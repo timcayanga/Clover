@@ -1191,9 +1191,10 @@ function AccountsPageContent() {
     setWorkspacesLoading(false);
   };
 
-  const loadWorkspaceData = async (workspaceId: string, options?: { silent?: boolean }) => {
+  const loadWorkspaceData = async (workspaceId: string, options?: { silent?: boolean; awaitHydration?: boolean }) => {
     const loadSeq = ++workspaceLoadSeqRef.current;
     let fetchedAccounts: Account[] = [];
+    const backgroundTasks: Promise<void>[] = [];
 
     if (!workspaceId) {
       setAccounts([]);
@@ -1256,7 +1257,7 @@ function AccountsPageContent() {
         setAccountsLoading(false);
       }
 
-      void (async () => {
+      backgroundTasks.push((async () => {
         try {
           const categoriesResponse = await fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`);
           if (workspaceLoadSeqRef.current !== loadSeq || !categoriesResponse.ok) {
@@ -1279,9 +1280,9 @@ function AccountsPageContent() {
         } catch {
           // Categories are best-effort during background hydration.
         }
-      })();
+      })());
 
-      void (async () => {
+      backgroundTasks.push((async () => {
         try {
           const transactionsResponse = await fetch(
             `/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}&pageSize=all&summaryMode=light`
@@ -1304,7 +1305,11 @@ function AccountsPageContent() {
         } catch {
           // Background transaction hydration is best-effort.
         }
-      })();
+      })());
+
+      if (options?.awaitHydration) {
+        await Promise.allSettled(backgroundTasks);
+      }
     } finally {
       if (!options?.silent) {
         setAccountsLoading(false);
@@ -2171,7 +2176,7 @@ function AccountsPageContent() {
 
   const refreshAll = async () => {
     if (!selectedWorkspaceId) return;
-    await loadWorkspaceData(selectedWorkspaceId, { silent: true });
+    await loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true });
     setMessage(`Workspace "${selectedWorkspace?.name ?? "selected"}" refreshed.`);
   };
 
@@ -3634,6 +3639,7 @@ function AccountsPageContent() {
             summary.accountType ?? null
           );
           const previewTransactions = summary.previewTransactions ?? [];
+          const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
           let nextAccountsSnapshot: Account[] | null = null;
           let nextTransactionsSnapshot: Transaction[] | null = null;
 
@@ -3705,7 +3711,9 @@ function AccountsPageContent() {
             }
           });
 
-          const settledAccountId = nextAccountsSnapshot ? resolvePersistedImportedAccountId(summary, nextAccountsSnapshot) : null;
+          const settledAccountId =
+            (nextAccountsSnapshot ? resolvePersistedImportedAccountId(summary, nextAccountsSnapshot) : null) ??
+            (summary.accountId && !summary.accountId.startsWith("optimistic-") ? summary.accountId : null);
           const settledSummary =
             settledAccountId && settledAccountId !== summary.accountId
               ? {
@@ -3716,7 +3724,6 @@ function AccountsPageContent() {
                 }
               : summary;
           setPendingImportSummary(settledSummary);
-          const importedAccountId = settledSummary.accountId ?? settledSummary.optimisticAccountId ?? null;
 
           if (selectedWorkspaceId && nextAccountsSnapshot && nextTransactionsSnapshot) {
             const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(selectedWorkspaceId);
@@ -3728,7 +3735,7 @@ function AccountsPageContent() {
             });
           }
 
-          const shouldRefreshAfterImport = !settledSummary.optimistic && Boolean(settledAccountId);
+          const shouldRefreshAfterImport = Boolean(settledAccountId);
           if (shouldRefreshAfterImport) {
             setImportRefreshInFlight(true);
             try {

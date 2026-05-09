@@ -7016,7 +7016,11 @@ function TransactionsPageContent() {
             }
 
             if (optimisticAccount) {
-              setAccounts((current) => mergeOptimisticImportedAccount(current, optimisticAccount));
+              setAccounts((current) => {
+                const next = mergeOptimisticImportedAccount(current, optimisticAccount);
+                nextAccountsSnapshot = next;
+                return next;
+              });
             }
           });
 

@@ -2354,7 +2354,7 @@ export function ImportFilesModal({
             optimisticAccountId: null,
           };
           seedImportedWorkspaceCaches(workspaceId, finalizedSummary);
-          void onImported(finalizedSummary);
+          await Promise.resolve(onImported(finalizedSummary));
           updateItem(itemId, {
             status: "done",
             confirmationState: "confirmed",
@@ -3740,14 +3740,14 @@ export function ImportFilesModal({
 
         if (confirmedSummary) {
           seedImportedWorkspaceCaches(workspaceId, confirmedSummary);
-          void onImported(confirmedSummary);
+          await Promise.resolve(onImported(confirmedSummary));
         }
 
-        const settledVisible = await waitForImportSettledVisibility({
-          accountId: serverConfirmedAccountId,
-          importedRows: confirmedRows,
-          expectedBalance: confirmedSummary.balance ?? null,
-        });
+          const settledVisible = await waitForImportSettledVisibility({
+            accountId: serverConfirmedAccountId,
+            importedRows: confirmedRows,
+            expectedBalance: confirmedSummary.balance ?? null,
+          });
         if (!settledVisible) {
           console.warn("Import finished before the settled data became visible", {
             importFileId,
@@ -3895,7 +3895,7 @@ export function ImportFilesModal({
         });
         if (optimisticSummary) {
           seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
-          void onImported(optimisticSummary);
+          await Promise.resolve(onImported(optimisticSummary));
 
           const settledVisible = await waitForImportSettledVisibility({
             accountId: optimisticAccountId,
@@ -4086,27 +4086,35 @@ export function ImportFilesModal({
       }
 
       if (targetAccountId) {
-        void confirmItemImport(itemId, importFileId, targetAccountId, {
-          fileName: item.file.name,
-          accountName: statementIdentity?.accountName ?? null,
-          institution: statementIdentity?.institution ?? null,
-          accountNumber: statementIdentity?.accountNumber ?? null,
-          accountType: statementIdentity?.accountType ?? statementAccountType,
-          optimisticAccountId: targetAccountId,
-          previewTransactions,
-        }, {
-          backgroundOnly: true,
-        }).then((result) => {
+        try {
+          const result = await confirmItemImport(
+            itemId,
+            importFileId,
+            targetAccountId,
+            {
+              fileName: item.file.name,
+              accountName: statementIdentity?.accountName ?? null,
+              institution: statementIdentity?.institution ?? null,
+              accountNumber: statementIdentity?.accountNumber ?? null,
+              accountType: statementIdentity?.accountType ?? statementAccountType,
+              optimisticAccountId: targetAccountId,
+              previewTransactions,
+            },
+            {
+              backgroundOnly: true,
+            }
+          );
+
           if (result.summary) {
             seedImportedWorkspaceCaches(workspaceId, result.summary);
-            void onImported(result.summary);
+            await Promise.resolve(onImported(result.summary));
           }
-        }).catch((error) => {
+        } catch (error) {
           console.warn("Background import confirmation failed", {
             importFileId,
             error: error instanceof Error ? error.message : String(error),
           });
-        });
+        }
 
         const settledVisible = await waitForImportSettledVisibility({
           accountId: targetAccountId,
@@ -4311,7 +4319,7 @@ export function ImportFilesModal({
         };
 
         seedImportedWorkspaceCaches(workspaceId, finalizedRecoveredSummary);
-        void onImported(finalizedRecoveredSummary);
+        await Promise.resolve(onImported(finalizedRecoveredSummary));
         updateItem(itemId, {
           status: "importing",
           confirmationState: "staged",
@@ -4605,10 +4613,12 @@ export function ImportFilesModal({
         for (const summary of uploadInsightsSummaries) {
           seedImportedWorkspaceCaches(workspaceId, summary);
         }
-        void onImported(
+        await Promise.resolve(
+          onImported(
           uploadInsightsSummaries.length === 1
             ? uploadInsightsSummaries[0]
             : combineUploadInsightsSummaries(uploadInsightsSummaries)
+          )
         );
       }
     }
@@ -4816,7 +4826,7 @@ export function ImportFilesModal({
         setMessage(`Confirmed ${result.importedRows} imported row${result.importedRows === 1 ? "" : "s"}.`);
       }
       if (result.summary) {
-        void onImported(result.summary);
+        await Promise.resolve(onImported(result.summary));
       }
       capturePostHogClientEvent("statement_identity_confirmed", {
         ...fileAnalyticsBase(item.file, workspaceId),
