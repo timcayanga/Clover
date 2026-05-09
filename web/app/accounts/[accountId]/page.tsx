@@ -17,6 +17,7 @@ import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { guessCategoryName } from "@/lib/import-parser";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
@@ -785,6 +786,26 @@ function AccountDetailPageContent() {
           } as Account)
         : null;
       let accountTransactionsLookup: ReturnType<typeof findCachedTransactionsForAccount> | null = null;
+      const pendingImportStatuses = new Set(["processing", "queued", "staged", "pending"]);
+      const hasPendingImportSettlement = () =>
+        Array.isArray(cachedTransactionsWorkspace?.imports) &&
+        (cachedTransactionsWorkspace.imports as ImportFile[]).some((importFile) => {
+          const status = String(importFile.status ?? "").trim().toLowerCase();
+          if (!pendingImportStatuses.has(status)) {
+            return false;
+          }
+
+          const importAccountId = typeof importFile.accountId === "string" ? importFile.accountId.trim() : "";
+          if (!importAccountId) {
+            return false;
+          }
+
+          return (
+            importAccountId === accountId ||
+            importAccountId === (cachedImportedAccount?.optimisticAccountId ?? "") ||
+            importAccountId === (cachedTransactionWorkspaceAccount?.id ?? "")
+          );
+        });
       const resolvePersistedImportedAccount = async (baseAccount: Account) => {
         const identityKey = normalizeImportedAccountKey(
           baseAccount.name,
@@ -822,12 +843,22 @@ function AccountDetailPageContent() {
           return null;
         }
 
-        for (let attempt = 0; attempt < 5; attempt += 1) {
+        if (!hasPendingImportSettlement()) {
+          return null;
+        }
+
+        const retryDelays = [900, 1800, 3000];
+        for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
           try {
-            const response = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(baseAccount.workspaceId)}`);
+            const response = await fetchJsonOnce<{ accounts?: Account[] }>({
+              key: `account-detail:accounts:${baseAccount.workspaceId}`,
+              route: "account-detail.accounts",
+              workspaceId: baseAccount.workspaceId,
+              detail: "import-settlement",
+              input: `/api/accounts?workspaceId=${encodeURIComponent(baseAccount.workspaceId)}`,
+            });
             if (response.ok) {
-              const payload = (await response.json()) as { accounts?: Account[] } | null;
-              const fetchedAccounts = Array.isArray(payload?.accounts) ? payload.accounts : [];
+              const fetchedAccounts = Array.isArray(response.json?.accounts) ? response.json.accounts : [];
               const replacement =
                 fetchedAccounts.find((entry) => {
                   if (!entry?.id || entry.id === accountId || entry.id.startsWith("optimistic-")) {
@@ -847,7 +878,7 @@ function AccountDetailPageContent() {
             // Keep polling briefly; upload-backed accounts can settle a moment later.
           }
 
-          await new Promise((resolve) => setTimeout(resolve, 750));
+          await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
         }
 
         return null;

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell, useCloverChrome } from "@/components/clover-shell";
@@ -20,6 +20,7 @@ import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path
 import { countNonCashAccounts } from "@/lib/account-limit-count";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
+import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceAccountDeletion,
@@ -335,6 +336,7 @@ const getCachedWorkspaceHydration = (workspaceId: string) => {
     return null;
   }
 
+  const transactionsSnapshot = getCachedTransactionsWorkspace(workspaceId);
   const accountsSnapshot = getCachedAccountsWorkspace(workspaceId);
   if (accountsSnapshot) {
     return {
@@ -342,10 +344,11 @@ const getCachedWorkspaceHydration = (workspaceId: string) => {
       accountRules: (accountsSnapshot.accountRules as AccountRule[] | undefined) ?? [],
       transactions: (accountsSnapshot.transactions as Transaction[] | undefined) ?? [],
       statementCheckpoints: (accountsSnapshot.statementCheckpoints as StatementCheckpoint[] | undefined) ?? [],
+      imports: (transactionsSnapshot?.imports as ImportFile[] | undefined) ?? [],
+      updatedAt: accountsSnapshot.updatedAt,
     };
   }
 
-  const transactionsSnapshot = getCachedTransactionsWorkspace(workspaceId);
   if (!transactionsSnapshot) {
     return null;
   }
@@ -355,6 +358,8 @@ const getCachedWorkspaceHydration = (workspaceId: string) => {
     accountRules: [] as AccountRule[],
     transactions: (transactionsSnapshot.transactions as Transaction[] | undefined) ?? [],
     statementCheckpoints: [] as StatementCheckpoint[],
+    imports: (transactionsSnapshot.imports as ImportFile[] | undefined) ?? [],
+    updatedAt: transactionsSnapshot.updatedAt,
   };
 };
 
@@ -363,6 +368,14 @@ type AccountRule = {
   accountName: string;
   institution: string | null;
   accountType: string;
+};
+
+type ImportFile = {
+  id: string;
+  fileName: string;
+  status: string;
+  uploadedAt: string;
+  accountId?: string | null;
 };
 
 type Transaction = {
@@ -954,6 +967,7 @@ function AccountsPageContent() {
   const addRef = useRef<HTMLDivElement>(null);
   const balanceInputRef = useRef<HTMLInputElement>(null);
   const workspaceLoadSeqRef = useRef(0);
+  const workspaceHydrationVersionRef = useRef(new Map<string, number>());
   const deletedAccountIdsRef = useRef(new Set<string>(getDeletedWorkspaceAccountIds(readSelectedWorkspaceId())));
   const initialWorkspaceId = readSelectedWorkspaceId();
   const deletingAccountIdFromQuery = searchParams?.get("deletingAccountId");
@@ -1062,6 +1076,31 @@ function AccountsPageContent() {
     }
   );
   const deletingAccountIdsRef = useRef(new Set<string>(getDeletingWorkspaceAccountIds(initialWorkspaceId)));
+
+  const markWorkspaceHydrated = useCallback((workspaceId: string, updatedAt?: number | null) => {
+    if (!workspaceId || !updatedAt || !Number.isFinite(updatedAt)) {
+      return;
+    }
+
+    workspaceHydrationVersionRef.current.set(workspaceId, updatedAt);
+  }, []);
+
+  const shouldHydrateWorkspaceSnapshot = useCallback(
+    (workspaceId: string) => {
+      if (!workspaceId) {
+        return false;
+      }
+
+      const cachedSnapshot = getCachedWorkspaceHydration(workspaceId);
+      if (!cachedSnapshot) {
+        return true;
+      }
+
+      const previousVersion = workspaceHydrationVersionRef.current.get(workspaceId) ?? 0;
+      return Number(cachedSnapshot.updatedAt ?? 0) > previousVersion;
+    },
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -1176,7 +1215,11 @@ function AccountsPageContent() {
 
   const loadWorkspaces = async () => {
     setWorkspacesLoading(true);
-    const response = await fetch("/api/workspaces");
+    const response = await fetchJsonOnce<{ workspaces?: Workspace[] }>({
+      key: "accounts:workspaces",
+      route: "accounts.workspaces",
+      input: "/api/workspaces",
+    });
     if (!response.ok) {
       setMessage("Unable to load workspaces.");
       setWorkspacesLoading(false);
@@ -1184,8 +1227,7 @@ function AccountsPageContent() {
       return;
     }
 
-    const data = await response.json();
-    const items = Array.isArray(data.workspaces) ? data.workspaces : [];
+    const items = Array.isArray(response.json?.workspaces) ? response.json.workspaces : [];
     setWorkspaces(items);
     setSelectedWorkspaceId((current) => chooseWorkspaceId(items, current));
     setWorkspacesLoading(false);
@@ -1210,14 +1252,20 @@ function AccountsPageContent() {
     }
 
     try {
-      const accountsResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
+      const accountsResponse = await fetchJsonOnce<{ accounts?: Account[]; accountRules?: AccountRule[]; statementCheckpoints?: StatementCheckpoint[] }>({
+        key: `accounts:data:${workspaceId}`,
+        route: "accounts.data",
+        workspaceId,
+        detail: options?.awaitHydration ? "awaitHydration" : options?.silent ? "silent" : "foreground",
+        input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`,
+      });
       if (workspaceLoadSeqRef.current !== loadSeq) {
         return;
       }
 
       if (accountsResponse.ok) {
-        const payload = await accountsResponse.json();
-        fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+        const payload = accountsResponse.json;
+        fetchedAccounts = Array.isArray(payload?.accounts) ? (payload.accounts as Account[]) : [];
         const cachedWorkspaceAccounts = getCachedAccountsWorkspace(workspaceId)?.accounts as Account[] | undefined;
         for (const fetchedAccount of fetchedAccounts) {
           clearDeletedWorkspaceAccount(workspaceId, fetchedAccount.id);
@@ -1241,8 +1289,8 @@ function AccountsPageContent() {
             deletedAccountIdsRef.current
           )
         );
-        setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
-        setStatementCheckpoints(Array.isArray(payload.statementCheckpoints) ? (payload.statementCheckpoints as StatementCheckpoint[]) : []);
+        setAccountRules(Array.isArray(payload?.accountRules) ? payload.accountRules : []);
+        setStatementCheckpoints(Array.isArray(payload?.statementCheckpoints) ? (payload.statementCheckpoints as StatementCheckpoint[]) : []);
       } else {
         if (!options?.silent) {
           setMessage("Unable to load accounts for this workspace.");
@@ -1259,13 +1307,18 @@ function AccountsPageContent() {
 
       backgroundTasks.push((async () => {
         try {
-          const categoriesResponse = await fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`);
+          const categoriesResponse = await fetchJsonOnce<{ categories?: Array<{ id: string; name: string }> }>({
+            key: `accounts:categories:${workspaceId}`,
+            route: "accounts.categories",
+            workspaceId,
+            detail: "background",
+            input: `/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`,
+          });
           if (workspaceLoadSeqRef.current !== loadSeq || !categoriesResponse.ok) {
             return;
           }
 
-          const payload = (await categoriesResponse.json()) as { categories?: Array<{ id: string; name: string }> } | null;
-          const fetchedCategories = Array.isArray(payload?.categories) ? payload.categories : [];
+          const fetchedCategories = Array.isArray(categoriesResponse.json?.categories) ? categoriesResponse.json.categories : [];
           if (fetchedCategories.length === 0) {
             return;
           }
@@ -1284,16 +1337,21 @@ function AccountsPageContent() {
 
       backgroundTasks.push((async () => {
         try {
-          const transactionsResponse = await fetch(
-            `/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}&pageSize=all&summaryMode=light`
-          );
+          const transactionsResponse = await fetchJsonOnce<{ transactions?: Transaction[] }>({
+            key: `accounts:transactions:${workspaceId}:light`,
+            route: "accounts.transactions",
+            workspaceId,
+            detail: options?.awaitHydration ? "awaitHydration" : "background",
+            input: `/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}&pageSize=all&summaryMode=light`,
+          });
           if (workspaceLoadSeqRef.current !== loadSeq) {
             return;
           }
 
           if (transactionsResponse.ok) {
-            const payload = await transactionsResponse.json();
-            const fetchedTransactions = Array.isArray(payload.transactions) ? payload.transactions : [];
+            const fetchedTransactions = Array.isArray(transactionsResponse.json?.transactions)
+              ? (transactionsResponse.json.transactions as Transaction[])
+              : [];
             const cachedWorkspaceTransactions = getCachedAccountsWorkspace(workspaceId)?.transactions as Transaction[] | undefined;
             setTransactions((current) =>
               mergeImportedWorkspaceTransactions(
@@ -1347,6 +1405,7 @@ function AccountsPageContent() {
     setAccountRules(cachedSnapshot.accountRules as AccountRule[]);
     setTransactions(filteredTransactions);
     setStatementCheckpoints(filteredCheckpoints);
+    markWorkspaceHydrated(workspaceId, cachedSnapshot.updatedAt);
     setAccountsLoading(false);
     setHasInitialWorkspaceDataLoaded(true);
     return true;
@@ -1454,7 +1513,7 @@ function AccountsPageContent() {
         return;
       }
 
-      if (!hydrateWorkspaceFromCache(activeWorkspaceId)) {
+      if (!hydrateWorkspaceFromCache(activeWorkspaceId) && shouldHydrateWorkspaceSnapshot(activeWorkspaceId)) {
         setAccountsLoading(true);
         void loadWorkspaceData(activeWorkspaceId);
       }
@@ -1462,19 +1521,20 @@ function AccountsPageContent() {
 
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, [loadWorkspaceData, selectedWorkspaceId]);
+  }, [loadWorkspaceData, selectedWorkspaceId, shouldHydrateWorkspaceSnapshot]);
 
   useEffect(() => {
     if (!selectedWorkspaceId || accountsLoading) {
       return;
     }
 
-    persistAccountsWorkspaceCache(selectedWorkspaceId, {
+    const updatedAt = persistAccountsWorkspaceCache(selectedWorkspaceId, {
       accounts,
       accountRules,
       transactions,
       statementCheckpoints,
     });
+    markWorkspaceHydrated(selectedWorkspaceId, updatedAt);
   }, [accounts, accountRules, accountsLoading, selectedWorkspaceId, statementCheckpoints, transactions]);
 
   useEffect(() => {

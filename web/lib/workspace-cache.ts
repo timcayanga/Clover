@@ -10,6 +10,7 @@ export type AccountsWorkspaceCacheSnapshot = {
   accountRules: CachedRecord[];
   transactions: CachedRecord[];
   statementCheckpoints: CachedRecord[];
+  imports?: CachedRecord[];
   updatedAt: number;
 };
 
@@ -741,15 +742,16 @@ export const getCachedAccountsWorkspace = (workspaceId: string): AccountsWorkspa
 export const persistAccountsWorkspaceCache = (
   workspaceId: string,
   snapshot: Omit<AccountsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
-) => {
+): number => {
   if (!workspaceId) {
-    return;
+    return 0;
   }
 
   const cache = readAccountsWorkspaceCache();
+  const updatedAt = Date.now();
   const nextSnapshot: AccountsWorkspaceCacheSnapshot = {
     workspaceId,
-    updatedAt: Date.now(),
+    updatedAt,
     ...snapshot,
   };
 
@@ -762,6 +764,7 @@ export const persistAccountsWorkspaceCache = (
   };
 
   writeJsonCache(accountsWorkspaceCacheKey, nextState);
+  return updatedAt;
 };
 
 export const readTransactionsWorkspaceCache = (): TransactionsWorkspaceCacheState | null => {
@@ -922,15 +925,16 @@ export const findCachedTransactionsForAccount = (
 export const persistTransactionsWorkspaceCache = (
   workspaceId: string,
   snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
-) => {
+): number => {
   if (!workspaceId) {
-    return;
+    return 0;
   }
 
   const cache = readTransactionsWorkspaceCache();
+  const updatedAt = Date.now();
   const nextSnapshot: TransactionsWorkspaceCacheSnapshot = {
     workspaceId,
-    updatedAt: Date.now(),
+    updatedAt,
     ...snapshot,
   };
 
@@ -943,6 +947,7 @@ export const persistTransactionsWorkspaceCache = (
   };
 
   writeJsonCache(transactionsWorkspaceCacheKey, nextState);
+  return updatedAt;
 };
 
 export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account: ImportedWorkspaceAccount) => {
@@ -958,6 +963,7 @@ export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account:
     accountRules: accountsCache?.snapshots[workspaceId]?.accountRules ?? [],
     transactions: accountsCache?.snapshots[workspaceId]?.transactions ?? [],
     statementCheckpoints: accountsCache?.snapshots[workspaceId]?.statementCheckpoints ?? [],
+    imports: accountsCache?.snapshots[workspaceId]?.imports ?? [],
   };
 
   const transactionsCache = readTransactionsWorkspaceCache();
@@ -1004,6 +1010,7 @@ export const syncImportedWorkspaceTransactionCaches = (
     accountRules: accountsCache?.snapshots[workspaceId]?.accountRules ?? [],
     transactions: mergeImportedTransactions(accountsCache?.snapshots[workspaceId]?.transactions ?? [], transactions),
     statementCheckpoints: accountsCache?.snapshots[workspaceId]?.statementCheckpoints ?? [],
+    imports: accountsCache?.snapshots[workspaceId]?.imports ?? [],
   };
 
   const nextTransactionsSnapshot: TransactionsWorkspaceCacheSnapshot = {
@@ -1054,6 +1061,9 @@ export const applyOptimisticWorkspaceAccountDeletion = (workspaceId: string, acc
       accountRules: snapshot.accountRules.filter((entry) => !transactionMatches(entry)),
       transactions: snapshot.transactions.filter((entry) => !transactionMatches(entry)),
       statementCheckpoints: snapshot.statementCheckpoints.filter((entry) => !transactionMatches(entry)),
+      imports: Array.isArray(snapshot.imports)
+        ? snapshot.imports.filter((entry) => !importMatches(entry as CachedRecord))
+        : [],
     };
 
     writeJsonCache(accountsWorkspaceCacheKey, {
@@ -1125,6 +1135,9 @@ export const applyOptimisticWorkspaceTransactionDeletion = (workspaceId: string,
       ...snapshot,
       updatedAt: Date.now(),
       transactions: snapshot.transactions.filter((entry) => !transactionMatches(entry)),
+      imports: Array.isArray(snapshot.imports)
+        ? snapshot.imports.filter((entry) => !transactionMatches(entry as CachedRecord))
+        : [],
     };
 
     writeJsonCache(accountsWorkspaceCacheKey, {

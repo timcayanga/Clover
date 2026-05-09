@@ -43,6 +43,7 @@ import {
   mergeImportedWorkspaceTransactions,
   normalizeImportedAccountKey,
 } from "@/lib/workspace-cache";
+import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import type { UserLimits } from "@/lib/user-limits";
@@ -1776,6 +1777,7 @@ function TransactionsPageContent() {
   const warningPopoverRefs = useRef(new Map<string, HTMLDivElement | null>());
   const selectionActionsMenuRef = useRef<HTMLDivElement | null>(null);
   const transactionsLoadRequestRef = useRef(0);
+  const transactionsHydrationVersionRef = useRef(new Map<string, number>());
   const mobileLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
@@ -1794,6 +1796,31 @@ function TransactionsPageContent() {
       overflow: "auto",
     }),
     [isCompactViewport]
+  );
+
+  const markTransactionsHydrated = useCallback((workspaceId: string, updatedAt?: number | null) => {
+    if (!workspaceId || !updatedAt || !Number.isFinite(updatedAt)) {
+      return;
+    }
+
+    transactionsHydrationVersionRef.current.set(workspaceId, updatedAt);
+  }, []);
+
+  const shouldHydrateTransactionsSnapshot = useCallback(
+    (workspaceId: string) => {
+      if (!workspaceId) {
+        return false;
+      }
+
+      const cachedSnapshot = getCachedTransactionsWorkspace(workspaceId);
+      if (!cachedSnapshot) {
+        return true;
+      }
+
+      const previousVersion = transactionsHydrationVersionRef.current.get(workspaceId) ?? 0;
+      return Number(cachedSnapshot.updatedAt ?? 0) > previousVersion;
+    },
+    []
   );
 
   useEffect(() => {
@@ -1899,10 +1926,13 @@ function TransactionsPageContent() {
 
   const loadWorkspaces = async () => {
     try {
-      const response = await fetch("/api/workspaces");
+      const response = await fetchJsonOnce<{ workspaces?: Workspace[] }>({
+        key: "transactions:workspaces",
+        route: "transactions.workspaces",
+        input: "/api/workspaces",
+      });
       if (!response.ok) return;
-      const data = await response.json();
-      const items = Array.isArray(data.workspaces) ? data.workspaces : [];
+      const items = Array.isArray(response.json?.workspaces) ? response.json.workspaces : [];
       setWorkspaces(items);
       setSelectedWorkspaceId((current) => {
         return chooseWorkspaceId(items, current);
@@ -1922,14 +1952,33 @@ function TransactionsPageContent() {
 
     try {
       const [accountsResponse, categoriesResponse, importResponse] = await Promise.all([
-        fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
-        fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`),
-        options?.skipImports ? Promise.resolve(null) : fetch(`/api/imports?workspaceId=${encodeURIComponent(workspaceId)}`),
+        fetchJsonOnce<{ accounts?: Account[] }>({
+          key: `transactions:accounts:${workspaceId}`,
+          route: "transactions.accounts",
+          workspaceId,
+          detail: options?.background ? "background" : "foreground",
+          input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`,
+        }),
+        fetchJsonOnce<{ categories?: Category[] }>({
+          key: `transactions:categories:${workspaceId}`,
+          route: "transactions.categories",
+          workspaceId,
+          detail: options?.background ? "background" : "foreground",
+          input: `/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`,
+        }),
+        options?.skipImports
+          ? Promise.resolve(null)
+          : fetchJsonOnce<{ importFiles?: ImportFile[] }>({
+              key: `transactions:imports:${workspaceId}`,
+              route: "transactions.imports",
+              workspaceId,
+              detail: options?.background ? "background" : "foreground",
+              input: `/api/imports?workspaceId=${encodeURIComponent(workspaceId)}`,
+            }),
       ]);
 
       if (accountsResponse.ok) {
-        const payload = await accountsResponse.json();
-        const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+        const fetchedAccounts = Array.isArray(accountsResponse.json?.accounts) ? (accountsResponse.json.accounts as Account[]) : [];
         const cachedWorkspaceAccounts = getCachedTransactionsWorkspace(workspaceId)?.accounts as Account[] | undefined;
         setAccounts((current) =>
           mergeAccountsWithOptimisticImports(
@@ -1940,10 +1989,10 @@ function TransactionsPageContent() {
       }
 
       if (categoriesResponse.ok) {
-        const payload = await categoriesResponse.json();
+        const payload = categoriesResponse.json;
         const cachedWorkspaceCategories = getCachedTransactionsWorkspace(workspaceId)?.categories as Category[] | undefined;
         const nextCategories =
-          Array.isArray(payload.categories) && payload.categories.length > 0 ? (payload.categories as Category[]) : cachedWorkspaceCategories ?? [];
+          Array.isArray(payload?.categories) && payload.categories.length > 0 ? (payload.categories as Category[]) : cachedWorkspaceCategories ?? [];
         setCategories(nextCategories);
       } else {
         const cachedWorkspaceCategories = getCachedTransactionsWorkspace(workspaceId)?.categories as Category[] | undefined;
@@ -1951,8 +2000,7 @@ function TransactionsPageContent() {
       }
 
       if (importResponse && importResponse.ok) {
-        const payload = await importResponse.json();
-        setImports(Array.isArray(payload.importFiles) ? payload.importFiles : []);
+        setImports(Array.isArray(importResponse.json?.importFiles) ? importResponse.json.importFiles : []);
       }
     } catch {
       if (!options?.background) {
@@ -2029,7 +2077,13 @@ function TransactionsPageContent() {
     searchParams.set("summaryMode", options?.summaryMode ?? (options?.background ? "full" : "light"));
 
     try {
-      const response = await fetch(`/api/transactions?${searchParams?.toString() ?? ""}`);
+      const response = await fetchJsonOnce<{ transactions?: Transaction[]; totalCount?: number; summary?: TransactionPageMeta; currencyCodes?: string[] }>({
+        key: `transactions:list:${workspaceId}:${searchParams.toString()}`,
+        route: "transactions.list",
+        workspaceId,
+        detail: options?.background ? "background" : options?.append ? "append" : "foreground",
+        input: `/api/transactions?${searchParams?.toString() ?? ""}`,
+      });
       if (!response.ok) {
         throw new Error("Unable to load transactions.");
       }
@@ -2038,15 +2092,16 @@ function TransactionsPageContent() {
         return;
       }
 
-      const payload = await response.json();
-      const fetchedTransactions = Array.isArray(payload.transactions) ? payload.transactions : [];
+      const payload = response.json;
+      const fetchedTransactions = Array.isArray(payload?.transactions) ? payload.transactions : [];
       const cachedWorkspaceTransactions = getCachedTransactionsWorkspace(workspaceId)?.transactions as Transaction[] | undefined;
       const baseTransactions =
         transactionsRef.current.length > 0 ? transactionsRef.current : cachedWorkspaceTransactions ?? [];
       const mergedTransactions = options?.append
         ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
         : mergeImportedWorkspaceTransactions(baseTransactions, fetchedTransactions);
-      const responseCurrencyCodes = Array.isArray(payload.currencyCodes)
+      const summaryPayload = payload?.summary && typeof payload.summary === "object" ? payload.summary : null;
+      const responseCurrencyCodes = Array.isArray(payload?.currencyCodes)
         ? payload.currencyCodes.map((value: unknown) => formatCurrencyCode(String(value ?? ""))).filter(Boolean)
         : [];
       const workspaceCurrencyCodesFromData = getWorkspaceCurrencyCodes(
@@ -2064,37 +2119,37 @@ function TransactionsPageContent() {
         setIsMobileLoadingMore(false);
       }
       setTransactionsSummary(
-        payload.summary && typeof payload.summary === "object"
+        summaryPayload
           ? {
               totalCount:
-                typeof payload.totalCount === "number"
-                  ? Math.max(payload.totalCount, mergedTransactions.length)
-                  : typeof payload.summary.totalCount === "number"
-                    ? Math.max(payload.summary.totalCount, mergedTransactions.length)
+                  typeof payload?.totalCount === "number"
+                    ? Math.max(payload.totalCount, mergedTransactions.length)
+                  : typeof summaryPayload.totalCount === "number"
+                    ? Math.max(summaryPayload.totalCount, mergedTransactions.length)
                     : fetchedTransactions.length,
-              income: typeof payload.summary.income === "number" ? payload.summary.income : 0,
-              spending: typeof payload.summary.spending === "number" ? payload.summary.spending : 0,
-              transfers: typeof payload.summary.transfers === "number" ? payload.summary.transfers : 0,
-              review: typeof payload.summary.review === "number" ? payload.summary.review : 0,
+              income: typeof summaryPayload.income === "number" ? summaryPayload.income : 0,
+              spending: typeof summaryPayload.spending === "number" ? summaryPayload.spending : 0,
+              transfers: typeof summaryPayload.transfers === "number" ? summaryPayload.transfers : 0,
+              review: typeof summaryPayload.review === "number" ? summaryPayload.review : 0,
               currencyCodes: nextCurrencyCodes,
-              topCategory: Array.isArray(payload.summary.topCategory) ? payload.summary.topCategory : null,
-              topAccount: Array.isArray(payload.summary.topAccount) ? payload.summary.topAccount : null,
+              topCategory: Array.isArray(summaryPayload.topCategory) ? summaryPayload.topCategory : null,
+              topAccount: Array.isArray(summaryPayload.topAccount) ? summaryPayload.topAccount : null,
               firstTransactionDate:
-                typeof payload.summary.firstTransactionDate === "string" ? payload.summary.firstTransactionDate : null,
+                typeof summaryPayload.firstTransactionDate === "string" ? summaryPayload.firstTransactionDate : null,
               lastTransactionDate:
-                typeof payload.summary.lastTransactionDate === "string" ? payload.summary.lastTransactionDate : null,
+                typeof summaryPayload.lastTransactionDate === "string" ? summaryPayload.lastTransactionDate : null,
               firstReviewTransaction:
-                payload.summary.firstReviewTransaction && typeof payload.summary.firstReviewTransaction === "object"
-                  ? (payload.summary.firstReviewTransaction as Transaction)
+                summaryPayload.firstReviewTransaction && typeof summaryPayload.firstReviewTransaction === "object"
+                  ? (summaryPayload.firstReviewTransaction as Transaction)
                   : null,
               firstReviewTransactionIndex:
-                typeof payload.summary.firstReviewTransactionIndex === "number"
-                  ? payload.summary.firstReviewTransactionIndex
+                typeof summaryPayload.firstReviewTransactionIndex === "number"
+                  ? summaryPayload.firstReviewTransactionIndex
                   : null,
             }
           : {
               totalCount:
-                typeof payload.totalCount === "number"
+                typeof payload?.totalCount === "number"
                   ? Math.max(payload.totalCount, mergedTransactions.length)
                   : mergedTransactions.length,
               income: 0,
@@ -2120,7 +2175,7 @@ function TransactionsPageContent() {
         setIsMobileLoadingMore(false);
       }
 
-      if (!options?.background && (options?.summaryMode ?? "light") === "light" && Number(payload.totalCount ?? 0) > 0) {
+      if (!options?.background && (options?.summaryMode ?? "light") === "light" && Number(payload?.totalCount ?? 0) > 0) {
         void loadTransactionsPage(workspaceId, {
           background: true,
           includeAll: options?.includeAll,
@@ -2189,6 +2244,7 @@ function TransactionsPageContent() {
           }
     );
     setWorkspaceCurrencyCodes(cachedCurrencyCodes);
+    markTransactionsHydrated(workspaceId, cachedSnapshot.updatedAt);
     setIsWorkspaceDataReady(true);
     setHasInitialTransactionsLoaded(true);
     return true;
@@ -2325,7 +2381,7 @@ function TransactionsPageContent() {
         return;
       }
 
-      if (!hydrateWorkspaceFromCache(activeWorkspaceId)) {
+      if (!hydrateWorkspaceFromCache(activeWorkspaceId) && shouldHydrateTransactionsSnapshot(activeWorkspaceId)) {
         setIsWorkspaceDataReady(false);
         void loadWorkspaceMetadata(activeWorkspaceId, { skipImports: true, background: true });
         void loadTransactionsPage(activeWorkspaceId, { background: true });
@@ -2334,7 +2390,7 @@ function TransactionsPageContent() {
 
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, [loadTransactionsPage, loadWorkspaceMetadata, selectedWorkspaceId]);
+  }, [loadTransactionsPage, loadWorkspaceMetadata, selectedWorkspaceId, shouldHydrateTransactionsSnapshot]);
 
   useEffect(() => {
     if (!selectedWorkspaceId) {
@@ -5238,7 +5294,7 @@ function TransactionsPageContent() {
       return;
     }
 
-    persistTransactionsWorkspaceCache(selectedWorkspaceId, {
+    const updatedAt = persistTransactionsWorkspaceCache(selectedWorkspaceId, {
       accounts,
       categories,
       transactions,
@@ -5249,6 +5305,7 @@ function TransactionsPageContent() {
       currencyCodes: workspaceCurrencyCodes,
       summary: transactionsSummary,
     });
+    markTransactionsHydrated(selectedWorkspaceId, updatedAt);
   }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes]);
 
   useEffect(() => {

@@ -595,7 +595,7 @@ const waitForImportSettledVisibility = async (params: {
   const expectedBalance = toBalanceString(params.expectedBalance);
   const timeoutMs = params.timeoutMs ?? 180_000;
   const startedAt = Date.now();
-  const pollDelayMs = 1500;
+  const pollDelayMs = 2500;
 
   const normalizeBalance = (value: unknown) => {
     const text = toBalanceString(value);
@@ -609,21 +609,9 @@ const waitForImportSettledVisibility = async (params: {
 
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const [accountResponse, transactionsResponse, categoriesResponse] = await Promise.all([
-        fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
-          cache: "no-store",
-        }),
-        params.importedRows > 0
-          ? fetch(`/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=1`, {
-              cache: "no-store",
-            })
-          : Promise.resolve(null),
-        params.importedRows > 0
-          ? fetch(`/api/categories?workspaceId=${encodeURIComponent(params.workspaceId)}`, {
-              cache: "no-store",
-            })
-          : Promise.resolve(null),
-      ]);
+      const accountResponse = await fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
+        cache: "no-store",
+      });
 
       if (!accountResponse.ok) {
         await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
@@ -645,12 +633,18 @@ const waitForImportSettledVisibility = async (params: {
       }
 
       if (params.importedRows > 0) {
-        if (!transactionsResponse || !transactionsResponse.ok) {
+        const transactionsResponse = await fetch(`/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=1`, {
+          cache: "no-store",
+        });
+        if (!transactionsResponse.ok) {
           await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
           continue;
         }
 
-        if (!categoriesResponse || !categoriesResponse.ok) {
+        const categoriesResponse = await fetch(`/api/categories?workspaceId=${encodeURIComponent(params.workspaceId)}`, {
+          cache: "no-store",
+        });
+        if (!categoriesResponse.ok) {
           await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
           continue;
         }
@@ -2538,7 +2532,7 @@ export function ImportFilesModal({
 
         if (Date.now() - startedAt >= MAX_WAIT_MS) {
           const hasRecoverableProgress =
-            Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0 || Boolean(resolvedAccountId);
+            Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0;
           if (hasRecoverableProgress) {
             closeImportAsRecoverable(
               itemId,
@@ -3464,7 +3458,7 @@ export function ImportFilesModal({
 
       if (Date.now() - startedAt >= MAX_WAIT_MS) {
         const hasRecoverableProgress =
-          Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0 || Boolean(resolvedAccountId);
+          Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0;
         if (hasRecoverableProgress) {
           closeImportAsRecoverable(
             itemId,
