@@ -5071,10 +5071,10 @@ export function ImportFilesModal({
           {validationNotice ? <p className="accounts-import-footer-copy__warning">{validationNotice}</p> : null}
           <p className="accounts-import-footer-copy__status">{message}</p>
           <p>
-            Accepted files: PDF, CSV, JPG, JPEG, PNG, WEBP, HEIC, and HEIF. Password-protected PDFs are supported.
-            CSVs work best with statement imports.
+            Accepted files: PDF, CSV, JPG, JPEG, PNG, WEBP, HEIC, and HEIF.
+            <br />
+            Password-protected PDFs are supported.
           </p>
-          <p>We upload the file first, then parse it on the server so the workflow stays responsive.</p>
         </div>
 
         {showImportHelp ? (
