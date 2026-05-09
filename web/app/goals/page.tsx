@@ -13,7 +13,7 @@ import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { GoalsSubtabs, GoalsSubtabsTitleAddon } from "@/components/goals-subtabs";
 import { GoalsEditor } from "@/components/goals-editor-modal";
-import { GoalGlyph, GoalIllustration } from "@/components/goals-visuals";
+import { GoalGlyph } from "@/components/goals-visuals";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import {
   GOAL_OPTIONS,
@@ -648,6 +648,33 @@ async function GoalsPageStream({
   const goalMoneyLabel = getGoalMoneyLabel(selectedGoalKey as GoalKey | null);
   const progressLabel =
     goalScore >= 85 ? "Coach mode: you are ahead of the curve" : goalScore >= 70 ? "On pace and looking sharp" : goalScore >= 50 ? "Building good momentum" : "Early, but absolutely moving";
+  const coachScoreBreakdown = [
+    {
+      label: "Savings pace",
+      value: `${savingsScore}`,
+      note: currentSavingsRate === null ? "Needs more income data" : "How fast you are saving versus the target rate",
+    },
+    {
+      label: "Trend",
+      value: `${trendScore}`,
+      note: currentNet >= previousNet ? "Net worth is moving up" : "Net worth dipped versus the prior window",
+    },
+    {
+      label: "Consistency",
+      value: `${consistencyScore}`,
+      note: previousSavingsRate !== null && currentSavingsRate !== null && currentSavingsRate >= previousSavingsRate ? "Savings are holding steady" : "The pace is still settling in",
+    },
+    {
+      label: "Cleanup",
+      value: `${Math.round(cleanlinessScore * 0.2)}`,
+      note: uncategorizedShare > 0 ? "Uncategorized rows are weighing the score" : "The transaction list is fairly clean",
+    },
+    {
+      label: "Recurring drag",
+      value: `-${dragPenalty}`,
+      note: recurringShare > 0 ? "Regular spending is trimming momentum" : "Recurring spend is not pulling the score down",
+    },
+  ];
 
   const weeklyProgress = clamp(goalScore + (currentSavingsRate !== null && currentSavingsRate >= targetRate / 100 ? 8 : 0) - (recurringShare > 0.25 ? 6 : 0), 12, 100);
   const progressRingPercent = goalProgress.progressPercent !== null ? clamp(goalProgress.progressPercent, 0, 100) : weeklyProgress;
@@ -823,9 +850,6 @@ async function GoalsPageStream({
               ) : null}
 
               <div className="goals-hero__summary">
-                <span className={`pill ${goalScore >= 70 ? "pill-good" : goalScore >= 50 ? "pill-accent" : "pill-warning"}`}>
-                  {coach.badge}
-                </span>
                 <span>{hasGoalSelection ? selectedGoal.signal : "Choose a lane to shape the plan."}</span>
                 <span>
                   {hasGoalSelection
@@ -934,12 +958,34 @@ async function GoalsPageStream({
                   </div>
                 </article>
               ) : (
-                <GoalIllustration
-                  goalKey={(selectedGoalKey ?? "save_more") as GoalKey}
-                  title={`${selectedGoal.title} in motion`}
-                  subtitle={heroSupport}
-                  progress={goalProgress.progressPercent ?? goalScore}
-                />
+                <article className="goals-hero__focus-card glass goals-hero__focus-card--coach">
+                  <div className="goals-panel__head">
+                    <div>
+                      <p className="eyebrow">Coach score</p>
+                      <h4>{goalScore}/100</h4>
+                    </div>
+                    <div className="goals-panel__stat">
+                      <strong>{goalScore >= 70 ? "Strong pace" : goalScore >= 50 ? "Momentum" : "Getting started"}</strong>
+                      <span>{progressLabel}</span>
+                    </div>
+                  </div>
+
+                  <div className="goals-hero__focus-card-body">
+                    <p>{coach.body}</p>
+                    <small>Score basis: savings pace, trend, consistency, cleanup, and recurring drag.</small>
+                    <div className="goals-hero__coach-score-grid" aria-label="Coach score breakdown">
+                      {coachScoreBreakdown.map((item) => (
+                        <div key={item.label} className="goals-hero__coach-score-item">
+                          <strong>
+                            {item.label}
+                            <span>{item.value}</span>
+                          </strong>
+                          <small>{item.note}</small>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </article>
               )}
             </div>
           </article>

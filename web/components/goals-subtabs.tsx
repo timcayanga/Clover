@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnimatedTabs } from "@/components/animated-tabs";
 
@@ -39,10 +39,18 @@ export function GoalsSubtabsTitleAddon({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  useEffect(() => {
+    for (const section of availableSections) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("section", section);
+      router.prefetch(`${pathname}?${params.toString()}`);
+    }
+  }, [availableSections, pathname, router, searchParams]);
+
   const setSection = (section: GoalsSection) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("section", section);
-    router.push(`${pathname}?${params.toString()}`);
+    router.replace(`${pathname}?${params.toString()}`);
   };
 
   return (

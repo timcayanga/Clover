@@ -738,6 +738,112 @@ const splitMerchantFilters = (value: string) =>
 
 const normalizeTransactionSearch = (value: string) => value.trim().toLowerCase();
 
+const startOfUtcDay = (value: string) => new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+
+const endOfUtcDay = (value: string) => new Date(`${value.slice(0, 10)}T23:59:59.999Z`);
+
+const startOfUtcWeek = (value: string) => {
+  const date = startOfUtcDay(value);
+  const day = date.getUTCDay();
+  const offset = (day + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - offset);
+  return date;
+};
+
+const endOfUtcWeek = (value: string) => {
+  const date = startOfUtcWeek(value);
+  date.setUTCDate(date.getUTCDate() + 6);
+  date.setUTCHours(23, 59, 59, 999);
+  return date;
+};
+
+const startOfUtcMonth = (value: string) => {
+  const date = startOfUtcDay(value);
+  date.setUTCDate(1);
+  return date;
+};
+
+const endOfUtcMonth = (value: string) => {
+  const date = startOfUtcMonth(value);
+  date.setUTCMonth(date.getUTCMonth() + 1, 0);
+  date.setUTCHours(23, 59, 59, 999);
+  return date;
+};
+
+const startOfUtcQuarter = (value: string) => {
+  const date = startOfUtcDay(value);
+  const quarterStartMonth = Math.floor(date.getUTCMonth() / 3) * 3;
+  date.setUTCMonth(quarterStartMonth, 1);
+  return date;
+};
+
+const endOfUtcQuarter = (value: string) => {
+  const date = startOfUtcQuarter(value);
+  date.setUTCMonth(date.getUTCMonth() + 3, 0);
+  date.setUTCHours(23, 59, 59, 999);
+  return date;
+};
+
+const startOfUtcYear = (value: string) => {
+  const date = startOfUtcDay(value);
+  date.setUTCMonth(0, 1);
+  return date;
+};
+
+const endOfUtcYear = (value: string) => {
+  const date = startOfUtcYear(value);
+  date.setUTCMonth(11, 31);
+  date.setUTCHours(23, 59, 59, 999);
+  return date;
+};
+
+const formatUtcDateKey = (value: Date) => value.toISOString().slice(0, 10);
+
+const matchesDateFilter = (
+  transactionDate: string,
+  mode: DateFilterMode,
+  anchor: string,
+  customStart: string,
+  customEnd: string
+) => {
+  if (mode === "ltd") {
+    return true;
+  }
+
+  const date = formatUtcDateKey(new Date(transactionDate));
+  const normalizedAnchor = anchor?.trim() || todayIso;
+
+  const range =
+    mode === "day"
+      ? { start: formatUtcDateKey(startOfUtcDay(normalizedAnchor)), end: formatUtcDateKey(endOfUtcDay(normalizedAnchor)) }
+      : mode === "week"
+        ? { start: formatUtcDateKey(startOfUtcWeek(normalizedAnchor)), end: formatUtcDateKey(endOfUtcWeek(normalizedAnchor)) }
+        : mode === "month"
+          ? { start: formatUtcDateKey(startOfUtcMonth(normalizedAnchor)), end: formatUtcDateKey(endOfUtcMonth(normalizedAnchor)) }
+          : mode === "quarter"
+            ? { start: formatUtcDateKey(startOfUtcQuarter(normalizedAnchor)), end: formatUtcDateKey(endOfUtcQuarter(normalizedAnchor)) }
+            : mode === "year"
+              ? { start: formatUtcDateKey(startOfUtcYear(normalizedAnchor)), end: formatUtcDateKey(endOfUtcYear(normalizedAnchor)) }
+              : {
+                  start: customStart.trim() ? formatUtcDateKey(startOfUtcDay(customStart)) : "",
+                  end: customEnd.trim() ? formatUtcDateKey(endOfUtcDay(customEnd)) : "",
+                };
+
+  if (!range.start && !range.end) {
+    return true;
+  }
+
+  if (range.start && date < range.start) {
+    return false;
+  }
+
+  if (range.end && date > range.end) {
+    return false;
+  }
+
+  return true;
+};
+
 const matchesTransactionSearch = (transaction: Transaction, searchText: string) => {
   if (!searchText) {
     return true;
@@ -756,6 +862,60 @@ const matchesTransactionSearch = (transaction: Transaction, searchText: string) 
     .toLowerCase();
 
   return haystack.includes(searchText);
+};
+
+const matchesTransactionFilters = (
+  transaction: Transaction,
+  filters: {
+    currencyFilter: string;
+    categoryFilters: string[];
+    accountFilters: string[];
+    typeFilters: TransactionTypeFilter[];
+    dateFilterMode: DateFilterMode;
+    dateFilterAnchor: string;
+    customStart: string;
+    customEnd: string;
+    amountMin: string;
+    amountMax: string;
+    otherCategoryId: string;
+  }
+) => {
+  if (filters.currencyFilter && formatCurrencyCode(transaction.currency) !== formatCurrencyCode(filters.currencyFilter)) {
+    return false;
+  }
+
+  if (filters.categoryFilters.length > 0 && !filters.categoryFilters.includes(transaction.categoryId ?? filters.otherCategoryId)) {
+    return false;
+  }
+
+  if (filters.accountFilters.length > 0 && !filters.accountFilters.includes(transaction.accountId)) {
+    return false;
+  }
+
+  if (filters.typeFilters.length > 0) {
+    const normalizedType = transaction.type === "income" ? "credit" : transaction.type === "transfer" ? "transfer" : "debit";
+    if (!filters.typeFilters.includes(normalizedType)) {
+      return false;
+    }
+  }
+
+  if (!matchesDateFilter(transaction.date, filters.dateFilterMode, filters.dateFilterAnchor, filters.customStart, filters.customEnd)) {
+    return false;
+  }
+
+  const amount = Number(transaction.amount);
+  const minAmount = filters.amountMin.trim() ? Number(filters.amountMin) : null;
+  const maxAmount = filters.amountMax.trim() ? Number(filters.amountMax) : null;
+
+  if (minAmount !== null && Number.isFinite(minAmount) && amount < minAmount) {
+    return false;
+  }
+
+  if (maxAmount !== null && Number.isFinite(maxAmount) && amount > maxAmount) {
+    return false;
+  }
+
+  return true;
 };
 
 const getLocalStorage = () => {
@@ -2469,7 +2629,22 @@ function TransactionsPageContent() {
   };
   const visibleTransactions = useMemo(() => {
     const filteredTransactions = transactions.filter(
-      (transaction) => !transaction.isExcluded && matchesTransactionSearch(transaction, searchText)
+      (transaction) =>
+        !transaction.isExcluded &&
+        matchesTransactionSearch(transaction, searchText) &&
+        matchesTransactionFilters(transaction, {
+          currencyFilter,
+          categoryFilters,
+          accountFilters: expandedAccountFilters,
+          typeFilters,
+          dateFilterMode,
+          dateFilterAnchor,
+          customStart,
+          customEnd,
+          amountMin,
+          amountMax,
+          otherCategoryId,
+        })
     );
     const directionMultiplier = sortDirection === "asc" ? 1 : -1;
 
@@ -2520,6 +2695,16 @@ function TransactionsPageContent() {
     accountInstitutionById,
     accountNameById,
     categories,
+    currencyFilter,
+    categoryFilters,
+    expandedAccountFilters,
+    typeFilters,
+    dateFilterMode,
+    dateFilterAnchor,
+    customStart,
+    customEnd,
+    amountMin,
+    amountMax,
     otherCategoryId,
     searchText,
     sortDirection,
@@ -6789,13 +6974,15 @@ function TransactionsPageContent() {
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution, summary.accountNumber ?? null, summary.accountType ?? null);
           const previewTransactions = summary.previewTransactions ?? [];
+          const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+          let nextAccountsSnapshot: Account[] | null = null;
 
           flushSync(() => {
             setIsWorkspaceDataReady(true);
 
             if (optimisticAccount) {
               setAccounts((current) =>
-                current.filter((account) => {
+                (nextAccountsSnapshot = current.filter((account) => {
                   if (summary.optimisticAccountId && account.id === summary.optimisticAccountId) {
                     return false;
                   }
@@ -6805,8 +6992,13 @@ function TransactionsPageContent() {
                   }
 
                   return true;
-                })
+                }))
               );
+            } else {
+              setAccounts((current) => {
+                nextAccountsSnapshot = current;
+                return current;
+              });
             }
 
             if (importedAccountId) {
@@ -6828,7 +7020,9 @@ function TransactionsPageContent() {
             }
           });
 
-          const settledAccountId = resolvePersistedImportedAccountId(summary, accounts);
+          const settledAccountId =
+            (nextAccountsSnapshot ? resolvePersistedImportedAccountId(summary, nextAccountsSnapshot) : null) ??
+            (summary.accountId && !summary.accountId.startsWith("optimistic-") ? summary.accountId : null);
           const settledSummary =
             settledAccountId && settledAccountId !== summary.accountId
               ? {
@@ -6839,13 +7033,12 @@ function TransactionsPageContent() {
                 }
               : summary;
           setPendingImportSummary(settledSummary);
-          const importedAccountId = settledSummary.accountId ?? settledSummary.optimisticAccountId ?? null;
 
           if (!selectedWorkspaceId) {
             return;
           }
 
-          const shouldRefreshAfterImport = !settledSummary.optimistic && Boolean(settledAccountId);
+          const shouldRefreshAfterImport = Boolean(settledAccountId);
           if (shouldRefreshAfterImport) {
             setImportRefreshInFlight(true);
             try {

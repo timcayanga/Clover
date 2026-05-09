@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { GoalDefinition, GoalPlan, GoalTargetCadence, GoalTargetMode } from "@/lib/goals";
 import { GoalGlyph } from "@/components/goals-visuals";
@@ -79,11 +79,13 @@ export function GoalsEditor({
   );
   const [targetPercent, setTargetPercent] = useState(initialPlan?.targetPercent !== null ? String(initialPlan?.targetPercent ?? "") : "");
   const [status, setStatus] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(!beginnerMode);
-  const [isPending, startTransition] = useTransition();
 
   const selectedGoalMeta = useMemo(() => goals.find((goal) => goal.value === selectedGoal) ?? null, [goals, selectedGoal]);
   const currentGoalMeta = useMemo(() => goals.find((goal) => goal.value === currentGoal) ?? null, [goals, currentGoal]);
+  const [optimisticGoalLabel, setOptimisticGoalLabel] = useState<string | null>(currentGoalMeta?.title ?? null);
+  const [optimisticStatusLabel, setOptimisticStatusLabel] = useState<string | null>(null);
   const currentTargetValue = currentTargetAmount ?? "";
   const currentPlanSummary = getGoalPlanSummary(currentGoalPlan, monthlyIncome, currency);
   const resolvedMonthlyTarget = useMemo(() => {
@@ -125,7 +127,8 @@ export function GoalsEditor({
 
   useEffect(() => {
     setSelectedGoal(currentGoal ?? goals[0]?.value ?? null);
-  }, [currentGoal, goals]);
+    setOptimisticGoalLabel(currentGoalMeta?.title ?? null);
+  }, [currentGoal, currentGoalMeta, goals]);
 
   useEffect(() => {
     const nextPlan = currentGoalPlan;
@@ -133,6 +136,7 @@ export function GoalsEditor({
     const defaults = getPlanDefaults(nextSelectedGoal);
 
     setSelectedGoal(nextSelectedGoal);
+    setOptimisticGoalLabel(nextSelectedGoal ? goals.find((goal) => goal.value === nextSelectedGoal)?.title ?? null : null);
     setTargetMode(nextPlan?.targetMode ?? defaults.targetMode);
     setCadence(nextPlan?.cadence ?? defaults.cadence);
     setPurpose(nextPlan?.purpose ?? defaults.purpose);
@@ -175,23 +179,46 @@ export function GoalsEditor({
   }, [isOpen]);
 
   const saveGoal = (goalValue: string | null) => {
-    startTransition(async () => {
-      setStatus("Saving your goal...");
-      const selectedGoalKey = goalValue ?? selectedGoal ?? null;
-      const rawAmount = targetAmount.trim() ? Number(targetAmount) : null;
-      const rawPercent = targetPercent.trim() ? Number(targetPercent) : null;
-      const nextPlan = {
-        goalKey: selectedGoalKey,
-        targetMode,
-        cadence,
-        targetAmount: targetMode === "amount" ? rawAmount : null,
-        targetPercent: targetMode === "percent" ? rawPercent : null,
-        purpose: purpose.trim() || null,
-      };
+    if (isSaving) {
+      return;
+    }
 
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 15000);
+    const selectedGoalKey = goalValue ?? selectedGoal ?? null;
+    const rawAmount = targetAmount.trim() ? Number(targetAmount) : null;
+    const rawPercent = targetPercent.trim() ? Number(targetPercent) : null;
+    const nextPlan = {
+      goalKey: selectedGoalKey,
+      targetMode,
+      cadence,
+      targetAmount: targetMode === "amount" ? rawAmount : null,
+      targetPercent: targetMode === "percent" ? rawPercent : null,
+      purpose: purpose.trim() || null,
+    };
 
+    const summary =
+      getGoalPlanSummary(
+        {
+          goalKey: selectedGoalKey ?? (selectedGoal ?? goals[0]?.value ?? null),
+          targetMode,
+          cadence,
+          targetAmount: targetMode === "amount" ? rawAmount : null,
+          targetPercent: targetMode === "percent" ? rawPercent : null,
+          purpose: purpose.trim() || null,
+        } as GoalPlan,
+        monthlyIncome,
+        currency
+      ) ?? null;
+
+    const nextGoalLabel = goals.find((goal) => goal.value === selectedGoalKey)?.title ?? "Goal";
+    setStatus("Saving your goal...");
+    setOptimisticStatusLabel(nextGoalLabel);
+    setIsSaving(true);
+    setIsOpen(false);
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+
+    void (async () => {
       try {
         const response = await fetch("/api/goals", {
           method: "POST",
@@ -211,38 +238,28 @@ export function GoalsEditor({
           throw new Error("Unable to save goal");
         }
 
-        const summary =
-          getGoalPlanSummary(
-            {
-              goalKey: selectedGoalKey ?? (selectedGoal ?? goals[0]?.value ?? null),
-              targetMode,
-              cadence,
-              targetAmount: targetMode === "amount" ? rawAmount : null,
-              targetPercent: targetMode === "percent" ? rawPercent : null,
-              purpose: purpose.trim() || null,
-            } as GoalPlan,
-            monthlyIncome,
-            currency
-          ) ?? null;
-
+        setOptimisticGoalLabel(nextGoalLabel);
         setStatus(goalValue ? summary?.detail ?? "Goal target updated. Nice work." : "Goal cleared. You can set a new one anytime.");
-        setIsOpen(false);
         router.refresh();
       } catch {
         setStatus("We couldn't save that goal right now.");
+        setIsOpen(true);
       } finally {
         window.clearTimeout(timeout);
+        setIsSaving(false);
+        setOptimisticStatusLabel(null);
       }
-    });
+    })();
   };
 
   const compactStatus =
     status ??
     currentPlanSummary?.detail ??
+    (optimisticStatusLabel ? `Saving ${optimisticStatusLabel.toLowerCase()}...` : null) ??
     (targetAmount
       ? `${getGoalMoneyLabel(currentGoalMeta?.value ?? null)} is set to ${formatCurrency(Number(targetAmount || 0), currency)}.`
       : "Your current goal is saved in Clover.");
-  const currentGoalLabel = currentGoalMeta?.title ?? "Set a goal";
+  const currentGoalLabel = optimisticGoalLabel ?? currentGoalMeta?.title ?? "Set a goal";
   const chipLabel = currentGoal ? "Adjust" : "Set goal";
   const investmentContextCopy =
     selectedGoal === "invest_better" && investmentHoldingsCount && investmentHoldingsCount > 0
@@ -437,15 +454,15 @@ export function GoalsEditor({
               <button
                 type="button"
                 className="button button-secondary"
-                disabled={isPending || !hasChanges}
+                disabled={isSaving || !hasChanges}
                 onClick={() => saveGoal(selectedGoal)}
               >
-                {selectedGoal ? "Save goal" : "Clear goal"}
+                {isSaving ? "Saving..." : selectedGoal ? "Save goal" : "Clear goal"}
               </button>
               <button
                 type="button"
                 className="button button-secondary"
-                disabled={isPending || (currentGoal === null && currentTargetAmount === null && targetAmount === "")}
+                disabled={isSaving || (currentGoal === null && currentTargetAmount === null && targetAmount === "")}
                 onClick={() => {
                   capturePostHogClientEvent("goal_reset", {
                     reset_scope: "editor_selection",
