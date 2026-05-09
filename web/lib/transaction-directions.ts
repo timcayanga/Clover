@@ -17,6 +17,29 @@ const normalizeAmount = (value: unknown) => {
 
 const normalizeDirectionText = (value: unknown) => String(value ?? "").trim().toLowerCase();
 
+const normalizeCategoryTypeText = (value: unknown) => String(value ?? "").trim().toLowerCase();
+
+export const coerceTransactionTypeFromCategoryName = (
+  categoryName: unknown,
+  fallback: TransactionType = "expense"
+): TransactionType => {
+  const normalized = normalizeCategoryTypeText(categoryName);
+
+  if (!normalized) {
+    return fallback;
+  }
+
+  if (normalized === "income") {
+    return "income";
+  }
+
+  if (normalized === "transfer" || normalized === "transfers") {
+    return "transfer";
+  }
+
+  return fallback;
+};
+
 export const coerceTransactionDirection = (value: unknown, amount?: unknown): TransactionDirection => {
   const normalized = normalizeDirectionText(value);
 

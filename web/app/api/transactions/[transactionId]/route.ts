@@ -7,6 +7,7 @@ import { z } from "zod";
 import { recordTrainingSignal, upsertAccountRule, upsertMerchantRule } from "@/lib/data-engine";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { hasCompatibleTable } from "@/lib/data-engine";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +84,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
     }
 
     await assertWorkspaceAccess(userId, transaction.workspaceId);
+    const resolvedCategoryId = payload.categoryId === undefined ? transaction.categoryId : payload.categoryId;
+    const resolvedCategory = resolvedCategoryId
+      ? await prisma.category.findUnique({
+          where: { id: resolvedCategoryId },
+        })
+      : null;
+    const resolvedType = coerceTransactionTypeFromCategoryName(
+      resolvedCategory?.name ?? null,
+      payload.type ?? transaction.type
+    );
+    const resolvedIsTransfer = payload.isTransfer ?? resolvedType === "transfer";
 
     const editedFields =
       payload.categoryId !== undefined ||
@@ -103,8 +115,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         categoryId: payload.categoryId === undefined ? undefined : payload.categoryId,
         accountId: payload.accountId,
         isExcluded: payload.isExcluded,
-        isTransfer: payload.isTransfer,
-        type: payload.type,
+        isTransfer: resolvedIsTransfer,
+        type: resolvedType,
         merchantRaw: payload.merchantRaw,
         merchantClean: payload.merchantClean,
         description: payload.description,
@@ -116,7 +128,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         categoryConfidence: payload.categoryId ? 100 : transaction.categoryConfidence,
         accountMatchConfidence: payload.accountId ? 100 : transaction.accountMatchConfidence,
         duplicateConfidence: transaction.duplicateConfidence,
-        transferConfidence: payload.isTransfer !== undefined ? 100 : transaction.transferConfidence,
+        transferConfidence: resolvedType === "transfer" ? 100 : 0,
         normalizedPayload: editedFields
           ? {
               ...(transaction.normalizedPayload && typeof transaction.normalizedPayload === "object" && !Array.isArray(transaction.normalizedPayload)
@@ -128,11 +140,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
               description: payload.description ?? transaction.description,
               categoryId: payload.categoryId === undefined ? transaction.categoryId : payload.categoryId,
               accountId: payload.accountId ?? transaction.accountId,
-              type: payload.type ?? transaction.type,
+              type: resolvedType,
               date: payload.date ? new Date(payload.date).toISOString() : transaction.date.toISOString(),
               amount: payload.amount === undefined ? transaction.amount.toString() : payload.amount.toString(),
               currency: payload.currency ? payload.currency.toUpperCase() : transaction.currency,
-              isTransfer: payload.isTransfer ?? transaction.isTransfer,
+              isTransfer: resolvedIsTransfer,
               isExcluded: payload.isExcluded ?? transaction.isExcluded,
               reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : transaction.reviewStatus),
               editedAt: new Date().toISOString(),
@@ -172,7 +184,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
           merchantText,
           categoryId: categoryForRule.id,
           categoryName: categoryForRule.name,
-          type: payload.type ?? transaction.type,
+          type: resolvedType,
           source: "manual_recategorization",
           confidence: 100,
           notes: payload.categoryId ? "Manual transaction edit from the transaction editor." : "Manual merchant label edit from the transaction editor.",
@@ -293,7 +305,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         date: updated.date.toISOString(),
         amount: updated.amount.toString(),
         currency: updated.currency,
-        type: updated.type,
+        type: resolvedType,
         merchantRaw: updated.merchantRaw,
         merchantClean: updated.merchantClean,
         description: updated.description,

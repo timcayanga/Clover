@@ -40,7 +40,7 @@ import { getTrailingBalanceFromParsedRows, inferAccountTypeFromStatement } from 
 import { parseImportTextWithOpenAIFallback, transcribeImportImagesWithOpenAI } from "@/lib/openai-import-parser";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
-import { toInternalTransactionType } from "@/lib/transaction-directions";
+import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { mergeCheckpointSourceMetadata } from "@/lib/import-workflow";
@@ -3245,8 +3245,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const rowCategoryConfidence = typeof row.categoryConfidence === "number" ? row.categoryConfidence : rowConfidence;
     const rowAccountMatchConfidence = typeof row.accountMatchConfidence === "number" ? row.accountMatchConfidence : 100;
     const rowDuplicateConfidence = typeof row.duplicateConfidence === "number" ? row.duplicateConfidence : 0;
-    const rowTransferConfidence = typeof row.transferConfidence === "number" ? row.transferConfidence : rowType === "transfer" ? 100 : 0;
     const categoryName = (typeof row.categoryName === "string" && row.categoryName) || defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
+    const canonicalType = coerceTransactionTypeFromCategoryName(
+      categoryName,
+      (rowType ?? "expense") as "income" | "expense" | "transfer"
+    );
+    const rowTransferConfidence =
+      typeof row.transferConfidence === "number" ? row.transferConfidence : canonicalType === "transfer" ? 100 : 0;
     const rowIsOpeningBalance = Boolean(
       typeof row.rawPayload === "object" &&
         row.rawPayload !== null &&
@@ -3265,7 +3270,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         data: {
           workspaceId: importFile.workspaceId,
           name: categoryName,
-          type: (rowType ?? "expense") as "income" | "expense" | "transfer",
+          type: canonicalType,
           isSystem: false,
         },
       });
@@ -3295,7 +3300,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       categoryName,
       reviewStatus: reviewOnlyRow
         ? "rejected"
-        : shouldRouteToReview({ confidence: rowConfidence, categoryName, type: rowType })
+        : shouldRouteToReview({ confidence: rowConfidence, categoryName, type: canonicalType })
           ? "pending_review"
           : "confirmed",
       parserConfidence: rowParserConfidence,
@@ -3317,11 +3322,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : account.currency ?? "PHP",
           account.name
         ) ?? "PHP",
-      type: (rowType ?? "expense") as TransactionType,
+      type: canonicalType,
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
       merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
       description: extractHumanReadableDescription(row.rawPayload ?? null),
-      isTransfer: rowType === "transfer",
+      isTransfer: canonicalType === "transfer",
       isExcluded:
         reviewOnlyRow ||
         (typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance"),
@@ -3333,7 +3338,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       insertRow,
       insightRow: {
         amount: row.amount,
-        type: rowType ?? "expense",
+        type: canonicalType,
         merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
         merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
         description: extractHumanReadableDescription(row.rawPayload ?? null),
@@ -3344,7 +3349,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         merchantText,
         categoryId,
         categoryName,
-        type: rowType ?? "expense",
+        type: canonicalType,
         confidence: typeof row.confidence === "number" ? row.confidence : 100,
         notes: typeof row.categoryReason === "string" ? row.categoryReason : null,
       },

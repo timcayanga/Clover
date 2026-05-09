@@ -10,6 +10,7 @@ import { countWorkspaceTransactions } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
@@ -253,6 +254,15 @@ const mapTransactionRow = (transaction: {
       transaction.currency,
       transaction.account.name
     ) ?? transaction.currency;
+  const categoryName = getEffectiveTransactionCategoryName({
+    categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+    rawPayload: transaction.rawPayload,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    description: transaction.description,
+    institution: transaction.account.institution,
+    type: transaction.type,
+  });
 
   return {
     id: transaction.id,
@@ -269,7 +279,7 @@ const mapTransactionRow = (transaction: {
     date: transaction.date.toISOString(),
     amount: transaction.amount.toString(),
     currency: normalizedCurrency,
-    type: transaction.type,
+    type: coerceTransactionTypeFromCategoryName(categoryName, transaction.type),
     merchantRaw: transaction.merchantRaw,
     merchantClean: getEffectiveTransactionMerchantName({
       merchantClean: transaction.merchantClean,
@@ -277,20 +287,12 @@ const mapTransactionRow = (transaction: {
       institution: transaction.account.institution,
     }),
     description: transaction.description,
-    isTransfer: transaction.isTransfer,
+    isTransfer: transaction.isTransfer || coerceTransactionTypeFromCategoryName(categoryName, transaction.type) === "transfer",
     isExcluded: transaction.isExcluded,
     createdAt: transaction.createdAt.toISOString(),
     warningReason: transaction.warningReason,
     rawPayload: transaction.rawPayload,
-    categoryName: getEffectiveTransactionCategoryName({
-      categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
-      rawPayload: transaction.rawPayload,
-      merchantRaw: transaction.merchantRaw,
-      merchantClean: transaction.merchantClean,
-      description: transaction.description,
-      institution: transaction.account.institution,
-      type: transaction.type,
-    }),
+    categoryName,
   };
 };
 

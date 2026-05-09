@@ -16,6 +16,7 @@ import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-p
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { guessCategoryName } from "@/lib/import-parser";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
@@ -520,21 +521,26 @@ const getTransactionSortLabel = (transaction: Transaction) =>
     rawPayload: transaction.rawPayload as never,
   }) ?? "Transaction";
 
-const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => ({
-  merchantClean:
-    getEffectiveTransactionMerchantName({
-      merchantClean: transaction.merchantClean,
-      merchantRaw: transaction.merchantRaw,
-      rawPayload: transaction.rawPayload as never,
-    }) ?? transaction.merchantRaw,
-  date: transaction.date.slice(0, 10),
-  categoryId: transaction.categoryId ?? "",
-  amount: transaction.amount,
-  currency: transaction.currency ?? "PHP",
-  type: transaction.type === "income" ? "credit" : transaction.type === "transfer" ? "transfer" : "debit",
-  description: transaction.description ?? "",
-  isExcluded: transaction.isExcluded,
-});
+const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => {
+  const categoryName = transaction.categoryName ?? null;
+  const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type);
+
+  return {
+    merchantClean:
+      getEffectiveTransactionMerchantName({
+        merchantClean: transaction.merchantClean,
+        merchantRaw: transaction.merchantRaw,
+        rawPayload: transaction.rawPayload as never,
+      }) ?? transaction.merchantRaw,
+    date: transaction.date.slice(0, 10),
+    categoryId: transaction.categoryId ?? "",
+    amount: transaction.amount,
+    currency: transaction.currency ?? "PHP",
+    type: effectiveType === "income" ? "credit" : effectiveType === "transfer" ? "transfer" : "debit",
+    description: transaction.description ?? "",
+    isExcluded: transaction.isExcluded,
+  };
+};
 
 const detailDraftTypeToTransactionType = (type: TransactionDetailDraft["type"]) =>
   type === "credit" ? "income" : type === "transfer" ? "transfer" : "expense";
@@ -548,23 +554,25 @@ const getDisplayTransactionCategoryName = (
     transaction.categoryId && transaction.categoryId.trim()
       ? categories.find((category) => category.id === transaction.categoryId)?.name ?? null
       : null;
+  const categoryName = getEffectiveTransactionCategoryName({
+    categoryName: categoryById ?? transaction.categoryName,
+    rawPayload: transaction.rawPayload as never,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    description: transaction.description ?? null,
+    institution,
+    type: transaction.type,
+  });
+  const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type);
   return (
-    getEffectiveTransactionCategoryName({
-      categoryName: categoryById ?? transaction.categoryName,
-      rawPayload: transaction.rawPayload as never,
-      merchantRaw: transaction.merchantRaw,
-      merchantClean: transaction.merchantClean,
-      description: transaction.description ?? null,
-      institution,
-      type: transaction.type,
-    }) ??
+    categoryName ??
     guessCategoryName(
       getEffectiveTransactionMerchantName({
         merchantClean: transaction.merchantClean,
         merchantRaw: transaction.merchantRaw,
         institution,
       }) || transaction.description || transaction.merchantRaw,
-      transaction.type
+      effectiveType
     ) ??
     "Other"
   );

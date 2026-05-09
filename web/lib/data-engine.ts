@@ -13,7 +13,7 @@ import {
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
-import { toInternalTransactionType } from "@/lib/transaction-directions";
+import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
 
@@ -2570,7 +2570,8 @@ const normalizeImportedAccountType = (value: unknown): ImportedAccountType => {
   return "bank";
 };
 
-const normalizeTransactionType = (value: unknown, amount?: unknown): TransactionType => toInternalTransactionType(value, amount);
+const normalizeTransactionType = (value: unknown, amount?: unknown, categoryName?: unknown): TransactionType =>
+  coerceTransactionTypeFromCategoryName(categoryName, toInternalTransactionType(value, amount));
 
 export const applyDataQaReviewLearning = async (params: {
   workspaceId: string;
@@ -2706,7 +2707,8 @@ export const applyDataQaReviewLearning = async (params: {
       (parsedNormalizedText || parsedMerchantText);
     const type = normalizeTransactionType(
       readReviewString(reviewRow.output, "type") ?? parsedRecord.type ?? parsedRecord.transactionType ?? "expense",
-      parsedRecord.amount ?? parsedRecord.value ?? parsedRecord.total
+      parsedRecord.amount ?? parsedRecord.value ?? parsedRecord.total,
+      categoryName
     );
 
     if (!category || !merchantText) {
@@ -2743,7 +2745,11 @@ export const applyDataQaReviewLearning = async (params: {
       readReviewString(output, "transactionName") ??
       readReviewString(output, "normalizedName") ??
       "";
-    const type = normalizeTransactionType(readReviewString(output, "type") ?? "expense", output && isRecord(output) ? output.amount : null);
+    const type = normalizeTransactionType(
+      readReviewString(output, "type") ?? "expense",
+      output && isRecord(output) ? output.amount : null,
+      categoryName
+    );
 
     if (!category || !merchantText) {
       continue;
@@ -2829,9 +2835,12 @@ export const enrichParsedRowsWithTraining = async (params: {
       merchantRules,
       trainingSignals,
     });
-    const nextType = learned.preferredType ?? row.type ?? "expense";
     const merchantClean = learned.normalizedName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
-    const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(nextType);
+    const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(learned.preferredType ?? row.type ?? "expense");
+    const nextType = coerceTransactionTypeFromCategoryName(
+      categoryName,
+      learned.preferredType ?? row.type ?? "expense"
+    );
     const accountName = row.accountName ?? null;
     const effectiveConfidence = Math.max(0, Math.min(100, Math.min(learned.confidence, statementConfidence)));
     const learnedRuleIdsApplied = [

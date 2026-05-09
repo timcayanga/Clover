@@ -34,6 +34,7 @@ import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/import-p
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import {
@@ -893,7 +894,8 @@ const matchesTransactionFilters = (
   }
 
   if (filters.typeFilters.length > 0) {
-    const normalizedType = transaction.type === "income" ? "credit" : transaction.type === "transfer" ? "transfer" : "debit";
+    const effectiveType = coerceTransactionTypeFromCategoryName(transaction.categoryName ?? null, transaction.type);
+    const normalizedType = effectiveType === "income" ? "credit" : effectiveType === "transfer" ? "transfer" : "debit";
     if (!filters.typeFilters.includes(normalizedType)) {
       return false;
     }
@@ -1281,19 +1283,23 @@ const summarizeTransactionChange = (before: Transaction, after: Transaction, acc
   return changes;
 };
 
-const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => ({
-  merchantRaw: transaction.merchantRaw,
-  merchantClean: transaction.merchantClean ?? transaction.merchantRaw,
-  date: transaction.date.slice(0, 10),
-  accountId: transaction.accountId,
-  categoryId: transaction.categoryId ?? "",
-  amount: transaction.amount,
-  currency: transaction.currency,
-  type: transaction.type === "income" ? "credit" : "debit",
-  description: normalizeTransactionNotes(transaction.description),
-  isExcluded: transaction.isExcluded,
-  isTransfer: transaction.isTransfer,
-});
+const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => {
+  const effectiveType = coerceTransactionTypeFromCategoryName(transaction.categoryName ?? null, transaction.type);
+
+  return {
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean ?? transaction.merchantRaw,
+    date: transaction.date.slice(0, 10),
+    accountId: transaction.accountId,
+    categoryId: transaction.categoryId ?? "",
+    amount: transaction.amount,
+    currency: transaction.currency,
+    type: effectiveType === "income" ? "credit" : "debit",
+    description: normalizeTransactionNotes(transaction.description),
+    isExcluded: transaction.isExcluded,
+    isTransfer: transaction.isTransfer,
+  };
+};
 
 const detailDraftTypeToTransactionType = (type: TransactionDetailDraft["type"]) => (type === "credit" ? "income" : "expense");
 
@@ -2659,7 +2665,7 @@ function TransactionsPageContent() {
           return accountNameById.get(transaction.accountId) ?? transaction.accountName;
         case "category": {
           const categoryValue = transaction.categoryId ?? otherCategoryId;
-          return (
+          const categoryLabel =
             getEffectiveTransactionCategoryName({
               categoryName: transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? null,
               rawPayload: transaction.rawPayload as never,
@@ -2667,7 +2673,11 @@ function TransactionsPageContent() {
               merchantClean: transaction.merchantClean,
               institution: accountInstitutionById.get(transaction.accountId) ?? null,
               type: transaction.type,
-            }) ?? "Other"
+            }) ??
+            guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
+            "Other";
+          return (
+            categoryLabel
           );
         }
         case "amount":
@@ -3773,7 +3783,7 @@ function TransactionsPageContent() {
     accountId: transaction.accountId,
     isExcluded: transaction.isExcluded,
     isTransfer: transaction.isTransfer,
-    type: transaction.type,
+    type: coerceTransactionTypeFromCategoryName(transaction.categoryName ?? null, transaction.type),
     merchantRaw: transaction.merchantRaw,
     merchantClean: transaction.merchantClean,
     description: transaction.description ?? null,
@@ -4488,6 +4498,7 @@ function TransactionsPageContent() {
             }) ??
             guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
             "Other";
+          const effectiveType = coerceTransactionTypeFromCategoryName(categoryLabel, transaction.type);
           const categoryTone = getCategoryIconTone(categoryLabel);
           const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
           const merchantSummary = summarizeTransactionMerchantText(
@@ -4495,9 +4506,9 @@ function TransactionsPageContent() {
             accountInstitution
           );
           const typeLabel =
-            transaction.type === "transfer" || transaction.isTransfer
+            effectiveType === "transfer" || transaction.isTransfer
               ? "Transfer"
-              : transaction.type === "income"
+              : effectiveType === "income"
                 ? "Credit"
                 : "Debit";
 
@@ -4521,11 +4532,11 @@ function TransactionsPageContent() {
                 </span>
               </td>
               <td>
-                <span class="transactions-pdf-type transactions-pdf-type--${transaction.type === "transfer" || transaction.isTransfer ? "transfer" : transaction.type === "income" ? "credit" : "debit"}">
+                <span class="transactions-pdf-type transactions-pdf-type--${effectiveType === "transfer" || transaction.isTransfer ? "transfer" : effectiveType === "income" ? "credit" : "debit"}">
                   ${escapeHtml(typeLabel)}
                 </span>
               </td>
-              <td class="${transaction.type === "income" ? "positive" : transaction.type === "transfer" || transaction.isTransfer ? "neutral" : "negative"}">${escapeHtml(
+              <td class="${effectiveType === "income" ? "positive" : effectiveType === "transfer" || transaction.isTransfer ? "neutral" : "negative"}">${escapeHtml(
                 formatTransactionAmount(amount, transaction.currency)
               )}</td>
               <td>${escapeHtml(warningReason ?? "—")}</td>
@@ -5577,7 +5588,6 @@ function TransactionsPageContent() {
               visibleTransactions.map((transaction, index) => {
                 const warningReason = warningReasonFor(transaction);
                 const amount = Number(transaction.amount);
-                const isPositive = transaction.type === "income";
                 const categoryValue = transaction.categoryId ?? otherCategoryId;
                 const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
                 const categoryLabel =
@@ -5591,14 +5601,15 @@ function TransactionsPageContent() {
                   }) ??
                   guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
                   "Other";
+                const effectiveType = coerceTransactionTypeFromCategoryName(categoryLabel, transaction.type);
                 const isTransferTransaction =
-                  transaction.isTransfer || transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
-                const amountToneClass = isTransferTransaction ? "neutral" : isPositive ? "positive" : "negative";
+                  transaction.isTransfer || effectiveType === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
+                const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
                 const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
                 const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
                   institution: accountInstitution,
                   name: accountDisplayName,
-                  type: transaction.type === "transfer" ? "bank" : transaction.type === "income" ? "bank" : "other",
+                  type: effectiveType === "transfer" ? "bank" : effectiveType === "income" ? "bank" : "other",
                 });
                 const merchantSummary = summarizeTransactionMerchantText(
                   transaction.merchantClean ?? transaction.merchantRaw,
@@ -5837,9 +5848,10 @@ function TransactionsPageContent() {
                           }) ??
                           guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
                           "Other";
+                        const effectiveType = coerceTransactionTypeFromCategoryName(categoryLabel, transaction.type);
                         const isTransferTransaction =
-                          transaction.isTransfer || transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
-                        const amountToneClass = isTransferTransaction ? "neutral" : transaction.type === "income" ? "positive" : "negative";
+                          transaction.isTransfer || effectiveType === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
+                        const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
                         const merchantSummary =
                           transaction.merchantClean?.trim() ||
                           summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
@@ -5847,7 +5859,7 @@ function TransactionsPageContent() {
                         const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
                           institution: accountInstitution,
                           name: accountDisplayName,
-                          type: transaction.type === "transfer" ? "bank" : transaction.type === "income" ? "bank" : "other",
+                          type: effectiveType === "transfer" ? "bank" : effectiveType === "income" ? "bank" : "other",
                         });
 
                         return (

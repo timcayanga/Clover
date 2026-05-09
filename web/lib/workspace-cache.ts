@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 
 type CachedRecord = Record<string, unknown>;
 
@@ -478,6 +479,16 @@ const mergeImportedTransactionRecord = <T extends CachedRecord>(current: T, inco
   const incomingCategoryName = typeof incoming.categoryName === "string" ? incoming.categoryName.trim() : "";
   const useCurrentCategory = !isGenericCategoryName(currentCategoryName) && isGenericCategoryName(incomingCategoryName);
   const derivedCategoryName = deriveCategoryNameFromRecord(incoming) ?? deriveCategoryNameFromRecord(current);
+  const resolvedCategoryName =
+    (useCurrentCategory ? currentCategoryName : incomingCategoryName || currentCategoryName || derivedCategoryName || null) ?? null;
+  const resolvedType = coerceTransactionTypeFromCategoryName(
+    resolvedCategoryName,
+    (typeof incoming.type === "string" && incoming.type.trim()
+      ? incoming.type.trim()
+      : typeof current.type === "string" && current.type.trim()
+        ? current.type.trim()
+        : "expense") as "income" | "expense" | "transfer"
+  );
 
   const currentCategoryId = typeof current.categoryId === "string" && current.categoryId.trim() ? current.categoryId.trim() : null;
   const incomingCategoryId = typeof incoming.categoryId === "string" && incoming.categoryId.trim() ? incoming.categoryId.trim() : null;
@@ -488,14 +499,12 @@ const mergeImportedTransactionRecord = <T extends CachedRecord>(current: T, inco
   const merged: CachedRecord = {
     ...current,
     ...incoming,
-    categoryName:
-      useCurrentCategory
-        ? currentCategoryName
-        : incomingCategoryName || currentCategoryName || derivedCategoryName || null,
+    categoryName: resolvedCategoryName,
     categoryId:
       useCurrentCategory
         ? currentCategoryId
         : incomingCategoryId ?? currentCategoryId ?? (derivedCategoryName ? `derived:${normalizeMerchantText(derivedCategoryName)}` : null),
+    type: resolvedType,
     rawPayload: mergedRawPayload,
     warningReason:
       typeof incoming.warningReason === "string" && incoming.warningReason.trim()
