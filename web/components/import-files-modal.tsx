@@ -1941,7 +1941,8 @@ export function ImportFilesModal({
       if (
         lastKnownConfirmedRows > 0 ||
         Boolean(lastKnownAccountBalance) ||
-        Boolean(summaryContext.accountName || summaryContext.accountNumber || summaryContext.institution)
+        Boolean(summaryContext.accountName || summaryContext.accountNumber || summaryContext.institution) ||
+        Boolean(resolvedAccountId)
       ) {
         emitItemUpdate({
           status: "importing",
