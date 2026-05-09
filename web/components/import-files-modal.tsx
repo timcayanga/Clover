@@ -580,6 +580,88 @@ const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsight
   }
 };
 
+const waitForImportSettledVisibility = async (params: {
+  accountId: string | null;
+  importedRows: number;
+  expectedBalance: string | null;
+  timeoutMs?: number;
+}) => {
+  const accountId = params.accountId && !params.accountId.startsWith("optimistic-") ? params.accountId : null;
+  if (!accountId) {
+    return true;
+  }
+
+  const expectedBalance = toBalanceString(params.expectedBalance);
+  const timeoutMs = params.timeoutMs ?? 180_000;
+  const startedAt = Date.now();
+  const pollDelayMs = 1500;
+
+  const normalizeBalance = (value: unknown) => {
+    const text = toBalanceString(value);
+    if (!text) {
+      return null;
+    }
+
+    const numeric = Number(text.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const [accountResponse, transactionsResponse] = await Promise.all([
+        fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
+          cache: "no-store",
+        }),
+        params.importedRows > 0
+          ? fetch(`/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=1`, {
+              cache: "no-store",
+            })
+          : Promise.resolve(null),
+      ]);
+
+      if (!accountResponse.ok) {
+        await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
+        continue;
+      }
+
+      const accountPayload = await accountResponse.json().catch(() => null);
+      const account = accountPayload?.account ?? null;
+      const accountBalance = normalizeBalance(account?.balance);
+      const accountLooksReady = Boolean(account && typeof account.id === "string" && account.id === accountId);
+      const balanceLooksReady =
+        expectedBalance === null
+          ? accountBalance !== null
+          : accountBalance !== null && normalizeBalance(expectedBalance) === accountBalance;
+
+      if (!accountLooksReady || !balanceLooksReady) {
+        await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
+        continue;
+      }
+
+      if (params.importedRows > 0) {
+        if (!transactionsResponse || !transactionsResponse.ok) {
+          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
+          continue;
+        }
+
+        const transactionPayload = await transactionsResponse.json().catch(() => null);
+        const totalCount = Number(transactionPayload?.totalCount ?? 0);
+        const rows = Array.isArray(transactionPayload?.transactions) ? transactionPayload.transactions : [];
+        if (totalCount <= 0 || rows.length <= 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
+          continue;
+        }
+      }
+
+      return true;
+    } catch {
+      await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
+    }
+  }
+
+  return false;
+};
+
 const buildOptimisticPreviewTransactions = (
   rows: Array<Record<string, unknown>>,
   params: {
@@ -956,6 +1038,7 @@ export function ImportFilesModal({
   const importActivitySurfaceRef = useRef<ImportActivityLocation>("modal");
   const lastImportActivityRef = useRef<ImportActivitySnapshot | null>(null);
   const autoCloseAfterStartRef = useRef(false);
+  const autoCloseCompletedBatchTimerRef = useRef<number | null>(null);
   const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
 
@@ -1890,7 +1973,7 @@ export function ImportFilesModal({
     };
     let seededFallbackSummary = false;
     const startedAt = Date.now();
-    const MAX_WAIT_MS = 20_000;
+    const MAX_WAIT_MS = 180_000;
     let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
@@ -2333,10 +2416,10 @@ export function ImportFilesModal({
         }
 
         if (Date.now() - startedAt >= MAX_WAIT_MS) {
-          const timeoutMessage =
-            parsedRowsCount > 0
-              ? "Clover could read some rows, but couldn't finish linking them to the account. Try the import again, or add the missing rows in Transactions."
-              : "Timed out after 180 seconds while Clover was still reading the document.";
+    const timeoutMessage =
+      parsedRowsCount > 0
+        ? "Clover could read some rows, but couldn't finish linking them to the account. Try the import again, or add the missing rows in Transactions."
+        : "Timed out after 180 seconds while Clover was still reading the document.";
           closeImportAfterError(itemId, "monitor", summaryContext.fileName, timeoutMessage);
           return;
         }
@@ -3655,6 +3738,23 @@ export function ImportFilesModal({
               : Number(confirmedInsightSummary.topMerchantCount),
         } satisfies UploadInsightsSummary);
 
+        if (confirmedSummary) {
+          seedImportedWorkspaceCaches(workspaceId, confirmedSummary);
+          void onImported(confirmedSummary);
+        }
+
+        const settledVisible = await waitForImportSettledVisibility({
+          accountId: serverConfirmedAccountId,
+          importedRows: confirmedRows,
+          expectedBalance: confirmedSummary.balance ?? null,
+        });
+        if (!settledVisible) {
+          console.warn("Import finished before the settled data became visible", {
+            importFileId,
+            accountId: serverConfirmedAccountId,
+          });
+        }
+
         updateItem(itemId, {
           status: "done",
           confirmationState: "confirmed",
@@ -3678,11 +3778,6 @@ export function ImportFilesModal({
           summary: confirmedSummary,
           errorMessage: null,
         });
-
-        if (confirmedSummary) {
-          seedImportedWorkspaceCaches(workspaceId, confirmedSummary);
-          void onImported(confirmedSummary);
-        }
 
         setMessage(`Imported ${item.file.name}.`);
         router.refresh();
@@ -3801,6 +3896,18 @@ export function ImportFilesModal({
         if (optimisticSummary) {
           seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
           void onImported(optimisticSummary);
+
+          const settledVisible = await waitForImportSettledVisibility({
+            accountId: optimisticAccountId,
+            importedRows: Number(processPayload?.imported ?? 0) || 0,
+            expectedBalance: optimisticSummary.balance ?? null,
+          });
+          if (!settledVisible) {
+            console.warn("Import finished before the settled data became visible", {
+              importFileId,
+              accountId: optimisticAccountId,
+            });
+          }
 
           updateItem(itemId, {
             status: "done",
@@ -4000,6 +4107,19 @@ export function ImportFilesModal({
             error: error instanceof Error ? error.message : String(error),
           });
         });
+
+        const settledVisible = await waitForImportSettledVisibility({
+          accountId: targetAccountId,
+          importedRows: Number(processPayload?.imported ?? 0) || 0,
+          expectedBalance: optimisticPreviewSummary?.balance ?? null,
+        });
+        if (!settledVisible) {
+          console.warn("Import finished before the settled data became visible", {
+            importFileId,
+            accountId: targetAccountId,
+          });
+        }
+
         updateItem(itemId, {
           status: "done",
           confirmationState: "confirmed",
@@ -4349,6 +4469,33 @@ export function ImportFilesModal({
     lastImportActivityRef.current = nextSnapshot;
     setImportActivity(nextSnapshot);
   }, [activeProgressItem, busy, completedFileCount, items, message, open, overallProgress, validationNotice, workspaceId]);
+  useEffect(() => {
+    if (autoCloseCompletedBatchTimerRef.current) {
+      window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
+      autoCloseCompletedBatchTimerRef.current = null;
+    }
+
+    if (!open || busy) {
+      return;
+    }
+
+    const hasCompletedBatchNow = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
+    if (!hasCompletedBatchNow) {
+      return;
+    }
+
+    autoCloseCompletedBatchTimerRef.current = window.setTimeout(() => {
+      autoCloseCompletedBatchTimerRef.current = null;
+      onClose();
+    }, 10_000);
+
+    return () => {
+      if (autoCloseCompletedBatchTimerRef.current) {
+        window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
+        autoCloseCompletedBatchTimerRef.current = null;
+      }
+    };
+  }, [busy, items, onClose, open]);
   useEffect(() => {
     if (!open || passwordItems.length === 0) {
       setSelectedPasswordItemId(null);
