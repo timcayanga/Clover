@@ -581,6 +581,7 @@ const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsight
 };
 
 const waitForImportSettledVisibility = async (params: {
+  workspaceId: string;
   accountId: string | null;
   importedRows: number;
   expectedBalance: string | null;
@@ -608,12 +609,17 @@ const waitForImportSettledVisibility = async (params: {
 
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const [accountResponse, transactionsResponse] = await Promise.all([
+      const [accountResponse, transactionsResponse, categoriesResponse] = await Promise.all([
         fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
           cache: "no-store",
         }),
         params.importedRows > 0
           ? fetch(`/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=1`, {
+              cache: "no-store",
+            })
+          : Promise.resolve(null),
+        params.importedRows > 0
+          ? fetch(`/api/categories?workspaceId=${encodeURIComponent(params.workspaceId)}`, {
               cache: "no-store",
             })
           : Promise.resolve(null),
@@ -644,10 +650,22 @@ const waitForImportSettledVisibility = async (params: {
           continue;
         }
 
+        if (!categoriesResponse || !categoriesResponse.ok) {
+          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
+          continue;
+        }
+
         const transactionPayload = await transactionsResponse.json().catch(() => null);
         const totalCount = Number(transactionPayload?.totalCount ?? 0);
         const rows = Array.isArray(transactionPayload?.transactions) ? transactionPayload.transactions : [];
         if (totalCount <= 0 || rows.length <= 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
+          continue;
+        }
+
+        const categoryPayload = await categoriesResponse.json().catch(() => null);
+        const categories = Array.isArray(categoryPayload?.categories) ? categoryPayload.categories : [];
+        if (categories.length <= 0) {
           await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
           continue;
         }
@@ -2186,7 +2204,7 @@ export function ImportFilesModal({
 
             seededFallbackSummary = true;
             seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
-            void onImported(fallbackSummary);
+            await Promise.resolve(onImported(fallbackSummary));
             emitItemUpdate({
               status: "importing",
               confirmationState: "pending",
@@ -2585,7 +2603,7 @@ export function ImportFilesModal({
                 errorMessage: null,
               });
               seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
-              void onImported(fallbackSummary);
+              await Promise.resolve(onImported(fallbackSummary));
             } else {
               updateItem(itemId, {
                 status: "importing",
@@ -2746,7 +2764,7 @@ export function ImportFilesModal({
           });
 
           seedImportedWorkspaceCaches(workspaceId, previewSummary);
-          void onImported(previewSummary);
+          await Promise.resolve(onImported(previewSummary));
           publishImportActivity({
             workspaceId,
             surface: importActivitySurfaceRef.current,
@@ -2782,10 +2800,10 @@ export function ImportFilesModal({
             },
             { backgroundOnly: true }
           )
-            .then((result) => {
+          .then(async (result) => {
               if (result.summary) {
                 seedImportedWorkspaceCaches(workspaceId, result.summary);
-                void onImported(result.summary);
+                await Promise.resolve(onImported(result.summary));
               }
             })
             .catch((error) => {
@@ -3096,7 +3114,7 @@ export function ImportFilesModal({
       );
 
       seedImportedWorkspaceCaches(workspaceId, summary);
-      void onImported(summary);
+      await Promise.resolve(onImported(summary));
       updateItem(itemId, {
         progressLabel: parsedRows.length > 0 ? "Preview ready" : "Reading locally",
       });
@@ -3744,6 +3762,7 @@ export function ImportFilesModal({
         }
 
           const settledVisible = await waitForImportSettledVisibility({
+            workspaceId,
             accountId: serverConfirmedAccountId,
             importedRows: confirmedRows,
             expectedBalance: confirmedSummary.balance ?? null,
@@ -3898,6 +3917,7 @@ export function ImportFilesModal({
           await Promise.resolve(onImported(optimisticSummary));
 
           const settledVisible = await waitForImportSettledVisibility({
+            workspaceId,
             accountId: optimisticAccountId,
             importedRows: Number(processPayload?.imported ?? 0) || 0,
             expectedBalance: optimisticSummary.balance ?? null,
@@ -4082,7 +4102,7 @@ export function ImportFilesModal({
 
       if (optimisticPreviewSummary) {
         seedImportedWorkspaceCaches(workspaceId, optimisticPreviewSummary);
-        void onImported(optimisticPreviewSummary);
+        await Promise.resolve(onImported(optimisticPreviewSummary));
       }
 
       if (targetAccountId) {
@@ -4117,6 +4137,7 @@ export function ImportFilesModal({
         }
 
         const settledVisible = await waitForImportSettledVisibility({
+          workspaceId,
           accountId: targetAccountId,
           importedRows: Number(processPayload?.imported ?? 0) || 0,
           expectedBalance: optimisticPreviewSummary?.balance ?? null,
