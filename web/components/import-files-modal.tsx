@@ -1690,6 +1690,8 @@ export function ImportFilesModal({
     }
 
     let finalizingProgress = 92;
+    let lastKnownConfirmedRows = 0;
+    let lastKnownAccountBalance: string | null = null;
     const finalizingTimer = window.setInterval(() => {
       finalizingProgress = Math.min(98, finalizingProgress + 1);
       emitItemUpdate({
@@ -1790,6 +1792,7 @@ export function ImportFilesModal({
 
         const confirmed = await confirmResponse.json();
         const importedRows = Number(confirmed.result?.imported ?? 0);
+        lastKnownConfirmedRows = importedRows;
         if (confirmed.result?.status === "staged") {
           emitItemUpdate({
             status: "importing",
@@ -1819,6 +1822,7 @@ export function ImportFilesModal({
         }
 
         const accountBalance = typeof confirmed.result?.accountBalance === "string" ? confirmed.result.accountBalance : null;
+        lastKnownAccountBalance = accountBalance;
         const insightSummary = confirmed.result?.insightSummary ?? null;
         const resolvedAccountType = (
           summaryContext.accountType ??
@@ -1865,6 +1869,40 @@ export function ImportFilesModal({
           topMerchantName: insightSummary?.topMerchantName ?? null,
           topMerchantCount: insightSummary?.topMerchantCount === null ? null : Number(insightSummary?.topMerchantCount ?? 0),
         } satisfies UploadInsightsSummary;
+        const settledVisible = await waitForImportSettledVisibility({
+          workspaceId,
+          accountId: resolvedAccountId,
+          importedRows,
+          expectedBalance: summary.balance ?? null,
+        });
+
+        if (!settledVisible) {
+          emitItemUpdate({
+            status: "importing",
+            confirmationState: "pending",
+            error: null,
+            importFileId,
+            targetAccountId: resolvedAccountId,
+            importedRows,
+            progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
+            progressLabel: "Finalizing import",
+          });
+          emitImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName: summaryContext.fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
+            detail: "Clover found the account details and is still saving the rest",
+            summary,
+            errorMessage: null,
+          });
+          return { status: "staged", importedRows, summary };
+        }
+
         emitItemUpdate({
           status: "done",
           confirmationState: "confirmed",
@@ -1898,6 +1936,37 @@ export function ImportFilesModal({
           currency: "PHP",
         });
         return { status: "done", importedRows, summary };
+      }
+
+      if (
+        lastKnownConfirmedRows > 0 ||
+        Boolean(lastKnownAccountBalance) ||
+        Boolean(summaryContext.accountName || summaryContext.accountNumber || summaryContext.institution)
+      ) {
+        emitItemUpdate({
+          status: "importing",
+          confirmationState: "pending",
+          progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
+          progressLabel: "Finalizing import",
+        });
+        emitImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "active",
+          fileName: summaryContext.fileName,
+          fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount,
+          progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
+          detail: "Clover found the account details and is still saving the rest",
+          summary: null,
+          errorMessage: null,
+        });
+        return {
+          status: "staged",
+          importedRows: lastKnownConfirmedRows || null,
+          summary: null,
+        };
       }
 
       emitImportError(
