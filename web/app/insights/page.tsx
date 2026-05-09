@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { InfoTip as InsightInfoTip } from "@/components/info-tip";
-import { InsightsTabs } from "@/components/insights-tabs";
+import { InsightsTabs, InsightsTabsTitleAddon } from "@/components/insights-tabs";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
@@ -747,6 +747,7 @@ async function InsightsPageStream({
     <CloverShell
       active="insights"
       title="Insights"
+      titleAddon={<InsightsTabsTitleAddon activeTab={selectedTab} />}
     >
       <PostHogEvent
         event="insight_generated"
@@ -805,7 +806,7 @@ async function InsightsPageStream({
       />
       <section className="insights-story">
         <InsightsTabs
-          initialTab={selectedTab}
+          activeTab={selectedTab}
           summary={
           <article className="insights-snapshot insights-snapshot--hero glass">
           <div className="insights-snapshot__copy">

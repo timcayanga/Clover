@@ -20,13 +20,24 @@ export const metadata = {
   title: "Settings",
 };
 
-async function SettingsPageStream() {
+const validSections = new Set(["account", "profiles", "display", "data", "categories", "plan"]);
+
+async function SettingsSectionPageStream({
+  params,
+}: {
+  params: Promise<{ section: string }>;
+}) {
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
   const env = getEnv();
+  const resolvedParams = await params;
 
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
+  }
+
+  if (!validSections.has(resolvedParams.section)) {
+    redirect("/settings");
   }
 
   const cookieStore = await cookies();
@@ -117,7 +128,8 @@ async function SettingsPageStream() {
   return (
     <CloverShell active="settings" title="Settings">
       <SettingsHub
-        mode="menu"
+        mode="panel"
+        initialSection={resolvedParams.section as "account" | "profiles" | "display" | "data" | "categories" | "plan"}
         workspaceId={selectedWorkspace.id}
         workspaceName={selectedWorkspace.name}
         profiles={serializedProfiles}
@@ -160,6 +172,14 @@ async function SettingsPageStream() {
   );
 }
 
-export default function SettingsPage() {
-  return <RouteSplash label="settings"><SettingsPageStream /></RouteSplash>;
+export default function SettingsSectionPage({
+  params,
+}: {
+  params: Promise<{ section: string }>;
+}) {
+  return (
+    <RouteSplash label="settings">
+      <SettingsSectionPageStream params={params} />
+    </RouteSplash>
+  );
 }

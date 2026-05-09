@@ -264,7 +264,7 @@ const extractTextFromImageBufferWithOcrBestEffort = async (imageSource: Buffer |
   return firstPass;
 };
 
-const renderPdfPagesToOcrText = async (data: Uint8Array, password?: string, baseUrl?: string | null, maxPages = 4, scale = 3.2) => {
+const renderPdfPagesToOcrText = async (data: Uint8Array, password?: string, baseUrl?: string | null, maxPages = 6, scale = 3.2) => {
   const pageImages = await renderPdfPageImagesFromBytes(data, password, maxPages, scale, true);
   const ocrPages: string[] = [];
 
@@ -303,6 +303,25 @@ const shouldPreferPdfOcrFirst = (fileName?: string | null) => {
   );
 };
 
+const looksLikeFragmentedStatementText = (text: string) => {
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 20) {
+    return false;
+  }
+
+  const monthPattern = /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?(?:\s+\d{1,2}(?:,\s*\d{4})?)?$/i;
+  const dateOnlyCount = lines.filter((line) => monthPattern.test(line) || /^(?:\d{1,2}\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:,\s*\d{4})?$/i.test(line)).length;
+  const moneyOnlyCount = lines.filter((line) => /^[0-9][0-9,]*\.\d{2}$/.test(line)).length;
+  const combinedCount = lines.filter((line) => /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}.*[0-9][0-9,]*\.\d{2}/i.test(line)).length;
+
+  return (dateOnlyCount >= 8 || moneyOnlyCount >= 8) && combinedCount < 6;
+};
+
 const extractTextFromPdfBytesWithRenderFirstFallback = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
   try {
     const ocrText = await renderPdfPagesToOcrText(data, password, baseUrl);
@@ -314,9 +333,9 @@ const extractTextFromPdfBytesWithRenderFirstFallback = async (data: Uint8Array, 
   }
 
   try {
-    return await extractTextFromPdfBytes(data, password, baseUrl);
+    return await extractTextFromPdfBytesWithOcrFallback(data, password, baseUrl);
   } catch (error) {
-    console.warn("PDF text extraction after OCR-first fallback failed", error);
+    console.warn("PDF OCR-first fallback after render-first extraction failed", error);
     return "";
   }
 };
@@ -338,10 +357,12 @@ const ensurePdfJsPolyfills = async () => {
 };
 
 const loadPdfJsText = async () => {
+  await ensurePdfJsPolyfills();
   return import("pdfjs-serverless");
 };
 
 const loadPdfJsRender = async () => {
+  await ensurePdfJsPolyfills();
   return import("./pdfjs.server");
 };
 
@@ -536,11 +557,17 @@ const extractTextFromPdfBytesWithOcrFallback = async (data: Uint8Array, password
     }
 
     const ocrJoinedText = ocrPages.join("\n").trim();
-    return ocrJoinedText.length > extractedText.trim().length ? ocrJoinedText : extractedText;
+    if (ocrJoinedText.length > extractedText.trim().length) {
+      return ocrJoinedText;
+    }
+    if (looksLikeFragmentedStatementText(extractedText)) {
+      return ocrJoinedText || extractedText;
+    }
+    return extractedText;
   } catch (error) {
     console.warn("PDF OCR fallback failed; retrying with a lighter render path", error);
     try {
-      const pageImages = await renderPdfPageImagesFromBytes(data, password, 4, 2.2, false);
+      const pageImages = await renderPdfPageImagesFromBytes(data, password, 6, 2.2, false);
       const ocrPages: string[] = [];
 
       for (const page of pageImages) {
@@ -562,7 +589,13 @@ const extractTextFromPdfBytesWithOcrFallback = async (data: Uint8Array, password
       }
 
       const ocrJoinedText = ocrPages.join("\n").trim();
-      return ocrJoinedText.length > extractedText.trim().length ? ocrJoinedText : extractedText;
+      if (ocrJoinedText.length > extractedText.trim().length) {
+        return ocrJoinedText;
+      }
+      if (looksLikeFragmentedStatementText(extractedText)) {
+        return ocrJoinedText || extractedText;
+      }
+      return extractedText;
     } catch (retryError) {
       console.warn("PDF OCR fallback retry failed", retryError);
       return extractedText;
@@ -628,6 +661,11 @@ const renderPdfPageImagesFromBytes = async (
   scale = 1.1,
   enhanceForOcr = false
 ) => {
+  const canvasModule = getCanvasModule();
+  if (!canvasModule?.createCanvas) {
+    throw new Error("@napi-rs/canvas is not available in this environment");
+  }
+
   const pdfjsModule = await loadPdfJsRender();
   const pdfjs = (pdfjsModule as any).pdfjs ?? pdfjsModule;
   const options = {
@@ -647,10 +685,6 @@ const renderPdfPageImagesFromBytes = async (
     try {
       const page = await pdf.getPage(pageNumber);
       const viewport = page.getViewport({ scale });
-      const canvasModule = getCanvasModule();
-      if (!canvasModule?.createCanvas) {
-        throw new Error("@napi-rs/canvas is not available in this environment");
-      }
       const canvas = canvasModule.createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
       const context = canvas.getContext("2d", { willReadFrequently: true });
       await page.render({ canvasContext: context as any, viewport }).promise;

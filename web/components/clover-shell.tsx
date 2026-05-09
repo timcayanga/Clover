@@ -8,6 +8,8 @@ import { formatCurrencyAmount } from "@/lib/currency-format";
 import { persistSelectedWorkspaceId, readSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
 import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
+import { DashboardManualTransactionModal } from "@/components/dashboard-top-actions";
+import { ImportFilesModal } from "@/components/import-files-modal";
 
 type CloverChromeActions = {
   closeChrome: () => void;
@@ -491,6 +493,7 @@ export function CloverShell({
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | "more" | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddModal, setQuickAddModal] = useState<"transaction" | "import" | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchWorkspaceId, setSearchWorkspaceId] = useState(() => readSelectedWorkspaceId());
@@ -499,6 +502,17 @@ export function CloverShell({
   const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
   const [searchTickerLoading, setSearchTickerLoading] = useState(false);
   const [previousPathname, setPreviousPathname] = useState<string | null>(null);
+  const quickAddAccounts = useMemo(
+    () =>
+      searchAccounts.map((account) => ({
+        id: account.id,
+        name: account.name,
+        institution: account.institution,
+        type: account.type,
+        currency: account.currency ?? "PHP",
+      })),
+    [searchAccounts]
+  );
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account";
   const profileImage = user?.imageUrl ?? null;
   const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
@@ -616,6 +630,7 @@ export function CloverShell({
     setIsSearchOpen(false);
     setSearchQuery("");
     setIsQuickAddOpen(false);
+    setQuickAddModal(null);
   }, [pathname]);
 
   useEffect(() => {
@@ -938,6 +953,10 @@ export function CloverShell({
 
   const openQuickAddTransaction = () => {
     setIsQuickAddOpen((current) => !current);
+  };
+
+  const closeQuickAddModal = () => {
+    setQuickAddModal(null);
   };
 
   const handleSignOut = () => {
@@ -1317,7 +1336,7 @@ export function CloverShell({
             role="menuitem"
             onClick={() => {
               setIsQuickAddOpen(false);
-              router.push("/transactions?manual=1");
+              setQuickAddModal("transaction");
             }}
           >
             <strong>Add Transaction</strong>
@@ -1329,13 +1348,31 @@ export function CloverShell({
             role="menuitem"
             onClick={() => {
               setIsQuickAddOpen(false);
-              router.push("/home?import=1");
+              setQuickAddModal("import");
             }}
           >
             <strong>Import Files</strong>
             <span>Upload statements, CSVs, and screenshots.</span>
           </button>
         </div>
+      ) : null}
+
+      {quickAddModal === "transaction" && searchWorkspaceId ? (
+        <DashboardManualTransactionModal workspaceId={searchWorkspaceId} accounts={quickAddAccounts} onClose={closeQuickAddModal} />
+      ) : null}
+
+      {quickAddModal === "import" && searchWorkspaceId ? (
+        <ImportFilesModal
+          open
+          workspaceId={searchWorkspaceId}
+          accounts={quickAddAccounts}
+          defaultAccountId={quickAddAccounts.find((account) => account.type !== "cash" && account.type !== "other" && account.type !== "investment")?.id ?? quickAddAccounts[0]?.id ?? null}
+          onClose={closeQuickAddModal}
+          onImported={async () => {
+            router.refresh();
+            closeQuickAddModal();
+          }}
+        />
       ) : null}
 
       <nav className="shell-bottom-nav glass" aria-label="Primary mobile navigation">

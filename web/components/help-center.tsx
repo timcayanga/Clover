@@ -53,15 +53,15 @@ export function HelpCenter({ returnTo }: HelpCenterProps) {
     <main className="help-page">
       <div className="help-page__inner">
         <nav className="help-page__nav" aria-label="Help page navigation">
+          <Link className="help-page__back-button" href={heroBackHref} aria-label="Go back" prefetch={false}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m15 6-6 6 6 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+            </svg>
+          </Link>
           <Link className="landing-brand" href={heroBackHref} aria-label="Clover home" prefetch={false}>
             <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
             <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
           </Link>
-          <div className="help-page__nav-links">
-            <Link className="help-page__nav-link" href="/contact-us" prefetch={false}>
-              Contact us
-            </Link>
-          </div>
         </nav>
 
         <label className="help-search help-search--hero" htmlFor="help-search">
@@ -90,6 +90,12 @@ export function HelpCenter({ returnTo }: HelpCenterProps) {
             </Link>
           ))}
         </section>
+
+        <div className="help-page__footer-cta">
+          <Link className="help-page__contact-link button button-secondary button-small" href="/contact-us" prefetch={false}>
+            Contact us
+          </Link>
+        </div>
 
       </div>
     </main>

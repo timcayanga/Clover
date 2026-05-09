@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
+import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
         where: { id: groupId },
         data: {
           name: body.name,
-          avatarUrl: body.avatarUrl?.trim() || null,
+          avatarUrl:
+            body.avatarUrl === undefined ? existing.avatarUrl ?? null : body.avatarUrl?.trim() || null,
         },
       });
 
@@ -55,25 +57,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
         })),
       });
 
-      await Promise.all(
-        body.members.map((member) =>
-          tx.splitBillPerson.upsert({
-            where: {
-              userId_name: {
-                userId: user.id,
-                name: member.name,
-              },
-            },
-            create: {
-              userId: user.id,
-              name: member.name,
-            },
-            update: {},
-          })
-        )
+      const people = await upsertSplitBillPeopleFromNames(
+        tx,
+        user.id,
+        body.members.map((member) => member.name)
       );
 
-      return tx.splitBillGroup.findUniqueOrThrow({
+      const group = await tx.splitBillGroup.findUniqueOrThrow({
         where: { id: groupId },
         include: {
           members: {
@@ -86,9 +76,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
           },
         },
       });
+
+      return { group, people };
     });
 
-    return NextResponse.json({ group });
+    return NextResponse.json(group);
   } catch (error) {
     return NextResponse.json(
       {

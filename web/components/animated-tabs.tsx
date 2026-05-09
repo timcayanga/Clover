@@ -1,10 +1,12 @@
 "use client";
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 type AnimatedTab = {
   key: string;
-  label: string;
+  label?: string;
+  icon?: ReactNode;
   badge?: string | null;
   disabled?: boolean;
   ariaLabel?: string | null;
@@ -74,12 +76,13 @@ export function AnimatedTabs({ className, activeKey, onChange, tabs }: AnimatedT
             }}
             disabled={tab.disabled}
             aria-pressed={isActive}
-            aria-label={tab.ariaLabel ?? tab.label}
-          >
-            <span>{tab.label}</span>
-            {tab.badge ? <span className="animated-tabs__badge">{tab.badge}</span> : null}
-          </button>
-        );
+          aria-label={tab.ariaLabel ?? tab.label}
+        >
+          {tab.icon ? <span className="animated-tabs__icon" aria-hidden="true">{tab.icon}</span> : null}
+          {tab.label ? <span>{tab.label}</span> : null}
+          {tab.badge ? <span className="animated-tabs__badge">{tab.badge}</span> : null}
+        </button>
+      );
       })}
     </div>
   );

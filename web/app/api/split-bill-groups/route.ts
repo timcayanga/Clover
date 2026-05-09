@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
+import { pickSplitBillAvatarUrl } from "@/lib/split-bill-avatars";
+import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
 
 export const dynamic = "force-dynamic";
 
@@ -45,49 +47,41 @@ export async function POST(request: Request) {
     const user = await getSplitBillCurrentUser();
     const body = createGroupSchema.parse(await request.json());
 
-    const group = await prisma.splitBillGroup.create({
-      data: {
-        userId: user.id,
-        name: body.name,
-        avatarUrl: body.avatarUrl?.trim() || null,
-        members: {
-          create: body.members.map((member) => ({
-            name: member.name,
-            sortOrder: member.sortOrder ?? 0,
-          })),
-        },
-      },
-      include: {
-        members: {
-          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        },
-        _count: {
-          select: {
-            bills: true,
+    const { group, people } = await prisma.$transaction(async (tx) => {
+      const group = await tx.splitBillGroup.create({
+        data: {
+          userId: user.id,
+          name: body.name,
+          avatarUrl: body.avatarUrl?.trim() || pickSplitBillAvatarUrl(body.name),
+          members: {
+            create: body.members.map((member) => ({
+              name: member.name,
+              sortOrder: member.sortOrder ?? 0,
+            })),
           },
         },
-      },
-    });
-
-    await prisma.$transaction(
-      body.members.map((member) =>
-        prisma.splitBillPerson.upsert({
-          where: {
-            userId_name: {
-              userId: user.id,
-              name: member.name,
+        include: {
+          members: {
+            orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          },
+          _count: {
+            select: {
+              bills: true,
             },
           },
-          create: {
-            userId: user.id,
-            name: member.name,
-          },
-          update: {},
-        })
-      )
-    );
+        },
+      });
 
-    return NextResponse.json({ group }, { status: 201 });
+      const people = await upsertSplitBillPeopleFromNames(
+        tx,
+        user.id,
+        body.members.map((member) => member.name)
+      );
+
+      return { group, people };
+    });
+
+    return NextResponse.json({ group, people }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
       {

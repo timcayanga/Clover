@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
@@ -243,11 +243,50 @@ type InvestmentEditDraft = {
 
 type InvestmentTab = "overview" | "portfolio" | "market" | "insights";
 
-const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; proOnly?: boolean }> = [
-  { key: "overview", label: "Overview" },
-  { key: "portfolio", label: "Portfolio" },
-  { key: "market", label: "Markets", proOnly: true },
-  { key: "insights", label: "Insights", proOnly: true },
+const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; icon: ReactNode; proOnly?: boolean }> = [
+  {
+    key: "overview",
+    label: "Overview",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 19h16" />
+        <path d="M6 15h3v4H6zM11 10h3v9h-3zM16 6h3v13h-3z" />
+      </svg>
+    ),
+  },
+  {
+    key: "portfolio",
+    label: "Portfolio",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 7h16v12H4z" />
+        <path d="M8 7v12" />
+        <path d="M4 12h16" />
+      </svg>
+    ),
+  },
+  {
+    key: "market",
+    label: "Markets",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 18h16" />
+        <path d="M6 14l3-3 3 3 5-6" />
+        <path d="M15 8h3v3" />
+      </svg>
+    ),
+    proOnly: true,
+  },
+  {
+    key: "insights",
+    label: "Insights",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3.5l1.87 4.63L18.5 10l-4.63 1.87L12 16.5l-1.87-4.63L5.5 10l4.63-1.87L12 3.5Z" />
+      </svg>
+    ),
+    proOnly: true,
+  },
 ];
 
 const investmentsEmptyStateIllustration = "/illustrations/clover-investments-portfolio-3d.png";
@@ -1013,7 +1052,8 @@ export default function InvestmentsPage() {
           onChange={(key) => setSelectedTab(key as InvestmentTab)}
           tabs={INVESTMENT_TABS.map((tab) => ({
             key: tab.key,
-            label: tab.label,
+            label: "",
+            icon: tab.icon,
             disabled: Boolean(tab.proOnly && !canUseProTabs),
             badge: tab.proOnly ? "Pro" : null,
             ariaLabel: tab.proOnly ? `${tab.label}, Pro only` : tab.label,
@@ -1036,6 +1076,15 @@ export default function InvestmentsPage() {
           </section>
         ) : selectedTab === "overview" ? (
           <>
+            <section className="investments-overview-hero glass">
+              <div className="investments-overview-hero__copy">
+                <p className="eyebrow">Portfolio</p>
+                <h3>Add investment</h3>
+                <p>Track holdings manually or from imported statements and screenshots.</p>
+              </div>
+              <div className="investments-overview-hero__actions">{renderAddInvestmentButton("desktop")}</div>
+            </section>
+
             <section className="accounts-overview-grid">
               <article className="accounts-overview-card glass">
                 <div className="investments-metric__label">

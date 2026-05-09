@@ -14,7 +14,7 @@ const getImportErrorNextSteps = (code: string) => {
 
   if (normalized === "I-107") {
     return [
-      "Stay on the import screen a little longer, or re-upload the original statement if Clover stops tracking it again.",
+      "Click Resume import if Clover shows it, or stay on the import screen a little longer while Clover finishes in the background.",
       "If the account details already look right, open the account and continue with any missing rows manually.",
       "If the transactions still do not appear, add the missing entries in Transactions and use Review to verify the totals.",
     ];
@@ -22,7 +22,7 @@ const getImportErrorNextSteps = (code: string) => {
 
   if (normalized === "I-105" || normalized === "I-104") {
     return [
-      "Re-upload the original PDF or CSV.",
+      "Click Resume import if Clover shows it, or re-upload the original PDF or CSV.",
       "If Clover still stalls, add the missing transactions manually in Transactions.",
       "If the statement looks off after import, check Review before confirming anything.",
     ];
