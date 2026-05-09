@@ -10,7 +10,7 @@ import { getAccountCardName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
-import { deriveReconciledBalance } from "@/lib/account-balance";
+import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-path";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
@@ -33,6 +33,7 @@ import {
   markDeletedWorkspaceAccount,
   normalizeImportedAccountKey,
   mergeImportedWorkspaceTransactions,
+  type ImportedWorkspaceTransaction,
 } from "@/lib/workspace-cache";
 import {
   getInvestmentFieldConfigs,
@@ -718,12 +719,22 @@ function AccountDetailPageContent() {
       const cachedAccountsWorkspace = getCachedAccountsWorkspace(activeWorkspaceId);
       const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(activeWorkspaceId);
       const cachedAccountLookup = findCachedImportedAccount(accountId);
+      const cachedImportedAccount = cachedAccountLookup?.account as
+        | {
+            optimisticAccountId?: string | null;
+            name?: string | null;
+            institution?: string | null;
+            accountNumber?: string | null;
+            type?: string | null;
+          }
+        | null
+        | undefined;
       const cachedTransactionsForAccount = findCachedTransactionsForAccount(accountId, {
-        optimisticAccountId: cachedAccountLookup?.account?.optimisticAccountId ?? null,
-        name: cachedAccountLookup?.account?.name ?? null,
-        institution: cachedAccountLookup?.account?.institution ?? null,
-        accountNumber: cachedAccountLookup?.account?.accountNumber ?? null,
-        type: cachedAccountLookup?.account?.type ?? null,
+        optimisticAccountId: cachedImportedAccount?.optimisticAccountId ?? null,
+        name: cachedImportedAccount?.name ?? null,
+        institution: cachedImportedAccount?.institution ?? null,
+        accountNumber: cachedImportedAccount?.accountNumber ?? null,
+        type: cachedImportedAccount?.type ?? null,
       });
       const cachedTransactionsForAccountRows = Array.isArray(cachedTransactionsForAccount?.transactions)
         ? (cachedTransactionsForAccount.transactions as Transaction[])
@@ -751,10 +762,10 @@ function AccountDetailPageContent() {
             return (
               normalizeImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type) ===
               normalizeImportedAccountKey(
-                cachedAccountLookup?.account?.name ?? null,
-                cachedAccountLookup?.account?.institution ?? null,
-                cachedAccountLookup?.account?.accountNumber ?? null,
-                cachedAccountLookup?.account?.type ?? null
+                cachedImportedAccount?.name ?? null,
+                cachedImportedAccount?.institution ?? null,
+                cachedImportedAccount?.accountNumber ?? null,
+                cachedImportedAccount?.type ?? null
               )
             );
           }) ?? null)
@@ -850,27 +861,30 @@ function AccountDetailPageContent() {
         return;
       }
 
-      if (cachedAccount) {
+      const activeCachedAccount = cachedAccount;
+      if (activeCachedAccount) {
         if (!cancelled) {
-          accountTransactionsLookup = findCachedTransactionsForAccount(cachedAccount.id, cachedAccount);
+          accountTransactionsLookup = findCachedTransactionsForAccount(activeCachedAccount.id, activeCachedAccount);
           cachedTransactions = (accountTransactionsLookup?.transactions as Transaction[] | undefined) ?? [];
           if (cachedTransactions.length === 0 && Array.isArray(cachedTransactionsWorkspace?.transactions)) {
             cachedTransactions = mergeImportedWorkspaceTransactions(
               [],
-              (cachedTransactionsWorkspace.transactions as Transaction[]).filter((transaction) => transaction.accountId === cachedAccount.id)
+              (cachedTransactionsWorkspace.transactions as ImportedWorkspaceTransaction[]).filter(
+                (transaction) => transaction.accountId === activeCachedAccount.id
+              )
             );
           }
           cachedImportFiles = Array.isArray(cachedTransactionsWorkspace?.imports)
             ? (cachedTransactionsWorkspace.imports as ImportFile[]).filter((importFile) => {
-                return !importFile.accountId || importFile.accountId === cachedAccount.id;
+                return !importFile.accountId || importFile.accountId === activeCachedAccount.id;
               })
             : [];
           cachedCheckpoints = Array.isArray(cachedAccountsWorkspace?.statementCheckpoints)
             ? (cachedAccountsWorkspace.statementCheckpoints as StatementCheckpoint[]).filter(
-                (checkpoint) => checkpoint.accountId === cachedAccount.id
+                (checkpoint) => checkpoint.accountId === activeCachedAccount.id
               )
             : [];
-          setAccount(cachedAccount);
+          setAccount(activeCachedAccount);
           setTransactions(cachedTransactions);
           setImportFiles(cachedImportFiles);
           setCategories(cachedCategories);
@@ -882,7 +896,7 @@ function AccountDetailPageContent() {
           setHasInitialDataLoaded(true);
           setCheckpoints(cachedCheckpoints);
         }
-        const canonicalPath = getAccountPath(cachedAccount);
+        const canonicalPath = getAccountPath(activeCachedAccount);
         if (!cancelled && canonicalPath !== `/accounts/${accountPathSegment}`) {
           router.replace(canonicalPath);
         }
@@ -1324,7 +1338,7 @@ function AccountDetailPageContent() {
           ? account?.balance ?? cachedImportedBalance ?? null
           : deriveReconciledBalance({
               balance: account?.balance ?? cachedImportedBalance ?? null,
-              transactions,
+              transactions: transactions as BalanceLikeTransaction[],
               checkpoints: checkpoint ? [checkpoint] : [],
             });
 
@@ -1335,7 +1349,7 @@ function AccountDetailPageContent() {
   const checkpointBalance = latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
     ? String(latestCheckpoint.endingBalance)
     : null;
-  const hasLoadedTransactions = transactions.some((transaction) => transaction.accountId === account.id);
+  const hasLoadedTransactions = account ? transactions.some((transaction) => transaction.accountId === account.id) : false;
   const accountCardNumber = account
     ? formatCardAccountNumber(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null)
     : "";

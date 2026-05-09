@@ -246,7 +246,6 @@ const mapTransactionRow = (transaction: {
   isTransfer: boolean;
   isExcluded: boolean;
   warningReason: string | null;
-  rawPayload: Prisma.JsonValue;
 }): TransactionApiRow => {
   const normalizedCurrency =
     normalizeInstitutionCurrency(
@@ -734,13 +733,6 @@ export async function POST(request: Request) {
         merchantRaw: payload.merchantRaw,
         merchantClean: payload.merchantClean ?? null,
         description: payload.description ?? null,
-        receiptLineItems:
-          payload.receiptLineItems?.map((item) => ({
-            description: item.description,
-            quantity: item.quantity === undefined || item.quantity === null ? null : item.quantity.toString(),
-            unitPrice: item.unitPrice === undefined || item.unitPrice === null ? null : item.unitPrice.toString(),
-            amount: item.amount === undefined || item.amount === null ? null : item.amount.toString(),
-          })) ?? [],
         isTransfer: payload.isTransfer ?? false,
         isExcluded: payload.isExcluded ?? false,
         reviewStatus: "confirmed",
@@ -821,6 +813,17 @@ export async function POST(request: Request) {
       is_excluded: transaction.isExcluded,
     });
 
+    const createdAccount = await prisma.account.findUnique({
+      where: { id: payload.accountId },
+      select: { name: true },
+    });
+    const createdCategory = resolvedCategoryId
+      ? await prisma.category.findUnique({
+          where: { id: resolvedCategoryId },
+          select: { name: true },
+        })
+      : null;
+
     void capturePostHogServerEvent("feature_used", userId, {
       workspace_id: payload.workspaceId,
       feature_name: "manual_transaction_creation",
@@ -842,8 +845,8 @@ export async function POST(request: Request) {
         date: transaction.date.toISOString(),
         createdAt: transaction.createdAt.toISOString(),
         updatedAt: transaction.updatedAt.toISOString(),
-        accountName: transaction.account.name,
-        categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+        accountName: createdAccount?.name ?? null,
+        categoryName: createdCategory?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
       },
     }, { status: 201 });
   } catch (error) {

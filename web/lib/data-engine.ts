@@ -1240,9 +1240,9 @@ export const upsertDocumentImportCompat = async (params: {
         currency: params.currency ?? "PHP",
         pageCount: params.pageCount ?? 0,
         confidence: params.confidence ?? 0,
-        sourceMetadata: params.sourceMetadata ?? null,
-        rawPayload: params.rawPayload ?? null,
-        extractedPayload: params.extractedPayload ?? null,
+        sourceMetadata: params.sourceMetadata ?? undefined,
+        rawPayload: params.rawPayload ?? undefined,
+        extractedPayload: params.extractedPayload ?? undefined,
       },
       create: {
         workspaceId: params.workspaceId,
@@ -1256,9 +1256,9 @@ export const upsertDocumentImportCompat = async (params: {
         currency: params.currency ?? "PHP",
         pageCount: params.pageCount ?? 0,
         confidence: params.confidence ?? 0,
-        sourceMetadata: params.sourceMetadata ?? null,
-        rawPayload: params.rawPayload ?? null,
-        extractedPayload: params.extractedPayload ?? null,
+        sourceMetadata: params.sourceMetadata ?? undefined,
+        rawPayload: params.rawPayload ?? undefined,
+        extractedPayload: params.extractedPayload ?? undefined,
       },
     });
   } catch (error) {
@@ -1307,7 +1307,7 @@ export const replaceDocumentImportPagesCompat = async (params: {
           rawOcrText: page.rawOcrText ?? null,
           layoutNotes: page.layoutNotes ?? null,
           confidence: page.confidence ?? 0,
-          rawPayload: page.rawPayload ?? null,
+          rawPayload: page.rawPayload ?? undefined,
         })),
       });
     }
@@ -1358,9 +1358,9 @@ export const upsertReceiptDocumentCompat = async (params: {
         tax: toNullableDecimal(params.tax),
         total: toNullableDecimal(params.total),
         paymentMethod: params.paymentMethod ?? null,
-        accountMatch: params.accountMatch ?? null,
+        accountMatch: params.accountMatch ?? undefined,
         confidence: params.confidence ?? 0,
-        rawPayload: params.rawPayload ?? null,
+        rawPayload: params.rawPayload ?? undefined,
       },
       create: {
         workspaceId: params.workspaceId,
@@ -1376,9 +1376,9 @@ export const upsertReceiptDocumentCompat = async (params: {
         tax: toNullableDecimal(params.tax),
         total: toNullableDecimal(params.total),
         paymentMethod: params.paymentMethod ?? null,
-        accountMatch: params.accountMatch ?? null,
+        accountMatch: params.accountMatch ?? undefined,
         confidence: params.confidence ?? 0,
-        rawPayload: params.rawPayload ?? null,
+        rawPayload: params.rawPayload ?? undefined,
       },
     });
   } catch (error) {
@@ -1422,7 +1422,7 @@ export const upsertInvestmentSnapshotCompat = async (params: {
         gainLossValue: toNullableDecimal(params.gainLossValue),
         gainLossPercent: toNullableDecimal(params.gainLossPercent),
         confidence: params.confidence ?? 0,
-        rawPayload: params.rawPayload ?? null,
+        rawPayload: params.rawPayload ?? undefined,
       },
       create: {
         workspaceId: params.workspaceId,
@@ -1436,7 +1436,7 @@ export const upsertInvestmentSnapshotCompat = async (params: {
         gainLossValue: toNullableDecimal(params.gainLossValue),
         gainLossPercent: toNullableDecimal(params.gainLossPercent),
         confidence: params.confidence ?? 0,
-        rawPayload: params.rawPayload ?? null,
+        rawPayload: params.rawPayload ?? undefined,
       },
     });
   } catch (error) {
@@ -1501,7 +1501,7 @@ export const replaceInvestmentHoldingsCompat = async (params: {
           currency: holding.currency ?? "PHP",
           status: holding.status ?? null,
           confidence: holding.confidence ?? 0,
-          rawPayload: holding.rawPayload ?? null,
+          rawPayload: holding.rawPayload ?? undefined,
         })),
       });
     }
@@ -1557,7 +1557,7 @@ export const replaceRecurringPatternsCompat = async (params: {
           nextExpectedDate: pattern.nextExpectedDate ?? null,
           transactionCount: pattern.transactionCount ?? 1,
           confidence: pattern.confidence ?? 0,
-          rawPayload: pattern.rawPayload ?? null,
+          rawPayload: pattern.rawPayload ?? undefined,
         })),
       });
     }

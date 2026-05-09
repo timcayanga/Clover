@@ -338,8 +338,6 @@ const deriveCategoryNameFromRecord = (record: CachedRecord) => {
   const categoryName = getEffectiveTransactionCategoryName({
     categoryName:
       typeof record.categoryName === "string" && record.categoryName.trim() ? record.categoryName : null,
-    category:
-      typeof record.category === "string" && record.category.trim() ? record.category : null,
     rawPayload: (typeof record.rawPayload === "object" && record.rawPayload !== null
       ? (record.rawPayload as Prisma.JsonValue)
       : null) as Prisma.JsonValue | null,

@@ -1966,6 +1966,7 @@ export const processImportFileText = async (
   const receiptAccountResolution =
     importMode === "receipt" && openAiParsed?.receiptAccountMatch
       ? await (async () => {
+          const receiptAccountMatch = openAiParsed.receiptAccountMatch!;
           const compatibleAccountColumns = await getCompatibleAccountColumns();
           const workspaceAccounts = await prisma.account.findMany({
             where: { workspaceId: importFile.workspaceId },
@@ -1973,10 +1974,10 @@ export const processImportFileText = async (
           });
           return resolveReceiptAccountHintToAccount(
             {
-              accountName: openAiParsed.receiptAccountMatch.account_name ?? null,
-              accountLast4: openAiParsed.receiptAccountMatch.account_last4 ?? null,
-              confidence: openAiParsed.receiptAccountMatch.confidence ?? 0,
-              reason: openAiParsed.receiptAccountMatch.reason ?? null,
+              accountName: receiptAccountMatch.account_name ?? null,
+              accountLast4: receiptAccountMatch.account_last4 ?? null,
+              confidence: receiptAccountMatch.confidence ?? 0,
+              reason: receiptAccountMatch.reason ?? null,
             },
             workspaceAccounts
           );
