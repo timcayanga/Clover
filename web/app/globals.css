@@ -27736,6 +27736,10 @@ button.accounts-detail__transaction-head-cell {
   gap: 14px;
 }
 
+.settings-data-grid--data {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .settings-choice-card,
 .settings-action-card,
 .settings-plan-card,
@@ -28091,7 +28095,7 @@ button.accounts-detail__transaction-head-cell {
 .settings-data-delete--compact {
   display: grid;
   gap: 12px;
-  max-width: 760px;
+  max-width: 100%;
 }
 
 .settings-data-delete__list {

@@ -829,7 +829,7 @@ export function SettingsHub({
               </div>
             </div>
 
-            <div className="settings-data-grid">
+            <div className="settings-data-grid settings-data-grid--data">
               <article className="settings-action-card">
                 <div>
                   <h5>Create a profile</h5>
@@ -856,7 +856,7 @@ export function SettingsHub({
               </article>
             </div>
 
-            <div className="settings-data-grid">
+            <div className="settings-data-grid settings-data-grid--data">
               {profiles.map((profile) => {
                 const isActive = profile.id === activeProfileId;
                 const renameDraft = profileRenameDrafts[profile.id] ?? profile.name;
