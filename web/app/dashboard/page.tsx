@@ -9,6 +9,7 @@ import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
+import { GOAL_OPTIONS, normalizeGoalPlan } from "@/lib/goals";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { isLiabilityAccountType, isSpendableAccountType } from "@/lib/account-types";
@@ -16,6 +17,7 @@ import { RouteSplash } from "@/components/route-splash";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardTopActions } from "@/components/dashboard-top-actions";
 import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
+import { GoalsEditor as GoalsEditorModal } from "@/components/goals-editor-modal";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
@@ -609,6 +611,7 @@ async function DashboardStream({
   const reviewAttentionCount = reviewAttentionTransactions.length;
   const goalKey = user.primaryGoal as GoalKey | null;
   const goalTargetAmount = user.goalTargetAmount !== null ? Number(user.goalTargetAmount) : null;
+  const currentGoalPlan = normalizeGoalPlan(user.goalPlan, goalKey, goalTargetAmount);
   const goalProgress = getGoalProgressSnapshot({
     goalKey,
     targetAmount: goalTargetAmount,
@@ -643,9 +646,9 @@ async function DashboardStream({
     },
   ];
   const goalHeroHeading = goalKey ? "Goal progress" : "Set a goal to track your progress";
-  const goalHeroCopy = goalKey ? goalProgress.coachCopy : "Set a goal to track your progress.";
-  const goalHeroActionLabel = goalKey ? "Open goals" : "Set a goal";
-  const goalHeroActionHref = "/goals";
+  const goalHeroCopy = goalKey ? goalProgress.coachCopy : null;
+  const goalHeroActionLabel = goalKey ? "Adjust goal" : "Set a goal";
+  const goalEditorMonthlyIncome = currentSummary.current.income > 0 ? currentSummary.current.income : null;
   const maxActivityCount = Math.max(...activitySeries.map((point) => point.count), 1);
   const activitySummaryLabel =
     peakActivityDay && peakActivityDay.count > 0
@@ -776,19 +779,38 @@ async function DashboardStream({
                   <strong>{goalSummaryLabel}</strong>
                   <p>{goalHeroCopy}</p>
                   <small>{goalProgressLabel} complete · {goalAction}</small>
-                  <Link className="button button-secondary button-small" href={goalHeroActionHref}>
-                    {goalHeroActionLabel}
-                  </Link>
+                  <GoalsEditorModal
+                    compact
+                    triggerLabel={goalHeroActionLabel}
+                    triggerClassName="button button-secondary button-small"
+                    goals={GOAL_OPTIONS}
+                    currentGoal={goalKey}
+                    currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
+                    currentGoalPlan={currentGoalPlan}
+                    monthlyIncome={goalEditorMonthlyIncome}
+                    suggestedTargetAmount={monthSummary.expense > 0 ? monthSummary.expense : null}
+                    beginnerMode={user.financialExperience === "beginner"}
+                    currency={displayCurrency}
+                  />
                 </div>
               </div>
             ) : (
               <div className="dashboard-home__goal-card dashboard-home__goal-card--empty">
                 <p className="eyebrow">Track progress</p>
                 <strong>{goalHeroHeading}</strong>
-                <p>{goalHeroCopy}</p>
-                <Link className="button button-secondary button-small" href={goalHeroActionHref}>
-                  {goalHeroActionLabel}
-                </Link>
+                <GoalsEditorModal
+                  compact
+                  triggerLabel={goalHeroActionLabel}
+                  triggerClassName="button button-secondary button-small"
+                  goals={GOAL_OPTIONS}
+                  currentGoal={goalKey}
+                  currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
+                  currentGoalPlan={currentGoalPlan}
+                  monthlyIncome={goalEditorMonthlyIncome}
+                  suggestedTargetAmount={monthSummary.expense > 0 ? monthSummary.expense : null}
+                  beginnerMode={user.financialExperience === "beginner"}
+                  currency={displayCurrency}
+                />
               </div>
             )}
           </div>
