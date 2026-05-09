@@ -21781,11 +21781,48 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   gap: 18px;
   padding: 24px;
+  width: 100%;
+  min-width: 0;
 }
 
 .settings-section {
   display: grid;
   gap: 20px;
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-hub--panel-only {
+  display: block;
+  width: 100%;
+}
+
+.settings-hub--panel-only .settings-hub__panel {
+  width: 100%;
+}
+
+.settings-section--data {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-section--data .settings-section__intro,
+.settings-section--data .settings-data-grid,
+.settings-section--data .settings-data-delete {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-section--data .settings-action-card {
+  width: 100%;
+}
+
+.settings-hub--panel-only .settings-section {
+  width: 100%;
+}
+
+.settings-hub--panel-only .settings-section--data .settings-data-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .settings-section__intro {
