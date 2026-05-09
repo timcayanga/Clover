@@ -1152,6 +1152,39 @@ export function ImportFilesModal({
     autoCloseAfterStartRef.current = false;
   };
 
+  const closeImportAsRecoverable = (
+    itemId: string,
+    fileName: string,
+    detail: string,
+    progressLabel = "Finalizing import"
+  ) => {
+    updateItem(itemId, {
+      status: "importing",
+      confirmationState: "staged",
+      error: null,
+      errorCode: null,
+      errorTitle: null,
+      errorNextSteps: null,
+      progress: Math.max(92, IMPORT_PROGRESS.loadingAccount),
+      progressLabel,
+    });
+    publishImportActivity({
+      workspaceId,
+      surface: "background",
+      status: "active",
+      fileName,
+      fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+      fileTotal: items.length,
+      completedFiles: completedFileCount,
+      progress: Math.max(92, IMPORT_PROGRESS.loadingAccount),
+      detail,
+      summary: null,
+      errorMessage: null,
+    });
+    setBusy(false);
+    autoCloseAfterStartRef.current = false;
+  };
+
   useEffect(() => {
     const wasOpen = wasOpenRef.current;
     wasOpenRef.current = open;
@@ -2504,10 +2537,18 @@ export function ImportFilesModal({
         }
 
         if (Date.now() - startedAt >= MAX_WAIT_MS) {
-    const timeoutMessage =
-      parsedRowsCount > 0
-        ? "Clover could read some rows, but couldn't finish linking them to the account. Try the import again, or add the missing rows in Transactions."
-        : "Timed out after 180 seconds while Clover was still reading the document.";
+          const hasRecoverableProgress = parsedRowsCount > 0 || confirmedTransactionsCount > 0 || Boolean(resolvedAccountId);
+          if (hasRecoverableProgress) {
+            closeImportAsRecoverable(
+              itemId,
+              summaryContext.fileName,
+              "Clover parsed the file and is still linking it to the account.",
+              "Finalizing import"
+            );
+            return;
+          }
+
+          const timeoutMessage = "Timed out after 180 seconds while Clover was still reading the document.";
           closeImportAfterError(itemId, "monitor", summaryContext.fileName, timeoutMessage);
           return;
         }
@@ -3421,10 +3462,18 @@ export function ImportFilesModal({
       });
 
       if (Date.now() - startedAt >= MAX_WAIT_MS) {
-        const timeoutMessage =
-          parsedRowsCount > 0 || confirmedTransactionsCount > 0
-            ? "Clover could read the document, but couldn't finish processing it in time."
-            : "Timed out after 2 minutes while Clover was still reading the document.";
+        const hasRecoverableProgress = parsedRowsCount > 0 || confirmedTransactionsCount > 0 || Boolean(resolvedAccountId);
+        if (hasRecoverableProgress) {
+          closeImportAsRecoverable(
+            itemId,
+            fileName,
+            "Clover parsed the file and is still finalizing the import.",
+            "Finalizing import"
+          );
+          return false;
+        }
+
+        const timeoutMessage = "Timed out after 2 minutes while Clover was still reading the document.";
         closeImportAfterError(itemId, "monitor", fileName, timeoutMessage);
         return false;
       }
