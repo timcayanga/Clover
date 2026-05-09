@@ -51,7 +51,7 @@ export function GlobalImportActivity() {
     return (
       <ImportErrorToast
         code={code}
-        category={spec.category}
+        httpClass={spec.httpClass}
         title={activity.errorTitle || spec.title || activity.detail || "Clover hit an import snag"}
         message={activity.errorMessage ?? spec.message}
         nextSteps={activity.errorNextSteps ?? getImportErrorNextSteps(code)}

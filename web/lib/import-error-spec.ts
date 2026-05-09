@@ -18,10 +18,13 @@ export type ImportErrorCategory =
   | "Finalizing"
   | "Unknown";
 
+export type ImportErrorHttpClass = "4xx client-side error" | "5xx server-side error" | "504 timeout" | "unknown";
+
 export type ImportErrorSpec = {
   code: string;
   stage: ImportErrorStage;
   category: ImportErrorCategory;
+  httpClass: ImportErrorHttpClass;
   title: string;
   message: string;
   nextSteps: string[];
@@ -35,6 +38,7 @@ const SPEC_BY_STAGE: Record<
   {
     code: string;
     category: ImportErrorCategory;
+    httpClass: ImportErrorHttpClass;
     title: string;
     message: string;
     nextSteps: string[];
@@ -44,6 +48,7 @@ const SPEC_BY_STAGE: Record<
   validation: {
     code: "I-101",
     category: "Validation",
+    httpClass: "4xx client-side error",
     title: "File needs a clearer scan",
     message: "Clover could not read this statement clearly enough to continue.",
     nextSteps: [
@@ -56,6 +61,7 @@ const SPEC_BY_STAGE: Record<
   password: {
     code: "I-102",
     category: "Password",
+    httpClass: "4xx client-side error",
     title: "Password required",
     message: "Clover needs the file password before it can read this statement.",
     nextSteps: [
@@ -68,6 +74,7 @@ const SPEC_BY_STAGE: Record<
   upload: {
     code: "I-103",
     category: "Upload",
+    httpClass: "5xx server-side error",
     title: "Upload failed",
     message: "Clover could not upload the file to finish processing it.",
     nextSteps: [
@@ -80,6 +87,7 @@ const SPEC_BY_STAGE: Record<
   process: {
     code: "I-104",
     category: "Parsing",
+    httpClass: "5xx server-side error",
     title: "Parsing issue",
     message: "Clover could not finish reading the statement.",
     nextSteps: [
@@ -92,6 +100,7 @@ const SPEC_BY_STAGE: Record<
   confirm: {
     code: "I-105",
     category: "Saving",
+    httpClass: "5xx server-side error",
     title: "Saving issue",
     message: "Clover parsed the file but could not finish saving the import.",
     nextSteps: [
@@ -104,6 +113,7 @@ const SPEC_BY_STAGE: Record<
   background: {
     code: "I-106",
     category: "Background sync",
+    httpClass: "5xx server-side error",
     title: "Background sync stalled",
     message: "Clover parsed the file, but the background reconciliation took too long.",
     nextSteps: [
@@ -116,6 +126,7 @@ const SPEC_BY_STAGE: Record<
   monitor: {
     code: "I-107",
     category: "Finalizing",
+    httpClass: "504 timeout",
     title: "Import still finalizing",
     message: "Clover read the account details, but the import needed more time to finish saving.",
     nextSteps: [
@@ -128,6 +139,7 @@ const SPEC_BY_STAGE: Record<
   unknown: {
     code: "I-199",
     category: "Unknown",
+    httpClass: "5xx server-side error",
     title: "Import issue",
     message: "Clover hit an unexpected problem while finishing this file.",
     nextSteps: [

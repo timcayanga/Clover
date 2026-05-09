@@ -4,17 +4,17 @@ import Link from "next/link";
 
 type ImportErrorToastProps = {
   code: string;
-  category: string;
+  httpClass: string;
   title: string;
   message: string;
   nextSteps: string[];
   onClose: () => void;
 };
 
-export function ImportErrorToast({ code, category, title, message, nextSteps, onClose }: ImportErrorToastProps) {
+export function ImportErrorToast({ code, httpClass, title, message, nextSteps, onClose }: ImportErrorToastProps) {
   return (
     <aside className="import-error-toast glass" role="alert" aria-live="assertive">
-      <div className="import-error-toast__eyebrow">{category} issue</div>
+      <div className="import-error-toast__eyebrow">{httpClass}</div>
       <div className="import-error-toast__title-row">
         <div>
           <h4>{title}</h4>
