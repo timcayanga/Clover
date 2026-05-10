@@ -9,6 +9,7 @@ import { SplitBillHome } from "@/components/split-bill-home";
 import { SplitBillPageActions } from "@/components/split-bill-page-actions";
 import { formatSplitBillAmount, normalizeCurrencyCode, type SplitBillSerializedBill } from "@/lib/split-bill";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
+import { getSplitBillBillsForGroup, getSplitBillBillsForPerson } from "@/lib/split-bill-view-models";
 
 type SplitBillWorkspaceProps = {
   bills: SplitBillSerializedBill[];
@@ -47,6 +48,8 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
   const selectedBill = selected?.kind === "bill" ? bills.find((bill) => bill.id === selected.id) ?? null : null;
   const selectedGroup = selected?.kind === "group" ? groups.find((group) => group.id === selected.id) ?? null : null;
   const selectedPerson = selected?.kind === "person" ? people.find((person) => person.id === selected.id) ?? null : null;
+  const selectedGroupBills = selectedGroup ? getSplitBillBillsForGroup(bills, selectedGroup.id) : [];
+  const selectedPersonBills = selectedPerson ? getSplitBillBillsForPerson(bills, selectedPerson.name) : [];
 
   const openBill = (billId: string) => setSelected({ kind: "bill", id: billId });
   const openGroup = (groupId: string) => setSelected({ kind: "group", id: groupId });
@@ -273,8 +276,8 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
                   </div>
                 </div>
                 <p>People: {selectedGroup.members.length}</p>
-                <p>Bills: {bills.filter((bill) => bill.group?.id === selectedGroup.id).length}</p>
-                <p>Total: {buildSummaryTotal(bills.filter((bill) => bill.group?.id === selectedGroup.id))}</p>
+                <p>Bills: {selectedGroupBills.length}</p>
+                <p>Total: {buildSummaryTotal(selectedGroupBills)}</p>
                 <div className="split-bill-detail-modal__chips">
                   {selectedGroup.members.length > 0 ? (
                     selectedGroup.members.map((member) => (
@@ -287,7 +290,7 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
                   )}
                 </div>
                 <div className="split-bill-detail-modal__list">
-                  {bills.filter((bill) => bill.group?.id === selectedGroup.id).map((bill) => (
+                  {selectedGroupBills.map((bill) => (
                     <button key={bill.id} type="button" className="split-bill-detail-modal__list-row split-bill-detail-modal__list-row--button" onClick={() => openBill(bill.id)}>
                       <strong>{bill.title}</strong>
                       <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
@@ -312,11 +315,9 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
                     <p>Use initials, a built-in avatar, or upload a fresh photo.</p>
                   </div>
                 </div>
-                <p>Bill count: {bills.filter((bill) => bill.participants.some((participant) => participant.name === selectedPerson.name)).length}</p>
+                <p>Bill count: {selectedPersonBills.length}</p>
                 <div className="split-bill-detail-modal__list">
-                  {bills
-                    .filter((bill) => bill.participants.some((participant) => participant.name === selectedPerson.name))
-                    .map((bill) => (
+                  {selectedPersonBills.map((bill) => (
                       <button key={bill.id} type="button" className="split-bill-detail-modal__list-row split-bill-detail-modal__list-row--button" onClick={() => openBill(bill.id)}>
                         <strong>{bill.title}</strong>
                         <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>

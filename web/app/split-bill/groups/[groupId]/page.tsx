@@ -3,11 +3,11 @@ import { notFound } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import { prisma } from "@/lib/prisma";
+import { loadSplitBillGroup } from "@/lib/split-bill-loaders";
 import {
   formatSplitBillAmount,
   normalizeCurrencyCode,
   serializeSplitBillRecord,
-  splitBillGroupMemberOrderBy,
   splitBillItemOrderBy,
 } from "@/lib/split-bill";
 
@@ -17,7 +17,7 @@ const billInclude = {
   group: {
     include: {
       members: {
-        orderBy: splitBillGroupMemberOrderBy,
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       },
     },
   },
@@ -51,22 +51,7 @@ export default async function SplitBillGroupPage({ params }: { params: Promise<{
   const { groupId } = await params;
 
   const [group, bills] = await Promise.all([
-    prisma.splitBillGroup.findFirst({
-      where: {
-        id: groupId,
-        userId: user.id,
-      },
-      include: {
-        members: {
-          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        },
-        _count: {
-          select: {
-            bills: true,
-          },
-        },
-      },
-    }),
+    loadSplitBillGroup(user.id, groupId),
     prisma.splitBill.findMany({
       where: {
         userId: user.id,

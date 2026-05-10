@@ -3,33 +3,13 @@ import { notFound } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { SplitBillDeleteButton } from "@/components/split-bill-delete-button";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
-import { prisma } from "@/lib/prisma";
+import { loadSplitBillBill } from "@/lib/split-bill-loaders";
 import {
   formatSplitBillAmount,
   serializeSplitBillRecord,
-  splitBillGroupMemberOrderBy,
-  splitBillItemOrderBy,
 } from "@/lib/split-bill";
 
 export const dynamic = "force-dynamic";
-
-const billInclude = {
-  group: {
-    include: {
-      members: {
-        orderBy: splitBillGroupMemberOrderBy,
-      },
-    },
-  },
-  participants: true,
-  items: {
-    include: {
-      participants: true,
-    },
-    orderBy: splitBillItemOrderBy,
-  },
-  payments: true,
-};
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
@@ -45,13 +25,7 @@ export default async function SplitBillDetailPage({ params }: { params: Promise<
   const user = await getSplitBillCurrentUser();
   const { billId } = await params;
 
-  const bill = await prisma.splitBill.findFirst({
-    where: {
-      id: billId,
-      userId: user.id,
-    },
-    include: billInclude,
-  });
+  const bill = await loadSplitBillBill(user.id, billId);
 
   if (!bill) {
     notFound();
