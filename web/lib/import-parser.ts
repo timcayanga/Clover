@@ -55,7 +55,6 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
   if (/salary|payroll|income|deposit|cash\s*(?:in|deposit)|credit memo/.test(lower)) return "Income";
   if (/epsaten|el\/?espay|payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
-  if (type === "income") return "Income";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
@@ -6918,17 +6917,17 @@ const normalizeGcashMerchant = (description: string) => {
 
   const billsPaymentMatch = trimmed.match(/^Bills Payment to\s+(.+)$/i);
   if (billsPaymentMatch?.[1]) {
-    return "Bills Payment";
+    return `Bills Payment to ${normalizeWhitespace(billsPaymentMatch[1])}`;
   }
 
   const receivedMatch = trimmed.match(/^Received GCash from\s+(.+?)(?:\s+with account ending in|\s+and invno:|$)/i);
   if (receivedMatch?.[1]) {
-    return normalizeWhitespace(receivedMatch[1].replace(/\s*\/\s*GCash Family Savings Bank.*$/i, ""));
+    return `Received GCash from ${normalizeWhitespace(receivedMatch[1].replace(/\s*\/\s*GCash Family Savings Bank.*$/i, ""))}`;
   }
 
   const sentMatch = trimmed.match(/^Sent GCash to\s+(.+?)(?:\s+with account ending in|\s+and invno:|$)/i);
   if (sentMatch?.[1]) {
-    return normalizeWhitespace(sentMatch[1]);
+    return `Sent GCash to ${normalizeWhitespace(sentMatch[1])}`;
   }
 
   const transferMatch = trimmed.match(/^Transfer from\s+\d+\s+to\s+\d+/i);
@@ -6938,7 +6937,7 @@ const normalizeGcashMerchant = (description: string) => {
 
   const paymentMatch = trimmed.match(/^Payment to\s+(.+)$/i);
   if (paymentMatch?.[1]) {
-    return normalizeWhitespace(paymentMatch[1]);
+    return `Payment to ${normalizeWhitespace(paymentMatch[1])}`;
   }
 
   trimmed = trimmed

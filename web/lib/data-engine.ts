@@ -510,7 +510,6 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/service\s*charge|servicecharge|bank\s*charge|bankcharge/.test(lower)) return "Financial";
   if (/tax withheld|withheld tax|taxwithheld|withheldtax/.test(lower)) return "Financial";
   if (/salary|payroll|income|deposit|cash\s*in\b|cashin\b|received|credit memo/.test(lower)) return "Income";
-  if (type === "income") return "Income";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";

@@ -311,10 +311,6 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "EastWest Bank",
     },
     {
-      patterns: [/payment\s+to\s+food\s*panda/i, /payment\s+to\s+foodpanda/i],
-      replacement: "Food Panda",
-    },
-    {
       patterns: [/payment\s+to\s+apple\s+services/i],
       replacement: "Apple",
     },
@@ -1522,10 +1518,6 @@ export const summarizeMerchantText = (value: string, institution?: string | null
     if (anyMatch && allMatch) {
       return rule.replacement;
     }
-  }
-
-  if (/^(cash in|cash out|payment to|received|sent|transfer to|transfer from)\b/i.test(simplified)) {
-    return simplified.split(/\s+/).slice(0, 3).join(" ");
   }
 
   const stripped = stripTrailingStatementNoise(stripLeadingStatementNoise(simplified));
