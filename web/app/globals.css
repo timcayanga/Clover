@@ -12427,14 +12427,23 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .modal-backdrop--import-fullscreen {
-  left: 0;
-  width: 100vw;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  min-height: 100dvh;
+  z-index: 9000;
   pointer-events: auto;
 }
 
 .modal-backdrop--import-fullscreen .accounts-import-modal,
 .modal-backdrop--import-fullscreen .accounts-import-help {
   pointer-events: auto;
+}
+
+body[data-clover-page-modal] .sidebar,
+body[data-clover-page-modal] .shell-quick-add-button {
+  pointer-events: none;
+  z-index: 0;
 }
 
 body[data-clover-page-modal] .modal-backdrop,
