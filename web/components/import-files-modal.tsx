@@ -933,7 +933,7 @@ const IMPORT_PROGRESS = {
   uploading: 40,
   parsing: 60,
   loadingAccount: 80,
-  finalizing: 95,
+  finalizing: 90,
   done: 100,
 } as const;
 
@@ -1087,7 +1087,7 @@ export function ImportFilesModal({
       errorCode: null,
       errorTitle: null,
       errorNextSteps: null,
-      progress: Math.max(92, IMPORT_PROGRESS.loadingAccount),
+      progress: Math.max(90, IMPORT_PROGRESS.loadingAccount),
       progressLabel,
     });
     publishImportActivity({
@@ -1098,7 +1098,7 @@ export function ImportFilesModal({
       fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
       fileTotal: items.length,
       completedFiles: completedFileCount,
-      progress: Math.max(92, IMPORT_PROGRESS.loadingAccount),
+      progress: Math.max(90, IMPORT_PROGRESS.loadingAccount),
       detail,
       summary: null,
       errorMessage: null,
@@ -1644,11 +1644,11 @@ export function ImportFilesModal({
       throw new Error("Unable to determine the destination account for this document.");
     }
 
-    let finalizingProgress = 92;
+    let finalizingProgress = 90;
     let lastKnownConfirmedRows = 0;
     let lastKnownAccountBalance: string | null = null;
     const finalizingTimer = window.setInterval(() => {
-      finalizingProgress = Math.min(98, finalizingProgress + 1);
+      finalizingProgress = Math.min(IMPORT_PROGRESS.finalizing, finalizingProgress + 1);
       emitItemUpdate({
         status: "importing",
         progress: finalizingProgress,
@@ -1713,7 +1713,7 @@ export function ImportFilesModal({
             emitItemUpdate({
               status: "importing",
               confirmationState: "pending",
-              progress: Math.max(92, finalizingProgress),
+              progress: Math.max(90, finalizingProgress),
               progressLabel: "Finalizing import",
               targetAccountId: resolvedAccountId,
             });
@@ -1725,7 +1725,7 @@ export function ImportFilesModal({
               fileIndex: items.findIndex((item) => item.id === itemId) + 1,
               fileTotal: items.length,
               completedFiles: completedFileCount,
-              progress: Math.max(92, finalizingProgress),
+              progress: Math.max(90, finalizingProgress),
               detail: "Clover is still finalizing the import",
               summary: null,
               errorMessage: null,
@@ -1752,7 +1752,7 @@ export function ImportFilesModal({
           emitItemUpdate({
             status: "importing",
             confirmationState: "pending",
-            progress: Math.max(92, finalizingProgress),
+            progress: Math.max(90, finalizingProgress),
             progressLabel: "Finalizing import",
             targetAccountId: resolvedAccountId,
           });
@@ -1764,7 +1764,7 @@ export function ImportFilesModal({
             fileIndex: items.findIndex((item) => item.id === itemId) + 1,
             fileTotal: items.length,
             completedFiles: completedFileCount,
-            progress: Math.max(92, finalizingProgress),
+            progress: Math.max(90, finalizingProgress),
             detail: "Clover is still lining things up",
             summary: null,
             errorMessage: null,
@@ -1839,7 +1839,7 @@ export function ImportFilesModal({
             importFileId,
             targetAccountId: resolvedAccountId,
             importedRows,
-            progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
+            progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
             progressLabel: "Finalizing import",
           });
           emitImportActivity({
@@ -1850,7 +1850,7 @@ export function ImportFilesModal({
             fileIndex: items.findIndex((item) => item.id === itemId) + 1,
             fileTotal: items.length,
             completedFiles: completedFileCount,
-            progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
+            progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
             detail: "Clover found the account details and is still saving the rest",
             summary,
             errorMessage: null,
@@ -1902,7 +1902,7 @@ export function ImportFilesModal({
         emitItemUpdate({
           status: "importing",
           confirmationState: "pending",
-          progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
+          progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
           progressLabel: "Finalizing import",
         });
         emitImportActivity({
@@ -1913,7 +1913,7 @@ export function ImportFilesModal({
           fileIndex: items.findIndex((item) => item.id === itemId) + 1,
           fileTotal: items.length,
           completedFiles: completedFileCount,
-          progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
+          progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
           detail: "Clover found the account details and is still saving the rest",
           summary: null,
           errorMessage: null,
@@ -2099,7 +2099,7 @@ export function ImportFilesModal({
           if (hasRecoverableImportSignal && attempt < 239) {
             emitItemUpdate({
               status: "importing",
-              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
+              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
               progressLabel: telemetryLabel ?? "Finalizing import",
             });
             emitImportActivity({
@@ -2110,7 +2110,7 @@ export function ImportFilesModal({
               fileIndex: items.findIndex((item) => item.id === itemId) + 1,
               fileTotal: items.length,
               completedFiles: completedFileCount,
-              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
+              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
               detail: getTelemetryDetail(
                 "Clover is finalizing the imported account",
                 telemetryMessage,
@@ -2235,7 +2235,7 @@ export function ImportFilesModal({
               confirmationState: "pending",
               progress: Math.max(
                 IMPORT_PROGRESS.loadingAccount,
-                Math.min(92, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
+                Math.min(90, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
               ),
               progressLabel: telemetryLabel ?? "Loading account",
               targetAccountId: fallbackAccountId,
@@ -2250,7 +2250,7 @@ export function ImportFilesModal({
               completedFiles: completedFileCount,
               progress: Math.max(
                 IMPORT_PROGRESS.loadingAccount,
-                Math.min(92, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
+                Math.min(90, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
               ),
               detail: getTelemetryDetail(
                 getProgressDetail(
@@ -2426,7 +2426,7 @@ export function ImportFilesModal({
             confirmationState: "pending",
             progress: Math.max(
               IMPORT_PROGRESS.loadingAccount,
-              Math.min(92, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
+              Math.min(90, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
             ),
             progressLabel: "Loading transactions",
             targetAccountId: latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-") ? latestResolvedAccountId : null,
@@ -2441,7 +2441,7 @@ export function ImportFilesModal({
             completedFiles: completedFileCount,
             progress: Math.max(
               IMPORT_PROGRESS.loadingAccount,
-              Math.min(92, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
+              Math.min(90, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
             ),
             detail: getProgressDetail(
               {
@@ -3297,7 +3297,7 @@ export function ImportFilesModal({
         if ((parsedRowsCount > 0 || confirmedTransactionsCount > 0) && attempt < 239) {
           updateItem(itemId, {
             status: "importing",
-            progress: 92,
+            progress: 90,
             progressLabel: telemetryLabel ?? "Finalizing import",
           });
           publishImportActivity({
@@ -3308,7 +3308,7 @@ export function ImportFilesModal({
             fileIndex: items.findIndex((item) => item.id === itemId) + 1,
             fileTotal: items.length,
             completedFiles: completedFileCount,
-            progress: 92,
+            progress: 90,
             detail: getTelemetryDetail(
               "Clover is finalizing the imported file",
               telemetryMessage,
@@ -3356,7 +3356,7 @@ export function ImportFilesModal({
 
       updateItem(itemId, {
         status: "importing",
-        progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(92, IMPORT_PROGRESS.parsing + attempt * 0.25)),
+        progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(90, IMPORT_PROGRESS.parsing + attempt * 0.25)),
         progressLabel: telemetryLabel ?? processingMessage ?? progressLabel,
       });
       publishImportActivity({
@@ -3367,7 +3367,7 @@ export function ImportFilesModal({
         fileIndex: items.findIndex((item) => item.id === itemId) + 1,
         fileTotal: items.length,
         completedFiles: completedFileCount,
-        progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(92, IMPORT_PROGRESS.parsing + attempt * 0.25)),
+        progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(90, IMPORT_PROGRESS.parsing + attempt * 0.25)),
         detail: getTelemetryDetail(
           telemetryPhase === "repair_needed"
             ? "Clover needs another pass to finish this file"
@@ -4559,7 +4559,7 @@ export function ImportFilesModal({
     autoCloseCompletedBatchTimerRef.current = window.setTimeout(() => {
       autoCloseCompletedBatchTimerRef.current = null;
       onClose();
-    }, 10_000);
+    }, 500);
 
     return () => {
       if (autoCloseCompletedBatchTimerRef.current) {
