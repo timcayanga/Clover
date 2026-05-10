@@ -21792,6 +21792,12 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
 }
 
+.settings-section--swap {
+  animation: settings-section-swap 180ms ease;
+  transform-origin: top center;
+  will-change: transform, opacity;
+}
+
 .settings-hub--panel-only {
   display: block;
   width: 100%;
@@ -21846,6 +21852,18 @@ input.transaction-inline-edit--amount::placeholder {
   margin-top: 10px;
   color: var(--muted);
   line-height: 1.55;
+}
+
+@keyframes settings-section-swap {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .settings-profile-summary {

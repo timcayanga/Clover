@@ -11,7 +11,6 @@ import { getUserBillingSubscription } from "@/lib/paypal-billing";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { countNonCashAccounts } from "@/lib/account-limit-count";
-import { RouteSplash } from "@/components/route-splash";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -117,7 +116,8 @@ async function SettingsPageStream() {
   return (
     <CloverShell active="settings" title="Settings">
       <SettingsHub
-        mode="menu"
+        mode="full"
+        initialSection="account"
         workspaceId={selectedWorkspace.id}
         workspaceName={selectedWorkspace.name}
         profiles={serializedProfiles}
@@ -161,5 +161,5 @@ async function SettingsPageStream() {
 }
 
 export default function SettingsPage() {
-  return <RouteSplash label="settings"><SettingsPageStream /></RouteSplash>;
+  return <SettingsPageStream />;
 }

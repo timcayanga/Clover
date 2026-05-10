@@ -27661,6 +27661,12 @@ button.accounts-detail__transaction-head-cell {
   min-width: 0;
 }
 
+.settings-section--swap {
+  animation: settings-section-swap 180ms ease;
+  transform-origin: top center;
+  will-change: transform, opacity;
+}
+
 .settings-section--data {
   width: 100%;
   min-width: 0;
@@ -27706,6 +27712,18 @@ button.accounts-detail__transaction-head-cell {
   margin-top: 10px;
   color: var(--muted);
   line-height: 1.55;
+}
+
+@keyframes settings-section-swap {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .settings-profile-summary {

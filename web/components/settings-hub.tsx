@@ -126,7 +126,7 @@ const sectionCopy: Record<
   },
   profiles: {
     title: "Profiles",
-    icon: <SettingsIcon path="M12 13.5c2.761 0 5-2.462 5-5.5S14.761 2.5 12 2.5 7 4.962 7 8s2.239 5.5 5 5.5Zm0 1.5c-4.418 0-8 2.91-8 6.5V22h16v-.5c0-3.59-3.582-6.5-8-6.5Z" />,
+    icon: <SettingsIcon path="M5 6h14v4H5zM5 11h14v4H5zM5 16h14v2H5z" />,
   },
   display: {
     title: "Display",
@@ -684,7 +684,7 @@ export function SettingsHub({
           </div>
         ) : null}
         {activeSection === "account" ? (
-          <section className="settings-section settings-section--profile" role="tabpanel">
+          <section className="settings-section settings-section--profile settings-section--swap" role="tabpanel">
             <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <h4>Account Details</h4>
@@ -822,7 +822,7 @@ export function SettingsHub({
         ) : null}
 
         {activeSection === "profiles" ? (
-          <section className="settings-section" role="tabpanel">
+          <section className="settings-section settings-section--swap" role="tabpanel">
             <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <h4>Profiles</h4>
@@ -925,7 +925,7 @@ export function SettingsHub({
         ) : null}
 
         {activeSection === "display" ? (
-          <section className="settings-section" role="tabpanel">
+          <section className="settings-section settings-section--swap" role="tabpanel">
             <div className="settings-section__intro">
               <div>
                 <h4>Display</h4>
@@ -970,7 +970,7 @@ export function SettingsHub({
         ) : null}
 
         {activeSection === "data" ? (
-          <section className="settings-section settings-section--data" role="tabpanel">
+          <section className="settings-section settings-section--data settings-section--swap" role="tabpanel">
             <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <h4>Data</h4>
@@ -1146,13 +1146,13 @@ export function SettingsHub({
         ) : null}
 
         {activeSection === "categories" ? (
-          <section className="settings-section" role="tabpanel">
+          <section className="settings-section settings-section--swap" role="tabpanel">
             <SettingsCategoriesPanel workspaceId={workspaceId} />
           </section>
         ) : null}
 
         {activeSection === "plan" ? (
-          <section className="settings-section" role="tabpanel">
+          <section className="settings-section settings-section--swap" role="tabpanel">
             <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <h4>Plan</h4>
