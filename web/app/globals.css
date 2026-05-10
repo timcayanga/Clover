@@ -12426,6 +12426,12 @@ input.transaction-inline-edit--amount::placeholder {
 .modal-backdrop--import-fullscreen {
   left: 0;
   width: 100vw;
+  pointer-events: none;
+}
+
+.modal-backdrop--import-fullscreen .accounts-import-modal,
+.modal-backdrop--import-fullscreen .accounts-import-help {
+  pointer-events: auto;
 }
 
 body[data-clover-page-modal] .sidebar,
