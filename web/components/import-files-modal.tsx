@@ -560,12 +560,12 @@ const waitForImportSettledVisibility = async (params: {
         continue;
       }
 
-      if (params.importedRows > 0) {
-        const transactionsResponse = await fetch(`/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=1`, {
-          cache: "no-store",
-        });
-        if (!transactionsResponse.ok) {
-          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
+        if (params.importedRows > 0) {
+          const transactionsResponse = await fetch(`/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=1`, {
+            cache: "no-store",
+          });
+          if (!transactionsResponse.ok) {
+            await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
           continue;
         }
 
@@ -580,7 +580,7 @@ const waitForImportSettledVisibility = async (params: {
         const transactionPayload = await transactionsResponse.json().catch(() => null);
         const totalCount = Number(transactionPayload?.totalCount ?? 0);
         const rows = Array.isArray(transactionPayload?.transactions) ? transactionPayload.transactions : [];
-        if (totalCount <= 0 || rows.length <= 0) {
+        if (totalCount < params.importedRows || rows.length <= 0) {
           await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
           continue;
         }
@@ -3773,9 +3773,10 @@ export function ImportFilesModal({
             topMerchantName: null,
             topMerchantCount: null,
           };
+        const settledRows = Math.max(confirmedRows, confirmedPreviewTransactions.length);
         const confirmedSummary = ({
           fileName: item.file.name,
-          rowsImported: confirmedRows,
+          rowsImported: settledRows,
           accountId: serverConfirmedAccountId,
           accountName: confirmedAccountName ?? null,
           institution: confirmedInstitution,
@@ -3808,10 +3809,10 @@ export function ImportFilesModal({
           await Promise.resolve(onImported(confirmedSummary));
         }
 
-          const settledVisible = await waitForImportSettledVisibility({
+        const settledVisible = await waitForImportSettledVisibility({
             workspaceId,
             accountId: serverConfirmedAccountId,
-            importedRows: confirmedRows,
+            importedRows: settledRows,
             expectedBalance: confirmedSummary.balance ?? null,
           });
         if (!settledVisible) {
@@ -3827,7 +3828,7 @@ export function ImportFilesModal({
           error: null,
           importFileId,
           targetAccountId: serverConfirmedAccountId,
-          importedRows: confirmedRows,
+          importedRows: settledRows,
           progress: 100,
           progressLabel: "Done",
         });
@@ -3849,7 +3850,7 @@ export function ImportFilesModal({
         router.refresh();
         return {
           status: "done",
-          importedRows: confirmedRows,
+          importedRows: settledRows,
           summary: confirmedSummary,
         };
       }
