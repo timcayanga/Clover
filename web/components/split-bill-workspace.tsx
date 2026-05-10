@@ -187,6 +187,8 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
 
   const selectedDetailKind = selected?.kind ?? null;
   const closeDetail = () => setSelected(null);
+  const selectedGroupAvatarLabel = selectedGroup?.avatarUrl ? "Custom photo" : "Initials + color";
+  const selectedPersonAvatarLabel = selectedPerson?.avatarUrl ? "Custom photo" : "Initials + color";
 
   useEffect(() => {
     const createdBill = sessionStorage.getItem("split-bill:created-bill");
@@ -275,9 +277,24 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
                     <p>Change the group look here, then keep using the same picker anywhere else.</p>
                   </div>
                 </div>
-                <p>People: {selectedGroup.members.length}</p>
-                <p>Bills: {selectedGroupBills.length}</p>
-                <p>Total: {buildSummaryTotal(selectedGroupBills)}</p>
+                <div className="split-bill-detail-modal__summary-grid">
+                  <article>
+                    <span>People</span>
+                    <strong>{selectedGroup.members.length}</strong>
+                  </article>
+                  <article>
+                    <span>Bills</span>
+                    <strong>{selectedGroupBills.length}</strong>
+                  </article>
+                  <article>
+                    <span>Total</span>
+                    <strong>{buildSummaryTotal(selectedGroupBills)}</strong>
+                  </article>
+                  <article>
+                    <span>Avatar</span>
+                    <strong>{selectedGroupAvatarLabel}</strong>
+                  </article>
+                </div>
                 <div className="split-bill-detail-modal__chips">
                   {selectedGroup.members.length > 0 ? (
                     selectedGroup.members.map((member) => (
@@ -315,7 +332,24 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
                     <p>Use initials, a built-in avatar, or upload a fresh photo.</p>
                   </div>
                 </div>
-                <p>Bill count: {selectedPersonBills.length}</p>
+                <div className="split-bill-detail-modal__summary-grid">
+                  <article>
+                    <span>Bills</span>
+                    <strong>{selectedPersonBills.length}</strong>
+                  </article>
+                  <article>
+                    <span>Avatar</span>
+                    <strong>{selectedPersonAvatarLabel}</strong>
+                  </article>
+                  <article>
+                    <span>Lookup</span>
+                    <strong>By saved name</strong>
+                  </article>
+                  <article>
+                    <span>Format</span>
+                    <strong>Shared across Split Bills</strong>
+                  </article>
+                </div>
                 <div className="split-bill-detail-modal__list">
                   {selectedPersonBills.map((bill) => (
                       <button key={bill.id} type="button" className="split-bill-detail-modal__list-row split-bill-detail-modal__list-row--button" onClick={() => openBill(bill.id)}>

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { formatSplitBillAmount, normalizeCurrencyCode, type SplitBillSerializedBill } from "@/lib/split-bill";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
+import { getSplitBillOverview } from "@/lib/split-bill-view-models";
 
 type SplitBillHomeProps = {
   bills: SplitBillSerializedBill[];
@@ -39,6 +40,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
   const [showAllBills, setShowAllBills] = useState(false);
 
   const recentBills = showAllBills ? bills : bills.slice(0, 4);
+  const overview = useMemo(() => getSplitBillOverview(bills, groups.length, people.length), [bills, groups.length, people.length]);
 
   const visibleGroups = useMemo(() => {
     return groups.map((group) => {
@@ -66,9 +68,38 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
   return (
     <div className="split-bill-home">
       <section className="split-bill-mobile-home">
+        <section className="split-bill-mobile-home__hero panel glass">
+          <div>
+            <p className="eyebrow">Split Bills</p>
+            <h2>Keep shared expenses and people in one place.</h2>
+            <p className="split-bill-mobile-home__copy">Track bills, groups, and saved people with the same avatar and detail flow everywhere.</p>
+          </div>
+          <div className="split-bill-mobile-home__hero-stats">
+            <article>
+              <span>Bills</span>
+              <strong>{overview.totalBills}</strong>
+            </article>
+            <article>
+              <span>Open</span>
+              <strong>{overview.openBills}</strong>
+            </article>
+            <article>
+              <span>Groups</span>
+              <strong>{overview.groupsCount}</strong>
+            </article>
+            <article>
+              <span>People</span>
+              <strong>{overview.peopleCount}</strong>
+            </article>
+          </div>
+        </section>
+
         <section className="split-bill-panel panel glass">
           <div className="split-bill-panel__head">
-            <h2>Bills</h2>
+            <div>
+              <h2>Bills</h2>
+              <p className="split-bill-mobile-home__copy">Tap a row to open the bill, edit it, or review the settlement.</p>
+            </div>
           </div>
 
           <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
@@ -125,7 +156,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
           </div>
           <div className="split-bill-table__footer">
             <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
-              All Bills
+              {showAllBills ? "Show fewer" : "Show all bills"}
             </button>
           </div>
         </section>
@@ -133,7 +164,10 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
         <div className="split-bill-mobile-home__sections">
           <section className="split-bill-mobile-home__section">
             <div className="split-bill-mobile-home__section-head">
-              <h3>People</h3>
+              <div>
+                <h3>People</h3>
+                <p className="split-bill-mobile-home__copy">Saved people are shared across manual bills, receipts, and groups.</p>
+              </div>
             </div>
 
             <div className="split-bill-mobile-home__people">
@@ -150,14 +184,17 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
             </div>
             <div className="split-bill-mobile-home__footer">
               <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-people"))}>
-                Add People
+                Add person
               </button>
             </div>
           </section>
 
           <section className="split-bill-mobile-home__section">
             <div className="split-bill-mobile-home__section-head">
-              <h3>Groups</h3>
+              <div>
+                <h3>Groups</h3>
+                <p className="split-bill-mobile-home__copy">Groups collect people, avatar choice, and shared bills together.</p>
+              </div>
             </div>
 
             <div className="split-bill-mobile-home__groups">
@@ -192,7 +229,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
             </div>
             <div className="split-bill-mobile-home__footer">
               <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-group"))}>
-                Add Group
+                Add group
               </button>
             </div>
           </section>
@@ -201,7 +238,30 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
 
       <section className="split-bill-panel panel glass split-bill-desktop-home">
         <div className="split-bill-panel__head">
-          <h2>Bills</h2>
+          <div>
+            <p className="eyebrow">Split Bills</p>
+            <h2>Shared expenses at a glance</h2>
+            <p className="split-bill-mobile-home__copy">The same people, group, and avatar records power every Split Bills surface.</p>
+          </div>
+        </div>
+
+        <div className="split-bill-home__summary-grid">
+          <article>
+            <span>Bills</span>
+            <strong>{overview.totalBills}</strong>
+          </article>
+          <article>
+            <span>Open</span>
+            <strong>{overview.openBills}</strong>
+          </article>
+          <article>
+            <span>Groups</span>
+            <strong>{overview.groupsCount}</strong>
+          </article>
+          <article>
+            <span>People</span>
+            <strong>{overview.peopleCount}</strong>
+          </article>
         </div>
 
         <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
@@ -258,7 +318,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
         </div>
         <div className="split-bill-table__footer">
           <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
-            All Bills
+            {showAllBills ? "Show fewer" : "Show all bills"}
           </button>
         </div>
       </section>
@@ -266,7 +326,10 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
       <div className="split-bill-desktop-home split-bill-desktop-home__secondary">
         <section className="split-bill-panel panel glass">
           <div className="split-bill-panel__head">
-            <h2>Groups</h2>
+            <div>
+              <h2>Groups</h2>
+              <p className="split-bill-mobile-home__copy">Browse group totals, status, and members from the same list.</p>
+            </div>
           </div>
 
           <div className="split-bill-home__groups-list">
@@ -285,14 +348,17 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
           </div>
           <div className="split-bill-home__bottom-actions">
             <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-group"))}>
-              Add Group
+              Add group
             </button>
           </div>
         </section>
 
         <section className="split-bill-panel panel glass">
           <div className="split-bill-panel__head">
-            <h2>People</h2>
+            <div>
+              <h2>People</h2>
+              <p className="split-bill-mobile-home__copy">Each saved person keeps the same initials, color, or avatar across Split Bills.</p>
+            </div>
           </div>
 
           <div className="split-bill-home__people-list">
@@ -309,7 +375,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
           </div>
           <div className="split-bill-home__bottom-actions">
             <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-people"))}>
-              Add People
+              Add person
             </button>
           </div>
         </section>

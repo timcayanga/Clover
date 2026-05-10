@@ -31193,6 +31193,33 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-size: 0.9rem;
 }
 
+.split-bill-home__summary-grid,
+.split-bill-detail-modal__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.split-bill-home__summary-grid article,
+.split-bill-detail-modal__summary-grid article {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.split-bill-home__summary-grid span,
+.split-bill-detail-modal__summary-grid span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.split-bill-home__summary-grid strong,
+.split-bill-detail-modal__summary-grid strong {
+  font-size: 1rem;
+}
+
 .split-bill-card,
 .split-bill-group-card,
 .split-bill-editor__item,
@@ -32005,6 +32032,11 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .split-bill-page-actions {
     flex-wrap: wrap;
+  }
+
+  .split-bill-home__summary-grid,
+  .split-bill-detail-modal__summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .split-bill-add-menu__panel {
