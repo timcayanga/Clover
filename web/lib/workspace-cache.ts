@@ -899,11 +899,10 @@ export const findCachedTransactionsForAccount = (
     const snapshotAccounts = Array.isArray(snapshotLike.accounts) ? snapshotLike.accounts : [];
     const identityKey =
       accountIdentity?.name || accountIdentity?.institution || accountIdentity?.accountNumber
-        ? normalizeImportedAccountKey(
+        ? normalizeImportedTransactionAccountKey(
             accountIdentity.name ?? null,
             accountIdentity.institution ?? null,
-            accountIdentity.accountNumber ?? null,
-            accountIdentity.type ?? null
+            accountIdentity.accountNumber ?? null
           )
         : null;
     const accountIds = new Set<string>([accountId]);

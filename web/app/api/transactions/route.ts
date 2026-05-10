@@ -37,6 +37,7 @@ type TransactionApiRow = {
   accountId: string;
   accountName: string;
   institution: string | null;
+  accountNumber: string | null;
   categoryId: string | null;
   categoryName: string | null;
   reviewStatus: string | null;
@@ -79,6 +80,7 @@ type TransactionSummaryRow = {
   description: string | null;
   category: { name: string } | null;
   account: { name: string; institution: string | null } | null;
+  accountNumber?: string | null;
   createdAt: Date;
   isTransfer: boolean;
   isExcluded: boolean;
@@ -245,6 +247,7 @@ const mapTransactionRow = (transaction: {
   merchantClean: string | null;
   description: string | null;
   importFileId?: string | null;
+  accountNumber?: string | null;
   isTransfer: boolean;
   isExcluded: boolean;
   warningReason: string | null;
@@ -272,6 +275,7 @@ const mapTransactionRow = (transaction: {
     accountId: transaction.accountId,
     accountName: transaction.account.name,
     institution: transaction.account.institution,
+    accountNumber: transaction.accountNumber ?? null,
     categoryId: transaction.categoryId,
     reviewStatus: transaction.reviewStatus,
     parserConfidence: transaction.parserConfidence,
@@ -566,6 +570,7 @@ export async function GET(request: Request) {
           select: {
             name: true,
             institution: true,
+            accountNumber: true,
           },
         },
         createdAt: true,
@@ -611,6 +616,7 @@ export async function GET(request: Request) {
         workspaceId,
         accountId: transaction.accountId,
         account: transaction.account,
+        accountNumber: transaction.account?.accountNumber ?? null,
         categoryId: transaction.categoryId,
         rawPayload: transaction.rawPayload,
         category: transaction.category,
@@ -770,6 +776,7 @@ export async function POST(request: Request) {
           select: {
             name: true,
             institution: true,
+            accountNumber: true,
           },
         },
         category: {

@@ -23,7 +23,9 @@ const resolveAccountTransactionsRouteUserId = async () => {
 type TransactionApiRow = {
   id: string;
   accountId: string;
+  accountName: string;
   institution: string | null;
+  accountNumber: string | null;
   categoryId: string | null;
   amount: string;
   currency: string;
@@ -57,6 +59,7 @@ const mapTransactionRow = (transaction: {
   createdAt: Date;
   institution?: string | null;
   accountName?: string | null;
+  accountNumber?: string | null;
 }): TransactionApiRow => {
   const normalizedCurrency =
     normalizeInstitutionCurrency(
@@ -78,7 +81,9 @@ const mapTransactionRow = (transaction: {
   return {
     id: transaction.id,
     accountId: transaction.accountId,
+    accountName: transaction.accountName ?? "",
     institution: transaction.institution ?? null,
+    accountNumber: transaction.accountNumber ?? null,
     categoryId: transaction.category?.id ?? null,
     amount: transaction.amount.toString(),
     currency: normalizedCurrency,
@@ -231,6 +236,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
           ...row,
           institution: row.account?.institution ?? account.institution ?? null,
           accountName: account.name,
+          accountNumber: account.accountNumber ?? null,
         })
       ),
       page,
