@@ -12429,23 +12429,12 @@ input.transaction-inline-edit--amount::placeholder {
 .modal-backdrop--import-fullscreen {
   left: 0;
   width: 100vw;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .modal-backdrop--import-fullscreen .accounts-import-modal,
 .modal-backdrop--import-fullscreen .accounts-import-help {
   pointer-events: auto;
-}
-
-body[data-clover-page-modal] .sidebar,
-body[data-clover-page-modal] .shell-quick-add-button {
-  pointer-events: none;
-  z-index: 0;
-}
-
-body[data-clover-page-modal] .app-shell {
-  pointer-events: none;
-  z-index: 0;
 }
 
 body[data-clover-page-modal] .modal-backdrop,
@@ -25444,13 +25433,8 @@ button.accounts-detail__transaction-head-cell {
   transform: scale(0.78) translateY(5px);
 }
 
-.clover-loading-screen__leaf--animated {
-  animation: clover-loading-screen-leaf 1.8s ease-in-out infinite;
-}
-
-.clover-loading-screen__leaf.is-visible {
-  opacity: 1;
-  transform: scale(1) translateY(0);
+.clover-loading-screen__leaf--pulse {
+  animation: clover-loading-screen-pulse 1.6s ease-in-out infinite;
 }
 
 .clover-loading-screen__leaf--accent {
@@ -25493,12 +25477,12 @@ button.accounts-detail__transaction-head-cell {
   line-height: 1.6;
 }
 
-@keyframes clover-loading-screen-leaf {
+@keyframes clover-loading-screen-pulse {
   0%,
   100% {
-    opacity: 0.22;
+    opacity: 0.28;
     transform: scale(0.82) translateY(4px);
-    filter: saturate(0.9);
+    filter: saturate(0.92);
   }
 
   50% {
