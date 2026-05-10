@@ -22546,6 +22546,7 @@ input.transaction-inline-edit--amount::placeholder {
   .settings-data-grid,
   .settings-data-delete,
   .settings-data-grid--split,
+  .settings-hub--panel-only .settings-section--data .settings-data-grid--split,
   .settings-plan-grid,
   .settings-plan-usage,
   .admin-data-qa__sample-grid,

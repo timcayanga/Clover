@@ -29076,6 +29076,7 @@ html[data-helper-text="hidden"] .settings-helper {
   .settings-data-grid,
   .settings-data-delete,
   .settings-data-grid--split,
+  .settings-hub--panel-only .settings-section--data .settings-data-grid--split,
   .settings-account-layout,
   .settings-category-creator__fields,
   .settings-category-card__fields,
