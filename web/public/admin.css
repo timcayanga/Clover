@@ -22543,7 +22543,14 @@ input.transaction-inline-edit--amount::placeholder {
 
   .settings-data-grid--split,
   .settings-hub--panel-only .settings-section--data .settings-data-grid--split {
-    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+  }
+
+  .settings-section--data .settings-data-grid--split > *,
+  .settings-hub--panel-only .settings-section--data .settings-data-grid--split > * {
+    width: 100%;
   }
 
   .settings-section__intro,
