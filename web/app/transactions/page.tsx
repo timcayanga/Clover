@@ -267,6 +267,7 @@ type Transaction = {
   id: string;
   accountId: string;
   accountName: string;
+  institution?: string | null;
   categoryId: string | null;
   categoryName: string | null;
   reviewStatus?: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
@@ -904,7 +905,17 @@ const matchesTransactionFilters = (
   }
 
   if (filters.typeFilters.length > 0) {
-    const effectiveType = coerceTransactionTypeFromCategoryName(transaction.categoryName ?? null, transaction.type);
+    const effectiveCategoryName =
+      getEffectiveTransactionCategoryName({
+        categoryName: transaction.categoryName ?? null,
+        rawPayload: transaction.rawPayload as never,
+        merchantRaw: transaction.merchantRaw,
+        merchantClean: transaction.merchantClean,
+        institution: transaction.institution ?? null,
+        source: transaction.source ?? null,
+        type: transaction.type,
+      }) ?? transaction.categoryName ?? null;
+    const effectiveType = coerceTransactionTypeFromCategoryName(effectiveCategoryName, transaction.type);
     const normalizedType = effectiveType === "income" ? "credit" : effectiveType === "transfer" ? "transfer" : "debit";
     if (!filters.typeFilters.includes(normalizedType)) {
       return false;
@@ -1295,7 +1306,17 @@ const summarizeTransactionChange = (before: Transaction, after: Transaction, acc
 };
 
 const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => {
-  const effectiveType = coerceTransactionTypeFromCategoryName(transaction.categoryName ?? null, transaction.type);
+  const effectiveCategoryName =
+    getEffectiveTransactionCategoryName({
+      categoryName: transaction.categoryName ?? null,
+      rawPayload: transaction.rawPayload as never,
+      merchantRaw: transaction.merchantRaw,
+      merchantClean: transaction.merchantClean,
+      institution: transaction.institution ?? null,
+      source: transaction.source ?? null,
+      type: transaction.type,
+    }) ?? transaction.categoryName ?? null;
+  const effectiveType = coerceTransactionTypeFromCategoryName(effectiveCategoryName, transaction.type);
 
   return {
     merchantRaw: transaction.merchantRaw,
@@ -1867,14 +1888,20 @@ function TransactionsPageContent() {
 
       for (const transaction of transactions) {
         const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
+        const transactionInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
         const transactionBrand = getAccountBrand({
-          institution: accountInstitutionById.get(transaction.accountId) ?? null,
+          institution: transactionInstitution,
           name: accountDisplayName,
-          type: inferAccountTypeFromStatement(accountInstitutionById.get(transaction.accountId) ?? null, accountDisplayName, "bank"),
+          type: inferAccountTypeFromStatement(transactionInstitution, accountDisplayName, "bank"),
         });
         const currentBrand = brandById.get(transaction.accountId);
 
-        if (!currentBrand || isGenericAccountBrand(currentBrand) || (!currentBrand.logoSrc && transactionBrand.logoSrcs.length > currentBrand.logoSrcs.length)) {
+        if (
+          !currentBrand ||
+          isGenericAccountBrand(currentBrand) ||
+          (!currentBrand.logoSrc && transactionBrand.logoSrcs.length > 0) ||
+          (currentBrand.logoSrcs.length === 0 && transactionBrand.logoSrcs.length > 0)
+        ) {
           brandById.set(transaction.accountId, transactionBrand);
         }
       }
@@ -2755,6 +2782,7 @@ function TransactionsPageContent() {
               merchantRaw: transaction.merchantRaw,
               merchantClean: transaction.merchantClean,
               institution: accountInstitutionById.get(transaction.accountId) ?? null,
+              source: transaction.source ?? null,
               type: transaction.type,
             }) ??
             guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
@@ -3866,7 +3894,18 @@ function TransactionsPageContent() {
     accountId: transaction.accountId,
     isExcluded: transaction.isExcluded,
     isTransfer: transaction.isTransfer,
-    type: coerceTransactionTypeFromCategoryName(transaction.categoryName ?? null, transaction.type),
+    type: coerceTransactionTypeFromCategoryName(
+      getEffectiveTransactionCategoryName({
+        categoryName: transaction.categoryName ?? null,
+        rawPayload: transaction.rawPayload as never,
+        merchantRaw: transaction.merchantRaw,
+        merchantClean: transaction.merchantClean,
+        institution: transaction.institution ?? null,
+        source: transaction.source ?? null,
+        type: transaction.type,
+      }) ?? transaction.categoryName ?? null,
+      transaction.type
+    ),
     merchantRaw: transaction.merchantRaw,
     merchantClean: transaction.merchantClean,
     description: transaction.description ?? null,
@@ -4577,13 +4616,14 @@ function TransactionsPageContent() {
               merchantRaw: transaction.merchantRaw,
               merchantClean: transaction.merchantClean,
               institution: accountInstitutionById.get(transaction.accountId) ?? null,
+              source: transaction.source ?? null,
               type: transaction.type,
             }) ??
             guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
             "Other";
           const effectiveType = coerceTransactionTypeFromCategoryName(categoryLabel, transaction.type);
           const categoryTone = getCategoryIconTone(categoryLabel);
-          const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+          const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
           const merchantSummary = summarizeTransactionMerchantText(
             transaction.merchantClean ?? transaction.merchantRaw,
             accountInstitution
@@ -5673,7 +5713,7 @@ function TransactionsPageContent() {
                 const warningReason = warningReasonFor(transaction);
                 const amount = Number(transaction.amount);
                 const categoryValue = transaction.categoryId ?? otherCategoryId;
-                const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+                const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
                 const categoryLabel =
                   getEffectiveTransactionCategoryName({
                     categoryName: transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? null,
@@ -5681,6 +5721,7 @@ function TransactionsPageContent() {
                     merchantRaw: transaction.merchantRaw,
                     merchantClean: transaction.merchantClean,
                     institution: accountInstitution,
+                    source: transaction.source ?? null,
                     type: transaction.type,
                   }) ??
                   guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
@@ -5920,7 +5961,7 @@ function TransactionsPageContent() {
                       {group.transactions.map((transaction) => {
                         const amount = Number(transaction.amount);
                         const categoryValue = transaction.categoryId ?? otherCategoryId;
-                        const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+                        const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
                         const categoryLabel =
                           getEffectiveTransactionCategoryName({
                             categoryName: transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? null,
@@ -5928,6 +5969,7 @@ function TransactionsPageContent() {
                             merchantRaw: transaction.merchantRaw,
                             merchantClean: transaction.merchantClean,
                             institution: accountInstitution,
+                            source: transaction.source ?? null,
                             type: transaction.type,
                           }) ??
                           guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??

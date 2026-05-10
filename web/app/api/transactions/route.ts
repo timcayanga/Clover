@@ -36,6 +36,7 @@ type TransactionApiRow = {
   workspaceId: string;
   accountId: string;
   accountName: string;
+  institution: string | null;
   categoryId: string | null;
   categoryName: string | null;
   reviewStatus: string | null;
@@ -243,6 +244,7 @@ const mapTransactionRow = (transaction: {
   merchantRaw: string;
   merchantClean: string | null;
   description: string | null;
+  importFileId?: string | null;
   isTransfer: boolean;
   isExcluded: boolean;
   warningReason: string | null;
@@ -260,6 +262,7 @@ const mapTransactionRow = (transaction: {
     merchantClean: transaction.merchantClean,
     description: transaction.description,
     institution: transaction.account.institution,
+    source: transaction.importFileId ? "upload" : "manual",
     type: transaction.type,
   });
 
@@ -268,6 +271,7 @@ const mapTransactionRow = (transaction: {
     workspaceId: transaction.workspaceId,
     accountId: transaction.accountId,
     accountName: transaction.account.name,
+    institution: transaction.account.institution,
     categoryId: transaction.categoryId,
     reviewStatus: transaction.reviewStatus,
     parserConfidence: transaction.parserConfidence,

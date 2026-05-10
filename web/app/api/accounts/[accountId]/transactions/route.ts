@@ -23,6 +23,7 @@ const resolveAccountTransactionsRouteUserId = async () => {
 type TransactionApiRow = {
   id: string;
   accountId: string;
+  institution: string | null;
   categoryId: string | null;
   amount: string;
   currency: string;
@@ -70,12 +71,14 @@ const mapTransactionRow = (transaction: {
     merchantClean: transaction.merchantClean,
     description: transaction.description,
     institution: transaction.institution ?? null,
+    source: transaction.importFileId ? "upload" : "manual",
     type: transaction.type,
   });
 
   return {
     id: transaction.id,
     accountId: transaction.accountId,
+    institution: transaction.institution ?? null,
     categoryId: transaction.category?.id ?? null,
     amount: transaction.amount.toString(),
     currency: normalizedCurrency,

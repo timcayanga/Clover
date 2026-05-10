@@ -359,6 +359,7 @@ const deriveCategoryNameFromRecord = (record: CachedRecord) => {
         ? record.type
         : "expense",
     institution: typeof record.institution === "string" ? record.institution : null,
+    source: typeof record.source === "string" ? record.source : null,
   });
 
   return isGenericCategoryName(categoryName) ? null : categoryName;

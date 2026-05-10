@@ -86,6 +86,7 @@ type Transaction = {
   categoryName: string | null;
   description: string | null;
   isExcluded: boolean;
+  institution?: string | null;
   source?: string | null;
   importFileId?: string | null;
   rawPayload?: unknown;
@@ -524,7 +525,15 @@ const getTransactionSortLabel = (transaction: Transaction) =>
   }) ?? "Transaction";
 
 const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => {
-  const categoryName = transaction.categoryName ?? null;
+  const categoryName =
+    getEffectiveTransactionCategoryName({
+      categoryName: transaction.categoryName ?? null,
+      rawPayload: transaction.rawPayload as never,
+      merchantRaw: transaction.merchantRaw,
+      merchantClean: transaction.merchantClean,
+      source: transaction.source ?? null,
+      type: transaction.type,
+    }) ?? transaction.categoryName ?? null;
   const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type);
 
   return {
@@ -563,6 +572,7 @@ const getDisplayTransactionCategoryName = (
     merchantClean: transaction.merchantClean,
     description: transaction.description ?? null,
     institution,
+    source: transaction.source ?? null,
     type: transaction.type,
   });
   const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type);

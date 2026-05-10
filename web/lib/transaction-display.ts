@@ -184,12 +184,22 @@ export const getEffectiveTransactionCategoryName = (params: {
   merchantClean?: string | null;
   description?: string | null;
   institution?: string | null;
+  source?: string | null;
   type: TransactionType;
 }) => {
   const directCategory = params.categoryName?.trim() ?? null;
   const rawPayloadCategory = getRawPayloadCategoryName(params.rawPayload);
   const hasImportedRawPayload =
     Boolean(params.rawPayload) && typeof params.rawPayload === "object" && !Array.isArray(params.rawPayload);
+  const isImportedRow = params.source === "upload";
+  const genericOverride = getGenericCategoryOverride(
+    getEffectiveTransactionMerchantName({
+      merchantClean: params.merchantClean,
+      merchantRaw: params.merchantRaw,
+      rawPayload: params.rawPayload,
+      institution: params.institution,
+    }) || params.merchantRaw
+  );
 
   const effectiveMerchantName = getEffectiveTransactionMerchantName({
     merchantClean: params.merchantClean,
@@ -203,16 +213,28 @@ export const getEffectiveTransactionCategoryName = (params: {
   const heuristic = guessCategoryName(effectiveMerchantName || descriptionText || params.merchantRaw, params.type);
 
   if (isMeaningfulCategoryName(directCategory)) {
-    if (hasImportedRawPayload && isBroadCategoryName(directCategory) && isMeaningfulCategoryName(heuristic) && heuristic !== directCategory) {
-      return heuristic;
+    if (isImportedRow && isBroadCategoryName(directCategory)) {
+      if (isMeaningfulCategoryName(genericOverride) && genericOverride !== directCategory) {
+        return genericOverride;
+      }
+
+      if (isMeaningfulCategoryName(heuristic) && heuristic !== directCategory) {
+        return heuristic;
+      }
     }
 
     return directCategory;
   }
 
   if (isMeaningfulCategoryName(rawPayloadCategory)) {
-    if (hasImportedRawPayload && isBroadCategoryName(rawPayloadCategory) && isMeaningfulCategoryName(heuristic) && heuristic !== rawPayloadCategory) {
-      return heuristic;
+    if ((isImportedRow || hasImportedRawPayload) && isBroadCategoryName(rawPayloadCategory)) {
+      if (isMeaningfulCategoryName(genericOverride) && genericOverride !== rawPayloadCategory) {
+        return genericOverride;
+      }
+
+      if (isMeaningfulCategoryName(heuristic) && heuristic !== rawPayloadCategory) {
+        return heuristic;
+      }
     }
 
     return rawPayloadCategory;
@@ -232,7 +254,6 @@ export const getEffectiveTransactionCategoryName = (params: {
     }
   }
 
-  const genericOverride = getGenericCategoryOverride(effectiveMerchantName || params.merchantRaw);
   if (genericOverride) {
     return genericOverride;
   }
