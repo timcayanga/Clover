@@ -296,7 +296,38 @@ const createImportedAccountCandidates = (account: ImportedWorkspaceAccount) => {
 
 const normalizeCategoryName = (value?: string | null) => normalizeMerchantText(value);
 
+const normalizeImportedTransactionAccountKey = (
+  accountName?: string | null,
+  institution?: string | null,
+  accountNumber?: string | null
+) =>
+  normalizeMerchantText(
+    `${institution ?? ""} ${
+      extractLastFourDigits(accountNumber) ??
+      extractLastFourDigits(accountName) ??
+      normalizeWhitespace(String(accountName ?? ""))
+    }`
+  );
+
+const getTransactionAccountIdentityKey = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
+  const accountName =
+    typeof entry.accountName === "string" && entry.accountName.trim() ? entry.accountName : null;
+  const institution =
+    typeof (entry as { institution?: string | null }).institution === "string" &&
+    (entry as { institution?: string | null }).institution?.trim()
+      ? ((entry as { institution?: string | null }).institution as string)
+      : null;
+  const accountNumber =
+    typeof (entry as { accountNumber?: string | null }).accountNumber === "string" &&
+    (entry as { accountNumber?: string | null }).accountNumber?.trim()
+      ? ((entry as { accountNumber?: string | null }).accountNumber as string)
+      : null;
+
+  return normalizeImportedTransactionAccountKey(accountName, institution, accountNumber);
+};
+
 const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
+  const accountIdentityKey = getTransactionAccountIdentityKey(entry);
   const accountId =
     typeof entry.accountId === "string" && entry.accountId.trim() ? normalizeMerchantText(entry.accountId) : "";
   const dateValue =
@@ -318,11 +349,20 @@ const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspace
   const descriptionValue =
     typeof entry.description === "string" && entry.description.trim() ? normalizeMerchantText(entry.description) : "";
 
-  if (!accountId && !dateValue && !amountValue && !merchantValue && !currencyValue && !typeValue && !descriptionValue) {
+  if (
+    !accountIdentityKey &&
+    !accountId &&
+    !dateValue &&
+    !amountValue &&
+    !merchantValue &&
+    !currencyValue &&
+    !typeValue &&
+    !descriptionValue
+  ) {
     return "";
   }
 
-  return [accountId, dateValue, amountValue, merchantValue, currencyValue, typeValue, descriptionValue].join("|");
+  return [accountIdentityKey || accountId, dateValue, amountValue, merchantValue, currencyValue, typeValue, descriptionValue].join("|");
 };
 
 const isGenericCategoryName = (value?: string | null) => {
@@ -902,11 +942,10 @@ export const findCachedTransactionsForAccount = (
         return false;
       }
 
-      const entryKey = normalizeImportedAccountKey(
+      const entryKey = normalizeImportedTransactionAccountKey(
         typeof entry.accountName === "string" ? entry.accountName : null,
         typeof (entry as { institution?: string | null }).institution === "string" ? (entry as { institution?: string | null }).institution ?? null : null,
-        typeof (entry as { accountNumber?: string | null }).accountNumber === "string" ? (entry as { accountNumber?: string | null }).accountNumber ?? null : null,
-        typeof (entry as { type?: string | null }).type === "string" ? (entry as { type?: string | null }).type ?? null : null
+        typeof (entry as { accountNumber?: string | null }).accountNumber === "string" ? (entry as { accountNumber?: string | null }).accountNumber ?? null : null
       );
       return entryKey === identityKey;
     });
