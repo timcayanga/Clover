@@ -19656,9 +19656,8 @@ input.transaction-inline-edit--amount::placeholder {
   transform: scale(0.78) translateY(5px);
 }
 
-.clover-loading-screen__leaf.is-visible {
-  opacity: 1;
-  transform: scale(1) translateY(0);
+.clover-loading-screen__leaf--pulse {
+  animation: clover-loading-screen-pulse 1.6s ease-in-out infinite;
 }
 
 .clover-loading-screen__leaf--accent {
@@ -19699,6 +19698,21 @@ input.transaction-inline-edit--amount::placeholder {
   max-width: 32ch;
   color: var(--muted);
   line-height: 1.6;
+}
+
+@keyframes clover-loading-screen-pulse {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: scale(0.82) translateY(4px);
+    filter: saturate(0.92);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: saturate(1.08);
+  }
 }
 
 .pricing-page .legal-page__inner {

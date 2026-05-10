@@ -14,46 +14,34 @@ const cloverPaths = {
   stem: "M32 146C55.2012 145.897 62.0608 139.623 61.9996 116",
 };
 
-const loadingDetails = [
-  {
-    headline: "Growing your Clover view",
-    detail: "One leaf at a time, your workspace is taking shape.",
-  },
-  {
-    headline: "Shaping the next layer",
-    detail: "Clover is pulling in the newest data and settling it in.",
-  },
-  {
-    headline: "Keeping the flow steady",
-    detail: "We are tuning the details so the page feels ready fast.",
-  },
-] as const;
+const loadingCopy = {
+  headline: "Loading your next financial move",
+  detail: "Clover is gathering the details so you can keep moving with confidence.",
+} as const;
 
 export function CloverRouteLoadingScreen({ label = "page" }: CloverRouteLoadingScreenProps) {
-  const current = loadingDetails[0];
-
   return (
     <div className="clover-loading-screen" role="status" aria-live="polite" aria-label={`Loading ${label}`}>
       <div className="clover-loading-screen__card glass">
         <div className="clover-loading-screen__logo" aria-hidden="true">
           <svg className="clover-loading-screen__mark" viewBox="0 0 124 148" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path
-              className="clover-loading-screen__leaf clover-loading-screen__leaf--accent clover-loading-screen__leaf--animated"
+              className="clover-loading-screen__leaf clover-loading-screen__leaf--accent clover-loading-screen__leaf--pulse"
               style={{ animationDelay: "0ms" }}
               d={cloverPaths.topRight}
             />
             <path
-              className="clover-loading-screen__leaf clover-loading-screen__leaf--animated"
+              className="clover-loading-screen__leaf clover-loading-screen__leaf--pulse"
               style={{ animationDelay: "120ms" }}
               d={cloverPaths.topLeft}
             />
             <path
-              className="clover-loading-screen__leaf clover-loading-screen__leaf--animated"
+              className="clover-loading-screen__leaf clover-loading-screen__leaf--pulse"
               style={{ animationDelay: "240ms" }}
               d={cloverPaths.bottomLeft}
             />
             <path
-              className="clover-loading-screen__leaf clover-loading-screen__leaf--animated"
+              className="clover-loading-screen__leaf clover-loading-screen__leaf--pulse"
               style={{ animationDelay: "360ms" }}
               d={cloverPaths.bottomRight}
             />
@@ -63,8 +51,8 @@ export function CloverRouteLoadingScreen({ label = "page" }: CloverRouteLoadingS
 
         <div className="clover-loading-screen__copy">
           <p className="eyebrow">Loading {label}</p>
-          <h2>{current.headline}</h2>
-          <p>{current.detail}</p>
+          <h2>{loadingCopy.headline}</h2>
+          <p>{loadingCopy.detail}</p>
         </div>
       </div>
     </div>

@@ -1,29 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 type CloverLoadingScreenProps = {
   label?: string;
 };
 
-const loadingStages = [
-  {
-    headline: "Growing your Clover view",
-    detail: "One leaf at a time, your workspace is taking shape.",
-  },
-  {
-    headline: "Shaping the next layer",
-    detail: "Clover is pulling in the newest data and settling it in.",
-  },
-  {
-    headline: "Keeping the flow steady",
-    detail: "We are tuning the details so the page feels ready fast.",
-  },
-  {
-    headline: "Almost there",
-    detail: "Clover is wrapping up the last leaf before you land.",
-  },
-] as const;
+const loadingCopy = {
+  headline: "Loading your next financial move",
+  detail: "Clover is gathering the details so you can keep moving with confidence.",
+} as const;
 
 const cloverPaths = {
   topLeft:
@@ -38,38 +22,39 @@ const cloverPaths = {
 };
 
 export function CloverLoadingScreen({ label = "page" }: CloverLoadingScreenProps) {
-  const [stage, setStage] = useState(0);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setStage((current) => (current + 1) % loadingStages.length);
-    }, 820);
-
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const current = loadingStages[stage];
-
   return (
     <div className="clover-loading-screen" role="status" aria-live="polite" aria-label={`Loading ${label}`}>
       <div className="clover-loading-screen__card glass">
         <div className="clover-loading-screen__logo" aria-hidden="true">
           <svg className="clover-loading-screen__mark" viewBox="0 0 124 148" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path
-              className={`clover-loading-screen__leaf clover-loading-screen__leaf--accent ${stage >= 0 ? "is-visible" : ""}`}
+              className="clover-loading-screen__leaf clover-loading-screen__leaf--accent clover-loading-screen__leaf--pulse"
+              style={{ animationDelay: "0ms" }}
               d={cloverPaths.topRight}
             />
-            <path className={`clover-loading-screen__leaf ${stage >= 1 ? "is-visible" : ""}`} d={cloverPaths.topLeft} />
-            <path className={`clover-loading-screen__leaf ${stage >= 2 ? "is-visible" : ""}`} d={cloverPaths.bottomLeft} />
-            <path className={`clover-loading-screen__leaf ${stage >= 3 ? "is-visible" : ""}`} d={cloverPaths.bottomRight} />
+            <path
+              className="clover-loading-screen__leaf clover-loading-screen__leaf--pulse"
+              style={{ animationDelay: "120ms" }}
+              d={cloverPaths.topLeft}
+            />
+            <path
+              className="clover-loading-screen__leaf clover-loading-screen__leaf--pulse"
+              style={{ animationDelay: "240ms" }}
+              d={cloverPaths.bottomLeft}
+            />
+            <path
+              className="clover-loading-screen__leaf clover-loading-screen__leaf--pulse"
+              style={{ animationDelay: "360ms" }}
+              d={cloverPaths.bottomRight}
+            />
             <path className="clover-loading-screen__stem" d={cloverPaths.stem} />
           </svg>
         </div>
 
         <div className="clover-loading-screen__copy">
           <p className="eyebrow">Loading {label}</p>
-          <h2>{current.headline}</h2>
-          <p>{current.detail}</p>
+          <h2>{loadingCopy.headline}</h2>
+          <p>{loadingCopy.detail}</p>
         </div>
       </div>
     </div>
