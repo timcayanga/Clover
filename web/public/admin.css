@@ -21821,7 +21821,7 @@ input.transaction-inline-edit--amount::placeholder {
   width: 100%;
 }
 
-.settings-hub--panel-only .settings-section--data .settings-data-grid {
+.settings-section--data .settings-data-grid--split {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -21961,6 +21961,45 @@ input.transaction-inline-edit--amount::placeholder {
   flex-wrap: wrap;
   align-items: end;
   justify-content: space-between;
+}
+
+.settings-data-download {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-data-download__list {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-data-download__item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.settings-data-download__item-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-data-download__item-copy strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.settings-data-download__item-copy span {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .settings-inline-field {

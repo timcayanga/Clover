@@ -977,62 +977,71 @@ export function SettingsHub({
               </div>
             </div>
 
-            <div className="settings-data-grid">
-              <article className="settings-action-card">
+            <div className="settings-data-grid settings-data-grid--split">
+              <article className="settings-action-card settings-data-download">
                 <div>
-                  <h5>Download transactions</h5>
-                  <p>Export the selected profile’s transactions as CSV.</p>
+                  <h5>Download</h5>
                 </div>
-                <button
-                  type="button"
-                  className="button button-secondary button-small"
-                  disabled={isPending}
-                  onClick={() =>
-                    handleAction(async () => {
-                      await runDownload(`/api/settings/export/transactions?workspaceId=${encodeURIComponent(workspaceId)}`, "clover-transactions.csv");
-                      setStatusMessage("Transactions download started.");
-                    })
-                  }
-                >
-                  Download transactions
-                </button>
+
+                <div className="settings-data-download__list">
+                  <div className="settings-data-download__item">
+                    <div className="settings-data-download__item-copy">
+                      <strong>Transactions as PDF</strong>
+                      <span>Download the selected profile’s transactions as a PDF.</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="button button-secondary button-small"
+                      disabled={isPending}
+                      onClick={() =>
+                        handleAction(async () => {
+                          await runDownload(
+                            `/api/settings/export/transactions?workspaceId=${encodeURIComponent(workspaceId)}`,
+                            "clover-transactions.pdf"
+                          );
+                          setStatusMessage("Transactions download started.");
+                        })
+                      }
+                    >
+                      Download PDF
+                    </button>
+                  </div>
+
+                  <div className="settings-data-download__item">
+                    <div className="settings-data-download__item-copy">
+                      <strong>Accounts as PDF</strong>
+                      <span>Download the latest balances for each account as a PDF.</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="button button-secondary button-small"
+                      disabled={isPending}
+                      onClick={() =>
+                        handleAction(async () => {
+                          await runDownload(
+                            `/api/settings/export/account-balances?workspaceId=${encodeURIComponent(workspaceId)}`,
+                            "clover-account-balances.pdf"
+                          );
+                          setStatusMessage("Account balances download started.");
+                        })
+                      }
+                    >
+                      Download PDF
+                    </button>
+                  </div>
+                </div>
               </article>
 
-              <article className="settings-action-card">
+              <article className="settings-action-card settings-data-delete settings-data-delete--compact">
                 <div>
-                  <h5>Download account balances</h5>
-                  <p>Export the latest balances for each account in CSV format.</p>
+                  <h5>Delete</h5>
                 </div>
-                <button
-                  type="button"
-                  className="button button-secondary button-small"
-                  disabled={isPending}
-                  onClick={() =>
-                    handleAction(async () => {
-                      await runDownload(
-                        `/api/settings/export/account-balances?workspaceId=${encodeURIComponent(workspaceId)}`,
-                        "clover-account-balances.csv"
-                      );
-                      setStatusMessage("Account balances download started.");
-                    })
-                  }
-                >
-                  Download balances
-                </button>
-              </article>
-            </div>
 
-            <article className="settings-action-card settings-data-delete settings-data-delete--compact">
-              <div>
-                <h5>Delete data</h5>
-                <p>Keep the list short so each delete action is obvious before you tap it.</p>
-              </div>
-
-              <div className="settings-data-delete__list">
+                <div className="settings-data-delete__list">
                 <div className="settings-data-delete__item">
                   <div className="settings-data-delete__item-copy">
-                    <strong>Delete transactions before selected date</strong>
-                    <span>Removes old transaction history and keeps accounts in place.</span>
+                    <strong>Transactions</strong>
+                    <span>Delete transactions before the selected date.</span>
                   </div>
                   <div className="settings-data-delete__controls">
                     <label className="settings-inline-field">
@@ -1060,8 +1069,8 @@ export function SettingsHub({
 
                 <div className="settings-data-delete__item">
                   <div className="settings-data-delete__item-copy">
-                    <strong>Delete accounts and linked transactions</strong>
-                    <span>Removes non-cash accounts together with the transactions tied to them.</span>
+                    <strong>Accounts</strong>
+                    <span>Delete accounts and linked transactions.</span>
                   </div>
                   <div className="settings-data-delete__controls">
                     <button
@@ -1089,8 +1098,8 @@ export function SettingsHub({
 
                 <div className="settings-data-delete__item">
                   <div className="settings-data-delete__item-copy">
-                    <strong>Delete all Clover data</strong>
-                    <span>Clears accounts, transactions, imports, and learned data while keeping your login.</span>
+                    <strong>All Clover Data</strong>
+                    <span>Delete everything in Clover while keeping your login.</span>
                   </div>
                   <div className="settings-data-delete__controls">
                     <button
@@ -1125,13 +1134,14 @@ export function SettingsHub({
                           window.location.assign("/dashboard");
                         })
                       }
-                      >
+                    >
                       Delete all data
                     </button>
                   </div>
                 </div>
               </div>
-            </article>
+              </article>
+            </div>
           </section>
         ) : null}
 
