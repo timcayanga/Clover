@@ -827,9 +827,12 @@ body.dashboard-modal-open .app-shell {
   position: relative;
   display: grid;
   gap: 4px;
+  z-index: 40;
 }
 
 .sidebar-nav__submenu {
+  position: relative;
+  z-index: 50;
   display: grid;
   gap: 4px;
   margin-left: 16px;
@@ -29073,7 +29076,14 @@ html[data-helper-text="hidden"] .settings-helper {
 
   .settings-data-grid--split,
   .settings-hub--panel-only .settings-section--data .settings-data-grid--split {
-    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+  }
+
+  .settings-section--data .settings-data-grid--split > *,
+  .settings-hub--panel-only .settings-section--data .settings-data-grid--split > * {
+    width: 100%;
   }
 
   .settings-section__intro,
@@ -31619,6 +31629,8 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 
 .split-bill-manual-modal {
   width: min(460px, 100%);
+  max-height: min(88vh, 780px);
+  overflow-y: auto;
 }
 
 .split-bill-manual-modal__head {
@@ -31864,15 +31876,25 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 .split-bill-group-modal {
   width: min(520px, 100%);
   border-radius: 28px;
+  max-height: min(88vh, 780px);
+  overflow-y: auto;
 }
 
 .split-bill-detail-modal {
   width: min(760px, 100%);
+  max-height: min(88vh, 840px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .split-bill-detail-modal__body {
   display: grid;
   gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .split-bill-detail-modal__summary {
@@ -31929,6 +31951,27 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   text-align: left;
 }
 
+.split-bill-detail-modal__list-row--split {
+  align-items: flex-start;
+}
+
+.split-bill-detail-modal__list-main {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.split-bill-detail-modal__row-meta {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
 .split-bill-detail-modal__list-row--button {
   cursor: pointer;
 }
@@ -31936,6 +31979,22 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 .split-bill-detail-modal__list-row:last-child {
   border-bottom: 0;
   padding-bottom: 0;
+}
+
+.split-bill-person-modal {
+  max-height: min(88vh, 700px);
+  overflow-y: auto;
+}
+
+.split-bill-group-detail__status {
+  display: inline-flex;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(4, 120, 87, 0.12);
+  color: var(--success, #047857);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .split-bill-detail-modal__file-button {
@@ -32067,6 +32126,11 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .split-bill-manual-modal__chips {
     margin-left: 0;
+  }
+
+  .split-bill-detail-modal__summary-grid,
+  .split-bill-home__summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .split-bill-group-detail__meta {

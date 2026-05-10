@@ -8,6 +8,7 @@ import {
   formatSplitBillAmount,
   normalizeCurrencyCode,
   serializeSplitBillRecord,
+  splitBillGroupMemberOrderBy,
   splitBillItemOrderBy,
 } from "@/lib/split-bill";
 
@@ -17,7 +18,7 @@ const billInclude = {
   group: {
     include: {
       members: {
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        orderBy: splitBillGroupMemberOrderBy,
       },
     },
   },
@@ -39,12 +40,12 @@ const formatDate = (value: string) =>
   });
 
 const getInitials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("")
-    .slice(0, 2) || "?";
+  (() => {
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "?";
+    return `${parts[0][0]?.toUpperCase() ?? ""}${parts[parts.length - 1][0]?.toUpperCase() ?? ""}` || "?";
+  })();
 
 export default async function SplitBillGroupPage({ params }: { params: Promise<{ groupId: string }> }) {
   const user = await getSplitBillCurrentUser();
@@ -67,6 +68,7 @@ export default async function SplitBillGroupPage({ params }: { params: Promise<{
   }
 
   const serializedBills = bills.map((bill) => serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0]));
+  const isFullySettled = serializedBills.length > 0 && serializedBills.every((bill) => bill.settlement.transfers.length === 0);
   const totalCurrencies = Array.from(new Set(serializedBills.map((bill) => normalizeCurrencyCode(bill.currency))));
   const summaryTotal =
     totalCurrencies.length === 0
@@ -108,6 +110,8 @@ export default async function SplitBillGroupPage({ params }: { params: Promise<{
             </div>
           </div>
 
+          {isFullySettled ? <span className="split-bill-group-detail__status">Fully Settled</span> : null}
+
           <div className="split-bill-group-detail__chips">
             {group.members.length > 0 ? (
               group.members.map((member) => (
@@ -136,11 +140,8 @@ export default async function SplitBillGroupPage({ params }: { params: Promise<{
                 <span role="columnheader">Date</span>
                 <span role="columnheader">People</span>
                 <span role="columnheader">Total</span>
-                <span role="columnheader">Status</span>
               </div>
               {serializedBills.map((bill) => {
-                const status = bill.settlement.transfers.length > 0 ? `${bill.settlement.transfers.length} transfer${bill.settlement.transfers.length === 1 ? "" : "s"}` : "Settled";
-
                 return (
                   <div key={bill.id} className="split-bill-table__row" role="row">
                     <div role="cell" className="split-bill-table__bill">
@@ -160,7 +161,6 @@ export default async function SplitBillGroupPage({ params }: { params: Promise<{
                       ))}
                     </div>
                     <div role="cell">{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</div>
-                    <div role="cell">{status}</div>
                   </div>
                 );
               })}

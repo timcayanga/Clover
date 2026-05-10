@@ -121,8 +121,8 @@ export default async function SplitBillDetailPage({ params }: { params: Promise<
               <strong>{splitBill.participants.length}</strong>
             </article>
             <article>
-              <span>Transfers</span>
-              <strong>{splitBill.settlement.transfers.length}</strong>
+              <span>Status</span>
+              <strong>{splitBill.settlement.transfers.length === 0 ? "Settled" : `${splitBill.settlement.transfers.length} transfer${splitBill.settlement.transfers.length === 1 ? "" : "s"}`}</strong>
             </article>
           </div>
         </section>

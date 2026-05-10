@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CloverShell } from "@/components/clover-shell";
-import { SplitBillAvatarPicker } from "@/components/split-bill-avatar-picker";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import { SplitBillHome } from "@/components/split-bill-home";
 import { SplitBillPageActions } from "@/components/split-bill-page-actions";
@@ -15,6 +14,7 @@ type SplitBillWorkspaceProps = {
   bills: SplitBillSerializedBill[];
   groups: SplitBillGroupSummary[];
   people: SplitBillPersonSummary[];
+  currentUserName: string;
 };
 
 type DetailSelection =
@@ -39,7 +39,12 @@ const buildSummaryTotal = (bills: SplitBillSerializedBill[]) => {
   return "Mixed";
 };
 
-export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups, people: initialPeople }: SplitBillWorkspaceProps) {
+export function SplitBillWorkspace({
+  bills: initialBills,
+  groups: initialGroups,
+  people: initialPeople,
+  currentUserName,
+}: SplitBillWorkspaceProps) {
   const [bills, setBills] = useState(initialBills);
   const [groups, setGroups] = useState(initialGroups);
   const [people, setPeople] = useState(initialPeople);
@@ -87,53 +92,6 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
     setSelected({ kind: "person", id: person.id });
   };
 
-  const updateGroupAvatar = async (groupId: string, avatarUrl: string | null) => {
-    const group = groups.find((entry) => entry.id === groupId);
-    if (!group) {
-      return;
-    }
-
-    const response = await fetch(`/api/split-bill-groups/${groupId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: group.name,
-        avatarUrl,
-        members: group.members.map((member, index) => ({
-          id: member.id,
-          name: member.name,
-          sortOrder: index,
-        })),
-      }),
-    });
-    if (!response.ok) {
-      return;
-    }
-
-    setGroups((current) => current.map((entry) => (entry.id === groupId ? { ...entry, avatarUrl } : entry)));
-  };
-
-  const updatePersonAvatar = async (personId: string, avatarUrl: string | null) => {
-    const person = people.find((entry) => entry.id === personId);
-    if (!person) {
-      return;
-    }
-
-    const response = await fetch(`/api/split-bill-people/${personId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: person.name,
-        avatarUrl,
-      }),
-    });
-    if (!response.ok) {
-      return;
-    }
-
-    setPeople((current) => current.map((entry) => (entry.id === personId ? { ...entry, avatarUrl } : entry)));
-  };
-
   const removeGroup = async (groupId: string) => {
     const group = groups.find((entry) => entry.id === groupId);
     if (!group || !window.confirm(`Remove ${group.name}?`)) {
@@ -172,6 +130,25 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
     }
   };
 
+  const removeBill = async (billId: string) => {
+    const bill = bills.find((entry) => entry.id === billId);
+    if (!bill || !window.confirm(`Delete ${bill.title}?`)) {
+      return;
+    }
+
+    const response = await fetch(`/api/split-bills/${billId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      return;
+    }
+
+    setBills((current) => current.filter((entry) => entry.id !== billId));
+    if (selected?.kind === "bill" && selected.id === billId) {
+      setSelected(null);
+    }
+  };
+
   const selectedDetailLabel = useMemo(() => {
     if (selectedBill) {
       return selectedBill.title;
@@ -187,9 +164,6 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
 
   const selectedDetailKind = selected?.kind ?? null;
   const closeDetail = () => setSelected(null);
-  const selectedGroupAvatarLabel = selectedGroup?.avatarUrl ? "Custom photo" : "Initials + color";
-  const selectedPersonAvatarLabel = selectedPerson?.avatarUrl ? "Custom photo" : "Initials + color";
-
   useEffect(() => {
     const createdBill = sessionStorage.getItem("split-bill:created-bill");
     if (!createdBill) {
@@ -213,7 +187,16 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
     <CloverShell
       active="split-bill"
       title="Split Bill"
-      actions={<SplitBillPageActions people={people} groups={groups} onBillSaved={handleBillSaved} onGroupSaved={handleGroupSaved} onPersonSaved={handlePersonSaved} />}
+      actions={
+        <SplitBillPageActions
+          currentUserName={currentUserName}
+          people={people}
+          groups={groups}
+          onBillSaved={handleBillSaved}
+          onGroupSaved={handleGroupSaved}
+          onPersonSaved={handlePersonSaved}
+        />
+      }
     >
       <SplitBillHome bills={bills} groups={groups} people={people} onOpenBill={openBill} onOpenGroup={openGroup} onOpenPerson={openPerson} />
 
@@ -238,6 +221,7 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
                   <span>Total</span>
                   <strong>{selectedBill.total ? formatSplitBillAmount(Number(selectedBill.total), selectedBill.currency) : "No total"}</strong>
                   <span>{selectedBill.billDate}</span>
+                  <span>{selectedBill.settlement.transfers.length === 0 ? "Settled" : `${selectedBill.settlement.transfers.length} transfer${selectedBill.settlement.transfers.length === 1 ? "" : "s"}`}</span>
                 </div>
                 <div className="split-bill-detail-modal__chips">
                   {selectedBill.participants.map((participant) => (
@@ -264,17 +248,11 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
 
             {selectedGroup ? (
               <div className="split-bill-detail-modal__body">
-                <SplitBillAvatarPicker
-                  name={selectedGroup.name}
-                  value={selectedGroup.avatarUrl}
-                  onChange={(value) => void updateGroupAvatar(selectedGroup.id, value)}
-                  defaultToSuggestedAvatar
-                />
                 <div className="split-bill-detail-modal__identity">
                   <SplitBillEntityAvatar name={selectedGroup.name} avatarUrl={selectedGroup.avatarUrl} sizeClass="split-bill-person-avatar--medium" />
                   <div>
                     <strong>{selectedGroup.name}</strong>
-                    <p>Change the group look here, then keep using the same picker anywhere else.</p>
+                    <p>Groups use initials only now, keeping the same look everywhere.</p>
                   </div>
                 </div>
                 <div className="split-bill-detail-modal__summary-grid">
@@ -290,10 +268,6 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
                     <span>Total</span>
                     <strong>{buildSummaryTotal(selectedGroupBills)}</strong>
                   </article>
-                  <article>
-                    <span>Avatar</span>
-                    <strong>{selectedGroupAvatarLabel}</strong>
-                  </article>
                 </div>
                 <div className="split-bill-detail-modal__chips">
                   {selectedGroup.members.length > 0 ? (
@@ -308,10 +282,15 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
                 </div>
                 <div className="split-bill-detail-modal__list">
                   {selectedGroupBills.map((bill) => (
-                    <button key={bill.id} type="button" className="split-bill-detail-modal__list-row split-bill-detail-modal__list-row--button" onClick={() => openBill(bill.id)}>
-                      <strong>{bill.title}</strong>
-                      <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
-                    </button>
+                    <div key={bill.id} className="split-bill-detail-modal__list-row split-bill-detail-modal__list-row--split">
+                      <button type="button" className="split-bill-detail-modal__list-main" onClick={() => openBill(bill.id)}>
+                        <strong>{bill.title}</strong>
+                        <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
+                      </button>
+                      <button className="button button-danger button-small" type="button" onClick={() => void removeBill(bill.id)}>
+                        Delete
+                      </button>
+                    </div>
                   ))}
                 </div>
                 <div className="split-bill-detail-modal__actions">
@@ -324,12 +303,11 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
 
             {selectedPerson ? (
               <div className="split-bill-detail-modal__body">
-                <SplitBillAvatarPicker name={selectedPerson.name} value={selectedPerson.avatarUrl} onChange={(value) => void updatePersonAvatar(selectedPerson.id, value)} />
                 <div className="split-bill-detail-modal__identity">
                   <SplitBillEntityAvatar name={selectedPerson.name} avatarUrl={selectedPerson.avatarUrl} sizeClass="split-bill-person-avatar--medium" />
                   <div>
                     <strong>{selectedPerson.name}</strong>
-                    <p>Use initials, a built-in avatar, or upload a fresh photo.</p>
+                    <p>People use initials only now, so every view stays consistent.</p>
                   </div>
                 </div>
                 <div className="split-bill-detail-modal__summary-grid">
@@ -338,25 +316,27 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
                     <strong>{selectedPersonBills.length}</strong>
                   </article>
                   <article>
-                    <span>Avatar</span>
-                    <strong>{selectedPersonAvatarLabel}</strong>
-                  </article>
-                  <article>
                     <span>Lookup</span>
                     <strong>By saved name</strong>
                   </article>
                   <article>
                     <span>Format</span>
-                    <strong>Shared across Split Bills</strong>
+                    <strong>Initials only</strong>
                   </article>
                 </div>
                 <div className="split-bill-detail-modal__list">
                   {selectedPersonBills.map((bill) => (
-                      <button key={bill.id} type="button" className="split-bill-detail-modal__list-row split-bill-detail-modal__list-row--button" onClick={() => openBill(bill.id)}>
+                    <div key={bill.id} className="split-bill-detail-modal__list-row split-bill-detail-modal__list-row--split">
+                      <button type="button" className="split-bill-detail-modal__list-main" onClick={() => openBill(bill.id)}>
                         <strong>{bill.title}</strong>
                         <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
+                        <span className="split-bill-detail-modal__row-meta">{bill.settlement.transfers.length === 0 ? "Settled" : `${bill.settlement.transfers.length} transfer${bill.settlement.transfers.length === 1 ? "" : "s"}`}</span>
                       </button>
-                    ))}
+                      <button className="button button-danger button-small" type="button" onClick={() => void removeBill(bill.id)}>
+                        Delete
+                      </button>
+                    </div>
+                  ))}
                 </div>
                 <div className="split-bill-detail-modal__actions">
                   <button className="button button-danger button-small" type="button" onClick={() => void removePerson(selectedPerson.id)}>

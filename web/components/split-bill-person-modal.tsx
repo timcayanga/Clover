@@ -1,15 +1,12 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useState } from "react";
-import { SplitBillAvatarPicker } from "@/components/split-bill-avatar-picker";
 import type { SplitBillPersonSummary } from "@/lib/split-bill-entities";
 
 type SplitBillPersonModalProps = {
   open: boolean;
   onClose: () => void;
   onSaved?: (person: SplitBillPersonSummary) => void;
-  avatarUrl: string | null;
-  onAvatarUrlChange: (value: string | null) => void;
 };
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
@@ -20,7 +17,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   return payload;
 }
 
-export function SplitBillPersonModal({ open, onClose, onSaved, avatarUrl, onAvatarUrlChange }: SplitBillPersonModalProps) {
+export function SplitBillPersonModal({ open, onClose, onSaved }: SplitBillPersonModalProps) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -33,8 +30,7 @@ export function SplitBillPersonModal({ open, onClose, onSaved, avatarUrl, onAvat
     setName("");
     setError(null);
     setIsSaving(false);
-    onAvatarUrlChange(null);
-  }, [open, onAvatarUrlChange]);
+  }, [open]);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -73,7 +69,7 @@ export function SplitBillPersonModal({ open, onClose, onSaved, avatarUrl, onAvat
       const response = await fetch("/api/split-bill-people", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: nextName, avatarUrl }),
+        body: JSON.stringify({ name: nextName }),
       });
       const result = await readJsonResponse<{ person: SplitBillPersonSummary }>(response);
       onSaved?.(result.person);
@@ -109,10 +105,7 @@ export function SplitBillPersonModal({ open, onClose, onSaved, avatarUrl, onAvat
           />
         </label>
 
-        <label className="settings-field">
-          <span>Photo or avatar</span>
-          <SplitBillAvatarPicker name={name} value={avatarUrl} onChange={onAvatarUrlChange} />
-        </label>
+        <p className="split-bill-manual-modal__hint">People use initials only now.</p>
 
         {error ? <p className="split-bill-editor__error">{error}</p> : null}
 

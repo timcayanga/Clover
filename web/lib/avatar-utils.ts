@@ -13,12 +13,13 @@ const hashString = (value: string) =>
   }, 0);
 
 export const getAvatarInitials = (value: string, maxLength = 2) => {
-  const initials = value
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("")
-    .slice(0, maxLength);
+  const parts = value.split(/\s+/).filter(Boolean);
+  const initials =
+    parts.length === 0
+      ? ""
+      : parts.length === 1
+        ? parts[0]?.[0]?.toUpperCase() ?? ""
+        : `${parts[0]?.[0]?.toUpperCase() ?? ""}${parts[parts.length - 1]?.[0]?.toUpperCase() ?? ""}`.slice(0, maxLength);
 
   return initials || "?";
 };

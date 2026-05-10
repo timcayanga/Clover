@@ -12,19 +12,11 @@ type SplitBillEntityAvatarProps = {
 
 export function SplitBillEntityAvatar({
   name,
-  avatarUrl,
+  avatarUrl: _avatarUrl,
   sizeClass = "split-bill-person-avatar--small",
   title,
   className = "split-bill-person-avatar",
 }: SplitBillEntityAvatarProps) {
-  if (avatarUrl) {
-    return (
-      <span className={`${className} ${sizeClass}`} title={title ?? name}>
-        <img className="split-bill-person-avatar__image" src={avatarUrl} alt="" />
-      </span>
-    );
-  }
-
   return (
     <span className={`${className} ${sizeClass}`} title={title ?? name} style={getAvatarBackgroundStyle(name)}>
       {getAvatarInitials(name)}

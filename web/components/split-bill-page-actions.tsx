@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { SplitBillAvatarPicker } from "@/components/split-bill-avatar-picker";
 import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
 import { SplitBillPersonModal } from "@/components/split-bill-person-modal";
@@ -9,6 +8,7 @@ import type { SplitBillSerializedBill } from "@/lib/split-bill";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 
 type SplitBillPageActionsProps = {
+  currentUserName: string;
   people: SplitBillPersonSummary[];
   groups: SplitBillGroupSummary[];
   onBillSaved?: (bill: SplitBillSerializedBill) => void;
@@ -85,17 +85,15 @@ function SplitBillPeoplePicker({
   );
 }
 
-export function SplitBillPageActions({ people, groups, onBillSaved, onGroupSaved, onPersonSaved }: SplitBillPageActionsProps) {
+export function SplitBillPageActions({ currentUserName, people, groups, onBillSaved, onGroupSaved, onPersonSaved }: SplitBillPageActionsProps) {
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [openAddMode, setOpenAddMode] = useState<"manual" | "import" | null>(null);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isPersonModalOpen, setIsPersonModalOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [groupPeople, setGroupPeople] = useState<string[]>([]);
-  const [groupAvatarUrl, setGroupAvatarUrl] = useState<string | null>(null);
   const [isSavingGroup, setIsSavingGroup] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
-  const [personAvatarUrl, setPersonAvatarUrl] = useState<string | null>(null);
   const isModalOpen = Boolean(openAddMode || isGroupModalOpen || isPersonModalOpen);
 
   const closeAddModal = () => {
@@ -108,14 +106,12 @@ export function SplitBillPageActions({ people, groups, onBillSaved, onGroupSaved
     setIsAddMenuOpen(false);
     setGroupName("");
     setGroupPeople([]);
-    setGroupAvatarUrl(null);
     setGroupError(null);
   };
 
   const closePersonModal = () => {
     setIsPersonModalOpen(false);
     setIsAddMenuOpen(false);
-    setPersonAvatarUrl(null);
   };
 
   useLayoutEffect(() => {
@@ -166,7 +162,6 @@ export function SplitBillPageActions({ people, groups, onBillSaved, onGroupSaved
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: groupName.trim(),
-          avatarUrl: groupAvatarUrl,
           members,
         }),
       });
@@ -220,15 +215,9 @@ export function SplitBillPageActions({ people, groups, onBillSaved, onGroupSaved
         </div>
       ) : null}
 
-      <SplitBillManualModal open={openAddMode === "manual"} people={people} groups={groups} onClose={closeAddModal} onSaved={onBillSaved} />
+      <SplitBillManualModal open={openAddMode === "manual"} currentUserName={currentUserName} people={people} groups={groups} onClose={closeAddModal} onSaved={onBillSaved} />
       <SplitBillImportModal open={openAddMode === "import"} onClose={closeAddModal} />
-      <SplitBillPersonModal
-        open={isPersonModalOpen}
-        onClose={closePersonModal}
-        avatarUrl={personAvatarUrl}
-        onAvatarUrlChange={setPersonAvatarUrl}
-        onSaved={onPersonSaved}
-      />
+      <SplitBillPersonModal open={isPersonModalOpen} onClose={closePersonModal} onSaved={onPersonSaved} />
 
       {isGroupModalOpen ? (
         <div className="split-bill-modal" role="presentation" onClick={closeGroupModal}>
@@ -247,10 +236,7 @@ export function SplitBillPageActions({ people, groups, onBillSaved, onGroupSaved
               <input className="settings-input" value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Weekend trip crew" autoFocus />
             </label>
 
-            <label className="settings-field">
-              <span>Photo or avatar</span>
-              <SplitBillAvatarPicker name={groupName} value={groupAvatarUrl} onChange={setGroupAvatarUrl} defaultToSuggestedAvatar />
-            </label>
+            <p className="split-bill-manual-modal__hint">Groups use initials only now.</p>
 
             <label className="settings-field">
               <span>People</span>

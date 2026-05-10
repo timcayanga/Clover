@@ -9,6 +9,7 @@ import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-
 
 type SplitBillManualModalProps = {
   open: boolean;
+  currentUserName: string;
   people: SplitBillPersonSummary[];
   groups: SplitBillGroupSummary[];
   onClose: () => void;
@@ -19,9 +20,9 @@ type SplitMode = "you-paid" | "you-owed" | "person-paid" | "person-owed";
 
 const currencyOptions = getCurrencyCatalogCodes();
 
-const splitModeOptions: Array<{ value: SplitMode; label: string }> = [
-  { value: "you-paid", label: "You paid, split equally" },
-  { value: "you-owed", label: "You are owed the full amount" },
+const splitModeOptions = (currentUserName: string): Array<{ value: SplitMode; label: string }> => [
+  { value: "you-paid", label: `${currentUserName} paid, split equally` },
+  { value: "you-owed", label: `${currentUserName} is owed the full amount` },
   { value: "person-paid", label: "Person paid, split equally" },
   { value: "person-owed", label: "Person is owed the full amount" },
 ];
@@ -36,7 +37,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   return payload;
 }
 
-export function SplitBillManualModal({ open, people, groups, onClose, onSaved }: SplitBillManualModalProps) {
+export function SplitBillManualModal({ open, currentUserName, people, groups, onClose, onSaved }: SplitBillManualModalProps) {
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -92,6 +93,8 @@ export function SplitBillManualModal({ open, people, groups, onClose, onSaved }:
   useEffect(() => {
     inputRef.current?.focus();
   }, [open]);
+
+  const splitOptions = useMemo(() => splitModeOptions(currentUserName), [currentUserName]);
 
   const selectedGroup = useMemo(() => groups.find((group) => group.id === selectedGroupId) ?? null, [groups, selectedGroupId]);
 
@@ -173,7 +176,7 @@ export function SplitBillManualModal({ open, people, groups, onClose, onSaved }:
     setError(null);
 
     try {
-      const payerName = splitMode.startsWith("you") ? "You" : selectedPayer;
+      const payerName = splitMode.startsWith("you") ? currentUserName : selectedPayer;
       const participantEntries = Array.from(new Set([...selectedPeople, payerName].filter(Boolean)))
         .filter(Boolean)
         .map((name) => ({
@@ -363,7 +366,7 @@ export function SplitBillManualModal({ open, people, groups, onClose, onSaved }:
         <label className="settings-field">
           <span>Split as</span>
           <select className="settings-input" value={splitMode} onChange={(event) => setSplitMode(event.target.value as SplitMode)}>
-            {splitModeOptions.map((option) => (
+                {splitOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

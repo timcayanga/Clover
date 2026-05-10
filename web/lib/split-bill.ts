@@ -1548,7 +1548,7 @@ export const splitBillDraftFromSerializedBill = (bill: SplitBillSerializedBill):
   })),
 });
 
-const getReceiptSummaryFromRawPayload = (rawPayload: Record<string, unknown> | null | undefined) => {
+const getReceiptSummaryFromRawPayload = (rawPayload: Record<string, unknown> | null | undefined): Partial<SplitBillReceiptSummary> | null => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return null;
   }
@@ -1558,7 +1558,16 @@ const getReceiptSummaryFromRawPayload = (rawPayload: Record<string, unknown> | n
     return null;
   }
 
-  return summary as Record<string, unknown>;
+  return summary as Partial<SplitBillReceiptSummary>;
+};
+
+const getRawPayloadTextValue = (rawPayload: Record<string, unknown> | null | undefined, key: "serviceCharge" | "rounding") => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const value = rawPayload[key];
+  return typeof value === "string" || typeof value === "number" ? value : null;
 };
 
 export const mergeSplitBillReceiptSummary = (
@@ -1636,16 +1645,12 @@ export const serializeSplitBillRecord = (bill: {
     })),
     serviceCharge:
       getReceiptSummaryFromRawPayload(bill.rawPayload)?.serviceCharge ??
-      (bill.rawPayload && typeof bill.rawPayload === "object" && !Array.isArray(bill.rawPayload)
-        ? (bill.rawPayload as Record<string, unknown>).serviceCharge ?? null
-        : null),
+      getRawPayloadTextValue(bill.rawPayload, "serviceCharge"),
     tax: bill.tax?.toString() ?? null,
     tip: bill.tip?.toString() ?? null,
     rounding:
       getReceiptSummaryFromRawPayload(bill.rawPayload)?.rounding ??
-      (bill.rawPayload && typeof bill.rawPayload === "object" && !Array.isArray(bill.rawPayload)
-        ? (bill.rawPayload as Record<string, unknown>).rounding ?? null
-        : null),
+      getRawPayloadTextValue(bill.rawPayload, "rounding"),
     discount: bill.discount?.toString() ?? null,
   });
 

@@ -25,6 +25,9 @@ const formatDate = (value: string) =>
 const buildRowStatus = (transfers: SplitBillSerializedBill["settlement"]["transfers"]) =>
   transfers.length > 0 ? `${transfers.length} transfer${transfers.length === 1 ? "" : "s"}` : "Settled";
 
+const buildGroupStatus = (items: SplitBillSerializedBill[]) =>
+  items.length > 0 && items.every((bill) => bill.settlement.transfers.length === 0) ? "Fully Settled" : null;
+
 const sumBillTotals = (items: SplitBillSerializedBill[]) =>
   items.reduce((sum, bill) => sum + (bill.total ? Number(bill.total) || 0 : 0), 0);
 
@@ -60,7 +63,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
       return {
         ...group,
         total,
-        status: groupBills.length === 0 ? "Empty" : groupBills.some((bill) => bill.settlement.transfers.length > 0) ? "Open" : "Settled",
+        status: buildGroupStatus(groupBills),
       };
     });
   }, [bills, groups]);
@@ -72,7 +75,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
           <div>
             <p className="eyebrow">Split Bills</p>
             <h2>Keep shared expenses and people in one place.</h2>
-            <p className="split-bill-mobile-home__copy">Track bills, groups, and saved people with the same avatar and detail flow everywhere.</p>
+            <p className="split-bill-mobile-home__copy">Track bills, groups, and saved people with the same initials and detail flow everywhere.</p>
           </div>
           <div className="split-bill-mobile-home__hero-stats">
             <article>
@@ -193,7 +196,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
             <div className="split-bill-mobile-home__section-head">
               <div>
                 <h3>Groups</h3>
-                <p className="split-bill-mobile-home__copy">Groups collect people, avatar choice, and shared bills together.</p>
+                <p className="split-bill-mobile-home__copy">Groups collect people, initials, and shared bills together.</p>
               </div>
             </div>
 
@@ -210,7 +213,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                     </div>
                     <div className="split-bill-mobile-group-card__meta">
                       <span>{group.members.length} member{group.members.length === 1 ? "" : "s"}</span>
-                      <span>{group.status}</span>
+                      <span>{group.status ?? ""}</span>
                     </div>
                     <div className="split-bill-mobile-group-card__avatars">
                       {group.members.length > 0 ? (
@@ -241,7 +244,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
           <div>
             <p className="eyebrow">Split Bills</p>
             <h2>Shared expenses at a glance</h2>
-            <p className="split-bill-mobile-home__copy">The same people, group, and avatar records power every Split Bills surface.</p>
+            <p className="split-bill-mobile-home__copy">The same people, group, and initials power every Split Bills surface.</p>
           </div>
         </div>
 
@@ -328,7 +331,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
           <div className="split-bill-panel__head">
             <div>
               <h2>Groups</h2>
-              <p className="split-bill-mobile-home__copy">Browse group totals, status, and members from the same list.</p>
+              <p className="split-bill-mobile-home__copy">Browse group totals and members from the same list.</p>
             </div>
           </div>
 
@@ -338,7 +341,8 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                 <button key={group.id} type="button" className="split-bill-home__group-row" onClick={() => onOpenGroup(group.id)}>
                   <strong>{group.name}</strong>
                   <span>
-                    {group.members.length} member{group.members.length === 1 ? "" : "s"} · {group.total} · {group.status}
+                    {group.members.length} member{group.members.length === 1 ? "" : "s"} · {group.total}
+                    {group.status ? ` · ${group.status}` : ""}
                   </span>
                 </button>
               ))
@@ -357,7 +361,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
           <div className="split-bill-panel__head">
             <div>
               <h2>People</h2>
-              <p className="split-bill-mobile-home__copy">Each saved person keeps the same initials, color, or avatar across Split Bills.</p>
+              <p className="split-bill-mobile-home__copy">Each saved person keeps the same initials and color across Split Bills.</p>
             </div>
           </div>
 
