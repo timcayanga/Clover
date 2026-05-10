@@ -345,7 +345,6 @@ const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspace
   const merchantValue = normalizeMerchantText(merchantRawValue || merchantCleanValue);
   const currencyValue =
     typeof entry.currency === "string" && entry.currency.trim() ? normalizeMerchantText(entry.currency) : "";
-  const typeValue = typeof entry.type === "string" && entry.type.trim() ? normalizeMerchantText(entry.type) : "";
   const descriptionValue =
     typeof entry.description === "string" && entry.description.trim() ? normalizeMerchantText(entry.description) : "";
 
@@ -356,13 +355,12 @@ const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspace
     !amountValue &&
     !merchantValue &&
     !currencyValue &&
-    !typeValue &&
     !descriptionValue
   ) {
     return "";
   }
 
-  return [accountIdentityKey || accountId, dateValue, amountValue, merchantValue, currencyValue, typeValue, descriptionValue].join("|");
+  return [accountIdentityKey || accountId, dateValue, amountValue, merchantValue, currencyValue, descriptionValue].join("|");
 };
 
 const isGenericCategoryName = (value?: string | null) => {
