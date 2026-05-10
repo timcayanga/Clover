@@ -28211,18 +28211,22 @@ button.accounts-detail__transaction-head-cell {
 
 .settings-data-delete--compact {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+  width: 100%;
   max-width: 100%;
 }
 
 .settings-data-delete__list {
   display: grid;
   gap: 10px;
+  width: 100%;
 }
 
 .settings-data-delete__item {
   display: grid;
   gap: 8px;
+  width: 100%;
   padding: 12px 14px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.56);
@@ -28232,6 +28236,7 @@ button.accounts-detail__transaction-head-cell {
 .settings-data-delete__item-copy {
   display: grid;
   gap: 4px;
+  width: 100%;
 }
 
 .settings-data-delete__item-copy strong {
@@ -28253,6 +28258,7 @@ button.accounts-detail__transaction-head-cell {
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
+  width: 100%;
 }
 
 .settings-category-manager {

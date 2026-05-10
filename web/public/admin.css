@@ -22023,6 +22023,58 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--muted);
 }
 
+.settings-data-delete--compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.settings-data-delete__list {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.settings-data-delete__item {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.settings-data-delete__item-copy {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+}
+
+.settings-data-delete__item-copy strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.settings-data-delete__item-copy span {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.settings-data-delete__controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  width: 100%;
+}
+
 .settings-inline-field {
   display: grid;
   gap: 6px;
