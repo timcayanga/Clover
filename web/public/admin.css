@@ -21966,11 +21966,13 @@ input.transaction-inline-edit--amount::placeholder {
 .settings-data-download {
   display: grid;
   gap: 14px;
+  align-content: start;
 }
 
 .settings-data-download__list {
   display: grid;
   gap: 12px;
+  align-content: start;
 }
 
 .settings-data-download__item {
@@ -21978,6 +21980,7 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
   align-items: flex-end;
   justify-content: space-between;
+  width: 100%;
   padding: 12px 14px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.56);

@@ -1003,7 +1003,7 @@ export function SettingsHub({
                         })
                       }
                     >
-                      Download PDF
+                      Download Transactions
                     </button>
                   </div>
 
@@ -1026,7 +1026,7 @@ export function SettingsHub({
                         })
                       }
                     >
-                      Download PDF
+                      Download Accounts
                     </button>
                   </div>
                 </div>
