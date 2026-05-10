@@ -22541,6 +22541,11 @@ input.transaction-inline-edit--amount::placeholder {
     max-height: none;
   }
 
+  .settings-data-grid--split,
+  .settings-hub--panel-only .settings-section--data .settings-data-grid--split {
+    grid-template-columns: 1fr !important;
+  }
+
   .settings-section__intro,
   .settings-choice-grid,
   .settings-data-grid,
