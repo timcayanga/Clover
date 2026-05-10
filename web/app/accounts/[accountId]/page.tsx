@@ -1070,6 +1070,18 @@ function AccountDetailPageContent() {
           setHasInitialDataLoaded(true);
         }
 
+        const resolvedCachedTransactionsLookup = findCachedTransactionsForAccount(mergedAccount.id, mergedAccount);
+        const resolvedCachedTransactions = (resolvedCachedTransactionsLookup?.transactions as Transaction[] | undefined) ?? [];
+        if (!cancelled && resolvedCachedTransactions.length > 0 && transactions.length === 0) {
+          const mergedCachedTransactions = mergeImportedWorkspaceTransactions([], resolvedCachedTransactions);
+          setTransactions(mergedCachedTransactions);
+          setTransactionTotalCount(
+            resolvedCachedTransactionsLookup?.totalCount ?? mergedCachedTransactions.length
+          );
+          setTransactionsError(null);
+          setTransactionsLoading(false);
+        }
+
         const canonicalPath = getAccountPath(mergedAccount);
         if (!cancelled && canonicalPath !== `/accounts/${accountPathSegment}`) {
           router.replace(canonicalPath);
