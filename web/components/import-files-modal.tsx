@@ -637,6 +637,7 @@ const buildOptimisticPreviewTransactions = (
       return {
         id: `optimistic-${params.importFileId}-${index}`,
         importFileId: params.importFileId,
+        sourceRowIndex: index + 1,
         accountId: params.accountId,
         accountName: params.accountName,
         institution: params.institution,

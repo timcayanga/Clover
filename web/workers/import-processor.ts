@@ -3238,7 +3238,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     });
   const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
 
-    for (const row of parsedRows) {
+    for (const [index, row] of parsedRows.entries()) {
     const rowType =
       row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : undefined;
     const rowConfidence = typeof row.confidence === "number" ? row.confidence : 0;
@@ -3309,7 +3309,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       accountMatchConfidence: rowAccountMatchConfidence,
       duplicateConfidence: rowDuplicateConfidence,
       transferConfidence: rowTransferConfidence,
-      rawPayload: (row.rawPayload ?? {}) as Prisma.InputJsonValue,
+      rawPayload: {
+        ...(row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : {}),
+        sourceRowIndex: index + 1,
+        sourceImportFileId: importFileId,
+      } as Prisma.InputJsonValue,
       normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
       date:
@@ -3344,7 +3348,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
         description: extractHumanReadableDescription(row.rawPayload ?? null),
         categoryName,
-        rawPayload: (row.rawPayload ?? {}) as Prisma.InputJsonValue,
+        rawPayload: {
+          ...(row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : {}),
+          sourceRowIndex: index + 1,
+          sourceImportFileId: importFileId,
+        } as Prisma.InputJsonValue,
       },
       trainingSignal: {
         merchantText,

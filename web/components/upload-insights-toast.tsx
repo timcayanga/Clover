@@ -16,6 +16,7 @@ export type UploadInsightsSummary = {
   previewTransactions?: Array<{
     id: string;
     importFileId: string;
+    sourceRowIndex?: number;
     accountId: string;
     accountName: string;
     categoryId: string | null;

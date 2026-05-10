@@ -309,6 +309,53 @@ const normalizeImportedTransactionAccountKey = (
     }`
   );
 
+const getImportedTransactionImportFileId = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
+  const directImportFileId =
+    typeof entry.importFileId === "string" && entry.importFileId.trim() ? entry.importFileId.trim() : "";
+  if (directImportFileId) {
+    return directImportFileId;
+  }
+
+  const rawPayload = entry.rawPayload;
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return "";
+  }
+
+  const sourceImportFileId = (rawPayload as Record<string, unknown>).sourceImportFileId;
+  return typeof sourceImportFileId === "string" && sourceImportFileId.trim() ? sourceImportFileId.trim() : "";
+};
+
+const getImportedTransactionSourceRowIndex = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
+  const directRowIndex = (entry as { sourceRowIndex?: unknown }).sourceRowIndex;
+  if (typeof directRowIndex === "number" && Number.isFinite(directRowIndex)) {
+    return Math.trunc(directRowIndex);
+  }
+  if (typeof directRowIndex === "string" && directRowIndex.trim()) {
+    const parsed = Number(directRowIndex);
+    if (Number.isFinite(parsed)) {
+      return Math.trunc(parsed);
+    }
+  }
+
+  const rawPayload = entry.rawPayload;
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const payloadRowIndex = (rawPayload as Record<string, unknown>).sourceRowIndex;
+  if (typeof payloadRowIndex === "number" && Number.isFinite(payloadRowIndex)) {
+    return Math.trunc(payloadRowIndex);
+  }
+  if (typeof payloadRowIndex === "string" && payloadRowIndex.trim()) {
+    const parsed = Number(payloadRowIndex);
+    if (Number.isFinite(parsed)) {
+      return Math.trunc(parsed);
+    }
+  }
+
+  return null;
+};
+
 const getTransactionAccountIdentityKey = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
   const accountName =
     typeof entry.accountName === "string" && entry.accountName.trim() ? entry.accountName : null;
@@ -327,6 +374,12 @@ const getTransactionAccountIdentityKey = (entry: CachedRecord | ImportedWorkspac
 };
 
 const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
+  const importFileId = getImportedTransactionImportFileId(entry);
+  const sourceRowIndex = getImportedTransactionSourceRowIndex(entry);
+  if (importFileId && sourceRowIndex !== null) {
+    return `${importFileId}:${sourceRowIndex}`;
+  }
+
   const accountIdentityKey = getTransactionAccountIdentityKey(entry);
   const accountId =
     typeof entry.accountId === "string" && entry.accountId.trim() ? normalizeMerchantText(entry.accountId) : "";
