@@ -561,7 +561,7 @@ const waitForImportSettledVisibility = async (params: {
       }
 
         if (params.importedRows > 0) {
-          const transactionsResponse = await fetch(`/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=1`, {
+          const transactionsResponse = await fetch(`/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=10`, {
             cache: "no-store",
           });
           if (!transactionsResponse.ok) {
@@ -588,6 +588,35 @@ const waitForImportSettledVisibility = async (params: {
         const categoryPayload = await categoriesResponse.json().catch(() => null);
         const categories = Array.isArray(categoryPayload?.categories) ? categoryPayload.categories : [];
         if (categories.length <= 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
+          continue;
+        }
+
+        const rowsLookEnriched = rows.every((row) => {
+          if (!row || typeof row !== "object") {
+            return false;
+          }
+
+          const record = row as Record<string, unknown>;
+          const categoryText =
+            typeof record.categoryName === "string"
+              ? record.categoryName
+              : typeof record.category === "string"
+                ? record.category
+                : record.category && typeof record.category === "object" && "name" in record.category
+                  ? String((record.category as { name?: unknown }).name ?? "")
+                  : "";
+          const merchantText =
+            typeof record.merchantClean === "string"
+              ? record.merchantClean
+              : typeof record.name === "string"
+                ? record.name
+                : "";
+
+          return Boolean(categoryText.trim() && merchantText.trim());
+        });
+
+        if (!rowsLookEnriched) {
           await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
           continue;
         }
@@ -869,7 +898,7 @@ const friendlyImportPhaseLabel = (label: string, fileName?: string | null) => {
       return "Queued for background processing";
     case "Finalizing in background":
     case "Finalizing import":
-      return "Saving and reconciling";
+      return "Applying names and categories";
     case "Loading transactions":
     case "Parsing in background":
       return "Identifying transactions";
@@ -910,7 +939,7 @@ const friendlyImportProgressLabel = (label: string, fileName?: string | null) =>
       return "Clover will finish the remaining work in the background";
     case "Finalizing in background":
     case "Finalizing import":
-      return "Clover is matching transactions, categories, and duplicates";
+      return "Clover is applying normalized names, categories, and duplicate checks";
     case "Loading account":
       return "Clover already found the account and is matching it to your workspace";
     case "Loading transactions":
@@ -1620,19 +1649,19 @@ export function ImportFilesModal({
   ): Promise<ImportProcessResult> => {
     const backgroundOnly = Boolean(options?.backgroundOnly);
     const emitItemUpdate = (patch: Partial<QueuedFile>) => {
-      if (!backgroundOnly) {
+      const terminalPatch = patch.status === "done" || patch.status === "error" || patch.confirmationState === "confirmed";
+      if (!backgroundOnly || terminalPatch) {
         updateItem(itemId, patch);
       }
     };
     const emitImportActivity = (payload: Parameters<typeof publishImportActivity>[0]) => {
-      if (!backgroundOnly) {
+      const terminalActivity = payload?.status === "done" || payload?.status === "error";
+      if (!backgroundOnly || terminalActivity) {
         publishImportActivity(payload);
       }
     };
     const emitImportError = (stage: ImportErrorStage, fileName: string, message: string | null | undefined) => {
-      if (!backgroundOnly) {
-        closeImportAfterError(itemId, stage, fileName, message);
-      }
+      closeImportAfterError(itemId, stage, fileName, message);
     };
     const resolvedAccountId =
       accountId && !accountId.startsWith("optimistic-")
@@ -1833,9 +1862,43 @@ export function ImportFilesModal({
           accountId: resolvedAccountId,
           importedRows,
           expectedBalance: summary.balance ?? null,
+          timeoutMs: 30_000,
         });
 
         if (!settledVisible) {
+          const resumeResponse = await fetch(`/api/imports/${importFileId}/resume`, {
+            method: "POST",
+            cache: "no-store",
+          }).catch(() => null);
+
+          if (resumeResponse?.ok) {
+            emitItemUpdate({
+              status: "importing",
+              confirmationState: "pending",
+              error: null,
+              importFileId,
+              targetAccountId: resolvedAccountId,
+              importedRows,
+              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
+              progressLabel: "Finalizing import",
+            });
+            emitImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "active",
+              fileName: summaryContext.fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount,
+              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
+              detail: "Clover found the transactions and is applying names and categories",
+              summary,
+              errorMessage: null,
+            });
+            await new Promise((resolve) => window.setTimeout(resolve, 1500));
+            continue;
+          }
+
           emitItemUpdate({
             status: "importing",
             confirmationState: "pending",
@@ -1855,7 +1918,7 @@ export function ImportFilesModal({
             fileTotal: items.length,
             completedFiles: completedFileCount,
             progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
-            detail: "Clover found the account details and is still saving the rest",
+            detail: "Clover found the transactions and is applying names and categories",
             summary,
             errorMessage: null,
           });
@@ -1951,11 +2014,11 @@ export function ImportFilesModal({
     ) => {
       if (rowsCount > 0) {
         if (resolved.accountNumber) {
-          return "Clover is reading the bank balance and transactions";
+          return "Clover found the transactions and is applying names and categories";
         }
 
         if (resolved.accountName || resolved.institution) {
-          return "Clover is reading the transactions";
+          return "Clover found the transactions and is applying categories";
         }
       }
 
