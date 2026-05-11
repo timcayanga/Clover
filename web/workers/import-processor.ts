@@ -2534,13 +2534,17 @@ export const processImportFileText = async (
       imageImport && importMode === "statement" && hasUsableParsedRows && !hasCriticalFindings;
     const canFinalizeWithWarnings = hasUsableParsedRows && !hasCriticalFindings;
 
+    // QA warnings should feed review/learning, not keep a usable statement in a
+    // long auto-rerun loop after the account and transaction rows are ready.
+    const shouldFinalizeUsableRowsWithWarnings = canFinalizeWithWarnings;
     const shouldAutoRerun =
       autoRerunEnabled &&
       !isDocumentImport &&
       !plateaued &&
       qaRunResult.evaluation.score < AUTO_REPARSE_SCORE_TARGET &&
       autoRerunAttempt < AUTO_REPARSE_MAX_ATTEMPTS &&
-      !allowWarningFinalizeForImageStatement;
+      !allowWarningFinalizeForImageStatement &&
+      !shouldFinalizeUsableRowsWithWarnings;
 
     if (shouldAutoRerun) {
       const autoRerunPayload = buildAutoRerunPayload({
