@@ -137,6 +137,7 @@ type ImportFile = {
     phase?: string | null;
     processedRows?: number | null;
     totalRows?: number | null;
+    updatedAt?: string | Date | null;
   } | null;
 };
 
@@ -163,20 +164,36 @@ const isActiveEnrichmentJob = (importFile: ImportFile) => {
   return Boolean(status && status !== "done" && status !== "failed");
 };
 
-const estimateEnrichmentTimeLabel = (importFiles: ImportFile[]) => {
-  const remainingRows = importFiles
-    .filter(isActiveEnrichmentJob)
-    .reduce((total, importFile) => {
+const estimateEnrichmentTimeLabel = (importFiles: ImportFile[], nowMs: number) => {
+  const activeJobs = importFiles.filter(isActiveEnrichmentJob);
+  const remainingRows = activeJobs.reduce((total, importFile) => {
       const totalRows = Number(importFile.enrichmentJob?.totalRows ?? 0);
       const processedRows = Number(importFile.enrichmentJob?.processedRows ?? 0);
       return total + Math.max(0, totalRows - processedRows);
     }, 0);
+  const latestUpdatedAtMs = activeJobs.reduce((latest, importFile) => {
+    const updatedAt = importFile.enrichmentJob?.updatedAt;
+    const timestamp = updatedAt ? new Date(updatedAt).getTime() : 0;
+    return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
+  }, 0);
 
   if (remainingRows <= 0) {
     return "less than 1 min left";
   }
 
-  const minutes = Math.max(1, Math.min(10, Math.ceil(remainingRows / 50)));
+  const estimatedSeconds = Math.max(30, Math.min(600, Math.ceil(remainingRows / 50) * 60));
+  const elapsedSeconds = latestUpdatedAtMs > 0 ? Math.max(0, Math.floor((nowMs - latestUpdatedAtMs) / 1000)) : 0;
+  const remainingSeconds = estimatedSeconds - elapsedSeconds;
+
+  if (remainingSeconds <= -60) {
+    return "taking longer than expected";
+  }
+
+  if (remainingSeconds <= 60) {
+    return "less than 1 min left";
+  }
+
+  const minutes = Math.max(1, Math.ceil(remainingSeconds / 60));
   return `about ${minutes} min${minutes === 1 ? "" : "s"} left`;
 };
 
@@ -1557,7 +1574,18 @@ function AccountDetailPageContent() {
     () => new Set(importFiles.filter(isActiveEnrichmentJob).map((importFile) => importFile.id)),
     [importFiles]
   );
-  const finalizingTimeLabel = useMemo(() => estimateEnrichmentTimeLabel(importFiles), [importFiles]);
+  const [finalizingNowMs, setFinalizingNowMs] = useState(() => Date.now());
+  const hasActiveFinalizingImports = activeFinalizingImportIds.size > 0;
+  useEffect(() => {
+    if (!hasActiveFinalizingImports) {
+      return;
+    }
+
+    setFinalizingNowMs(Date.now());
+    const intervalId = window.setInterval(() => setFinalizingNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(intervalId);
+  }, [hasActiveFinalizingImports]);
+  const finalizingTimeLabel = useMemo(() => estimateEnrichmentTimeLabel(importFiles, finalizingNowMs), [finalizingNowMs, importFiles]);
   const finalizingTransactionCount = useMemo(
     () =>
       visibleTransactions.filter(
