@@ -44,7 +44,7 @@ export function GlobalImportActivity() {
     const timeout = window.setTimeout(() => {
       clearImportActivity();
       setActivity(null);
-    }, 5000);
+    }, 1500);
 
     return () => {
       window.clearTimeout(timeout);

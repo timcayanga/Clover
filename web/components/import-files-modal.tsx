@@ -4533,7 +4533,7 @@ export function ImportFilesModal({
     }
 
     const hasCompletedBatchNow = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
-    const nextStatus = hasCompletedBatchNow && !busy ? "done" : items.some((item) => item.status === "error") ? "error" : "active";
+    const nextStatus = hasCompletedBatchNow ? "done" : items.some((item) => item.status === "error") ? "error" : "active";
     const nextDetail = activeProgressItem
       ? friendlyImportProgressLabel(activeProgressItem.progressLabel, activeProgressItem.file.name)
       : validationNotice ?? message;
@@ -4566,7 +4566,7 @@ export function ImportFilesModal({
       autoCloseCompletedBatchTimerRef.current = null;
     }
 
-    if (!open || busy) {
+    if (!open) {
       return;
     }
 
@@ -4577,6 +4577,9 @@ export function ImportFilesModal({
 
     autoCloseCompletedBatchTimerRef.current = window.setTimeout(() => {
       autoCloseCompletedBatchTimerRef.current = null;
+      clearImportActivity();
+      lastImportActivityRef.current = null;
+      setBusy(false);
       onClose();
     }, 500);
 
@@ -4586,7 +4589,7 @@ export function ImportFilesModal({
         autoCloseCompletedBatchTimerRef.current = null;
       }
     };
-  }, [busy, items, onClose, open]);
+  }, [items, onClose, open]);
   useEffect(() => {
     if (!open || passwordItems.length === 0) {
       setSelectedPasswordItemId(null);
