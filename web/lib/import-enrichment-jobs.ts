@@ -80,6 +80,7 @@ export const upsertImportEnrichmentJob = async (params: {
   importFileId: string;
   totalRows: number;
   phase?: string;
+  forceRequeue?: boolean;
 }) => {
   await ensureImportEnrichmentJobTable();
   const id = crypto.randomUUID();
@@ -95,18 +96,25 @@ export const upsertImportEnrichmentJob = async (params: {
       ON CONFLICT ("importFileId") DO UPDATE SET
         "workspaceId" = EXCLUDED."workspaceId",
         "status" = CASE
+          WHEN $6::boolean THEN 'queued'::"ImportEnrichmentJobStatus"
           WHEN "ImportEnrichmentJob"."status" = 'done' THEN 'done'::"ImportEnrichmentJobStatus"
           ELSE 'queued'::"ImportEnrichmentJobStatus"
         END,
         "phase" = CASE
+          WHEN $6::boolean THEN EXCLUDED."phase"
           WHEN "ImportEnrichmentJob"."status" = 'done' THEN "ImportEnrichmentJob"."phase"
           ELSE EXCLUDED."phase"
         END,
         "totalRows" = GREATEST("ImportEnrichmentJob"."totalRows", EXCLUDED."totalRows"),
+        "lastRowIndex" = CASE WHEN $6::boolean THEN 0 ELSE "ImportEnrichmentJob"."lastRowIndex" END,
+        "processedRows" = CASE WHEN $6::boolean THEN 0 ELSE "ImportEnrichmentJob"."processedRows" END,
+        "attempts" = CASE WHEN $6::boolean THEN 0 ELSE "ImportEnrichmentJob"."attempts" END,
         "errorCode" = NULL,
         "errorMessage" = NULL,
         "lockedAt" = NULL,
         "lockedBy" = NULL,
+        "startedAt" = CASE WHEN $6::boolean THEN NULL ELSE "ImportEnrichmentJob"."startedAt" END,
+        "completedAt" = CASE WHEN $6::boolean THEN NULL ELSE "ImportEnrichmentJob"."completedAt" END,
         "updatedAt" = NOW()
       RETURNING *
     `,
@@ -114,7 +122,8 @@ export const upsertImportEnrichmentJob = async (params: {
     params.workspaceId,
     params.importFileId,
     params.phase ?? "queued",
-    Math.max(0, params.totalRows)
+    Math.max(0, params.totalRows),
+    Boolean(params.forceRequeue)
   );
   return rows[0] ? normalizeJob(rows[0]) : null;
 };

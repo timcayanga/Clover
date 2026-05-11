@@ -1179,6 +1179,149 @@ const replayRelatedImportsAfterGenericTraining = async (params: {
   };
 };
 
+const replayRelatedImportsAfterLearning = async (params: {
+  workspaceId: string;
+  sourceImportFileId: string;
+  sourceBankName: string | null;
+  actorUserId?: string | null;
+}) => {
+  const normalizedBankName = normalizeBankName(params.sourceBankName ?? "");
+  if (!normalizedBankName || normalizedBankName === "Unknown") {
+    return { replayed: 0, candidates: 0 };
+  }
+
+  const importFiles = await prisma.importFile.findMany({
+    where: {
+      workspaceId: params.workspaceId,
+      id: { not: params.sourceImportFileId },
+      status: { not: "deleted" },
+    },
+    select: {
+      id: true,
+      fileName: true,
+      fileType: true,
+      status: true,
+      parsedRowsCount: true,
+      confirmedTransactionsCount: true,
+      updatedAt: true,
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 200,
+  }).catch(() => []);
+
+  if (importFiles.length === 0 || !(await hasCompatibleTable("AccountStatementCheckpoint"))) {
+    return { replayed: 0, candidates: 0 };
+  }
+
+  const importFileIds = importFiles.map((file) => file.id);
+  const [checkpoints, runs] = await Promise.all([
+    prisma.accountStatementCheckpoint.findMany({
+      where: {
+        importFileId: { in: importFileIds },
+      },
+      select: {
+        importFileId: true,
+        sourceMetadata: true,
+      },
+    }).catch(() => []),
+    prisma.dataQaRun.findMany({
+      where: {
+        importFileId: { in: importFileIds },
+      },
+      select: {
+        importFileId: true,
+        score: true,
+        createdAt: true,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+  ]);
+
+  const checkpointByImportId = new Map(checkpoints.map((checkpoint) => [checkpoint.importFileId, checkpoint]));
+  const latestRunByImportId = new Map<string, { score: number; createdAt: Date }>();
+  for (const run of runs) {
+    if (!run.importFileId || latestRunByImportId.has(run.importFileId)) {
+      continue;
+    }
+    latestRunByImportId.set(run.importFileId, { score: run.score, createdAt: run.createdAt });
+  }
+
+  const candidates = importFiles
+    .filter((file) => {
+      if (isJsonImportFile(file.fileType, file.fileName)) {
+        return false;
+      }
+
+      const normalizedStatus = String(file.status ?? "").toLowerCase();
+      if (normalizedStatus !== "done" && normalizedStatus !== "staged") {
+        return false;
+      }
+
+      if (Number(file.parsedRowsCount ?? 0) <= 0 && Number(file.confirmedTransactionsCount ?? 0) <= 0) {
+        return false;
+      }
+
+      const checkpoint = checkpointByImportId.get(file.id);
+      const bankName = readCheckpointBankName(checkpoint?.sourceMetadata);
+      if (bankName !== normalizedBankName) {
+        return false;
+      }
+
+      const latestRun = latestRunByImportId.get(file.id);
+      if (!latestRun) {
+        return true;
+      }
+
+      return latestRun.score < AUTO_REPARSE_SCORE_TARGET;
+    })
+    .slice(0, 6);
+
+  let replayed = 0;
+  for (const candidate of candidates) {
+    const totalRows = Math.max(0, Number(candidate.parsedRowsCount ?? candidate.confirmedTransactionsCount ?? 0));
+    if (totalRows <= 0) {
+      continue;
+    }
+
+    try {
+      await upsertImportEnrichmentJob({
+        workspaceId: params.workspaceId,
+        importFileId: candidate.id,
+        totalRows,
+        phase: "queued",
+        forceRequeue: true,
+      });
+
+      void processImportEnrichmentJobs({
+        importFileId: candidate.id,
+        limit: Math.max(1, Math.ceil(totalRows / 50)),
+        workerId: `learning-replay-${params.sourceImportFileId}-${candidate.id}-${Date.now()}`,
+      }).catch((error) => {
+        console.warn("Unable to replay related import after continuous learning", {
+          sourceImportFileId: params.sourceImportFileId,
+          candidateImportFileId: candidate.id,
+          bankName: normalizedBankName,
+          error,
+        });
+      });
+
+      replayed += 1;
+    } catch (error) {
+      console.warn("Unable to queue related import replay after continuous learning", {
+        sourceImportFileId: params.sourceImportFileId,
+        candidateImportFileId: candidate.id,
+        bankName: normalizedBankName,
+        error,
+      });
+    }
+  }
+
+  return {
+    replayed,
+    candidates: candidates.length,
+  };
+};
+
 const buildAutoRerunPayload = (params: {
   latestScore: number;
   findings: Array<{
@@ -2996,6 +3139,25 @@ export const processImportFileText = async (
             accountBalance: confirmedImportResult.accountBalance ?? null,
             status: "staged",
           };
+        }
+
+        if (
+          options.qaSource === "import_processing" &&
+          confirmedImportResult.status === "done" &&
+          typeof resolvedMetadata.institution === "string" &&
+          resolvedMetadata.institution.trim()
+        ) {
+          void replayRelatedImportsAfterLearning({
+            workspaceId: String(importFile.workspaceId),
+            sourceImportFileId: importFileId,
+            sourceBankName: resolvedMetadata.institution,
+            actorUserId: options.actorUserId ?? null,
+          }).catch((error) => {
+            console.warn("Continuous learning replay failed after import confirmation", {
+              importFileId,
+              error,
+            });
+          });
         }
 
         if (isDocumentImport) {
