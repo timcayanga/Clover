@@ -106,7 +106,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       void (async () => {
         try {
           const { processImportEnrichmentJobs } = await import("@/workers/import-processor");
-          await processImportEnrichmentJobs({ importFileId: importId, limit: 1 });
+          const limit = Math.max(1, Math.min(10, Math.ceil(Math.max(1, finalizationRemainingRows || Number(enrichmentJob.totalRows ?? 50)) / 50)));
+          await processImportEnrichmentJobs({ importFileId: importId, limit });
         } catch (error) {
           console.warn("Unable to resume import enrichment from status poll", {
             importId,

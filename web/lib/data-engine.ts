@@ -423,6 +423,20 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
   const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
 
+  if (
+    /incoming\s+(?:interbank\s+)?transfer|outgoing\s+(?:interbank\s+)?transfer|fund\s+transfer|interbank\s+fund\s+transfer|system\s+(?:debit|credit)|miscellaneous\s+debit|investment\s+sweep|cash\s+payment|card\s+payment|payment\s*-\s*thank\s+you/.test(lower) ||
+    /incoming(?:interbank)?transfer|outgoing(?:interbank)?transfer|fundtransfer|interbankfundtransfer|system(?:debit|credit)|miscellaneousdebit|investmentsweep|cashpayment|cardpayment|paymentthankyou/.test(compact)
+  ) {
+    return "Transfers";
+  }
+
+  if (
+    /atm\s+withdrawal|atm\s+withdrawal\s+acquirer\s+fee|cash\s+withdrawal|cash\s+out|expressnet|megalink/.test(lower) ||
+    /atmwithdrawal|atmwithdrawalacquirerfee|cashwithdrawal|cashout|expressnet|megalink/.test(compact)
+  ) {
+    return "Cash & ATM";
+  }
+
   if (/office\s*365|google\s+one/.test(lower) || /office365|googleone/.test(compact)) {
     return "Business";
   }
@@ -435,20 +449,24 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Financial";
   }
 
+  if (/interest\s+earned|base\s+interest|boost\s+interest|cash\/?check\s+deposit/.test(lower) || /interestearned|baseinterest|boostinterest|cashcheckdeposit/.test(compact)) {
+    return "Income";
+  }
+
   if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) {
-    return "Transfers";
+    return "Financial";
   }
 
   if (
-    /repayment|cash\s+payment|transfer\s+to\s+wallet|credit\s+drawdown/.test(lower) ||
-    /repayment|cashpayment|transfertowallet|creditdrawdown/.test(compact)
+    /repayment|transfer\s+to\s+wallet|credit\s+drawdown/.test(lower) ||
+    /repayment|transfertowallet|creditdrawdown/.test(compact)
   ) {
     return "Transfers";
   }
 
   if (
-    /service\s+fee|penalty\s+fee|late\s+penalty|documentary\s+stamp\s+tax|\bdst\b/.test(lower) ||
-    /servicefee|penaltyfee|latepenalty|documentarystamptax|\bdst\b/.test(compact)
+    /service\s+charge|service\s+fee|interbank\s+service\s+charge|bank\s+charge|finance\s+charges?|late\s+payment\s+fee|annual\s+fee|penalty\s+fee|late\s+penalty|documentary\s+stamp\s+tax|\bdst\b/.test(lower) ||
+    /servicecharge|servicefee|interbankservicecharge|bankcharge|financecharges?|latepaymentfee|annualfee|penaltyfee|latepenalty|documentarystamptax|dst/.test(compact)
   ) {
     return "Financial";
   }
@@ -503,13 +521,16 @@ export const buildTrainingSignalDedupeKey = (params: {
 
 export const guessCategoryFallback = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
+  const compact = normalizeWhitespace(description).replace(/\s+/g, "").toLowerCase();
   const override = getHardcodedCategoryOverride(description);
   if (override) return override;
-  if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
-  if (/expressnet|megalink|withdrawal|atm\b|cash withdrawal|cash out|atmwdl|atm withdrawal/.test(lower)) return "Cash & ATM";
-  if (/service\s*charge|servicecharge|bank\s*charge|bankcharge/.test(lower)) return "Financial";
+  if (/transfer|instapay|pesonet|wise to|to savings|to checking|wa\s+(?:cr|db)|et\s+(?:cr|db)\s+ibft|st\s+(?:cm|dm)\s+gen|mo\s+dm/.test(lower)) return "Transfers";
+  if (/expressnet|megalink|withdrawal|atm\b|cash withdrawal|cash out|atmwdl|atm withdrawal|et\s+wdl/.test(lower)) return "Cash & ATM";
+  if (/service\s*charge|servicecharge|service\s*fee|bank\s*charge|bankcharge|svchg|finance\s+charges?|late\s+payment\s+fee|annual\s+fee/.test(lower)) return "Financial";
   if (/tax withheld|withheld tax|taxwithheld|withheldtax/.test(lower)) return "Financial";
-  if (/salary|payroll|income|deposit|cash\s*in\b|cashin\b|received|credit memo/.test(lower)) return "Income";
+  if (/interest\s+earned|interestearned|salary|payroll|income|deposit|cash\s*in\b|cashin\b|cash\/?check\s+deposit|received|credit memo/.test(lower)) return "Income";
+  if (/interbankservicecharge|atmwithdrawalacquirerfee|financecharge|financecharges|latepaymentfee|annualfee/.test(compact)) return "Financial";
+  if (/incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|systemdebit|systemcredit|miscellaneousdebit|investmentsweep/.test(compact)) return "Transfers";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
@@ -2145,17 +2166,19 @@ const scoreMerchantRule = (tokens: string[], normalizedMerchant: string, rule: M
 
 export const classifyMerchant = (params: {
   merchantText: string;
+  categoryText?: string | null;
   type: TransactionType;
   categoryName?: string | null;
   merchantRules: MerchantRuleRow[];
   trainingSignals: TrainingSignalRow[];
 }) => {
-  const tokens = tokenizeMerchant(params.merchantText);
+  const categoryText = [params.categoryText, params.merchantText].filter((value) => typeof value === "string" && value.trim()).join(" ");
+  const tokens = tokenizeMerchant(categoryText || params.merchantText);
   const normalizedMerchant = normalizeMerchantText(params.merchantText);
-  const hardcodedOverride = getHardcodedCategoryOverride(params.merchantText);
+  const hardcodedOverride = getHardcodedCategoryOverride(categoryText || params.merchantText);
   const providedCategory = params.categoryName?.trim();
   const heuristicCategory =
-    providedCategory && providedCategory.toLowerCase() !== "other" ? providedCategory : guessCategoryFallback(params.merchantText, params.type);
+    providedCategory && providedCategory.toLowerCase() !== "other" ? providedCategory : guessCategoryFallback(categoryText || params.merchantText, params.type);
 
   let bestRule: MerchantRuleRow | null = null;
   let bestRuleScore = 0;
@@ -2827,9 +2850,23 @@ export const enrichParsedRowsWithTraining = async (params: {
   return params.rows.map((row) => {
     const rowWithInstitution = row as ParsedImportRow & { institution?: string | null };
     const merchantText = row.merchantRaw || row.description || row.merchantClean || "";
+    const normalizedPayload =
+      row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
+        ? (row.normalizedPayload as Record<string, unknown>)
+        : null;
+    const categoryText = [
+      row.merchantRaw,
+      row.merchantClean,
+      row.description,
+      typeof normalizedPayload?.merchantClean === "string" ? normalizedPayload.merchantClean : null,
+      typeof normalizedPayload?.categoryName === "string" ? normalizedPayload.categoryName : null,
+    ]
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      .join(" ");
     const accountMatch = findBestAccountRule(row.accountName ?? null, rowWithInstitution.institution ?? null, accountRules);
     const learned = classifyMerchant({
       merchantText,
+      categoryText,
       type: row.type ?? "expense",
       categoryName: row.categoryName ?? null,
       merchantRules,

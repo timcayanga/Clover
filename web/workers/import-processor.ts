@@ -2029,8 +2029,9 @@ export const processImportEnrichmentJobs = async (options: {
   return { processedJobs: results.length, results };
 };
 
-const processImportEnrichmentJobsInBackground = (importFileId: string) => {
-  void processImportEnrichmentJobs({ importFileId, limit: 1 }).catch((error) => {
+const processImportEnrichmentJobsInBackground = (importFileId: string, totalRows?: number | null) => {
+  const limit = Math.max(1, Math.min(10, Math.ceil(Math.max(1, Number(totalRows ?? 50)) / 50)));
+  void processImportEnrichmentJobs({ importFileId, limit }).catch((error) => {
     console.warn("Background import enrichment job failed", {
       importFileId,
       error,
@@ -2935,7 +2936,7 @@ export const processImportFileText = async (
         totalRows: rows.length,
         phase: "queued",
       });
-      processImportEnrichmentJobsInBackground(importFileId);
+      processImportEnrichmentJobsInBackground(importFileId, rows.length);
 
       return {
         imported: confirmedImportResult.imported,

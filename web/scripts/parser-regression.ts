@@ -761,6 +761,26 @@ const main = async () => {
   }
   console.log("[PASS] BDO classification | bank transfer and withdrawal rows classified correctly");
 
+  const guessCategoryFallback = dataEngine.guessCategoryFallback as (description: string, type: "income" | "expense" | "transfer") => string;
+  const enrichmentFallbackExpectations: Array<[string, "income" | "expense" | "transfer", string]> = [
+    ["Incoming Interbank Transfer", "income", "Transfers"],
+    ["Outgoing Interbank Transfer", "expense", "Transfers"],
+    ["System Debit", "expense", "Transfers"],
+    ["Interbank Service Charge", "expense", "Financial"],
+    ["ATM Withdrawal", "expense", "Cash & ATM"],
+    ["Cash/Check Deposit", "income", "Income"],
+    ["Interest Earned", "income", "Income"],
+    ["Tax Withheld", "expense", "Financial"],
+    ["Finance Charges", "expense", "Financial"],
+  ];
+  for (const [description, type, expectedCategory] of enrichmentFallbackExpectations) {
+    const actualCategory = guessCategoryFallback(description, type);
+    if (actualCategory !== expectedCategory) {
+      throw new Error(`expected enrichment fallback ${description} to classify as ${expectedCategory}, got ${actualCategory}`);
+    }
+  }
+  console.log("[PASS] enrichment fallback | normalized bank labels classify without falling back to Other");
+
   const chinaBankPath = join(root, "Samples/China Bank/860976948-CHINA-BANK-STATEMENT.pdf");
   try {
     const chinaBankBytes = await readFile(chinaBankPath);
