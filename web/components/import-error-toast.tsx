@@ -14,7 +14,7 @@ type ImportErrorToastProps = {
 export function ImportErrorToast({ code, httpClass, title, message, nextSteps, onClose }: ImportErrorToastProps) {
   return (
     <aside className="import-error-toast glass" role="alert" aria-live="assertive">
-      <div className="import-error-toast__eyebrow">{httpClass}</div>
+      <div className="import-error-toast__eyebrow">HTTP {httpClass}</div>
       <div className="import-error-toast__title-row">
         <div>
           <h4>{title}</h4>
@@ -25,7 +25,7 @@ export function ImportErrorToast({ code, httpClass, title, message, nextSteps, o
         </button>
       </div>
 
-      <div className="import-error-toast__code">Technical code {code}</div>
+      <div className="import-error-toast__code">Import code {code}</div>
 
       <div className="import-error-toast__callout">If the file still matters, you can keep moving with manual entry below.</div>
 

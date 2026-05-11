@@ -3537,7 +3537,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       insightSummary,
       accountBalance: reconciledAccountBalance,
     };
-  });
+  }, { maxWait: 15_000, timeout: 30_000 });
 
   if (qaMetadataForRun && qaAccountForRun) {
     try {
