@@ -736,6 +736,31 @@ const main = async () => {
     throw new Error(`Parser regression checks failed:\n${failures.map((entry) => `- ${entry}`).join("\n")}`);
   }
 
+  const bdoPath = join(root, "Samples/BDO/648293940-BDO.pdf");
+  const bdoBytes = await readFile(bdoPath);
+  const bdoText = await readUploadedFileText({
+    name: basename(bdoPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(bdoBytes.length);
+      copy.set(bdoBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const bdoMetadata = detectStatementMetadataFromText(bdoText);
+  const bdoRows = parser.parseImportText(bdoText, basename(bdoPath), "application/pdf", {
+    institution: bdoMetadata.institution,
+    accountName: bdoMetadata.accountName,
+    accountNumber: bdoMetadata.accountNumber,
+  });
+  if (!bdoRows.some((row) => /bank\s+transfer|pob\s+ibft|fund\s+transfer/i.test(row.description ?? "") && row.type === "transfer" && row.categoryName === "Transfers")) {
+    throw new Error("expected BDO bank transfer rows to classify as transfer");
+  }
+  if (!bdoRows.some((row) => /atm\s+withdrawal|w\/d\s+fr\s+sav|cash\s+withdrawal|wdrawal/i.test(row.description ?? "") && row.type === "expense" && row.categoryName === "Cash & ATM")) {
+    throw new Error("expected BDO withdrawal rows to classify as expense");
+  }
+  console.log("[PASS] BDO classification | bank transfer and withdrawal rows classified correctly");
+
   const chinaBankPath = join(root, "Samples/China Bank/860976948-CHINA-BANK-STATEMENT.pdf");
   try {
     const chinaBankBytes = await readFile(chinaBankPath);

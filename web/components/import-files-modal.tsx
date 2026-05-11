@@ -560,12 +560,15 @@ const waitForImportSettledVisibility = async (params: {
         continue;
       }
 
-        if (params.importedRows > 0) {
-          const transactionsResponse = await fetch(`/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=10`, {
+      if (params.importedRows > 0) {
+        const transactionsResponse = await fetch(
+          `/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=all`,
+          {
             cache: "no-store",
-          });
-          if (!transactionsResponse.ok) {
-            await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
+          }
+        );
+        if (!transactionsResponse.ok) {
+          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
           continue;
         }
 
@@ -580,7 +583,7 @@ const waitForImportSettledVisibility = async (params: {
         const transactionPayload = await transactionsResponse.json().catch(() => null);
         const totalCount = Number(transactionPayload?.totalCount ?? 0);
         const rows = Array.isArray(transactionPayload?.transactions) ? transactionPayload.transactions : [];
-        if (totalCount < params.importedRows || rows.length <= 0) {
+        if (totalCount < params.importedRows || rows.length < params.importedRows) {
           await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
           continue;
         }

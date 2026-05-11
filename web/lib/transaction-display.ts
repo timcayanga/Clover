@@ -155,6 +155,24 @@ const getGenericCategoryOverride = (merchantText: string) => {
   return null;
 };
 
+const getBdoCategoryOverride = (merchantText: string) => {
+  const lower = merchantText.toLowerCase();
+
+  if (/bank\s+transfer|pob\s+ibft|ibft\s+bn|fund\s+transfer|interbank\s+deposit|received\s+a\/c|reciv(?:ed)?\s+a\/c/.test(lower)) {
+    return "Transfers";
+  }
+
+  if (/atm\s+withdrawal|cash\s+withdrawal|w\/d\s+fr\s+sav|wdrawal|cw\b|\/drw\b/.test(lower)) {
+    return "Cash & ATM";
+  }
+
+  if (/salary|payroll|interest|cash\s+deposit|funds?\s+deposited/.test(lower)) {
+    return "Income";
+  }
+
+  return null;
+};
+
 export const getEffectiveTransactionMerchantName = (params: {
   merchantClean?: string | null;
   merchantRaw: string;
@@ -211,6 +229,15 @@ export const getEffectiveTransactionCategoryName = (params: {
   const descriptionText =
     typeof params.description === "string" && params.description.trim() ? params.description.trim() : null;
   const heuristic = guessCategoryName(effectiveMerchantName || descriptionText || params.merchantRaw, params.type);
+
+  if (/\bbdo\b/i.test((params.institution ?? "").trim())) {
+    const bdoOverride = getBdoCategoryOverride(effectiveMerchantName || descriptionText || params.merchantRaw);
+    if (bdoOverride) {
+      if (!isImportedRow || isBroadCategoryName(directCategory) || isBroadCategoryName(rawPayloadCategory)) {
+        return bdoOverride;
+      }
+    }
+  }
 
   if (isMeaningfulCategoryName(directCategory)) {
     if (isImportedRow && isBroadCategoryName(directCategory)) {

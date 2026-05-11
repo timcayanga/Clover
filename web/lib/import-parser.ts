@@ -5310,11 +5310,13 @@ const guessBdoCategoryName = (description: string, type: TransactionType) => {
   if (/interest/.test(lower)) return "Income";
   if (/salary|payroll/.test(lower)) return "Income";
   if (/service\s+charge|tax|withheld|fee|charge/.test(lower)) return "Financial";
-  if (/cash\s*deposit|fund\s+transfer|funds\s+deposited|received\s+a\/c|reciv(?:ed)?\s+a\/c|payroll|salary|interbank\s+deposit/i.test(lower)) {
+  if (/cash\s*deposit|payroll|salary|interest/i.test(lower)) {
     return "Income";
   }
-  if (/bank\s+transfer|pob\s+ibft/i.test(lower)) return "Transfers";
-  if (/withdrawal|atm|cash\s+withdrawal|cw\b|w\/d|wdrawal|pob\s+ibft/i.test(lower)) return "Cash & ATM";
+  if (/bank\s+transfer|pob\s+ibft|fund\s+transfer|funds\s+deposited|received\s+a\/c|reciv(?:ed)?\s+a\/c|interbank\s+deposit/i.test(lower)) {
+    return "Transfers";
+  }
+  if (/withdrawal|atm|cash\s+withdrawal|cw\b|w\/d|wdrawal/i.test(lower)) return "Cash & ATM";
   if (/merchant\s+payment|ma[_\s-]?pc/i.test(lower)) return "Shopping";
   return guessCategoryName(description, type);
 };
@@ -5390,17 +5392,17 @@ const parseBdoSavingsTransactionBlock = (
 
   const lower = description.toLowerCase();
   const type: TransactionType =
-    /salary|payroll|interest/.test(lower) || /cash\s*deposit|fund\s+transfer|funds\s+deposited|received\s+a\/c|reciv(?:ed)?\s+a\/c|interbank\s+deposit/i.test(
-      lower
-    )
+    /salary|payroll|interest|cash\s*deposit/.test(lower)
       ? "income"
-      : /service\s+charge|tax|withheld|fee|charge/.test(lower)
-        ? "expense"
-        : /withdrawal|atm|cash\s+withdrawal|cw\b|w\/d|wdrawal|pob\s+ibft|bank\s+transfer/i.test(
-            lower
-          )
-          ? "transfer"
-          : "expense";
+      : /bank\s+transfer|pob\s+ibft|fund\s+transfer|funds\s+deposited|received\s+a\/c|reciv(?:ed)?\s+a\/c|interbank\s+deposit/i.test(
+          lower
+        )
+        ? "transfer"
+        : /service\s+charge|tax|withheld|fee|charge/.test(lower)
+          ? "expense"
+          : /withdrawal|atm|cash\s+withdrawal|cw\b|w\/d|wdrawal/i.test(lower)
+            ? "expense"
+            : "expense";
 
   const categoryName =
     !/[A-Za-z]/.test(description)
