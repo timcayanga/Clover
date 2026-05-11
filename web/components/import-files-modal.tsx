@@ -1857,72 +1857,23 @@ export function ImportFilesModal({
           topMerchantName: insightSummary?.topMerchantName ?? null,
           topMerchantCount: insightSummary?.topMerchantCount === null ? null : Number(insightSummary?.topMerchantCount ?? 0),
         } satisfies UploadInsightsSummary;
+        seedImportedWorkspaceCaches(workspaceId, summary);
+        await Promise.resolve(onImported(summary));
+
         const settledVisible = await waitForImportSettledVisibility({
           workspaceId,
           accountId: resolvedAccountId,
           importedRows,
           expectedBalance: summary.balance ?? null,
-          timeoutMs: 30_000,
+          timeoutMs: 10_000,
         });
 
         if (!settledVisible) {
-          const resumeResponse = await fetch(`/api/imports/${importFileId}/resume`, {
-            method: "POST",
-            cache: "no-store",
-          }).catch(() => null);
-
-          if (resumeResponse?.ok) {
-            emitItemUpdate({
-              status: "importing",
-              confirmationState: "pending",
-              error: null,
-              importFileId,
-              targetAccountId: resolvedAccountId,
-              importedRows,
-              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
-              progressLabel: "Finalizing import",
-            });
-            emitImportActivity({
-              workspaceId,
-              surface: importActivitySurfaceRef.current,
-              status: "active",
-              fileName: summaryContext.fileName,
-              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
-              fileTotal: items.length,
-              completedFiles: completedFileCount,
-              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
-              detail: "Clover found the transactions and is applying names and categories",
-              summary,
-              errorMessage: null,
-            });
-            await new Promise((resolve) => window.setTimeout(resolve, 1500));
-            continue;
-          }
-
-          emitItemUpdate({
-            status: "importing",
-            confirmationState: "pending",
-            error: null,
+          console.warn("Import confirmation succeeded before settled data became visible", {
             importFileId,
-            targetAccountId: resolvedAccountId,
+            accountId: resolvedAccountId,
             importedRows,
-            progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
-            progressLabel: "Finalizing import",
           });
-          emitImportActivity({
-            workspaceId,
-            surface: importActivitySurfaceRef.current,
-            status: "active",
-            fileName: summaryContext.fileName,
-            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
-            fileTotal: items.length,
-            completedFiles: completedFileCount,
-            progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
-            detail: "Clover found the transactions and is applying names and categories",
-            summary,
-            errorMessage: null,
-          });
-          return { status: "staged", importedRows, summary };
         }
 
         emitItemUpdate({
