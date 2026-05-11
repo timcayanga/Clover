@@ -237,10 +237,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         effectiveFileType.toLowerCase().startsWith("image/") ||
         /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(effectiveFileName.toLowerCase());
       const shouldQueueDocumentUpload = isImageUpload || Boolean(importMode && importMode !== "statement");
-      const filenameSuggestsGcash = /\bgcash\b/i.test(effectiveFileName);
-      const shouldPreflightPdf =
-        isPdfUpload(effectiveFileName, effectiveFileType) &&
-        (bytes.length <= 1_000_000 || (filenameSuggestsGcash && bytes.length <= 10_000_000));
+      const shouldPreflightPdf = isPdfUpload(effectiveFileName, effectiveFileType) && bytes.length <= 10_000_000;
       if (shouldQueueDocumentUpload && localDev) {
         return NextResponse.json({
           ok: true,
@@ -287,15 +284,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const parsedMetadataConfidence = Number((metadata as { confidence?: unknown } | null)?.confidence ?? 0);
       const hasExtractedText = extractedText.trim().length > 0;
       const detectedInstitution = normalizeBankName(String((metadata as { institution?: unknown } | null)?.institution ?? ""));
-      const shouldProcessKnownGcashInline =
+      const hasKnownInlineInstitution = Boolean(detectedInstitution && detectedInstitution !== "Unknown");
+      const shouldProcessKnownStatementInline =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
         hasExtractedText &&
         bytes.length <= 10_000_000 &&
-        (detectedInstitution === "GCash" || filenameSuggestsGcash);
+        hasKnownInlineInstitution;
       const shouldQueuePdfImmediately =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
         !forceInlineProcessing &&
-        !shouldProcessKnownGcashInline &&
+        !shouldProcessKnownStatementInline &&
         !(hasExtractedText && parsedMetadataConfidence >= 80);
 
       if (shouldQueuePdfImmediately) {
@@ -371,9 +369,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       const shouldProcessInlinePdf =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
-        (forceInlineProcessing || shouldProcessKnownGcashInline) &&
+        (forceInlineProcessing || shouldProcessKnownStatementInline) &&
         hasExtractedText &&
-        (parsedMetadataConfidence >= 80 || shouldProcessKnownGcashInline);
+        (parsedMetadataConfidence >= 80 || shouldProcessKnownStatementInline);
       const shouldProcessInline =
         (!shouldQueueDocumentUpload &&
           !isPdfUpload(effectiveFileName, effectiveFileType) &&

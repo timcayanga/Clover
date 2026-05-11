@@ -49,23 +49,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       importAgeMs > selfHealDelayMs &&
       ((parsedRowsCountBefore === 0 && confirmedTransactionsCountBefore === 0 && ((importFile.status === "processing" || importFile.status === "queued") || (importFile.status === "done" && checkpointRowCount === 0))) ||
         (importFile.status === "done" && hasParsedRows && !hasConfirmedRows));
-    const checkpointMetadata =
-      statementCheckpoint?.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object" && !Array.isArray(statementCheckpoint.sourceMetadata)
-        ? (statementCheckpoint.sourceMetadata as Record<string, unknown>)
-        : null;
-    const isGcashImport =
-      /gcash/i.test(String(importFile.fileName ?? "")) ||
-      String(checkpointMetadata?.institution ?? checkpointMetadata?.uploadBankHint ?? "").toLowerCase() === "gcash";
-    const shouldInlineSelfHeal = shouldSelfHeal && isGcashImport && importAgeMs > 10_000;
+    const shouldInlineSelfHeal = shouldSelfHeal && hasParsedRows && importAgeMs > 10_000;
 
     if (shouldInlineSelfHeal) {
       try {
-        const { confirmImportFile, processImportFileText } = await import("@/workers/import-processor");
-        if (hasParsedRows) {
-          await confirmImportFile(importId, importFile.accountId ?? null);
-        } else {
-          await processImportFileText(importId, { actorUserId: null });
-        }
+        const { confirmImportFile } = await import("@/workers/import-processor");
+        await confirmImportFile(importId, importFile.accountId ?? null);
         importFile = (await fetchImportFileCompat(importId)) ?? importFile;
         statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
           ? await prisma.accountStatementCheckpoint.findUnique({
@@ -74,7 +63,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           : null;
         checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
       } catch (error) {
-        console.warn("Unable to inline self-heal stalled GCash import status", {
+        console.warn("Unable to inline self-heal stalled import status", {
           importId,
           error: error instanceof Error ? error.message : String(error),
         });

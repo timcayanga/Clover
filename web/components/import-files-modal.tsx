@@ -2497,32 +2497,32 @@ export function ImportFilesModal({
         if (importFile?.status === "done" || parsedRowsCount > 0) {
           const statementConfidence = Number(statementMetadata?.confidence ?? 0);
           const trustStatementIdentity = statementConfidence >= 70;
+          const metadataAccountName =
+            typeof statementMetadata?.accountName === "string" && statementMetadata.accountName.trim()
+              ? statementMetadata.accountName.trim()
+              : null;
+          const metadataInstitution =
+            typeof statementMetadata?.institution === "string" && statementMetadata.institution.trim()
+              ? statementMetadata.institution.trim()
+              : null;
+          const metadataAccountNumber =
+            typeof statementMetadata?.accountNumber === "string" && statementMetadata.accountNumber.trim()
+              ? statementMetadata.accountNumber.trim()
+              : null;
+          const metadataAccountType =
+            typeof statementMetadata?.accountType === "string" &&
+            ["bank", "wallet", "credit_card", "cash", "investment", "other"].includes(statementMetadata.accountType)
+              ? (statementMetadata.accountType as UploadInsightsSummary["accountType"])
+              : null;
           const resolvedIdentity = {
-            accountName:
-              trustStatementIdentity &&
-              typeof statementMetadata?.accountName === "string" && statementMetadata.accountName.trim()
-                ? statementMetadata.accountName.trim()
-                : summaryContext.accountName,
-            institution:
-              trustStatementIdentity &&
-              typeof statementMetadata?.institution === "string" && statementMetadata.institution.trim()
-                ? statementMetadata.institution.trim()
-                : summaryContext.institution,
-            accountNumber:
-              trustStatementIdentity &&
-              typeof statementMetadata?.accountNumber === "string" && statementMetadata.accountNumber.trim()
-                ? statementMetadata.accountNumber.trim()
-                : summaryContext.accountNumber,
-            accountType:
-              trustStatementIdentity &&
-              typeof statementMetadata?.accountType === "string" &&
-              ["bank", "wallet", "credit_card", "cash", "investment", "other"].includes(statementMetadata.accountType)
-                ? (statementMetadata.accountType as UploadInsightsSummary["accountType"])
-                : summaryContext.accountType,
+            accountName: metadataAccountName ?? processingIdentity?.accountName ?? summaryContext.accountName,
+            institution: metadataInstitution ?? processingIdentity?.institution ?? summaryContext.institution,
+            accountNumber: metadataAccountNumber ?? processingIdentity?.accountNumber ?? summaryContext.accountNumber,
+            accountType: metadataAccountType ?? processingIdentity?.accountType ?? summaryContext.accountType,
             balance: toBalanceString(statementCheckpoint?.endingBalance),
           };
           const resolvedAccountType = (resolvedIdentity.accountType ??
-            accounts.find((account) => account.id === resolvedAccountId)?.type ??
+            accounts.find((account) => account.id === (latestResolvedAccountId ?? accountId ?? ""))?.type ??
             summaryContext.accountType ??
             null) as UploadInsightsSummary["accountType"];
           if (!trustStatementIdentity || statementConfidence < 80 || !resolvedIdentity.accountName || !resolvedIdentity.institution) {
@@ -2572,12 +2572,10 @@ export function ImportFilesModal({
                 ) ?? parsedRows[0] ?? null;
 
               resolvedIdentity.accountName =
-                trustStatementIdentity &&
                 typeof previewRow?.accountName === "string" && previewRow.accountName.trim()
                   ? previewRow.accountName.trim()
                   : summaryContext.accountName;
               resolvedIdentity.institution =
-                trustStatementIdentity &&
                 typeof previewRow?.institution === "string" && previewRow.institution.trim()
                   ? previewRow.institution.trim()
                   : summaryContext.institution;
@@ -2586,6 +2584,7 @@ export function ImportFilesModal({
 
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution && shouldUseFallbackIdentity) {
             resolvedIdentity.accountName = summaryContext.fallbackAccountName;
+            resolvedIdentity.institution = processingIdentity?.institution ?? summaryContext.institution ?? null;
           }
 
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
@@ -2699,7 +2698,7 @@ export function ImportFilesModal({
               accounts.some((account) => account.id === accountId)
           );
           let resolvedAccountId = hasValidCurrentAccount ? accountId : null;
-          if (hasValidCurrentAccount && trustStatementIdentity) {
+          if (hasValidCurrentAccount && (trustStatementIdentity || Boolean(resolvedIdentity.accountName || resolvedIdentity.institution))) {
             const currentAccountId = accountId as string;
             const syncAccountName = resolvedIdentity.accountName ?? summaryContext.fallbackAccountName;
             const syncInstitution = resolvedIdentity.institution ?? summaryContext.institution;
@@ -2926,7 +2925,18 @@ export function ImportFilesModal({
       await sleep(600);
     }
 
-    closeImportAfterError(itemId, "monitor", summaryContext.fileName, "Timed out waiting for trusted statement identity.");
+    const latestItem = itemsRef.current.find((entry) => entry.id === itemId);
+    if (latestItem?.importFileId) {
+      closeImportAsRecoverable(
+        itemId,
+        summaryContext.fileName,
+        "Clover parsed the file and is still linking it to the account.",
+        "Finalizing import"
+      );
+      return;
+    }
+
+    closeImportAfterError(itemId, "monitor", summaryContext.fileName, "Timed out while Clover was still finalizing this import.");
   };
 
   const preflightPasswordProtectedFiles = async () => {
