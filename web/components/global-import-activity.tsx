@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ImportErrorToast } from "@/components/import-error-toast";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { UploadInsightsToast } from "@/components/upload-insights-toast";
@@ -10,11 +11,41 @@ import { getImportErrorNextSteps, getImportErrorSpecForCode } from "@/lib/import
 const isCompletedSummary = (activity: ImportActivitySnapshot | null) =>
   Boolean(activity && activity.status === "done" && activity.summary);
 
+const IMPORT_ACTIVITY_APP_PATH_PREFIXES = [
+  "/accounts",
+  "/admin",
+  "/dashboard",
+  "/goals",
+  "/home",
+  "/imports",
+  "/insights",
+  "/investments",
+  "/more",
+  "/notifications",
+  "/onboarding",
+  "/profile",
+  "/recurring",
+  "/reports",
+  "/review",
+  "/settings",
+  "/split-bill",
+  "/transactions",
+];
+
+const canShowImportActivityOnPath = (pathname: string | null) => {
+  const currentPath = pathname || "/";
+  return IMPORT_ACTIVITY_APP_PATH_PREFIXES.some(
+    (prefix) => currentPath === prefix || currentPath.startsWith(`${prefix}/`)
+  );
+};
+
 export function GlobalImportActivity() {
+  const pathname = usePathname();
   const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
   const [pageModalActive, setPageModalActive] = useState(() =>
     typeof document === "undefined" ? false : document.body.hasAttribute("data-clover-page-modal")
   );
+  const shouldShowOnCurrentPath = canShowImportActivityOnPath(pathname);
 
   useEffect(() => subscribeImportActivity(() => setActivity(readImportActivity())), []);
 
@@ -51,7 +82,7 @@ export function GlobalImportActivity() {
     };
   }, [activity]);
 
-  if (!activity || (activity.surface === "modal" && pageModalActive)) {
+  if (!activity || !shouldShowOnCurrentPath || (activity.surface === "modal" && pageModalActive)) {
     return null;
   }
 
