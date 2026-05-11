@@ -567,7 +567,8 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     match: /\bPAYPAL\b/i,
     brand: makeBrand({
       label: "PayPal",
-      logoSrcs: philippinesLogoWithVariants("paypal"),
+      logoSrc: philippinesLogoPath("paypal.jpeg?v=20260511"),
+      logoSrcs: [philippinesLogoPath("paypal.jpeg?v=20260511")],
       fallbackIconSrc: walletIcon,
       accent: "#003087",
       background: "linear-gradient(135deg, rgba(0, 48, 135, 0.16), rgba(0, 48, 135, 0.06))",
