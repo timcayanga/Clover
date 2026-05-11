@@ -34,6 +34,7 @@ const normalizeStage = (value?: string | null): ImportWorkflowStage | null => {
       return "staged";
     case "complete":
     case "done":
+    case "finalizing_enrichment":
       return "complete";
     case "plateaued":
     case "needs_retry":

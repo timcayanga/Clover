@@ -1624,6 +1624,140 @@ const buildTransactionInsertRecord = (params: {
   return record;
 };
 
+const recordImportDataQaInBackground = (params: {
+  workspaceId: string;
+  importFileId: string;
+  fileName: string;
+  fileType: string;
+  importMode: ImportImageMode;
+  rows: EnrichedParsedImportRow[];
+  metadata: Parameters<typeof recordDataQaRun>[0]["metadata"];
+  startedAt: number;
+  usedVisionFallback: boolean;
+  usedOpenAiFallback: boolean;
+  actorUserId?: string | null;
+}) => {
+  void recordDataQaRun({
+    workspaceId: params.workspaceId,
+    importFileId: params.importFileId,
+    source: "import_processing",
+    fileName: params.fileName,
+    fileType: params.fileType,
+    parserVersion: DATA_ENGINE_VERSION,
+    documentType: params.importMode,
+    parsedRows: params.rows as unknown as DataQaParsedRow[],
+    metadata: params.metadata,
+    timings: {
+      totalMs: Date.now() - params.startedAt,
+      parsingMs: Date.now() - params.startedAt,
+      usedVisionFallback: params.usedVisionFallback,
+      usedOpenAiFallback: params.usedOpenAiFallback,
+      usedDeterministicParser: !params.usedOpenAiFallback,
+    },
+    duplicate: false,
+    actorUserId: params.actorUserId ?? null,
+  }).catch((error) => {
+    console.warn("Background data QA recording failed after visible import", {
+      importFileId: params.importFileId,
+      error,
+    });
+  });
+};
+
+const finalizeImportedTransactionDetailsInBackground = (params: {
+  workspaceId: string;
+  importFileId: string;
+  rows: EnrichedParsedImportRow[];
+  statementConfidence: number;
+}) => {
+  void (async () => {
+    const enrichedRows = await enrichParsedRowsWithTraining({
+      workspaceId: params.workspaceId,
+      rows: params.rows,
+      statementConfidence: params.statementConfidence,
+    });
+    const transactions = await prisma.transaction.findMany({
+      where: { importFileId: params.importFileId },
+      select: { id: true, rawPayload: true },
+    });
+    const transactionBySourceIndex = new Map<number, string>();
+    for (const transaction of transactions) {
+      const rawPayload = transaction.rawPayload;
+      const sourceRowIndex =
+        rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+          ? Number((rawPayload as Record<string, unknown>).sourceRowIndex)
+          : 0;
+      if (Number.isFinite(sourceRowIndex) && sourceRowIndex > 0) {
+        transactionBySourceIndex.set(sourceRowIndex, transaction.id);
+      }
+    }
+
+    const existingCategories = await prisma.category.findMany({
+      where: { workspaceId: params.workspaceId },
+      select: { id: true, name: true },
+    });
+    const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
+
+    for (const [index, row] of enrichedRows.entries()) {
+      const transactionId = transactionBySourceIndex.get(index + 1);
+      if (!transactionId) {
+        continue;
+      }
+
+      const rowType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
+      const categoryName =
+        (typeof row.categoryName === "string" && row.categoryName.trim()) || defaultCategoryForType(rowType);
+      const canonicalType = coerceTransactionTypeFromCategoryName(categoryName, rowType);
+      let categoryId = categoryByName.get(categoryName.toLowerCase());
+      if (!categoryId) {
+        const created = await prisma.category.create({
+          data: {
+            workspaceId: params.workspaceId,
+            name: categoryName,
+            type: canonicalType,
+            isSystem: false,
+          },
+          select: { id: true },
+        });
+        categoryId = created.id;
+        categoryByName.set(categoryName.toLowerCase(), categoryId);
+      }
+
+      const rowConfidence = typeof row.confidence === "number" ? row.confidence : 0;
+      const categoryConfidence = typeof row.categoryConfidence === "number" ? row.categoryConfidence : rowConfidence;
+      await prisma.transaction.update({
+        where: { id: transactionId },
+        data: {
+          categoryId,
+          type: canonicalType,
+          merchantClean:
+            typeof row.merchantClean === "string" && row.merchantClean.trim()
+              ? row.merchantClean.trim()
+              : typeof row.merchantRaw === "string"
+                ? row.merchantRaw
+                : undefined,
+          categoryConfidence,
+          parserConfidence: typeof row.parserConfidence === "number" ? row.parserConfidence : rowConfidence,
+          reviewStatus: rowConfidence >= 90 && categoryConfidence >= 90 ? "confirmed" : "pending_review",
+          isTransfer: canonicalType === "transfer",
+          normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
+          learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    await updateImportFileCompat(params.importFileId, {
+      processingPhase: "complete",
+      processingMessage: "Transaction details finalized.",
+    });
+  })().catch((error) => {
+    console.warn("Background import detail finalization failed", {
+      importFileId: params.importFileId,
+      error,
+    });
+  });
+};
+
 const isWiseReviewOnlyTransaction = (params: {
   institution: string | null | undefined;
   row: {
@@ -2175,21 +2309,7 @@ export const processImportFileText = async (
     });
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
-  let rows: Awaited<ReturnType<typeof enrichParsedRowsWithTraining>> = effectiveRows as Awaited<
-    ReturnType<typeof enrichParsedRowsWithTraining>
-  >;
-  try {
-    rows = await enrichParsedRowsWithTraining({
-      workspaceId: importFile.workspaceId,
-      rows: effectiveRows,
-      statementConfidence: resolvedMetadata.confidence ?? 0,
-    });
-  } catch (error) {
-    console.warn("Import training enrichment failed; continuing with parsed rows", {
-      importFileId,
-      error,
-    });
-  }
+  const rows = effectiveRows as EnrichedParsedImportRow[];
 
   if (await hasCompatibleTable("ParsedTransaction")) {
     await prisma.parsedTransaction.deleteMany({
@@ -2483,6 +2603,84 @@ export const processImportFileText = async (
     }
   }
 
+  if (!isDocumentImport) {
+    try {
+      confirmedImportResult = await confirmImportFile(importFileId, null);
+      if (confirmedImportResult.status === "staged") {
+        await updateImportFileCompat(importFileId, {
+          status: "processing",
+          processingPhase: "staged",
+          processingMessage: "Clover saved the raw rows and is linking them to the account.",
+        });
+
+        return {
+          imported: confirmedImportResult.imported,
+          duplicate: Boolean(confirmedImportResult.duplicate),
+          metadata: resolvedMetadata,
+          accountId: confirmedImportResult.accountId ?? null,
+          confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
+          insightSummary: confirmedImportResult.insightSummary ?? undefined,
+          accountBalance: confirmedImportResult.accountBalance ?? null,
+          status: "staged",
+        };
+      }
+
+      await updateImportFileCompat(importFileId, {
+        status: "done",
+        processingPhase: "finalizing_enrichment",
+        processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
+        confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? confirmedImportResult.imported,
+      });
+      emitImportProcessingEvent("import_processing_completed", {
+        processing_status: "done",
+        processing_phase: "visible_rows_saved",
+        imported_rows: confirmedImportResult.imported,
+      });
+      recordImportDataQaInBackground({
+        workspaceId: String(importFile.workspaceId),
+        importFileId,
+        fileName: String(importFile.fileName ?? "imported-file"),
+        fileType: String(importFile.fileType ?? "unknown"),
+        importMode,
+        rows,
+        metadata: resolvedMetadata,
+        startedAt,
+        usedVisionFallback: Boolean(pageImages?.length),
+        usedOpenAiFallback: Boolean(useOpenAiParse),
+        actorUserId: options.actorUserId ?? null,
+      });
+      finalizeImportedTransactionDetailsInBackground({
+        workspaceId: String(importFile.workspaceId),
+        importFileId,
+        rows,
+        statementConfidence: resolvedMetadata.confidence ?? 0,
+      });
+
+      return {
+        imported: confirmedImportResult.imported,
+        duplicate: Boolean(confirmedImportResult.duplicate),
+        metadata: resolvedMetadata,
+        accountId: confirmedImportResult.accountId ?? null,
+        confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
+        insightSummary: confirmedImportResult.insightSummary ?? undefined,
+        accountBalance: confirmedImportResult.accountBalance ?? null,
+        status: "done",
+      };
+    } catch (error) {
+      await updateImportFileCompat(importFileId, {
+        status: "failed",
+        processingPhase: "repair_needed",
+        processingMessage: "Clover couldn't finish saving the raw rows.",
+      });
+      emitImportProcessingEvent("import_processing_stalled", {
+        processing_status: "failed",
+        processing_phase: "repair_needed",
+        reason: "confirm_import_failed",
+      });
+      throw error;
+    }
+  }
+
   try {
     const qaRunResult = await recordDataQaRun({
       workspaceId: String(importFile.workspaceId),
@@ -2530,8 +2728,7 @@ export const processImportFileText = async (
 
     const hasCriticalFindings = qaRunResult.evaluation.findings.some((finding) => finding.severity === "critical");
     const hasUsableParsedRows = rows.length > 0;
-    const allowWarningFinalizeForImageStatement =
-      imageImport && importMode === "statement" && hasUsableParsedRows && !hasCriticalFindings;
+    const allowWarningFinalizeForImageStatement = false;
     const canFinalizeWithWarnings = hasUsableParsedRows && !hasCriticalFindings;
 
     // QA warnings should feed review/learning, not keep a usable statement in a

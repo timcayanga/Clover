@@ -51,6 +51,7 @@ const normalizePhase = (phase?: string | null): ImportTelemetryPhase | null => {
       return "reconciling";
     case "complete":
     case "done":
+    case "finalizing_enrichment":
       return "complete";
     case "plateaued":
     case "needs_retry":

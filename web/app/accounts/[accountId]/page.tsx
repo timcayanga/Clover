@@ -84,6 +84,8 @@ type Transaction = {
   merchantRaw: string;
   merchantClean: string | null;
   categoryName: string | null;
+  reviewStatus?: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped" | null;
+  categoryConfidence?: number | null;
   description: string | null;
   isExcluded: boolean;
   institution?: string | null;
@@ -133,6 +135,22 @@ type ImportFile = {
 };
 
 const normalizeCategoryName = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+
+const isImportFinalizingTransaction = (transaction: Transaction) => {
+  if (!transaction.importFileId) {
+    return false;
+  }
+
+  const categoryName = normalizeCategoryName(transaction.categoryName);
+  return (
+    transaction.reviewStatus === "pending_review" ||
+    transaction.reviewStatus === "suggested" ||
+    (typeof transaction.categoryConfidence === "number" && transaction.categoryConfidence < 90) ||
+    !categoryName ||
+    categoryName === "other" ||
+    categoryName === "needs category review"
+  );
+};
 
 type StatementCheckpoint = {
   id: string;
@@ -1507,6 +1525,10 @@ function AccountDetailPageContent() {
     },
     [account?.institution, categories, transactions, transactionSortDirection, transactionSortField]
   );
+  const finalizingTransactionCount = useMemo(
+    () => visibleTransactions.filter(isImportFinalizingTransaction).length,
+    [visibleTransactions]
+  );
   const mobileTransactionGroups = useMemo(() => {
     const groups: Array<{ date: string; label: string; transactions: Transaction[] }> = [];
 
@@ -2650,6 +2672,11 @@ function AccountDetailPageContent() {
             </div>
             <div className="accounts-detail__transactions-actions">
               <span className="accounts-summary-chip is-neutral">{`${visibleTransactions.length} of ${transactionTotalCount} loaded`}</span>
+              {finalizingTransactionCount > 0 ? (
+                <span className="accounts-summary-chip is-neutral">
+                  Finalizing {finalizingTransactionCount} detail{finalizingTransactionCount === 1 ? "" : "s"} · about 5 min left
+                </span>
+              ) : null}
               {selectedTransactionIds.length > 0 ? (
                 <>
                   <span className="accounts-summary-chip is-neutral">{`${selectedTransactionIds.length} selected`}</span>

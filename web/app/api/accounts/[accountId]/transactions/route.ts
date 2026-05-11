@@ -34,6 +34,8 @@ type TransactionApiRow = {
   merchantRaw: string;
   merchantClean: string | null;
   categoryName: string | null;
+  reviewStatus: string | null;
+  categoryConfidence: number;
   description: string | null;
   isExcluded: boolean;
   importFileId: string | null;
@@ -51,6 +53,8 @@ const mapTransactionRow = (transaction: {
   type: "income" | "expense" | "transfer";
   merchantRaw: string;
   merchantClean: string | null;
+  reviewStatus: string | null;
+  categoryConfidence: number;
   rawPayload: Prisma.JsonValue;
   category: { id: string; name: string } | null;
   description: string | null;
@@ -96,6 +100,8 @@ const mapTransactionRow = (transaction: {
       institution: transaction.institution ?? null,
     }),
     categoryName,
+    reviewStatus: transaction.reviewStatus,
+    categoryConfidence: transaction.categoryConfidence,
     description: transaction.description,
     isExcluded: transaction.isExcluded,
     importFileId: transaction.importFileId,
@@ -207,6 +213,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
           type: true,
           merchantRaw: true,
           merchantClean: true,
+          reviewStatus: true,
+          categoryConfidence: true,
           rawPayload: true,
           description: true,
           isExcluded: true,

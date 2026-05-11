@@ -271,6 +271,7 @@ type Transaction = {
   categoryId: string | null;
   categoryName: string | null;
   reviewStatus?: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
+  categoryConfidence?: number | null;
   date: string;
   amount: string;
   currency: string;
@@ -489,6 +490,22 @@ const normalizeCategoryName = (value: string | null | undefined) => value?.trim(
 
 const isResolvedReviewStatus = (status: Transaction["reviewStatus"]) =>
   status === "confirmed" || status === "rejected" || status === "duplicate_skipped";
+
+const isImportFinalizingTransaction = (transaction: Transaction) => {
+  if (!transaction.importFileId) {
+    return false;
+  }
+
+  const categoryName = normalizeCategoryName(transaction.categoryName);
+  return (
+    transaction.reviewStatus === "pending_review" ||
+    transaction.reviewStatus === "suggested" ||
+    (typeof transaction.categoryConfidence === "number" && transaction.categoryConfidence < 90) ||
+    !categoryName ||
+    categoryName === "other" ||
+    categoryName === "needs category review"
+  );
+};
 
 function InlineEditableCell({
   value,
@@ -2833,6 +2850,10 @@ function TransactionsPageContent() {
     transactions,
   ]);
   const totalTransactionCountForDisplay = searchText ? visibleTransactions.length : transactionsSummary.totalCount;
+  const finalizingTransactionCount = useMemo(
+    () => visibleTransactions.filter(isImportFinalizingTransaction).length,
+    [visibleTransactions]
+  );
   const totalTransactionPages = Math.max(1, Math.ceil(totalTransactionCountForDisplay / Math.max(transactionsPageSize, 1)));
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);
   const pageStartIndex = (currentTransactionPage - 1) * transactionsPageSize;
@@ -5417,6 +5438,17 @@ function TransactionsPageContent() {
       />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`} style={transactionsLayoutStyle}>
         <div className="transactions-main-panel">
+          {finalizingTransactionCount > 0 ? (
+            <div className="transactions-status-line" role="status" aria-live="polite">
+              <div className="transactions-status-line__meta">
+                <span className="pill pill-neutral">Finalizing details</span>
+                <span className="panel-muted">
+                  Clover is cleaning up names and categories for {finalizingTransactionCount} visible transaction
+                  {finalizingTransactionCount === 1 ? "" : "s"} · about 5 min left.
+                </span>
+              </div>
+            </div>
+          ) : null}
       {filterOpen ? (
             <div className="transactions-inline-filters glass">
               <div className="transactions-inline-filters__head">
