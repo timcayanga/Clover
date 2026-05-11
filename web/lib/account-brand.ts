@@ -243,11 +243,11 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     match: /\b(METROBANK|METROPOLITAN BANK|METROPOLITAN BANK AND TRUST COMPANY)\b/i,
     brand: makeBrand({
       label: "Metrobank",
-      logoSrc: philippinesLogoPath("metrobank.png?v=20260427"),
-      logoSrcs: [philippinesLogoPath("metrobank.png?v=20260427")],
+      logoSrc: philippinesLogoPath("metrobank.jpeg?v=20260511"),
+      logoSrcs: [philippinesLogoPath("metrobank.jpeg?v=20260511")],
       fallbackIconSrc: bankIcon,
       accent: "#00539B",
-      background: "linear-gradient(135deg, rgba(0, 83, 155, 0.18), rgba(0, 83, 155, 0.08))",
+      background: "linear-gradient(135deg, rgba(0, 49, 118, 0.28), rgba(0, 83, 155, 0.14))",
     }),
   },
   {
