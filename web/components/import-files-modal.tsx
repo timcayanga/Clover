@@ -572,54 +572,10 @@ const waitForImportSettledVisibility = async (params: {
           continue;
         }
 
-        const categoriesResponse = await fetch(`/api/categories?workspaceId=${encodeURIComponent(params.workspaceId)}`, {
-          cache: "no-store",
-        });
-        if (!categoriesResponse.ok) {
-          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
-          continue;
-        }
-
         const transactionPayload = await transactionsResponse.json().catch(() => null);
         const totalCount = Number(transactionPayload?.totalCount ?? 0);
         const rows = Array.isArray(transactionPayload?.transactions) ? transactionPayload.transactions : [];
         if (totalCount < params.importedRows || rows.length < params.importedRows) {
-          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
-          continue;
-        }
-
-        const categoryPayload = await categoriesResponse.json().catch(() => null);
-        const categories = Array.isArray(categoryPayload?.categories) ? categoryPayload.categories : [];
-        if (categories.length <= 0) {
-          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
-          continue;
-        }
-
-        const rowsLookEnriched = rows.every((row) => {
-          if (!row || typeof row !== "object") {
-            return false;
-          }
-
-          const record = row as Record<string, unknown>;
-          const categoryText =
-            typeof record.categoryName === "string"
-              ? record.categoryName
-              : typeof record.category === "string"
-                ? record.category
-                : record.category && typeof record.category === "object" && "name" in record.category
-                  ? String((record.category as { name?: unknown }).name ?? "")
-                  : "";
-          const merchantText =
-            typeof record.merchantClean === "string"
-              ? record.merchantClean
-              : typeof record.name === "string"
-                ? record.name
-                : "";
-
-          return Boolean(categoryText.trim() && merchantText.trim());
-        });
-
-        if (!rowsLookEnriched) {
           await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
           continue;
         }
@@ -2158,7 +2114,7 @@ export function ImportFilesModal({
           return;
         }
 
-        if (importFile?.status === "processing" && processingPhase) {
+        if (importFile?.status === "processing" && processingPhase && confirmedTransactionsCount === 0) {
           emitItemUpdate({
             status: "importing",
             progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(79, IMPORT_PROGRESS.parsing + Number(importFile.processingAttempt ?? 0))),

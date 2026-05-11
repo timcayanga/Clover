@@ -518,6 +518,23 @@ const isActiveEnrichmentJob = (importFile: ImportFile) => {
   return Boolean(status && status !== "done" && status !== "failed");
 };
 
+const estimateEnrichmentTimeLabel = (importFiles: ImportFile[]) => {
+  const remainingRows = importFiles
+    .filter(isActiveEnrichmentJob)
+    .reduce((total, importFile) => {
+      const totalRows = Number(importFile.enrichmentJob?.totalRows ?? 0);
+      const processedRows = Number(importFile.enrichmentJob?.processedRows ?? 0);
+      return total + Math.max(0, totalRows - processedRows);
+    }, 0);
+
+  if (remainingRows <= 0) {
+    return "less than 1 min left";
+  }
+
+  const minutes = Math.max(1, Math.min(10, Math.ceil(remainingRows / 50)));
+  return `about ${minutes} min${minutes === 1 ? "" : "s"} left`;
+};
+
 function InlineEditableCell({
   value,
   displayValue,
@@ -2866,6 +2883,7 @@ function TransactionsPageContent() {
     () => new Set(imports.filter(isActiveEnrichmentJob).map((importFile) => importFile.id)),
     [imports]
   );
+  const finalizingTimeLabel = useMemo(() => estimateEnrichmentTimeLabel(imports), [imports]);
   const finalizingTransactionCount = useMemo(
     () =>
       visibleTransactions.filter(
@@ -5465,7 +5483,7 @@ function TransactionsPageContent() {
                 <span className="pill pill-neutral">Finalizing details</span>
                 <span className="panel-muted">
                   Clover is cleaning up names and categories for {finalizingTransactionCount} visible transaction
-                  {finalizingTransactionCount === 1 ? "" : "s"} · about 5 min left.
+                  {finalizingTransactionCount === 1 ? "" : "s"} · {finalizingTimeLabel}.
                 </span>
               </div>
             </div>

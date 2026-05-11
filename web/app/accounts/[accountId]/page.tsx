@@ -163,6 +163,23 @@ const isActiveEnrichmentJob = (importFile: ImportFile) => {
   return Boolean(status && status !== "done" && status !== "failed");
 };
 
+const estimateEnrichmentTimeLabel = (importFiles: ImportFile[]) => {
+  const remainingRows = importFiles
+    .filter(isActiveEnrichmentJob)
+    .reduce((total, importFile) => {
+      const totalRows = Number(importFile.enrichmentJob?.totalRows ?? 0);
+      const processedRows = Number(importFile.enrichmentJob?.processedRows ?? 0);
+      return total + Math.max(0, totalRows - processedRows);
+    }, 0);
+
+  if (remainingRows <= 0) {
+    return "less than 1 min left";
+  }
+
+  const minutes = Math.max(1, Math.min(10, Math.ceil(remainingRows / 50)));
+  return `about ${minutes} min${minutes === 1 ? "" : "s"} left`;
+};
+
 type StatementCheckpoint = {
   id: string;
   accountId: string | null;
@@ -1540,6 +1557,7 @@ function AccountDetailPageContent() {
     () => new Set(importFiles.filter(isActiveEnrichmentJob).map((importFile) => importFile.id)),
     [importFiles]
   );
+  const finalizingTimeLabel = useMemo(() => estimateEnrichmentTimeLabel(importFiles), [importFiles]);
   const finalizingTransactionCount = useMemo(
     () =>
       visibleTransactions.filter(
@@ -2694,7 +2712,7 @@ function AccountDetailPageContent() {
               <span className="accounts-summary-chip is-neutral">{`${visibleTransactions.length} of ${transactionTotalCount} loaded`}</span>
               {finalizingTransactionCount > 0 ? (
                 <span className="accounts-summary-chip is-neutral">
-                  Finalizing {finalizingTransactionCount} detail{finalizingTransactionCount === 1 ? "" : "s"} · about 5 min left
+                  Finalizing {finalizingTransactionCount} detail{finalizingTransactionCount === 1 ? "" : "s"} · {finalizingTimeLabel}
                 </span>
               ) : null}
               {selectedTransactionIds.length > 0 ? (

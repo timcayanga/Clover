@@ -1,6 +1,6 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { fetchImportFileCompat, hasCompatibleTable } from "@/lib/data-engine";
+import { countTransactionsByImportFileCompat, fetchImportFileCompat, hasCompatibleTable } from "@/lib/data-engine";
 import { buildImportTelemetrySnapshot } from "@/lib/import-telemetry";
 import { readCheckpointWorkflowStage } from "@/lib/import-workflow";
 import { getImportEnrichmentJobByImportFileId } from "@/lib/import-enrichment-jobs";
@@ -88,8 +88,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     }
 
     let parsedRowsCount = Math.max(Number(importFile.parsedRowsCount ?? 0), checkpointRowCount);
+    const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
     let confirmedTransactionsCount = Math.max(
       Number(importFile.confirmedTransactionsCount ?? 0),
+      savedTransactionsCount,
       statementCheckpoint?.status === "reconciled" ? checkpointRowCount : 0
     );
     const enrichmentJob = await getImportEnrichmentJobByImportFileId(importId).catch(() => null);
