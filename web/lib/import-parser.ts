@@ -3989,7 +3989,8 @@ const parseBpiCreditCardSegment = (
 
 const guessRcbcCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
-  if (/^cash payment$/i.test(description) || /cash payment|payment to card|card payment/.test(lower)) return "Financial";
+  if (/^cash payment$/i.test(description) || /cash payment/.test(lower)) return "Shopping";
+  if (/payment to card|card payment/.test(lower)) return "Financial";
   if (/transfer|instapay|pesonet/.test(lower)) return "Transfers";
   if (/the\s+sm\s+store|sm\s+fairview|sm\s+grand\s+caloocan/i.test(lower)) return "Shopping";
   if (/bayad\s+online/i.test(lower)) return "Bills & Utilities";
@@ -4022,7 +4023,7 @@ const parseRcbcTransactionLine = (
     return null;
   }
 
-  const type: TransactionType = /cash payment|payment to card|card payment/i.test(description)
+  const type: TransactionType = /payment to card|card payment/i.test(description)
     ? "transfer"
     : /refund|reversal|credit memo/i.test(description)
       ? "income"
@@ -4119,7 +4120,7 @@ const parseRcbcImportText = (text: string) => {
               return null;
             }
 
-            const type: TransactionType = "transfer";
+            const type: TransactionType = /^cash payment$/i.test(description) || /cash payment/i.test(description) ? "expense" : "transfer";
             return {
               date: saleDate.toISOString().slice(0, 10),
               amount: Math.abs(amount).toFixed(2),

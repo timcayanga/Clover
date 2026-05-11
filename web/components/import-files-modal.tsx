@@ -2870,6 +2870,33 @@ export function ImportFilesModal({
         if (limitPayload) {
           showPlanLimitNudge(limitPayload);
         }
+        const errorMessage = error instanceof Error ? error.message : String(error ?? "");
+        const transientFetchFailure = /failed to fetch|networkerror|load failed|abort/i.test(errorMessage);
+        const latestItem = itemsRef.current.find((entry) => entry.id === itemId);
+        if (transientFetchFailure && latestItem?.importFileId && Date.now() - startedAt < MAX_WAIT_MS) {
+          emitItemUpdate({
+            status: "importing",
+            confirmationState: "pending",
+            progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
+            progressLabel: "Finalizing import",
+            targetAccountId: latestResolvedAccountId ?? accountId,
+          });
+          emitImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName: summaryContext.fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
+            detail: "Clover is still finalizing this import",
+            summary: null,
+            errorMessage: null,
+          });
+          await sleep(1000);
+          continue;
+        }
         capturePostHogClientEvent("import_retry_failed", {
           workspace_id: workspaceId,
           import_file_id: importFileId,
@@ -2877,7 +2904,7 @@ export function ImportFilesModal({
           retry_reason: "background_confirmation",
           error_code: getImportErrorCode(error),
         });
-        closeImportAfterError(itemId, "monitor", summaryContext.fileName, error instanceof Error ? error.message : null);
+        closeImportAfterError(itemId, "monitor", summaryContext.fileName, errorMessage || null);
         return;
       }
 

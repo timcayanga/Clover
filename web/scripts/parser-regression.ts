@@ -761,6 +761,31 @@ const main = async () => {
   }
   console.log("[PASS] BDO classification | bank transfer and withdrawal rows classified correctly");
 
+  const rcbcCreditPath = join(root, "Samples/RCBC/728919236-Acfroga47rrwerw7v8xwjcyqjxnpvi1hv5climj2qkpdzsqlabwmr51pzid4mt-Ao-Swizece4lt1ycaubzsilpqnzohhyzqxuv2cfbldosfajyekhfijmkceso8yzz1vgjmwntbprxb5ribspge-G.pdf");
+  const rcbcCreditBytes = await readFile(rcbcCreditPath);
+  const rcbcCreditText = await readUploadedFileText({
+    name: basename(rcbcCreditPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(rcbcCreditBytes.length);
+      copy.set(rcbcCreditBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const rcbcCreditMetadata = detectStatementMetadataFromText(rcbcCreditText);
+  const rcbcCreditRows = parser.parseImportText(rcbcCreditText, basename(rcbcCreditPath), "application/pdf", {
+    institution: rcbcCreditMetadata.institution,
+    accountName: rcbcCreditMetadata.accountName,
+    accountNumber: rcbcCreditMetadata.accountNumber,
+  });
+  const rcbcCashPaymentRow = rcbcCreditRows.find((row) => /^cash payment$/i.test(String(row.description ?? row.merchantRaw ?? "")));
+  if (!rcbcCashPaymentRow || rcbcCashPaymentRow.type !== "expense" || rcbcCashPaymentRow.categoryName !== "Shopping") {
+    throw new Error(
+      `expected standalone RCBC Cash Payment to classify as Shopping expense, got ${rcbcCashPaymentRow?.categoryName ?? "missing"} ${rcbcCashPaymentRow?.type ?? "missing"}`
+    );
+  }
+  console.log("[PASS] RCBC classification | standalone Cash Payment rows classify as Shopping expense");
+
   const guessCategoryFallback = dataEngine.guessCategoryFallback as (description: string, type: "income" | "expense" | "transfer") => string;
   const enrichmentFallbackExpectations: Array<[string, "income" | "expense" | "transfer", string]> = [
     ["Incoming Interbank Transfer", "income", "Transfers"],

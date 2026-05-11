@@ -18,7 +18,8 @@ This document captures the RCBC credit-card parsing rules learned from the April
   - a row shape that matches the transaction table
 - Preserve both sale date and post date when present.
 - Preserve foreign-currency metadata when the statement includes it.
-- Keep cash payments as card-payment credits, not income.
+- Keep explicit card-payment rows as card-payment credits, not income.
+- Treat standalone `Cash Payment` rows without a card-payment marker as cash-paid purchases (`Shopping`, expense) so they do not render as black transfer rows.
 - For RCBC savings statements, keep the last 4 digits in the account name so multiple RCBC accounts do not merge, for example `RCBC 5080`.
 - For RCBC cards, keep the last 4 digits in the account name, for example `RCBC 1014` or `RCBC 2006`.
 - Keep travel, shopping, food, transport, business, and bill merchants as learned category candidates instead of collapsing them to `Other`.

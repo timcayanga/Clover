@@ -166,6 +166,9 @@ const isActiveEnrichmentJob = (importFile: ImportFile) => {
 
 const estimateEnrichmentTimeLabel = (importFiles: ImportFile[], nowMs: number) => {
   const activeJobs = importFiles.filter(isActiveEnrichmentJob);
+  if (activeJobs.length === 0) {
+    return "couldn't finalize automatically; please review";
+  }
   const remainingRows = activeJobs.reduce((total, importFile) => {
       const totalRows = Number(importFile.enrichmentJob?.totalRows ?? 0);
       const processedRows = Number(importFile.enrichmentJob?.processedRows ?? 0);
@@ -177,16 +180,16 @@ const estimateEnrichmentTimeLabel = (importFiles: ImportFile[], nowMs: number) =
     return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
   }, 0);
 
-  if (remainingRows <= 0) {
-    return "less than 1 min left";
-  }
-
   const estimatedSeconds = Math.max(30, Math.min(600, Math.ceil(remainingRows / 50) * 60));
   const elapsedSeconds = latestUpdatedAtMs > 0 ? Math.max(0, Math.floor((nowMs - latestUpdatedAtMs) / 1000)) : 0;
   const remainingSeconds = estimatedSeconds - elapsedSeconds;
 
-  if (remainingSeconds <= -60) {
-    return "taking longer than expected";
+  if (remainingRows <= 0) {
+    return elapsedSeconds >= 120 ? "couldn't finalize automatically; please review" : "finishing now";
+  }
+
+  if (remainingSeconds <= -60 || elapsedSeconds >= 300) {
+    return "couldn't finalize automatically; please review";
   }
 
   if (remainingSeconds <= 60) {

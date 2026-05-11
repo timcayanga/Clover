@@ -424,8 +424,8 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
   const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
 
   if (
-    /incoming\s+(?:interbank\s+)?transfer|outgoing\s+(?:interbank\s+)?transfer|fund\s+transfer|interbank\s+fund\s+transfer|system\s+(?:debit|credit)|miscellaneous\s+debit|investment\s+sweep|cash\s+payment|card\s+payment|payment\s*-\s*thank\s+you/.test(lower) ||
-    /incoming(?:interbank)?transfer|outgoing(?:interbank)?transfer|fundtransfer|interbankfundtransfer|system(?:debit|credit)|miscellaneousdebit|investmentsweep|cashpayment|cardpayment|paymentthankyou/.test(compact)
+    /incoming\s+(?:interbank\s+)?transfer|outgoing\s+(?:interbank\s+)?transfer|fund\s+transfer|interbank\s+fund\s+transfer|system\s+(?:debit|credit)|miscellaneous\s+debit|investment\s+sweep|card\s+payment|payment\s*-\s*thank\s+you/.test(lower) ||
+    /incoming(?:interbank)?transfer|outgoing(?:interbank)?transfer|fundtransfer|interbankfundtransfer|system(?:debit|credit)|miscellaneousdebit|investmentsweep|cardpayment|paymentthankyou/.test(compact)
   ) {
     return "Transfers";
   }
