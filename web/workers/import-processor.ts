@@ -3827,7 +3827,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     }).catch(() => null);
   }
 
-  void Promise.allSettled(trainingSignalJobs);
+  await Promise.allSettled(trainingSignalJobs);
 
   const insightSummary = buildImportInsightSummary(transactions);
 
