@@ -521,9 +521,9 @@ const waitForImportSettledVisibility = async (params: {
   }
 
   const expectedBalance = toBalanceString(params.expectedBalance);
-  const timeoutMs = params.timeoutMs ?? 180_000;
+  const timeoutMs = params.timeoutMs ?? 10_000;
   const startedAt = Date.now();
-  const pollDelayMs = 2500;
+  const pollDelayMs = 1000;
 
   const normalizeBalance = (value: unknown) => {
     const text = toBalanceString(value);
@@ -552,7 +552,7 @@ const waitForImportSettledVisibility = async (params: {
       const accountLooksReady = Boolean(account && typeof account.id === "string" && account.id === accountId);
       const balanceLooksReady =
         expectedBalance === null
-          ? accountBalance !== null
+          ? true
           : accountBalance !== null && normalizeBalance(expectedBalance) === accountBalance;
 
       if (!accountLooksReady || !balanceLooksReady) {
