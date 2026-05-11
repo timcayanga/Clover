@@ -584,6 +584,7 @@ function InlineEditableCell({
         className={className}
         value={draft}
         aria-label={ariaLabel}
+        title={displayValue}
         onFocus={() => setDraft(value)}
           onChange={(event) => {
             const next = event.target.value;
@@ -636,7 +637,7 @@ function InlineEditableCell({
   }
 
   return (
-    <button type="button" className={className} onClick={openEditor} aria-label={ariaLabel}>
+    <button type="button" className={className} onClick={openEditor} aria-label={ariaLabel} title={displayValue}>
       {displayValue}
     </button>
   );

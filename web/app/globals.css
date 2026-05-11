@@ -11441,11 +11441,16 @@ button.transaction-inline-edit {
 }
 
 button.transaction-inline-edit--name {
+  min-width: 0;
+  width: 100%;
   font-size: 0.88rem;
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.25;
   padding: 2px 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   border-radius: 10px;
   transition: background-color 160ms ease, box-shadow 160ms ease, color 160ms ease;
 }
@@ -11568,6 +11573,11 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transaction-account-cell .transaction-inline-edit--select {
   min-width: 0;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .transaction-account-cell {
@@ -11587,6 +11597,11 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transaction-account-cell .transaction-inline-edit--select {
   min-width: 0;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .transaction-amount-cell {
