@@ -163,21 +163,32 @@ function downloadBlob(blob: Blob, fileName: string) {
 export function SettingsHub({
   mode = "full",
   initialSection = "account",
-  workspaceId,
-  workspaceName,
-  selectedProfileId,
-  firstName,
-  lastName,
-  email,
-  planTier,
-  paypalClientId,
-  paypalMonthlyPlanId,
-  paypalAnnualPlanId,
-  paypalBuyerCountry,
+  workspaceId: initialWorkspaceId,
+  workspaceName: initialWorkspaceName,
+  selectedProfileId: initialSelectedProfileId,
+  firstName: initialFirstName,
+  lastName: initialLastName,
+  email: initialEmail,
+  planTier: initialPlanTier,
+  paypalClientId: initialPaypalClientId,
+  paypalMonthlyPlanId: initialPaypalMonthlyPlanId,
+  paypalAnnualPlanId: initialPaypalAnnualPlanId,
+  paypalBuyerCountry: initialPaypalBuyerCountry,
 }: SettingsHubProps) {
   const router = useRouter();
   const { isLoaded, isSignedIn, user } = useUser();
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>(initialSection);
+  const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId);
+  const [workspaceName, setWorkspaceName] = useState(initialWorkspaceName);
+  const [selectedProfileId, setSelectedProfileId] = useState(initialSelectedProfileId);
+  const [firstName, setFirstName] = useState<string | null>(initialFirstName);
+  const [lastName, setLastName] = useState<string | null>(initialLastName);
+  const [email, setEmail] = useState(initialEmail);
+  const [planTier, setPlanTier] = useState<"free" | "pro">(initialPlanTier);
+  const [paypalClientId, setPaypalClientId] = useState<string | null>(initialPaypalClientId ?? null);
+  const [paypalMonthlyPlanId, setPaypalMonthlyPlanId] = useState<string | null>(initialPaypalMonthlyPlanId ?? null);
+  const [paypalAnnualPlanId, setPaypalAnnualPlanId] = useState<string | null>(initialPaypalAnnualPlanId ?? null);
+  const [paypalBuyerCountry, setPaypalBuyerCountry] = useState<string | null>(initialPaypalBuyerCountry ?? null);
   const [themeMode, setThemeMode] = useState<ThemeMode>("light");
   const [helperTextVisible, setHelperTextVisible] = useState(true);
   const [historyCutoff, setHistoryCutoff] = useState(() => new Date().toISOString().slice(0, 10));
@@ -188,9 +199,9 @@ export function SettingsHub({
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [newProfileName, setNewProfileName] = useState("");
   const [profileRenameDrafts, setProfileRenameDrafts] = useState<Record<string, string>>({});
-  const [activeProfileId, setActiveProfileId] = useState(selectedProfileId);
-  const [firstNameDraft, setFirstNameDraft] = useState(firstName ?? "");
-  const [lastNameDraft, setLastNameDraft] = useState(lastName ?? "");
+  const [activeProfileId, setActiveProfileId] = useState(initialSelectedProfileId);
+  const [firstNameDraft, setFirstNameDraft] = useState(initialFirstName ?? "");
+  const [lastNameDraft, setLastNameDraft] = useState(initialLastName ?? "");
   const [passwordCurrentDraft, setPasswordCurrentDraft] = useState("");
   const [passwordNewDraft, setPasswordNewDraft] = useState("");
   const [passwordConfirmDraft, setPasswordConfirmDraft] = useState("");
@@ -215,6 +226,7 @@ export function SettingsHub({
   const [dataDeleteModal, setDataDeleteModal] = useState<DataDeleteModalState | null>(null);
   const [dataDeleteInFlight, setDataDeleteInFlight] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const workspaceReady = Boolean(workspaceId);
 
   const activeProfile = profileList.find((profile) => profile.id === activeProfileId) ?? profileList[0] ?? null;
   const primaryEmail = user?.primaryEmailAddress?.emailAddress ?? email;
@@ -230,6 +242,90 @@ export function SettingsHub({
     setThemeMode(initialTheme);
     applyThemeMode(initialTheme);
   }, []);
+
+  useEffect(() => {
+    if (initialWorkspaceId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadBootstrap = async () => {
+      try {
+        const response = await fetch("/api/settings/bootstrap", {
+          cache: "no-store",
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          workspaceId?: string;
+          workspaceName?: string;
+          selectedProfileId?: string;
+          firstName?: string | null;
+          lastName?: string | null;
+          email?: string;
+          planTier?: "free" | "pro";
+          paypalClientId?: string | null;
+          paypalMonthlyPlanId?: string | null;
+          paypalAnnualPlanId?: string | null;
+          paypalBuyerCountry?: string | null;
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Unable to load settings data.");
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        setWorkspaceId(payload.workspaceId ?? "");
+        setWorkspaceName(payload.workspaceName ?? "Settings");
+        setSelectedProfileId(payload.selectedProfileId ?? "");
+        setActiveProfileId(payload.selectedProfileId ?? "");
+        setFirstName(payload.firstName ?? null);
+        setLastName(payload.lastName ?? null);
+        setEmail(payload.email ?? initialEmail);
+        setPlanTier(payload.planTier ?? "free");
+        setPaypalClientId(payload.paypalClientId ?? null);
+        setPaypalMonthlyPlanId(payload.paypalMonthlyPlanId ?? null);
+        setPaypalAnnualPlanId(payload.paypalAnnualPlanId ?? null);
+        setPaypalBuyerCountry(payload.paypalBuyerCountry ?? null);
+      } catch {
+        if (!cancelled) {
+          setWorkspaceId("");
+          setWorkspaceName(initialWorkspaceName);
+          setSelectedProfileId(initialSelectedProfileId);
+          setActiveProfileId(initialSelectedProfileId);
+          setFirstName(initialFirstName);
+          setLastName(initialLastName);
+          setEmail(initialEmail);
+          setPlanTier(initialPlanTier);
+          setPaypalClientId(initialPaypalClientId ?? null);
+          setPaypalMonthlyPlanId(initialPaypalMonthlyPlanId ?? null);
+          setPaypalAnnualPlanId(initialPaypalAnnualPlanId ?? null);
+          setPaypalBuyerCountry(initialPaypalBuyerCountry ?? null);
+        }
+      }
+    };
+
+    void loadBootstrap();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    initialEmail,
+    initialFirstName,
+    initialLastName,
+    initialPlanTier,
+    initialPaypalAnnualPlanId,
+    initialPaypalBuyerCountry,
+    initialPaypalClientId,
+    initialPaypalMonthlyPlanId,
+    initialSelectedProfileId,
+    initialWorkspaceId,
+    initialWorkspaceName,
+  ]);
 
   useEffect(() => {
     setActiveProfileId(selectedProfileId);
@@ -296,7 +392,7 @@ export function SettingsHub({
     let cancelled = false;
 
     const loadPlan = async () => {
-      if (planLoaded || planLoading || activeSection !== "plan") {
+      if (planLoaded || planLoading || activeSection !== "plan" || !workspaceReady) {
         return;
       }
 
@@ -368,7 +464,7 @@ export function SettingsHub({
     return () => {
       cancelled = true;
     };
-  }, [activeSection, planLoaded, planLoading, workspaceId]);
+  }, [activeSection, planLoaded, planLoading, workspaceId, workspaceReady]);
 
   useEffect(() => {
     const initialHelperText = readStoredHelperTextPreference();
@@ -995,6 +1091,15 @@ export function SettingsHub({
               </div>
             </div>
 
+            {!workspaceReady ? (
+              <article className="settings-action-card">
+                <div>
+                  <h5>Loading workspace</h5>
+                  <p>Pulling your profile data into Settings.</p>
+                </div>
+              </article>
+            ) : null}
+
             <div className="settings-data-grid settings-data-grid--split">
               <article className="settings-action-card settings-data-download">
                 <div>
@@ -1010,7 +1115,7 @@ export function SettingsHub({
                     <button
                       type="button"
                       className="button button-secondary button-small"
-                      disabled={isPending}
+                      disabled={isPending || !workspaceReady}
                       onClick={() => {
                         setStatusMessage(null);
                         void (async () => {
@@ -1038,7 +1143,7 @@ export function SettingsHub({
                     <button
                       type="button"
                       className="button button-secondary button-small"
-                      disabled={isPending}
+                      disabled={isPending || !workspaceReady}
                       onClick={() => {
                         setStatusMessage(null);
                         void (async () => {
@@ -1079,7 +1184,7 @@ export function SettingsHub({
                     <button
                       type="button"
                       className="button button-danger button-small"
-                      disabled={isPending}
+                      disabled={isPending || !workspaceReady}
                       onClick={() => openDeleteModal("transactions")}
                     >
                       Delete transactions
@@ -1096,7 +1201,7 @@ export function SettingsHub({
                     <button
                       type="button"
                       className="button button-danger button-small"
-                      disabled={isPending}
+                      disabled={isPending || !workspaceReady}
                       onClick={() => openDeleteModal("accounts")}
                     >
                       Delete accounts
@@ -1113,7 +1218,7 @@ export function SettingsHub({
                     <button
                       type="button"
                       className="button button-danger button-small"
-                      disabled={isPending}
+                      disabled={isPending || !workspaceReady}
                       onClick={() => openDeleteModal("all")}
                     >
                       Delete all data
@@ -1126,7 +1231,18 @@ export function SettingsHub({
           </section>
         ) : null}
 
-        {activeSection === "categories" ? <SettingsCategoriesPanel workspaceId={workspaceId} /> : null}
+        {activeSection === "categories" ? (
+          workspaceReady ? (
+            <SettingsCategoriesPanel workspaceId={workspaceId} />
+          ) : (
+            <article className="settings-action-card">
+              <div>
+                <h5>Loading workspace</h5>
+                <p>Pulling your profile data into Settings.</p>
+              </div>
+            </article>
+          )
+        ) : null}
 
         {activeSection === "plan" ? (
           <SettingsPlanPanel
