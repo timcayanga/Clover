@@ -75,6 +75,14 @@ type BillingSubscriptionSummary = {
   planTier: "free" | "pro";
 };
 
+type DataDeleteScope = "transactions" | "accounts" | "all";
+
+type DataDeleteModalState = {
+  scope: DataDeleteScope;
+  phase: "confirm" | "success";
+  deletedCount: number | null;
+};
+
 type SettingsHubProps = {
   mode?: "menu" | "panel" | "full";
   initialSection?: SettingsSectionKey;
@@ -204,6 +212,8 @@ export function SettingsHub({
   });
   const [planLoaded, setPlanLoaded] = useState(false);
   const [planLoading, setPlanLoading] = useState(false);
+  const [dataDeleteModal, setDataDeleteModal] = useState<DataDeleteModalState | null>(null);
+  const [dataDeleteInFlight, setDataDeleteInFlight] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const activeProfile = profileList.find((profile) => profile.id === activeProfileId) ?? profileList[0] ?? null;
@@ -469,6 +479,50 @@ export function SettingsHub({
     });
   };
 
+  const dataDeleteCopy = {
+    transactions: {
+      confirmTitle: "Delete transaction history?",
+      body: "This removes transactions before the selected date and keeps your accounts in place.",
+      confirmLabel: "Delete transactions",
+      successTitle: "Transactions deleted",
+      successBody: (count: number | null) =>
+        count === 0
+          ? "No transactions matched the selected date."
+          : `Deleted ${count.toLocaleString()} transaction${count === 1 ? "" : "s"}.`,
+    },
+    accounts: {
+      confirmTitle: "Delete accounts and linked transactions?",
+      body: "This removes non-cash accounts and the transactions tied to them.",
+      confirmLabel: "Delete accounts",
+      successTitle: "Accounts deleted",
+      successBody: (count: number | null) =>
+        count === 0
+          ? "No non-cash accounts were available to delete."
+          : `Deleted ${count.toLocaleString()} account${count === 1 ? "" : "s"}.`,
+    },
+    all: {
+      confirmTitle: "Delete all Clover data?",
+      body: "This removes your accounts, transactions, imports, and learned data while keeping your Clover login.",
+      confirmLabel: "Delete all data",
+      successTitle: "All Clover data deleted",
+      successBody: () => "Your Clover data has been deleted and the page is ready for a fresh start.",
+    },
+  } as const;
+
+  const openDeleteModal = (scope: DataDeleteScope) => {
+    setStatusMessage(null);
+    setDataDeleteModal({
+      scope,
+      phase: "confirm",
+      deletedCount: null,
+    });
+  };
+
+  const closeDeleteModal = () => {
+    setDataDeleteModal(null);
+    setDataDeleteInFlight(false);
+  };
+
   const runDelete = async (scope: "transactions" | "balances" | "accounts") => {
     const response = await fetch("/api/settings/data", {
       method: "DELETE",
@@ -488,20 +542,56 @@ export function SettingsHub({
     }
 
     clearAllWorkspaceCaches();
-    router.refresh();
 
     return payload.deleted ?? 0;
   };
 
-  const handleAction = (action: () => Promise<void>) => {
+  const handleDeleteConfirm = async () => {
+    if (!dataDeleteModal || dataDeleteInFlight) {
+      return;
+    }
+
+    setDataDeleteInFlight(true);
     setStatusMessage(null);
-    startTransition(async () => {
-      try {
-        await action();
-      } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : "Something went wrong.");
+
+    try {
+      if (dataDeleteModal.scope === "all") {
+        const response = await fetch("/api/account/wipe-data", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Unable to delete Clover data.");
+        }
+
+        persistSelectedWorkspaceId("");
+        syncSelectedWorkspaceCookie();
+        clearAllWorkspaceCaches();
+
+        setDataDeleteModal({
+          scope: dataDeleteModal.scope,
+          phase: "success",
+          deletedCount: null,
+        });
+        return;
       }
-    });
+
+      const deleted = await runDelete(dataDeleteModal.scope);
+      setDataDeleteModal({
+        scope: dataDeleteModal.scope,
+        phase: "success",
+        deletedCount: deleted,
+      });
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Something went wrong.");
+      closeDeleteModal();
+    } finally {
+      setDataDeleteInFlight(false);
+    }
   };
 
   const handleProfileSwitch = (profileId: string) => {
@@ -921,15 +1011,20 @@ export function SettingsHub({
                       type="button"
                       className="button button-secondary button-small"
                       disabled={isPending}
-                      onClick={() =>
-                        handleAction(async () => {
-                          await runDownload(
-                            `/api/settings/export/transactions?workspaceId=${encodeURIComponent(workspaceId)}`,
-                            "clover-transactions.pdf"
-                          );
-                          setStatusMessage("Transactions download started.");
-                        })
-                      }
+                      onClick={() => {
+                        setStatusMessage(null);
+                        void (async () => {
+                          try {
+                            await runDownload(
+                              `/api/settings/export/transactions?workspaceId=${encodeURIComponent(workspaceId)}`,
+                              "clover-transactions.pdf"
+                            );
+                            setStatusMessage("Transactions download started.");
+                          } catch (error) {
+                            setStatusMessage(error instanceof Error ? error.message : "Something went wrong.");
+                          }
+                        })();
+                      }}
                     >
                       Download Transactions
                     </button>
@@ -944,15 +1039,20 @@ export function SettingsHub({
                       type="button"
                       className="button button-secondary button-small"
                       disabled={isPending}
-                      onClick={() =>
-                        handleAction(async () => {
-                          await runDownload(
-                            `/api/settings/export/account-balances?workspaceId=${encodeURIComponent(workspaceId)}`,
-                            "clover-account-balances.pdf"
-                          );
-                          setStatusMessage("Account balances download started.");
-                        })
-                      }
+                      onClick={() => {
+                        setStatusMessage(null);
+                        void (async () => {
+                          try {
+                            await runDownload(
+                              `/api/settings/export/account-balances?workspaceId=${encodeURIComponent(workspaceId)}`,
+                              "clover-account-balances.pdf"
+                            );
+                            setStatusMessage("Account balances download started.");
+                          } catch (error) {
+                            setStatusMessage(error instanceof Error ? error.message : "Something went wrong.");
+                          }
+                        })();
+                      }}
                     >
                       Download Accounts
                     </button>
@@ -980,15 +1080,7 @@ export function SettingsHub({
                       type="button"
                       className="button button-danger button-small"
                       disabled={isPending}
-                      onClick={() =>
-                        handleAction(async () => {
-                          if (!window.confirm("Delete transaction history before the selected date? This only removes transactions and leaves your accounts in place.")) {
-                            return;
-                          }
-                          const deleted = await runDelete("transactions");
-                          setStatusMessage(`Deleted ${deleted} transaction${deleted === 1 ? "" : "s"}.`);
-                        })
-                      }
+                      onClick={() => openDeleteModal("transactions")}
                     >
                       Delete transactions
                     </button>
@@ -1005,19 +1097,7 @@ export function SettingsHub({
                       type="button"
                       className="button button-danger button-small"
                       disabled={isPending}
-                      onClick={() =>
-                        handleAction(async () => {
-                          if (
-                            !window.confirm(
-                              "Delete all non-cash accounts in this profile? Their linked transactions will be removed too. Clover can recreate the default Cash account later if needed."
-                            )
-                          ) {
-                            return;
-                          }
-                          const deleted = await runDelete("accounts");
-                          setStatusMessage(`Deleted ${deleted} account${deleted === 1 ? "" : "s"} from this profile.`);
-                        })
-                      }
+                      onClick={() => openDeleteModal("accounts")}
                     >
                       Delete accounts
                     </button>
@@ -1034,34 +1114,7 @@ export function SettingsHub({
                       type="button"
                       className="button button-danger button-small"
                       disabled={isPending}
-                      onClick={() =>
-                        handleAction(async () => {
-                          if (
-                            !window.confirm(
-                              "Delete all Clover data across every profile? This removes your accounts, transactions, imports, and learned data, but keeps your Clover login."
-                            )
-                          ) {
-                            return;
-                          }
-
-                          const response = await fetch("/api/account/wipe-data", {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                            },
-                          });
-
-                          const payload = (await response.json().catch(() => ({}))) as { error?: string };
-                          if (!response.ok) {
-                            throw new Error(payload.error ?? "Unable to delete Clover data.");
-                          }
-
-                          persistSelectedWorkspaceId("");
-                          syncSelectedWorkspaceCookie();
-                          clearAllWorkspaceCaches();
-                          window.location.assign("/dashboard");
-                        })
-                      }
+                      onClick={() => openDeleteModal("all")}
                     >
                       Delete all data
                     </button>
@@ -1089,6 +1142,73 @@ export function SettingsHub({
             planLoading={planLoading}
             planLoaded={planLoaded}
           />
+        ) : null}
+
+        {dataDeleteModal ? (
+          <div
+            className="account-actions-modal settings-delete-modal"
+            role="presentation"
+            onClick={(event) => {
+              if (event.target === event.currentTarget && !dataDeleteInFlight) {
+                closeDeleteModal();
+              }
+            }}
+          >
+            <section
+              className="account-actions-modal__card panel settings-delete-modal__card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="settings-delete-modal-title"
+              aria-describedby="settings-delete-modal-copy"
+            >
+              {dataDeleteModal.phase === "confirm" ? (
+                <>
+                  <div className="account-actions-modal__head">
+                    <div>
+                      <p className="eyebrow">Confirm deletion</p>
+                      <h4 id="settings-delete-modal-title">{dataDeleteCopy[dataDeleteModal.scope].confirmTitle}</h4>
+                    </div>
+                    <button className="button button-secondary button-small" type="button" onClick={closeDeleteModal} disabled={dataDeleteInFlight}>
+                      Cancel
+                    </button>
+                  </div>
+
+                  <p id="settings-delete-modal-copy" className="account-actions-modal__copy">
+                    {dataDeleteCopy[dataDeleteModal.scope].body}
+                  </p>
+
+                  {dataDeleteModal.scope === "transactions" ? (
+                    <label className="account-actions-modal__field">
+                      <span>Before date</span>
+                      <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} disabled={dataDeleteInFlight} />
+                    </label>
+                  ) : null}
+
+                  <div className="account-actions-modal__actions">
+                    <button className="button button-danger button-small" type="button" onClick={() => void handleDeleteConfirm()} disabled={dataDeleteInFlight}>
+                      {dataDeleteInFlight ? "Deleting..." : dataDeleteCopy[dataDeleteModal.scope].confirmLabel}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="account-actions-modal__head">
+                    <div>
+                      <p className="eyebrow">Deletion complete</p>
+                      <h4 id="settings-delete-modal-title">{dataDeleteCopy[dataDeleteModal.scope].successTitle}</h4>
+                    </div>
+                    <button className="button button-primary button-small" type="button" onClick={closeDeleteModal}>
+                      Done
+                    </button>
+                  </div>
+
+                  <p id="settings-delete-modal-copy" className="account-actions-modal__copy">
+                    {dataDeleteCopy[dataDeleteModal.scope].successBody(dataDeleteModal.deletedCount)}
+                  </p>
+                </>
+              )}
+            </section>
+          </div>
         ) : null}
 
         {(activeSection === "account" || activeSection === "profiles") && (profileMessage || profileListMessage) ? (
