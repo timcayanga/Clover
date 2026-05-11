@@ -449,18 +449,15 @@ function MenuIcon({ name }: { name: IconName }) {
 const notifications = [
   {
     title: "Import finished",
-    detail: "Your latest statement import is ready for review.",
-    time: "Just now",
+    href: "/review",
   },
   {
     title: "Transactions need attention",
-    detail: "Three recent transactions still need categorization.",
-    time: "14m ago",
+    href: "/transactions?review=1",
   },
   {
     title: "Weekly summary",
-    detail: "A spending summary is ready in Reports.",
-    time: "Yesterday",
+    href: "/reports",
   },
 ];
 
@@ -1298,18 +1295,22 @@ export function CloverShell({
             <div ref={notificationsPopoverRef} className="sidebar-popover sidebar-popover--notifications" role="menu" aria-label="Notifications">
               <div className="sidebar-popover__head">
                 <span className="sidebar-popover__title">Notifications</span>
-                <span className="sidebar-popover__subtitle">
-                  {notificationCount ? `${notificationCount} recent update${notificationCount === 1 ? "" : "s"}` : "No new alerts"}
-                </span>
               </div>
               <div className="sidebar-popover__items">
                 {notifications.length ? (
                   notifications.map((notification) => (
-                    <div key={notification.title} className="sidebar-popover__item">
-                      <strong>{notification.title}</strong>
-                      <span>{notification.detail}</span>
-                      <small>{notification.time}</small>
-                    </div>
+                    <Link
+                      key={notification.title}
+                      href={notification.href}
+                      className="sidebar-popover__item sidebar-popover__notification-link"
+                      role="menuitem"
+                      prefetch
+                      onClick={closeChrome}
+                      onMouseEnter={() => prefetchNavTarget(notification.href)}
+                      onTouchStart={() => prefetchNavTarget(notification.href)}
+                    >
+                      <span className="sidebar-popover__notification-title">{notification.title}</span>
+                    </Link>
                   ))
                 ) : (
                   <div className="sidebar-popover__empty">You’re all caught up.</div>

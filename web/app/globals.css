@@ -1247,6 +1247,15 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 12px;
 }
 
+.sidebar-popover--notifications {
+  left: calc(100% + 12px);
+  right: auto;
+  width: 268px;
+  z-index: 80;
+  max-height: min(340px, calc(100dvh - 144px));
+  overflow: auto;
+}
+
 @media (min-width: 921px) {
   .sidebar {
     padding: 12px 10px;
@@ -1307,6 +1316,10 @@ body.transactions-manual-open .shell-quick-add-button {
   font-size: 14px;
 }
 
+.sidebar-popover--notifications .sidebar-popover__title {
+  font-weight: 400;
+}
+
 .sidebar-popover__subtitle {
   font-size: 13px;
   color: var(--muted);
@@ -1347,6 +1360,14 @@ body.transactions-manual-open .shell-quick-add-button {
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
+.sidebar-popover__notification-link {
+  color: var(--text);
+  align-items: start;
+  grid-template-columns: 1fr;
+  text-decoration: none;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
 .sidebar-popover__link--bare,
 .sidebar-popover__link--bare:hover {
   background: transparent;
@@ -1359,6 +1380,12 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .sidebar-popover__link:hover {
+  background: var(--accent-soft);
+  border-color: rgba(3, 168, 192, 0.1);
+  transform: translateX(1px);
+}
+
+.sidebar-popover__notification-link:hover {
   background: var(--accent-soft);
   border-color: rgba(3, 168, 192, 0.1);
   transform: translateX(1px);
@@ -1386,6 +1413,13 @@ body.transactions-manual-open .shell-quick-add-button {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.sidebar-popover__notification-title {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 400;
 }
 
 .sidebar-popover__link > span:last-child {
