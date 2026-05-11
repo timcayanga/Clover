@@ -29,7 +29,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const updatedAtMs = importFile.updatedAt ? new Date(importFile.updatedAt).getTime() : 0;
     const createdAtMs = importFile.createdAt ? new Date(importFile.createdAt).getTime() : 0;
     const importAgeMs = Math.max(0, Date.now() - Math.max(updatedAtMs, createdAtMs));
-    const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
+    let statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
       ? await prisma.accountStatementCheckpoint.findUnique({
           where: { importFileId: importId },
         })
@@ -40,7 +40,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         ? String((statementCheckpoint.sourceMetadata as { importMode?: unknown }).importMode ?? "")
         : "";
     const isDocumentImportMode = checkpointImportMode.length > 0 && checkpointImportMode !== "statement";
-    const checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
+    let checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
     const checkpointWorkflowStage = readCheckpointWorkflowStage(statementCheckpoint?.sourceMetadata);
     const selfHealDelayMs = isImageImport || isDocumentImportMode ? 2_000 : 3_000;
     const hasParsedRows = parsedRowsCountBefore > 0 || checkpointRowCount > 0;
@@ -49,8 +49,37 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       importAgeMs > selfHealDelayMs &&
       ((parsedRowsCountBefore === 0 && confirmedTransactionsCountBefore === 0 && ((importFile.status === "processing" || importFile.status === "queued") || (importFile.status === "done" && checkpointRowCount === 0))) ||
         (importFile.status === "done" && hasParsedRows && !hasConfirmedRows));
+    const checkpointMetadata =
+      statementCheckpoint?.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object" && !Array.isArray(statementCheckpoint.sourceMetadata)
+        ? (statementCheckpoint.sourceMetadata as Record<string, unknown>)
+        : null;
+    const isGcashImport =
+      /gcash/i.test(String(importFile.fileName ?? "")) ||
+      String(checkpointMetadata?.institution ?? checkpointMetadata?.uploadBankHint ?? "").toLowerCase() === "gcash";
+    const shouldInlineSelfHeal = shouldSelfHeal && isGcashImport && importAgeMs > 10_000;
 
-    if (shouldSelfHeal) {
+    if (shouldInlineSelfHeal) {
+      try {
+        const { confirmImportFile, processImportFileText } = await import("@/workers/import-processor");
+        if (hasParsedRows) {
+          await confirmImportFile(importId, importFile.accountId ?? null);
+        } else {
+          await processImportFileText(importId, { actorUserId: null });
+        }
+        importFile = (await fetchImportFileCompat(importId)) ?? importFile;
+        statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
+          ? await prisma.accountStatementCheckpoint.findUnique({
+              where: { importFileId: importId },
+            })
+          : null;
+        checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
+      } catch (error) {
+        console.warn("Unable to inline self-heal stalled GCash import status", {
+          importId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else if (shouldSelfHeal) {
       void (async () => {
         try {
           const { confirmImportFile, processImportFileText } = await import("@/workers/import-processor");

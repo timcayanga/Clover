@@ -1847,13 +1847,19 @@ export const processImportFileText = async (
     processingMessage: "Identifying transactions...",
   });
   const hasKnownInstitution = Boolean(metadataForParse.institution && metadataForParse.institution !== "Unknown");
+  const parsedRowsWithDates = countRowsWithParseableDates(parsedRows);
+  const parsedDateCoverage = parsedRows.length > 0 ? parsedRowsWithDates / parsedRows.length : 0;
+  const gcashLooksStructurallyReadable =
+    metadataForParse.institution === "GCash" &&
+    parsedRows.length >= 6 &&
+    parsedDateCoverage >= 0.75 &&
+    Boolean(metadataForParse.accountName || metadataForParse.accountNumber || metadataForParse.institution);
   const gcashSuspiciouslySparse =
     metadataForParse.institution === "GCash" &&
     parsedRows.length > 0 &&
-    parsedRows.length < 50 &&
-    !metadataForParse.endingBalance;
-  const parsedRowsWithDates = countRowsWithParseableDates(parsedRows);
-  const parsedDateCoverage = parsedRows.length > 0 ? parsedRowsWithDates / parsedRows.length : 0;
+    parsedRows.length < 6 &&
+    !metadataForParse.endingBalance &&
+    !gcashLooksStructurallyReadable;
   const looksCharacterSpacedOcr = /(?:\b[A-Z]\s+){8,}[A-Z]\b/.test(textForParse);
   const genericIdentityLooksWeak =
     !metadataForParse.accountName ||
