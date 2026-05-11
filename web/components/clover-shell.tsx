@@ -634,7 +634,7 @@ export function CloverShell({
   }, [pathname]);
 
   useEffect(() => {
-    const prefetchTargets = ["/home", "/transactions", "/split-bill", "/more"];
+    const prefetchTargets = ["/home", "/transactions", "/split-bill", "/more", "/settings"];
 
     for (const href of prefetchTargets) {
       void router.prefetch(href);
@@ -1264,17 +1264,20 @@ export function CloverShell({
                 <span className="sidebar-popover__title">{displayName}</span>
               </div>
               <div className="sidebar-popover__links sidebar-popover__links--bare">
-                <button
+                <Link
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__link--bare"
-                  type="button"
-                  onClick={() => navigateTo("/settings")}
+                  href="/settings"
+                  prefetch
+                  onClick={closeChrome}
+                  onMouseEnter={() => prefetchNavTarget("/settings")}
+                  onTouchStart={() => prefetchNavTarget("/settings")}
                   role="menuitem"
                 >
                   <span className="sidebar-popover__link-icon" aria-hidden="true">
                     <MenuIcon name="settings" />
                   </span>
                   <span>Settings</span>
-                </button>
+                </Link>
                 <div className="sidebar-popover__separator" aria-hidden="true" />
                 <button
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger sidebar-popover__link--bare"
