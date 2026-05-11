@@ -33,13 +33,16 @@ export function ImportUploadDock({
     return null;
   }
 
-  const value = clampProgress(progress);
-  const donutStyle = { ["--progress" as any]: `${value}%` } as CSSProperties;
   const safeFileTotal = Math.max(0, fileTotal);
   const safeFileIndex =
     safeFileTotal > 0 ? Math.min(Math.max(1, fileIndex || 1), safeFileTotal) : Math.max(0, fileIndex || 0);
   const safeCompletedFiles = safeFileTotal > 0 ? Math.min(Math.max(0, completedFiles), safeFileTotal) : Math.max(0, completedFiles);
-  const isComplete = safeFileTotal > 0 && safeCompletedFiles >= safeFileTotal && value >= 100;
+  const rawValue = clampProgress(progress);
+  const isComplete = safeFileTotal > 0 && safeCompletedFiles >= safeFileTotal && rawValue >= 100;
+  const activeFileBatchCeiling =
+    safeFileTotal > 0 && safeFileIndex > 0 ? Math.max(1, ((safeFileIndex - 0.02) / safeFileTotal) * 100) : 99;
+  const value = safeFileTotal > 0 && !isComplete ? Math.min(rawValue, activeFileBatchCeiling, 99) : rawValue;
+  const donutStyle = { ["--progress" as any]: `${value}%` } as CSSProperties;
   const fileLabel =
     safeFileTotal > 0
       ? fileName
