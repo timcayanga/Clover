@@ -14,9 +14,19 @@ import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { prisma } from "@/lib/prisma";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode } from "@/lib/import-image-mode";
+import { listImportEnrichmentJobsByWorkspace } from "@/lib/import-enrichment-jobs";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
+
+const attachEnrichmentJobs = async (workspaceId: string, importFiles: any[]) => {
+  const jobs = await listImportEnrichmentJobsByWorkspace(workspaceId).catch(() => []);
+  const jobByImportFileId = new Map(jobs.map((job) => [job.importFileId, job]));
+  return importFiles.map((importFile) => ({
+    ...importFile,
+    enrichmentJob: jobByImportFileId.get(String(importFile.id)) ?? null,
+  }));
+};
 
 const prepareSchema = z.object({
   workspaceId: z.string().min(1),
@@ -82,7 +92,7 @@ export async function GET(request: Request) {
       const workspace = await ensureStarterWorkspace(user, user.email, user.verified);
       const importFiles = await listImportFilesCompat(workspace.id);
 
-      return NextResponse.json({ importFiles });
+      return NextResponse.json({ importFiles: await attachEnrichmentJobs(workspace.id, importFiles) });
     }
 
     const { userId } = await requireAuth();
@@ -97,7 +107,7 @@ export async function GET(request: Request) {
 
     const importFiles = await listImportFilesCompat(workspaceId);
 
-    return NextResponse.json({ importFiles });
+    return NextResponse.json({ importFiles: await attachEnrichmentJobs(workspaceId, importFiles) });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

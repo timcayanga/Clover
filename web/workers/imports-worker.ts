@@ -2,7 +2,7 @@ import { Worker } from "bullmq";
 import { getRedisConnection } from "@/lib/import-queue";
 import { updateImportFileCompat } from "@/lib/data-engine";
 import { getConfiguredPdfJsBaseUrl } from "@/lib/import-file-text.server";
-import { processImportFileText } from "@/workers/import-processor";
+import { processImportEnrichmentJobs, processImportFileText } from "@/workers/import-processor";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 
 const connection = getRedisConnection();
@@ -33,6 +33,19 @@ const worker = new Worker(
 
 worker.on("completed", (job) => {
   console.log(`Import job completed: ${job.id}`);
+  const importFileId = job.data?.importFileId;
+  if (importFileId) {
+    void processImportEnrichmentJobs({
+      importFileId,
+      limit: 1,
+      workerId: `bullmq-import-enrichment-${job.id}`,
+    }).catch((error) => {
+      console.warn("Unable to continue import enrichment after import job completed", {
+        importFileId,
+        error: summarizeErrorForLog(error),
+      });
+    });
+  }
 });
 
 worker.on("failed", async (job, error) => {

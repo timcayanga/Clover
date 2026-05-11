@@ -5,6 +5,7 @@ import { buildImportTelemetrySnapshot } from "@/lib/import-telemetry";
 import { readCheckpointWorkflowStage } from "@/lib/import-workflow";
 import { enqueueImportProcessing } from "@/lib/import-queue";
 import { ensureImportProcessingWorker } from "@/lib/import-worker-runtime";
+import { getImportEnrichmentJobByImportFileId } from "@/lib/import-enrichment-jobs";
 import { prisma } from "@/lib/prisma";
 import { getConfiguredPdfJsBaseUrl } from "@/lib/import-file-text.server";
 import { NextResponse } from "next/server";
@@ -58,7 +59,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       workflowStage: checkpointWorkflowStage,
     });
 
-    const alreadyComplete = telemetry.phase === "complete" && confirmedTransactionsCount > 0;
+    const enrichmentJob = await getImportEnrichmentJobByImportFileId(importId).catch(() => null);
+    const alreadyComplete =
+      telemetry.phase === "complete" &&
+      confirmedTransactionsCount > 0 &&
+      (!enrichmentJob || enrichmentJob.status === "done");
     if (alreadyComplete) {
       return NextResponse.json({
         ok: true,
@@ -71,6 +76,30 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         resumeReason: telemetry.resumeReason,
         importFileId: importId,
         accountId: importFile.accountId ?? null,
+      });
+    }
+
+    if (telemetry.phase === "complete" && confirmedTransactionsCount > 0 && enrichmentJob && enrichmentJob.status !== "done") {
+      const { processImportEnrichmentJobs } = await import("@/workers/import-processor");
+      const result = await processImportEnrichmentJobs({
+        importFileId: importId,
+        limit: 1,
+        workerId: `resume-import-enrichment-${userId}`,
+      });
+      return NextResponse.json({
+        ok: true,
+        queued: false,
+        skipped: false,
+        resumedFromCheckpoint: true,
+        resumeStrategy: "enrichment_resumed",
+        importFileId: importId,
+        accountId: importFile.accountId ?? null,
+        enrichment: result,
+        telemetryPhase: telemetry.phase,
+        telemetryLabel: telemetry.phaseLabel,
+        telemetryMessage: "Clover resumed finalizing transaction names and categories.",
+        canResume: true,
+        resumeReason: "finalizing_enrichment",
       });
     }
 
@@ -103,7 +132,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
 
       const { confirmImportFile } = await import("@/workers/import-processor");
-      const confirmationResult = await confirmImportFile(importId, importFile.accountId ?? null);
+      const confirmationResult = (await confirmImportFile(importId, importFile.accountId ?? null)) as {
+        imported: number;
+        status?: string;
+        accountId?: string | null;
+        confirmedTransactionsCount?: number | null;
+      };
 
       if (confirmationResult.status === "staged" && confirmationResult.imported === 0) {
         await updateImportFileCompat(importId, {

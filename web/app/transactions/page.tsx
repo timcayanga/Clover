@@ -307,6 +307,12 @@ type ImportFile = {
   fileName: string;
   status: string;
   uploadedAt: string;
+  enrichmentJob?: {
+    status?: string | null;
+    phase?: string | null;
+    processedRows?: number | null;
+    totalRows?: number | null;
+  } | null;
 };
 
 type TransactionsWorkspaceCacheSnapshot = {
@@ -505,6 +511,11 @@ const isImportFinalizingTransaction = (transaction: Transaction) => {
     categoryName === "other" ||
     categoryName === "needs category review"
   );
+};
+
+const isActiveEnrichmentJob = (importFile: ImportFile) => {
+  const status = importFile.enrichmentJob?.status;
+  return Boolean(status && status !== "done" && status !== "failed");
 };
 
 function InlineEditableCell({
@@ -2850,9 +2861,18 @@ function TransactionsPageContent() {
     transactions,
   ]);
   const totalTransactionCountForDisplay = searchText ? visibleTransactions.length : transactionsSummary.totalCount;
+  const activeFinalizingImportIds = useMemo(
+    () => new Set(imports.filter(isActiveEnrichmentJob).map((importFile) => importFile.id)),
+    [imports]
+  );
   const finalizingTransactionCount = useMemo(
-    () => visibleTransactions.filter(isImportFinalizingTransaction).length,
-    [visibleTransactions]
+    () =>
+      visibleTransactions.filter(
+        (transaction) =>
+          isImportFinalizingTransaction(transaction) ||
+          (transaction.importFileId ? activeFinalizingImportIds.has(transaction.importFileId) : false)
+      ).length,
+    [activeFinalizingImportIds, visibleTransactions]
   );
   const totalTransactionPages = Math.max(1, Math.ceil(totalTransactionCountForDisplay / Math.max(transactionsPageSize, 1)));
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);

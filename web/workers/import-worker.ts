@@ -1,1 +1,1 @@
-export { confirmImportFile, processImportFileText as processImportFile } from "@/workers/import-processor";
+export { confirmImportFile, processImportEnrichmentJobs, processImportFileText as processImportFile } from "@/workers/import-processor";

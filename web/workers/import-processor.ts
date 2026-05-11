@@ -45,6 +45,13 @@ import { normalizeBankName } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { mergeCheckpointSourceMetadata } from "@/lib/import-workflow";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import {
+  claimNextImportEnrichmentJob,
+  completeImportEnrichmentJob,
+  failImportEnrichmentJob,
+  updateImportEnrichmentJobProgress,
+  upsertImportEnrichmentJob,
+} from "@/lib/import-enrichment-jobs";
 
 type ImportInsightSummary = {
   incomeTotal: number;
@@ -1664,95 +1671,225 @@ const recordImportDataQaInBackground = (params: {
   });
 };
 
-const finalizeImportedTransactionDetailsInBackground = (params: {
-  workspaceId: string;
-  importFileId: string;
-  rows: EnrichedParsedImportRow[];
-  statementConfidence: number;
-}) => {
-  void (async () => {
-    const enrichedRows = await enrichParsedRowsWithTraining({
-      workspaceId: params.workspaceId,
-      rows: params.rows,
-      statementConfidence: params.statementConfidence,
+const coerceParsedTransactionRowsForEnrichment = (rows: Array<Record<string, unknown>>) =>
+  rows.map(
+    (row) =>
+      ({
+        ...row,
+        date:
+          row.date instanceof Date
+            ? row.date
+            : typeof row.date === "string"
+              ? (parseDateValue(row.date) ?? row.date)
+              : row.date,
+        amount:
+          typeof row.amount === "object" && row.amount !== null && "toString" in row.amount
+            ? String((row.amount as { toString: () => string }).toString())
+            : row.amount,
+      }) as EnrichedParsedImportRow
+  );
+
+export const processImportEnrichmentJobs = async (options: {
+  importFileId?: string | null;
+  limit?: number;
+  batchSize?: number;
+  workerId?: string;
+} = {}) => {
+  const workerId = options.workerId ?? `import-enrichment-${process.pid}-${Date.now()}`;
+  const limit = Math.max(1, Math.min(options.limit ?? 3, 10));
+  const batchSize = Math.max(10, Math.min(options.batchSize ?? 50, 100));
+  const results: Array<{
+    importFileId: string;
+    status: "done" | "running" | "failed" | "skipped";
+    processedRows: number;
+    totalRows: number;
+    errorMessage?: string;
+  }> = [];
+
+  for (let jobIndex = 0; jobIndex < limit; jobIndex += 1) {
+    const job = await claimNextImportEnrichmentJob({
+      workerId,
+      importFileId: options.importFileId ?? null,
     });
-    const transactions = await prisma.transaction.findMany({
-      where: { importFileId: params.importFileId },
-      select: { id: true, rawPayload: true },
-    });
-    const transactionBySourceIndex = new Map<number, string>();
-    for (const transaction of transactions) {
-      const rawPayload = transaction.rawPayload;
-      const sourceRowIndex =
-        rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
-          ? Number((rawPayload as Record<string, unknown>).sourceRowIndex)
-          : 0;
-      if (Number.isFinite(sourceRowIndex) && sourceRowIndex > 0) {
-        transactionBySourceIndex.set(sourceRowIndex, transaction.id);
-      }
+
+    if (!job) {
+      break;
     }
 
-    const existingCategories = await prisma.category.findMany({
-      where: { workspaceId: params.workspaceId },
-      select: { id: true, name: true },
-    });
-    const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
-
-    for (const [index, row] of enrichedRows.entries()) {
-      const transactionId = transactionBySourceIndex.get(index + 1);
-      if (!transactionId) {
+    try {
+      const importFile = await fetchImportFileCompat(job.importFileId);
+      if (!importFile) {
+        await failImportEnrichmentJob({
+          id: job.id,
+          errorCode: "I-404",
+          errorMessage: "Import file was not found for enrichment.",
+          retryable: false,
+        });
+        results.push({
+          importFileId: job.importFileId,
+          status: "failed",
+          processedRows: job.processedRows,
+          totalRows: job.totalRows,
+          errorMessage: "Import file was not found for enrichment.",
+        });
         continue;
       }
 
-      const rowType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
-      const categoryName =
-        (typeof row.categoryName === "string" && row.categoryName.trim()) || defaultCategoryForType(rowType);
-      const canonicalType = coerceTransactionTypeFromCategoryName(categoryName, rowType);
-      let categoryId = categoryByName.get(categoryName.toLowerCase());
-      if (!categoryId) {
-        const created = await prisma.category.create({
-          data: {
-            workspaceId: params.workspaceId,
-            name: categoryName,
-            type: canonicalType,
-            isSystem: false,
-          },
-          select: { id: true },
-        });
-        categoryId = created.id;
-        categoryByName.set(categoryName.toLowerCase(), categoryId);
+      const parsedRows = await fetchParsedTransactionRows(job.importFileId);
+      const totalRows = parsedRows.length;
+      if (totalRows === 0) {
+        await completeImportEnrichmentJob({ id: job.id, totalRows: 0 });
+        results.push({ importFileId: job.importFileId, status: "done", processedRows: 0, totalRows: 0 });
+        continue;
       }
 
-      const rowConfidence = typeof row.confidence === "number" ? row.confidence : 0;
-      const categoryConfidence = typeof row.categoryConfidence === "number" ? row.categoryConfidence : rowConfidence;
-      await prisma.transaction.update({
-        where: { id: transactionId },
-        data: {
-          categoryId,
-          type: canonicalType,
-          merchantClean:
-            typeof row.merchantClean === "string" && row.merchantClean.trim()
-              ? row.merchantClean.trim()
-              : typeof row.merchantRaw === "string"
-                ? row.merchantRaw
-                : undefined,
-          categoryConfidence,
-          parserConfidence: typeof row.parserConfidence === "number" ? row.parserConfidence : rowConfidence,
-          reviewStatus: rowConfidence >= 90 && categoryConfidence >= 90 ? "confirmed" : "pending_review",
-          isTransfer: canonicalType === "transfer",
-          normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
-          learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
-        },
+      const nextStartIndex = Math.max(0, Math.min(job.lastRowIndex, totalRows));
+      const batchRows = parsedRows.slice(nextStartIndex, nextStartIndex + batchSize);
+      if (batchRows.length === 0) {
+        await completeImportEnrichmentJob({ id: job.id, totalRows });
+        await updateImportFileCompat(job.importFileId, {
+          processingPhase: "complete",
+          processingMessage: "Transaction details finalized.",
+        });
+        results.push({ importFileId: job.importFileId, status: "done", processedRows: totalRows, totalRows });
+        continue;
+      }
+
+      const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
+        ? await prisma.accountStatementCheckpoint.findUnique({
+            where: { importFileId: job.importFileId },
+            select: { sourceMetadata: true },
+          })
+        : null;
+      const statementConfidence =
+        typeof statementCheckpoint?.sourceMetadata === "object" && statementCheckpoint.sourceMetadata !== null
+          ? Number((statementCheckpoint.sourceMetadata as Record<string, unknown>).confidence ?? 0)
+          : 0;
+      const enrichedRows = await enrichParsedRowsWithTraining({
+        workspaceId: String(importFile.workspaceId),
+        rows: coerceParsedTransactionRowsForEnrichment(batchRows),
+        statementConfidence,
+      });
+
+      const sourceIndexes = enrichedRows.map((_, index) => nextStartIndex + index + 1);
+      const transactions = await prisma.transaction.findMany({
+        where: { importFileId: job.importFileId },
+        select: { id: true, rawPayload: true, reviewStatus: true },
+      });
+      const transactionBySourceIndex = new Map<number, { id: string; reviewStatus: string }>();
+      for (const transaction of transactions) {
+        const rawPayload = transaction.rawPayload;
+        const sourceRowIndex =
+          rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+            ? Number((rawPayload as Record<string, unknown>).sourceRowIndex)
+            : 0;
+        if (Number.isFinite(sourceRowIndex) && sourceRowIndex > 0) {
+          transactionBySourceIndex.set(sourceRowIndex, {
+            id: transaction.id,
+            reviewStatus: transaction.reviewStatus,
+          });
+        }
+      }
+
+      const existingCategories = await prisma.category.findMany({
+        where: { workspaceId: String(importFile.workspaceId) },
+        select: { id: true, name: true },
+      });
+      const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
+
+      for (const [index, row] of enrichedRows.entries()) {
+        const sourceRowIndex = sourceIndexes[index] ?? nextStartIndex + index + 1;
+        const transaction = transactionBySourceIndex.get(sourceRowIndex);
+        if (!transaction || transaction.reviewStatus === "edited" || transaction.reviewStatus === "rejected") {
+          continue;
+        }
+
+        const rowType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
+        const categoryName =
+          (typeof row.categoryName === "string" && row.categoryName.trim()) || defaultCategoryForType(rowType);
+        const canonicalType = coerceTransactionTypeFromCategoryName(categoryName, rowType);
+        let categoryId = categoryByName.get(categoryName.toLowerCase());
+        if (!categoryId) {
+          const created = await prisma.category.create({
+            data: {
+              workspaceId: String(importFile.workspaceId),
+              name: categoryName,
+              type: canonicalType,
+              isSystem: false,
+            },
+            select: { id: true },
+          });
+          categoryId = created.id;
+          categoryByName.set(categoryName.toLowerCase(), categoryId);
+        }
+
+        const rowConfidence = typeof row.confidence === "number" ? row.confidence : 0;
+        const categoryConfidence = typeof row.categoryConfidence === "number" ? row.categoryConfidence : rowConfidence;
+        await prisma.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            categoryId,
+            type: canonicalType,
+            merchantClean:
+              typeof row.merchantClean === "string" && row.merchantClean.trim()
+                ? row.merchantClean.trim()
+                : typeof row.merchantRaw === "string"
+                  ? row.merchantRaw
+                  : undefined,
+            categoryConfidence,
+            parserConfidence: typeof row.parserConfidence === "number" ? row.parserConfidence : rowConfidence,
+            reviewStatus: rowConfidence >= 90 && categoryConfidence >= 90 ? "confirmed" : "pending_review",
+            isTransfer: canonicalType === "transfer",
+            normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
+            learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
+          },
+        });
+      }
+
+      const processedRows = Math.min(totalRows, nextStartIndex + batchRows.length);
+      if (processedRows >= totalRows) {
+        await completeImportEnrichmentJob({ id: job.id, totalRows });
+        await updateImportFileCompat(job.importFileId, {
+          processingPhase: "complete",
+          processingMessage: "Transaction details finalized.",
+        });
+        results.push({ importFileId: job.importFileId, status: "done", processedRows, totalRows });
+      } else {
+        await updateImportEnrichmentJobProgress({
+          id: job.id,
+          phase: "categorizing",
+          lastRowIndex: processedRows,
+          processedRows,
+          totalRows,
+          workerId,
+        });
+        results.push({ importFileId: job.importFileId, status: "running", processedRows, totalRows });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to finalize transaction details.";
+      await failImportEnrichmentJob({
+        id: job.id,
+        errorCode: "I-503",
+        errorMessage: message,
+        retryable: true,
+      });
+      results.push({
+        importFileId: job.importFileId,
+        status: "failed",
+        processedRows: job.processedRows,
+        totalRows: job.totalRows,
+        errorMessage: message,
       });
     }
+  }
 
-    await updateImportFileCompat(params.importFileId, {
-      processingPhase: "complete",
-      processingMessage: "Transaction details finalized.",
-    });
-  })().catch((error) => {
-    console.warn("Background import detail finalization failed", {
-      importFileId: params.importFileId,
+  return { processedJobs: results.length, results };
+};
+
+const processImportEnrichmentJobsInBackground = (importFileId: string) => {
+  void processImportEnrichmentJobs({ importFileId, limit: 1 }).catch((error) => {
+    console.warn("Background import enrichment job failed", {
+      importFileId,
       error,
     });
   });
@@ -2649,12 +2786,13 @@ export const processImportFileText = async (
         usedOpenAiFallback: Boolean(useOpenAiParse),
         actorUserId: options.actorUserId ?? null,
       });
-      finalizeImportedTransactionDetailsInBackground({
+      await upsertImportEnrichmentJob({
         workspaceId: String(importFile.workspaceId),
         importFileId,
-        rows,
-        statementConfidence: resolvedMetadata.confidence ?? 0,
+        totalRows: rows.length,
+        phase: "queued",
       });
+      processImportEnrichmentJobsInBackground(importFileId);
 
       return {
         imported: confirmedImportResult.imported,

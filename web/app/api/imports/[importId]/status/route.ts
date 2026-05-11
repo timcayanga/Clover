@@ -3,6 +3,7 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { fetchImportFileCompat, hasCompatibleTable } from "@/lib/data-engine";
 import { buildImportTelemetrySnapshot } from "@/lib/import-telemetry";
 import { readCheckpointWorkflowStage } from "@/lib/import-workflow";
+import { getImportEnrichmentJobByImportFileId } from "@/lib/import-enrichment-jobs";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -91,6 +92,27 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       Number(importFile.confirmedTransactionsCount ?? 0),
       statementCheckpoint?.status === "reconciled" ? checkpointRowCount : 0
     );
+    const enrichmentJob = await getImportEnrichmentJobByImportFileId(importId).catch(() => null);
+    const finalizationRemainingRows = enrichmentJob
+      ? Math.max(0, Number(enrichmentJob.totalRows ?? 0) - Number(enrichmentJob.processedRows ?? 0))
+      : 0;
+    const finalizationEstimatedSecondsRemaining =
+      enrichmentJob && enrichmentJob.status !== "done" && finalizationRemainingRows > 0
+        ? Math.max(60, Math.min(600, Math.ceil(finalizationRemainingRows / 25) * 60))
+        : 0;
+    if (enrichmentJob && enrichmentJob.status !== "done" && enrichmentJob.status !== "failed") {
+      void (async () => {
+        try {
+          const { processImportEnrichmentJobs } = await import("@/workers/import-processor");
+          await processImportEnrichmentJobs({ importFileId: importId, limit: 1 });
+        } catch (error) {
+          console.warn("Unable to resume import enrichment from status poll", {
+            importId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })();
+    }
 
     const confirmationStatus =
       importFile.status === "failed"
@@ -141,6 +163,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       canResume: telemetry.canResume,
       resumeReason: telemetry.resumeReason,
       workflowStage: resolvedWorkflowStage,
+      enrichmentJob,
+      finalizationStatus: enrichmentJob?.status ?? null,
+      finalizationPhase: enrichmentJob?.phase ?? null,
+      finalizationProcessedRows: enrichmentJob?.processedRows ?? null,
+      finalizationTotalRows: enrichmentJob?.totalRows ?? null,
+      finalizationEstimatedSecondsRemaining,
       statementCheckpoint,
     });
   } catch {

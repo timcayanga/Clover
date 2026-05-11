@@ -132,6 +132,12 @@ type ImportFile = {
   status: string;
   uploadedAt: string;
   accountId?: string | null;
+  enrichmentJob?: {
+    status?: string | null;
+    phase?: string | null;
+    processedRows?: number | null;
+    totalRows?: number | null;
+  } | null;
 };
 
 const normalizeCategoryName = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
@@ -150,6 +156,11 @@ const isImportFinalizingTransaction = (transaction: Transaction) => {
     categoryName === "other" ||
     categoryName === "needs category review"
   );
+};
+
+const isActiveEnrichmentJob = (importFile: ImportFile) => {
+  const status = importFile.enrichmentJob?.status;
+  return Boolean(status && status !== "done" && status !== "failed");
 };
 
 type StatementCheckpoint = {
@@ -1525,9 +1536,18 @@ function AccountDetailPageContent() {
     },
     [account?.institution, categories, transactions, transactionSortDirection, transactionSortField]
   );
+  const activeFinalizingImportIds = useMemo(
+    () => new Set(importFiles.filter(isActiveEnrichmentJob).map((importFile) => importFile.id)),
+    [importFiles]
+  );
   const finalizingTransactionCount = useMemo(
-    () => visibleTransactions.filter(isImportFinalizingTransaction).length,
-    [visibleTransactions]
+    () =>
+      visibleTransactions.filter(
+        (transaction) =>
+          isImportFinalizingTransaction(transaction) ||
+          (transaction.importFileId ? activeFinalizingImportIds.has(transaction.importFileId) : false)
+      ).length,
+    [activeFinalizingImportIds, visibleTransactions]
   );
   const mobileTransactionGroups = useMemo(() => {
     const groups: Array<{ date: string; label: string; transactions: Transaction[] }> = [];

@@ -57,6 +57,14 @@ enum StatementCheckpointStatus {
   mismatch
 }
 
+enum ImportEnrichmentJobStatus {
+  queued
+  running
+  done
+  failed
+  retrying
+}
+
 enum CommitmentKind {
   planned_payment
   debt
@@ -330,6 +338,7 @@ model Workspace {
   categories               Category[]
   transactions             Transaction[]
   importFiles              ImportFile[]
+  importEnrichmentJobs     ImportEnrichmentJob[]
   documentImports          DocumentImport[]
   statementCheckpoints     AccountStatementCheckpoint[]
   financialCommitments     FinancialCommitment[]
@@ -508,12 +517,40 @@ model ImportFile {
   transactions               Transaction[]
   trainingSignals            TrainingSignal[]
   statementCheckpoint        AccountStatementCheckpoint?
+  enrichmentJob              ImportEnrichmentJob?
   dataQaRuns                 DataQaRun[]
   dataQaFindings             DataQaFinding[]
 
   @@index([workspaceId])
   @@index([accountId])
   @@index([status])
+}
+
+model ImportEnrichmentJob {
+  id             String                    @id @default(cuid())
+  workspaceId    String
+  importFileId   String                    @unique
+  status         ImportEnrichmentJobStatus @default(queued)
+  phase          String                    @default("queued")
+  lastRowIndex   Int                       @default(0)
+  totalRows      Int                       @default(0)
+  processedRows  Int                       @default(0)
+  attempts       Int                       @default(0)
+  errorCode      String?
+  errorMessage   String?
+  lockedAt       DateTime?
+  lockedBy       String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  workspace      Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  importFile     ImportFile                @relation(fields: [importFileId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([lockedAt])
+  @@index([updatedAt])
 }
 
 model DocumentImport {
