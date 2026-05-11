@@ -35,12 +35,33 @@ export function ImportUploadDock({
 
   const value = clampProgress(progress);
   const donutStyle = { ["--progress" as any]: `${value}%` } as CSSProperties;
+  const safeFileTotal = Math.max(0, fileTotal);
+  const safeFileIndex =
+    safeFileTotal > 0 ? Math.min(Math.max(1, fileIndex || 1), safeFileTotal) : Math.max(0, fileIndex || 0);
+  const safeCompletedFiles = safeFileTotal > 0 ? Math.min(Math.max(0, completedFiles), safeFileTotal) : Math.max(0, completedFiles);
+  const isComplete = safeFileTotal > 0 && safeCompletedFiles >= safeFileTotal && value >= 100;
   const fileLabel =
-    fileTotal > 0
+    safeFileTotal > 0
       ? fileName
-        ? `File ${fileIndex} of ${fileTotal}`
-        : `Uploaded ${completedFiles} of ${fileTotal}`
+        ? `File ${safeFileIndex} of ${safeFileTotal}`
+        : `${safeCompletedFiles} of ${safeFileTotal} files ready`
       : "Clover is getting things ready";
+  const progressLabel =
+    safeFileTotal > 0
+      ? isComplete
+        ? `${safeCompletedFiles} of ${safeFileTotal}`
+        : fileName
+          ? `Processing ${safeFileIndex} of ${safeFileTotal}`
+          : `${safeCompletedFiles} of ${safeFileTotal}`
+      : "Preparing";
+  const progressCaption =
+    safeFileTotal > 0
+      ? isComplete
+        ? "files ready"
+        : fileName
+          ? "current file"
+          : "files ready"
+      : "import queue";
 
   return (
     <div className={`import-upload-dock import-upload-dock--${tone}`} role="status" aria-live="polite">
@@ -69,10 +90,8 @@ export function ImportUploadDock({
           </div>
 
           <div className="import-upload-dock__meta">
-            <strong>
-              {completedFiles} of {fileTotal}
-            </strong>
-            <span>files uploaded</span>
+            <strong>{progressLabel}</strong>
+            <span>{progressCaption}</span>
           </div>
         </div>
       </div>

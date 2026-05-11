@@ -12,11 +12,32 @@ const isCompletedSummary = (activity: ImportActivitySnapshot | null) =>
 
 export function GlobalImportActivity() {
   const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
+  const [pageModalActive, setPageModalActive] = useState(() =>
+    typeof document === "undefined" ? false : document.body.hasAttribute("data-clover-page-modal")
+  );
 
   useEffect(() => subscribeImportActivity(() => setActivity(readImportActivity())), []);
 
   useEffect(() => {
-    if (!activity || (activity.status !== "error" && activity.status !== "done")) {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const updatePageModalState = () => {
+      setPageModalActive(document.body.hasAttribute("data-clover-page-modal"));
+    };
+
+    updatePageModalState();
+    const observer = new MutationObserver(updatePageModalState);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["data-clover-page-modal"] });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activity || activity.status !== "done") {
       return;
     }
 
@@ -30,7 +51,7 @@ export function GlobalImportActivity() {
     };
   }, [activity]);
 
-  if (!activity || activity.surface === "modal") {
+  if (!activity || (activity.surface === "modal" && pageModalActive)) {
     return null;
   }
 
