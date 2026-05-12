@@ -1378,9 +1378,6 @@ export function SettingsHub({
                       <p className="eyebrow">Confirm deletion</p>
                       <h4 id="settings-delete-modal-title">{dataDeleteCopy[dataDeleteModal.scope].confirmTitle}</h4>
                     </div>
-                    <button className="button button-secondary button-small" type="button" onClick={closeDeleteModal} disabled={dataDeleteInFlight}>
-                      Cancel
-                    </button>
                   </div>
 
                   <p id="settings-delete-modal-copy" className="account-actions-modal__copy">
@@ -1395,6 +1392,9 @@ export function SettingsHub({
                   ) : null}
 
                   <div className="account-actions-modal__actions">
+                    <button className="button button-secondary button-small" type="button" onClick={closeDeleteModal} disabled={dataDeleteInFlight}>
+                      Cancel
+                    </button>
                     <button className="button button-danger button-small" type="button" onClick={() => void handleDeleteConfirm()} disabled={dataDeleteInFlight}>
                       {dataDeleteInFlight ? "Deleting..." : dataDeleteCopy[dataDeleteModal.scope].confirmLabel}
                     </button>
