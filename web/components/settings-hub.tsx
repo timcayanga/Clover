@@ -337,6 +337,55 @@ export function SettingsHub({
     disableWorkspaceBootstrap,
   ]);
 
+  const resolveWorkspaceId = async () => {
+    if (workspaceId || disableWorkspaceBootstrap) {
+      return workspaceId;
+    }
+
+    const response = await fetch("/api/settings/bootstrap", {
+      cache: "no-store",
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      workspaceId?: string;
+      workspaceName?: string;
+      selectedProfileId?: string;
+      firstName?: string | null;
+      lastName?: string | null;
+      email?: string;
+      imageUrl?: string | null;
+      planTier?: "free" | "pro";
+      paypalClientId?: string | null;
+      paypalMonthlyPlanId?: string | null;
+      paypalAnnualPlanId?: string | null;
+      paypalBuyerCountry?: string | null;
+      error?: string;
+    };
+
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Unable to load workspace details.");
+    }
+
+    const nextWorkspaceId = payload.workspaceId ?? "";
+    if (nextWorkspaceId) {
+      setWorkspaceId(nextWorkspaceId);
+      setWorkspaceName(payload.workspaceName ?? "Personal");
+      setSelectedProfileId(payload.selectedProfileId ?? nextWorkspaceId);
+      setActiveProfileId(payload.selectedProfileId ?? nextWorkspaceId);
+      setFirstName(payload.firstName ?? null);
+      setLastName(payload.lastName ?? null);
+      setAvatarUrl(payload.imageUrl ?? null);
+      setEmail(payload.email ?? email);
+      setPlanTier(payload.planTier ?? "free");
+      setPaypalClientId(payload.paypalClientId ?? null);
+      setPaypalMonthlyPlanId(payload.paypalMonthlyPlanId ?? null);
+      setPaypalAnnualPlanId(payload.paypalAnnualPlanId ?? null);
+      setPaypalBuyerCountry(payload.paypalBuyerCountry ?? null);
+    }
+
+    return nextWorkspaceId;
+  };
+
   useEffect(() => {
     setActiveProfileId(selectedProfileId);
   }, [selectedProfileId]);
@@ -493,7 +542,15 @@ export function SettingsHub({
   }, [helperTextVisible]);
 
   const runDownload = async (path: string, fileName: string) => {
-    const response = await fetch(path);
+    const resolvedWorkspaceId = await resolveWorkspaceId();
+    if (!resolvedWorkspaceId) {
+      throw new Error("Workspace is still loading.");
+    }
+
+    const url = new URL(path, window.location.origin);
+    url.searchParams.set("workspaceId", resolvedWorkspaceId);
+
+    const response = await fetch(url.toString());
     if (!response.ok) {
       throw new Error("Unable to prepare the download.");
     }
@@ -630,13 +687,18 @@ export function SettingsHub({
   };
 
   const runDelete = async (scope: "transactions" | "balances" | "accounts") => {
+    const resolvedWorkspaceId = await resolveWorkspaceId();
+    if (!resolvedWorkspaceId) {
+      throw new Error("Workspace is still loading.");
+    }
+
     const response = await fetch("/api/settings/data", {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        workspaceId,
+        workspaceId: resolvedWorkspaceId,
         beforeDate: historyCutoff,
         scope,
       }),
@@ -684,6 +746,10 @@ export function SettingsHub({
         setWorkspaceName("Settings");
         setSelectedProfileId("");
         setActiveProfileId("");
+        setProfileList([]);
+        setProfilesLoaded(false);
+        setProfilesLoading(false);
+        setProfileListMessage(null);
         setBillingSubscription(null);
         setPlanUsage({
           accountCount: 0,
@@ -1143,13 +1209,13 @@ export function SettingsHub({
                     <button
                       type="button"
                       className="button button-secondary button-small"
-                      disabled={isPending || !workspaceReady}
+                      disabled={isPending}
                       onClick={() => {
                         setStatusMessage(null);
                         void (async () => {
                           try {
                             await runDownload(
-                              `/api/settings/export/transactions?workspaceId=${encodeURIComponent(workspaceId)}`,
+                              "/api/settings/export/transactions",
                               "clover-transactions.pdf"
                             );
                             setStatusMessage("Transactions download started.");
@@ -1171,13 +1237,13 @@ export function SettingsHub({
                     <button
                       type="button"
                       className="button button-secondary button-small"
-                      disabled={isPending || !workspaceReady}
+                      disabled={isPending}
                       onClick={() => {
                         setStatusMessage(null);
                         void (async () => {
                           try {
                             await runDownload(
-                              `/api/settings/export/account-balances?workspaceId=${encodeURIComponent(workspaceId)}`,
+                              "/api/settings/export/account-balances",
                               "clover-account-balances.pdf"
                             );
                             setStatusMessage("Account balances download started.");
@@ -1212,7 +1278,7 @@ export function SettingsHub({
                     <button
                       type="button"
                       className="button button-danger button-small"
-                      disabled={isPending || !workspaceReady}
+                      disabled={isPending}
                       onClick={() => openDeleteModal("transactions")}
                     >
                       Delete transactions
@@ -1229,7 +1295,7 @@ export function SettingsHub({
                     <button
                       type="button"
                       className="button button-danger button-small"
-                      disabled={isPending || !workspaceReady}
+                      disabled={isPending}
                       onClick={() => openDeleteModal("accounts")}
                     >
                       Delete accounts
@@ -1246,7 +1312,7 @@ export function SettingsHub({
                     <button
                       type="button"
                       className="button button-danger button-small"
-                      disabled={isPending || !workspaceReady}
+                      disabled={isPending}
                       onClick={() => openDeleteModal("all")}
                     >
                       Delete all data

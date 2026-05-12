@@ -111,15 +111,18 @@ export const ensureStarterWorkspace = async (
       ? await getOrCreateCurrentUser(userOrClerkUserId)
       : userOrClerkUserId;
 
-  const existing = await prisma.workspace.findFirst({
-    where: { userId: user.id },
+  const existingPersonal = await prisma.workspace.findFirst({
+    where: {
+      userId: user.id,
+      type: "personal",
+    },
     select: starterWorkspaceSelect,
   });
 
-  if (existing) {
-    await ensureStarterCashAccount(existing.id);
+  if (existingPersonal) {
+    await ensureStarterCashAccount(existingPersonal.id);
 
-    return existing;
+    return existingPersonal;
   }
 
   const workspace = await prisma.workspace.create({

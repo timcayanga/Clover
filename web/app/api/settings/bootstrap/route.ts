@@ -33,6 +33,17 @@ export async function GET() {
       orderBy: [{ createdAt: "asc" }],
     });
 
+    if (!selectedWorkspace) {
+      const starterWorkspace = await ensureStarterWorkspace(user);
+      selectedWorkspace = await prisma.workspace.findUnique({
+        where: { id: starterWorkspace.id },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+    }
+
     if (!selectedWorkspace && selectedWorkspaceCookieId) {
       selectedWorkspace = await prisma.workspace.findFirst({
         where: { id: selectedWorkspaceCookieId, userId: user.id },
@@ -41,25 +52,6 @@ export async function GET() {
           name: true,
         },
       });
-    }
-
-    if (!selectedWorkspace) {
-      selectedWorkspace = await prisma.workspace.findFirst({
-        where: { userId: user.id },
-        select: {
-          id: true,
-          name: true,
-        },
-        orderBy: [{ updatedAt: "desc" }, { createdAt: "asc" }],
-      });
-    }
-
-    if (!selectedWorkspace) {
-      const starterWorkspace = await ensureStarterWorkspace(user);
-      selectedWorkspace = {
-        id: starterWorkspace.id,
-        name: starterWorkspace.name,
-      };
     }
 
     return NextResponse.json({
