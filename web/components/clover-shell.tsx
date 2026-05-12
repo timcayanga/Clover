@@ -541,10 +541,16 @@ export function CloverShell({
     setOpenMenu(null);
 
     const buttonRect = notificationsButtonRef.current?.getBoundingClientRect();
+    const sidebarRect = shellRef.current?.querySelector(".sidebar")?.getBoundingClientRect();
     if (buttonRect) {
       const popoverWidth = 268;
+      const sidebarRight = sidebarRect?.right ?? buttonRect.right;
+      const left = sidebarRight + popoverWidth + 24 <= window.innerWidth
+        ? sidebarRight + 12
+        : Math.max(12, buttonRect.left - popoverWidth - 12);
+
       setNotificationsPopoverStyle({
-        left: Math.min(Math.max(12, buttonRect.right + 12), window.innerWidth - popoverWidth - 12),
+        left: Math.min(left, window.innerWidth - popoverWidth - 12),
         bottom: Math.max(12, window.innerHeight - buttonRect.top + 12),
       });
     }
