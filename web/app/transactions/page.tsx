@@ -13,7 +13,8 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { createPortal, flushSync } from "react-dom";
-import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell, useCloverChrome } from "@/components/clover-shell";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
@@ -21,6 +22,7 @@ import { CurrencySelector } from "@/components/currency-selector";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
+import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
 import { getCategoryIconTone } from "@/lib/category-icons";
 import {
   analyticsOnceKey,
@@ -38,6 +40,7 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { clearImportActivity, readImportActivity } from "@/lib/import-activity";
+import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
   deriveCachedCategoriesFromTransactions,
@@ -246,6 +249,7 @@ type Category = {
 
 type Transaction = {
   id: string;
+  workspaceId: string;
   accountId: string;
   accountName: string;
   institution?: string | null;
@@ -262,6 +266,7 @@ type Transaction = {
   description?: string | null;
   isTransfer: boolean;
   isExcluded: boolean;
+  splitBill?: { id: string; title: string } | null;
   source?: string | null;
   importFileId?: string | null;
   warningReason?: string | null;
@@ -1804,6 +1809,7 @@ export default function TransactionsPage() {
 
 function TransactionsPageContent() {
   const { closeChrome } = useCloverChrome();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlSearchParams = useMemo(() => searchParams ?? new URLSearchParams(), [searchParams]);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -1874,6 +1880,13 @@ function TransactionsPageContent() {
   const hasSelectedTransactions = selectedTransactionCount > 0;
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
   const [transactionDeleteConfirmOpen, setTransactionDeleteConfirmOpen] = useState(false);
+  const [transactionSplitBillOpen, setTransactionSplitBillOpen] = useState(false);
+  const [transactionSplitBillDraft, setTransactionSplitBillDraft] = useState<SplitBillTransactionLinkDraft>({
+    groupId: "",
+    participantNames: [],
+  });
+  const [transactionSplitBillSaving, setTransactionSplitBillSaving] = useState(false);
+  const [transactionSplitBillError, setTransactionSplitBillError] = useState<string | null>(null);
   const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>("ltd");
   const [dateFilterAnchor, setDateFilterAnchor] = useState(todayIso);
   const [customStart, setCustomStart] = useState("");
@@ -3431,6 +3444,12 @@ function TransactionsPageContent() {
     setActiveWarningTransactionId(null);
     setSelectedTransaction(transaction);
     setTransactionDeleteConfirmOpen(false);
+    setTransactionSplitBillOpen(false);
+    setTransactionSplitBillDraft({
+      groupId: "",
+      participantNames: [],
+    });
+    setTransactionSplitBillSaving(false);
     setDetailDraft({
       ...createDetailDraft(transaction),
       categoryId: transaction.categoryId ?? otherCategoryId,
@@ -3545,7 +3564,53 @@ function TransactionsPageContent() {
     setSelectedTransaction(null);
     setDetailDraft(null);
     setTransactionDeleteConfirmOpen(false);
+    setTransactionSplitBillOpen(false);
+    setTransactionSplitBillDraft({
+      groupId: "",
+      participantNames: [],
+    });
+    setTransactionSplitBillSaving(false);
+    setTransactionSplitBillError(null);
     setActiveWarningTransactionId(null);
+  };
+
+  const createTransactionSplitBill = async () => {
+    if (!selectedTransaction) {
+      return;
+    }
+
+    const transactionTitle = (detailDraft?.merchantClean ?? selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw).trim();
+    const transactionAmount = detailDraft?.amount ?? selectedTransaction.amount;
+    const transactionCurrency = detailDraft?.currency ?? selectedTransaction.currency;
+    const transactionDate = detailDraft?.date ?? selectedTransaction.date.slice(0, 10);
+
+    setTransactionSplitBillSaving(true);
+    try {
+      const createdBill = (await createSplitBillFromTransaction({
+        workspaceId: selectedTransaction.workspaceId,
+        transactionId: selectedTransaction.id,
+        transactionTitle: transactionTitle || "Split Bill",
+        billDate: transactionDate,
+        currency: transactionCurrency,
+        amount: transactionAmount,
+        draft: transactionSplitBillDraft,
+      })) as { id: string; title: string } | null;
+
+      setTransactionSplitBillOpen(false);
+      setTransactionSplitBillDraft({
+        groupId: "",
+        participantNames: [],
+      });
+      setTransactionSplitBillError(null);
+      if (createdBill) {
+        setSelectedTransaction((current) => (current ? { ...current, splitBill: createdBill } : current));
+      }
+      router.refresh();
+    } catch (error) {
+      setTransactionSplitBillError(error instanceof Error ? error.message : "Unable to create split bill.");
+    } finally {
+      setTransactionSplitBillSaving(false);
+    }
   };
 
   const toggleSelectedTransaction = (transactionId: string, selected: boolean) => {
@@ -3877,6 +3942,7 @@ function TransactionsPageContent() {
       const receiptLineItems = sanitizeReceiptLineItems(manualForm.receiptLineItems);
       const optimisticTransaction: Transaction = {
         id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        workspaceId: activeWorkspaceId,
         accountId,
         accountName,
         categoryId: categoryId ?? null,
@@ -7079,6 +7145,40 @@ function TransactionsPageContent() {
                     })}
                   </div>
                 </div>
+              ) : null}
+            </div>
+
+            <div className="transaction-drawer-split-bill">
+              {selectedTransaction.splitBill ? (
+                <Link className="button button-secondary button-small" href={`/split-bill/${selectedTransaction.splitBill.id}`} prefetch={false}>
+                  Open In Split Bills
+                </Link>
+              ) : (
+                <button
+                  className="button button-secondary button-small"
+                  type="button"
+                  onClick={() => {
+                    setTransactionSplitBillError(null);
+                    setTransactionSplitBillOpen((current) => !current);
+                  }}
+                >
+                  {transactionSplitBillOpen ? "Hide Split Bills" : "Add To Split Bills"}
+                </button>
+              )}
+              {transactionSplitBillError ? <p className="field-help field-help--compact transaction-drawer-split-bill__error">{transactionSplitBillError}</p> : null}
+              {transactionSplitBillOpen && !selectedTransaction.splitBill ? (
+                <SplitBillTransactionLinkFields
+                  workspaceId={selectedTransaction.workspaceId}
+                  draft={transactionSplitBillDraft}
+                  onChange={setTransactionSplitBillDraft}
+                  open={transactionSplitBillOpen}
+                  title="Add transaction to Split Bills"
+                  helperText="Choose a group or add names. The split bill will be created from this transaction."
+                  actionLabel="Create split bill"
+                  onAction={createTransactionSplitBill}
+                  actionBusy={transactionSplitBillSaving}
+                  actionDisabled={!transactionSplitBillDraft.groupId.trim() && transactionSplitBillDraft.participantNames.length === 0}
+                />
               ) : null}
             </div>
 

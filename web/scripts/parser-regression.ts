@@ -1601,6 +1601,39 @@ const main = async () => {
     throw new Error(`expected named item settlement to be uneven, got owed=${namedItemOwed.map((value) => value.toFixed(2)).join(", ")}`);
   }
 
+  const pettyCashVoucherPreview = parseReceiptText([
+    "PETTY CASH VOUCHER",
+    "Approved for payment:",
+    "Paid by:",
+    "Received Payment:",
+    "Lamba - 2¢9",
+    "Bbw bowl - 3ea",
+    "1dambo <akd - eq",
+    "Chas Oyakedsf - 299",
+    "Gack behwaton - 2927",
+    "TOTAL 2467.30",
+  ].join("\n"));
+  if (pettyCashVoucherPreview.receiptAccountMatch?.accountName !== "Petty Cash") {
+    throw new Error(
+      `expected petty cash voucher to resolve Petty Cash account, got ${pettyCashVoucherPreview.receiptAccountMatch?.accountName ?? "null"}`
+    );
+  }
+
+  const visaTicketPreview = parseReceiptText([
+    "Passenger: Cayanga Timothy Gunther Mr (ADT)",
+    "ELECTRONIC TICKET RECEIPT",
+    "PAYMENT DETAILS FARE DETAILS",
+    "Form of payment: FFSR007950084-M9500-PHP115* Fare equivalent: PHP 115",
+    "Form of payment: CC VI XXXXXXXXXXXX6003 PHP 550LI",
+    "PAYMENT DETAILS FARE DETAILS",
+    "Form of payment: CC VI XXXXXXXXXXXX6003 XXXX Tax and Other charges:",
+  ].join("\n"));
+  if (visaTicketPreview.receiptAccountMatch?.accountName !== "Visa" || visaTicketPreview.receiptAccountMatch?.accountLast4 !== "6003") {
+    throw new Error(
+      `expected airline ticket receipt to resolve Visa 6003, got ${visaTicketPreview.receiptAccountMatch?.accountName ?? "null"} ${visaTicketPreview.receiptAccountMatch?.accountLast4 ?? "null"}`
+    );
+  }
+
   const jarandjamReceiptPreview = parseReceiptText([
     "Br    =",
     "= a",

@@ -131,6 +131,7 @@ export const splitBillItemOrderBy: Prisma.SplitBillItemOrderByWithRelationInput[
 export type SplitBillSerializedBill = {
   id: string;
   userId: string;
+  transactionId: string | null;
   groupId: string | null;
   title: string;
   note: string | null;
@@ -169,6 +170,17 @@ export type SplitBillSerializedBill = {
     amount: string;
     note: string | null;
   }>;
+  transaction: {
+    id: string;
+    merchantRaw: string;
+    merchantClean: string | null;
+    date: string;
+    amount: string;
+    currency: string;
+    account: {
+      name: string;
+    } | null;
+  } | null;
   settlement: SplitBillSettlement;
 };
 
@@ -1295,12 +1307,35 @@ const detectReceiptAccountMatchFromText = (text: string): ReceiptPreviewAccountM
     return null;
   }
 
+  const pettyCashMatch = normalized.match(/\b(?:petty\s+cash\s+voucher|cash\s+voucher)\b/i);
+  if (pettyCashMatch) {
+    return {
+      accountName: "Petty Cash",
+      accountLast4: null,
+      confidence: 90,
+      reason: "Document is a petty cash voucher or cash voucher.",
+    };
+  }
+
+  const visaPaymentMatch = normalized.match(
+    /\b(?:form\s+of\s+payment|payment\s+details|paid\s+with|payment\s+method)\b[\s\S]{0,80}?\b(?:cc\s+)?(?:visa|vi)\s+x{4,}(?<last4>\d{4})\b/i
+  );
+  if (visaPaymentMatch?.groups?.last4) {
+    return {
+      accountName: "Visa",
+      accountLast4: visaPaymentMatch.groups.last4,
+      confidence: 95,
+      reason: `Form of payment shows Visa ending ${visaPaymentMatch.groups.last4}.`,
+    };
+  }
+
   const accountSignals: Array<{ pattern: RegExp; accountName: string; confidence: number }> = [
     { pattern: /\b(?:visa|vsa)\b/i, accountName: "Visa", confidence: 80 },
     { pattern: /\bmaster\s*card\b|\bmastercard\b/i, accountName: "Mastercard", confidence: 80 },
     { pattern: /\bamex\b|\bamerican express\b/i, accountName: "American Express", confidence: 80 },
     { pattern: /\bdebit card\b/i, accountName: "Debit Card", confidence: 72 },
     { pattern: /\bcredit card\b/i, accountName: "Credit Card", confidence: 72 },
+    { pattern: /\b(?:credit\s+card|debit\s+card|card\s+payment|payment\s+card|paid\s+by|paid\s+with|form\s+of\s+payment|payment\s+details|payment\s+method|approved\s+for\s+payment|received\s+payment)\b/i, accountName: "Card", confidence: 58 },
     { pattern: /\bgcash\b/i, accountName: "GCash", confidence: 78 },
     { pattern: /\bmaya\b|\bpaymaya\b/i, accountName: "Maya", confidence: 78 },
     { pattern: /\bgrabpay\b/i, accountName: "GrabPay", confidence: 76 },
@@ -1909,6 +1944,7 @@ export const mergeSplitBillReceiptSummary = (
 export const serializeSplitBillRecord = (bill: {
   id: string;
   userId: string;
+  transactionId: string | null;
   groupId: string | null;
   title: string;
   note: string | null;
@@ -1947,6 +1983,17 @@ export const serializeSplitBillRecord = (bill: {
     amount: { toString: () => string };
     note: string | null;
   }>;
+  transaction?: {
+    id: string;
+    merchantRaw: string;
+    merchantClean: string | null;
+    date: Date;
+    amount: { toString: () => string };
+    currency: string;
+    account: {
+      name: string;
+    } | null;
+  } | null;
 }): SplitBillSerializedBill => {
   const settlement = buildSplitBillSettlement({
     participants: bill.participants,
@@ -1972,6 +2019,7 @@ export const serializeSplitBillRecord = (bill: {
   return {
     id: bill.id,
     userId: bill.userId,
+    transactionId: bill.transactionId,
     groupId: bill.groupId,
     title: bill.title,
     note: bill.note,
@@ -2015,6 +2063,21 @@ export const serializeSplitBillRecord = (bill: {
       amount: payment.amount.toString(),
       note: payment.note,
     })),
+    transaction: bill.transaction
+      ? {
+          id: bill.transaction.id,
+          merchantRaw: bill.transaction.merchantRaw,
+          merchantClean: bill.transaction.merchantClean,
+          date: bill.transaction.date.toISOString(),
+          amount: bill.transaction.amount.toString(),
+          currency: bill.transaction.currency,
+          account: bill.transaction.account
+            ? {
+                name: bill.transaction.account.name,
+              }
+            : null,
+        }
+      : null,
     settlement,
   };
 };
