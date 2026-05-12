@@ -71,12 +71,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       savedTransactionsCount,
       statementCheckpoint?.status === "reconciled" ? checkpointRowCount : 0
     );
-    if (importFile.status === "failed" && confirmedTransactionsCount > 0) {
+    const hasVisibleImportData = confirmedTransactionsCount > 0 || parsedRowsCount > 0 || checkpointRowCount > 0;
+    if (importFile.status === "failed" && hasVisibleImportData) {
       importFile =
         (await updateImportFileCompat(importId, {
           status: "done",
           processingPhase: "finalizing_enrichment",
-          processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
+          processingMessage:
+            confirmedTransactionsCount > 0
+              ? "Transactions are visible. Clover is cleaning up names and categories in the background."
+              : "Account details are visible. Clover is finishing transaction cleanup in the background.",
           confirmedTransactionsCount,
         }).catch(() => null)) ?? importFile;
     }

@@ -2,6 +2,8 @@ import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { buildImportKey } from "@/lib/import-keys";
 import {
   detectStatementMetadataFromText,
+  countParsedTransactionRows,
+  countTransactionsByImportFileCompat,
   fetchImportFileCompat,
   insertImportFileCompat,
   loadStatementTemplate,
@@ -535,11 +537,25 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     console.error("Import processing failed", { stage, error: summarizeErrorForLog(error) });
     const errorMessage = error instanceof Error ? error.message || "Unable to process import" : "Unable to process import";
     if (importId) {
-      await updateImportFileCompat(importId, {
-        status: "failed",
-        processingPhase: null,
-        processingMessage: errorMessage,
-      }).catch(() => null);
+      const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
+      const parsedRowsCount = await countParsedTransactionRows(importId).catch(() => 0);
+      if (savedTransactionsCount > 0 || parsedRowsCount > 0) {
+        await updateImportFileCompat(importId, {
+          status: "done",
+          processingPhase: "finalizing_enrichment",
+          processingMessage:
+            savedTransactionsCount > 0
+              ? "Transactions are visible. Clover is cleaning up names and categories in the background."
+              : "Account details are visible. Clover is finishing transaction cleanup in the background.",
+          confirmedTransactionsCount: savedTransactionsCount,
+        }).catch(() => null);
+      } else {
+        await updateImportFileCompat(importId, {
+          status: "failed",
+          processingPhase: null,
+          processingMessage: errorMessage,
+        }).catch(() => null);
+      }
     }
     const detectedLimit = detectLimitError(errorMessage);
     if (detectedLimit) {

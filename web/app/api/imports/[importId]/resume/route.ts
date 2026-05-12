@@ -32,19 +32,26 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           where: { importFileId: importId },
         })
       : null;
-    const parsedRowsCount = Number(importFile.parsedRowsCount ?? 0);
+    const parsedRowsCount = Math.max(Number(importFile.parsedRowsCount ?? 0), Number(statementCheckpoint?.rowCount ?? 0));
     const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
     const confirmedTransactionsCount = Math.max(Number(importFile.confirmedTransactionsCount ?? 0), savedTransactionsCount);
-    if (importFile.status === "failed" && confirmedTransactionsCount > 0) {
+    const hasVisibleImportData = confirmedTransactionsCount > 0 || parsedRowsCount > 0;
+    if (importFile.status === "failed" && hasVisibleImportData) {
       await updateImportFileCompat(importId, {
         status: "done",
         processingPhase: "finalizing_enrichment",
-        processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
+        processingMessage:
+          confirmedTransactionsCount > 0
+            ? "Transactions are visible. Clover is cleaning up names and categories in the background."
+            : "Account details are visible. Clover is finishing transaction cleanup in the background.",
         confirmedTransactionsCount,
       });
       importFile.status = "done";
       importFile.processingPhase = "finalizing_enrichment";
-      importFile.processingMessage = "Transactions are visible. Clover is cleaning up names and categories in the background.";
+      importFile.processingMessage =
+        confirmedTransactionsCount > 0
+          ? "Transactions are visible. Clover is cleaning up names and categories in the background."
+          : "Account details are visible. Clover is finishing transaction cleanup in the background.";
       importFile.confirmedTransactionsCount = confirmedTransactionsCount;
     }
     const checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);

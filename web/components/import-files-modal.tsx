@@ -2168,32 +2168,27 @@ export function ImportFilesModal({
             canResume ||
             telemetryPhase === "repair_needed"
         );
+        const hasVisibleImportDataSignal = Boolean(
+          parsedRowsCount > 0 ||
+            confirmedTransactionsCount > 0 ||
+            checkpointBalance ||
+            checkpointAccountId ||
+            processingIdentity?.accountName ||
+            processingIdentity?.accountNumber
+        );
 
         if (importFile?.status === "failed" && parsedRowsCount === 0 && confirmedTransactionsCount === 0) {
-          if (hasRecoverableImportSignal && attempt < 239) {
-            emitItemUpdate({
-              status: "importing",
-              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
-              progressLabel: telemetryLabel ?? "Finalizing import",
-            });
-            emitImportActivity({
-              workspaceId,
-              surface: importActivitySurfaceRef.current,
-              status: "active",
-              fileName: summaryContext.fileName,
-              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
-              fileTotal: items.length,
-              completedFiles: completedFileCount,
-              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
-              detail: getTelemetryDetail(
-                "Clover is finalizing the imported account",
-                telemetryMessage,
-                telemetryLabel,
-                resumeReason
-              ),
-              summary: null,
-              errorMessage: null,
-            });
+          if (hasVisibleImportDataSignal) {
+            closeImportAsRecoverable(
+              itemId,
+              summaryContext.fileName,
+              "Account details are visible. Clover will keep cleaning up names and categories in the background.",
+              "Visible in Clover"
+            );
+            return;
+          }
+
+          if (hasRecoverableImportSignal && attempt < 6) {
             await sleep(800);
             continue;
           }
@@ -3509,32 +3504,14 @@ export function ImportFilesModal({
       const resumeReason = typeof payload.resumeReason === "string" ? payload.resumeReason : null;
 
       if (importStatus === "failed") {
-        if ((parsedRowsCount > 0 || confirmedTransactionsCount > 0) && attempt < 239) {
-          updateItem(itemId, {
-            status: "importing",
-            progress: 90,
-            progressLabel: telemetryLabel ?? "Finalizing import",
-          });
-          publishImportActivity({
-            workspaceId,
-            surface: importActivitySurfaceRef.current,
-            status: "active",
+        if (parsedRowsCount > 0 || confirmedTransactionsCount > 0) {
+          closeImportAsRecoverable(
+            itemId,
             fileName,
-            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
-            fileTotal: items.length,
-            completedFiles: completedFileCount,
-            progress: 90,
-            detail: getTelemetryDetail(
-              "Clover is finalizing the imported file",
-              telemetryMessage,
-              telemetryLabel,
-              resumeReason
-            ),
-            summary: null,
-            errorMessage: null,
-          });
-          await sleep(800);
-          continue;
+            "The file is visible in Clover. Clover will keep cleaning up names and categories in the background.",
+            "Visible in Clover"
+          );
+          return true;
         }
         closeImportAfterError(
           itemId,
@@ -4568,9 +4545,14 @@ export function ImportFilesModal({
                 recoverableIdentity?.institution ?? null
               ).catch(() => [])
             : [];
+        const recoveredRowsCount = Math.max(
+          recoverableConfirmedRowsCount,
+          recoverableParsedRowsCount,
+          recoverablePreviewTransactions.length
+        );
         const recoveredSummary = buildOptimisticUploadSummary(
           item.file.name,
-          Math.max(recoverableConfirmedRowsCount, recoverableParsedRowsCount),
+          recoveredRowsCount,
           fallbackAccountId,
           recoverableIdentity?.accountName ?? item.file.name,
           recoverableIdentity?.institution ?? null,
@@ -4600,13 +4582,48 @@ export function ImportFilesModal({
 
         seedImportedWorkspaceCaches(workspaceId, finalizedRecoveredSummary);
         await Promise.resolve(onImported(finalizedRecoveredSummary));
+        if (recoveredRowsCount > 0) {
+          updateItem(itemId, {
+            status: "done",
+            confirmationState: "confirmed",
+            error: null,
+            errorCode: null,
+            errorTitle: null,
+            errorNextSteps: null,
+            importFileId,
+            targetAccountId: fallbackAccountId,
+            importedRows: recoveredRowsCount,
+            progress: 100,
+            progressLabel: "Visible in Clover",
+          });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "done",
+            fileName: item.file.name,
+            fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: Math.min(items.length, completedFileCount + 1),
+            progress: 100,
+            detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
+            summary: finalizedRecoveredSummary,
+            errorMessage: null,
+          });
+
+          return {
+            status: "done",
+            importedRows: recoveredRowsCount,
+            summary: finalizedRecoveredSummary,
+          };
+        }
+
         updateItem(itemId, {
           status: "importing",
           confirmationState: "staged",
           error: null,
           importFileId,
           targetAccountId: fallbackAccountId,
-          importedRows: Math.max(recoverableConfirmedRowsCount, recoverableParsedRowsCount) || 0,
+          importedRows: recoveredRowsCount || 0,
           progress: IMPORT_PROGRESS.loadingAccount,
           progressLabel: "Loading account",
         });
@@ -4625,7 +4642,7 @@ export function ImportFilesModal({
               institution: recoverableIdentity?.institution ?? null,
               accountNumber: recoverableIdentity?.accountNumber ?? null,
             },
-            Math.max(recoverableConfirmedRowsCount, recoverableParsedRowsCount)
+            recoveredRowsCount
           ),
           summary: null,
           errorMessage: null,
@@ -4653,7 +4670,7 @@ export function ImportFilesModal({
 
         return {
           status: "staged",
-          importedRows: Math.max(recoverableConfirmedRowsCount, recoverableParsedRowsCount) || null,
+          importedRows: recoveredRowsCount || null,
           summary: finalizedRecoveredSummary,
         };
       }
