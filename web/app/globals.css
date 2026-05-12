@@ -13801,6 +13801,99 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   transform: rotate(180deg);
 }
 
+.transactions-split-bill-link-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(3, 168, 192, 0.18);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: var(--shadow-soft);
+}
+
+.transactions-split-bill-link-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.transactions-split-bill-link-panel__toggle-row {
+  display: grid;
+  gap: 10px;
+}
+
+.transactions-split-bill-link-panel__participants {
+  display: grid;
+  gap: 8px;
+}
+
+.transactions-split-bill-link-panel__participants-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.transactions-split-bill-link-panel__group-chip,
+.transactions-split-bill-link-panel__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(243, 247, 250, 0.96);
+  border: 1px solid rgba(219, 227, 232, 0.9);
+  color: var(--text-strong);
+}
+
+.transactions-split-bill-link-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.transactions-split-bill-link-panel__chip-remove {
+  border: 0;
+  background: transparent;
+  color: var(--muted-2);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.transactions-split-bill-link-panel__adder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transactions-split-bill-link-panel__adder input,
+.transactions-split-bill-link-panel select {
+  min-width: 0;
+  width: 100%;
+}
+
+.transactions-split-bill-link-panel__adder input {
+  flex: 1 1 auto;
+}
+
+.transactions-split-bill-link-panel__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.transaction-drawer-split-bill {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.transaction-drawer-split-bill__error {
+  color: var(--danger);
+}
+
 .manual-more-panel {
   display: grid;
   gap: 8px;

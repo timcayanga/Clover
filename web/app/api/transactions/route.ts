@@ -58,6 +58,7 @@ type TransactionApiRow = {
   createdAt: string;
   warningReason: string | null;
   rawPayload: Prisma.JsonValue;
+  splitBill: { id: string; title: string } | null;
 };
 
 type TransactionSummaryRow = {
@@ -251,6 +252,7 @@ const mapTransactionRow = (transaction: {
   isTransfer: boolean;
   isExcluded: boolean;
   warningReason: string | null;
+  splitBill: { id: string; title: string } | null;
 }): TransactionApiRow => {
   const normalizedCurrency =
     normalizeInstitutionCurrency(
@@ -299,6 +301,7 @@ const mapTransactionRow = (transaction: {
     createdAt: transaction.createdAt.toISOString(),
     warningReason: transaction.warningReason,
     rawPayload: transaction.rawPayload,
+    splitBill: transaction.splitBill,
     categoryName,
   };
 };
@@ -450,6 +453,12 @@ export async function GET(request: Request) {
                 institution: true,
               },
             },
+            splitBill: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
             createdAt: true,
             isTransfer: true,
             isExcluded: true,
@@ -521,6 +530,7 @@ export async function GET(request: Request) {
           isExcluded: transaction.isExcluded,
           createdAt: transaction.createdAt,
           warningReason: getTransactionWarningReason(transaction, duplicateCounts),
+          splitBill: transaction.splitBill,
         })
       );
       const lightSummary = {
@@ -599,6 +609,12 @@ export async function GET(request: Request) {
             accountNumber: true,
           },
         },
+        splitBill: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
         createdAt: true,
         isTransfer: true,
         isExcluded: true,
@@ -663,6 +679,7 @@ export async function GET(request: Request) {
         isExcluded: transaction.isExcluded,
         createdAt: transaction.createdAt,
         warningReason,
+        splitBill: transaction.splitBill,
       });
       transactions.push(mappedTransaction);
 

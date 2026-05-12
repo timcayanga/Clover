@@ -481,6 +481,7 @@ model Transaction {
   trainingSignals        TrainingSignal[]
   dataQaFindings         DataQaFinding[]
   receiptDocument        ReceiptDocument?
+  splitBill              SplitBill?
 
   @@index([workspaceId])
   @@index([accountId])
@@ -862,6 +863,7 @@ model SplitBillGroupMember {
 model SplitBill {
   id                  String                 @id @default(cuid())
   userId              String
+  transactionId       String?                @unique
   groupId             String?
   title               String
   note                String?
@@ -882,12 +884,14 @@ model SplitBill {
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
   user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction         Transaction?           @relation(fields: [transactionId], references: [id], onDelete: SetNull)
   group               SplitBillGroup?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
   participants        SplitBillParticipant[]
   items               SplitBillItem[]
   payments            SplitBillPayment[]
 
   @@index([userId])
+  @@index([transactionId])
   @@index([groupId])
   @@index([billDate])
   @@index([sourceType])

@@ -3,6 +3,21 @@ import { serializeSplitBillRecord, splitBillGroupMemberOrderBy, splitBillItemOrd
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 
 const billInclude = {
+  transaction: {
+    select: {
+      id: true,
+      merchantRaw: true,
+      merchantClean: true,
+      date: true,
+      amount: true,
+      currency: true,
+      account: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  },
   group: {
     include: {
       members: {

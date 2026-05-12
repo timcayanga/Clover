@@ -6,10 +6,12 @@ import { useRouter } from "next/navigation";
 import { ImportFilesModal } from "@/components/import-files-modal";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
+import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getAccountDisplayName } from "@/lib/account-display";
 import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 
 type DashboardTopActionsProps = {
   workspaceId: string;
@@ -84,6 +86,11 @@ export function DashboardManualTransactionModal({
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
+  const [manualSplitBillOpen, setManualSplitBillOpen] = useState(false);
+  const [manualSplitBillDraft, setManualSplitBillDraft] = useState<SplitBillTransactionLinkDraft>({
+    groupId: "",
+    participantNames: [],
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
@@ -228,6 +235,11 @@ export function DashboardManualTransactionModal({
     setAccountMenuOpen(false);
     setCategoryMenuOpen(false);
     setManualMoreOpen(false);
+    setManualSplitBillOpen(false);
+    setManualSplitBillDraft({
+      groupId: "",
+      participantNames: [],
+    });
     onClose();
   };
 
@@ -304,14 +316,40 @@ export function DashboardManualTransactionModal({
         }),
       });
 
+      const payload = (await response.json().catch(() => null)) as
+        | { transaction?: { id?: string; merchantRaw?: string; date?: string; currency?: string; amount?: string }; error?: string }
+        | null;
+
       if (!response.ok) {
-        const payload = await response.json().catch(() => null);
         throw new Error(payload?.error ?? "Unable to create transaction.");
+      }
+
+      const createdTransaction = payload?.transaction ?? null;
+      const splitBillDraftHasContent = manualSplitBillOpen && (manualSplitBillDraft.groupId.trim() || manualSplitBillDraft.participantNames.length > 0);
+      if (splitBillDraftHasContent && createdTransaction?.id) {
+        try {
+          await createSplitBillFromTransaction({
+            workspaceId,
+            transactionId: createdTransaction.id,
+            transactionTitle: form.merchantRaw.trim() || createdTransaction.merchantRaw?.trim() || "Split Bill",
+            billDate: form.date,
+            currency,
+            amount: form.amount,
+            draft: manualSplitBillDraft,
+          });
+        } catch (splitBillError) {
+          console.error(splitBillError);
+        }
       }
 
       setError(null);
       if (keepOpenAfterSave) {
         setManualMoreOpen(false);
+        setManualSplitBillOpen(false);
+        setManualSplitBillDraft({
+          groupId: "",
+          participantNames: [],
+        });
         setForm((current) => ({
           ...current,
           amount: "",
@@ -567,6 +605,30 @@ export function DashboardManualTransactionModal({
                       placeholder="Optional note or review context"
                     />
                   </label>
+
+                  <div className="transactions-split-bill-link-panel__toggle-row">
+                    <button
+                      type="button"
+                      className="transactions-manual-more"
+                      onClick={() => setManualSplitBillOpen((current) => !current)}
+                      aria-expanded={manualSplitBillOpen}
+                    >
+                      <span>{manualSplitBillOpen ? "Hide split bill" : "Add to Split Bills"}</span>
+                      <span className={`transactions-manual-more__chevron ${manualSplitBillOpen ? "is-open" : ""}`} aria-hidden="true">
+                        ▾
+                      </span>
+                    </button>
+                    {manualSplitBillOpen ? (
+                      <SplitBillTransactionLinkFields
+                        workspaceId={workspaceId}
+                        draft={manualSplitBillDraft}
+                        onChange={setManualSplitBillDraft}
+                        open={manualSplitBillOpen}
+                        title="Split bill details"
+                        helperText="This split bill will be created after you save the transaction."
+                      />
+                    ) : null}
+                  </div>
 
                   <div className="manual-more-panel__receipt-line-items">
                     <div className="manual-more-panel__section-head">

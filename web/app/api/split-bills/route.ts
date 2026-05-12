@@ -38,6 +38,7 @@ const billSchema = z.object({
   billDate: z.string().min(1),
   currency: z.string().trim().min(1).default("PHP"),
   sourceType: z.enum(["manual", "receipt"]).default("manual"),
+  transactionId: z.string().nullable().optional(),
   merchantName: z.string().trim().nullable().optional(),
   receiptFileName: z.string().trim().nullable().optional(),
   receiptMimeType: z.string().trim().nullable().optional(),
@@ -82,10 +83,11 @@ const resolveReceiptAccountResolution = async (
     return rawPayload;
   }
 
-  const accountName = typeof receiptAccountMatch.accountName === "string" ? receiptAccountMatch.accountName : null;
-  const accountLast4 = typeof receiptAccountMatch.accountLast4 === "string" ? receiptAccountMatch.accountLast4 : null;
-  const confidence = typeof receiptAccountMatch.confidence === "number" ? receiptAccountMatch.confidence : 0;
-  const reason = typeof receiptAccountMatch.reason === "string" ? receiptAccountMatch.reason : null;
+  const receiptAccountMatchRecord = receiptAccountMatch as Record<string, unknown>;
+  const accountName = typeof receiptAccountMatchRecord.accountName === "string" ? receiptAccountMatchRecord.accountName : null;
+  const accountLast4 = typeof receiptAccountMatchRecord.accountLast4 === "string" ? receiptAccountMatchRecord.accountLast4 : null;
+  const confidence = typeof receiptAccountMatchRecord.confidence === "number" ? receiptAccountMatchRecord.confidence : 0;
+  const reason = typeof receiptAccountMatchRecord.reason === "string" ? receiptAccountMatchRecord.reason : null;
 
   if (!accountName && !accountLast4) {
     return rawPayload;
@@ -137,7 +139,70 @@ const resolveReceiptAccountResolution = async (
   };
 };
 
+const resolveLinkedTransactionId = async (userId: string, transactionId: string | null | undefined, existingBillId?: string) => {
+  const normalizedTransactionId = transactionId?.trim() || null;
+  if (!normalizedTransactionId) {
+    return null;
+  }
+
+  const transaction = await prisma.transaction.findFirst({
+    where: {
+      id: normalizedTransactionId,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      workspaceId: true,
+    },
+  });
+
+  if (!transaction) {
+    throw new Error("Linked transaction not found.");
+  }
+
+  const workspace = await prisma.workspace.findFirst({
+    where: {
+      id: transaction.workspaceId,
+      userId,
+    },
+    select: { id: true },
+  });
+
+  if (!workspace) {
+    throw new Error("Linked transaction does not belong to this Clover account.");
+  }
+
+  const existingLink = await prisma.splitBill.findFirst({
+    where: {
+      transactionId: normalizedTransactionId,
+      ...(existingBillId ? { id: { not: existingBillId } } : {}),
+    },
+    select: { id: true },
+  });
+
+  if (existingLink) {
+    throw new Error("That transaction is already linked to a split bill.");
+  }
+
+  return normalizedTransactionId;
+};
+
 const getBillInclude = {
+  transaction: {
+    select: {
+      id: true,
+      merchantRaw: true,
+      merchantClean: true,
+      date: true,
+      amount: true,
+      currency: true,
+      account: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  },
   group: {
     include: {
       members: {
@@ -157,16 +222,26 @@ const getBillInclude = {
 
 const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema>, existingBillId?: string) => {
   const groupId = normalizeOptionalString(input.groupId ?? null);
+  const transactionId = await resolveLinkedTransactionId(userId, input.transactionId ?? null, existingBillId);
+  const groupMembers = groupId
+    ? await prisma.splitBillGroup.findFirst({
+        where: {
+          id: groupId,
+          userId,
+        },
+        select: {
+          id: true,
+          members: {
+            orderBy: splitBillGroupMemberOrderBy,
+            select: {
+              name: true,
+            },
+          },
+        },
+      })
+    : null;
   if (groupId) {
-    const group = await prisma.splitBillGroup.findFirst({
-      where: {
-        id: groupId,
-        userId,
-      },
-      select: { id: true },
-    });
-
-    if (!group) {
+    if (!groupMembers) {
       throw new Error("Selected group does not belong to this Clover account.");
     }
   }
@@ -175,6 +250,21 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
     sourceId: participant.id?.trim() || randomUUID(),
     name: participant.name.trim(),
   }));
+
+  if (groupMembers) {
+    const existingNames = new Set(participantEntries.map((participant) => participant.name.trim().toLowerCase()));
+    for (const member of groupMembers.members) {
+      const memberName = member.name.trim();
+      if (!memberName || existingNames.has(memberName.toLowerCase())) {
+        continue;
+      }
+      participantEntries.push({
+        sourceId: randomUUID(),
+        name: memberName,
+      });
+      existingNames.add(memberName.toLowerCase());
+    }
+  }
 
   if (participantEntries.length === 0) {
     throw new Error("Add at least one person to split the bill.");
@@ -212,8 +302,9 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
   });
   const resolvedRawPayload = await resolveReceiptAccountResolution(userId, input.rawPayload ?? null);
 
-  return {
+    return {
     groupId,
+    transactionId,
     participants: participantEntries,
     items: normalizedItems,
     payments: normalizedPayments,
@@ -266,6 +357,7 @@ const persistSplitBill = async (
         data: {
           ...payload.billData,
           groupId: payload.groupId,
+          transactionId: payload.transactionId,
         } as Prisma.SplitBillUncheckedUpdateInput,
       });
 
@@ -288,11 +380,12 @@ const persistSplitBill = async (
 
     }
 
-    const bill = mode === "create"
+      const bill = mode === "create"
       ? await tx.splitBill.create({
           data: {
             userId,
             groupId: payload.groupId,
+            transactionId: payload.transactionId,
             ...payload.billData,
           },
         })

@@ -152,6 +152,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
           : undefined,
         learnedRuleIdsApplied: editedFields ? appendManualEditMarker(transaction.learnedRuleIdsApplied) : undefined,
       },
+      include: {
+        splitBill: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+      },
     });
 
     const account = await prisma.account.findUnique({
@@ -314,6 +322,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         rawPayload: updated.rawPayload,
         createdAt: updated.createdAt.toISOString(),
         updatedAt: updated.updatedAt.toISOString(),
+        splitBill: updated.splitBill,
       },
     });
   } catch {
