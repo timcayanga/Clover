@@ -777,7 +777,7 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
   }, [menuOpen]);
 
   useLayoutEffect(() => {
-    const active = manualOpen || importOpen;
+    const active = manualOpen;
     document.body.classList.toggle("dashboard-modal-open", active);
     document.body.toggleAttribute("data-clover-page-modal", active);
 
@@ -785,7 +785,7 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
       document.body.classList.remove("dashboard-modal-open");
       document.body.removeAttribute("data-clover-page-modal");
     };
-  }, [importOpen, manualOpen]);
+  }, [manualOpen]);
 
   useEffect(() => {
     const manualParam = new URLSearchParams(window.location.search).get("manual");

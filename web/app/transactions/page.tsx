@@ -2748,13 +2748,13 @@ function TransactionsPageContent() {
   };
 
   useEffect(() => {
-    const active = manualOpen || (importOpen && !importBackgroundOnly);
+    const active = manualOpen;
     document.body.toggleAttribute("data-clover-page-modal", active);
 
     return () => {
       document.body.removeAttribute("data-clover-page-modal");
     };
-  }, [addMenuOpen, importBackgroundOnly, importOpen, manualOpen]);
+  }, [addMenuOpen, manualOpen]);
 
   useEffect(() => {
     if (urlSearchParams.get("import") === "1") {

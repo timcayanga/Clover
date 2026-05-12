@@ -2456,13 +2456,13 @@ function AccountsPageContent() {
   };
 
   useEffect(() => {
-    const active = addOpen || (importOpen && !importBackgroundOnly);
+    const active = addOpen;
     document.body.toggleAttribute("data-clover-page-modal", active);
 
     return () => {
       document.body.removeAttribute("data-clover-page-modal");
     };
-  }, [addOpen, importBackgroundOnly, importOpen]);
+  }, [addOpen]);
 
   const applyManualNameSuggestion = (suggestion: InstitutionSuggestion) => {
     if (suggestion.category === "investment_platform") {
@@ -2513,23 +2513,17 @@ function AccountsPageContent() {
       return;
     }
     const navigableAccount = resolveNavigableAccount(account);
-    if (!navigableAccount) {
-      setMessage("Clover is still linking this imported account. The account card can stay visible while the details page gets ready.");
-      return;
-    }
+    const targetAccount = navigableAccount ?? account;
     closeChrome();
-    window.location.assign(getAccountPath(navigableAccount));
+    window.location.assign(getAccountPath(targetAccount));
   };
 
   const openFullAccountPage = () => {
     if (!selectedAccount) return;
     const navigableAccount = resolveNavigableAccount(selectedAccount);
-    if (!navigableAccount) {
-      setMessage("Clover is still linking this imported account. The account card can stay visible while the details page gets ready.");
-      return;
-    }
+    const targetAccount = navigableAccount ?? selectedAccount;
     closeChrome();
-    window.location.assign(getAccountPath(navigableAccount));
+    window.location.assign(getAccountPath(targetAccount));
   };
 
   const openDrawerForWarning = (account: Account, warning: string) => {
