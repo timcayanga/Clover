@@ -91,6 +91,9 @@ export function GlobalImportActivity() {
   const [pageModalActive, setPageModalActive] = useState(() =>
     typeof document === "undefined" ? false : document.body.hasAttribute("data-clover-page-modal")
   );
+  const [accountsSplashActive, setAccountsSplashActive] = useState(() =>
+    typeof document === "undefined" ? false : document.body.hasAttribute("data-clover-accounts-loading")
+  );
   const shouldShowOnCurrentPath = canShowImportActivityOnPath(pathname);
 
   useEffect(
@@ -120,6 +123,24 @@ export function GlobalImportActivity() {
     updatePageModalState();
     const observer = new MutationObserver(updatePageModalState);
     observer.observe(document.body, { attributes: true, attributeFilter: ["data-clover-page-modal"] });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const updateAccountsSplashState = () => {
+      setAccountsSplashActive(document.body.hasAttribute("data-clover-accounts-loading"));
+    };
+
+    updateAccountsSplashState();
+    const observer = new MutationObserver(updateAccountsSplashState);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["data-clover-accounts-loading"] });
 
     return () => {
       observer.disconnect();
@@ -162,6 +183,10 @@ export function GlobalImportActivity() {
   const isError = activity.status === "error";
 
   if (isError) {
+    if (accountsSplashActive) {
+      return null;
+    }
+
     const code = activity.errorCode ?? "I-199";
     const spec = getImportErrorSpecForCode(code);
     return (

@@ -42,6 +42,9 @@ export function ImportErrorToast({ code, httpClass, title, message, nextSteps, o
         <Link href="/review" className="button button-secondary button-small" onClick={onClose} prefetch={false}>
           Check review
         </Link>
+        <button type="button" className="button button-secondary button-small" onClick={onClose}>
+          Dismiss
+        </button>
       </div>
     </aside>
   );

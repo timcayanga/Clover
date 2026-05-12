@@ -82,6 +82,7 @@ const ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS = [
 
 const ACCOUNT_LOADING_TIMEOUT_MS = 45_000;
 const ACCOUNT_LOADING_PULSE_MS = 5_000;
+const PAGE_LOADING_TIMEOUT_MS = 12_000;
 
 type Workspace = {
   id: string;
@@ -1064,7 +1065,10 @@ function AccountsPageContent() {
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
   const stableAccountBalancesRef = useRef(new Map<string, string>());
   const accountLoadingSinceRef = useRef(new Map<string, number>());
+  const pageLoadingSinceRef = useRef<number>(Date.now());
+  const wasColdLoadingRef = useRef(false);
   const [accountLoadingPulse, setAccountLoadingPulse] = useState(() => Date.now());
+  const [pageLoadingPulse, setPageLoadingPulse] = useState(() => Date.now());
   const isLocalDevBrowser =
     typeof window !== "undefined" && /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/i.test(window.location.hostname);
   const [deletingAccountIds, setDeletingAccountIds] = useState<string[]>(
@@ -1891,6 +1895,42 @@ function AccountsPageContent() {
       window.clearInterval(interval);
     };
   }, [visibleUploadLoadingAccountIds.length]);
+
+  const isColdLoading =
+    (selectedWorkspaceId && (accountsLoading || !hasInitialWorkspaceDataLoaded)) ||
+    (!selectedWorkspaceId && (workspacesLoading || accountsLoading || !hasInitialWorkspaceDataLoaded));
+
+  useEffect(() => {
+    if (!isColdLoading) {
+      wasColdLoadingRef.current = false;
+      return;
+    }
+
+    if (!wasColdLoadingRef.current) {
+      pageLoadingSinceRef.current = Date.now();
+    }
+    wasColdLoadingRef.current = true;
+
+    const interval = window.setInterval(() => {
+      setPageLoadingPulse(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [isColdLoading]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    document.body.toggleAttribute("data-clover-accounts-loading", isColdLoading && accounts.length === 0);
+
+    return () => {
+      document.body.removeAttribute("data-clover-accounts-loading");
+    };
+  }, [accounts.length, isColdLoading]);
 
   const duplicateCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -2862,8 +2902,8 @@ function AccountsPageContent() {
 
   const showColdLoadGuard =
     accounts.length === 0 &&
-    ((selectedWorkspaceId && (accountsLoading || !hasInitialWorkspaceDataLoaded)) ||
-      (!selectedWorkspaceId && (workspacesLoading || accountsLoading || !hasInitialWorkspaceDataLoaded)));
+    isColdLoading &&
+    pageLoadingPulse - pageLoadingSinceRef.current < PAGE_LOADING_TIMEOUT_MS;
 
   if (!hasInitialWorkspaceDataLoaded || showColdLoadGuard) {
     return <CloverLoadingScreen label="accounts" />;
