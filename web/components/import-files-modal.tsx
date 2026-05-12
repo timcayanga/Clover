@@ -971,6 +971,7 @@ export function ImportFilesModal({
   const initialFilesSignatureRef = useRef<string | null>(null);
   const importActivitySurfaceRef = useRef<ImportActivityLocation>("modal");
   const lastImportActivityRef = useRef<ImportActivitySnapshot | null>(null);
+  const retiredImportActivityFileNamesRef = useRef(new Set<string>());
   const autoCloseAfterStartRef = useRef(false);
   const autoCloseCompletedBatchTimerRef = useRef<number | null>(null);
   const wasOpenRef = useRef(open);
@@ -1018,6 +1019,16 @@ export function ImportFilesModal({
       errorNextSteps: snapshot.errorNextSteps ?? null,
       updatedAt: Date.now(),
     };
+    if (
+      nextSnapshot.status === "active" &&
+      nextSnapshot.fileName &&
+      retiredImportActivityFileNamesRef.current.has(nextSnapshot.fileName)
+    ) {
+      return;
+    }
+    if (nextSnapshot.status === "done" && nextSnapshot.fileName) {
+      retiredImportActivityFileNamesRef.current.add(nextSnapshot.fileName);
+    }
     const previousSnapshot = lastImportActivityRef.current;
     if (
       previousSnapshot &&
@@ -1608,6 +1619,9 @@ export function ImportFilesModal({
         return;
       }
 
+      for (const item of itemsRef.current) {
+        retiredImportActivityFileNamesRef.current.add(item.file.name);
+      }
       lastImportActivityRef.current = null;
       setBusy(false);
       autoStartRef.current = false;
@@ -4690,6 +4704,16 @@ export function ImportFilesModal({
       errorNextSteps: activeErrorItem?.errorNextSteps ?? null,
       updatedAt: Date.now(),
     };
+    if (
+      nextSnapshot.status === "active" &&
+      nextSnapshot.fileName &&
+      retiredImportActivityFileNamesRef.current.has(nextSnapshot.fileName)
+    ) {
+      return;
+    }
+    if (nextSnapshot.status === "done" && nextSnapshot.fileName) {
+      retiredImportActivityFileNamesRef.current.add(nextSnapshot.fileName);
+    }
 
     lastImportActivityRef.current = nextSnapshot;
     setImportActivity(nextSnapshot);

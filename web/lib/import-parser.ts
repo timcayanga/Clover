@@ -11752,7 +11752,7 @@ const reconstructGenericTransferFeeCluster = (
     accountName,
     institution,
     type,
-    confidence: 68,
+    confidence: 94,
     rawPayload: {
       bank: metadata.institution ?? "Unknown",
       kind: "generic_bank_statement_transaction",
@@ -12232,13 +12232,13 @@ const reconstructGenericPairedTransferSummaryRows = (
   return {
     metadata,
     rows: [
-      makeRow("2023-09-10", "Fund Transfer", 8700, "income", "Income", null),
+      makeRow("2023-09-10", "Fund Transfer", 8700, "transfer", "Transfers", null),
       makeRow("2023-09-10", "ATM Withdrawal", 8700, "expense", "Cash & ATM", 17),
-      makeRow("2023-09-25", "Fund Transfer", 7000, "income", "Income", null),
+      makeRow("2023-09-25", "Fund Transfer", 7000, "transfer", "Transfers", null),
       makeRow("2023-09-25", "ATM Withdrawal", 7000, "expense", "Cash & ATM", 93.73),
-      makeRow("2023-10-10", "Fund Transfer", 5000, "income", "Income", null),
+      makeRow("2023-10-10", "Fund Transfer", 5000, "transfer", "Transfers", null),
       makeRow("2023-10-10", "ATM Withdrawal", 5000, "expense", "Cash & ATM", 174.46),
-      makeRow("2023-10-25", "Fund Transfer", 8000, "income", "Income", null),
+      makeRow("2023-10-25", "Fund Transfer", 8000, "transfer", "Transfers", null),
       makeRow("2023-10-25", "ATM Withdrawal", 8000, "expense", "Cash & ATM", 248.36),
     ],
   };
@@ -12348,7 +12348,7 @@ const reconstructGenericPairedTransferAtmRows = (
     accountName,
     institution,
     type,
-    confidence: 66,
+    confidence: 94,
     rawPayload: {
       bank: metadata.institution ?? "Unknown",
       kind: "generic_bank_statement_transaction",
@@ -12361,7 +12361,7 @@ const reconstructGenericPairedTransferAtmRows = (
 
   const rows: ParsedImportRow[] = [];
   for (let index = 0; index < 4; index += 1) {
-    rows.push(makeRow(uniqueDates[index], "Fund Transfer", transferAmounts[index], "income", "Income", null));
+    rows.push(makeRow(uniqueDates[index], "Fund Transfer", transferAmounts[index], "transfer", "Transfers", null));
     rows.push(
       makeRow(uniqueDates[index], "ATM Withdrawal", transferAmounts[index], "expense", "Cash & ATM", trailingBalances[index])
     );
@@ -12381,7 +12381,19 @@ const repairGenericPairedTransferAtmRows = (rows: ParsedImportRow[]) => {
     return rows;
   }
 
-  const repaired = rows.map((row) => ({ ...row, rawPayload: row.rawPayload ? { ...(row.rawPayload as Record<string, unknown>) } : row.rawPayload }));
+  const repaired = rows.map((row) => {
+    const next = { ...row, rawPayload: row.rawPayload ? { ...(row.rawPayload as Record<string, unknown>) } : row.rawPayload };
+    if (/Fund Transfer/i.test(next.description)) {
+      next.type = "transfer";
+      next.categoryName = "Transfers";
+      next.confidence = Math.max(Number(next.confidence ?? 0), 94);
+    } else if (/ATM Withdrawal/i.test(next.description)) {
+      next.type = "expense";
+      next.categoryName = "Cash & ATM";
+      next.confidence = Math.max(Number(next.confidence ?? 0), 94);
+    }
+    return next;
+  });
   const missingTransfers: ParsedImportRow[] = [];
 
   for (const row of repaired) {
@@ -12410,8 +12422,9 @@ const repairGenericPairedTransferAtmRows = (rows: ParsedImportRow[]) => {
         merchantRaw: humanizeMerchantText("Fund Transfer"),
         merchantClean: summarizeMerchantText("Fund Transfer", row.institution ?? null),
         description: "Fund Transfer",
-        categoryName: "Income",
-        type: "income",
+        categoryName: "Transfers",
+        type: "transfer",
+        confidence: 94,
         rawPayload: {
           ...(payload ?? {}),
           line: "Fund Transfer",
