@@ -100,25 +100,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     }
 
     if (telemetry.phase === "complete" && confirmedTransactionsCount > 0 && enrichmentJob && enrichmentJob.status !== "done") {
-      const { processImportEnrichmentJobs } = await import("@/workers/import-processor");
-      const result = await processImportEnrichmentJobs({
-        importFileId: importId,
-        limit: 1,
-        workerId: `resume-import-enrichment-${userId}`,
-      });
       return NextResponse.json({
         ok: true,
         queued: false,
-        skipped: false,
+        skipped: true,
         resumedFromCheckpoint: true,
-        resumeStrategy: "enrichment_resumed",
+        resumeStrategy: "visible_import_background_enrichment",
         importFileId: importId,
         accountId: importFile.accountId ?? null,
-        enrichment: result,
         telemetryPhase: telemetry.phase,
         telemetryLabel: telemetry.phaseLabel,
-        telemetryMessage: "Clover resumed finalizing transaction names and categories.",
-        canResume: true,
+        telemetryMessage: "Accounts and transactions are already visible. Clover will keep cleaning names and categories in the background.",
+        canResume: false,
         resumeReason: "finalizing_enrichment",
       });
     }

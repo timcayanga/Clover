@@ -52,6 +52,7 @@ import {
   claimNextImportEnrichmentJob,
   completeImportEnrichmentJob,
   failImportEnrichmentJob,
+  MAX_IMPORT_ENRICHMENT_ATTEMPTS,
   updateImportEnrichmentJobProgress,
   upsertImportEnrichmentJob,
 } from "@/lib/import-enrichment-jobs";
@@ -2229,12 +2230,19 @@ export const processImportEnrichmentJobs = async (options: {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to finalize transaction details.";
+      const retryable = job.attempts < MAX_IMPORT_ENRICHMENT_ATTEMPTS;
       await failImportEnrichmentJob({
         id: job.id,
         errorCode: "I-503",
         errorMessage: message,
-        retryable: true,
+        retryable,
       });
+      if (!retryable) {
+        await updateImportFileCompat(job.importFileId, {
+          processingPhase: "repair_needed",
+          processingMessage: "Clover couldn't finalize all transaction details automatically; please review the remaining items.",
+        }).catch(() => null);
+      }
       results.push({
         importFileId: job.importFileId,
         status: "failed",

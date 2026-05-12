@@ -146,7 +146,7 @@ export const setImportActivity = (
   };
   const visibleDataCompletion =
     nextSnapshot.status === "active" &&
-    /accounts and transactions are visible|transactions are in clover|couldn'?t finalize automatically/i.test(
+    /accounts and transactions are visible|transactions are in clover|has the file|will keep cleaning|couldn'?t finalize automatically/i.test(
       nextSnapshot.detail
     );
   if (visibleDataCompletion) {

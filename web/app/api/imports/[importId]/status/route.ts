@@ -3,11 +3,35 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { countTransactionsByImportFileCompat, fetchImportFileCompat, hasCompatibleTable, updateImportFileCompat } from "@/lib/data-engine";
 import { buildImportTelemetrySnapshot } from "@/lib/import-telemetry";
 import { readCheckpointWorkflowStage } from "@/lib/import-workflow";
-import { getImportEnrichmentJobByImportFileId } from "@/lib/import-enrichment-jobs";
+import { getImportEnrichmentJobByImportFileId, MAX_IMPORT_ENRICHMENT_ATTEMPTS } from "@/lib/import-enrichment-jobs";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+const estimateFinalizationSecondsRemaining = (job: Awaited<ReturnType<typeof getImportEnrichmentJobByImportFileId>>) => {
+  if (!job || job.status === "done" || job.status === "failed") {
+    return 0;
+  }
+
+  const totalRows = Math.max(0, Number(job.totalRows ?? 0));
+  const processedRows = Math.max(0, Number(job.processedRows ?? 0));
+  const remainingRows = Math.max(0, totalRows - processedRows);
+  if (remainingRows === 0) {
+    return 0;
+  }
+
+  const startedAtMs = job.startedAt ? new Date(job.startedAt).getTime() : 0;
+  const elapsedSeconds = startedAtMs > 0 ? Math.max(1, Math.floor((Date.now() - startedAtMs) / 1000)) : 0;
+  if (processedRows > 0 && elapsedSeconds > 0) {
+    const observedRowsPerSecond = processedRows / elapsedSeconds;
+    return Math.max(15, Math.ceil((remainingRows / Math.max(0.1, observedRowsPerSecond)) * 1.25));
+  }
+
+  // Before the first checkpoint, use a conservative generic estimate so the
+  // UI does not promise a fake countdown while the worker is still warming up.
+  return Math.max(30, Math.ceil(remainingRows / 20) * 60);
+};
 
 export async function GET(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   try {
@@ -88,10 +112,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const finalizationRemainingRows = enrichmentJob
       ? Math.max(0, Number(enrichmentJob.totalRows ?? 0) - Number(enrichmentJob.processedRows ?? 0))
       : 0;
-    const finalizationEstimatedSecondsRemaining =
-      enrichmentJob && enrichmentJob.status !== "done" && finalizationRemainingRows > 0
-        ? Math.max(60, Math.min(600, Math.ceil(finalizationRemainingRows / 25) * 60))
-        : 0;
+    const finalizationEstimatedSecondsRemaining = estimateFinalizationSecondsRemaining(enrichmentJob);
+    const finalizationNeedsReview =
+      Boolean(enrichmentJob) &&
+      (enrichmentJob?.status === "failed" ||
+        (Number(enrichmentJob?.attempts ?? 0) >= MAX_IMPORT_ENRICHMENT_ATTEMPTS && finalizationRemainingRows > 0));
     const confirmationStatus =
       confirmedTransactionsCount > 0
         ? "confirmed"
@@ -147,6 +172,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       finalizationProcessedRows: enrichmentJob?.processedRows ?? null,
       finalizationTotalRows: enrichmentJob?.totalRows ?? null,
       finalizationEstimatedSecondsRemaining,
+      finalizationAttempts: enrichmentJob?.attempts ?? null,
+      finalizationMaxAttempts: MAX_IMPORT_ENRICHMENT_ATTEMPTS,
+      finalizationNeedsReview,
       statementCheckpoint,
     });
   } catch {

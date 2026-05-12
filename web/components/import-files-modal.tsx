@@ -152,6 +152,7 @@ type ImportStatusPayload = {
   };
   parsedRowsCount?: number;
   confirmedTransactionsCount?: number;
+  visibleImportComplete?: boolean;
   confirmationStatus?: string;
   telemetryPhase?: string | null;
   telemetryLabel?: string | null;
@@ -162,6 +163,8 @@ type ImportStatusPayload = {
     sourceMetadata?: Record<string, unknown> | null;
     endingBalance?: string | null;
   } | null;
+  finalizationEstimatedSecondsRemaining?: number | null;
+  finalizationNeedsReview?: boolean | null;
 };
 
 const isPasswordError = (error: unknown) => {
@@ -2234,6 +2237,8 @@ export function ImportFilesModal({
         const importFile = payload.importFile;
         const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
         const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
+        const visibleImportComplete = Boolean(payload.visibleImportComplete || confirmedTransactionsCount > 0);
+        const finalizationNeedsReview = Boolean(payload.finalizationNeedsReview);
         const processingPhase = typeof importFile?.processingPhase === "string" ? importFile.processingPhase : null;
         const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
         const telemetryPhase = typeof payload.telemetryPhase === "string" ? payload.telemetryPhase : null;
@@ -2298,6 +2303,7 @@ export function ImportFilesModal({
             telemetryPhase === "repair_needed"
         );
         const hasVisibleImportDataSignal = Boolean(
+          visibleImportComplete ||
           parsedRowsCount > 0 ||
             confirmedTransactionsCount > 0 ||
             checkpointBalance ||
@@ -2305,6 +2311,15 @@ export function ImportFilesModal({
             processingIdentity?.accountName ||
             processingIdentity?.accountNumber
         );
+
+        if (finalizationNeedsReview && hasVisibleImportDataSignal) {
+          emitImportRecoverable(
+            summaryContext.fileName,
+            "Accounts and transactions are visible. Some details could not be finalized automatically; please review them.",
+            "Needs review"
+          );
+          return;
+        }
 
         if (importFile?.status === "failed" && parsedRowsCount === 0 && confirmedTransactionsCount === 0) {
           if (hasVisibleImportDataSignal) {
@@ -2574,7 +2589,7 @@ export function ImportFilesModal({
           }
         }
 
-        const hasSettledRows = confirmedTransactionsCount > 0;
+        const hasSettledRows = visibleImportComplete;
 
         if (hasSettledRows) {
           const completedAccountId =
@@ -3435,11 +3450,22 @@ export function ImportFilesModal({
           return;
         }
 
+        const receiptAccountCandidates = accounts.map((account) => ({
+          id: account.id,
+          name: account.name,
+          institution: account.institution ?? null,
+          accountNumber: account.accountNumber ?? null,
+          type: account.type,
+          currency: account.currency ?? null,
+        }));
         const receiptHint = receiptPreview.receiptAccountMatch
-          ? resolveReceiptAccountHintToAccount(receiptPreview.receiptAccountMatch, accounts)
+          ? resolveReceiptAccountHintToAccount(receiptPreview.receiptAccountMatch, receiptAccountCandidates)
+          : null;
+        const matchedReceiptAccount = receiptHint
+          ? accounts.find((account) => account.id === receiptHint.accountId) ?? null
           : null;
         const cashAccount = resolveCashAccountOption(accounts);
-        const targetAccount = receiptHint ?? cashAccount;
+        const targetAccount = matchedReceiptAccount ?? cashAccount;
         if (!targetAccount) {
           return;
         }
