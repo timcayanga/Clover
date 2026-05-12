@@ -2088,6 +2088,11 @@ export function ImportFilesModal({
         closeImportAfterError(itemId, stage, fileName, message);
       }
     };
+    const emitImportRecoverable = (fileName: string, detail: string, progressLabel = "Review needed") => {
+      if (!backgroundOnly) {
+        closeImportAsRecoverable(itemId, fileName, detail, progressLabel);
+      }
+    };
     let seededFallbackSummary = false;
     const startedAt = Date.now();
     const MAX_WAIT_MS = 180_000;
@@ -2179,8 +2184,7 @@ export function ImportFilesModal({
 
         if (importFile?.status === "failed" && parsedRowsCount === 0 && confirmedTransactionsCount === 0) {
           if (hasVisibleImportDataSignal) {
-            closeImportAsRecoverable(
-              itemId,
+            emitImportRecoverable(
               summaryContext.fileName,
               "Account details are visible. Clover will keep cleaning up names and categories in the background.",
               "Visible in Clover"
@@ -2516,13 +2520,13 @@ export function ImportFilesModal({
           };
           seedImportedWorkspaceCaches(workspaceId, finalizedSummary);
           await Promise.resolve(onImported(finalizedSummary));
-          updateItem(itemId, {
+          emitItemUpdate({
             status: "done",
             confirmationState: "confirmed",
             progress: 100,
             progressLabel: "Done",
           });
-          publishImportActivity({
+          emitImportActivity({
             workspaceId,
             surface: importActivitySurfaceRef.current,
             status: "done",
@@ -2539,7 +2543,7 @@ export function ImportFilesModal({
         }
 
         if (importFile?.status === "done" && !hasSettledRows) {
-          updateItem(itemId, {
+          emitItemUpdate({
             status: "importing",
             confirmationState: "pending",
             progress: Math.max(
@@ -2549,7 +2553,7 @@ export function ImportFilesModal({
             progressLabel: "Loading transactions",
             targetAccountId: latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-") ? latestResolvedAccountId : null,
           });
-          publishImportActivity({
+          emitImportActivity({
             workspaceId,
             surface: importActivitySurfaceRef.current,
             status: "active",
@@ -2580,8 +2584,7 @@ export function ImportFilesModal({
           const hasRecoverableProgress =
             Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0;
           if (hasRecoverableProgress) {
-            closeImportAsRecoverable(
-              itemId,
+            emitImportRecoverable(
               summaryContext.fileName,
               "Clover parsed the file and is still linking it to the account.",
               "Finalizing import"
@@ -2590,7 +2593,7 @@ export function ImportFilesModal({
           }
 
           const timeoutMessage = "Timed out after 180 seconds while Clover was still reading the document.";
-          closeImportAfterError(itemId, "monitor", summaryContext.fileName, timeoutMessage);
+          emitImportError("monitor", summaryContext.fileName, timeoutMessage);
           return;
         }
 
@@ -2727,13 +2730,13 @@ export function ImportFilesModal({
               );
 
               seededFallbackSummary = true;
-              updateItem(itemId, {
+              emitItemUpdate({
                 status: "importing",
                 progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(IMPORT_PROGRESS.loadingAccount, IMPORT_PROGRESS.parsing + attempt * 0.5)),
                 progressLabel: "Reading account details",
                 targetAccountId: fallbackAccountId,
               });
-              publishImportActivity({
+              emitImportActivity({
                 workspaceId,
                 surface: importActivitySurfaceRef.current,
                 status: "active",
@@ -2756,13 +2759,13 @@ export function ImportFilesModal({
               seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
               await Promise.resolve(onImported(fallbackSummary));
             } else {
-              updateItem(itemId, {
+              emitItemUpdate({
                 status: "importing",
                 progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(IMPORT_PROGRESS.loadingAccount, IMPORT_PROGRESS.parsing + attempt * 0.5)),
                 progressLabel: telemetryLabel ?? "Reading account details",
                 targetAccountId: accountId,
               });
-              publishImportActivity({
+              emitImportActivity({
                 workspaceId,
                 surface: importActivitySurfaceRef.current,
                 status: "active",
@@ -2837,13 +2840,13 @@ export function ImportFilesModal({
             attempt < 4;
 
           if (shouldWaitForDeferredConfirmation) {
-            updateItem(itemId, {
+            emitItemUpdate({
               status: "importing",
               progress: Math.max(IMPORT_PROGRESS.loadingAccount, Math.min(98, IMPORT_PROGRESS.loadingAccount + attempt * 0.5)),
               progressLabel: telemetryLabel ?? "Finalizing import",
               targetAccountId: resolvedAccountId,
             });
-            publishImportActivity({
+            emitImportActivity({
               workspaceId,
               surface: importActivitySurfaceRef.current,
               status: "active",
@@ -2910,7 +2913,7 @@ export function ImportFilesModal({
             true
           );
 
-          updateItem(itemId, {
+          emitItemUpdate({
             status: "done",
             confirmationState: "confirmed",
             progress: 100,
@@ -2920,7 +2923,7 @@ export function ImportFilesModal({
 
           seedImportedWorkspaceCaches(workspaceId, previewSummary);
           await Promise.resolve(onImported(previewSummary));
-          publishImportActivity({
+          emitImportActivity({
             workspaceId,
             surface: importActivitySurfaceRef.current,
             status: "done",
@@ -2989,7 +2992,7 @@ export function ImportFilesModal({
                 );
                 seedImportedWorkspaceCaches(workspaceId, completedSummary);
                 await Promise.resolve(onImported(completedSummary));
-                updateItem(itemId, {
+                emitItemUpdate({
                   status: "done",
                   confirmationState: "confirmed",
                   progress: 100,
@@ -2997,7 +3000,7 @@ export function ImportFilesModal({
                   targetAccountId: resolvedAccountId,
                   importedRows: Number(result.importedRows ?? 0),
                 });
-                publishImportActivity({
+                emitImportActivity({
                   workspaceId,
                   surface: importActivitySurfaceRef.current,
                   status: "done",
@@ -3035,13 +3038,13 @@ export function ImportFilesModal({
           return;
         }
 
-        updateItem(itemId, {
+        emitItemUpdate({
           status: "importing",
           progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(IMPORT_PROGRESS.loadingAccount, IMPORT_PROGRESS.parsing + attempt * 0.5)),
           progressLabel: "Reading statement details",
           targetAccountId: accountId,
         });
-        publishImportActivity({
+        emitImportActivity({
           workspaceId,
           surface: importActivitySurfaceRef.current,
           status: "active",
@@ -3100,7 +3103,7 @@ export function ImportFilesModal({
           retry_reason: "background_confirmation",
           error_code: getImportErrorCode(error),
         });
-        closeImportAfterError(itemId, "monitor", summaryContext.fileName, errorMessage || null);
+        emitImportError("monitor", summaryContext.fileName, errorMessage || null);
         return;
       }
 
@@ -3109,8 +3112,7 @@ export function ImportFilesModal({
 
     const latestItem = itemsRef.current.find((entry) => entry.id === itemId);
     if (latestItem?.importFileId) {
-      closeImportAsRecoverable(
-        itemId,
+      emitImportRecoverable(
         summaryContext.fileName,
         "Clover parsed the file and is still linking it to the account.",
         "Finalizing import"
@@ -3118,7 +3120,7 @@ export function ImportFilesModal({
       return;
     }
 
-    closeImportAfterError(itemId, "monitor", summaryContext.fileName, "Timed out while Clover was still finalizing this import.");
+    emitImportError("monitor", summaryContext.fileName, "Timed out while Clover was still finalizing this import.");
   };
 
   const preflightPasswordProtectedFiles = async () => {
@@ -3997,18 +3999,20 @@ export function ImportFilesModal({
           await Promise.resolve(onImported(confirmedSummary));
         }
 
-        const settledVisible = await waitForImportSettledVisibility({
-            workspaceId,
-            accountId: serverConfirmedAccountId,
-            importedRows: settledRows,
-            expectedBalance: confirmedSummary.balance ?? null,
-          });
-        if (!settledVisible) {
-          console.warn("Import finished before the settled data became visible", {
-            importFileId,
-            accountId: serverConfirmedAccountId,
-          });
-        }
+        void waitForImportSettledVisibility({
+          workspaceId,
+          accountId: serverConfirmedAccountId,
+          importedRows: settledRows,
+          expectedBalance: confirmedSummary.balance ?? null,
+          timeoutMs: 10_000,
+        }).then((settledVisible) => {
+          if (!settledVisible) {
+            console.warn("Import finished before the settled data became visible", {
+              importFileId,
+              accountId: serverConfirmedAccountId,
+            });
+          }
+        });
 
         updateItem(itemId, {
           status: "done",
@@ -4090,6 +4094,7 @@ export function ImportFilesModal({
                     })
               )
             : [];
+        const visibleRows = Math.max(Number(processPayload?.imported ?? 0) || 0, previewTransactions.length);
         const optimisticIdentity =
           statementIdentity?.accountNumber
             ? statementIdentity
@@ -4104,7 +4109,7 @@ export function ImportFilesModal({
           ? ({
               ...buildOptimisticUploadSummary(
                 item.file.name,
-                0,
+                visibleRows,
                 optimisticAccountId,
                 optimisticIdentity.accountName ?? null,
                 optimisticIdentity.institution ?? null,
@@ -4152,18 +4157,20 @@ export function ImportFilesModal({
           seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
           await Promise.resolve(onImported(optimisticSummary));
 
-          const settledVisible = await waitForImportSettledVisibility({
+          void waitForImportSettledVisibility({
             workspaceId,
             accountId: optimisticAccountId,
             importedRows: Number(processPayload?.imported ?? 0) || 0,
             expectedBalance: optimisticSummary.balance ?? null,
+            timeoutMs: 10_000,
+          }).then((settledVisible) => {
+            if (!settledVisible) {
+              console.warn("Import finished before the settled data became visible", {
+                importFileId,
+                accountId: optimisticAccountId,
+              });
+            }
           });
-          if (!settledVisible) {
-            console.warn("Import finished before the settled data became visible", {
-              importFileId,
-              accountId: optimisticAccountId,
-            });
-          }
 
           updateItem(itemId, {
             status: "done",
@@ -4171,7 +4178,7 @@ export function ImportFilesModal({
             error: null,
             importFileId,
             targetAccountId: optimisticAccountId,
-            importedRows: Number(processPayload?.imported ?? 0) || 0,
+            importedRows: visibleRows,
             progress: 100,
             progressLabel: "Done",
           });
@@ -4184,7 +4191,7 @@ export function ImportFilesModal({
             fileTotal: items.length,
             completedFiles: completedFileCount + 1,
             progress: 100,
-            detail: "All set",
+            detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
             summary: optimisticSummary,
             errorMessage: null,
           });
@@ -4216,7 +4223,7 @@ export function ImportFilesModal({
 
           return {
             status: "done",
-            importedRows: Number(processPayload?.imported ?? 0) || 0,
+            importedRows: visibleRows,
             summary: optimisticSummary,
           };
         }
@@ -4372,18 +4379,20 @@ export function ImportFilesModal({
           });
         }
 
-        const settledVisible = await waitForImportSettledVisibility({
+        void waitForImportSettledVisibility({
           workspaceId,
           accountId: targetAccountId,
           importedRows: Number(processPayload?.imported ?? 0) || 0,
           expectedBalance: optimisticPreviewSummary?.balance ?? null,
+          timeoutMs: 10_000,
+        }).then((settledVisible) => {
+          if (!settledVisible) {
+            console.warn("Import finished before the settled data became visible", {
+              importFileId,
+              accountId: targetAccountId,
+            });
+          }
         });
-        if (!settledVisible) {
-          console.warn("Import finished before the settled data became visible", {
-            importFileId,
-            accountId: targetAccountId,
-          });
-        }
 
         updateItem(itemId, {
           status: "done",
