@@ -98,6 +98,7 @@ type SettingsHubProps = {
   paypalMonthlyPlanId?: string | null;
   paypalAnnualPlanId?: string | null;
   paypalBuyerCountry?: string | null;
+  disableWorkspaceBootstrap?: boolean;
 };
 
 function SettingsIcon({ path }: { path: string }) {
@@ -176,6 +177,7 @@ export function SettingsHub({
   paypalMonthlyPlanId: initialPaypalMonthlyPlanId,
   paypalAnnualPlanId: initialPaypalAnnualPlanId,
   paypalBuyerCountry: initialPaypalBuyerCountry,
+  disableWorkspaceBootstrap = false,
 }: SettingsHubProps) {
   const router = useRouter();
   const { isLoaded, isSignedIn, user } = useUser();
@@ -247,7 +249,7 @@ export function SettingsHub({
   }, []);
 
   useEffect(() => {
-    if (initialWorkspaceId) {
+    if (initialWorkspaceId || disableWorkspaceBootstrap) {
       return;
     }
 
@@ -332,6 +334,7 @@ export function SettingsHub({
     initialSelectedProfileId,
     initialWorkspaceId,
     initialWorkspaceName,
+    disableWorkspaceBootstrap,
   ]);
 
   useEffect(() => {
@@ -664,6 +667,9 @@ export function SettingsHub({
           headers: {
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({
+            reseedStarterWorkspace: false,
+          }),
         });
 
         const payload = (await response.json().catch(() => ({}))) as { error?: string };
@@ -674,12 +680,26 @@ export function SettingsHub({
         persistSelectedWorkspaceId("");
         syncSelectedWorkspaceCookie();
         clearAllWorkspaceCaches();
+        setWorkspaceId("");
+        setWorkspaceName("Settings");
+        setSelectedProfileId("");
+        setActiveProfileId("");
+        setBillingSubscription(null);
+        setPlanUsage({
+          accountCount: 0,
+          cashAccountCount: 0,
+          monthlyUploadCount: 0,
+          transactionCount: 0,
+        });
+        setPlanLimits({ accountLimit: 0, monthlyUploadLimit: 0, transactionLimit: null });
+        setPlanLoaded(false);
 
         setDataDeleteModal({
           scope: dataDeleteModal.scope,
           phase: "success",
           deletedCount: null,
         });
+        router.refresh();
         return;
       }
 
@@ -689,6 +709,7 @@ export function SettingsHub({
         phase: "success",
         deletedCount: deleted,
       });
+      router.refresh();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Something went wrong.");
       closeDeleteModal();

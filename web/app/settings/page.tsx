@@ -18,7 +18,7 @@ export default async function SettingsPage() {
   let workspaceId = "";
   let workspaceName = "Settings";
 
-  if (user && hasCompletedOnboarding(user)) {
+  if (user && hasCompletedOnboarding(user) && user.dataWipedAt === null) {
     const cookieStore = await cookies();
     const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
     const selectedWorkspace =
@@ -79,6 +79,7 @@ export default async function SettingsPage() {
         paypalMonthlyPlanId={null}
         paypalAnnualPlanId={null}
         paypalBuyerCountry={null}
+        disableWorkspaceBootstrap={Boolean(user?.dataWipedAt)}
       />
     </CloverShell>
   );

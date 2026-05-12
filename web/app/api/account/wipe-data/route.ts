@@ -5,15 +5,20 @@ import { capturePostHogServerEvent } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const { userId, isGuest } = await requireAuth();
+    const payload = (await request.json().catch(() => null)) as
+      | {
+          reseedStarterWorkspace?: boolean;
+        }
+      | null;
 
     if (isGuest) {
       return NextResponse.json({ error: "Guest accounts cannot be wiped." }, { status: 403 });
     }
 
-    await wipeLocalUserData(userId);
+    await wipeLocalUserData(userId, { reseedStarterWorkspace: payload?.reseedStarterWorkspace !== false });
     void capturePostHogServerEvent("account_wiped", userId, {
       wipe_scope: "all_app_data",
     });
