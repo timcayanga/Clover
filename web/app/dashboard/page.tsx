@@ -627,7 +627,6 @@ async function DashboardStream({
   const daysSinceLastImport = latestImport
     ? Math.max(0, Math.floor((now.getTime() - latestImport.uploadedAt.getTime()) / 86400000))
     : null;
-  const goalAction = goalProgress.nextAction;
   const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
   const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
   const totalBalanceLabel = formatCurrency(savingsTotal, displayCurrency);
@@ -646,7 +645,6 @@ async function DashboardStream({
     },
   ];
   const goalHeroHeading = goalKey ? "Goal progress" : "Set a goal to track your progress";
-  const goalHeroCopy = goalKey ? goalProgress.coachCopy : null;
   const goalHeroActionLabel = goalKey ? "Adjust goal" : "Set a goal";
   const goalEditorMonthlyIncome = currentSummary.current.income > 0 ? currentSummary.current.income : null;
   const maxActivityCount = Math.max(...activitySeries.map((point) => point.count), 1);
@@ -763,35 +761,24 @@ async function DashboardStream({
               </div>
             ) : goalKey ? (
               <div className="dashboard-home__goal-card">
-                <div
-                  className="dashboard-home__ring dashboard-home__ring--compact"
-                  style={{
-                    background: `conic-gradient(var(--accent) 0 ${goalProgressPercent}%, rgba(15, 23, 42, 0.08) ${goalProgressPercent}% 100%)`,
-                  }}
-                >
-                  <div className="dashboard-home__ring-inner">
-                    <strong>{goalProgress.progressPercent === null ? "Set" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
-                    <span>{goalProgress.bandLabel}</span>
-                  </div>
-                </div>
-                <div className="dashboard-home__goal-card-copy">
+                <div className="dashboard-home__goal-card-head">
                   <p className="eyebrow">Track progress</p>
-                  <strong>{goalSummaryLabel}</strong>
-                  <p>{goalHeroCopy}</p>
-                  <small>{goalProgressLabel} complete · {goalAction}</small>
-                  <GoalsEditorModal
-                    compact
-                    triggerLabel={goalHeroActionLabel}
-                    triggerClassName="button button-secondary button-small"
-                    goals={GOAL_OPTIONS}
-                    currentGoal={goalKey}
-                    currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
-                    currentGoalPlan={currentGoalPlan}
-                    monthlyIncome={goalEditorMonthlyIncome}
-                    suggestedTargetAmount={monthSummary.expense > 0 ? monthSummary.expense : null}
-                    beginnerMode={user.financialExperience === "beginner"}
-                    currency={displayCurrency}
-                  />
+                </div>
+                <div className="dashboard-home__goal-card-body">
+                  <div
+                    className="dashboard-home__ring dashboard-home__ring--compact"
+                    style={{
+                      background: `conic-gradient(var(--accent) 0 ${goalProgressPercent}%, rgba(15, 23, 42, 0.08) ${goalProgressPercent}% 100%)`,
+                    }}
+                  >
+                    <div className="dashboard-home__ring-inner">
+                      <strong>{goalProgress.progressPercent === null ? "Set" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
+                    </div>
+                  </div>
+                  <div className="dashboard-home__goal-card-copy">
+                    <strong>{goalSummaryLabel}</strong>
+                    <small>{goalProgressLabel} complete</small>
+                  </div>
                 </div>
               </div>
             ) : (

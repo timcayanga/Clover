@@ -4048,24 +4048,35 @@ body.transactions-manual-open .shell-quick-add-button {
 .dashboard-home__goal-card,
 .dashboard-home__starter-card {
   display: grid;
-  gap: 10px;
-  padding: 18px;
-  border-radius: 30px;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: var(--shadow-soft);
+  gap: 14px;
+  padding: 16px;
+  border-radius: 28px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow);
   height: 100%;
 }
 
 .dashboard-home__goal-card {
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
+  align-content: start;
 }
 
 .dashboard-home__goal-card--empty {
   grid-template-columns: 1fr;
   align-items: start;
+}
+
+.dashboard-home__goal-card-head {
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.dashboard-home__goal-card-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
 }
 
 .dashboard-home__goal-card-copy {
