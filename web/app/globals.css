@@ -10518,6 +10518,11 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   min-width: 132px;
 }
 
+.transactions-add-menu__panel {
+  left: auto;
+  right: 0;
+}
+
 .transactions-more-menu__panel {
   left: auto;
   right: 0;
