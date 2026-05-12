@@ -2250,19 +2250,22 @@ export function ImportFilesModal({
               errorMessage: null,
           });
           if (!seededFallbackSummary && (parsedRowsCount > 0 || Boolean(processingIdentity?.accountName || processingIdentity?.institution))) {
+            const persistedFallbackAccountId =
+              accountId && !accountId.startsWith("optimistic-")
+                ? accountId
+                : await ensureTargetAccountId(
+                    processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
+                    processingIdentity?.institution ?? null,
+                    processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+                    processingIdentity?.accountNumber ?? null,
+                    stableOptimisticBalance,
+                    null
+                  );
             const fallbackAccountId =
-              summaryContext.optimisticAccountId && summaryContext.optimisticAccountId.trim()
+              persistedFallbackAccountId ??
+              (summaryContext.optimisticAccountId && summaryContext.optimisticAccountId.trim()
                 ? summaryContext.optimisticAccountId
-                : accountId && !accountId.startsWith("optimistic-")
-                  ? accountId
-                  : await ensureTargetAccountId(
-                      processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
-                      processingIdentity?.institution ?? null,
-                      processingIdentity?.accountType ?? summaryContext.accountType ?? null,
-                      processingIdentity?.accountNumber ?? null,
-                      stableOptimisticBalance,
-                      null
-                    );
+                : null);
             latestResolvedAccountId = fallbackAccountId;
             const fallbackPreviewTransactions =
               summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
@@ -2304,6 +2307,52 @@ export function ImportFilesModal({
             seededFallbackSummary = true;
             seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
             await Promise.resolve(onImported(fallbackSummary));
+            if (parsedRowsCount > 0 && fallbackPreviewTransactions.length > 0) {
+              emitItemUpdate({
+                status: "done",
+                confirmationState: "confirmed",
+                progress: 100,
+                progressLabel: "Done",
+                targetAccountId: fallbackAccountId,
+                importedRows: Math.max(parsedRowsCount, fallbackPreviewTransactions.length),
+              });
+              emitImportActivity({
+                workspaceId,
+                surface: importActivitySurfaceRef.current,
+                status: "done",
+                fileName: summaryContext.fileName,
+                fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+                fileTotal: items.length,
+                completedFiles: completedFileCount + 1,
+                progress: 100,
+                detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
+                summary: fallbackSummary,
+                errorMessage: null,
+              });
+              if (fallbackAccountId && !fallbackAccountId.startsWith("optimistic-")) {
+                void confirmItemImport(
+                  itemId,
+                  importFileId,
+                  fallbackAccountId,
+                  {
+                    fileName: summaryContext.fileName,
+                    accountName: fallbackSummary.accountName,
+                    institution: fallbackSummary.institution,
+                    accountNumber: fallbackSummary.accountNumber ?? null,
+                    accountType: fallbackSummary.accountType,
+                    optimisticAccountId: summaryContext.optimisticAccountId,
+                    previewTransactions: fallbackPreviewTransactions,
+                  },
+                  { backgroundOnly: true }
+                ).catch((error) => {
+                  console.warn("Background raw-row confirmation failed after visible import", {
+                    importFileId,
+                    error: error instanceof Error ? error.message : String(error),
+                  });
+                });
+              }
+              return;
+            }
             emitItemUpdate({
               status: "importing",
               confirmationState: "pending",

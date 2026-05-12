@@ -50,34 +50,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       importAgeMs > selfHealDelayMs &&
       ((parsedRowsCountBefore === 0 && confirmedTransactionsCountBefore === 0 && ((importFile.status === "processing" || importFile.status === "queued") || (importFile.status === "done" && checkpointRowCount === 0))) ||
         (importFile.status === "done" && hasParsedRows && !hasConfirmedRows));
-    const shouldInlineSelfHeal = shouldSelfHeal && hasParsedRows && importAgeMs > 10_000;
-
-    if (shouldInlineSelfHeal) {
-      try {
-        const { confirmImportFile } = await import("@/workers/import-processor");
-        await confirmImportFile(importId, importFile.accountId ?? null);
-        importFile = (await fetchImportFileCompat(importId)) ?? importFile;
-        statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
-          ? await prisma.accountStatementCheckpoint.findUnique({
-              where: { importFileId: importId },
-            })
-          : null;
-        checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
-      } catch (error) {
-        console.warn("Unable to inline self-heal stalled import status", {
-          importId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    } else if (shouldSelfHeal) {
+    if (shouldSelfHeal && !hasParsedRows) {
       void (async () => {
         try {
-          const { confirmImportFile, processImportFileText } = await import("@/workers/import-processor");
-          if (hasParsedRows) {
-            await confirmImportFile(importId, importFile.accountId ?? null);
-          } else {
-            await processImportFileText(importId, { actorUserId: null });
-          }
+          const { processImportFileText } = await import("@/workers/import-processor");
+          await processImportFileText(importId, { actorUserId: null });
         } catch (error) {
           console.warn("Unable to self-heal stalled import status", {
             importId,
@@ -102,26 +79,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       enrichmentJob && enrichmentJob.status !== "done" && finalizationRemainingRows > 0
         ? Math.max(60, Math.min(600, Math.ceil(finalizationRemainingRows / 25) * 60))
         : 0;
-    if (enrichmentJob && enrichmentJob.status !== "done" && enrichmentJob.status !== "failed") {
-      void (async () => {
-        try {
-          const { processImportEnrichmentJobs } = await import("@/workers/import-processor");
-          const limit = Math.max(1, Math.min(10, Math.ceil(Math.max(1, finalizationRemainingRows || Number(enrichmentJob.totalRows ?? 50)) / 50)));
-          await processImportEnrichmentJobs({ importFileId: importId, limit });
-        } catch (error) {
-          console.warn("Unable to resume import enrichment from status poll", {
-            importId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      })();
-    }
-
     const confirmationStatus =
-      importFile.status === "failed"
-        ? "failed"
-        : confirmedTransactionsCount > 0
-          ? "confirmed"
+      confirmedTransactionsCount > 0
+        ? "confirmed"
+        : importFile.status === "failed"
+          ? "failed"
           : importFile.status === "done" && hasParsedRows
             ? "staged"
             : importFile.status === "done"

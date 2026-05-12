@@ -3514,7 +3514,15 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   let statementConfidence = 0;
   let reconciledAccountBalance: string | null = null;
   const transactions: ImportInsightSourceRow[] = [];
-  const trainingSignalJobs: Promise<unknown>[] = [];
+  const trainingSignals: Array<{
+    transactionId: string;
+    merchantText: string;
+    categoryId: string;
+    categoryName: string;
+    type: "income" | "expense" | "transfer";
+    confidence: number;
+    notes: string | null;
+  }> = [];
   const preparedTransactions: PreparedImportTransaction[] = [];
   let qaMetadataForRun: {
     institution: string | null;
@@ -3953,20 +3961,15 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
 
   for (const entry of preparedTransactions) {
     transactions.push(entry.insightRow);
-    trainingSignalJobs.push(
-      recordTrainingSignal({
-        workspaceId: importFile.workspaceId,
-        importFileId,
-        transactionId: entry.transactionId,
-        merchantText: entry.trainingSignal.merchantText,
-        categoryId: entry.trainingSignal.categoryId,
-        categoryName: entry.trainingSignal.categoryName,
-        type: entry.trainingSignal.type,
-        source: "import_confirmation",
-        confidence: entry.trainingSignal.confidence,
-        notes: entry.trainingSignal.notes,
-      }).catch(() => null)
-    );
+    trainingSignals.push({
+      transactionId: entry.transactionId,
+      merchantText: entry.trainingSignal.merchantText,
+      categoryId: entry.trainingSignal.categoryId,
+      categoryName: entry.trainingSignal.categoryName,
+      type: entry.trainingSignal.type,
+      confidence: entry.trainingSignal.confidence,
+      notes: entry.trainingSignal.notes,
+    });
   }
 
   const confirmedStatementRow = statementRow as unknown as { accountName?: unknown; institution?: unknown } | null;
@@ -3989,8 +3992,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       confidence: 100,
     }).catch(() => null);
   }
-
-  await Promise.allSettled(trainingSignalJobs);
 
   const insightSummary = buildImportInsightSummary(transactions);
 
@@ -4046,6 +4047,23 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       accountBalance: reconciledAccountBalance,
     };
   }, { maxWait: 15_000, timeout: 30_000 });
+
+  void Promise.allSettled(
+    trainingSignals.map((entry) =>
+      recordTrainingSignal({
+        workspaceId: importFile.workspaceId,
+        importFileId,
+        transactionId: entry.transactionId,
+        merchantText: entry.merchantText,
+        categoryId: entry.categoryId,
+        categoryName: entry.categoryName,
+        type: entry.type,
+        source: "import_confirmation",
+        confidence: entry.confidence,
+        notes: entry.notes,
+      })
+    )
+  ).catch(() => null);
 
   if (qaMetadataForRun && qaAccountForRun) {
     try {
