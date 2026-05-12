@@ -1233,18 +1233,21 @@ export function CloverShell({
             }
 
             return (
-              <button
+              <Link
                 key={item.key}
                 className={`nav-link ${active === item.key ? "is-active" : ""}`}
-                type="button"
                 aria-current={active === item.key ? "page" : undefined}
-                onClick={() => navigateTo(item.href)}
+                href={item.href}
+                prefetch
+                onClick={closeChrome}
+                onMouseEnter={() => prefetchNavTarget(item.href)}
+                onTouchStart={() => prefetchNavTarget(item.href)}
               >
                 <span className="nav-link__icon" aria-hidden="true">
                   <MenuIcon name={item.key} />
                 </span>
                 {item.label}
-              </button>
+              </Link>
             );
           })}
         </nav>

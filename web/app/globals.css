@@ -903,6 +903,8 @@ body.dashboard-modal-open .app-shell {
   border-radius: 15px;
   font-size: 14px;
   line-height: 1.2;
+  cursor: pointer;
+  text-decoration: none;
   transition: background 160ms ease, color 160ms ease, transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
