@@ -1683,6 +1683,32 @@ const main = async () => {
     );
   }
 
+  const mainBarReceiptPreview = parseReceiptText([
+    "DON'T LIVE LIFE WITHOUT IT",
+    "12/23/24 9:16 PM",
+    "Table: BT1",
+    "Server: Claude",
+    "Transaction Type: MAIN BAR",
+    "Qty Item Description Amount",
+    "1 Rice Is Nice 440.00",
+    "1 Dirty Sorbetes 440.00",
+    "2 Dounua 960.00",
+    "Sub-total: 1840.00",
+    "Service Charge: 164.29",
+    "Total Amount 2004.29",
+    "Vatable Sales 1642.65",
+    "12% VAT 197.14",
+  ].join("\n"));
+  if (mainBarReceiptPreview.billDate?.slice(0, 10) !== "2024-12-23") {
+    throw new Error(`expected main bar receipt to resolve 2024-12-23, got ${mainBarReceiptPreview.billDate ?? "null"}`);
+  }
+  if (mainBarReceiptPreview.merchantName !== "Main Bar") {
+    throw new Error(`expected main bar receipt to resolve Main Bar, got ${mainBarReceiptPreview.merchantName ?? "null"}`);
+  }
+  if (mainBarReceiptPreview.total !== "2004.29") {
+    throw new Error(`expected main bar receipt to resolve 2004.29, got ${mainBarReceiptPreview.total ?? "null"}`);
+  }
+
   const jarandjamReceiptPreview = parseReceiptText([
     "Br    =",
     "= a",
