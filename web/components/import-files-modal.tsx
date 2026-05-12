@@ -1819,22 +1819,6 @@ export function ImportFilesModal({
         seedImportedWorkspaceCaches(workspaceId, summary);
         await Promise.resolve(onImported(summary));
 
-        const settledVisible = await waitForImportSettledVisibility({
-          workspaceId,
-          accountId: resolvedAccountId,
-          importedRows,
-          expectedBalance: summary.balance ?? null,
-          timeoutMs: 10_000,
-        });
-
-        if (!settledVisible) {
-          console.warn("Import confirmation succeeded before settled data became visible", {
-            importFileId,
-            accountId: resolvedAccountId,
-            importedRows,
-          });
-        }
-
         emitItemUpdate({
           status: "done",
           confirmationState: "confirmed",
@@ -1854,9 +1838,24 @@ export function ImportFilesModal({
           fileTotal: items.length,
           completedFiles: completedFileCount + 1,
           progress: 100,
-          detail: "All set",
+          detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
           summary,
           errorMessage: null,
+        });
+        void waitForImportSettledVisibility({
+          workspaceId,
+          accountId: resolvedAccountId,
+          importedRows,
+          expectedBalance: summary.balance ?? null,
+          timeoutMs: 10_000,
+        }).then((settledVisible) => {
+          if (!settledVisible) {
+            console.warn("Import confirmation succeeded before settled data became visible", {
+              importFileId,
+              accountId: resolvedAccountId,
+              importedRows,
+            });
+          }
         });
         capturePostHogClientEvent("import_confirmed", {
           workspace_id: workspaceId || null,
@@ -1876,29 +1875,70 @@ export function ImportFilesModal({
         Boolean(summaryContext.accountName || summaryContext.accountNumber || summaryContext.institution) ||
         Boolean(resolvedAccountId)
       ) {
+        const resolvedAccountType = (
+          summaryContext.accountType ??
+          accounts.find((account) => account.id === resolvedAccountId)?.type ??
+          inferAccountTypeFromStatement(summaryContext.institution, summaryContext.accountName, "bank")
+        ) as UploadInsightsSummary["accountType"];
+        const rowsImported = Math.max(lastKnownConfirmedRows, summaryContext.previewTransactions?.length ?? 0);
+        const summary = buildOptimisticUploadSummary(
+          summaryContext.fileName,
+          rowsImported,
+          resolvedAccountId,
+          summaryContext.accountName,
+          summaryContext.institution ?? null,
+          resolvedAccountType,
+          resolvedAccountId.startsWith("optimistic-") ? summaryContext.optimisticAccountId ?? resolvedAccountId : null,
+          pickStableBalance(
+            lastKnownAccountBalance,
+            findKnownImportedBalance(accounts, {
+              workspaceId,
+              accountId: resolvedAccountId,
+              accountName: summaryContext.accountName,
+              institution: summaryContext.institution ?? null,
+              accountNumber: summaryContext.accountNumber ?? null,
+              accountType: resolvedAccountType,
+            })
+          ),
+          getKnownPreviewTransactions({
+            workspaceId,
+            accountId: resolvedAccountId,
+            optimisticAccountId: summaryContext.optimisticAccountId ?? null,
+            accountName: summaryContext.accountName,
+            institution: summaryContext.institution ?? null,
+            accountNumber: summaryContext.accountNumber ?? null,
+            accountType: resolvedAccountType,
+            previewTransactions: summaryContext.previewTransactions,
+          }),
+          summaryContext.accountNumber ?? null
+        );
+        seedImportedWorkspaceCaches(workspaceId, summary);
+        await Promise.resolve(onImported(summary));
         emitItemUpdate({
-          status: "importing",
-          confirmationState: "pending",
-          progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
-          progressLabel: "Finalizing import",
+          status: "done",
+          confirmationState: "confirmed",
+          progress: 100,
+          progressLabel: "Done",
+          targetAccountId: resolvedAccountId,
+          importedRows: rowsImported,
         });
         emitImportActivity({
           workspaceId,
           surface: importActivitySurfaceRef.current,
-          status: "active",
+          status: "done",
           fileName: summaryContext.fileName,
           fileIndex: items.findIndex((item) => item.id === itemId) + 1,
           fileTotal: items.length,
-          completedFiles: completedFileCount,
-          progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
-          detail: "Clover found the account details and is still saving the rest",
-          summary: null,
+          completedFiles: completedFileCount + 1,
+          progress: 100,
+          detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
+          summary,
           errorMessage: null,
         });
         return {
-          status: "staged",
-          importedRows: lastKnownConfirmedRows || null,
-          summary: null,
+          status: "done",
+          importedRows: rowsImported,
+          summary,
         };
       }
 
@@ -1924,11 +1964,11 @@ export function ImportFilesModal({
     ) => {
       if (rowsCount > 0) {
         if (resolved.accountNumber) {
-          return "Clover found the transactions and is applying names and categories";
+          return "Accounts and transactions are visible. Clover is cleaning up names and categories in the background.";
         }
 
         if (resolved.accountName || resolved.institution) {
-          return "Clover found the transactions and is applying categories";
+          return "Accounts and transactions are visible. Clover is cleaning up categories in the background.";
         }
       }
 
@@ -2733,7 +2773,7 @@ export function ImportFilesModal({
 
           const previewSummary = buildOptimisticUploadSummary(
             summaryContext.fileName,
-            0,
+            Math.max(parsedRowsCount, summaryContext.previewTransactions?.length ?? 0),
             resolvedAccountId,
             resolvedIdentity.accountName ?? null,
             resolvedIdentity.institution ?? null,
@@ -2770,6 +2810,10 @@ export function ImportFilesModal({
           );
 
           updateItem(itemId, {
+            status: "done",
+            confirmationState: "confirmed",
+            progress: 100,
+            progressLabel: "Done",
             targetAccountId: resolvedAccountId,
           });
 
@@ -2778,21 +2822,14 @@ export function ImportFilesModal({
           publishImportActivity({
             workspaceId,
             surface: importActivitySurfaceRef.current,
-            status: "active",
+            status: "done",
             fileName: summaryContext.fileName,
             fileIndex: items.findIndex((item) => item.id === itemId) + 1,
             fileTotal: items.length,
-            completedFiles: completedFileCount,
-            progress: IMPORT_PROGRESS.loadingAccount,
-            detail: getProgressDetail(
-              {
-                accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
-                institution: resolvedIdentity.institution ?? summaryContext.institution,
-                accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber,
-              },
-              summaryContext.previewTransactions?.length ?? 0
-            ),
-            summary: null,
+            completedFiles: completedFileCount + 1,
+            progress: 100,
+            detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
+            summary: previewSummary,
             errorMessage: null,
           });
 
