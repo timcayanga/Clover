@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 type ImportedAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
@@ -769,6 +769,76 @@ const main = async () => {
     throw new Error("expected BDO withdrawal rows to classify as expense");
   }
   console.log("[PASS] BDO classification | bank transfer and withdrawal rows classified correctly");
+
+  const mayaSamplesDir = join(root, "Samples/Maya");
+  const mayaSampleFiles = (await readdir(mayaSamplesDir)).filter((entry) => /\.pdf$/i.test(entry)).sort();
+  for (const mayaFile of mayaSampleFiles) {
+    const mayaPath = join(mayaSamplesDir, mayaFile);
+    const mayaBytes = await readFile(mayaPath);
+    const mayaText = await readUploadedFileText({
+      name: basename(mayaPath),
+      type: "application/pdf",
+      arrayBuffer: async () => {
+        const copy = new Uint8Array(mayaBytes.length);
+        copy.set(mayaBytes);
+        return copy.buffer as ArrayBuffer;
+      },
+    });
+    const mayaMetadata = detectStatementMetadataFromText(mayaText);
+    const mayaRows = parser.parseImportText(mayaText, basename(mayaPath), "application/pdf", {
+      institution: mayaMetadata.institution,
+      accountName: mayaMetadata.accountName,
+      accountNumber: mayaMetadata.accountNumber,
+    });
+
+    const problematicRows = mayaRows.filter((row) => {
+      const confidence = typeof row.confidence === "number" ? row.confidence : 0;
+      if (confidence < 90 || row.categoryName === "Other") {
+        return true;
+      }
+
+      if (row.categoryName === "Income") {
+        return row.type !== "income";
+      }
+
+      if (row.categoryName === "Financial") {
+        return row.type !== "expense";
+      }
+
+      if (row.categoryName === "Transfers") {
+        return row.type !== "transfer";
+      }
+
+      return false;
+    });
+
+    if (problematicRows.length > 0) {
+      const sample = problematicRows
+        .slice(0, 5)
+        .map((row) => `${row.description ?? row.merchantRaw ?? "missing"}:${row.categoryName}/${row.type}/${row.confidence ?? "no-confidence"}`)
+        .join(", ");
+      throw new Error(`expected Maya rows to finalize deterministically for ${mayaFile}; problematic rows: ${sample}`);
+    }
+
+    if (/2023DEC/i.test(mayaFile)) {
+      const counts = mayaRows.reduce<Record<string, number>>((accumulator, row) => {
+        const key = `${row.categoryName}:${row.type}`;
+        accumulator[key] = (accumulator[key] ?? 0) + 1;
+        return accumulator;
+      }, {});
+      const expectedCounts: Record<string, number> = {
+        "Income:income": 29,
+        "Financial:expense": 10,
+        "Transfers:transfer": 21,
+      };
+      for (const [key, expected] of Object.entries(expectedCounts)) {
+        if (counts[key] !== expected) {
+          throw new Error(`expected Maya December 2023 ${key} count ${expected}, got ${counts[key] ?? 0}`);
+        }
+      }
+    }
+  }
+  console.log(`[PASS] Maya classification | ${mayaSampleFiles.length} samples finalize without low-confidence Other rows`);
 
   const dateStampedBankName = normalizeBankName("2026-05-01 22.01.12 0112");
   if (dateStampedBankName !== "Unknown") {

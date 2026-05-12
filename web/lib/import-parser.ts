@@ -13429,22 +13429,52 @@ const parseMayaSavingsTransactionBlock = (
 
   const amountStart = amountMatch?.index ?? bodyText.length;
   let detailsText = normalizeWhitespace(bodyText.slice(0, amountStart));
+  const amountEnd = amountMatch ? (amountMatch.index ?? 0) + amountMatch[0].length : amountStart;
+  const balanceEnd = balanceMatch ? (balanceMatch.index ?? 0) + balanceMatch[0].length : amountEnd;
+  const trailingDetailsText = normalizeWhitespace(bodyText.slice(balanceEnd))
+    .replace(/^\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)\b/i, "")
+    .replace(/\bTOTAL\b.*$/i, "")
+    .trim();
   detailsText = detailsText.replace(/\b(?:running\s+balance|balance)\s+(?:PHP\s*)?[0-9][0-9,]*\.\d{2}\b.*$/i, "").trim();
   detailsText = detailsText.replace(/\b(?:transaction\s+no\.?|reference\s+no\.?|ref\.?\s*no\.?)\s*[:#-]?\s*\d{5,}\b.*$/i, "").trim();
   detailsText = detailsText.replace(/\b\d{5,}\b/g, " ").replace(/\s{2,}/g, " ").trim();
   detailsText = detailsText.replace(/\s*-\s*$/, "").trim();
 
-  const description = detailsText || bodyText;
+  const descriptionSeed = detailsText || bodyText;
+  const trailingLower = trailingDetailsText.toLowerCase();
+  const description = (() => {
+    if (/boost\s+campaign/i.test(descriptionSeed) && /interest\s+withholding\s+tax/i.test(trailingDetailsText)) {
+      return "Boost Campaign Interest Withholding Tax";
+    }
+
+    if (/boost\s+campaign/i.test(descriptionSeed) && /interest\s+applied/i.test(trailingDetailsText)) {
+      return "Boost Campaign Interest applied";
+    }
+
+    if (/base\s+interest/i.test(descriptionSeed) && /withholding\s+tax/i.test(trailingDetailsText)) {
+      return "Base Interest Withholding Tax";
+    }
+
+    if (/interest\s+applied/i.test(descriptionSeed) && /\d+(?:\.\d+)?%\s*p\.a\./i.test(trailingDetailsText)) {
+      return `Interest Applied (at ${trailingDetailsText.match(/\d+(?:\.\d+)?%\s*p\.a\./i)?.[0] ?? "3.5% p.a."})`;
+    }
+
+    if (trailingLower && /^(wallet transfer|deposit|withdrawal|auto cash[- ]?in)$/i.test(descriptionSeed)) {
+      return descriptionSeed;
+    }
+
+    return descriptionSeed;
+  })();
   const lower = description.toLowerCase();
   const balanceDelta = state.previousBalance !== null && balance !== null ? balance - state.previousBalance : null;
 
   let type: TransactionType = "expense";
-  if (/interest|deposit|incoming|cash in|credit\b/.test(lower)) {
-    type = "income";
-  } else if (/fee|tax/.test(lower)) {
+  if (/fee|tax/.test(lower)) {
     type = "expense";
-  } else if (/withdrawal|wallet transfer|transfer|auto cash[- ]?in|send money|received money|payment|cash out/.test(lower)) {
+  } else if (/deposit|withdrawal|wallet transfer|transfer|auto cash[- ]?in|send money|received money|payment|cash out|cash in/.test(lower)) {
     type = "transfer";
+  } else if (/interest|salary|incoming|credit\b/.test(lower)) {
+    type = "income";
   } else if (balanceDelta !== null) {
     type = balanceDelta > 0 ? "income" : "transfer";
   }
@@ -13467,12 +13497,14 @@ const parseMayaSavingsTransactionBlock = (
     accountName: state.accountName,
     institution: state.institution ?? undefined,
     type,
+    confidence: 96,
     rawPayload: {
       bank: "Maya",
       kind: "maya_savings_transaction",
       line: rowText,
       dateText,
       description,
+      trailingDetails: trailingDetailsText || null,
       amountText: amountMatch?.[0] ?? null,
       balanceText: balanceMatch?.[0] ?? null,
       balance,

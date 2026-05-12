@@ -25,6 +25,7 @@ This document captures the Maya parsing rules learned from the synthetic trainin
 - Keep `Salary Credit` as `Income`.
 - Keep `Interest Earned` as `Income`.
 - Keep `Tax Withheld` as `Financial`.
+- Preserve trailing savings-row detail text after the amount and running-balance columns when it disambiguates the transaction, especially `Boost Campaign Interest applied`, `Boost Campaign Interest Withholding Tax`, and `Base Interest Withholding Tax`.
 - Keep `Adjustment Reversal` as a review-worthy adjustment entry.
 - When the statement exposes a table with `Date & Time`, `Transaction Type & Details`, `Transaction No.`, `Amount (PHP)`, and `Running Balance`, parse the row from the date/time, details, amount, and running balance columns, and ignore the transaction number column.
 
