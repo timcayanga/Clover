@@ -1239,6 +1239,8 @@ function AccountsPageContent() {
   const loadWorkspaceData = async (workspaceId: string, options?: { silent?: boolean; awaitHydration?: boolean }) => {
     const loadSeq = ++workspaceLoadSeqRef.current;
     let fetchedAccounts: Account[] = [];
+    let visibleFetchedAccounts: Account[] = [];
+    let visibleCachedWorkspaceAccounts: Account[] = [];
     const backgroundTasks: Promise<void>[] = [];
 
     if (!workspaceId) {
@@ -1270,25 +1272,17 @@ function AccountsPageContent() {
         const payload = accountsResponse.json;
         fetchedAccounts = Array.isArray(payload?.accounts) ? (payload.accounts as Account[]) : [];
         const cachedWorkspaceAccounts = getCachedAccountsWorkspace(workspaceId)?.accounts as Account[] | undefined;
-        for (const fetchedAccount of fetchedAccounts) {
-          clearDeletedWorkspaceAccount(workspaceId, fetchedAccount.id);
-          clearDeletingWorkspaceAccount(workspaceId, fetchedAccount.id);
-        }
-        deletedAccountIdsRef.current = new Set(
-          getDeletedWorkspaceAccountIds(workspaceId).filter(
-            (deletedId) => !fetchedAccounts.some((account) => account.id === deletedId)
-          )
+        visibleFetchedAccounts = fetchedAccounts.filter((account) => !deletedAccountIdsRef.current.has(account.id));
+        visibleCachedWorkspaceAccounts = (cachedWorkspaceAccounts ?? []).filter(
+          (account) => !deletedAccountIdsRef.current.has(account.id)
         );
-        deletingAccountIdsRef.current = new Set(
-          getDeletingWorkspaceAccountIds(workspaceId).filter(
-            (deletingId) => !fetchedAccounts.some((account) => account.id === deletingId)
-          )
-        );
+        deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(workspaceId));
+        deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(workspaceId));
         setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
         setAccounts((current) =>
           mergeAccountsWithOptimisticImports(
-            fetchedAccounts,
-            current.length > 0 ? current : cachedWorkspaceAccounts ?? [],
+            visibleFetchedAccounts,
+            current.length > 0 ? current.filter((account) => !deletedAccountIdsRef.current.has(account.id)) : visibleCachedWorkspaceAccounts,
             deletedAccountIdsRef.current
           )
         );
@@ -1328,9 +1322,14 @@ function AccountsPageContent() {
 
           const cachedWorkspaceTransactions = getCachedAccountsWorkspace(workspaceId);
           persistTransactionsWorkspaceCache(workspaceId, {
-            accounts: (cachedWorkspaceTransactions?.accounts as Account[] | undefined) ?? fetchedAccounts,
+            accounts: (cachedWorkspaceTransactions?.accounts as Account[] | undefined) ?? visibleFetchedAccounts,
             categories: fetchedCategories,
-            transactions: (cachedWorkspaceTransactions?.transactions as Transaction[] | undefined) ?? [],
+            transactions:
+              (cachedWorkspaceTransactions?.transactions as Transaction[] | undefined)?.filter(
+                (transaction) =>
+                  !deletedAccountIdsRef.current.has(transaction.accountId) &&
+                  !deletingAccountIdsRef.current.has(transaction.accountId)
+              ) ?? [],
             imports: (cachedWorkspaceTransactions?.imports as ImportFile[] | undefined) ?? [],
           });
         } catch {
@@ -1356,10 +1355,26 @@ function AccountsPageContent() {
               ? (transactionsResponse.json.transactions as Transaction[])
               : [];
             const cachedWorkspaceTransactions = getCachedAccountsWorkspace(workspaceId)?.transactions as Transaction[] | undefined;
+            const visibleFetchedTransactions = fetchedTransactions.filter(
+              (transaction) =>
+                !deletedAccountIdsRef.current.has(transaction.accountId) &&
+                !deletingAccountIdsRef.current.has(transaction.accountId)
+            );
+            const visibleCachedWorkspaceTransactions = (cachedWorkspaceTransactions ?? []).filter(
+              (transaction) =>
+                !deletedAccountIdsRef.current.has(transaction.accountId) &&
+                !deletingAccountIdsRef.current.has(transaction.accountId)
+            );
             setTransactions((current) =>
               mergeImportedWorkspaceTransactions(
-                current.length > 0 ? current : cachedWorkspaceTransactions ?? [],
-                fetchedTransactions
+                current.length > 0
+                  ? current.filter(
+                      (transaction) =>
+                        !deletedAccountIdsRef.current.has(transaction.accountId) &&
+                        !deletingAccountIdsRef.current.has(transaction.accountId)
+                    )
+                  : visibleCachedWorkspaceTransactions,
+                visibleFetchedTransactions
               )
             );
           }

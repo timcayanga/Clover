@@ -54,6 +54,23 @@ export async function GET() {
       });
     }
 
+    if (!selectedWorkspace && user.dataWipedAt) {
+      return NextResponse.json({
+        workspaceId: "",
+        workspaceName: "Settings",
+        selectedProfileId: "",
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        imageUrl: user.imageUrl ?? null,
+        planTier: user.planTier,
+        paypalClientId: env.PAYPAL_CLIENT_ID ?? null,
+        paypalMonthlyPlanId: env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null,
+        paypalAnnualPlanId: env.PAYPAL_ANNUAL_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null,
+        paypalBuyerCountry: env.PAYPAL_BUYER_COUNTRY ?? null,
+      });
+    }
+
     return NextResponse.json({
       workspaceId: selectedWorkspace.id,
       workspaceName: selectedWorkspace.name,

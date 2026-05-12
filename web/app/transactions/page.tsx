@@ -46,6 +46,8 @@ import {
   deriveCachedCategoriesFromTransactions,
   findBestImportedAccountMatch as findBestImportedAccountIdentityMatch,
   mergeImportedWorkspaceTransactions,
+  getDeletedWorkspaceAccountIds,
+  getDeletingWorkspaceAccountIds,
   normalizeImportedAccountKey,
   matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
 } from "@/lib/workspace-cache";
@@ -2261,10 +2263,21 @@ function TransactionsPageContent() {
       }
 
       const payload = response.json;
-      const fetchedTransactions = Array.isArray(payload?.transactions) ? payload.transactions : [];
+      const deletedAccountIds = new Set([
+        ...getDeletedWorkspaceAccountIds(workspaceId),
+        ...getDeletingWorkspaceAccountIds(workspaceId),
+      ]);
+      const fetchedTransactions = Array.isArray(payload?.transactions)
+        ? payload.transactions.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
+        : [];
       const cachedWorkspaceTransactions = getCachedTransactionsWorkspace(workspaceId)?.transactions as Transaction[] | undefined;
+      const visibleCachedWorkspaceTransactions = (cachedWorkspaceTransactions ?? []).filter(
+        (transaction) => !deletedAccountIds.has(transaction.accountId)
+      );
       const baseTransactions =
-        transactionsRef.current.length > 0 ? transactionsRef.current : cachedWorkspaceTransactions ?? [];
+        transactionsRef.current.length > 0
+          ? transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
+          : visibleCachedWorkspaceTransactions;
       const mergedTransactions = options?.append
         ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
         : mergeImportedWorkspaceTransactions(baseTransactions, fetchedTransactions);
@@ -2381,8 +2394,16 @@ function TransactionsPageContent() {
       return false;
     }
 
-    const dedupedCachedTransactions = mergeImportedWorkspaceTransactions([], cachedSnapshot.transactions as Transaction[]);
-    setAccounts(cachedSnapshot.accounts);
+    const deletedAccountIds = new Set([
+      ...getDeletedWorkspaceAccountIds(workspaceId),
+      ...getDeletingWorkspaceAccountIds(workspaceId),
+    ]);
+    const filteredAccounts = (cachedSnapshot.accounts as Account[]).filter((account) => !deletedAccountIds.has(account.id));
+    const filteredTransactions = (cachedSnapshot.transactions as Transaction[]).filter(
+      (transaction) => !deletedAccountIds.has(transaction.accountId)
+    );
+    const dedupedCachedTransactions = mergeImportedWorkspaceTransactions([], filteredTransactions);
+    setAccounts(filteredAccounts);
     setCategories(
       cachedSnapshot.categories.length > 0
         ? cachedSnapshot.categories

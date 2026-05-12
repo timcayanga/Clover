@@ -31,6 +31,12 @@ export async function GET() {
       },
     });
 
+    if (user?.dataWipedAt) {
+      return NextResponse.json({
+        workspaces: user.workspaces ?? [],
+      });
+    }
+
     if (user?.workspaces?.length) {
       void Promise.all(user.workspaces.map((workspace) => seedWorkspaceDefaults(workspace.id)));
 
