@@ -89,6 +89,7 @@ type SettingsHubProps = {
   workspaceId: string;
   workspaceName: string;
   selectedProfileId: string;
+  initialProfileList?: ProfileSummary[];
   firstName: string | null;
   lastName: string | null;
   email: string;
@@ -168,6 +169,7 @@ export function SettingsHub({
   workspaceId: initialWorkspaceId,
   workspaceName: initialWorkspaceName,
   selectedProfileId: initialSelectedProfileId,
+  initialProfileList = [],
   firstName: initialFirstName,
   lastName: initialLastName,
   email: initialEmail,
@@ -210,8 +212,8 @@ export function SettingsHub({
   const [passwordCurrentDraft, setPasswordCurrentDraft] = useState("");
   const [passwordNewDraft, setPasswordNewDraft] = useState("");
   const [passwordConfirmDraft, setPasswordConfirmDraft] = useState("");
-  const [profileList, setProfileList] = useState<ProfileSummary[]>([]);
-  const [profilesLoaded, setProfilesLoaded] = useState(false);
+  const [profileList, setProfileList] = useState<ProfileSummary[]>(initialProfileList);
+  const [profilesLoaded, setProfilesLoaded] = useState(initialProfileList.length > 0);
   const [profilesLoading, setProfilesLoading] = useState(false);
   const [profileListMessage, setProfileListMessage] = useState<string | null>(null);
   const [billingSubscription, setBillingSubscription] = useState<BillingSubscriptionSummary | null>(null);
@@ -288,10 +290,10 @@ export function SettingsHub({
         setWorkspaceName(payload.workspaceName ?? "Settings");
         setSelectedProfileId(payload.selectedProfileId ?? "");
         setActiveProfileId(payload.selectedProfileId ?? "");
-        setFirstName(payload.firstName ?? null);
-        setLastName(payload.lastName ?? null);
+        setFirstName(payload.firstName ?? initialFirstName);
+        setLastName(payload.lastName ?? initialLastName);
         setEmail(payload.email ?? initialEmail);
-        setAvatarUrl(payload.imageUrl ?? null);
+        setAvatarUrl(payload.imageUrl ?? initialAvatarUrl ?? null);
         setPlanTier(payload.planTier ?? "free");
         setPaypalClientId(payload.paypalClientId ?? null);
         setPaypalMonthlyPlanId(payload.paypalMonthlyPlanId ?? null);
@@ -372,8 +374,8 @@ export function SettingsHub({
       setWorkspaceName(payload.workspaceName ?? "Personal");
       setSelectedProfileId(payload.selectedProfileId ?? nextWorkspaceId);
       setActiveProfileId(payload.selectedProfileId ?? nextWorkspaceId);
-      setFirstName(payload.firstName ?? null);
-      setLastName(payload.lastName ?? null);
+      setFirstName(payload.firstName ?? initialFirstName);
+      setLastName(payload.lastName ?? initialLastName);
       setAvatarUrl(payload.imageUrl ?? null);
       setEmail(payload.email ?? email);
       setPlanTier(payload.planTier ?? "free");

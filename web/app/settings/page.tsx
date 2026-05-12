@@ -17,10 +17,28 @@ export default async function SettingsPage() {
 
   let workspaceId = "";
   let workspaceName = "Settings";
+  let profileList: Array<{
+    id: string;
+    name: string;
+    type: string;
+    createdAt: string;
+    updatedAt: string;
+  }> = [];
 
   if (user && hasCompletedOnboarding(user) && user.dataWipedAt === null) {
     const cookieStore = await cookies();
     const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
+    const userWorkspaces = await prisma.workspace.findMany({
+      where: { userId: user.id },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
     const personalWorkspace =
       (await prisma.workspace.findFirst({
         where: {
@@ -33,8 +51,8 @@ export default async function SettingsPage() {
         select: {
           id: true,
           name: true,
-        },
-      })) ??
+          },
+        })) ??
       (await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified).then(async (starterWorkspace) =>
         prisma.workspace.findUnique({
           where: { id: starterWorkspace.id },
@@ -63,6 +81,11 @@ export default async function SettingsPage() {
 
     workspaceId = selectedWorkspace?.id ?? "";
     workspaceName = selectedWorkspace?.name ?? "Personal";
+    profileList = userWorkspaces.map((workspace) => ({
+      ...workspace,
+      createdAt: workspace.createdAt.toISOString(),
+      updatedAt: workspace.updatedAt.toISOString(),
+    }));
   }
 
   return (
@@ -73,6 +96,7 @@ export default async function SettingsPage() {
         workspaceId={workspaceId}
         workspaceName={workspaceName}
         selectedProfileId={workspaceId}
+        initialProfileList={profileList}
         firstName={user?.firstName ?? null}
         lastName={user?.lastName ?? null}
         email={user?.email ?? ""}
