@@ -1,4 +1,5 @@
 import { ClerkAuthScreen } from "@/components/clerk-auth-screen";
+import { StagingRedirect } from "@/components/staging-redirect";
 import { isStagingHost } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
@@ -15,6 +16,7 @@ export default async function SignInPage() {
 
   return (
     <main className="auth-page auth-page--signin">
+      <StagingRedirect />
       <ClerkAuthScreen enabled={Boolean(publishableKey)} mode="sign-in" />
     </main>
   );
