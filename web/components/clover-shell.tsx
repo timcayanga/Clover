@@ -538,6 +538,8 @@ export function CloverShell({
       return;
     }
 
+    setOpenMenu(null);
+
     const buttonRect = notificationsButtonRef.current?.getBoundingClientRect();
     if (buttonRect) {
       const popoverWidth = 268;

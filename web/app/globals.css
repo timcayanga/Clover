@@ -1252,7 +1252,7 @@ body.transactions-manual-open .shell-quick-add-button {
   right: auto;
   left: auto;
   width: 268px;
-  z-index: 140;
+  z-index: 2147483647;
   max-height: min(340px, calc(100dvh - 144px));
   overflow: auto;
 }
