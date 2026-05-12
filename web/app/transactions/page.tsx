@@ -1774,7 +1774,6 @@ function TransactionsPageContent() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const manualNameInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
-  const downloadMenuRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const initialWorkspaceId = urlSearchParams.get("workspaceId") || readSelectedWorkspaceId();
   const initialCachedWorkspace = null;
@@ -1825,7 +1824,6 @@ function TransactionsPageContent() {
   const [message, setMessage] = useState("Select a workspace to review transactions.");
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
-  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [selectionMenuOpen, setSelectionMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
@@ -2556,7 +2554,7 @@ function TransactionsPageContent() {
   ]);
 
   useEffect(() => {
-    if (!addMenuOpen && !downloadMenuOpen && !selectionMenuOpen && !activeWarningTransactionId && !headerMenuOpen) {
+    if (!addMenuOpen && !selectionMenuOpen && !activeWarningTransactionId && !headerMenuOpen) {
       return;
     }
 
@@ -2568,7 +2566,6 @@ function TransactionsPageContent() {
 
       if (
         addMenuRef.current?.contains(target) ||
-        downloadMenuRef.current?.contains(target) ||
         selectionActionsMenuRef.current?.contains(target) ||
         headerMenuRef.current?.contains(target) ||
         (activeWarningTransactionId ? warningPopoverRefs.current.get(activeWarningTransactionId)?.contains(target) : false)
@@ -2577,7 +2574,6 @@ function TransactionsPageContent() {
       }
 
       setAddMenuOpen(false);
-      setDownloadMenuOpen(false);
       setSelectionMenuOpen(false);
       setActiveWarningTransactionId(null);
       setHeaderMenuOpen(null);
@@ -2587,7 +2583,6 @@ function TransactionsPageContent() {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         setAddMenuOpen(false);
-        setDownloadMenuOpen(false);
         setSelectionMenuOpen(false);
         setActiveWarningTransactionId(null);
         setHeaderMenuOpen(null);
@@ -2602,7 +2597,7 @@ function TransactionsPageContent() {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [activeWarningTransactionId, addMenuOpen, downloadMenuOpen, headerMenuOpen, selectionMenuOpen]);
+  }, [activeWarningTransactionId, addMenuOpen, headerMenuOpen, selectionMenuOpen]);
 
   useEffect(() => {
     if (manualOpen) {
@@ -2636,7 +2631,6 @@ function TransactionsPageContent() {
 
   const closeToolbarMenus = () => {
     setAddMenuOpen(false);
-    setDownloadMenuOpen(false);
     setSelectionMenuOpen(false);
     setHeaderMenuOpen(null);
     setHeaderMenuPosition(null);
@@ -2644,21 +2638,10 @@ function TransactionsPageContent() {
 
   const openAddMenu = () => {
     flushSync(() => {
-      setDownloadMenuOpen(false);
       setSelectionMenuOpen(false);
       setHeaderMenuOpen(null);
       setHeaderMenuPosition(null);
       setAddMenuOpen((current) => !current);
-    });
-  };
-
-  const openDownloadMenu = () => {
-    flushSync(() => {
-      setAddMenuOpen(false);
-      setSelectionMenuOpen(false);
-      setHeaderMenuOpen(null);
-      setHeaderMenuPosition(null);
-      setDownloadMenuOpen((current) => !current);
     });
   };
 
@@ -2680,7 +2663,7 @@ function TransactionsPageContent() {
     return () => {
       document.body.removeAttribute("data-clover-page-modal");
     };
-  }, [addMenuOpen, downloadMenuOpen, importBackgroundOnly, importOpen, manualOpen]);
+  }, [addMenuOpen, importBackgroundOnly, importOpen, manualOpen]);
 
   useEffect(() => {
     if (urlSearchParams.get("import") === "1") {
@@ -3539,7 +3522,6 @@ function TransactionsPageContent() {
     const menuWidth = field === "category" ? 380 : field === "amount" ? 400 : field === "date" ? 460 : 320;
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
     setAddMenuOpen(false);
-    setDownloadMenuOpen(false);
     setSelectionMenuOpen(false);
     setFilterOpen(false);
     setHeaderMenuOpen((current) => (current === field ? null : field));
@@ -3697,7 +3679,7 @@ function TransactionsPageContent() {
           return;
         }
 
-        if (addMenuOpen || downloadMenuOpen) {
+        if (addMenuOpen) {
           closeToolbarMenus();
         }
 
@@ -3745,7 +3727,6 @@ function TransactionsPageContent() {
     addMenuOpen,
     bulkDeleteConfirmOpen,
     bulkEditOpen,
-    downloadMenuOpen,
     headerMenuOpen,
     filterOpen,
     hasSelectedTransactions,
@@ -5412,38 +5393,6 @@ function TransactionsPageContent() {
         menuAlignment="end"
         showChevron={false}
       />
-
-      <div className="transactions-download-menu" id="transactions-download-menu" ref={downloadMenuRef} style={transactionsMenuStyle}>
-        <button
-          className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-download-menu__toggle"
-          style={toolbarChipStyle}
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={downloadMenuOpen}
-          onClick={() => {
-            openDownloadMenu();
-          }}
-          title="Download"
-          aria-label="Download transactions"
-        >
-          <span className="button-icon" aria-hidden="true">
-            <ActionIcon name="download" />
-          </span>
-          {!isCompactViewport ? <span>Download</span> : null}
-        </button>
-        <div className="transactions-download-menu__panel" hidden={!downloadMenuOpen}>
-          <button
-            className="transactions-download-menu__item"
-            type="button"
-            onClick={() => {
-              closeToolbarMenus();
-              downloadPdf();
-            }}
-          >
-            PDF
-          </button>
-        </div>
-      </div>
     </div>
   );
 
@@ -6348,9 +6297,6 @@ function TransactionsPageContent() {
             </div>
           </dl>
 
-          <button className="transactions-summary-panel__download" type="button" onClick={downloadPdf}>
-            Download PDF
-          </button>
         </aside>
       </section>
 
