@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import type { AccountType } from "@/lib/domain-types";
 
 export type UploadInsightsSummary = {
   fileName: string;
@@ -9,7 +10,7 @@ export type UploadInsightsSummary = {
   accountName: string | null;
   institution: string | null;
   accountNumber?: string | null;
-  accountType?: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other" | null;
+  accountType?: AccountType | null;
   balance: string | null;
   optimistic?: boolean;
   optimisticAccountId?: string | null;

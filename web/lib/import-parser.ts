@@ -2,7 +2,21 @@ import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 
-export type ImportedAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
+export type ImportedAccountType =
+  | "bank"
+  | "wallet"
+  | "credit_card"
+  | "cash"
+  | "investment"
+  | "loan"
+  | "mortgage"
+  | "line_of_credit"
+  | "receivable"
+  | "payable"
+  | "bnpl"
+  | "prepaid"
+  | "insurance"
+  | "other";
 
 export type ParsedImportRow = {
   date?: string;
@@ -102,12 +116,12 @@ export const inferAccountTypeFromStatement = (
   const normalized = `${institution ?? ""} ${accountName ?? ""}`.toLowerCase();
 
   if (/maya/.test(normalized)) {
-    if (
-      /(maya\s+easy\s+credit|maya\s+credit|easy\s+credit|billing\s+statement|payment\s+due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit)/.test(
-        normalized
-      )
-    ) {
+    if (/(credit\s*card|card\s+ending|visa|mastercard|amex)/.test(normalized)) {
       return "credit_card";
+    }
+
+    if (/(maya\s+easy\s+credit|maya\s+credit|easy\s+credit|billing\s+statement|payment\s+due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit)/.test(normalized)) {
+      return "line_of_credit";
     }
 
     if (/(wallet|cash\s*(?:in|out)|send\s+money|received\s+money|fund\s+transfer|transfer\s+to\s+maya\s+savings|auto\s*cash[- ]?in)/.test(normalized)) {
@@ -8395,7 +8409,7 @@ const parseMayaCreditStatementMetadata = (text: string, context: ImportParseCont
     institution: context.institution?.trim() || "Maya",
     accountNumber,
     accountName,
-    accountType: "credit_card" as ImportedAccountType,
+    accountType: "line_of_credit" as ImportedAccountType,
     openingBalance: previousBalance,
     endingBalance: totalAmountDue,
     paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,

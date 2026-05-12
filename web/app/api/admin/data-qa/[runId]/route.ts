@@ -78,7 +78,20 @@ const parseMaybeNumber = (value: string | null) => {
 };
 
 const isImportedAccountType = (value: string | null): value is ImportedAccountType =>
-  value === "bank" || value === "wallet" || value === "credit_card" || value === "cash" || value === "investment" || value === "other";
+  value === "bank" ||
+  value === "wallet" ||
+  value === "credit_card" ||
+  value === "cash" ||
+  value === "investment" ||
+  value === "loan" ||
+  value === "mortgage" ||
+  value === "line_of_credit" ||
+  value === "receivable" ||
+  value === "payable" ||
+  value === "bnpl" ||
+  value === "prepaid" ||
+  value === "insurance" ||
+  value === "other";
 
 const buildStatementMetadataOverride = (params: {
   reviewPayload: Record<string, unknown>;

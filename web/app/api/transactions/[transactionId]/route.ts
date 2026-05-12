@@ -207,7 +207,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         accountId: updated.accountId,
         accountName: account?.name ?? "",
         institution: account?.institution ?? null,
-        accountType: (account?.type ?? "bank") as "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other",
+        accountType: account?.type ?? "bank",
         source: "manual_transaction_reassignment",
         confidence: 100,
       }).catch(() => null);

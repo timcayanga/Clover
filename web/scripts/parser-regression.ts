@@ -790,6 +790,11 @@ const main = async () => {
       accountName: mayaMetadata.accountName,
       accountNumber: mayaMetadata.accountNumber,
     });
+    const expectedMayaAccountType = /easy\s*credit|maya\s*credit/i.test(mayaFile) ? "line_of_credit" : "bank";
+    const mayaAccountType = (mayaMetadata as { accountType?: string | null }).accountType ?? null;
+    if (mayaAccountType !== expectedMayaAccountType) {
+      throw new Error(`expected ${mayaFile} to classify as ${expectedMayaAccountType}, got ${mayaAccountType ?? "missing"}`);
+    }
 
     const problematicRows = mayaRows.filter((row) => {
       const confidence = typeof row.confidence === "number" ? row.confidence : 0;

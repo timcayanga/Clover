@@ -31,6 +31,7 @@ This document captures the Maya parsing rules learned from the synthetic trainin
 
 ## Credit Card Rules
 
+- Do not classify `Maya Credit` or `Maya Easy Credit` sample statements as `credit_card`; they are credit-line statements unless the document explicitly says credit card or shows card-network/card-ending language.
 - Keep `Cash Payment` as a payment credit, not income.
 - Keep `OpenAI ChatGPT Subscription` as `Business` for this user.
 - Keep travel, shopping, food, transport, and merchant refunds as learned category candidates.

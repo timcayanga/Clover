@@ -30,6 +30,7 @@ import {
   capturePostHogClientEventOnce,
 } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
+import type { AccountType } from "@/lib/domain-types";
 import { getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
 import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/import-parser";
@@ -73,7 +74,7 @@ type Account = {
   name: string;
   institution: string | null;
   accountNumber?: string | null;
-  type: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
+  type: AccountType;
   currency: string;
   source?: string;
   balance?: string | null;

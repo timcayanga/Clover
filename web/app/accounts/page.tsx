@@ -1985,7 +1985,16 @@ function AccountsPageContent() {
         title: "Credit Cards",
         tone: "liability",
         itemLabel: "account",
-        rows: visibleAccounts.filter((account) => isLiabilityAccountType(getEffectiveAccountType(account))),
+        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "credit_card"),
+      },
+      {
+        title: "Loans & credit",
+        tone: "liability",
+        itemLabel: "account",
+        rows: visibleAccounts.filter((account) => {
+          const effectiveType = getEffectiveAccountType(account);
+          return effectiveType !== "credit_card" && isLiabilityAccountType(effectiveType);
+        }),
       },
       {
         title: "Wallets",
@@ -2022,7 +2031,7 @@ function AccountsPageContent() {
           (sum, row) =>
             sum +
             normalizeAccountBalance(
-              row.kind === "investment_institution" ? "investment" : getEffectiveAccountType(row),
+              "kind" in row && row.kind === "investment_institution" ? "investment" : getEffectiveAccountType(row as Account),
               parseAmount(row.balance)
             ),
           0

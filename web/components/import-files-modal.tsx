@@ -44,6 +44,7 @@ import {
   type ImportActivityStatus,
 } from "@/lib/import-activity";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
+import type { AccountType } from "@/lib/domain-types";
 
 type AccountOption = {
   id: string;
@@ -80,7 +81,7 @@ type ImportStatus = "pending" | "needs_password" | "parsing" | "importing" | "do
 
 type ConfirmationState = "none" | "pending" | "staged" | "confirmed";
 
-type UploadAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other" | null;
+type UploadAccountType = AccountType | null;
 
 type StatementIdentity = {
   accountName: string | null;

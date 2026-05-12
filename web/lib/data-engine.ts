@@ -606,13 +606,15 @@ export const detectStatementMetadataFromText = (text: string): StatementMetadata
   const refinedAccountType =
     metadata?.accountType ??
     (institution && /maya/i.test(institution)
-      ? /\b(maya\s+easy\s+credit|maya\s+credit|easy\s+credit|billing\s+statement|payment\s+due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit)\b/i.test(normalizedText)
+      ? /\b(credit\s*card|card\s+ending|visa|mastercard|amex)\b/i.test(normalizedText)
         ? "credit_card"
-        : /\b(wallet|cash\s*(?:in|out)|send\s+money|received\s+money|fund\s+transfer|transfer\s+to\s+maya\s+savings|auto\s*cash[- ]?in)\b/i.test(normalizedText)
-          ? "wallet"
-          : /\b(savings|consumer\s+savings|account\s+summary|running\s+balance|starting\s+balance|ending\s+balance|interest\s+earned)\b/i.test(normalizedText)
-            ? "bank"
-            : "bank"
+        : /\b(maya\s+easy\s+credit|maya\s+credit|easy\s+credit|billing\s+statement|payment\s+due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit)\b/i.test(normalizedText)
+          ? "line_of_credit"
+          : /\b(wallet|cash\s*(?:in|out)|send\s+money|received\s+money|fund\s+transfer|transfer\s+to\s+maya\s+savings|auto\s*cash[- ]?in)\b/i.test(normalizedText)
+            ? "wallet"
+            : /\b(savings|consumer\s+savings|account\s+summary|running\s+balance|starting\s+balance|ending\s+balance|interest\s+earned)\b/i.test(normalizedText)
+              ? "bank"
+              : "bank"
       : null) ??
     (institution === "GoTyme" ? "bank" : null);
   const accountType = refinedAccountType ?? inferAccountTypeFromStatement(institution, accountName, "bank");

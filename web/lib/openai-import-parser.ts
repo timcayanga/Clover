@@ -3,6 +3,7 @@ import { getEnv } from "@/lib/env";
 import {
   type DetectedStatementMetadata,
   inferAccountTypeFromStatement,
+  type ImportedAccountType,
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
@@ -1116,11 +1117,27 @@ const normalizeAccountTypeValue = (
   value: string | null | undefined,
   institution: string | null,
   accountName: string | null,
-  fallback: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other" = "bank"
+  fallback: ImportedAccountType = "bank"
 ) => {
-  const normalized = normalizeWhitespace(String(value ?? "")).toLowerCase();
-  if (normalized === "bank" || normalized === "wallet" || normalized === "credit_card" || normalized === "cash" || normalized === "investment" || normalized === "other") {
-    return normalized;
+  const normalized = normalizeWhitespace(String(value ?? "")).toLowerCase().replace(/[\s-]+/g, "_");
+  const supportedTypes: ImportedAccountType[] = [
+    "bank",
+    "wallet",
+    "credit_card",
+    "cash",
+    "investment",
+    "loan",
+    "mortgage",
+    "line_of_credit",
+    "receivable",
+    "payable",
+    "bnpl",
+    "prepaid",
+    "insurance",
+    "other",
+  ];
+  if (supportedTypes.includes(normalized as ImportedAccountType)) {
+    return normalized as ImportedAccountType;
   }
 
   return inferAccountTypeFromStatement(institution, accountName, fallback);

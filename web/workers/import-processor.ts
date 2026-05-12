@@ -1764,10 +1764,26 @@ const resolveConfirmationAccount = async (params: {
     typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
       ? params.statementMetadata.accountNumber.trim()
       : null;
-  const inferredAccountType =
+  const supportedImportAccountTypes: AccountType[] = [
+    "bank",
+    "wallet",
+    "credit_card",
+    "cash",
+    "investment",
+    "loan",
+    "mortgage",
+    "line_of_credit",
+    "receivable",
+    "payable",
+    "bnpl",
+    "prepaid",
+    "insurance",
+    "other",
+  ];
+  const inferredAccountType: AccountType | null =
     typeof params.statementMetadata?.accountType === "string" &&
-    ["bank", "wallet", "credit_card", "cash", "investment", "other"].includes(params.statementMetadata.accountType)
-      ? (params.statementMetadata.accountType as "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other")
+    supportedImportAccountTypes.includes(params.statementMetadata.accountType as AccountType)
+      ? (params.statementMetadata.accountType as AccountType)
       : null;
   const inferredCurrency = normalizeInstitutionCurrency(
     inferredInstitution,
@@ -1814,8 +1830,8 @@ const resolveConfirmationAccount = async (params: {
     return updatedAccount;
   }
 
-  const accountIdentityType =
-    inferredAccountType ?? inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank");
+  const accountIdentityType: AccountType =
+    inferredAccountType ?? (inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank") as AccountType);
   const candidateKey = normalizeImportedAccountKey(
     inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
     inferredInstitution,
