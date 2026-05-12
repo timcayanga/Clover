@@ -2849,26 +2849,45 @@ export const enrichParsedRowsWithTraining = async (params: {
   const merchantRules = await loadMerchantRules(params.workspaceId);
   const accountRules = await loadAccountRules(params.workspaceId);
   const trainingSignals = await loadTrainingSignals(params.workspaceId);
-  const statementConfidence = typeof params.statementConfidence === "number" ? params.statementConfidence : 100;
-
-  const isRowLowConfidence = (details: { effectiveConfidence: number; categoryName: string; categoryReason?: string | null; rowType?: ParsedImportRow["type"] }) => {
-    if (details.effectiveConfidence < 90) {
-      return true;
+  const rawStatementConfidence =
+    typeof params.statementConfidence === "number" && Number.isFinite(params.statementConfidence)
+      ? Math.max(0, Math.min(100, params.statementConfidence))
+      : 0;
+  const statementConfidence = rawStatementConfidence > 0 ? rawStatementConfidence : 100;
+  const normalizeConfidenceScore = (value: unknown) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return 0;
     }
 
+    const scaled = value > 0 && value <= 1 ? value * 100 : value;
+    return Math.max(0, Math.min(100, Math.round(scaled)));
+  };
+
+  const isRowLowConfidence = (details: { effectiveConfidence: number; categoryName: string; categoryReason?: string | null; rowType?: ParsedImportRow["type"] }) => {
     if (!details.rowType) {
       return true;
     }
 
-    return false;
+    if (!details.categoryName || details.categoryName.trim().toLowerCase() === "other") {
+      return true;
+    }
+
+    return details.effectiveConfidence < 70;
   };
 
   return params.rows.map((row) => {
-    const rowWithInstitution = row as ParsedImportRow & { institution?: string | null };
+    const rowWithInstitution = row as ParsedImportRow & {
+      institution?: string | null;
+      normalizedPayload?: Prisma.JsonValue | null;
+      parserConfidence?: number | null;
+      categoryConfidence?: number | null;
+    };
     const merchantText = row.merchantRaw || row.description || row.merchantClean || "";
     const normalizedPayload =
-      row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
-        ? (row.normalizedPayload as Record<string, unknown>)
+      rowWithInstitution.normalizedPayload &&
+      typeof rowWithInstitution.normalizedPayload === "object" &&
+      !Array.isArray(rowWithInstitution.normalizedPayload)
+        ? (rowWithInstitution.normalizedPayload as Record<string, unknown>)
         : null;
     const categoryText = [
       row.merchantRaw,
@@ -2895,7 +2914,17 @@ export const enrichParsedRowsWithTraining = async (params: {
       learned.preferredType ?? row.type ?? "expense"
     );
     const accountName = row.accountName ?? null;
-    const effectiveConfidence = Math.max(0, Math.min(100, Math.min(learned.confidence, statementConfidence)));
+    const parserCategoryName = typeof row.categoryName === "string" ? row.categoryName.trim() : "";
+    const parserSuppliedConcreteCategory = Boolean(parserCategoryName) && parserCategoryName.toLowerCase() !== "other";
+    const rowConfidence = normalizeConfidenceScore(row.confidence);
+    const rowParserConfidence = normalizeConfidenceScore(rowWithInstitution.parserConfidence);
+    const rowCategoryConfidence = normalizeConfidenceScore(rowWithInstitution.categoryConfidence);
+    const deterministicParserConfidence = parserSuppliedConcreteCategory
+      ? Math.max(rowConfidence, rowParserConfidence, rowCategoryConfidence, Math.min(95, Math.max(90, statementConfidence)))
+      : 0;
+    const effectiveConfidence = Math.max(0, Math.min(100, Math.max(learned.confidence, deterministicParserConfidence, rowConfidence, rowCategoryConfidence)));
+    const parserConfidence = Math.max(rowParserConfidence, rowConfidence, statementConfidence);
+    const categoryConfidence = Math.max(rowCategoryConfidence, effectiveConfidence);
     const learnedRuleIdsApplied = [
       ...(Array.isArray(row.learnedRuleIdsApplied) ? (row.learnedRuleIdsApplied as string[]) : []),
       ...(accountMatch ? [`account-rule:${accountMatch.rule.ruleKey}`] : []),
@@ -2917,9 +2946,9 @@ export const enrichParsedRowsWithTraining = async (params: {
       })
         ? "pending_review"
         : "suggested",
-      parserConfidence: statementConfidence,
-      categoryConfidence: effectiveConfidence,
-      accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.min(Math.max(70, accountMatch.score), statementConfidence))) : 0,
+      parserConfidence,
+      categoryConfidence,
+      accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.max(70, accountMatch.score))) : 0,
       duplicateConfidence: 0,
       transferConfidence: nextType === "transfer" ? 100 : 0,
       learnedRuleIdsApplied,

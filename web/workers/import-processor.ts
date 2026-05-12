@@ -44,7 +44,7 @@ import { parseImportTextWithOpenAIFallback, transcribeImportImagesWithOpenAI } f
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
-import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
+import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { mergeCheckpointSourceMetadata } from "@/lib/import-workflow";
 import { findBestImportedAccountMatch, normalizeImportedAccountKey } from "@/lib/workspace-cache";
@@ -203,16 +203,42 @@ const updateImportFileWithTxCompat = async (
   );
 };
 
-const shouldRouteToReview = (params: { confidence: number; categoryName?: string | null; type?: string | null }) => {
-  if (params.confidence < 90) {
-    return true;
+const normalizeImportConfidenceScore = (value: unknown) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 0;
   }
 
+  const scaled = value > 0 && value <= 1 ? value * 100 : value;
+  return Math.max(0, Math.min(100, Math.round(scaled)));
+};
+
+const inferParserRowConfidence = (params: {
+  confidence?: unknown;
+  parserConfidence?: unknown;
+  categoryConfidence?: unknown;
+  statementConfidence?: unknown;
+  categoryName?: string | null;
+}) => {
+  const confidence = normalizeImportConfidenceScore(params.confidence);
+  const parserConfidence = normalizeImportConfidenceScore(params.parserConfidence);
+  const categoryConfidence = normalizeImportConfidenceScore(params.categoryConfidence);
+  const statementConfidence = normalizeImportConfidenceScore(params.statementConfidence);
+  const hasConcreteCategory = Boolean(params.categoryName?.trim()) && params.categoryName?.trim().toLowerCase() !== "other";
+  const deterministicFallback = hasConcreteCategory ? Math.min(95, Math.max(90, statementConfidence || 90)) : 0;
+
+  return Math.max(confidence, parserConfidence, categoryConfidence, deterministicFallback);
+};
+
+const shouldRouteToReview = (params: { confidence: number; categoryName?: string | null; type?: string | null }) => {
   if (!params.type) {
     return true;
   }
 
-  return false;
+  if (!params.categoryName || params.categoryName.trim().toLowerCase() === "other") {
+    return true;
+  }
+
+  return params.confidence < 70;
 };
 
 const assessReceiptExtractionQuality = (params: {
@@ -2085,8 +2111,8 @@ export const processImportEnrichmentJobs = async (options: {
         : null;
       const statementConfidence =
         typeof statementCheckpoint?.sourceMetadata === "object" && statementCheckpoint.sourceMetadata !== null
-          ? Number((statementCheckpoint.sourceMetadata as Record<string, unknown>).confidence ?? 0)
-          : 0;
+          ? normalizeImportConfidenceScore((statementCheckpoint.sourceMetadata as Record<string, unknown>).confidence)
+          : 100;
       const enrichedRows = await enrichParsedRowsWithTraining({
         workspaceId: String(importFile.workspaceId),
         rows: coerceParsedTransactionRowsForEnrichment(batchRows),
@@ -2145,8 +2171,22 @@ export const processImportEnrichmentJobs = async (options: {
           categoryByName.set(categoryName.toLowerCase(), categoryId);
         }
 
-        const rowConfidence = typeof row.confidence === "number" ? row.confidence : 0;
-        const categoryConfidence = typeof row.categoryConfidence === "number" ? row.categoryConfidence : rowConfidence;
+        const rowConfidence = inferParserRowConfidence({
+          confidence: row.confidence,
+          parserConfidence: row.parserConfidence,
+          categoryConfidence: row.categoryConfidence,
+          statementConfidence,
+          categoryName,
+        });
+        const categoryConfidence = Math.max(normalizeImportConfidenceScore(row.categoryConfidence), rowConfidence);
+        const parserConfidence = Math.max(normalizeImportConfidenceScore(row.parserConfidence), normalizeImportConfidenceScore(row.confidence), statementConfidence);
+        const nextReviewStatus = shouldRouteToReview({
+          confidence: Math.max(rowConfidence, categoryConfidence),
+          categoryName,
+          type: canonicalType,
+        })
+          ? "pending_review"
+          : "confirmed";
         await prisma.transaction.update({
           where: { id: transaction.id },
           data: {
@@ -2159,8 +2199,8 @@ export const processImportEnrichmentJobs = async (options: {
                   ? row.merchantRaw
                   : undefined,
             categoryConfidence,
-            parserConfidence: typeof row.parserConfidence === "number" ? row.parserConfidence : rowConfidence,
-            reviewStatus: rowConfidence >= 90 && categoryConfidence >= 90 ? "confirmed" : "pending_review",
+            parserConfidence,
+            reviewStatus: nextReviewStatus,
             isTransfer: canonicalType === "transfer",
             normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
             learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
@@ -4311,12 +4351,18 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     for (const [index, row] of parsedRows.entries()) {
     const rowType =
       row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : undefined;
-    const rowConfidence = typeof row.confidence === "number" ? row.confidence : 0;
-    const rowParserConfidence = typeof row.parserConfidence === "number" ? row.parserConfidence : rowConfidence;
-    const rowCategoryConfidence = typeof row.categoryConfidence === "number" ? row.categoryConfidence : rowConfidence;
+    const categoryName = (typeof row.categoryName === "string" && row.categoryName) || defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
+    const rowConfidence = inferParserRowConfidence({
+      confidence: row.confidence,
+      parserConfidence: row.parserConfidence,
+      categoryConfidence: row.categoryConfidence,
+      statementConfidence,
+      categoryName,
+    });
+    const rowParserConfidence = Math.max(normalizeImportConfidenceScore(row.parserConfidence), normalizeImportConfidenceScore(row.confidence), normalizeImportConfidenceScore(statementConfidence));
+    const rowCategoryConfidence = Math.max(normalizeImportConfidenceScore(row.categoryConfidence), rowConfidence);
     const rowAccountMatchConfidence = typeof row.accountMatchConfidence === "number" ? row.accountMatchConfidence : 100;
     const rowDuplicateConfidence = typeof row.duplicateConfidence === "number" ? row.duplicateConfidence : 0;
-    const categoryName = (typeof row.categoryName === "string" && row.categoryName) || defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
     const canonicalType = coerceTransactionTypeFromCategoryName(
       categoryName,
       (rowType ?? "expense") as "income" | "expense" | "transfer"
@@ -4407,7 +4453,15 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         (typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance"),
     });
     const transactionId = String(insertRow.id ?? crypto.randomUUID());
-    const dedupeKey = buildConfirmedTransactionDedupeKey(insertRow);
+    const dedupeKey = buildConfirmedTransactionDedupeKey(insertRow as {
+      date: unknown;
+      amount: unknown;
+      currency: unknown;
+      type: unknown;
+      merchantRaw: unknown;
+      merchantClean: unknown;
+      description: unknown;
+    });
     const currentOccurrence = (currentDedupeCounts.get(dedupeKey) ?? 0) + 1;
     currentDedupeCounts.set(dedupeKey, currentOccurrence);
     if ((existingDedupeCounts.get(dedupeKey) ?? 0) >= currentOccurrence) {
@@ -4435,7 +4489,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         categoryId,
         categoryName,
         type: canonicalType,
-        confidence: typeof row.confidence === "number" ? row.confidence : 100,
+        confidence: rowConfidence,
         notes: typeof row.categoryReason === "string" ? row.categoryReason : null,
       },
       });
