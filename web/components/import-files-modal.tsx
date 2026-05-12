@@ -24,6 +24,8 @@ import {
   normalizeInstitutionCurrency,
   parseImportText,
 } from "@/lib/import-parser";
+import { parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
+import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { getImportErrorSpec, isResumableImportErrorCode, type ImportErrorStage, type ImportErrorSpec } from "@/lib/import-error-spec";
 import {
@@ -656,6 +658,85 @@ const buildOptimisticPreviewTransactions = (
     .filter((row) => row !== null) as NonNullable<UploadInsightsSummary["previewTransactions"]>;
 
   return previewTransactions;
+};
+
+const resolveCashAccountOption = (accounts: AccountOption[]) =>
+  accounts.find((account) => {
+    const name = account.name.trim().toLowerCase();
+    const institution = (account.institution ?? "").trim().toLowerCase();
+    const type = account.type.trim().toLowerCase();
+    return name === "cash" || institution === "cash" || type === "cash";
+  }) ?? null;
+
+const buildReceiptPreviewTransactions = (
+  preview: ReceiptPreviewResult,
+  params: {
+    importFileId: string;
+    accountId: string;
+    accountName: string;
+    institution: string | null;
+    accountType: UploadAccountType;
+  }
+): NonNullable<UploadInsightsSummary["previewTransactions"]> => {
+  const amount = preview.total?.trim() ?? "";
+  const date = preview.billDate?.trim() ?? "";
+
+  if (!amount || !date) {
+    return [];
+  }
+
+  return [
+    {
+      id: `optimistic-${params.importFileId}-receipt`,
+      importFileId: params.importFileId,
+      sourceRowIndex: 1,
+      accountId: params.accountId,
+      accountName: params.accountName,
+      categoryId: null,
+      categoryName: null,
+      reviewStatus: "pending_review",
+      date,
+      amount,
+      currency: preview.currency?.trim().toUpperCase() || "PHP",
+      type: "expense",
+      merchantRaw: preview.merchantName?.trim() || "Receipt",
+      merchantClean: preview.merchantName?.trim() || null,
+      description: preview.merchantName?.trim() || null,
+      isTransfer: false,
+      isExcluded: false,
+      source: "upload",
+    },
+  ];
+};
+
+const buildReceiptOptimisticSummary = (
+  fileName: string,
+  importFileId: string,
+  preview: ReceiptPreviewResult,
+  account: AccountOption
+): UploadInsightsSummary => {
+  const accountType = account.type as UploadAccountType;
+  const previewTransactions = buildReceiptPreviewTransactions(preview, {
+    importFileId,
+    accountId: account.id,
+    accountName: account.name,
+    institution: account.institution ?? null,
+    accountType,
+  });
+
+  return buildOptimisticUploadSummary(
+    fileName,
+    previewTransactions.length,
+    account.id,
+    account.name,
+    account.institution ?? null,
+    accountType,
+    null,
+    null,
+    previewTransactions,
+    null,
+    false
+  );
 };
 
 const loadOptimisticPreviewTransactions = async (
@@ -3347,9 +3428,29 @@ export function ImportFilesModal({
 
     try {
       const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
+      const itemImportMode = item.importMode ?? "statement";
+      if (itemImportMode === "receipt") {
+        const receiptPreview = parseReceiptText(text);
+        if (!receiptPreview.billDate || !receiptPreview.total) {
+          return;
+        }
+
+        const receiptHint = receiptPreview.receiptAccountMatch
+          ? resolveReceiptAccountHintToAccount(receiptPreview.receiptAccountMatch, accounts)
+          : null;
+        const cashAccount = resolveCashAccountOption(accounts);
+        const targetAccount = receiptHint ?? cashAccount;
+        if (!targetAccount) {
+          return;
+        }
+
+        const summary = buildReceiptOptimisticSummary(item.file.name, item.importFileId ?? item.id, receiptPreview, targetAccount);
+        localPreparseSummaryByItemIdRef.current.set(itemId, summary);
+        return;
+      }
+
       const localMetadata = detectStatementMetadata(text);
       const guessedIdentity = guessStatementIdentity(item.file.name);
-      const itemImportMode = item.importMode ?? "statement";
       if (itemImportMode !== "statement") {
         return;
       }
@@ -3796,7 +3897,7 @@ export function ImportFilesModal({
                   ? "Reading portfolio in background"
                   : itemImportMode === "account_detail"
                     ? "Reading file details in background"
-                    : itemImportMode === "notes"
+              : itemImportMode === "notes"
                       ? "Reading notes in background"
                       : "Reading document in background",
           });
@@ -3822,6 +3923,44 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
+          if (itemImportMode === "receipt") {
+            const precomputedReceiptSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
+            if (precomputedReceiptSummary) {
+              seedImportedWorkspaceCaches(workspaceId, precomputedReceiptSummary);
+              await Promise.resolve(onImported(precomputedReceiptSummary));
+
+              updateItem(itemId, {
+                status: "done",
+                confirmationState: "confirmed",
+                error: null,
+                importFileId,
+                targetAccountId: precomputedReceiptSummary.accountId,
+                importedRows: precomputedReceiptSummary.rowsImported,
+                progress: 100,
+                progressLabel: "Receipt imported",
+              });
+              publishImportActivity({
+                workspaceId,
+                surface: importActivitySurfaceRef.current,
+                status: "done",
+                fileName: item.file.name,
+                fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+                fileTotal: items.length,
+                completedFiles: completedFileCount + 1,
+                progress: 100,
+                detail: "Receipt imported",
+                summary: precomputedReceiptSummary,
+                errorMessage: null,
+              });
+
+              void monitorQueuedDocumentImport(itemId, importFileId, itemImportMode, item.file.name).finally(() => router.refresh());
+              return {
+                status: "done",
+                importedRows: precomputedReceiptSummary.rowsImported,
+                summary: precomputedReceiptSummary,
+              };
+            }
+          }
           const completed = await monitorQueuedDocumentImport(itemId, importFileId, itemImportMode, item.file.name);
           if (!completed) {
             return { status: "error", importedRows: null, summary: null };
