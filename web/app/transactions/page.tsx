@@ -37,6 +37,7 @@ import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
+import { clearImportActivity, readImportActivity } from "@/lib/import-activity";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
   deriveCachedCategoriesFromTransactions,
@@ -2964,6 +2965,16 @@ function TransactionsPageContent() {
     }
   }, [hasActiveFinalizingImports]);
   const finalizingNeedsReview = finalizingTimeLabel === "couldn't finalize automatically; please review";
+  useEffect(() => {
+    if (!finalizingNeedsReview || finalizingTransactionCount === 0 || visibleTransactions.length === 0) {
+      return;
+    }
+
+    const currentActivity = readImportActivity();
+    if (currentActivity?.status === "active") {
+      clearImportActivity();
+    }
+  }, [finalizingNeedsReview, finalizingTransactionCount, visibleTransactions.length]);
   const showFinalizingNotice = finalizingTransactionCount > 0 && !finalizingNoticeDismissed;
   const totalTransactionPages = Math.max(1, Math.ceil(totalTransactionCountForDisplay / Math.max(transactionsPageSize, 1)));
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);

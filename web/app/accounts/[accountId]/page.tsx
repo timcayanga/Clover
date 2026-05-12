@@ -18,6 +18,7 @@ import { guessCategoryName } from "@/lib/import-parser";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
+import { clearImportActivity, readImportActivity } from "@/lib/import-activity";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
@@ -1611,6 +1612,16 @@ function AccountDetailPageContent() {
     [activeFinalizingImportIds, visibleTransactions]
   );
   const finalizingNeedsReview = finalizingTimeLabel.toLowerCase().includes("couldn't finalize");
+  useEffect(() => {
+    if (!finalizingNeedsReview || finalizingTransactionCount === 0 || visibleTransactions.length === 0) {
+      return;
+    }
+
+    const currentActivity = readImportActivity();
+    if (currentActivity?.status === "active") {
+      clearImportActivity();
+    }
+  }, [finalizingNeedsReview, finalizingTransactionCount, visibleTransactions.length]);
   const mobileTransactionGroups = useMemo(() => {
     const groups: Array<{ date: string; label: string; transactions: Transaction[] }> = [];
 

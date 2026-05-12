@@ -2463,7 +2463,9 @@ function AccountsPageContent() {
         (entry) =>
           !entry.id.startsWith("optimistic-") &&
           getImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type) === accountKey
-      ) ?? null
+      ) ??
+      accounts.find((entry) => !entry.id.startsWith("optimistic-") && matchesImportedAccountIdentity(entry, account)) ??
+      null
     );
   };
 

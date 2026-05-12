@@ -1070,27 +1070,27 @@ export function ImportFilesModal({
     itemId: string,
     fileName: string,
     detail: string,
-    progressLabel = "Finalizing import"
+    progressLabel = "Review needed"
   ) => {
     updateItem(itemId, {
-      status: "importing",
-      confirmationState: "staged",
+      status: "done",
+      confirmationState: "confirmed",
       error: null,
       errorCode: null,
       errorTitle: null,
       errorNextSteps: null,
-      progress: Math.max(90, IMPORT_PROGRESS.loadingAccount),
+      progress: 100,
       progressLabel,
     });
     publishImportActivity({
       workspaceId,
       surface: "background",
-      status: "active",
+      status: "done",
       fileName,
       fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
       fileTotal: items.length,
-      completedFiles: completedFileCount,
-      progress: Math.max(90, IMPORT_PROGRESS.loadingAccount),
+      completedFiles: Math.min(items.length, completedFileCount + 1),
+      progress: 100,
       detail,
       summary: null,
       errorMessage: null,
