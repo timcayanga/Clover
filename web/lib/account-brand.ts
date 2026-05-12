@@ -1,3 +1,6 @@
+import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
+import { normalizeBankName } from "@/lib/data-qa-banks";
+
 type AccountBrandInput = {
   institution?: string | null;
   name?: string | null;
@@ -919,8 +922,12 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
 ];
 
 export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
-  const institution = normalize(params.institution);
-  const name = normalize(params.name);
+  const normalizedInstitution = normalizeBankName(params.institution);
+  const institution =
+    normalizedInstitution !== "Unknown"
+      ? normalize(normalizedInstitution)
+      : normalize(sanitizeBankNameLabel(params.institution) ?? params.institution);
+  const name = normalize(sanitizeBankNameLabel(params.name) ?? params.name);
   const type = normalize(params.type);
 
   if (type === "cash" || institution === "cash" || name === "cash") {
@@ -1066,4 +1073,4 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
     background: "linear-gradient(135deg, rgba(212, 217, 223, 0.94), rgba(166, 173, 184, 0.88))",
     foreground: "#111827",
   });
-};
+  };

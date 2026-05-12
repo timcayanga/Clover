@@ -14,6 +14,7 @@ import {
   parseDateValue,
   type ParsedImportRow,
 } from "@/lib/import-parser";
+import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
@@ -596,11 +597,11 @@ export const detectAccountNumber = (text: string | null | undefined) => {
 
 export const detectStatementMetadataFromText = (text: string): StatementMetadataSnapshot => {
   const metadata = detectStatementMetadata(text);
-  const institution = metadata?.institution ?? detectInstitutionFromText(text);
+  const institution = sanitizeBankNameLabel(metadata?.institution ?? detectInstitutionFromText(text));
   const accountNumber = metadata?.accountNumber ?? detectAccountNumber(text);
   const normalizedText = normalizeWhitespace(text);
   const accountName =
-    metadata?.accountName ??
+    sanitizeBankNameLabel(metadata?.accountName) ??
     (institution && accountNumber ? `${institution} ${accountNumber.slice(-4)}` : institution ?? null);
   const refinedAccountType =
     metadata?.accountType ??

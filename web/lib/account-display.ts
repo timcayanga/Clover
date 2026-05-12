@@ -1,4 +1,6 @@
 import { getAccountBrand } from "@/lib/account-brand";
+import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
+import { normalizeBankName } from "@/lib/data-qa-banks";
 
 type AccountDisplayInput = {
   name?: string | null;
@@ -24,12 +26,21 @@ const extractLastFourDigits = (value?: string | null) => {
 };
 
 const resolveBankLabel = (input: AccountDisplayInput) => {
+  const normalizedInstitution = normalizeBankName(input.institution);
+  const safeInstitution =
+    normalizedInstitution !== "Unknown" ? normalizedInstitution : sanitizeBankNameLabel(input.institution) ?? null;
+  const safeName = sanitizeBankNameLabel(input.name) ?? null;
   const brand = getAccountBrand({
-    institution: input.institution ?? null,
-    name: input.name ?? null,
+    institution: safeInstitution,
+    name: safeName,
     type: input.type ?? null,
   });
-  return normalizeWhitespace(brand.label) || normalizeWhitespace(input.institution ?? "") || normalizeWhitespace(input.name ?? "") || "Imported account";
+  return (
+    normalizeWhitespace(brand.label) ||
+    normalizeWhitespace(safeInstitution ?? "") ||
+    normalizeWhitespace(safeName ?? "") ||
+    "Imported account"
+  );
 };
 
 export const formatUploadAccountDisplayName = (

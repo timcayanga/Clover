@@ -538,6 +538,8 @@ const main = async () => {
 
   const importFileTextModule = await import("../lib/import-file-text.server");
   const dataEngine = await import("../lib/data-engine");
+  const dataQaBanksModule = await import("../lib/data-qa-banks");
+  const accountDisplayModule = await import("../lib/account-display");
   const parser = await import("../lib/import-parser");
   const receiptAccountResolutionModule = await import("../lib/receipt-account-resolution");
   const splitBillModule = await import("../lib/split-bill");
@@ -556,6 +558,13 @@ const main = async () => {
     endDate: string | null;
     confidence: number;
   };
+  const normalizeBankName = dataQaBanksModule.normalizeBankName as (value: string | null | undefined) => string;
+  const formatUploadAccountDisplayName = accountDisplayModule.formatUploadAccountDisplayName as (
+    name?: string | null,
+    institution?: string | null,
+    accountNumber?: string | null,
+    type?: string | null
+  ) => string;
   const inferAccountTypeFromStatement = parser.inferAccountTypeFromStatement as (
       institution?: string | null,
       accountName?: string | null,
@@ -760,6 +769,22 @@ const main = async () => {
     throw new Error("expected BDO withdrawal rows to classify as expense");
   }
   console.log("[PASS] BDO classification | bank transfer and withdrawal rows classified correctly");
+
+  const dateStampedBankName = normalizeBankName("2026-05-01 22.01.12 0112");
+  if (dateStampedBankName !== "Unknown") {
+    throw new Error(`expected date-stamped bank label to normalize to Unknown but got ${dateStampedBankName}`);
+  }
+
+  const dateStampedAlias = normalizeBankName("2026-05-01 BDO");
+  if (dateStampedAlias !== "BDO") {
+    throw new Error(`expected bank alias inside date-stamped label to normalize to BDO but got ${dateStampedAlias}`);
+  }
+
+  const safeDisplayName = formatUploadAccountDisplayName("2026-05-01 22.01.12 0112", "2026-05-01 22.01.12 0112", "001234567890", "bank");
+  if (/\b2026-05-01\b/.test(safeDisplayName) || /\b22\.01\.12\b/.test(safeDisplayName)) {
+    throw new Error(`expected date-stamped upload display name to omit date text but got ${safeDisplayName}`);
+  }
+  console.log("[PASS] Bank label hygiene | date-stamped labels are rejected or sanitized");
 
   const rcbcCreditPath = join(root, "Samples/RCBC/728919236-Acfroga47rrwerw7v8xwjcyqjxnpvi1hv5climj2qkpdzsqlabwmr51pzid4mt-Ao-Swizece4lt1ycaubzsilpqnzohhyzqxuv2cfbldosfajyekhfijmkceso8yzz1vgjmwntbprxb5ribspge-G.pdf");
   const rcbcCreditBytes = await readFile(rcbcCreditPath);

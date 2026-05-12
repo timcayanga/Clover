@@ -4,6 +4,36 @@ const normalizeKey = (value: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
 
+const DATE_LIKE_STAMP_PATTERN =
+  /(?:\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|\b\d{1,2}[.]\d{1,2}[.]\d{2,4}\b|\b\d{1,2}[:.]\d{2}[:.]\d{2}\b)/i;
+
+export const isLikelyDateLikeBankLabel = (value?: string | null) => {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  const hasLetters = /[a-z]/i.test(trimmed);
+  if (!hasLetters && DATE_LIKE_STAMP_PATTERN.test(trimmed)) {
+    return true;
+  }
+
+  if (/\b(downloaded|generated|printed|statement\s+date|run\s*date|rundate|as\s+of|created\s+on|downloaded\s+on)\b/i.test(trimmed) && DATE_LIKE_STAMP_PATTERN.test(trimmed)) {
+    return true;
+  }
+
+  return false;
+};
+
+export const sanitizeBankNameLabel = (value?: string | null) => {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed || isLikelyDateLikeBankLabel(trimmed)) {
+    return null;
+  }
+
+  return trimmed.replace(/\s+/g, " ");
+};
+
 export const BANK_PRIORITY = [
   "BPI",
   "GCash",
@@ -138,8 +168,19 @@ export const normalizeBankName = (value: string | null | undefined) => {
     return alias;
   }
 
+  for (const [aliasKey, aliasValue] of BANK_ALIAS_ENTRIES) {
+    if (normalizeKey(trimmed).includes(aliasKey)) {
+      return aliasValue;
+    }
+  }
+
   const priorityMatch = BANK_PRIORITY.find((bankName) => normalizeKey(bankName) === normalizeKey(trimmed));
-  return priorityMatch ?? trimmed;
+  if (priorityMatch) {
+    return priorityMatch;
+  }
+
+  const sanitized = sanitizeBankNameLabel(trimmed);
+  return sanitized ?? "Unknown";
 };
 
 export const inferBankNameFromText = (value: string | null | undefined) => {
@@ -161,7 +202,11 @@ export const inferBankNameFromText = (value: string | null | undefined) => {
   }
 
   const priorityMatch = BANK_PRIORITY.find((bankName) => normalized.includes(normalizeKey(bankName)));
-  return priorityMatch ?? normalizeBankName(trimmed);
+  if (priorityMatch) {
+    return priorityMatch;
+  }
+
+  return normalizeBankName(trimmed);
 };
 
 export const getBankPriorityIndex = (bankName: string) => {

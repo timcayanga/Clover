@@ -1,5 +1,6 @@
 import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
+import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 
 export type ImportedAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
 
@@ -10356,7 +10357,7 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
         )
       : null;
   const institution =
-    context.institution ??
+    sanitizeBankNameLabel(context.institution) ??
     detectInstitutionFromLines([...lines, ...signalLines]) ??
     detectInstitutionFromText(normalized) ??
     detectInstitutionFromText(signalText);
@@ -13822,17 +13823,19 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
   }
 
   const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-  const institution = detectInstitutionFromText(normalized);
+  const institution = sanitizeBankNameLabel(detectInstitutionFromText(normalized));
   const accountNumber = detectAccountNumberFromText(normalized);
   const { startDate, endDate } = detectStatementDatesFromText(normalized);
   const { openingBalance, endingBalance } = detectBalanceFromText(normalized);
-  const accountName = institution && accountNumber
-    ? `${institution} ${accountNumber.slice(-4)}`
-    : institution
-      ? institution
-      : accountNumber
-        ? `Account ${accountNumber.slice(-4)}`
-        : null;
+  const accountName = sanitizeBankNameLabel(
+    institution && accountNumber
+      ? `${institution} ${accountNumber.slice(-4)}`
+      : institution
+        ? institution
+        : accountNumber
+          ? `Account ${accountNumber.slice(-4)}`
+          : null
+  );
 
   if (!institution && !accountNumber && !startDate && !endDate && openingBalance === null && endingBalance === null) {
     return null;

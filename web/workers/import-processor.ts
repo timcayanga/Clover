@@ -44,7 +44,7 @@ import { parseImportTextWithOpenAIFallback, transcribeImportImagesWithOpenAI } f
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
-import { normalizeBankName } from "@/lib/data-qa-banks";
+import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { mergeCheckpointSourceMetadata } from "@/lib/import-workflow";
 import { findBestImportedAccountMatch, normalizeImportedAccountKey } from "@/lib/workspace-cache";
@@ -1729,17 +1729,10 @@ const resolveConfirmationAccount = async (params: {
     params.parsedRows.find((row) => typeof row.institution === "string" && row.institution.trim()) ??
     null;
 
-  const inferredAccountName =
-    typeof candidateRow?.accountName === "string" && candidateRow.accountName.trim()
-      ? String(candidateRow.accountName).trim()
-      : typeof candidateRow?.institution === "string" && candidateRow.institution.trim()
-        ? candidateRow.institution.trim()
-        : null;
-
   const inferredInstitution =
-    typeof candidateRow?.institution === "string" && candidateRow.institution.trim()
-      ? candidateRow.institution.trim()
-      : null;
+    sanitizeBankNameLabel(typeof candidateRow?.institution === "string" ? candidateRow.institution : null);
+  const inferredAccountName =
+    sanitizeBankNameLabel(typeof candidateRow?.accountName === "string" ? candidateRow.accountName : null) ?? inferredInstitution;
   const inferredAccountNumber =
     typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
       ? params.statementMetadata.accountNumber.trim()
