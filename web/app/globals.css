@@ -3071,7 +3071,8 @@ body.transactions-manual-open .shell-quick-add-button {
   }
 
   .content {
-    padding: 18px 18px calc(156px + env(safe-area-inset-bottom));
+    padding: 18px 18px calc(220px + env(safe-area-inset-bottom));
+    scroll-padding-bottom: calc(220px + env(safe-area-inset-bottom));
     min-height: 0;
     overflow: visible;
   }
