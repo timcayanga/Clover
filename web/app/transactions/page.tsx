@@ -2907,6 +2907,14 @@ function TransactionsPageContent() {
       ).length,
     [activeFinalizingImportIds, visibleTransactions]
   );
+  const [finalizingNoticeDismissed, setFinalizingNoticeDismissed] = useState(false);
+  useEffect(() => {
+    if (!hasActiveFinalizingImports) {
+      setFinalizingNoticeDismissed(false);
+    }
+  }, [hasActiveFinalizingImports]);
+  const finalizingNeedsReview = finalizingTimeLabel === "couldn't finalize automatically; please review";
+  const showFinalizingNotice = finalizingTransactionCount > 0 && !finalizingNoticeDismissed;
   const totalTransactionPages = Math.max(1, Math.ceil(totalTransactionCountForDisplay / Math.max(transactionsPageSize, 1)));
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);
   const pageStartIndex = (currentTransactionPage - 1) * transactionsPageSize;
@@ -5457,15 +5465,26 @@ function TransactionsPageContent() {
       />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`} style={transactionsLayoutStyle}>
         <div className="transactions-main-panel">
-          {finalizingTransactionCount > 0 ? (
+          {showFinalizingNotice ? (
             <div className="transactions-status-line" role="status" aria-live="polite">
               <div className="transactions-status-line__meta">
-                <span className="pill pill-neutral">Finalizing details</span>
+                <span className={`pill ${finalizingNeedsReview ? "pill-neutral" : "pill-neutral"}`}>
+                  {finalizingNeedsReview ? "Needs review" : "Finalizing details"}
+                </span>
                 <span className="panel-muted">
-                  Clover is cleaning up names and categories for {finalizingTransactionCount} visible transaction
-                  {finalizingTransactionCount === 1 ? "" : "s"} · {finalizingTimeLabel}.
+                  {finalizingNeedsReview
+                    ? `Clover couldn't finalize automatically for ${finalizingTransactionCount} visible transaction${finalizingTransactionCount === 1 ? "" : "s"}; please review.`
+                    : `Clover is cleaning up names and categories for ${finalizingTransactionCount} visible transaction${finalizingTransactionCount === 1 ? "" : "s"} · ${finalizingTimeLabel}.`}
                 </span>
               </div>
+              <button
+                type="button"
+                className="icon-button transactions-status-line__dismiss"
+                onClick={() => setFinalizingNoticeDismissed(true)}
+                aria-label="Dismiss status notice"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
             </div>
           ) : null}
       {filterOpen ? (

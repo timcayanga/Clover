@@ -10593,6 +10593,10 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   justify-content: flex-end;
 }
 
+.transactions-status-line__dismiss {
+  flex: none;
+}
+
 .transactions-selection-bar {
   margin: 12px 0 14px;
   padding: 10px 12px;
