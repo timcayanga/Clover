@@ -5,7 +5,7 @@
   "scripts": {
     "predev": "tsx scripts/sync-public-assets.ts",
     "dev": "next dev",
-    "prebuild": "tsx scripts/sync-public-assets.ts && node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\"",
+    "prebuild": "tsx scripts/sync-public-assets.ts && tsx scripts/apply-migrations.ts && node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

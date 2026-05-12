@@ -200,11 +200,16 @@ const loadCanvasModule = async (): Promise<CanvasModule | null> => {
 };
 
 let ocrWorkerPromise: Promise<unknown> | null = null;
+let ocrWorkerUnavailable = false;
 
 const getOcrWorker = async () => {
+  if (ocrWorkerUnavailable) {
+    return null;
+  }
+
   if (!ocrWorkerPromise) {
     ocrWorkerPromise = (async () => {
-      const { createWorker } = await new Function("return import('tesseract.js')")();
+      const { createWorker } = await import("tesseract.js");
       const worker = await createWorker("eng", 1, {
         logger: () => {
           // Keep OCR logs quiet during imports.
@@ -219,7 +224,11 @@ const getOcrWorker = async () => {
         // If OCR parameter setup fails, continue with the default worker config.
       }
       return worker;
-    })();
+    })().catch((error) => {
+      ocrWorkerUnavailable = true;
+      console.warn("OCR worker unavailable; skipping tesseract fallback", error);
+      return null;
+    });
   }
 
   return ocrWorkerPromise;
@@ -231,6 +240,9 @@ const extractTextFromImageBufferWithOcr = async (
 ) => {
   try {
     const worker = await getOcrWorker();
+    if (!worker) {
+      return "";
+    }
     const source =
       typeof imageSource === "string"
         ? imageSource

@@ -803,6 +803,7 @@ const openAIJsonSchema = {
     "institution",
     "institution_raw",
     "statement_type",
+    "document_type",
     "payment_due_date",
     "total_amount_due",
     "account",
