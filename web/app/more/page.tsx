@@ -15,7 +15,7 @@ type MoreSection = {
   items: MoreLink[];
 };
 
-type PageIconName = "accounts" | "recurring" | "investments" | "reports" | "insights" | "goals" | "settings" | "help";
+type PageIconName = "accounts" | "recurring" | "investments" | "reports" | "insights" | "goals" | "notifications" | "settings" | "help";
 
 function PageIcon({ name }: { name: PageIconName }) {
   const common = {
@@ -80,6 +80,14 @@ function PageIcon({ name }: { name: PageIconName }) {
           <path d="m12 3.5 2.71 5.49 6.06.88-4.39 4.28 1.04 6.03L12 17.98l-5.42 2.85 1.04-6.03-4.39-4.28 6.06-.88L12 3.5Z" />
         </svg>
       );
+    case "notifications":
+      return (
+        <svg {...common}>
+          <path d="M15 17H9" />
+          <path d="M17 14v-3.8a5 5 0 0 0-10 0V14l-1.7 1.7A1 1 0 0 0 6 17h12a1 1 0 0 0 .7-1.7L17 14Z" />
+          <path d="M10.5 17a1.5 1.5 0 0 0 3 0" />
+        </svg>
+      );
     case "settings":
       return (
         <svg {...common}>
@@ -142,6 +150,11 @@ const moreSections: MoreSection[] = [
   {
     title: "App",
     items: [
+      {
+        href: "/notifications",
+        title: "Notifications",
+        icon: "notifications",
+      },
       {
         href: "/settings",
         title: "Settings",
