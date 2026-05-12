@@ -967,6 +967,7 @@ export function ImportFilesModal({
   const [qaErrorByItemId, setQaErrorByItemId] = useState<Record<string, string | null>>({});
   const autoLoadedQaIdsRef = useRef(new Set<string>());
   const localPreparseStartedRef = useRef(new Set<string>());
+  const localPreparseSummaryByItemIdRef = useRef(new Map<string, UploadInsightsSummary>());
   const handleStartImportRef = useRef<null | (() => Promise<void>)>(null);
   const initialFilesSignatureRef = useRef<string | null>(null);
   const importActivitySurfaceRef = useRef<ImportActivityLocation>("modal");
@@ -1132,6 +1133,7 @@ export function ImportFilesModal({
       setQaErrorByItemId({});
       autoLoadedQaIdsRef.current.clear();
       localPreparseStartedRef.current.clear();
+      localPreparseSummaryByItemIdRef.current.clear();
       autoCloseAfterStartRef.current = false;
       accountIdByKeyRef.current.clear();
       setMessage("");
@@ -3360,8 +3362,11 @@ export function ImportFilesModal({
       );
 
       seedImportedWorkspaceCaches(workspaceId, summary);
+      localPreparseSummaryByItemIdRef.current.set(itemId, summary);
       await Promise.resolve(onImported(summary));
       updateItem(itemId, {
+        targetAccountId: resolvedAccountId,
+        importedRows: parsedRows.length,
         progressLabel: parsedRows.length > 0 ? "Preview ready" : "Reading locally",
       });
     } catch (error) {
@@ -3373,6 +3378,7 @@ export function ImportFilesModal({
   }
 
   const removeItem = (id: string) => {
+    localPreparseSummaryByItemIdRef.current.delete(id);
     setItems((current) => current.filter((item) => item.id !== id));
   };
 
@@ -4122,25 +4128,29 @@ export function ImportFilesModal({
               ),
             } satisfies UploadInsightsSummary)
           : null;
+        const localPreparseSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
+        const queuedVisibleSummary = optimisticSummary ?? localPreparseSummary;
+        const queuedVisibleRows = Math.max(visibleRows, queuedVisibleSummary?.rowsImported ?? 0);
         updateItem(itemId, {
           importFileId,
-          targetAccountId: optimisticAccountId,
-          confirmationState: "staged",
-          progress: IMPORT_PROGRESS.loadingAccount,
-          progressLabel: hasStatementIdentity || canUseOptimisticGuess ? "Loading account" : "Waiting for account details",
-          status: "importing",
+          targetAccountId: queuedVisibleSummary?.accountId ?? optimisticAccountId,
+          confirmationState: queuedVisibleSummary ? "confirmed" : "staged",
+          progress: queuedVisibleSummary ? 100 : IMPORT_PROGRESS.loadingAccount,
+          progressLabel: queuedVisibleSummary ? "Done" : hasStatementIdentity || canUseOptimisticGuess ? "Loading account" : "Waiting for account details",
+          status: queuedVisibleSummary ? "done" : "importing",
         });
         publishImportActivity({
           workspaceId,
           surface: importActivitySurfaceRef.current,
-          status: "active",
+          status: queuedVisibleSummary ? "done" : "active",
           fileName: item.file.name,
           fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
           fileTotal: items.length,
-          completedFiles: completedFileCount,
-          progress: IMPORT_PROGRESS.loadingAccount,
-          detail:
-            hasStatementIdentity || canUseOptimisticGuess
+          completedFiles: queuedVisibleSummary ? completedFileCount + 1 : completedFileCount,
+          progress: queuedVisibleSummary ? 100 : IMPORT_PROGRESS.loadingAccount,
+          detail: queuedVisibleSummary
+            ? "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background."
+            : hasStatementIdentity || canUseOptimisticGuess
               ? getProgressDetail(
                   {
                     accountName: statementIdentity?.accountName ?? guessedIdentity?.accountName ?? null,
@@ -4150,24 +4160,24 @@ export function ImportFilesModal({
                   previewTransactions.length
                 )
               : "Clover is reading the document",
-          summary: null,
+          summary: queuedVisibleSummary,
           errorMessage: null,
         });
-        if (optimisticSummary) {
-          seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
-          await Promise.resolve(onImported(optimisticSummary));
+        if (queuedVisibleSummary) {
+          seedImportedWorkspaceCaches(workspaceId, queuedVisibleSummary);
+          await Promise.resolve(onImported(queuedVisibleSummary));
 
           void waitForImportSettledVisibility({
             workspaceId,
-            accountId: optimisticAccountId,
-            importedRows: Number(processPayload?.imported ?? 0) || 0,
-            expectedBalance: optimisticSummary.balance ?? null,
+            accountId: queuedVisibleSummary.accountId ?? optimisticAccountId,
+            importedRows: queuedVisibleRows,
+            expectedBalance: queuedVisibleSummary.balance ?? null,
             timeoutMs: 10_000,
           }).then((settledVisible) => {
             if (!settledVisible) {
               console.warn("Import finished before the settled data became visible", {
                 importFileId,
-                accountId: optimisticAccountId,
+                accountId: queuedVisibleSummary.accountId ?? optimisticAccountId,
               });
             }
           });
@@ -4177,8 +4187,8 @@ export function ImportFilesModal({
             confirmationState: "confirmed",
             error: null,
             importFileId,
-            targetAccountId: optimisticAccountId,
-            importedRows: visibleRows,
+            targetAccountId: queuedVisibleSummary.accountId ?? optimisticAccountId,
+            importedRows: queuedVisibleRows,
             progress: 100,
             progressLabel: "Done",
           });
@@ -4192,7 +4202,7 @@ export function ImportFilesModal({
             completedFiles: completedFileCount + 1,
             progress: 100,
             detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
-            summary: optimisticSummary,
+            summary: queuedVisibleSummary,
             errorMessage: null,
           });
 
@@ -4214,17 +4224,17 @@ export function ImportFilesModal({
               accountNumber: statementIdentity?.accountNumber ?? null,
               accountType: statementIdentity?.accountType ?? null,
               optimisticAccountId: hasStatementIdentity ? optimisticAccountId : canUseOptimisticGuess ? item.optimisticAccountId : null,
-              initialBalance: optimisticSummary.balance ?? null,
+              initialBalance: queuedVisibleSummary.balance ?? null,
               password: item.password.trim() || undefined,
-              previewTransactions,
+              previewTransactions: queuedVisibleSummary.previewTransactions ?? previewTransactions,
             },
             { backgroundOnly: true }
           );
 
           return {
             status: "done",
-            importedRows: visibleRows,
-            summary: optimisticSummary,
+            importedRows: queuedVisibleRows,
+            summary: queuedVisibleSummary,
           };
         }
 
@@ -4242,7 +4252,7 @@ export function ImportFilesModal({
           accountNumber: statementIdentity?.accountNumber ?? null,
           accountType: statementIdentity?.accountType ?? null,
           optimisticAccountId: hasStatementIdentity ? optimisticAccountId : canUseOptimisticGuess ? item.optimisticAccountId : null,
-              initialBalance: optimisticSummary ? (optimisticSummary as UploadInsightsSummary).balance : null,
+          initialBalance: null,
           password: item.password.trim() || undefined,
           previewTransactions,
         });
