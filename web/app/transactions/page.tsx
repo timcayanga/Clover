@@ -1445,9 +1445,9 @@ const transactionsToolbarSearchStyle = {
 
 const transactionsToolbarSearchCompactStyle = {
   ...transactionsToolbarSearchStyle,
-  width: "min(220px, 48vw)",
-  minWidth: "140px",
-  maxWidth: "220px",
+  width: "min(160px, 34vw)",
+  minWidth: "96px",
+  maxWidth: "160px",
   flex: "0 1 auto",
 } as const;
 
@@ -5314,6 +5314,40 @@ function TransactionsPageContent() {
   const isTableLoading = Boolean(selectedWorkspaceId) && !isWorkspaceDataReady && transactions.length === 0;
   const transactionsShellActions = (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
+      <label
+        className="transactions-toolbar-search"
+        style={isCompactViewport ? transactionsToolbarSearchCompactStyle : transactionsToolbarSearchStyle}
+      >
+        <span className="transactions-toolbar-search__icon" aria-hidden="true">
+          <ActionIcon name="search" />
+        </span>
+        <span className="sr-only">Search transactions</span>
+        <input
+          ref={searchInputRef}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search"
+          aria-label="Search transactions"
+          aria-keyshortcuts="/"
+          style={isCompactViewport ? { width: "auto", opacity: 1 } : undefined}
+        />
+      </label>
+
+      <CurrencySelector
+        value={currencyFilter}
+        onChange={(next) => setCurrencyFilter(next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "")}
+        options={workspaceCurrencyCodes}
+        includeAllOption
+        allLabel="All currencies"
+        ariaLabel="Filter transactions by currency"
+        className="transactions-currency-filter"
+        buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip"
+        menuClassName="transactions-currency-filter__menu"
+        optionClassName="transactions-currency-filter__option"
+        menuAlignment="end"
+        showChevron={false}
+      />
+
       <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>
         <button
           className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
@@ -5359,40 +5393,6 @@ function TransactionsPageContent() {
           </button>
         </div>
       </div>
-
-      <label
-        className="transactions-toolbar-search"
-        style={isCompactViewport ? transactionsToolbarSearchCompactStyle : transactionsToolbarSearchStyle}
-      >
-        <span className="transactions-toolbar-search__icon" aria-hidden="true">
-          <ActionIcon name="search" />
-        </span>
-        <span className="sr-only">Search transactions</span>
-        <input
-          ref={searchInputRef}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search"
-          aria-label="Search transactions"
-          aria-keyshortcuts="/"
-          style={isCompactViewport ? { width: "auto", opacity: 1 } : undefined}
-        />
-      </label>
-
-      <CurrencySelector
-        value={currencyFilter}
-        onChange={(next) => setCurrencyFilter(next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "")}
-        options={workspaceCurrencyCodes}
-        includeAllOption
-        allLabel="All currencies"
-        ariaLabel="Filter transactions by currency"
-        className="transactions-currency-filter"
-        buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip"
-        menuClassName="transactions-currency-filter__menu"
-        optionClassName="transactions-currency-filter__option"
-        menuAlignment="end"
-        showChevron={false}
-      />
     </div>
   );
 
