@@ -41,6 +41,11 @@ export type TransactionsWorkspaceCacheState = {
   snapshots: Record<string, TransactionsWorkspaceCacheSnapshot>;
 };
 
+type WritableTransactionsWorkspaceCacheSnapshot = TransactionsWorkspaceCacheSnapshot & {
+  totalCount?: number;
+  summary?: Record<string, unknown> | null;
+};
+
 type TransactionsWorkspaceSnapshotLike = {
   workspaceId: string;
   accounts?: CachedRecord[];
@@ -797,6 +802,62 @@ export const clearDeletingWorkspaceAccount = (workspaceId: string, accountId: st
   } satisfies DeletingAccountsWorkspaceCacheState);
 };
 
+const getWorkspaceAccountDeletionIds = (workspaceId: string) =>
+  new Set([...getDeletedWorkspaceAccountIds(workspaceId), ...getDeletingWorkspaceAccountIds(workspaceId)]);
+
+const filterAccountsWorkspaceSnapshot = (
+  workspaceId: string,
+  snapshot: AccountsWorkspaceCacheSnapshot
+): AccountsWorkspaceCacheSnapshot => {
+  const deletedIds = getWorkspaceAccountDeletionIds(workspaceId);
+  if (deletedIds.size === 0) {
+    return snapshot;
+  }
+
+  const accountMatches = (entry: CachedRecord) => typeof entry.id === "string" && deletedIds.has(entry.id);
+  const relationMatches = (entry: CachedRecord) =>
+    typeof entry.accountId === "string" && deletedIds.has(entry.accountId);
+
+  return {
+    ...snapshot,
+    accounts: Array.isArray(snapshot.accounts) ? snapshot.accounts.filter((entry) => !accountMatches(entry)) : [],
+    accountRules: snapshot.accountRules.filter((entry) => !relationMatches(entry)),
+    transactions: Array.isArray(snapshot.transactions)
+      ? snapshot.transactions.filter((entry) => !relationMatches(entry))
+      : [],
+    statementCheckpoints: snapshot.statementCheckpoints.filter((entry) => !relationMatches(entry)),
+    imports: Array.isArray(snapshot.imports)
+      ? snapshot.imports.filter((entry) => !relationMatches(entry as CachedRecord))
+      : [],
+  };
+};
+
+const filterTransactionsWorkspaceSnapshot = (
+  workspaceId: string,
+  snapshot: WritableTransactionsWorkspaceCacheSnapshot
+): WritableTransactionsWorkspaceCacheSnapshot => {
+  const deletedIds = getWorkspaceAccountDeletionIds(workspaceId);
+  if (deletedIds.size === 0) {
+    return snapshot;
+  }
+
+  const accountMatches = (entry: CachedRecord) => typeof entry.id === "string" && deletedIds.has(entry.id);
+  const relationMatches = (entry: CachedRecord) =>
+    typeof entry.accountId === "string" && deletedIds.has(entry.accountId);
+
+  return {
+    ...snapshot,
+    accounts: Array.isArray(snapshot.accounts) ? snapshot.accounts.filter((entry) => !accountMatches(entry)) : [],
+    categories: Array.isArray(snapshot.categories) ? snapshot.categories : [],
+    transactions: Array.isArray(snapshot.transactions)
+      ? snapshot.transactions.filter((entry) => !relationMatches(entry))
+      : [],
+    imports: Array.isArray(snapshot.imports)
+      ? snapshot.imports.filter((entry) => !relationMatches(entry as CachedRecord))
+      : [],
+  };
+};
+
 export const readAccountsWorkspaceCache = (): AccountsWorkspaceCacheState | null => {
   const cache = readJsonCache<AccountsWorkspaceCacheState>(accountsWorkspaceCacheKey);
   if (!cache || typeof cache !== "object" || typeof cache.selectedWorkspaceId !== "string") {
@@ -841,11 +902,11 @@ export const persistAccountsWorkspaceCache = (
 
   const cache = readAccountsWorkspaceCache();
   const updatedAt = Date.now();
-  const nextSnapshot: AccountsWorkspaceCacheSnapshot = {
+  const nextSnapshot = filterAccountsWorkspaceSnapshot(workspaceId, {
     workspaceId,
     updatedAt,
     ...snapshot,
-  };
+  });
 
   const nextState: AccountsWorkspaceCacheState = {
     selectedWorkspaceId: workspaceId,
@@ -1022,11 +1083,11 @@ export const persistTransactionsWorkspaceCache = (
 
   const cache = readTransactionsWorkspaceCache();
   const updatedAt = Date.now();
-  const nextSnapshot: TransactionsWorkspaceCacheSnapshot = {
+  const nextSnapshot = filterTransactionsWorkspaceSnapshot(workspaceId, {
     workspaceId,
     updatedAt,
     ...snapshot,
-  };
+  });
 
   const nextState: TransactionsWorkspaceCacheState = {
     selectedWorkspaceId: workspaceId,
@@ -1070,7 +1131,7 @@ export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account:
     selectedWorkspaceId: workspaceId,
     snapshots: {
       ...(accountsCache?.snapshots ?? {}),
-      [workspaceId]: nextAccountsSnapshot,
+      [workspaceId]: filterAccountsWorkspaceSnapshot(workspaceId, nextAccountsSnapshot),
     },
   } satisfies AccountsWorkspaceCacheState);
 
@@ -1078,7 +1139,7 @@ export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account:
     selectedWorkspaceId: workspaceId,
     snapshots: {
       ...(transactionsCache?.snapshots ?? {}),
-      [workspaceId]: nextTransactionsSnapshot,
+      [workspaceId]: filterTransactionsWorkspaceSnapshot(workspaceId, nextTransactionsSnapshot),
     },
   } satisfies TransactionsWorkspaceCacheState);
 };
@@ -1119,7 +1180,7 @@ export const syncImportedWorkspaceTransactionCaches = (
     selectedWorkspaceId: workspaceId,
     snapshots: {
       ...(accountsCache?.snapshots ?? {}),
-      [workspaceId]: nextAccountsSnapshot,
+      [workspaceId]: filterAccountsWorkspaceSnapshot(workspaceId, nextAccountsSnapshot),
     },
   } satisfies AccountsWorkspaceCacheState);
 
@@ -1127,7 +1188,7 @@ export const syncImportedWorkspaceTransactionCaches = (
     selectedWorkspaceId: workspaceId,
     snapshots: {
       ...(transactionsCache?.snapshots ?? {}),
-      [workspaceId]: nextTransactionsSnapshot,
+      [workspaceId]: filterTransactionsWorkspaceSnapshot(workspaceId, nextTransactionsSnapshot),
     },
   } satisfies TransactionsWorkspaceCacheState);
 };
@@ -1160,7 +1221,7 @@ export const applyOptimisticWorkspaceAccountDeletion = (workspaceId: string, acc
       ...accountsCache,
       snapshots: {
         ...accountsCache.snapshots,
-        [workspaceId]: nextSnapshot,
+        [workspaceId]: filterAccountsWorkspaceSnapshot(workspaceId, nextSnapshot),
       },
     } satisfies AccountsWorkspaceCacheState);
   }
@@ -1171,12 +1232,13 @@ export const applyOptimisticWorkspaceAccountDeletion = (workspaceId: string, acc
     const nextTransactions = Array.isArray(snapshot.transactions)
       ? snapshot.transactions.filter((entry) => !transactionMatches(entry as CachedRecord))
       : [];
-    const nextSnapshot = {
+    const nextSnapshot: WritableTransactionsWorkspaceCacheSnapshot = {
       ...snapshot,
       updatedAt: Date.now(),
       accounts: Array.isArray(snapshot.accounts)
         ? snapshot.accounts.filter((entry) => !accountMatches(entry as CachedRecord))
         : [],
+      categories: Array.isArray(snapshot.categories) ? snapshot.categories : [],
       transactions: nextTransactions,
       imports: Array.isArray(snapshot.imports)
         ? snapshot.imports.filter((entry) => !importMatches(entry as CachedRecord))
@@ -1205,7 +1267,7 @@ export const applyOptimisticWorkspaceAccountDeletion = (workspaceId: string, acc
       ...transactionsCache,
       snapshots: {
         ...transactionsCache.snapshots,
-        [workspaceId]: nextSnapshot,
+        [workspaceId]: filterTransactionsWorkspaceSnapshot(workspaceId, nextSnapshot),
       },
     });
   }
