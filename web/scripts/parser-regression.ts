@@ -786,6 +786,31 @@ const main = async () => {
   }
   console.log("[PASS] RCBC classification | standalone Cash Payment rows classify as Shopping expense");
 
+  const metrobankCreditPath = join(root, "Samples/Metrobank/412340326-compressor.pdf");
+  const metrobankCreditBytes = await readFile(metrobankCreditPath);
+  const metrobankCreditText = await readUploadedFileText({
+    name: basename(metrobankCreditPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(metrobankCreditBytes.length);
+      copy.set(metrobankCreditBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const metrobankCreditMetadata = detectStatementMetadataFromText(metrobankCreditText);
+  const metrobankCreditRows = parser.parseImportText(metrobankCreditText, basename(metrobankCreditPath), "application/pdf", {
+    institution: metrobankCreditMetadata.institution,
+    accountName: metrobankCreditMetadata.accountName,
+    accountNumber: metrobankCreditMetadata.accountNumber,
+  });
+  const metrobankCashPaymentRow = metrobankCreditRows.find((row) => /cash payment/i.test(String(row.description ?? row.merchantRaw ?? "")));
+  if (!metrobankCashPaymentRow || metrobankCashPaymentRow.type !== "transfer" || metrobankCashPaymentRow.categoryName !== "Transfers") {
+    throw new Error(
+      `expected Metrobank Cash Payment statement settlement to stay as Transfers, got ${metrobankCashPaymentRow?.categoryName ?? "missing"} ${metrobankCashPaymentRow?.type ?? "missing"}`
+    );
+  }
+  console.log("[PASS] Metrobank classification | Cash Payment settlement rows stay as Transfers");
+
   const guessCategoryFallback = dataEngine.guessCategoryFallback as (description: string, type: "income" | "expense" | "transfer") => string;
   const enrichmentFallbackExpectations: Array<[string, "income" | "expense" | "transfer", string]> = [
     ["Incoming Interbank Transfer", "income", "Transfers"],
@@ -797,6 +822,9 @@ const main = async () => {
     ["Interest Earned", "income", "Income"],
     ["Tax Withheld", "expense", "Financial"],
     ["Finance Charges", "expense", "Financial"],
+    ["Cash Payment", "expense", "Shopping"],
+    ["Cash Payment - Thank You - MB ATM", "income", "Transfers"],
+    ["Card Payment", "income", "Transfers"],
   ];
   for (const [description, type, expectedCategory] of enrichmentFallbackExpectations) {
     const actualCategory = guessCategoryFallback(description, type);

@@ -45,9 +45,30 @@ const delimiterForFile = (fileType: string, fileName: string) => {
   return ",";
 };
 
+export const isStatementPaymentSettlementDescription = (value?: string | null) => {
+  const lower = normalizeWhitespace(String(value ?? "")).toLowerCase();
+  const compact = compactWhitespace(lower);
+  return (
+    /payment\s*-\s*thank\s*you|payment\s+thank\s+you|card\s+payment|payment\s+to\s+card|payment\s+received|repayment/.test(lower) ||
+    /cash\s+payment\s*-\s*thank\s*you|cash\s+payment\s+thank\s+you/.test(lower) ||
+    /paymentthankyou|cardpayment|paymenttocard|paymentreceived|cashpaymentthankyou/.test(compact)
+  );
+};
+
+export const isStandaloneCashPaymentDescription = (value?: string | null) => {
+  const lower = normalizeWhitespace(String(value ?? "")).toLowerCase();
+  if (!/\bcash\s+payment\b/.test(lower)) {
+    return false;
+  }
+
+  return !isStatementPaymentSettlementDescription(lower);
+};
+
 export const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
+  if (isStandaloneCashPaymentDescription(text)) return "Shopping";
+  if (isStatementPaymentSettlementDescription(text)) return "Transfers";
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";
   if (/service\s*charge|servicecharge|bank charge|bankcharge/.test(lower) || /servicecharge|bankcharge/.test(compact)) return "Financial";
   if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) return "Transfers";
@@ -3989,7 +4010,8 @@ const parseBpiCreditCardSegment = (
 
 const guessRcbcCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
-  if (/^cash payment$/i.test(description) || /cash payment/.test(lower)) return "Shopping";
+  if (isStandaloneCashPaymentDescription(description)) return "Shopping";
+  if (isStatementPaymentSettlementDescription(description)) return "Transfers";
   if (/payment to card|card payment/.test(lower)) return "Financial";
   if (/transfer|instapay|pesonet/.test(lower)) return "Transfers";
   if (/the\s+sm\s+store|sm\s+fairview|sm\s+grand\s+caloocan/i.test(lower)) return "Shopping";
@@ -4023,7 +4045,7 @@ const parseRcbcTransactionLine = (
     return null;
   }
 
-  const type: TransactionType = /payment to card|card payment/i.test(description)
+  const type: TransactionType = isStatementPaymentSettlementDescription(description)
     ? "transfer"
     : /refund|reversal|credit memo/i.test(description)
       ? "income"
@@ -4120,7 +4142,7 @@ const parseRcbcImportText = (text: string) => {
               return null;
             }
 
-            const type: TransactionType = /^cash payment$/i.test(description) || /cash payment/i.test(description) ? "expense" : "transfer";
+            const type: TransactionType = isStandaloneCashPaymentDescription(description) ? "expense" : "transfer";
             return {
               date: saleDate.toISOString().slice(0, 10),
               amount: Math.abs(amount).toFixed(2),
@@ -10981,6 +11003,14 @@ const classifyGenericStatementTransaction = (description: string, credit: number
   const compact = compactWhitespace(description).toLowerCase();
   const codeOnlyReference = /^\d{2}\s+[a-z0-9/_-]{6,}$/i.test(description);
 
+  if (isStandaloneCashPaymentDescription(description)) {
+    return { type: "expense" as TransactionType, categoryName: "Shopping" };
+  }
+
+  if (isStatementPaymentSettlementDescription(description)) {
+    return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+  }
+
   if (/interest|intrest|salary|payroll|refund|credit memo|cash in|received|recived|cash deposit|funds deposited|deposit\b/.test(lower)) {
     return { type: "income" as TransactionType, categoryName: guessCategoryName(description, "income") };
   }
@@ -11810,6 +11840,14 @@ const reconstructGenericSparseSummaryRows = (
 const classifyGenericWalletHistoryTransaction = (description: string, previousBalance: number | null, balance: number | null) => {
   const lower = description.toLowerCase();
   const balanceDelta = previousBalance !== null && balance !== null ? balance - previousBalance : null;
+
+  if (isStandaloneCashPaymentDescription(description)) {
+    return { type: "expense" as TransactionType, categoryName: "Shopping" };
+  }
+
+  if (isStatementPaymentSettlementDescription(description)) {
+    return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+  }
 
   if (/^buy load transaction for\b/.test(lower) || /^bills payment to\b/.test(lower)) {
     return { type: "expense" as TransactionType, categoryName: "Bills & Utilities" };

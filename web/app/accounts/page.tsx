@@ -2463,7 +2463,7 @@ function AccountsPageContent() {
         (entry) =>
           !entry.id.startsWith("optimistic-") &&
           getImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type) === accountKey
-      ) ?? account
+      ) ?? null
     );
   };
 
@@ -2471,14 +2471,24 @@ function AccountsPageContent() {
     if (deletingAccountIdsSet.has(account.id)) {
       return;
     }
+    const navigableAccount = resolveNavigableAccount(account);
+    if (!navigableAccount) {
+      setMessage("Clover is still linking this imported account. The account card can stay visible while the details page gets ready.");
+      return;
+    }
     closeChrome();
-    window.location.assign(getAccountPath(resolveNavigableAccount(account)));
+    window.location.assign(getAccountPath(navigableAccount));
   };
 
   const openFullAccountPage = () => {
     if (!selectedAccount) return;
+    const navigableAccount = resolveNavigableAccount(selectedAccount);
+    if (!navigableAccount) {
+      setMessage("Clover is still linking this imported account. The account card can stay visible while the details page gets ready.");
+      return;
+    }
     closeChrome();
-    window.location.assign(getAccountPath(resolveNavigableAccount(selectedAccount)));
+    window.location.assign(getAccountPath(navigableAccount));
   };
 
   const openDrawerForWarning = (account: Account, warning: string) => {

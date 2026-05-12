@@ -7,6 +7,8 @@ import {
   type DetectedStatementMetadata,
   type ImportedAccountType,
   inferAccountTypeFromStatement,
+  isStandaloneCashPaymentDescription,
+  isStatementPaymentSettlementDescription,
   normalizeInstitutionCurrency,
   parseAmountValue,
   parseDateValue,
@@ -423,9 +425,14 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
   const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
 
+  if (isStandaloneCashPaymentDescription(merchantText)) {
+    return "Shopping";
+  }
+
   if (
     /incoming\s+(?:interbank\s+)?transfer|outgoing\s+(?:interbank\s+)?transfer|fund\s+transfer|interbank\s+fund\s+transfer|system\s+(?:debit|credit)|miscellaneous\s+debit|investment\s+sweep|card\s+payment|payment\s*-\s*thank\s+you/.test(lower) ||
-    /incoming(?:interbank)?transfer|outgoing(?:interbank)?transfer|fundtransfer|interbankfundtransfer|system(?:debit|credit)|miscellaneousdebit|investmentsweep|cardpayment|paymentthankyou/.test(compact)
+    /incoming(?:interbank)?transfer|outgoing(?:interbank)?transfer|fundtransfer|interbankfundtransfer|system(?:debit|credit)|miscellaneousdebit|investmentsweep|cardpayment|paymentthankyou/.test(compact) ||
+    isStatementPaymentSettlementDescription(merchantText)
   ) {
     return "Transfers";
   }
@@ -482,6 +489,7 @@ const HARDCODED_EXACT_MERCHANT_KEYS = new Set([
   "base interest",
   "boost interest",
   "tax withheld",
+  "cash payment",
   "repayment",
   "credit drawdown",
   "service fee",
@@ -2172,6 +2180,13 @@ export const classifyMerchant = (params: {
   merchantRules: MerchantRuleRow[];
   trainingSignals: TrainingSignalRow[];
 }) => {
+  const preferredTypeForCategory = (categoryName: string | null | undefined, fallback: TransactionType, categorySource?: string | null) => {
+    if (categoryName?.trim().toLowerCase() === "shopping" && isStandaloneCashPaymentDescription(categorySource)) {
+      return "expense";
+    }
+
+    return coerceTransactionTypeFromCategoryName(categoryName, fallback);
+  };
   const categoryText = [params.categoryText, params.merchantText].filter((value) => typeof value === "string" && value.trim()).join(" ");
   const tokens = tokenizeMerchant(categoryText || params.merchantText);
   const normalizedMerchant = normalizeMerchantText(params.merchantText);
@@ -2204,7 +2219,7 @@ export const classifyMerchant = (params: {
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
       normalizedName: bestRule.normalizedName || summarizeMerchantText(params.merchantText),
-      preferredType: learnedType,
+      preferredType: preferredTypeForCategory(learnedCategory, learnedType, categoryText || params.merchantText),
     };
   }
 
@@ -2227,7 +2242,7 @@ export const classifyMerchant = (params: {
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
       normalizedName: summarizeMerchantText(params.merchantText),
-      preferredType: bestSignal.type ?? params.type,
+      preferredType: preferredTypeForCategory(learnedCategory, bestSignal.type ?? params.type, categoryText || params.merchantText),
     };
   }
 
@@ -2239,7 +2254,7 @@ export const classifyMerchant = (params: {
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
       normalizedName: summarizeMerchantText(params.merchantText),
-      preferredType: params.type,
+      preferredType: preferredTypeForCategory(heuristicCategory, params.type, categoryText || params.merchantText),
     };
   }
 
@@ -2251,7 +2266,7 @@ export const classifyMerchant = (params: {
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
       normalizedName: summarizeMerchantText(params.merchantText),
-      preferredType: params.type,
+      preferredType: preferredTypeForCategory(hardcodedOverride, params.type, categoryText || params.merchantText),
     };
   }
 
@@ -2262,7 +2277,7 @@ export const classifyMerchant = (params: {
     merchantKey: normalizedMerchant,
     merchantTokens: tokens,
     normalizedName: summarizeMerchantText(params.merchantText),
-    preferredType: params.type,
+    preferredType: preferredTypeForCategory(heuristicCategory, params.type, categoryText || params.merchantText),
   };
 };
 

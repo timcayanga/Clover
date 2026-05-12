@@ -1036,6 +1036,18 @@ function AccountDetailPageContent() {
       }
 
       try {
+        if (!cachedAccount && accountId.startsWith("optimistic-")) {
+          if (!cancelled) {
+            setTransactions([]);
+            setTransactionTotalCount(0);
+            setTransactionsError(null);
+            setTransactionsLoading(false);
+            setMessage("Clover is still linking this imported account. You can keep using Clover while the details page gets ready.");
+            setHasInitialDataLoaded(true);
+          }
+          return;
+        }
+
         const resolvedAccountId = cachedAccount?.id && !cachedAccount.id.startsWith("optimistic-") ? cachedAccount.id : accountId;
         const accountPromise = fetch(`/api/accounts/${resolvedAccountId}`);
         const checkpointsPromise = fetch(`/api/accounts/${resolvedAccountId}/statement-checkpoints`);
@@ -2335,6 +2347,31 @@ function AccountDetailPageContent() {
 
   if (!hasInitialDataLoaded) {
     return <CloverLoadingScreen label="account details" />;
+  }
+
+  if (!account) {
+    return (
+      <CloverShell
+        active="accounts"
+        title="Account"
+        kicker="Account history"
+        subtitle="This imported account is still being linked."
+        showTopbar={false}
+      >
+        <section className="accounts-detail__panel">
+          <div className="accounts-detail__header">
+            <div className="actions accounts-detail__desktop-actions">
+              <button className="button button-secondary" type="button" onClick={() => router.push("/accounts")}>
+                Back to Accounts
+              </button>
+            </div>
+          </div>
+          <div className="empty-state">
+            <p>{message || "Clover is still linking this imported account. Please try opening it again in a moment."}</p>
+          </div>
+        </section>
+      </CloverShell>
+    );
   }
 
   const mobileBackAction = (
