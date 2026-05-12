@@ -439,7 +439,7 @@ const detectGenericTrainingBundle = (root: Record<string, unknown>, fileName: st
 };
 
 const AUTO_REPARSE_SCORE_TARGET = 95;
-const AUTO_REPARSE_MAX_ATTEMPTS = 12;
+const AUTO_REPARSE_MAX_ATTEMPTS = 2;
 const AUTO_REPARSE_PLATEAU_WINDOW = 3;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

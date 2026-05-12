@@ -34,7 +34,9 @@ import {
 } from "@/lib/workspace-cache";
 import {
   clearImportActivity,
+  readImportActivity,
   setImportActivity,
+  subscribeImportActivity,
   type ImportActivityLocation,
   type ImportActivitySnapshot,
   type ImportActivityStatus,
@@ -1588,6 +1590,47 @@ export function ImportFilesModal({
       })
     );
   };
+
+  useEffect(() => {
+    return subscribeImportActivity(() => {
+      const currentActivity = readImportActivity();
+      const previousActivity = lastImportActivityRef.current;
+      if (currentActivity || previousActivity?.status !== "active") {
+        return;
+      }
+
+      const canRetireVisibleImport = itemsRef.current.some(
+        (item) =>
+          (item.status === "importing" || item.status === "pending" || item.confirmationState === "staged") &&
+          (item.importFileId || item.targetAccountId || item.importedRows !== null || item.progress >= IMPORT_PROGRESS.uploading)
+      );
+      if (!canRetireVisibleImport) {
+        return;
+      }
+
+      lastImportActivityRef.current = null;
+      setBusy(false);
+      autoStartRef.current = false;
+      setItems((current) =>
+        current.map((item) =>
+          item.status === "importing" || item.status === "pending" || item.confirmationState === "staged"
+            ? {
+                ...item,
+                status: "done",
+                confirmationState: "confirmed",
+                error: null,
+                errorCode: null,
+                errorTitle: null,
+                errorNextSteps: null,
+                progress: 100,
+                progressLabel: "Done",
+              }
+            : item
+        )
+      );
+      onClose();
+    });
+  }, [onClose]);
 
   const confirmItemImport = async (
     itemId: string,

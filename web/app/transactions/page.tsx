@@ -2966,15 +2966,22 @@ function TransactionsPageContent() {
   }, [hasActiveFinalizingImports]);
   const finalizingNeedsReview = finalizingTimeLabel === "couldn't finalize automatically; please review";
   useEffect(() => {
-    if (!finalizingNeedsReview || finalizingTransactionCount === 0 || visibleTransactions.length === 0) {
+    if (visibleTransactions.length === 0) {
       return;
     }
 
     const currentActivity = readImportActivity();
-    if (currentActivity?.status === "active") {
+    if (currentActivity?.status !== "active") {
+      return;
+    }
+
+    const hasVisibleImportedTransactions = visibleTransactions.some(
+      (transaction) => transaction.source === "upload" || Boolean(transaction.importFileId)
+    );
+    if ((finalizingNeedsReview && finalizingTransactionCount > 0) || hasVisibleImportedTransactions) {
       clearImportActivity();
     }
-  }, [finalizingNeedsReview, finalizingTransactionCount, visibleTransactions.length]);
+  }, [finalizingNeedsReview, finalizingTransactionCount, visibleTransactions]);
   const showFinalizingNotice = finalizingTransactionCount > 0 && !finalizingNoticeDismissed;
   const totalTransactionPages = Math.max(1, Math.ceil(totalTransactionCountForDisplay / Math.max(transactionsPageSize, 1)));
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);

@@ -64,6 +64,7 @@ import {
 import type { InstitutionSuggestion } from "@/lib/institution-suggestions";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
+import { clearImportActivity, readImportActivity } from "@/lib/import-activity";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -1207,6 +1208,24 @@ function AccountsPageContent() {
       }
     }
   }, [reconciledAccounts]);
+
+  useEffect(() => {
+    const currentActivity = readImportActivity();
+    if (currentActivity?.status !== "active") {
+      return;
+    }
+
+    const hasVisibleImportedAccount = reconciledAccounts.some(
+      (account) => account.source === "upload" && !account.id.startsWith("optimistic-")
+    );
+    const hasVisibleImportedTransactions = transactions.some(
+      (transaction) => transaction.source === "upload" || Boolean(transaction.importFileId)
+    );
+
+    if (hasVisibleImportedAccount && hasVisibleImportedTransactions) {
+      clearImportActivity();
+    }
+  }, [reconciledAccounts, transactions]);
 
   const deletingAccountIdsSet = useMemo(
     () => new Set([...deletingAccountIds, ...getDeletingWorkspaceAccountIds(selectedWorkspaceId)]),
