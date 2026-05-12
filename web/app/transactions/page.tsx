@@ -41,8 +41,10 @@ import { clearImportActivity, readImportActivity } from "@/lib/import-activity";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
   deriveCachedCategoriesFromTransactions,
+  findBestImportedAccountMatch as findBestImportedAccountIdentityMatch,
   mergeImportedWorkspaceTransactions,
   normalizeImportedAccountKey,
+  matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
 } from "@/lib/workspace-cache";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
@@ -97,20 +99,17 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
 };
 
 const resolvePersistedImportedAccountId = (summary: UploadInsightsSummary, accounts: Account[]) => {
-  const importedAccountKey = normalizeImportedAccountKey(
-    summary.accountName,
-    summary.institution,
-    summary.accountNumber ?? null,
-    summary.accountType ?? null
+  const importedAccount = findBestImportedAccountIdentityMatch(
+    accounts.filter((account) => !account.id.startsWith("optimistic-")),
+    {
+      name: summary.accountName,
+      institution: summary.institution,
+      accountNumber: summary.accountNumber ?? null,
+      type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+    }
   );
 
-  return (
-    accounts.find(
-      (account) =>
-        !account.id.startsWith("optimistic-") &&
-        normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === importedAccountKey
-    )?.id ?? null
-  );
+  return importedAccount?.id ?? null;
 };
 
 const getImportedAccountLastFour = (value?: string | null) => {
@@ -119,26 +118,7 @@ const getImportedAccountLastFour = (value?: string | null) => {
 };
 
 const matchesImportedAccountIdentity = (left: Account, right: Account) => {
-  const leftKey = normalizeImportedAccountKey(left.name, left.institution, left.accountNumber, left.type);
-  const rightKey = normalizeImportedAccountKey(right.name, right.institution, right.accountNumber, right.type);
-  if (leftKey === rightKey) {
-    return true;
-  }
-
-  const leftInstitution = (left.institution ?? "").trim().toLowerCase();
-  const rightInstitution = (right.institution ?? "").trim().toLowerCase();
-  const leftLastFour = getImportedAccountLastFour(left.accountNumber ?? left.name);
-  const rightLastFour = getImportedAccountLastFour(right.accountNumber ?? right.name);
-
-  return Boolean(
-    leftInstitution &&
-      rightInstitution &&
-      leftInstitution === rightInstitution &&
-      leftLastFour &&
-      rightLastFour &&
-      leftLastFour === rightLastFour &&
-      left.type === right.type
-  );
+  return isImportedAccountIdentityMatch(left, right);
 };
 
 const transactionsEmptyStateIllustration = "/illustrations/clover-transactions-search-3d.png";

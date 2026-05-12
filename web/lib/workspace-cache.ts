@@ -176,6 +176,23 @@ const extractLastFourDigits = (value?: string | null) => {
   return digits.slice(-4);
 };
 
+const normalizeImportedAccountNameStem = (value?: string | null) => {
+  const normalized = normalizeWhitespace(String(value ?? ""));
+  if (!normalized) {
+    return "";
+  }
+
+  return normalizeMerchantText(normalized.replace(/[\s\-_./]*\d{4}\s*$/u, ""));
+};
+
+export type ImportedAccountIdentityLike = {
+  name?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+  type?: string | null;
+  source?: string | null;
+};
+
 export const normalizeImportedAccountKey = (
   accountName?: string | null,
   institution?: string | null,
@@ -189,6 +206,65 @@ export const normalizeImportedAccountKey = (
       normalizeWhitespace(String(accountName ?? ""))
     } ${normalizeWhitespace(String(accountType ?? ""))}`
   );
+
+const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, right: ImportedAccountIdentityLike) => {
+  const leftKey = normalizeImportedAccountKey(left.name, left.institution, left.accountNumber, left.type);
+  const rightKey = normalizeImportedAccountKey(right.name, right.institution, right.accountNumber, right.type);
+  if (leftKey === rightKey) {
+    return 100;
+  }
+
+  const leftInstitution = normalizeWhitespace(String(left.institution ?? "")).toLowerCase();
+  const rightInstitution = normalizeWhitespace(String(right.institution ?? "")).toLowerCase();
+  const leftType = normalizeWhitespace(String(left.type ?? "")).toLowerCase();
+  const rightType = normalizeWhitespace(String(right.type ?? "")).toLowerCase();
+  if (!leftInstitution || !rightInstitution || leftInstitution !== rightInstitution || !leftType || leftType !== rightType) {
+    return 0;
+  }
+
+  const leftLastFour = extractLastFourDigits(left.accountNumber ?? left.name);
+  const rightLastFour = extractLastFourDigits(right.accountNumber ?? right.name);
+  if (leftLastFour && rightLastFour && leftLastFour === rightLastFour) {
+    return 95;
+  }
+
+  const leftStem = normalizeImportedAccountNameStem(left.name ?? left.institution ?? null);
+  const rightStem = normalizeImportedAccountNameStem(right.name ?? right.institution ?? null);
+  if (leftStem && rightStem && leftStem === rightStem) {
+    if (!leftLastFour || !rightLastFour) {
+      return 90;
+    }
+
+    return 80;
+  }
+
+  return 0;
+};
+
+export const matchesImportedAccountIdentity = (left: ImportedAccountIdentityLike, right: ImportedAccountIdentityLike) =>
+  scoreImportedAccountIdentityMatch(left, right) > 0;
+
+export const findBestImportedAccountMatch = <T extends ImportedAccountIdentityLike>(accounts: T[], identity: ImportedAccountIdentityLike) => {
+  let bestMatch: T | null = null;
+  let bestScore = 0;
+  let tied = false;
+
+  for (const account of accounts) {
+    const score = scoreImportedAccountIdentityMatch(account, identity);
+    if (score > bestScore) {
+      bestMatch = account;
+      bestScore = score;
+      tied = false;
+      continue;
+    }
+
+    if (score > 0 && score === bestScore) {
+      tied = true;
+    }
+  }
+
+  return tied ? null : bestMatch;
+};
 
 const getSessionStorage = () => {
   if (typeof window === "undefined") {

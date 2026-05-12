@@ -47,7 +47,7 @@ import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { mergeCheckpointSourceMetadata } from "@/lib/import-workflow";
-import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import { findBestImportedAccountMatch, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
   claimNextImportEnrichmentJob,
   completeImportEnrichmentJob,
@@ -1638,10 +1638,15 @@ const resolveConfirmationAccount = async (params: {
     if (next.currency && next.currency !== account.currency && account.source !== "manual") {
       data.currency = next.currency;
     }
-    if (typeof next.balance === "number" && Number.isFinite(next.balance) && account.source !== "manual") {
+    if (typeof next.balance === "number" && Number.isFinite(next.balance)) {
       const currentBalance =
         account.balance && typeof account.balance.toString === "function" ? Number(account.balance.toString()) : Number.NaN;
-      if (!Number.isFinite(currentBalance) || currentBalance === 0 || Math.abs(currentBalance - next.balance) > 0.000001) {
+      const shouldUpdateBalance =
+        account.source !== "manual" ||
+        !Number.isFinite(currentBalance) ||
+        currentBalance === 0 ||
+        Math.abs(currentBalance - next.balance) > 0.000001;
+      if (shouldUpdateBalance) {
         data.balance = next.balance.toString();
       }
     }
@@ -1766,6 +1771,26 @@ const resolveConfirmationAccount = async (params: {
   );
   if (existingByKey) {
     const updatedAccount = await updateAccountIdentity(existingByKey, {
+      name: inferredAccountName,
+      institution: inferredInstitution,
+      accountNumber: inferredAccountNumber,
+      type: accountIdentityType,
+      currency: inferredCurrency,
+      balance: inferredBalance,
+    });
+
+    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    return updatedAccount;
+  }
+
+  const existingByIdentity = findBestImportedAccountMatch(workspaceAccounts, {
+    name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
+    institution: inferredInstitution,
+    accountNumber: inferredAccountNumber,
+    type: accountIdentityType,
+  });
+  if (existingByIdentity) {
+    const updatedAccount = await updateAccountIdentity(existingByIdentity, {
       name: inferredAccountName,
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,

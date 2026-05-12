@@ -34,6 +34,7 @@ import {
   deriveCachedCategoriesFromTransactions,
   markDeletedWorkspaceAccount,
   normalizeImportedAccountKey,
+  findBestImportedAccountMatch as findBestImportedAccountIdentityMatch,
   mergeImportedWorkspaceTransactions,
   type ImportedWorkspaceTransaction,
 } from "@/lib/workspace-cache";
@@ -716,6 +717,10 @@ function AccountDetailPageContent() {
   const stableBalanceRef = useRef<string | null>(null);
   const accountInvestmentDraftSyncKeyRef = useRef<string | null>(null);
   const [favoriteSaving, setFavoriteSaving] = useState(false);
+  const [workspaceAccounts, setWorkspaceAccounts] = useState<Account[]>([]);
+  const [mergeDirection, setMergeDirection] = useState<"into_other" | "into_current" | null>(null);
+  const [mergeAccountId, setMergeAccountId] = useState("");
+  const [mergeBusy, setMergeBusy] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
   const [isSavingTransactionDetail, setIsSavingTransactionDetail] = useState(false);
@@ -763,6 +768,48 @@ function AccountDetailPageContent() {
   useEffect(() => {
     document.title = account?.type === "investment" ? "Clover | Asset Details" : "Clover | Account";
   }, [account?.type]);
+
+  useEffect(() => {
+    if (!account?.workspaceId) {
+      setWorkspaceAccounts([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadWorkspaceAccounts = async () => {
+      const cachedWorkspaceAccounts = getCachedAccountsWorkspace(account.workspaceId)?.accounts;
+      if (!cancelled && Array.isArray(cachedWorkspaceAccounts)) {
+        setWorkspaceAccounts(cachedWorkspaceAccounts as Account[]);
+      }
+
+      try {
+        const response = await fetchJsonOnce<{ accounts?: Account[] }>({
+          key: `account-detail:workspace-accounts:${account.workspaceId}`,
+          route: "account-detail.workspace-accounts",
+          workspaceId: account.workspaceId,
+          detail: "background",
+          input: `/api/accounts?workspaceId=${encodeURIComponent(account.workspaceId)}`,
+        });
+
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        setWorkspaceAccounts(Array.isArray(response.json?.accounts) ? (response.json.accounts as Account[]) : []);
+      } catch {
+        if (!cancelled && !Array.isArray(cachedWorkspaceAccounts)) {
+          setWorkspaceAccounts([]);
+        }
+      }
+    };
+
+    void loadWorkspaceAccounts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.workspaceId]);
 
   useEffect(() => {
     if (!account) {
@@ -884,25 +931,13 @@ function AccountDetailPageContent() {
           );
         });
       const resolvePersistedImportedAccount = async (baseAccount: Account) => {
-        const identityKey = normalizeImportedAccountKey(
-          baseAccount.name,
-          baseAccount.institution,
-          baseAccount.accountNumber,
-          baseAccount.type
-        );
-
         const findReplacementInSnapshot = (snapshot?: { accounts?: unknown[] } | null) => {
           const accounts = Array.isArray(snapshot?.accounts) ? (snapshot.accounts as Account[]) : [];
           return (
-            accounts.find((entry) => {
-              if (!entry?.id || entry.id === accountId || entry.id.startsWith("optimistic-")) {
-                return false;
-              }
-
-              return (
-                normalizeImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type) === identityKey
-              );
-            }) ?? null
+            findBestImportedAccountIdentityMatch(
+              accounts.filter((entry) => entry?.id && entry.id !== accountId && !entry.id.startsWith("optimistic-")),
+              baseAccount
+            ) ?? null
           );
         };
 
@@ -936,16 +971,10 @@ function AccountDetailPageContent() {
             });
             if (response.ok) {
               const fetchedAccounts = Array.isArray(response.json?.accounts) ? response.json.accounts : [];
-              const replacement =
-                fetchedAccounts.find((entry) => {
-                  if (!entry?.id || entry.id === accountId || entry.id.startsWith("optimistic-")) {
-                    return false;
-                  }
-
-                  return (
-                    normalizeImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type) === identityKey
-                  );
-                }) ?? null;
+              const replacement = findBestImportedAccountIdentityMatch(
+                fetchedAccounts.filter((entry) => entry?.id && entry.id !== accountId && !entry.id.startsWith("optimistic-")),
+                baseAccount
+              );
 
               if (replacement) {
                 return replacement;
@@ -2194,6 +2223,93 @@ function AccountDetailPageContent() {
     }
   };
 
+  const mergeableAccounts = useMemo(
+    () =>
+      workspaceAccounts
+        .filter((candidate) => Boolean(account && candidate.id !== account.id))
+        .sort((left, right) => {
+          const leftLabel = `${left.institution ?? ""} ${left.name}`.trim().toLowerCase();
+          const rightLabel = `${right.institution ?? ""} ${right.name}`.trim().toLowerCase();
+          return leftLabel.localeCompare(rightLabel);
+        }),
+    [account, workspaceAccounts]
+  );
+
+  const openMergeAccountModal = (direction: "into_other" | "into_current") => {
+    if (!account || mergeBusy || mergeableAccounts.length === 0) {
+      return;
+    }
+
+    setMergeDirection(direction);
+    setMergeAccountId((current) => {
+      if (current && mergeableAccounts.some((candidate) => candidate.id === current)) {
+        return current;
+      }
+
+      return mergeableAccounts[0]?.id ?? "";
+    });
+  };
+
+  const closeMergeAccountModal = () => {
+    if (mergeBusy) {
+      return;
+    }
+
+    setMergeDirection(null);
+    setMergeAccountId("");
+  };
+
+  const mergeAccount = async () => {
+    if (!account || !mergeDirection || mergeBusy || !mergeAccountId) {
+      return;
+    }
+
+    const sourceAccountId = mergeDirection === "into_other" ? account.id : mergeAccountId;
+    const targetAccountId = mergeDirection === "into_other" ? mergeAccountId : account.id;
+    if (sourceAccountId === targetAccountId) {
+      setMessage("Choose two different accounts to merge.");
+      return;
+    }
+
+    setMergeBusy(true);
+    try {
+      const response = await fetch(`/api/accounts/${sourceAccountId}/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: account.workspaceId,
+          targetAccountId,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error ?? "Unable to merge accounts.");
+      }
+
+      const payload = await response.json();
+      if (payload.account) {
+        const mergedAccount = payload.account as Account;
+        setAccount(mergedAccount);
+        setMergeDirection(null);
+        setMergeAccountId("");
+        const nextPath = getAccountPath(mergedAccount);
+        if (nextPath !== `/accounts/${accountPathSegment}`) {
+          window.location.assign(nextPath);
+        } else {
+          window.location.reload();
+        }
+        return;
+      }
+
+      throw new Error("The merged account was not returned.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to merge accounts.");
+    } finally {
+      setMergeBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (!account || account.type === "investment") {
       setAccountEditSaveState("idle");
@@ -3342,8 +3458,90 @@ function AccountDetailPageContent() {
               </button>
             </div>
           </div>
+        ) : mergeDirection ? (
+          <div className="detail-warning-box accounts-detail__merge-confirm" style={{ marginTop: 20 }}>
+            <div className="detail-warning-box__header">
+              <span className="detail-warning-box__icon" aria-hidden="true">
+                <ActionIcon name="warning" />
+              </span>
+              <strong>
+                {mergeDirection === "into_other"
+                  ? account?.type === "investment"
+                    ? "Merge this asset into another?"
+                    : "Merge this account into another?"
+                  : account?.type === "investment"
+                    ? "Merge another asset into this one?"
+                    : "Merge another account into this one?"}
+              </strong>
+            </div>
+            <p>
+              {mergeDirection === "into_other" ? (
+                <>
+                  This will move <strong>{account?.name ?? "this account"}</strong> and all of its linked history into the account
+                  you choose.
+                </>
+              ) : (
+                <>
+                  This will move the selected account and all of its linked history into{" "}
+                  <strong>{account?.name ?? "this account"}</strong>.
+                </>
+              )}
+            </p>
+            <label className="accounts-detail__merge-select">
+              {mergeDirection === "into_other"
+                ? "Choose the account to keep"
+                : "Choose the account to merge into this one"}
+              <select value={mergeAccountId} onChange={(event) => setMergeAccountId(event.target.value)} disabled={mergeBusy}>
+                <option value="">Select an account</option>
+                {mergeableAccounts.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.institution ? `${candidate.institution} · ` : ""}
+                    {candidate.name}
+                    {candidate.accountNumber ? ` · ${candidate.accountNumber}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p>
+              Clover will move linked transactions, imports, checkpoints, investment history, recurring patterns, and rules so the
+              merged account keeps its history in one place.
+            </p>
+            <div className="detail-warning-actions">
+              <button className="button button-secondary button-small" type="button" onClick={closeMergeAccountModal} disabled={mergeBusy}>
+                Cancel
+              </button>
+              <button
+                className="button button-primary button-small"
+                type="button"
+                onClick={() => void mergeAccount()}
+                disabled={mergeBusy || !mergeAccountId}
+              >
+                {mergeBusy ? "Merging..." : "Merge account"}
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="accounts-detail__footer-actions" style={{ marginTop: 20 }}>
+            {mergeableAccounts.length > 0 ? (
+              <>
+                <button
+                  className="button button-secondary button-small"
+                  type="button"
+                  onClick={() => openMergeAccountModal("into_other")}
+                  disabled={Boolean(deleteBusy)}
+                >
+                  {account?.type === "investment" ? "Merge asset into another" : "Merge account into another"}
+                </button>
+                <button
+                  className="button button-secondary button-small"
+                  type="button"
+                  onClick={() => openMergeAccountModal("into_current")}
+                  disabled={Boolean(deleteBusy)}
+                >
+                  {account?.type === "investment" ? "Merge another asset here" : "Merge another account here"}
+                </button>
+              </>
+            ) : null}
             <button
               className="button button-secondary button-small"
               type="button"
