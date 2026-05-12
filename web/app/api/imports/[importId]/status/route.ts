@@ -1,6 +1,6 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { countTransactionsByImportFileCompat, fetchImportFileCompat, hasCompatibleTable } from "@/lib/data-engine";
+import { countTransactionsByImportFileCompat, fetchImportFileCompat, hasCompatibleTable, updateImportFileCompat } from "@/lib/data-engine";
 import { buildImportTelemetrySnapshot } from "@/lib/import-telemetry";
 import { readCheckpointWorkflowStage } from "@/lib/import-workflow";
 import { getImportEnrichmentJobByImportFileId } from "@/lib/import-enrichment-jobs";
@@ -71,6 +71,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       savedTransactionsCount,
       statementCheckpoint?.status === "reconciled" ? checkpointRowCount : 0
     );
+    if (importFile.status === "failed" && confirmedTransactionsCount > 0) {
+      importFile =
+        (await updateImportFileCompat(importId, {
+          status: "done",
+          processingPhase: "finalizing_enrichment",
+          processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
+          confirmedTransactionsCount,
+        }).catch(() => null)) ?? importFile;
+    }
     const enrichmentJob = await getImportEnrichmentJobByImportFileId(importId).catch(() => null);
     const finalizationRemainingRows = enrichmentJob
       ? Math.max(0, Number(enrichmentJob.totalRows ?? 0) - Number(enrichmentJob.processedRows ?? 0))

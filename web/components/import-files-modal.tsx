@@ -2169,7 +2169,7 @@ export function ImportFilesModal({
             telemetryPhase === "repair_needed"
         );
 
-        if (importFile?.status === "failed") {
+        if (importFile?.status === "failed" && parsedRowsCount === 0 && confirmedTransactionsCount === 0) {
           if (hasRecoverableImportSignal && attempt < 239) {
             emitItemUpdate({
               status: "importing",

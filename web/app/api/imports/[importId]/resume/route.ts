@@ -1,6 +1,6 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { fetchImportFileCompat, hasCompatibleTable, updateImportFileCompat } from "@/lib/data-engine";
+import { countTransactionsByImportFileCompat, fetchImportFileCompat, hasCompatibleTable, updateImportFileCompat } from "@/lib/data-engine";
 import { buildImportTelemetrySnapshot } from "@/lib/import-telemetry";
 import { readCheckpointWorkflowStage } from "@/lib/import-workflow";
 import { enqueueImportProcessing } from "@/lib/import-queue";
@@ -33,14 +33,27 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         })
       : null;
     const parsedRowsCount = Number(importFile.parsedRowsCount ?? 0);
-    const confirmedTransactionsCount = Number(importFile.confirmedTransactionsCount ?? 0);
+    const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
+    const confirmedTransactionsCount = Math.max(Number(importFile.confirmedTransactionsCount ?? 0), savedTransactionsCount);
+    if (importFile.status === "failed" && confirmedTransactionsCount > 0) {
+      await updateImportFileCompat(importId, {
+        status: "done",
+        processingPhase: "finalizing_enrichment",
+        processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
+        confirmedTransactionsCount,
+      });
+      importFile.status = "done";
+      importFile.processingPhase = "finalizing_enrichment";
+      importFile.processingMessage = "Transactions are visible. Clover is cleaning up names and categories in the background.";
+      importFile.confirmedTransactionsCount = confirmedTransactionsCount;
+    }
     const checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
     const checkpointWorkflowStage = readCheckpointWorkflowStage(statementCheckpoint?.sourceMetadata);
     const confirmationStatus =
-      importFile.status === "failed"
-        ? "failed"
-        : confirmedTransactionsCount > 0
-          ? "confirmed"
+      confirmedTransactionsCount > 0
+        ? "confirmed"
+        : importFile.status === "failed"
+          ? "failed"
           : importFile.status === "done"
             ? parsedRowsCount > 0
               ? "staged"
