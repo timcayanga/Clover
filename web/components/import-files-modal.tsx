@@ -188,6 +188,10 @@ const fileTypeLabel = (file: File) => {
   return "File";
 };
 
+const isImageImportFile = (file: File) =>
+  /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) ||
+  file.type.startsWith("image/");
+
 const fileAnalyticsBase = (file: File, workspaceId: string) => ({
   workspace_id: workspaceId || null,
   file_name: file.name,
@@ -3632,7 +3636,7 @@ export function ImportFilesModal({
     const guessedIdentity = guessStatementIdentity(item.file.name);
     const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName && guessedIdentity.accountNumber);
     const itemImportMode = item.importMode ?? "statement";
-    const isDocumentImport = itemImportMode !== "statement";
+    const isDocumentImport = itemImportMode !== "statement" || isImageImportFile(item.file);
     let importFileId: string | null = null;
 
     if (!workspaceId) {
@@ -4246,7 +4250,7 @@ export function ImportFilesModal({
               previewTransactions: queuedVisibleSummary.previewTransactions ?? previewTransactions,
             },
             { backgroundOnly: true }
-          );
+          ).finally(() => router.refresh());
 
           return {
             status: "done",
@@ -4472,7 +4476,7 @@ export function ImportFilesModal({
           errorMessage: null,
         });
       } else {
-          void monitorQueuedImportAndConfirm(itemId, importFileId, null, {
+        void monitorQueuedImportAndConfirm(itemId, importFileId, null, {
           fileName: item.file.name,
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
           guessedAccountName: guessedIdentity?.accountName ?? null,
@@ -4490,7 +4494,7 @@ export function ImportFilesModal({
           password: item.password.trim() || undefined,
         }, {
           backgroundOnly: true,
-        });
+        }).finally(() => router.refresh());
         updateItem(itemId, {
           status: "done",
           confirmationState: "confirmed",
