@@ -81,7 +81,24 @@ export default async function SettingsPage() {
 
     workspaceId = selectedWorkspace?.id ?? "";
     workspaceName = selectedWorkspace?.name ?? "Personal";
-    profileList = userWorkspaces.map((workspace) => ({
+    const starterWorkspaceForProfiles = userWorkspaces.length
+      ? null
+      : await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
+    const nextProfileList = userWorkspaces.length
+      ? userWorkspaces
+      : starterWorkspaceForProfiles
+        ? [
+            {
+              id: starterWorkspaceForProfiles.id,
+              name: starterWorkspaceForProfiles.name,
+              type: starterWorkspaceForProfiles.type,
+              createdAt: starterWorkspaceForProfiles.createdAt.toISOString(),
+              updatedAt: starterWorkspaceForProfiles.updatedAt.toISOString(),
+            },
+          ]
+        : [];
+
+    profileList = nextProfileList.map((workspace) => ({
       ...workspace,
       createdAt: workspace.createdAt.toISOString(),
       updatedAt: workspace.updatedAt.toISOString(),

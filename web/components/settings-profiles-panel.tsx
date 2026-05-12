@@ -59,7 +59,7 @@ export function SettingsProfilesPanel({
       </div>
 
       <div className="settings-profile-cards">
-        {profilesLoading ? (
+        {profilesLoading && profileList.length === 0 ? (
           <article className="settings-action-card">
             <div>
               <h5>Loading profiles</h5>

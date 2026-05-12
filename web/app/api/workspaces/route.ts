@@ -76,7 +76,11 @@ export async function POST(request: Request) {
         environment: resolvePersistedUserEnvironment(currentEnvironment, existingUser?.environment),
       },
       create: {
-        ...clerkUser,
+        clerkUserId: clerkUser.clerkUserId,
+        email: clerkUser.email,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+        verified: clerkUser.verified,
         environment: currentEnvironment,
       },
     });
@@ -107,6 +111,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ workspace: seededWorkspace ?? workspace });
   } catch (error) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Unable to create profile",
+      },
+      { status: 400 }
+    );
   }
 }
