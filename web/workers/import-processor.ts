@@ -91,6 +91,47 @@ type PreparedImportTransaction = {
   };
 };
 
+const normalizeTransactionDedupeText = (value: unknown) =>
+  String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+const buildConfirmedTransactionDedupeKey = (params: {
+  date: unknown;
+  amount: unknown;
+  currency: unknown;
+  type: unknown;
+  merchantRaw: unknown;
+  merchantClean: unknown;
+  description: unknown;
+}) => {
+  const date =
+    params.date instanceof Date && !Number.isNaN(params.date.getTime())
+      ? params.date.toISOString().slice(0, 10)
+      : normalizeTransactionDedupeText(params.date).slice(0, 10);
+  const amount = parseAmountValue(
+    typeof params.amount === "number" || typeof params.amount === "string"
+      ? String(params.amount)
+      : params.amount && typeof params.amount === "object" && "toString" in params.amount
+        ? String((params.amount as { toString?: () => string }).toString?.() ?? "")
+        : null
+  );
+  const merchant =
+    normalizeTransactionDedupeText(params.merchantRaw) ||
+    normalizeTransactionDedupeText(params.merchantClean) ||
+    normalizeTransactionDedupeText(params.description);
+
+  return [
+    date,
+    amount === null ? "" : amount.toFixed(2),
+    normalizeTransactionDedupeText(params.currency || "PHP").toUpperCase(),
+    normalizeTransactionDedupeText(params.type),
+    merchant,
+    normalizeTransactionDedupeText(params.description),
+  ].join("|");
+};
+
 type ProcessImportResult = {
   imported: number;
   duplicate: boolean;
@@ -4251,6 +4292,28 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       where: { workspaceId: importFile.workspaceId },
     });
   const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
+  const existingRowsForAccount = await tx.transaction.findMany({
+    where: {
+      accountId: resolvedAccountId,
+      deletedAt: null,
+      OR: [{ importFileId: null }, { importFileId: { not: importFileId } }],
+    },
+    select: {
+      date: true,
+      amount: true,
+      currency: true,
+      type: true,
+      merchantRaw: true,
+      merchantClean: true,
+      description: true,
+    },
+  });
+  const existingDedupeCounts = new Map<string, number>();
+  for (const existingRow of existingRowsForAccount) {
+    const key = buildConfirmedTransactionDedupeKey(existingRow);
+    existingDedupeCounts.set(key, (existingDedupeCounts.get(key) ?? 0) + 1);
+  }
+  const currentDedupeCounts = new Map<string, number>();
 
     for (const [index, row] of parsedRows.entries()) {
     const rowType =
@@ -4351,6 +4414,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         (typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance"),
     });
     const transactionId = String(insertRow.id ?? crypto.randomUUID());
+    const dedupeKey = buildConfirmedTransactionDedupeKey(insertRow);
+    const currentOccurrence = (currentDedupeCounts.get(dedupeKey) ?? 0) + 1;
+    currentDedupeCounts.set(dedupeKey, currentOccurrence);
+    if ((existingDedupeCounts.get(dedupeKey) ?? 0) >= currentOccurrence) {
+      continue;
+    }
 
     preparedTransactions.push({
       transactionId,
