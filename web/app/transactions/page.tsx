@@ -12,7 +12,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { CloverShell, useCloverChrome } from "@/components/clover-shell";
 import { AccountBrandMark } from "@/components/account-brand-mark";
@@ -1809,6 +1809,7 @@ function TransactionsPageContent() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const manualNameInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
+  const addMenuPanelRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const initialWorkspaceId = urlSearchParams.get("workspaceId") || readSelectedWorkspaceId();
   const initialCachedWorkspace = null;
@@ -1859,6 +1860,7 @@ function TransactionsPageContent() {
   const [message, setMessage] = useState("Select a workspace to review transactions.");
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [addMenuPortalStyle, setAddMenuPortalStyle] = useState<React.CSSProperties | null>(null);
   const [selectionMenuOpen, setSelectionMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
@@ -2603,6 +2605,7 @@ function TransactionsPageContent() {
 
       if (
         addMenuRef.current?.contains(target) ||
+        addMenuPanelRef.current?.contains(target) ||
         selectionActionsMenuRef.current?.contains(target) ||
         headerMenuRef.current?.contains(target) ||
         (activeWarningTransactionId ? warningPopoverRefs.current.get(activeWarningTransactionId)?.contains(target) : false)
@@ -2635,6 +2638,44 @@ function TransactionsPageContent() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [activeWarningTransactionId, addMenuOpen, headerMenuOpen, selectionMenuOpen]);
+
+  useLayoutEffect(() => {
+    if (!addMenuOpen) {
+      setAddMenuPortalStyle(null);
+      return;
+    }
+
+    const updateAddMenuPosition = () => {
+      const trigger = addMenuRef.current;
+      if (!trigger || typeof window === "undefined") {
+        return;
+      }
+
+      const rect = trigger.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const width = 196;
+      const left = Math.max(12, Math.min(rect.right - width, viewportWidth - width - 12));
+      const top = Math.min(rect.bottom + 8, viewportHeight - 16);
+
+      setAddMenuPortalStyle({
+        position: "fixed",
+        top,
+        left,
+        width,
+        zIndex: 140,
+      });
+    };
+
+    updateAddMenuPosition();
+    window.addEventListener("resize", updateAddMenuPosition);
+    window.addEventListener("scroll", updateAddMenuPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateAddMenuPosition);
+      window.removeEventListener("scroll", updateAddMenuPosition, true);
+    };
+  }, [addMenuOpen]);
 
   useEffect(() => {
     if (manualOpen) {
@@ -5433,27 +5474,36 @@ function TransactionsPageContent() {
             </span>
           ) : null}
         </button>
-        <div className="transactions-add-menu__panel" hidden={!addMenuOpen}>
-          <button
-            className="transactions-add-menu__item"
-            type="button"
-            onClick={() => {
-              setAddMenuOpen(false);
-              void openManualAdd();
-            }}
-          >
-            Add transaction
-          </button>
-          <button
-            className="transactions-add-menu__item"
-            type="button"
-            onClick={() => {
-              openImportFiles();
-            }}
-          >
-            Import files
-          </button>
-        </div>
+        {addMenuOpen && addMenuPortalStyle && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                ref={addMenuPanelRef}
+                className="transactions-add-menu__panel transactions-add-menu__panel--portal"
+                style={addMenuPortalStyle}
+              >
+                <button
+                  className="transactions-add-menu__item"
+                  type="button"
+                  onClick={() => {
+                    setAddMenuOpen(false);
+                    void openManualAdd();
+                  }}
+                >
+                  Add transaction
+                </button>
+                <button
+                  className="transactions-add-menu__item"
+                  type="button"
+                  onClick={() => {
+                    openImportFiles();
+                  }}
+                >
+                  Import files
+                </button>
+              </div>,
+              document.body
+            )
+          : null}
       </div>
     </div>
   );
