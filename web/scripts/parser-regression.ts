@@ -1634,6 +1634,55 @@ const main = async () => {
     );
   }
 
+  const cafeMadridReceiptPreview = parseReceiptText([
+    "Cafe Madrid",
+    "Les Jamelles Pinot Noir",
+    "Grilled Calamares",
+    "Chorizo on Piggy Back",
+    "Jamon Iberico & Chicken",
+    "Super Cochinillo Becham",
+    "Caesar Salad",
+    "Seafood Paella",
+    "Parmesan",
+    "Carbonara",
+    "Gross Amount",
+    "Service Charge",
+    "Tax Details",
+    "12% VAT",
+  ].join("\n"));
+  if (cafeMadridReceiptPreview.receiptAccountMatch?.accountName !== "Card") {
+    throw new Error(
+      `expected cafe madrid receipt to resolve Card, got ${cafeMadridReceiptPreview.receiptAccountMatch?.accountName ?? "null"}`
+    );
+  }
+
+  const cafeMadridOcrPreview = parseReceiptText([
+    "Ny 4 3",
+    "\\ Nn,",
+    "1} d",
+    "4 - \\",
+    "bi |",
+    "F130 ”",
+    "CIRCLE |",
+    "Po. 000 .",
+    "Jenin TBERIC : 510.00 We of",
+    "SUPER COCHI! gb Aen.00 [a oF",
+    "TERRY EBERSST © {7 495.00 ee",
+    "DOUBLE PARI IE Cn",
+    "TRADTTONAL 30.01 Ea 8",
+    "Total 8ty ITE :",
+    "Gross Anount & es :",
+    "service’ Charge Sh 4",
+    "Tax Details oo ; Wi Sh",
+    "yaT Exenph Bale E yes NNER",
+    "12% VAT )",
+  ].join("\n"));
+  if (cafeMadridOcrPreview.receiptAccountMatch?.accountName !== "Card") {
+    throw new Error(
+      `expected cafe madrid OCR footer pattern to resolve Card, got ${cafeMadridOcrPreview.receiptAccountMatch?.accountName ?? "null"}`
+    );
+  }
+
   const jarandjamReceiptPreview = parseReceiptText([
     "Br    =",
     "= a",

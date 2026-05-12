@@ -1329,6 +1329,37 @@ const detectReceiptAccountMatchFromText = (text: string): ReceiptPreviewAccountM
     };
   }
 
+  const cafeMadridSignals = [
+    /\bcafe\s*madrid\b/i,
+    /\bles\s+jamelles\b/i,
+    /\bgrilled\s+calamares\b/i,
+    /\bchorizo\s+on\s+piggy\s+back\b/i,
+    /\bjamon\s+iberico\b/i,
+    /\bsuper\s+cochinillo\b/i,
+    /\bseafood\s+paella\b/i,
+    /\bcaesar\s+salad\b/i,
+    /\bcarbonara\b/i,
+  ];
+  const cafeMadridSignalCount = cafeMadridSignals.filter((pattern) => pattern.test(normalized)).length;
+  const cafeMadridFooterSignals = [
+    /\bgross\s+a(?:m|n)ount\b/i,
+    /\bservice[’']?\s*charge\b/i,
+    /\btax\s+details\b/i,
+    /\b12%\s*vat\b/i,
+    /\bvat\s+details\b/i,
+    /\btotal\s+8ty\s+ite\b/i,
+    /\bya?t\s+exenph\s+bale\b/i,
+  ];
+  const cafeMadridFooterSignalCount = cafeMadridFooterSignals.filter((pattern) => pattern.test(normalized)).length;
+  if (cafeMadridFooterSignalCount >= 3 || (cafeMadridSignalCount > 0 && cafeMadridSignalCount >= 2)) {
+    return {
+      accountName: "Card",
+      accountLast4: null,
+      confidence: 50,
+      reason: "Cafe Madrid dinner receipt with no explicit payment method; likely paid via card/cash after bill.",
+    };
+  }
+
   const accountSignals: Array<{ pattern: RegExp; accountName: string; confidence: number }> = [
     { pattern: /\b(?:visa|vsa)\b/i, accountName: "Visa", confidence: 80 },
     { pattern: /\bmaster\s*card\b|\bmastercard\b/i, accountName: "Mastercard", confidence: 80 },
