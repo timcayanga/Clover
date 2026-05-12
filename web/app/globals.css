@@ -27969,6 +27969,46 @@ button.accounts-detail__transaction-head-cell {
   line-height: 1.4;
 }
 
+.settings-profile-cards {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-profile-card {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-profile-card__actions {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-profile-card__buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.settings-profile-create {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.settings-profile-create__form {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.settings-profile-create__toggle {
+  justify-self: start;
+}
+
 .settings-clerk-frame {
   overflow: hidden;
   border-radius: 24px;

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 
 type ProfileSummary = {
@@ -47,6 +48,8 @@ export function SettingsProfilesPanel({
   onSwitchProfile,
   onRemoveProfile,
 }: SettingsProfilesPanelProps) {
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+
   return (
     <section className="settings-section settings-section--swap" role="tabpanel">
       <div className="settings-section__intro settings-section__intro--single">
@@ -55,29 +58,7 @@ export function SettingsProfilesPanel({
         </div>
       </div>
 
-      <div className="settings-data-grid settings-data-grid--data">
-        <article className="settings-action-card">
-          <div>
-            <h5>Create a profile</h5>
-            <p>New profiles stay separated by default so Clover can keep personal and shared money clear.</p>
-          </div>
-          <div className="settings-action-card__row">
-            <label className="settings-inline-field">
-              <span>Profile name</span>
-              <input
-                value={newProfileName}
-                onChange={(event) => onNewProfileNameChange(event.target.value)}
-                placeholder="Personal, Shared, Partner..."
-              />
-            </label>
-            <button type="button" className="button button-primary button-small" disabled={isPending} onClick={onCreateProfile}>
-              Create profile
-            </button>
-          </div>
-        </article>
-      </div>
-
-      <div className="settings-data-grid settings-data-grid--data">
+      <div className="settings-profile-cards">
         {profilesLoading ? (
           <article className="settings-action-card">
             <div>
@@ -94,37 +75,64 @@ export function SettingsProfilesPanel({
           const avatarFallback = profile.name || workspaceName;
 
           return (
-            <article key={profile.id} className={`settings-action-card${isActive ? " is-active" : ""}`}>
+            <article key={profile.id} className={`settings-action-card settings-profile-card${isActive ? " is-active" : ""}`}>
               <div className="settings-profile-summary settings-profile-summary--with-avatar">
                 <span className="settings-profile-summary__avatar" style={profileAvatar ? undefined : getAvatarBackgroundStyle(avatarFallback)}>
                   {profileAvatar ? <img src={profileAvatar} alt="" /> : <span>{getAvatarInitials(avatarFallback)}</span>}
                 </span>
                 <div className="settings-profile-summary__copy">
                   <strong>{profile.name}</strong>
-                  <p>{profile.type === "shared" ? "Shared profile" : "Personal profile"}</p>
+                  <p>{profile.type === "shared" ? "Shared" : "Personal"}</p>
                 </div>
               </div>
-              <div className="settings-action-card__row">
+              <div className="settings-profile-card__actions">
                 <label className="settings-inline-field">
                   <span>Rename</span>
                   <input value={renameDraft} onChange={(event) => onRenameDraftChange(profile.id, event.target.value)} />
                 </label>
-                <button type="button" className="button button-secondary button-small" disabled={isPending} onClick={() => onRenameProfile(profile.id)}>
-                  Save name
-                </button>
-                <button type="button" className="button button-secondary button-small" disabled={isPending || isActive} onClick={() => onSwitchProfile(profile.id)}>
-                  {isActive ? "Active" : "Switch"}
-                </button>
-                <button type="button" className="button button-danger button-small" disabled={isPending} onClick={() => onRemoveProfile(profile.id, profile.name)}>
-                  Remove
-                </button>
+                <div className="settings-profile-card__buttons">
+                  <button type="button" className="button button-secondary button-small" disabled={isPending} onClick={() => onRenameProfile(profile.id)}>
+                    Save name
+                  </button>
+                  <button type="button" className="button button-secondary button-small" disabled={isPending || isActive} onClick={() => onSwitchProfile(profile.id)}>
+                    {isActive ? "Active" : "Switch"}
+                  </button>
+                  <button type="button" className="button button-danger button-small" disabled={isPending} onClick={() => onRemoveProfile(profile.id, profile.name)}>
+                    Remove
+                  </button>
+                </div>
               </div>
             </article>
           );
         })}
       </div>
 
-      <p className="settings-helper">{profileMessage ?? profileListMessage ?? "Profiles are scoped to the signed-in email account and will not move data silently between each other."}</p>
+      <div className="settings-profile-create">
+        {isCreateOpen ? (
+          <div className="settings-profile-create__form">
+            <label className="settings-inline-field">
+              <span>Profile name</span>
+              <input
+                value={newProfileName}
+                onChange={(event) => onNewProfileNameChange(event.target.value)}
+                placeholder="Personal, Shared, Partner..."
+              />
+            </label>
+            <button type="button" className="button button-primary button-small" disabled={isPending} onClick={onCreateProfile}>
+              Create profile
+            </button>
+          </div>
+        ) : null}
+        <button
+          type="button"
+          className="button button-secondary button-small settings-profile-create__toggle"
+          onClick={() => setIsCreateOpen((current) => !current)}
+        >
+          Create Profile
+        </button>
+      </div>
+
+      {profileMessage || profileListMessage ? <p className="settings-helper">{profileMessage ?? profileListMessage}</p> : null}
     </section>
   );
 }
