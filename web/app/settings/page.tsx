@@ -21,26 +21,13 @@ export default async function SettingsPage() {
   if (user && hasCompletedOnboarding(user) && user.dataWipedAt === null) {
     const cookieStore = await cookies();
     const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
-    const selectedWorkspace =
-      (selectedWorkspaceCookieId
-        ? await prisma.workspace.findFirst({
-            where: {
-              id: selectedWorkspaceCookieId,
-              user: {
-                clerkUserId: user.clerkUserId,
-              },
-            },
-            select: {
-              id: true,
-              name: true,
-            },
-          })
-        : null) ??
+    const personalWorkspace =
       (await prisma.workspace.findFirst({
         where: {
           user: {
             clerkUserId: user.clerkUserId,
           },
+          type: "personal",
         },
         orderBy: { createdAt: "asc" },
         select: {
@@ -57,9 +44,25 @@ export default async function SettingsPage() {
           },
         })
       ));
+    const selectedWorkspace =
+      personalWorkspace ??
+      (selectedWorkspaceCookieId
+        ? await prisma.workspace.findFirst({
+            where: {
+              id: selectedWorkspaceCookieId,
+              user: {
+                clerkUserId: user.clerkUserId,
+              },
+            },
+            select: {
+              id: true,
+              name: true,
+            },
+          })
+        : null);
 
     workspaceId = selectedWorkspace?.id ?? "";
-    workspaceName = selectedWorkspace?.name ?? "Settings";
+    workspaceName = selectedWorkspace?.name ?? "Personal";
   }
 
   return (
