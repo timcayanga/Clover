@@ -42,35 +42,3 @@ export const normalizeImportImageMode = (value: unknown): ImportImageMode => {
 
   return "statement";
 };
-
-export const getImportModeDisplayNoun = (mode: ImportImageMode | null | undefined) => {
-  switch (mode ?? "statement") {
-    case "receipt":
-      return "receipt";
-    case "notes":
-      return "notes";
-    case "portfolio":
-      return "portfolio";
-    case "account_detail":
-      return "account details";
-    case "statement":
-    default:
-      return "statement";
-  }
-};
-
-export const getImportModeUploadLabel = (mode: ImportImageMode | null | undefined) => {
-  switch (mode ?? "statement") {
-    case "receipt":
-      return "receipt";
-    case "notes":
-      return "notes screenshot";
-    case "portfolio":
-      return "portfolio screenshot";
-    case "account_detail":
-      return "account details";
-    case "statement":
-    default:
-      return "statement";
-  }
-};

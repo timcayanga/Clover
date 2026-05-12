@@ -2337,7 +2337,7 @@ export const processImportFileText = async (
     processingMessage:
       autoRerunAttempt > 0
         ? `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} running...`
-      : "Reading account details...",
+      : "Reading file details...",
   });
   emitImportProcessingEvent("import_processing_started", {
     processing_phase: autoRerunAttempt > 0 ? "auto_rerunning" : "reading_account_details",

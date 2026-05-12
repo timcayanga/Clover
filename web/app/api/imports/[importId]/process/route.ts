@@ -24,7 +24,7 @@ import { NextResponse } from "next/server";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { prisma } from "@/lib/prisma";
-import { getImportModeUploadLabel, normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
+import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -220,7 +220,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       await updateImportFileCompat(importId, {
         status: "processing",
         processingPhase: "uploading",
-        processingMessage: `Uploading ${getImportModeUploadLabel(importMode)}...`,
+        processingMessage: "Uploading file...",
       });
       const bytes = new Uint8Array(await file.arrayBuffer());
       await uploadObject(String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)), bytes, file.type || "application/octet-stream");
@@ -388,7 +388,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         await updateImportFileCompat(importId, {
           status: "processing",
           processingPhase: "reading_account_details",
-          processingMessage: "Reading account details...",
+          processingMessage: "Reading file details...",
         });
 
         const { processImportFileText } = await import("@/workers/import-processor");

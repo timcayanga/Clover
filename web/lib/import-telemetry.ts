@@ -67,7 +67,7 @@ const normalizePhase = (phase?: string | null): ImportTelemetryPhase | null => {
 const phaseLabelMap: Record<ImportTelemetryPhase, string> = {
   queued: "Queued",
   uploading: "Uploading file",
-  reading_account_details: "Reading account details",
+  reading_account_details: "Reading file details",
   identifying_transactions: "Identifying transactions",
   reconciling: "Reconciling and saving",
   staged: "Reconciling and saving",
@@ -79,10 +79,10 @@ const phaseLabelMap: Record<ImportTelemetryPhase, string> = {
 const phaseMessageMap: Record<ImportTelemetryPhase, string> = {
   queued: "Clover is waiting to start",
   uploading: "Clover is sending the file to the server",
-  reading_account_details: "Clover is extracting the account name, number, and balance",
+  reading_account_details: "Clover is extracting key details from the file",
   identifying_transactions: "Clover is finding transactions and categories",
   reconciling: "Clover is matching transactions, categories, and duplicates",
-  staged: "Clover found the account details and is still finishing the rest",
+  staged: "Clover found the file details and is still finishing the rest",
   complete: "The file is imported and ready",
   repair_needed: "Clover needs another pass to finish this import",
   failed: "Clover couldn't finish the import",
@@ -91,8 +91,8 @@ const phaseMessageMap: Record<ImportTelemetryPhase, string> = {
 const GENERIC_PROGRESS_MESSAGES = new Set([
   "parsing file...",
   "parsing file",
-  "reading account details...",
-  "reading account details",
+  "reading file details...",
+  "reading file details",
   "identifying transactions...",
   "identifying transactions",
   "clover is sending the file to the server",
