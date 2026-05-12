@@ -1248,10 +1248,11 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .sidebar-popover--notifications {
-  left: calc(100% + 12px);
+  position: fixed;
   right: auto;
+  left: auto;
   width: 268px;
-  z-index: 80;
+  z-index: 140;
   max-height: min(340px, calc(100dvh - 144px));
   overflow: auto;
 }

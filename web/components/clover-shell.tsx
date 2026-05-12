@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
@@ -490,6 +491,7 @@ export function CloverShell({
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | "more" | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [notificationsPopoverStyle, setNotificationsPopoverStyle] = useState<{ left: number; bottom: number } | null>(null);
   const [quickAddModal, setQuickAddModal] = useState<"transaction" | "import" | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -526,6 +528,26 @@ export function CloverShell({
     setOpenMenu(null);
     setIsSearchOpen(false);
     setIsSidebarOpen(false);
+    setNotificationsPopoverStyle(null);
+  };
+
+  const handleNotificationsToggle = () => {
+    if (openMenu === "notifications") {
+      setOpenMenu(null);
+      setNotificationsPopoverStyle(null);
+      return;
+    }
+
+    const buttonRect = notificationsButtonRef.current?.getBoundingClientRect();
+    if (buttonRect) {
+      const popoverWidth = 268;
+      setNotificationsPopoverStyle({
+        left: Math.min(Math.max(12, buttonRect.right + 12), window.innerWidth - popoverWidth - 12),
+        bottom: Math.max(12, window.innerHeight - buttonRect.top + 12),
+      });
+    }
+
+    setOpenMenu("notifications");
   };
 
   useEffect(() => {
@@ -558,6 +580,7 @@ export function CloverShell({
         !notificationsPopoverRef.current?.contains(target)
       ) {
         setOpenMenu(null);
+        setNotificationsPopoverStyle(null);
       }
 
       if (
@@ -575,6 +598,7 @@ export function CloverShell({
       if (!shellRef.current.contains(target)) {
         setOpenMenu(null);
         setIsSearchOpen(false);
+        setNotificationsPopoverStyle(null);
       }
     };
 
@@ -582,6 +606,7 @@ export function CloverShell({
       if (event.key === "Escape") {
         setOpenMenu(null);
         setIsSearchOpen(false);
+        setNotificationsPopoverStyle(null);
       }
     };
 
@@ -1250,7 +1275,7 @@ export function CloverShell({
             aria-label={`Open notifications${notificationCount ? ` (${notificationCount})` : ""}`}
             aria-expanded={isNotificationsActive}
             aria-haspopup="menu"
-            onClick={() => setOpenMenu((current) => (current === "notifications" ? null : "notifications"))}
+            onClick={handleNotificationsToggle}
           >
             <MenuIcon name="notifications" />
           </button>
@@ -1291,36 +1316,49 @@ export function CloverShell({
             </div>
           ) : null}
 
-          {isNotificationsActive ? (
-            <div ref={notificationsPopoverRef} className="sidebar-popover sidebar-popover--notifications" role="menu" aria-label="Notifications">
-              <div className="sidebar-popover__head">
-                <span className="sidebar-popover__title">Notifications</span>
-              </div>
-              <div className="sidebar-popover__items">
-                {notifications.length ? (
-                  notifications.map((notification) => (
-                    <Link
-                      key={notification.title}
-                      href={notification.href}
-                      className="sidebar-popover__item sidebar-popover__notification-link"
-                      role="menuitem"
-                      prefetch
-                      onClick={closeChrome}
-                      onMouseEnter={() => prefetchNavTarget(notification.href)}
-                      onTouchStart={() => prefetchNavTarget(notification.href)}
-                    >
-                      <span className="sidebar-popover__notification-title">{notification.title}</span>
-                    </Link>
-                  ))
-                ) : (
-                  <div className="sidebar-popover__empty">You’re all caught up.</div>
-                )}
-              </div>
-            </div>
-          ) : null}
         </div>
 
       </aside>
+
+      {typeof document !== "undefined" && isNotificationsActive && notificationsPopoverStyle ? (
+        createPortal(
+          <div
+            ref={notificationsPopoverRef}
+            className="sidebar-popover sidebar-popover--notifications"
+            role="menu"
+            aria-label="Notifications"
+            style={{
+              left: `${notificationsPopoverStyle.left}px`,
+              bottom: `${notificationsPopoverStyle.bottom}px`,
+            }}
+          >
+            <div className="sidebar-popover__head">
+              <span className="sidebar-popover__title">Notifications</span>
+            </div>
+            <div className="sidebar-popover__items">
+              {notifications.length ? (
+                notifications.map((notification) => (
+                  <Link
+                    key={notification.title}
+                    href={notification.href}
+                    className="sidebar-popover__item sidebar-popover__notification-link"
+                    role="menuitem"
+                    prefetch
+                    onClick={closeChrome}
+                    onMouseEnter={() => prefetchNavTarget(notification.href)}
+                    onTouchStart={() => prefetchNavTarget(notification.href)}
+                  >
+                    <span className="sidebar-popover__notification-title">{notification.title}</span>
+                  </Link>
+                ))
+              ) : (
+                <div className="sidebar-popover__empty">You’re all caught up.</div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )
+      ) : null}
 
       <button
         ref={quickAddButtonRef}
