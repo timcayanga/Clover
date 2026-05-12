@@ -66,7 +66,7 @@ const normalizePhase = (phase?: string | null): ImportTelemetryPhase | null => {
 
 const phaseLabelMap: Record<ImportTelemetryPhase, string> = {
   queued: "Queued",
-  uploading: "Uploading statement",
+  uploading: "Uploading file",
   reading_account_details: "Reading account details",
   identifying_transactions: "Identifying transactions",
   reconciling: "Reconciling and saving",
@@ -78,7 +78,7 @@ const phaseLabelMap: Record<ImportTelemetryPhase, string> = {
 
 const phaseMessageMap: Record<ImportTelemetryPhase, string> = {
   queued: "Clover is waiting to start",
-  uploading: "Clover is sending the statement to the server",
+  uploading: "Clover is sending the file to the server",
   reading_account_details: "Clover is extracting the account name, number, and balance",
   identifying_transactions: "Clover is finding transactions and categories",
   reconciling: "Clover is matching transactions, categories, and duplicates",
@@ -95,9 +95,9 @@ const GENERIC_PROGRESS_MESSAGES = new Set([
   "reading account details",
   "identifying transactions...",
   "identifying transactions",
-  "clover is sending the statement to the server",
-  "uploading statement...",
-  "uploading statement",
+  "clover is sending the file to the server",
+  "uploading file...",
+  "uploading file",
 ]);
 
 export const buildImportTelemetrySnapshot = (params: ImportTelemetryParams): ImportTelemetrySnapshot => {

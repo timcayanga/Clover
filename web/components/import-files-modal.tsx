@@ -15,7 +15,11 @@ import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { extractTextFromFile } from "@/lib/import-file-text";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
-import { type ImportImageMode } from "@/lib/import-image-mode";
+import {
+  getImportModeDisplayNoun,
+  getImportModeUploadLabel,
+  type ImportImageMode,
+} from "@/lib/import-image-mode";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import {
   detectStatementMetadata,
@@ -836,13 +840,14 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
   };
 };
 
-const friendlyImportPhaseLabel = (label: string, fileName?: string | null) => {
+const friendlyImportPhaseLabel = (label: string, fileName?: string | null, importMode?: ImportImageMode | null) => {
   const fileSuffix = fileName ? ` ${fileName}` : "";
+  const importLabel = getImportModeDisplayNoun(importMode);
 
   switch (label) {
     case "Starting upload":
     case "Uploading the file":
-      return "Uploading statement";
+      return `Uploading ${importLabel}`;
     case "Password needed":
       return "Password needed";
     case "Waiting for account details":
@@ -876,22 +881,25 @@ const friendlyImportPhaseLabel = (label: string, fileName?: string | null) => {
   }
 };
 
-const friendlyImportProgressLabel = (label: string, fileName?: string | null) => {
+const friendlyImportProgressLabel = (label: string, fileName?: string | null, importMode?: ImportImageMode | null) => {
   const fileSuffix = fileName ? ` ${fileName}` : "";
+  const importLabel = getImportModeUploadLabel(importMode);
 
   switch (label) {
     case "Starting upload":
-      return "Clover is preparing the statement for upload";
+      return `Clover is preparing the ${importLabel} for upload`;
     case "Clover is getting your file ready":
-      return "Clover is preparing the statement for upload";
+      return `Clover is preparing the ${importLabel} for upload`;
     case "Uploading the file":
-      return "Clover is sending the statement to the server";
+      return `Clover is sending the ${importLabel} to the server`;
     case "Password needed":
-      return "This statement needs a password before Clover can continue";
+      return `This ${getImportModeDisplayNoun(importMode)} needs a password before Clover can continue`;
     case "Waiting for account details":
       return "Clover is extracting the account name, number, and balance";
     case "Waiting for statement identity":
-      return "Clover is reading the statement layout";
+      return importMode === "receipt"
+        ? "Clover is reading the receipt layout"
+        : "Clover is reading the statement layout";
     case "Reading locally":
       return "Clover is scanning the file locally";
     case "Preview ready":
@@ -910,7 +918,9 @@ const friendlyImportProgressLabel = (label: string, fileName?: string | null) =>
     case "Reading account details":
       return "Clover is pulling the account name, number, and balance into preview";
     case "Reading statement details":
-      return "Clover is reading the account details, balance, and transactions";
+      return importMode === "receipt"
+        ? "Clover is reading the receipt details"
+        : "Clover is reading the account details, balance, and transactions";
     case "Import failed":
       return "Clover couldn't finish the import";
     case "Done":
@@ -4785,7 +4795,7 @@ export function ImportFilesModal({
     const hasCompletedBatchNow = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
     const nextStatus = hasCompletedBatchNow ? "done" : items.some((item) => item.status === "error") ? "error" : "active";
     const nextDetail = activeProgressItem
-      ? friendlyImportProgressLabel(activeProgressItem.progressLabel, activeProgressItem.file.name)
+      ? friendlyImportProgressLabel(activeProgressItem.progressLabel, activeProgressItem.file.name, activeProgressItem.importMode)
       : validationNotice ?? message;
     const activeErrorItem = items.find((item) => item.status === "error") ?? null;
     const previousSummary = lastImportActivityRef.current?.summary ?? null;
@@ -5287,8 +5297,16 @@ export function ImportFilesModal({
         fileTotal={items.length}
         completedFiles={completedFileCount}
         progress={overallProgress}
-        detail={friendlyImportProgressLabel(activeProgressItem ? activeProgressItem.progressLabel : completedFileCount > 0 ? "Done" : "Queued", activeProgressItem?.file.name ?? null)}
-        phaseLabel={activeProgressItem ? friendlyImportPhaseLabel(activeProgressItem.progressLabel, activeProgressItem.file.name) : null}
+        detail={friendlyImportProgressLabel(
+          activeProgressItem ? activeProgressItem.progressLabel : completedFileCount > 0 ? "Done" : "Queued",
+          activeProgressItem?.file.name ?? null,
+          activeProgressItem?.importMode ?? null
+        )}
+        phaseLabel={
+          activeProgressItem
+            ? friendlyImportPhaseLabel(activeProgressItem.progressLabel, activeProgressItem.file.name, activeProgressItem.importMode)
+            : null
+        }
         onClose={onClose}
         />
     ) : (
