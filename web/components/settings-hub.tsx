@@ -789,9 +789,20 @@ export function SettingsHub({
       return;
     }
 
+    const nextProfile = profileList.find((profile) => profile.id === profileId);
+    if (!nextProfile) {
+      setProfileMessage("Profile not found.");
+      return;
+    }
+
     persistSelectedWorkspaceId(profileId);
     syncSelectedWorkspaceCookie();
+    setWorkspaceId(profileId);
+    setWorkspaceName(nextProfile.name);
+    setSelectedProfileId(profileId);
     setActiveProfileId(profileId);
+    setPlanLoaded(false);
+    setBillingSubscription(null);
     setProfileMessage("Profile switched.");
     router.refresh();
   };
