@@ -737,6 +737,25 @@ const guessStatementIdentity = (fileName: string) => {
   return null;
 };
 
+const inferImportModeForFile = (file: File, defaultMode: ImportImageMode): ImportImageMode => {
+  if (!isImageImportFile(file)) {
+    return defaultMode;
+  }
+
+  const lowerName = file.name.toLowerCase();
+  const guessedIdentity = guessStatementIdentity(file.name);
+
+  if (guessedIdentity) {
+    return "statement";
+  }
+
+  if (/\b(statement|bank|balance|account|history|ledger|transaction)\b/i.test(lowerName)) {
+    return "statement";
+  }
+
+  return "receipt";
+};
+
 const resolveStatementIdentityFromMetadata = (metadata: unknown) => {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return null;
@@ -1480,6 +1499,7 @@ export function ImportFilesModal({
         const guessedIdentity = guessStatementIdentity(file.name);
         const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName && guessedIdentity.accountNumber);
         const optimisticAccountId = guessedIdentity && canUseOptimisticGuess ? `optimistic-${crypto.randomUUID()}` : null;
+        const importMode = inferImportModeForFile(file, selectedImportMode);
         capturePostHogClientEvent("file_upload_started", {
           ...fileAnalyticsBase(file, workspaceId),
           selected_account_id: selectedAccountId || null,
@@ -1494,7 +1514,7 @@ export function ImportFilesModal({
             error: null,
             password: "",
             passwordVisible: false,
-            importMode: selectedImportMode,
+            importMode,
             importFileId: null,
             targetAccountId: null,
             optimisticAccountId,
@@ -3490,7 +3510,7 @@ export function ImportFilesModal({
   ) => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     const startedAt = Date.now();
-    const MAX_WAIT_MS = 20_000;
+    const MAX_WAIT_MS = importMode === "receipt" ? 12_000 : 20_000;
     const progressLabel =
       importMode === "receipt"
         ? "Reading receipt in background"
