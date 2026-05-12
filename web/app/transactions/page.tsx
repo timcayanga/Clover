@@ -1229,8 +1229,14 @@ const parseReceiptLineItemsFromPayload = (rawPayload: unknown): ReceiptLineItem[
   }
 
   const receiptDetails = isRecord(rawPayload.receiptDetails) ? rawPayload.receiptDetails : null;
-  if (receiptDetails && Array.isArray(receiptDetails.lineItems)) {
-    candidateSources.push(receiptDetails.lineItems);
+  if (receiptDetails) {
+    if (Array.isArray(receiptDetails.lineItems)) {
+      candidateSources.push(receiptDetails.lineItems);
+    }
+
+    if (Array.isArray(receiptDetails.line_items)) {
+      candidateSources.push(receiptDetails.line_items);
+    }
   }
 
   for (const source of candidateSources) {

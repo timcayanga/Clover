@@ -585,12 +585,17 @@ const mergeFragmentLines = (lines: string[]) => {
 
 const parseAmountFromLine = (line: string) => {
   const compact = normalizeWhitespace(line);
-  const matches = compact.match(/(-?\(?[\d,.]+(?:\.\d{1,2})?\)?)\s*$/);
-  if (!matches) {
+  const matches = Array.from(compact.matchAll(/-?\(?[\d,.]+(?:\.\d{1,2})?\)?/g));
+  if (matches.length === 0) {
     return null;
   }
 
-  return parseAmountValue(matches[1]);
+  const amountToken =
+    [...matches]
+      .reverse()
+      .map((match) => match[0] ?? null)
+      .find((token) => token !== null && (/\.\d{1,2}$/.test(token) || /^\d{3,}$/.test(token))) ?? null;
+  return parseAmountValue(amountToken);
 };
 
 const isLikelyReceiptBodyLine = (line: string) => {
@@ -684,6 +689,310 @@ const appendReceiptModifier = (description: string, modifier: string) => {
   }
 
   return `${normalizedDescription} (${normalizedModifier})`;
+};
+
+const findReceiptTableBounds = (lines: string[]) => {
+  const startIndex = lines.findIndex((line) =>
+    /(?:^\s*qty\s+description\b|^\s*vat\s+item\(s\)\b|^\s*item\(s\)\b)/i.test(normalizeWhitespace(line))
+  );
+
+  if (startIndex < 0) {
+    return null;
+  }
+
+  const endIndex = lines.findIndex((line, index) => {
+    if (index <= startIndex) {
+      return false;
+    }
+
+    return /^(?:\s*sub\s*-?\s*total\b|\s*service\s+charge\b|\s*amount\s+due\b|\s*total\s+no\s+of\s+items\b|\s*vat\s+sales\b|\s*12%\s+vat\s+sales\b|\s*non-vat\s+sales\b|\s*zero-rated\s+sales\b|\s*temporary\s+bill\b)/i.test(
+      normalizeWhitespace(line)
+    );
+  });
+
+  return {
+    startIndex: startIndex + 1,
+    endIndex: endIndex < 0 ? lines.length : endIndex,
+  };
+};
+
+const detectReceiptMerchantNameFromLines = (lines: string[]) => {
+  const candidates = lines
+    .map((rawLine, index) => {
+      const line = normalizeWhitespace(rawLine);
+      if (!line || isSummaryLine(line) || isNoiseLine(line) || isReceiptDateLine(line)) {
+        return null;
+      }
+
+      if (parseAmountFromLine(line) !== null) {
+        return null;
+      }
+
+      const cleaned = cleanReceiptDescription(line);
+      if (!cleaned || cleaned.length < 3 || cleaned.length > 60 || !/[A-Za-z]{3}/.test(cleaned)) {
+        return null;
+      }
+
+      let score = 0;
+      const alphaCount = (cleaned.match(/[A-Za-z]/g) ?? []).length;
+      score += Math.min(12, alphaCount / 2);
+      score += Math.max(0, 8 - index);
+      if (/\b(?:inc|inc\.|corp|co|ltd|restaurant|grill|cafe|café|diner)\b/i.test(cleaned)) {
+        score += 8;
+      }
+      if (/^[A-Z0-9&'.,/-]+(?:\s+[A-Z0-9&'.,/-]+){1,5}$/.test(cleaned)) {
+        score += 4;
+      }
+      if (/\b(?:city|district|legaspi|makati|san lorenzo|universal|lms|building|bldg|street|st\.?)\b/i.test(cleaned)) {
+        score -= 6;
+      }
+      if (/^(?:qty|description|dine in|vat item|cashier|server|guest count|invoice|sub\s*-?\s*total|service charge|amount due|total no of items|vat sales|temporary bill)\b/i.test(cleaned)) {
+        score -= 20;
+      }
+
+      return { cleaned, score };
+  })
+    .filter((candidate): candidate is { cleaned: string; score: number } => candidate !== null)
+    .sort((left, right) => right.score - left.score);
+
+  for (const candidate of candidates) {
+    return candidate.cleaned;
+  }
+
+  return null;
+};
+
+const sanitizeReceiptMerchantName = (value: string) => {
+  const normalized = cleanReceiptDescription(value).replace(/^[^A-Za-z0-9]+/, "");
+  if (!normalized) {
+    return null;
+  }
+
+  const parts = normalized.split(/\s+/).filter(Boolean);
+  while (parts.length > 1 && parts[0].length <= 2 && /^[A-Za-z]+$/.test(parts[0])) {
+    parts.shift();
+  }
+
+  const cleaned = parts.join(" ").trim();
+  return cleaned || null;
+};
+
+const parseReceiptAmountToken = (token: string | null | undefined) => {
+  if (!token) {
+    return null;
+  }
+
+  const trimmed = normalizeWhitespace(token).replace(/,/g, "");
+  if (!trimmed) {
+    return null;
+  }
+
+  if (/\.\d{1,2}$/.test(trimmed)) {
+    return parseAmountValue(trimmed);
+  }
+
+  if (/^\d{5,}$/.test(trimmed)) {
+    const normalized = `${trimmed.slice(0, -2)}.${trimmed.slice(-2)}`;
+    return parseAmountValue(normalized);
+  }
+
+  return parseAmountValue(trimmed);
+};
+
+const parseReceiptTableItemLine = (line: string) => {
+  const normalized = normalizeWhitespace(line);
+  if (!normalized || isSummaryLine(normalized) || isNoiseLine(normalized) || isReceiptDateLine(normalized)) {
+    return null;
+  }
+
+  if (
+    /^(?:qty|description|dine in|vat item\(s\)|sub\s*-?\s*total|service charge|amount due|total no of items|vat sales|12%\s+vat sales|non-vat sales|zero-rated sales|temporary bill)\b/i.test(
+      normalized
+    ) ||
+    !/[A-Za-z]/.test(normalized)
+  ) {
+    return null;
+  }
+
+  const leadingQuantityMatch = normalized.match(/^(?:[^A-Za-z0-9]*\s*|\d+\s+)?(?<quantity>\d+(?:\.\d+)?)\s+(?<rest>.+)$/);
+  if (!leadingQuantityMatch?.groups?.quantity || !leadingQuantityMatch.groups.rest) {
+    return null;
+  }
+
+  const quantity = Number(leadingQuantityMatch.groups.quantity ?? NaN);
+  const rest = normalizeWhitespace(leadingQuantityMatch.groups.rest);
+  const numericTokens = Array.from(rest.matchAll(/\d[\d,]*(?:\.\d{1,2})?/g));
+  const amountToken =
+    [...numericTokens]
+      .reverse()
+      .map((match) => match[0] ?? null)
+      .find((token) => token !== null && (/\.\d{1,2}$/.test(token) || /^\d{5,}$/.test(token) || /^\d{3,4}$/.test(token))) ?? null;
+  const amount = parseReceiptAmountToken(amountToken);
+  const amountIndex = amountToken ? rest.lastIndexOf(amountToken) : -1;
+  const descriptionSource = amountIndex >= 0 ? rest.slice(0, amountIndex) : rest;
+  const description = cleanReceiptDescription(descriptionSource);
+  if (!description || description.length < 2) {
+    return null;
+  }
+
+  const unitPrice = amount !== null && Number.isFinite(quantity) && quantity > 0 ? amount / quantity : null;
+
+  return {
+    description,
+    amount: amount !== null ? amount.toFixed(2) : null,
+    quantity: Number.isFinite(quantity) ? quantity : null,
+    unitPrice: unitPrice !== null && Number.isFinite(unitPrice) ? unitPrice.toFixed(2) : null,
+    wrapped: false,
+  } satisfies ReceiptPreviewItem;
+};
+
+const extractReceiptTableItems = (lines: string[], merchantName?: string | null) => {
+  const bounds = findReceiptTableBounds(lines);
+  if (!bounds) {
+    return [];
+  }
+
+  const tableLines = lines.slice(bounds.startIndex, bounds.endIndex);
+  const candidates: ReceiptPreviewItem[] = [];
+
+  for (const line of tableLines) {
+    const normalized = normalizeWhitespace(line);
+    if (
+      !normalized ||
+      /^dine\s+in$/i.test(normalized) ||
+      /^qty\s+description\b/i.test(normalized) ||
+      /^vat\s+item\(s\)\b/i.test(normalized)
+    ) {
+      continue;
+    }
+
+    const item = parseReceiptTableItemLine(normalized);
+    if (item) {
+      candidates.push(item);
+      continue;
+    }
+  }
+
+  return candidates;
+};
+
+const repairReceiptItemsWithSubtotal = (items: ReceiptPreviewItem[], subtotal: number | null) => {
+  if (subtotal === null || !Number.isFinite(subtotal) || items.length === 0) {
+    return items;
+  }
+
+  const nonNullAmounts = items
+    .map((item) => parseAmountValue(item.amount))
+    .filter((value): value is number => value !== null && Number.isFinite(value) && value > 0);
+  if (nonNullAmounts.length === 0) {
+    return items;
+  }
+
+  const sortedAmounts = [...nonNullAmounts].sort((left, right) => left - right);
+  const medianAmount = sortedAmounts[Math.floor(sortedAmounts.length / 2)] ?? null;
+  const typicalAmount = medianAmount !== null && medianAmount >= 1 ? medianAmount : null;
+  const itemTotal = items.reduce((sum, item) => sum + (parseAmountValue(item.amount) ?? 0), 0);
+  if (Math.abs(Number((subtotal - itemTotal).toFixed(2))) <= 0.05) {
+    return items;
+  }
+
+  const nullAmountCount = items.filter((item) => parseAmountValue(item.amount) === null).length;
+  const expectedMissingTotal = typicalAmount !== null ? Number((typicalAmount * nullAmountCount).toFixed(2)) : 0;
+  const nonNullMedian = sortedAmounts[Math.floor(sortedAmounts.length / 2)] ?? null;
+  const lowAmountThreshold = nonNullMedian !== null ? Math.max(25, nonNullMedian * 0.35) : 25;
+
+  const correctedItems = items.map((item) => ({ ...item }));
+  const suspiciousIndices = correctedItems
+    .map((item, index) => {
+      const amount = parseAmountValue(item.amount);
+      if (amount === null) {
+        return { index, kind: "missing" as const };
+      }
+
+      const quantity = item.quantity ?? null;
+      const perUnitAmount = quantity && quantity > 0 ? amount / quantity : amount;
+      const isSuspiciousLow = amount < lowAmountThreshold || (quantity !== null && quantity > 1 && perUnitAmount < lowAmountThreshold);
+      return isSuspiciousLow ? { index, kind: "low" as const } : null;
+    })
+    .filter((value): value is { index: number; kind: "missing" | "low" } => value !== null);
+
+  if (suspiciousIndices.length === 0) {
+    return items;
+  }
+
+  const knownGoodTotal = correctedItems.reduce((sum, item, index) => {
+    if (suspiciousIndices.some((candidate) => candidate.index === index)) {
+      return sum;
+    }
+    return sum + (parseAmountValue(item.amount) ?? 0);
+  }, 0);
+
+  const lowAmountCandidate = suspiciousIndices.find((entry) => entry.kind === "low");
+  if (lowAmountCandidate) {
+    const correctedAmount = Number((subtotal - knownGoodTotal - expectedMissingTotal).toFixed(2));
+    if (correctedAmount > 0) {
+      correctedItems[lowAmountCandidate.index] = {
+        ...correctedItems[lowAmountCandidate.index],
+        amount: correctedAmount.toFixed(2),
+      };
+    }
+  }
+
+  const remainingDiff = Number((subtotal - correctedItems.reduce((sum, item) => sum + (parseAmountValue(item.amount) ?? 0), 0)).toFixed(2));
+  if (Math.abs(remainingDiff) <= 0.05) {
+    return correctedItems;
+  }
+
+  const missingAmountCandidate = suspiciousIndices.find((entry) => entry.kind === "missing");
+  if (missingAmountCandidate) {
+    correctedItems[missingAmountCandidate.index] = {
+      ...correctedItems[missingAmountCandidate.index],
+      amount: remainingDiff > 0 ? remainingDiff.toFixed(2) : typicalAmount?.toFixed(2) ?? correctedItems[missingAmountCandidate.index].amount,
+    };
+  }
+
+  return correctedItems;
+};
+
+const inferReceiptSubtotalFromFooter = (lines: string[]) => {
+  const footerAmounts: number[] = [];
+  let footerStarted = false;
+
+  for (const rawLine of lines) {
+    const line = normalizeWhitespace(rawLine);
+    if (!line) {
+      continue;
+    }
+
+    if (/\b(?:total\s+no\s+of\s+items|sub\s*-?\s*total|amount\s+due)\b/i.test(line)) {
+      footerStarted = true;
+      continue;
+    }
+
+    if (!footerStarted) {
+      continue;
+    }
+
+    if (/^(?:temporary\s+bill|buyer\s+name|buyer\s+address|buyer\s+tin|business\s+style)\b/i.test(line)) {
+      break;
+    }
+
+    if (/\b(?:charge|due|item|count|invoice|cashier|server|start|end)\b/i.test(line)) {
+      continue;
+    }
+
+    const amount = parseAmountFromLine(line);
+    if (amount !== null && amount >= 100) {
+      footerAmounts.push(amount);
+    }
+  }
+
+  if (footerAmounts.length < 2) {
+    return null;
+  }
+
+  const subtotal = footerAmounts.reduce((sum, amount) => sum + amount, 0);
+  return Number.isFinite(subtotal) && subtotal > 0 ? subtotal : null;
 };
 
 const extractReceiptItemFromLine = (line: string, pendingDescription?: string | null) => {
@@ -1098,27 +1407,33 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const currencyWarning =
     currencyMentions.length > 1 ? `Mixed currencies detected: ${currencyMentions.join(", ")}` : null;
   const billDate = parseBillDateFromText(normalized);
+  const tableBounds = findReceiptTableBounds(lines);
   const merchantName =
-    lines.find((line) => line.length > 2 && !isSummaryLine(line) && !isNoiseLine(line) && parseAmountFromLine(line) === null) ?? null;
+    sanitizeReceiptMerchantName(detectReceiptMerchantNameFromLines(tableBounds ? lines.slice(0, tableBounds.startIndex) : lines) ?? "") ??
+    lines.find((line) => line.length > 2 && !isSummaryLine(line) && !isNoiseLine(line) && parseAmountFromLine(line) === null) ??
+    null;
 
   const subtotalLine = lines.find((line) => /^[+\-*•]?\s*sub\s*total\b/i.test(line));
-  const serviceChargeLine = lines.find((line) => /^[+\-*•]?\s*service\s+charge\b/i.test(line));
+  const serviceChargeLine = lines.find((line) => /\bcharge\b/i.test(line) && parseAmountFromLine(line) !== null);
   const taxLine = lines.find((line) => /^[+\-*•]?\s*(tax|vat)\b/i.test(line));
   const tipLine = lines.find((line) => /^[+\-*•]?\s*tip\b/i.test(line));
   const roundingLine = lines.find((line) => /^[+\-*•]?\s*(round\s*off|rounding)\b/i.test(line));
   const discountLine = lines.find((line) => /^[+\-*•]?\s*discount\b/i.test(line));
   const totalLine = [...lines].reverse().find((line) => /^[+\-*•]?\s*(amount due|grand total|total)\b/i.test(line));
-  const subtotal = subtotalLine ? parseAmountFromLine(subtotalLine) : null;
+  const subtotal = subtotalLine ? parseAmountFromLine(subtotalLine) : inferReceiptSubtotalFromFooter(lines);
   const serviceCharge = serviceChargeLine ? parseAmountFromLine(serviceChargeLine) : null;
   const tax = taxLine ? parseAmountFromLine(taxLine) : null;
   const tip = tipLine ? parseAmountFromLine(tipLine) : null;
   const rounding = roundingLine ? parseAmountFromLine(roundingLine) : null;
   const discount = discountLine ? parseAmountFromLine(discountLine) : null;
-  const items = itemCandidatesFromText(lines, merchantName);
+  const tableItems = extractReceiptTableItems(lines, merchantName);
+  const items = repairReceiptItemsWithSubtotal(tableItems.length > 0 ? tableItems : itemCandidatesFromText(lines, merchantName), subtotal);
   const total =
     totalLine && parseAmountFromLine(totalLine) !== null
       ? parseAmountFromLine(totalLine)
-      : items.reduce((sum, item) => sum + (parseAmountValue(item.amount) ?? 0), 0) || null;
+      : subtotal !== null
+        ? subtotal + (serviceCharge ?? 0) + (tax ?? 0) + (tip ?? 0) + (rounding ?? 0) - (discount ?? 0)
+        : items.reduce((sum, item) => sum + (parseAmountValue(item.amount) ?? 0), 0) || null;
   const { allocations, participants } = splitAllocationsFromText(lines, currency, total !== null ? total.toFixed(2) : null);
   const receiptAccountMatch = detectReceiptAccountMatchFromText(normalized);
   const paymentMethod = detectReceiptPaymentMethodFromText(lines, receiptAccountMatch);

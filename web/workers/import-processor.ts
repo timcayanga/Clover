@@ -9,6 +9,7 @@ import { countNonCashAccounts, getWorkspaceOwnerLimits } from "@/lib/plan-access
 import { normalizeInstitutionCurrency, parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
 import { readImportedFileImageDataUrls, readImportedFileText, readImportedPdfPageImages } from "@/lib/import-file-text.server";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
+import { parseReceiptText } from "@/lib/split-bill";
 import {
   DATA_ENGINE_VERSION,
   applyDataQaReviewLearning,
@@ -21,6 +22,7 @@ import {
   fetchParsedTransactionRows,
   enrichParsedRowsWithTraining,
   defaultCategoryForType,
+  insertTransactionCompat,
   replaceDocumentImportPagesCompat,
   upsertDocumentImportCompat,
   upsertInvestmentSnapshotCompat,
@@ -37,6 +39,7 @@ import {
   upsertStatementTemplate,
 } from "@/lib/data-engine";
 import { getTrailingBalanceFromParsedRows, inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { guessCategoryName } from "@/lib/import-parser";
 import { parseImportTextWithOpenAIFallback, transcribeImportImagesWithOpenAI } from "@/lib/openai-import-parser";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
@@ -291,6 +294,123 @@ const assessReceiptExtractionQuality = (params: {
     score: Math.max(0, Math.min(10, score)),
     issues,
   };
+};
+
+type NormalizedReceiptLineItem = {
+  description: string;
+  quantity: number | null;
+  unitPrice: number | null;
+  amount: number | null;
+  currency: string | null;
+  confidenceScore: number;
+  parserEvidence: {
+    page: number | null;
+    sourceText: string | null;
+    reason: string;
+  };
+};
+
+const normalizeReceiptLineItems = (
+  lineItems: Array<{
+    description?: string | null;
+    quantity?: number | null;
+    unit_price?: number | null;
+    amount?: number | null;
+    currency?: string | null;
+    confidence_score?: number | null;
+    parser_evidence?: {
+      page?: number | null;
+      source_text?: string | null;
+      reason?: string | null;
+    } | null;
+  }>
+) : NormalizedReceiptLineItem[] =>
+  lineItems
+    .map((item) => {
+      const description = typeof item.description === "string" ? item.description.trim() : "";
+      if (!description) {
+        return null;
+      }
+
+      return {
+        description,
+        quantity: typeof item.quantity === "number" && Number.isFinite(item.quantity) ? item.quantity : null,
+        unitPrice: typeof item.unit_price === "number" && Number.isFinite(item.unit_price) ? item.unit_price : null,
+        amount: typeof item.amount === "number" && Number.isFinite(item.amount) ? item.amount : null,
+        currency: typeof item.currency === "string" && item.currency.trim() ? item.currency.trim() : null,
+        confidenceScore:
+          typeof item.confidence_score === "number" && Number.isFinite(item.confidence_score) ? item.confidence_score : 0,
+        parserEvidence: {
+          page: typeof item.parser_evidence?.page === "number" && Number.isFinite(item.parser_evidence.page) ? item.parser_evidence.page : null,
+          sourceText:
+            typeof item.parser_evidence?.source_text === "string" && item.parser_evidence.source_text.trim()
+              ? item.parser_evidence.source_text.trim()
+              : null,
+          reason:
+            typeof item.parser_evidence?.reason === "string" && item.parser_evidence.reason.trim()
+              ? item.parser_evidence.reason.trim()
+              : "Receipt line item",
+        },
+      };
+    })
+    .filter((item): item is NormalizedReceiptLineItem => item !== null);
+
+const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptText>) => ({
+  receipt_type: "receipt",
+  merchant_raw: preview.merchantName ?? null,
+  merchant_clean: preview.merchantName ?? null,
+  document_number: null,
+  invoice_number: null,
+  booking_reference: null,
+  order_number: null,
+  buyer_name: preview.receiptPayerName ?? null,
+  transaction_date: preview.billDate ?? null,
+  transaction_time: null,
+  currency: preview.currency ?? null,
+  subtotal: preview.subtotal !== null ? Number(preview.subtotal) : null,
+  tax: preview.tax !== null ? Number(preview.tax) : null,
+  service_charge: preview.serviceCharge !== null ? Number(preview.serviceCharge) : null,
+  discount: preview.discount !== null ? Number(preview.discount) : null,
+  tip: preview.tip !== null ? Number(preview.tip) : null,
+  total: preview.total !== null ? Number(preview.total) : null,
+  payment_method: preview.paymentMethod ?? null,
+  line_items: preview.items.map((item) => ({
+    description: item.description,
+    quantity: item.quantity ?? null,
+    unit_price: item.unitPrice !== null ? Number(item.unitPrice) : null,
+    amount: Number(item.amount),
+    currency: preview.currency ?? null,
+    confidence_score: Math.max(0, Math.min(100, Math.round(preview.confidence))),
+    parser_evidence: {
+      page: null,
+      source_text: item.description,
+      reason: "Receipt line item parsed from OCR",
+    },
+  })),
+  split_allocations: [],
+  confidence_score: Math.max(0, Math.min(100, Math.round(preview.confidence))),
+  parser_evidence: {
+    page: null,
+    source_text: preview.receiptText,
+    reason: "Receipt fallback parsed from OCR text",
+  },
+});
+
+const resolveWorkspaceCashAccountId = async (workspaceId: string, currency = "PHP") => {
+  await ensureWorkspaceCashAccount(workspaceId, currency);
+  const normalizedCurrency =
+    normalizeInstitutionCurrency(null, currency ?? "PHP", "Cash") ??
+    (String(currency ?? "PHP").trim().toUpperCase() || "PHP");
+  const cashAccount = await prisma.account.findFirst({
+    where: {
+      workspaceId,
+      type: "cash",
+      currency: normalizedCurrency,
+    },
+    select: { id: true },
+  });
+
+  return cashAccount?.id ?? null;
 };
 
 const countRowsWithParseableDates = (rows: Array<{ date?: string | null }>) =>
@@ -2377,17 +2497,58 @@ export const processImportFileText = async (
     )
     : null;
 
+  const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
+  const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
+  const receiptPreviewLooksLikeReceipt =
+    Boolean(
+      receiptPreview &&
+        receiptPreview.items.length > 0 &&
+        receiptPreview.total !== null &&
+        receiptPreview.billDate &&
+        receiptPreview.confidence >= 80
+    );
+  const receiptDetails =
+    importMode === "receipt" &&
+    openAiParsed?.receiptDetails &&
+    (openAiParsed.receiptDetails.merchant_raw ||
+      openAiParsed.receiptDetails.merchant_clean ||
+      openAiParsed.receiptDetails.total !== null ||
+      openAiParsed.receiptDetails.line_items.length > 0 ||
+      openAiParsed.receiptDetails.split_allocations.length > 0)
+      ? openAiParsed.receiptDetails
+      : receiptPreviewLooksLikeReceipt
+        ? receiptPreviewDetails
+        : null;
+  const receiptAccountMatch =
+    importMode === "receipt"
+      ? openAiParsed?.receiptAccountMatch ??
+        (receiptPreview?.receiptAccountMatch
+          ? {
+              account_name: receiptPreview.receiptAccountMatch.accountName,
+              account_last4: receiptPreview.receiptAccountMatch.accountLast4,
+              confidence: receiptPreview.receiptAccountMatch.confidence,
+              reason: receiptPreview.receiptAccountMatch.reason,
+            }
+          : null)
+      : receiptPreviewLooksLikeReceipt && receiptPreview?.receiptAccountMatch
+        ? {
+            account_name: receiptPreview.receiptAccountMatch.accountName,
+            account_last4: receiptPreview.receiptAccountMatch.accountLast4,
+            confidence: receiptPreview.receiptAccountMatch.confidence,
+            reason: receiptPreview.receiptAccountMatch.reason,
+          }
+      : null;
+
   const openAiReceiptValidation =
     importMode === "receipt"
       ? assessReceiptExtractionQuality({
-          receiptDetails: openAiParsed?.receiptDetails ?? null,
+          receiptDetails: receiptDetails ?? null,
           expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
         })
       : null;
   const receiptAccountResolution =
-    importMode === "receipt" && openAiParsed?.receiptAccountMatch
+    importMode === "receipt" && receiptAccountMatch
       ? await (async () => {
-          const receiptAccountMatch = openAiParsed.receiptAccountMatch!;
           const compatibleAccountColumns = await getCompatibleAccountColumns();
           const workspaceAccounts = await prisma.account.findMany({
             where: { workspaceId: importFile.workspaceId },
@@ -2627,7 +2788,7 @@ export const processImportFileText = async (
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const documentImportAccountId =
-    importMode === "receipt" ? importFile.account?.id ?? resolvedReceiptAccountId : importFile.account?.id ?? null;
+    importMode === "receipt" || receiptPreviewLooksLikeReceipt ? importFile.account?.id ?? resolvedReceiptAccountId : importFile.account?.id ?? null;
   const documentImportExtractedPayload = {
     metadata: resolvedMetadata,
     rowCount: rows.length,
@@ -2640,7 +2801,9 @@ export const processImportFileText = async (
       type: row.type ?? null,
       confidence: row.confidence ?? null,
     })),
-    receiptValidation: importMode === "receipt" ? openAiReceiptValidation : null,
+    receiptValidation: importMode === "receipt" || receiptPreviewLooksLikeReceipt ? openAiReceiptValidation : null,
+    receiptDetails: importMode === "receipt" || receiptPreviewLooksLikeReceipt ? receiptDetails : null,
+    receiptAccountMatch: importMode === "receipt" || receiptPreviewLooksLikeReceipt ? receiptAccountMatch : null,
     receiptAccountResolution,
     openAiAudit: openAiParsed?.audit
       ? {
@@ -2718,39 +2881,39 @@ export const processImportFileText = async (
     });
   }
 
-  if (documentImportRecord && importMode === "receipt") {
-    const receiptDetails = openAiParsed?.receiptDetails ?? null;
-    const receiptAccountMatch = openAiParsed?.receiptAccountMatch ?? null;
+  if (documentImportRecord && (importMode === "receipt" || receiptDetails)) {
+    const receiptDetailsPayload = receiptDetails ?? openAiParsed?.receiptDetails ?? null;
+    const receiptAccountMatchPayload = receiptAccountMatch ?? openAiParsed?.receiptAccountMatch ?? null;
     const receiptValidation = openAiReceiptValidation;
     await upsertReceiptDocumentCompat({
       workspaceId: String(importFile.workspaceId),
       documentImportId: documentImportRecord.id,
       accountId: documentImportAccountId,
       transactionId: null,
-      merchantRaw: receiptDetails?.merchant_raw ?? null,
-      merchantClean: receiptDetails?.merchant_clean ?? null,
-      transactionDate: parseDateValue(receiptDetails?.transaction_date ?? resolvedMetadata.endDate ?? null),
-      transactionTime: receiptDetails?.transaction_time ?? null,
-      currency: receiptDetails?.currency ?? resolvedMetadata.currency ?? null,
-      subtotal: receiptDetails?.subtotal ?? null,
-      tax: receiptDetails?.tax ?? null,
-      total: receiptDetails?.total ?? resolvedMetadata.endingBalance ?? resolvedMetadata.totalAmountDue ?? null,
-      paymentMethod: receiptDetails?.payment_method ?? null,
-      accountMatch: receiptAccountMatch
+      merchantRaw: receiptDetailsPayload?.merchant_raw ?? null,
+      merchantClean: receiptDetailsPayload?.merchant_clean ?? null,
+      transactionDate: parseDateValue(receiptDetailsPayload?.transaction_date ?? resolvedMetadata.endDate ?? null),
+      transactionTime: receiptDetailsPayload?.transaction_time ?? null,
+      currency: receiptDetailsPayload?.currency ?? resolvedMetadata.currency ?? null,
+      subtotal: receiptDetailsPayload?.subtotal ?? null,
+      tax: receiptDetailsPayload?.tax ?? null,
+      total: receiptDetailsPayload?.total ?? resolvedMetadata.endingBalance ?? resolvedMetadata.totalAmountDue ?? null,
+      paymentMethod: receiptDetailsPayload?.payment_method ?? null,
+      accountMatch: receiptAccountMatchPayload
         ? {
-            account_name: receiptAccountMatch.account_name,
-            account_last4: receiptAccountMatch.account_last4,
-            confidence: receiptAccountMatch.confidence,
-            reason: receiptAccountMatch.reason,
+            account_name: receiptAccountMatchPayload.account_name,
+            account_last4: receiptAccountMatchPayload.account_last4,
+            confidence: receiptAccountMatchPayload.confidence,
+            reason: receiptAccountMatchPayload.reason,
           }
         : null,
       confidence: resolvedMetadata.confidence ?? 0,
       rawPayload: {
         documentType: importMode,
         metadata: resolvedMetadata,
-        receiptAccountMatch,
+        receiptAccountMatch: receiptAccountMatchPayload,
         receiptAccountResolution,
-        receiptDetails,
+        receiptDetails: receiptDetailsPayload,
         receiptValidation,
         rowCount: rows.length,
         pageCount: pageImages?.length ?? 0,
@@ -3414,22 +3577,332 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             select: {
               id: true,
               accountId: true,
+              currency: true,
               documentFamily: true,
               documentSubtype: true,
+              rawPayload: true,
             },
           }).catch(() => null)
         : null;
 
-    return {
-      imported: 0,
-      duplicate: false,
-      metadata: detectStatementMetadataFromText(""),
-      accountId: documentImport?.accountId ?? accountId ?? null,
-      confirmedTransactionsCount: 0,
-      insightSummary: null,
-      accountBalance: null,
-      status: "done",
-    };
+    const receiptDocument =
+      importMode === "receipt" && (await hasCompatibleTable("ReceiptDocument"))
+        ? await prisma.receiptDocument.findUnique({
+            where: { documentImportId: documentImport?.id ?? "" },
+            select: {
+              id: true,
+              accountId: true,
+              transactionId: true,
+              merchantRaw: true,
+              merchantClean: true,
+              transactionDate: true,
+              transactionTime: true,
+              currency: true,
+              subtotal: true,
+              tax: true,
+              total: true,
+              paymentMethod: true,
+              accountMatch: true,
+              rawPayload: true,
+            },
+          }).catch(() => null)
+        : null;
+
+    if (importMode === "receipt") {
+      const documentPayload =
+        documentImport?.rawPayload && typeof documentImport.rawPayload === "object" && !Array.isArray(documentImport.rawPayload)
+          ? (documentImport.rawPayload as Record<string, unknown>)
+          : null;
+      const receiptPayloadSource =
+        receiptDocument?.rawPayload && typeof receiptDocument.rawPayload === "object" && !Array.isArray(receiptDocument.rawPayload)
+          ? (receiptDocument.rawPayload as Record<string, unknown>)
+          : documentPayload;
+      const receiptDetailsPayload =
+        receiptPayloadSource && typeof receiptPayloadSource.receiptDetails === "object" && !Array.isArray(receiptPayloadSource.receiptDetails)
+          ? (receiptPayloadSource.receiptDetails as Record<string, unknown>)
+          : null;
+      const receiptDetailsRecord =
+        receiptDetailsPayload ??
+        (receiptPayloadSource && typeof receiptPayloadSource.receipt_details === "object" && !Array.isArray(receiptPayloadSource.receipt_details)
+          ? (receiptPayloadSource.receipt_details as Record<string, unknown>)
+          : null);
+      const receiptLineItems = normalizeReceiptLineItems(
+        Array.isArray(receiptDetailsRecord?.line_items)
+          ? (receiptDetailsRecord.line_items as Array<{
+              description?: string | null;
+              quantity?: number | null;
+              unit_price?: number | null;
+              amount?: number | null;
+              currency?: string | null;
+              confidence_score?: number | null;
+              parser_evidence?: {
+                page?: number | null;
+                source_text?: string | null;
+                reason?: string | null;
+              } | null;
+            }>)
+          : Array.isArray(receiptDetailsRecord?.lineItems)
+            ? (receiptDetailsRecord.lineItems as Array<{
+                description?: string | null;
+                quantity?: number | null;
+                unit_price?: number | null;
+                amount?: number | null;
+                currency?: string | null;
+                confidence_score?: number | null;
+                parser_evidence?: {
+                  page?: number | null;
+                  source_text?: string | null;
+                  reason?: string | null;
+                } | null;
+              }>)
+            : []
+      );
+      const receiptCurrency =
+        String(
+          receiptDocument?.currency ??
+            (typeof receiptDetailsRecord?.currency === "string" ? receiptDetailsRecord.currency : null) ??
+            documentImport?.currency ??
+            "PHP"
+        )
+          .trim()
+          .toUpperCase() || "PHP";
+      const receiptSubtotal =
+        receiptDocument?.subtotal !== null && receiptDocument?.subtotal !== undefined
+          ? receiptDocument.subtotal.toString()
+          : typeof receiptDetailsRecord?.subtotal === "number"
+            ? receiptDetailsRecord.subtotal.toString()
+            : null;
+      const receiptTax =
+        receiptDocument?.tax !== null && receiptDocument?.tax !== undefined
+          ? receiptDocument.tax.toString()
+          : typeof receiptDetailsRecord?.tax === "number"
+            ? receiptDetailsRecord.tax.toString()
+            : null;
+      const receiptAmount =
+        receiptDocument?.total !== null && receiptDocument?.total !== undefined
+          ? receiptDocument.total.toString()
+          : typeof receiptDetailsRecord?.total === "number"
+            ? receiptDetailsRecord.total.toString()
+            : null;
+      const receiptDate =
+        receiptDocument?.transactionDate ??
+        parseDateValue(
+          typeof receiptDetailsRecord?.transaction_date === "string"
+            ? receiptDetailsRecord.transaction_date
+            : typeof receiptDetailsRecord?.transactionDate === "string"
+              ? receiptDetailsRecord.transactionDate
+              : null
+        ) ??
+        null;
+      const receiptMerchantRaw =
+        typeof receiptDocument?.merchantRaw === "string" && receiptDocument.merchantRaw.trim()
+          ? receiptDocument.merchantRaw.trim()
+          : typeof receiptDetailsRecord?.merchant_raw === "string" && receiptDetailsRecord.merchant_raw.trim()
+            ? receiptDetailsRecord.merchant_raw.trim()
+            : typeof receiptDetailsRecord?.merchantRaw === "string" && receiptDetailsRecord.merchantRaw.trim()
+              ? receiptDetailsRecord.merchantRaw.trim()
+              : typeof receiptDocument?.merchantClean === "string" && receiptDocument.merchantClean.trim()
+                ? receiptDocument.merchantClean.trim()
+                : "Receipt";
+      const receiptMerchantClean =
+        typeof receiptDocument?.merchantClean === "string" && receiptDocument.merchantClean.trim()
+          ? receiptDocument.merchantClean.trim()
+          : typeof receiptDetailsRecord?.merchant_clean === "string" && receiptDetailsRecord.merchant_clean.trim()
+            ? receiptDetailsRecord.merchant_clean.trim()
+            : typeof receiptDetailsRecord?.merchantClean === "string" && receiptDetailsRecord.merchantClean.trim()
+              ? receiptDetailsRecord.merchantClean.trim()
+              : receiptMerchantRaw;
+      const receiptAccountMatchPayload =
+        receiptDocument?.accountMatch && typeof receiptDocument.accountMatch === "object" && !Array.isArray(receiptDocument.accountMatch)
+          ? (receiptDocument.accountMatch as Record<string, unknown>)
+          : receiptPayloadSource?.receiptAccountMatch && typeof receiptPayloadSource.receiptAccountMatch === "object" && !Array.isArray(receiptPayloadSource.receiptAccountMatch)
+            ? (receiptPayloadSource.receiptAccountMatch as Record<string, unknown>)
+            : null;
+      const cashAccountId =
+        receiptDocument?.accountId ??
+        (documentImport?.accountId && !String(documentImport.accountId).startsWith("optimistic-") ? documentImport.accountId : null) ??
+        (await resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency));
+      const receiptCategoryName = guessCategoryName(receiptMerchantClean || receiptMerchantRaw, "expense");
+      let createdTransactionId = receiptDocument?.transactionId ?? null;
+
+      if (!createdTransactionId && cashAccountId && receiptAmount !== null && receiptDate) {
+        const existingReceiptTransaction = await prisma.transaction.findFirst({
+          where: {
+            importFileId,
+            accountId: cashAccountId,
+          },
+          select: { id: true },
+        }).catch(() => null);
+
+        if (existingReceiptTransaction?.id) {
+          createdTransactionId = existingReceiptTransaction.id;
+        } else {
+          const insertedTransaction = await insertTransactionCompat({
+            workspaceId: String(importFile.workspaceId),
+            accountId: cashAccountId,
+            importFileId,
+            categoryName: receiptCategoryName,
+            reviewStatus: "confirmed",
+            parserConfidence:
+              Number(
+                receiptDocument?.rawPayload && typeof receiptDocument.rawPayload === "object"
+                  ? (receiptDocument.rawPayload as Record<string, unknown>).confidence ?? 0
+                  : receiptPayloadSource?.confidence ?? receiptPayloadSource?.confidence_score ?? 0
+              ) || 95,
+            categoryConfidence: 95,
+            accountMatchConfidence: 100,
+            duplicateConfidence: 0,
+            transferConfidence: 0,
+            date: receiptDate,
+            amount: receiptAmount,
+            currency: receiptCurrency,
+            type: "expense",
+            merchantRaw: receiptMerchantRaw,
+            merchantClean: receiptMerchantClean,
+            description: receiptMerchantClean,
+            rawPayload: {
+              source: "receipt",
+              documentType: "receipt",
+              receiptDocumentId: receiptDocument?.id ?? documentImport?.id ?? null,
+              receiptDetails: {
+                ...(receiptDetailsRecord ?? {}),
+                merchantRaw: receiptMerchantRaw,
+                merchantClean: receiptMerchantClean,
+                transactionDate: receiptDate?.toISOString() ?? null,
+                transactionTime: receiptDocument?.transactionTime ?? null,
+                currency: receiptCurrency,
+                subtotal: receiptSubtotal,
+                tax: receiptTax,
+                total: receiptAmount,
+                paymentMethod: receiptDocument?.paymentMethod ?? (typeof receiptDetailsRecord?.payment_method === "string" ? receiptDetailsRecord.payment_method : null),
+                lineItems: receiptLineItems.map((item) => ({
+                  description: item.description,
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  amount: item.amount,
+                  currency: receiptCurrency,
+                  confidenceScore: item.confidenceScore,
+                  parserEvidence: item.parserEvidence,
+                })),
+                line_items: receiptLineItems.map((item) => ({
+                  description: item.description,
+                  quantity: item.quantity,
+                  unit_price: item.unitPrice,
+                  amount: item.amount,
+                  currency: receiptCurrency,
+                  confidence_score: item.confidenceScore,
+                  parser_evidence: {
+                    page: item.parserEvidence.page,
+                    source_text: item.parserEvidence.sourceText,
+                    reason: item.parserEvidence.reason,
+                  },
+                })),
+              },
+              receiptLineItems: receiptLineItems.map((item) => ({
+                description: item.description,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                amount: item.amount,
+              })),
+              receiptAccountMatch: receiptAccountMatchPayload as Prisma.InputJsonValue | null,
+            } as Prisma.InputJsonValue,
+            normalizedPayload: {
+              merchantClean: receiptMerchantClean,
+              categoryName: receiptCategoryName,
+              type: "expense",
+            } as Prisma.InputJsonValue,
+            learnedRuleIdsApplied: [],
+          });
+
+          createdTransactionId =
+            insertedTransaction && typeof insertedTransaction.id === "string" && insertedTransaction.id.trim()
+              ? insertedTransaction.id
+              : null;
+        }
+      }
+
+      if (createdTransactionId && documentImport?.id) {
+        await upsertReceiptDocumentCompat({
+          workspaceId: String(importFile.workspaceId),
+          documentImportId: documentImport.id,
+          accountId: cashAccountId,
+          transactionId: createdTransactionId,
+          merchantRaw: receiptMerchantRaw,
+          merchantClean: receiptMerchantClean,
+          transactionDate: receiptDate,
+          transactionTime: typeof receiptDetailsRecord?.transaction_time === "string" ? receiptDetailsRecord.transaction_time : receiptDocument?.transactionTime ?? null,
+          currency: receiptCurrency,
+          subtotal: receiptSubtotal,
+          tax: receiptTax,
+          total: receiptAmount,
+          paymentMethod:
+            receiptDocument?.paymentMethod ?? (typeof receiptDetailsRecord?.payment_method === "string" ? receiptDetailsRecord.payment_method : null),
+          accountMatch: receiptAccountMatchPayload as Prisma.InputJsonValue | null,
+          confidence:
+            Number(
+              receiptDocument?.rawPayload && typeof receiptDocument.rawPayload === "object"
+                ? (receiptDocument.rawPayload as Record<string, unknown>).confidence ?? 0
+                : receiptPayloadSource?.confidence ?? receiptPayloadSource?.confidence_score ?? 0
+            ) || 95,
+          rawPayload: {
+            ...(receiptPayloadSource ?? {}),
+            receiptDetails: {
+              ...(receiptDetailsRecord ?? {}),
+              merchantRaw: receiptMerchantRaw,
+              merchantClean: receiptMerchantClean,
+              transactionDate: receiptDate?.toISOString() ?? null,
+              transactionTime: typeof receiptDetailsRecord?.transaction_time === "string" ? receiptDetailsRecord.transaction_time : receiptDocument?.transactionTime ?? null,
+              currency: receiptCurrency,
+              subtotal: receiptSubtotal,
+              tax: receiptTax,
+              total: receiptAmount,
+              paymentMethod:
+                receiptDocument?.paymentMethod ?? (typeof receiptDetailsRecord?.payment_method === "string" ? receiptDetailsRecord.payment_method : null),
+              lineItems: receiptLineItems.map((item) => ({
+                description: item.description,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                amount: item.amount,
+                currency: receiptCurrency,
+                confidenceScore: item.confidenceScore,
+                parserEvidence: item.parserEvidence,
+              })),
+              line_items: receiptLineItems.map((item) => ({
+                description: item.description,
+                quantity: item.quantity,
+                unit_price: item.unitPrice,
+                amount: item.amount,
+                currency: receiptCurrency,
+                confidence_score: item.confidenceScore,
+                parser_evidence: {
+                  page: item.parserEvidence.page,
+                  source_text: item.parserEvidence.sourceText,
+                  reason: item.parserEvidence.reason,
+                },
+              })),
+            },
+            receiptLineItems: receiptLineItems.map((item) => ({
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              amount: item.amount,
+            })),
+            transactionId: createdTransactionId,
+          } as Prisma.InputJsonValue,
+        });
+      }
+
+      return {
+        imported: createdTransactionId ? 1 : 0,
+        duplicate: false,
+        metadata: detectStatementMetadataFromText(""),
+        accountId: cashAccountId ?? documentImport?.accountId ?? accountId ?? null,
+        confirmedTransactionsCount: createdTransactionId ? 1 : 0,
+        insightSummary: null,
+        accountBalance: null,
+        status: "done",
+      };
+    }
   }
 
   let parsedRows: Array<Record<string, unknown>> = [];
@@ -3962,7 +4435,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   for (const entry of preparedTransactions) {
     transactions.push(entry.insightRow);
     trainingSignals.push({
-      transactionId: entry.transactionId,
+      transactionId: entry.transactionId ?? crypto.randomUUID(),
       merchantText: entry.trainingSignal.merchantText,
       categoryId: entry.trainingSignal.categoryId,
       categoryName: entry.trainingSignal.categoryName,

@@ -1601,6 +1601,60 @@ const main = async () => {
     throw new Error(`expected named item settlement to be uneven, got owed=${namedItemOwed.map((value) => value.toFixed(2)).join(", ")}`);
   }
 
+  const jarandjamReceiptPreview = parseReceiptText([
+    "Br    =",
+    "= a",
+    "ee              JARANDJAM INC.",
+    "=             G/F UNIVERSAL LMS BLDG., 106 ESTEBAN £1)",
+    "=              LEGASPI VILL., SAN LORENZO",
+    "CITY OF MAKATI",
+    "=     Se            NCR, FOURTH DISTRICT",
+    "=                 PN: FP112025-047-0562551-00001",
+    "Sere   i   =          SN: CTC10778101 MIN: 25110814212659428                  :",
+    "—=           § «a8                                         :",
+    "-              GUEST COUNT: 5                              ’       5",
+    "CASHIER : CHRISTINA SILVIO            #0186          —     -",
+    "SERVER: JJ ESTANQUE                10190 [EEE",
+    "12/22/2025                    20:48:02 [BEE EE",
+    "#0000003214        INVOICEH001-000001383  FEEMEERt mt",
+    "Qty Description              Amount Ee   oe ae So",
+    "DINE IN           ee",
+    "VAT ITEH(s)                              on",
+    "2.00 BEEF SHORTRIBS ADOBO ©      10.00 £7 es a",
+    "1.00 LAMB PARES               72000 hae Eo",
+    "1.00 PORK KARE-CURRY           650.00 (eke ae He",
+    "1.00 TORCHED SALMON DONBURI      850.00 A=    Bees ie",
+    "1.00 YAKULT LEMONDE           180.00  BicigEe a eR",
+    "1.00 LYCHEE FIZZ         WO bo",
+    "1.00 BAST OLD FASHIONED         395.00 Eades ol",
+    "3                    1.00 GIN & TONIC              395.00   Eo Se",
+    "=                  1.00 BOTTLED SEA SALT LEMON       180.00    0 att",
+    "==              SUB-TOTAL                  ra.",
+    "RUICE CHARGE                  637.95 EE eee",
+    "NT DUE     rB2 as        Ee",
+    "OF TENS: 10.00               TEE",
+    "0:49:27/21:48:42 KT:43 80:92        Ee       2",
+    "SS:",
+    "VLE:",
+    "cmmmemmeeeeeeees 6379.46",
+    "ES -------ermnemmaeas    765.54",
+    "Re A      0.00",
+    "BALES -------semneenas      0.00",
+    "EMPORARY BILL",
+  ].join("\n"));
+  if (
+    jarandjamReceiptPreview.merchantName !== "JARANDJAM INC." ||
+    jarandjamReceiptPreview.billDate !== "2025-12-22T00:00:00.000Z" ||
+    jarandjamReceiptPreview.subtotal !== "7145.00" ||
+    jarandjamReceiptPreview.serviceCharge !== "637.95" ||
+    jarandjamReceiptPreview.total !== "7782.95" ||
+    jarandjamReceiptPreview.items.length !== 9
+  ) {
+    throw new Error(
+      `expected Jarandjam receipt parse to resolve merchant, subtotal, service charge, total, and 9 items, got merchant=${jarandjamReceiptPreview.merchantName ?? "null"} subtotal=${jarandjamReceiptPreview.subtotal ?? "null"} serviceCharge=${jarandjamReceiptPreview.serviceCharge ?? "null"} total=${jarandjamReceiptPreview.total ?? "null"} items=${jarandjamReceiptPreview.items.length}`
+    );
+  }
+
   const weightedSummarySettlement = splitBillModule.buildSplitBillSettlement({
     participants: [
       { id: "alice", name: "Alice" },
