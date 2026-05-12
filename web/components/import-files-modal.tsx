@@ -1049,6 +1049,18 @@ export function ImportFilesModal({
     fileName: string,
     reason?: string | null
   ) => {
+    const currentItem = itemsRef.current.find((entry) => entry.id === itemId);
+    if (
+      currentItem?.status === "done" ||
+      currentItem?.confirmationState === "confirmed" ||
+      retiredImportActivityFileNamesRef.current.has(fileName)
+    ) {
+      retiredImportActivityFileNamesRef.current.add(fileName);
+      setBusy(false);
+      autoCloseAfterStartRef.current = false;
+      return;
+    }
+
     const notice = buildImportErrorNotice(stage, fileName, reason);
     updateItem(itemId, {
       status: "error",
@@ -1578,6 +1590,19 @@ export function ImportFilesModal({
       current.map((item) => {
         if (item.id !== id) {
           return item;
+        }
+
+        if (
+          (item.status === "done" || item.confirmationState === "confirmed") &&
+          patch.status &&
+          patch.status !== "done"
+        ) {
+          return {
+            ...item,
+            importFileId: patch.importFileId ?? item.importFileId,
+            targetAccountId: patch.targetAccountId ?? item.targetAccountId,
+            importedRows: patch.importedRows ?? item.importedRows,
+          };
         }
 
         if (item.status === "error" && patch.status && patch.status !== "error") {
@@ -3328,7 +3353,7 @@ export function ImportFilesModal({
         deriveFallbackAccountNameFromFileName(item.file.name);
       const institution = localMetadata?.institution ?? guessedIdentity?.institution ?? null;
       const accountNumber = localMetadata?.accountNumber ?? null;
-      if (!accountNumber) {
+      if (!accountName && !institution && parsedRows.length === 0) {
         return;
       }
       const accountType = (localMetadata?.accountType ??
