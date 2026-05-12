@@ -417,7 +417,7 @@ export async function GET(request: Request) {
 
     if (summaryMode === "light") {
       const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
-      const [pageRows, duplicateRows] = await Promise.all([
+      const [pageRows, duplicateRows, typeTotals] = await Promise.all([
         prisma.transaction.findMany({
           where: visibleWhere,
           select: {
@@ -475,6 +475,13 @@ export async function GET(request: Request) {
           orderBy,
           take: 250,
         }),
+        prisma.transaction.groupBy({
+          by: ["type"],
+          where: visibleWhere,
+          _sum: {
+            amount: true,
+          },
+        }),
       ]);
 
       const duplicateCounts = new Map<string, number>();
@@ -516,6 +523,25 @@ export async function GET(request: Request) {
           warningReason: getTransactionWarningReason(transaction, duplicateCounts),
         })
       );
+      const lightSummary = {
+        income: 0,
+        spending: 0,
+        transfers: 0,
+      };
+      for (const row of typeTotals) {
+        const amount = Math.abs(Number(row._sum.amount ?? 0));
+        if (!Number.isFinite(amount)) {
+          continue;
+        }
+
+        if (row.type === "income") {
+          lightSummary.income += amount;
+        } else if (row.type === "transfer") {
+          lightSummary.transfers += amount;
+        } else {
+          lightSummary.spending += amount;
+        }
+      }
 
       return NextResponse.json({
         transactions,
@@ -525,9 +551,9 @@ export async function GET(request: Request) {
         currencyCodes,
         summary: {
           totalCount,
-          income: 0,
-          spending: 0,
-          transfers: 0,
+          income: lightSummary.income,
+          spending: lightSummary.spending,
+          transfers: lightSummary.transfers,
           review: 0,
           currencyCodes,
           topCategory: null,

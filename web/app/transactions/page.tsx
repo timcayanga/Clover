@@ -472,6 +472,54 @@ const formatTransactionAggregate = (value: number, transactions: Array<{ currenc
   return "Mixed currencies";
 };
 
+const buildVisibleTransactionSummary = (
+  transactions: Transaction[],
+  fallback?: Partial<TransactionPageMeta> | null
+): TransactionPageMeta => {
+  const summary: TransactionPageMeta = {
+    totalCount: fallback?.totalCount ?? transactions.length,
+    income: 0,
+    spending: 0,
+    transfers: 0,
+    review: fallback?.review ?? 0,
+    currencyCodes: fallback?.currencyCodes ?? getWorkspaceCurrencyCodes(transactions),
+    topCategory: fallback?.topCategory ?? null,
+    topAccount: fallback?.topAccount ?? null,
+    firstTransactionDate: fallback?.firstTransactionDate ?? null,
+    lastTransactionDate: fallback?.lastTransactionDate ?? null,
+    firstReviewTransaction: fallback?.firstReviewTransaction ?? null,
+    firstReviewTransactionIndex: fallback?.firstReviewTransactionIndex ?? null,
+  };
+
+  for (const transaction of transactions) {
+    if (transaction.isExcluded) {
+      continue;
+    }
+
+    const amount = Math.abs(Number(transaction.amount));
+    if (!Number.isFinite(amount)) {
+      continue;
+    }
+
+    const effectiveType =
+      normalizeCategoryName(transaction.categoryName) === "income"
+        ? "income"
+        : normalizeCategoryName(transaction.categoryName) === "transfers" || transaction.isTransfer
+          ? "transfer"
+          : transaction.type;
+
+    if (effectiveType === "income") {
+      summary.income += amount;
+    } else if (effectiveType === "transfer") {
+      summary.transfers += amount;
+    } else {
+      summary.spending += amount;
+    }
+  }
+
+  return summary;
+};
+
 const createEmptyManualForm = (accountId = "", categoryId = "", currency = "PHP"): ManualTransactionForm => ({
   date: todayIso,
   accountId,
@@ -2236,6 +2284,8 @@ function TransactionsPageContent() {
       if (options?.append) {
         setIsMobileLoadingMore(false);
       }
+      const visibleSummaryFallback =
+        mergedTransactions.length > 0 ? buildVisibleTransactionSummary(mergedTransactions, { totalCount: Math.max(Number(payload?.totalCount ?? 0), mergedTransactions.length), currencyCodes: nextCurrencyCodes }) : null;
       setTransactionsSummary(
         summaryPayload
           ? {
@@ -2245,9 +2295,9 @@ function TransactionsPageContent() {
                   : typeof summaryPayload.totalCount === "number"
                     ? Math.max(summaryPayload.totalCount, mergedTransactions.length)
                     : fetchedTransactions.length,
-              income: typeof summaryPayload.income === "number" ? summaryPayload.income : 0,
-              spending: typeof summaryPayload.spending === "number" ? summaryPayload.spending : 0,
-              transfers: typeof summaryPayload.transfers === "number" ? summaryPayload.transfers : 0,
+              income: typeof summaryPayload.income === "number" && summaryPayload.income !== 0 ? summaryPayload.income : visibleSummaryFallback?.income ?? 0,
+              spending: typeof summaryPayload.spending === "number" && summaryPayload.spending !== 0 ? summaryPayload.spending : visibleSummaryFallback?.spending ?? 0,
+              transfers: typeof summaryPayload.transfers === "number" && summaryPayload.transfers !== 0 ? summaryPayload.transfers : visibleSummaryFallback?.transfers ?? 0,
               review: typeof summaryPayload.review === "number" ? summaryPayload.review : 0,
               currencyCodes: nextCurrencyCodes,
               topCategory: Array.isArray(summaryPayload.topCategory) ? summaryPayload.topCategory : null,
@@ -2270,9 +2320,9 @@ function TransactionsPageContent() {
                 typeof payload?.totalCount === "number"
                   ? Math.max(payload.totalCount, mergedTransactions.length)
                   : mergedTransactions.length,
-              income: 0,
-              spending: 0,
-              transfers: 0,
+              income: visibleSummaryFallback?.income ?? 0,
+              spending: visibleSummaryFallback?.spending ?? 0,
+              transfers: visibleSummaryFallback?.transfers ?? 0,
               review: 0,
               currencyCodes: nextCurrencyCodes,
               topCategory: null,

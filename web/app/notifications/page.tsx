@@ -1,7 +1,7 @@
-import { redirect } from "next/navigation";
+import { NotificationsClient } from "./notifications-client";
 
 export const dynamic = "force-dynamic";
 
 export default function NotificationsPage() {
-  redirect("/recurring");
+  return <NotificationsClient />;
 }

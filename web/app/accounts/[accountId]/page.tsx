@@ -1610,6 +1610,7 @@ function AccountDetailPageContent() {
       ).length,
     [activeFinalizingImportIds, visibleTransactions]
   );
+  const finalizingNeedsReview = finalizingTimeLabel.toLowerCase().includes("couldn't finalize");
   const mobileTransactionGroups = useMemo(() => {
     const groups: Array<{ date: string; label: string; transactions: Transaction[] }> = [];
 
@@ -2780,7 +2781,7 @@ function AccountDetailPageContent() {
               <span className="accounts-summary-chip is-neutral">{`${visibleTransactions.length} of ${transactionTotalCount} loaded`}</span>
               {finalizingTransactionCount > 0 ? (
                 <span className="accounts-summary-chip is-neutral">
-                  Finalizing {finalizingTransactionCount} detail{finalizingTransactionCount === 1 ? "" : "s"} · {finalizingTimeLabel}
+                  {finalizingNeedsReview ? "Review needed" : "Finalizing"} {finalizingTransactionCount} detail{finalizingTransactionCount === 1 ? "" : "s"} · {finalizingTimeLabel}
                 </span>
               ) : null}
               {selectedTransactionIds.length > 0 ? (

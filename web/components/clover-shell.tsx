@@ -449,8 +449,8 @@ function MenuIcon({ name }: { name: IconName }) {
 
 const notifications = [
   {
-    title: "Import finished",
-    href: "/review",
+    title: "Import progress",
+    href: "/notifications",
   },
   {
     title: "Transactions need attention",

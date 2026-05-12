@@ -2814,6 +2814,64 @@ export function ImportFilesModal({
               if (result.summary) {
                 seedImportedWorkspaceCaches(workspaceId, result.summary);
                 await Promise.resolve(onImported(result.summary));
+                return;
+              }
+
+              if (result.status === "staged" && Number(result.importedRows ?? 0) > 0) {
+                const completedSummary = buildOptimisticUploadSummary(
+                  summaryContext.fileName,
+                  Number(result.importedRows ?? 0),
+                  resolvedAccountId,
+                  resolvedIdentity.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName,
+                  resolvedIdentity.institution ?? summaryContext.institution ?? null,
+                  resolvedAccountType,
+                  null,
+                  pickStableBalance(
+                    findKnownImportedBalance(accounts, {
+                      workspaceId,
+                      accountId: resolvedAccountId,
+                      accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
+                      institution: resolvedIdentity.institution ?? summaryContext.institution ?? null,
+                      accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
+                      accountType: resolvedAccountType,
+                    }),
+                    summaryContext.initialBalance
+                  ),
+                  getKnownPreviewTransactions({
+                    workspaceId,
+                    accountId: resolvedAccountId,
+                    optimisticAccountId: summaryContext.optimisticAccountId,
+                    accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
+                    institution: resolvedIdentity.institution ?? summaryContext.institution ?? null,
+                    accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
+                    accountType: resolvedAccountType,
+                    previewTransactions: summaryContext.previewTransactions,
+                  }),
+                  resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null
+                );
+                seedImportedWorkspaceCaches(workspaceId, completedSummary);
+                await Promise.resolve(onImported(completedSummary));
+                updateItem(itemId, {
+                  status: "done",
+                  confirmationState: "confirmed",
+                  progress: 100,
+                  progressLabel: "Done",
+                  targetAccountId: resolvedAccountId,
+                  importedRows: Number(result.importedRows ?? 0),
+                });
+                publishImportActivity({
+                  workspaceId,
+                  surface: importActivitySurfaceRef.current,
+                  status: "done",
+                  fileName: summaryContext.fileName,
+                  fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+                  fileTotal: items.length,
+                  completedFiles: completedFileCount + 1,
+                  progress: 100,
+                  detail: "Transactions are in Clover. Names and categories may need review.",
+                  summary: completedSummary,
+                  errorMessage: null,
+                });
               }
             })
             .catch((error) => {
