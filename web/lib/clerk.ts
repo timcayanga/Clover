@@ -5,6 +5,7 @@ export type SyncedClerkUser = {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  imageUrl: string | null;
   verified: boolean;
 };
 
@@ -16,6 +17,7 @@ export const syncClerkUser = async (clerkUserId: string): Promise<SyncedClerkUse
     email: `${clerkUserId}@placeholder.local`,
     firstName: null as string | null,
     lastName: null as string | null,
+    imageUrl: null,
     verified: false,
   };
 
@@ -37,6 +39,7 @@ export const syncClerkUser = async (clerkUserId: string): Promise<SyncedClerkUse
       email,
       firstName: clerkUser.firstName ?? null,
       lastName: clerkUser.lastName ?? null,
+      imageUrl: clerkUser.imageUrl ?? null,
       verified: clerkUser.emailAddresses.some((entry) => entry.verification?.status === "verified"),
     };
   } catch (error) {

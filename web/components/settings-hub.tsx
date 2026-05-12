@@ -92,6 +92,7 @@ type SettingsHubProps = {
   firstName: string | null;
   lastName: string | null;
   email: string;
+  avatarUrl?: string | null;
   planTier: "free" | "pro";
   paypalClientId?: string | null;
   paypalMonthlyPlanId?: string | null;
@@ -169,6 +170,7 @@ export function SettingsHub({
   firstName: initialFirstName,
   lastName: initialLastName,
   email: initialEmail,
+  avatarUrl: initialAvatarUrl,
   planTier: initialPlanTier,
   paypalClientId: initialPaypalClientId,
   paypalMonthlyPlanId: initialPaypalMonthlyPlanId,
@@ -183,6 +185,7 @@ export function SettingsHub({
   const [selectedProfileId, setSelectedProfileId] = useState(initialSelectedProfileId);
   const [firstName, setFirstName] = useState<string | null>(initialFirstName);
   const [lastName, setLastName] = useState<string | null>(initialLastName);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(initialAvatarUrl ?? null);
   const [email, setEmail] = useState(initialEmail);
   const [planTier, setPlanTier] = useState<"free" | "pro">(initialPlanTier);
   const [paypalClientId, setPaypalClientId] = useState<string | null>(initialPaypalClientId ?? null);
@@ -262,6 +265,7 @@ export function SettingsHub({
           firstName?: string | null;
           lastName?: string | null;
           email?: string;
+          imageUrl?: string | null;
           planTier?: "free" | "pro";
           paypalClientId?: string | null;
           paypalMonthlyPlanId?: string | null;
@@ -285,6 +289,7 @@ export function SettingsHub({
         setFirstName(payload.firstName ?? null);
         setLastName(payload.lastName ?? null);
         setEmail(payload.email ?? initialEmail);
+        setAvatarUrl(payload.imageUrl ?? null);
         setPlanTier(payload.planTier ?? "free");
         setPaypalClientId(payload.paypalClientId ?? null);
         setPaypalMonthlyPlanId(payload.paypalMonthlyPlanId ?? null);
@@ -299,6 +304,7 @@ export function SettingsHub({
           setFirstName(initialFirstName);
           setLastName(initialLastName);
           setEmail(initialEmail);
+          setAvatarUrl(initialAvatarUrl ?? null);
           setPlanTier(initialPlanTier);
           setPaypalClientId(initialPaypalClientId ?? null);
           setPaypalMonthlyPlanId(initialPaypalMonthlyPlanId ?? null);
@@ -317,6 +323,7 @@ export function SettingsHub({
     initialEmail,
     initialFirstName,
     initialLastName,
+    initialAvatarUrl,
     initialPlanTier,
     initialPaypalAnnualPlanId,
     initialPaypalBuyerCountry,
@@ -888,7 +895,7 @@ export function SettingsHub({
                   <h5>Photo</h5>
                   <span className="settings-pill">Account</span>
                 </div>
-                <UserAvatarEditor displayName={`${firstNameDraft} ${lastNameDraft}`.trim() || workspaceName} avatarUrl={user?.imageUrl ?? null} />
+                <UserAvatarEditor displayName={`${firstNameDraft} ${lastNameDraft}`.trim() || workspaceName} avatarUrl={avatarUrl ?? user?.imageUrl ?? null} />
               </article>
 
               <article className="settings-action-card settings-account-card settings-account-card--details">
@@ -1015,7 +1022,7 @@ export function SettingsHub({
         {activeSection === "profiles" ? (
           <SettingsProfilesPanel
             workspaceName={workspaceName}
-            userImageUrl={user?.imageUrl ?? null}
+            userImageUrl={avatarUrl ?? user?.imageUrl ?? null}
             activeProfileId={activeProfileId}
             profileList={profileList}
             profilesLoading={profilesLoading}

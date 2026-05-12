@@ -57,6 +57,7 @@ export async function GET() {
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
+      imageUrl: user.imageUrl ?? null,
       planTier: user.planTier,
       paypalClientId: env.PAYPAL_CLIENT_ID ?? null,
       paypalMonthlyPlanId: env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null,
