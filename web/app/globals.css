@@ -17151,6 +17151,24 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   font-size: 0.82rem;
 }
 
+.accounts-detail__merge-direction {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.accounts-detail__merge-direction-button {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.accounts-detail__merge-direction-button.is-active {
+  border-color: rgba(18, 162, 194, 0.42);
+  background: rgba(18, 162, 194, 0.1);
+  color: var(--accent-strong);
+}
+
 .accounts-detail__merge-select select {
   width: 100%;
   min-height: 40px;

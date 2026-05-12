@@ -2235,12 +2235,12 @@ function AccountDetailPageContent() {
     [account, workspaceAccounts]
   );
 
-  const openMergeAccountModal = (direction: "into_other" | "into_current") => {
+  const openMergeAccountModal = () => {
     if (!account || mergeBusy || mergeableAccounts.length === 0) {
       return;
     }
 
-    setMergeDirection(direction);
+    setMergeDirection((current) => current ?? "into_other");
     setMergeAccountId((current) => {
       if (current && mergeableAccounts.some((candidate) => candidate.id === current)) {
         return current;
@@ -3474,6 +3474,24 @@ function AccountDetailPageContent() {
                     : "Merge another account into this one?"}
               </strong>
             </div>
+            <div className="accounts-detail__merge-direction">
+              <button
+                className={`button button-secondary button-small accounts-detail__merge-direction-button${mergeDirection === "into_other" ? " is-active" : ""}`}
+                type="button"
+                onClick={() => setMergeDirection("into_other")}
+                disabled={mergeBusy}
+              >
+                {account?.type === "investment" ? "Keep this asset" : "Keep this account"}
+              </button>
+              <button
+                className={`button button-secondary button-small accounts-detail__merge-direction-button${mergeDirection === "into_current" ? " is-active" : ""}`}
+                type="button"
+                onClick={() => setMergeDirection("into_current")}
+                disabled={mergeBusy}
+              >
+                {account?.type === "investment" ? "Keep another asset" : "Keep another account"}
+              </button>
+            </div>
             <p>
               {mergeDirection === "into_other" ? (
                 <>
@@ -3523,24 +3541,9 @@ function AccountDetailPageContent() {
         ) : (
           <div className="accounts-detail__footer-actions" style={{ marginTop: 20 }}>
             {mergeableAccounts.length > 0 ? (
-              <>
-                <button
-                  className="button button-secondary button-small"
-                  type="button"
-                  onClick={() => openMergeAccountModal("into_other")}
-                  disabled={Boolean(deleteBusy)}
-                >
-                  {account?.type === "investment" ? "Merge asset into another" : "Merge account into another"}
-                </button>
-                <button
-                  className="button button-secondary button-small"
-                  type="button"
-                  onClick={() => openMergeAccountModal("into_current")}
-                  disabled={Boolean(deleteBusy)}
-                >
-                  {account?.type === "investment" ? "Merge another asset here" : "Merge another account here"}
-                </button>
-              </>
+              <button className="button button-secondary button-small" type="button" onClick={() => openMergeAccountModal()} disabled={Boolean(deleteBusy)}>
+                Merge
+              </button>
             ) : null}
             <button
               className="button button-secondary button-small"
