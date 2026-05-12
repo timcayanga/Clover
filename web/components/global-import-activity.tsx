@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ImportErrorToast } from "@/components/import-error-toast";
 import { ImportUploadDock } from "@/components/import-upload-dock";
@@ -39,15 +39,74 @@ const canShowImportActivityOnPath = (pathname: string | null) => {
   );
 };
 
+const dismissedImportActivityStorageKey = "clover.import.activity.dismissed.v1";
+
+const getDismissKey = (activity: ImportActivitySnapshot | null) => {
+  if (!activity) {
+    return null;
+  }
+
+  return [
+    activity.workspaceId,
+    activity.status,
+    activity.fileName ?? "file",
+    activity.errorCode ?? "no-code",
+    activity.detail ?? "",
+  ].join("|");
+};
+
+const readDismissedKeys = () => {
+  if (typeof window === "undefined") {
+    return new Set<string>();
+  }
+
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(dismissedImportActivityStorageKey) ?? "[]");
+    return new Set(Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === "string") : []);
+  } catch {
+    return new Set<string>();
+  }
+};
+
+const writeDismissedKeys = (keys: Set<string>) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(dismissedImportActivityStorageKey, JSON.stringify([...keys].slice(-50)));
+  } catch {
+    // Dismissal is best-effort; storage can be unavailable in private contexts.
+  }
+};
+
 export function GlobalImportActivity() {
   const pathname = usePathname();
-  const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
+  const dismissedKeysRef = useRef<Set<string>>(readDismissedKeys());
+  const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => {
+    const snapshot = readImportActivity();
+    const dismissKey = getDismissKey(snapshot);
+    return dismissKey && dismissedKeysRef.current.has(dismissKey) ? null : snapshot;
+  });
   const [pageModalActive, setPageModalActive] = useState(() =>
     typeof document === "undefined" ? false : document.body.hasAttribute("data-clover-page-modal")
   );
   const shouldShowOnCurrentPath = canShowImportActivityOnPath(pathname);
 
-  useEffect(() => subscribeImportActivity(() => setActivity(readImportActivity())), []);
+  useEffect(
+    () =>
+      subscribeImportActivity(() => {
+        const snapshot = readImportActivity();
+        const dismissKey = getDismissKey(snapshot);
+        if (dismissKey && dismissedKeysRef.current.has(dismissKey)) {
+          setActivity(null);
+          return;
+        }
+
+        setActivity(snapshot);
+      }),
+    []
+  );
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -87,6 +146,11 @@ export function GlobalImportActivity() {
   }
 
   const handleClose = () => {
+    const dismissKey = getDismissKey(activity);
+    if (dismissKey) {
+      dismissedKeysRef.current.add(dismissKey);
+      writeDismissedKeys(dismissedKeysRef.current);
+    }
     clearImportActivity();
     setActivity(null);
   };
