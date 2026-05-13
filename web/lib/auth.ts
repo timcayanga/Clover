@@ -31,11 +31,15 @@ export const getSessionContext = async (options?: { preferGuestOnStaging?: boole
   try {
     session = await auth();
   } catch {
-    return { userId: stagingGuestUserId, isGuest: true };
+    if (localDevHost || (stagingHost && options?.preferGuestOnStaging)) {
+      return { userId: stagingGuestUserId, isGuest: true };
+    }
+
+    throw new Error("UNAUTHORIZED");
   }
 
   if (!session.userId) {
-    if (stagingHost || localDevHost) {
+    if (localDevHost || (stagingHost && options?.preferGuestOnStaging)) {
       return { userId: stagingGuestUserId, isGuest: true };
     }
 
