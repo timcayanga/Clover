@@ -1090,6 +1090,30 @@ export function ImportFilesModal({
     itemsRef.current = items;
   }, [items]);
 
+  useEffect(() => {
+    if (typeof document === "undefined" || !open || backgroundOnly || launchInBackground) {
+      return;
+    }
+
+    const body = document.body;
+    const nextLockCount = Number(body.dataset.cloverImportModalLocks ?? "0") + 1;
+    body.dataset.cloverImportModalLocks = String(nextLockCount);
+    body.dataset.cloverImportModalOpen = "true";
+
+    return () => {
+      const currentLockCount = Number(body.dataset.cloverImportModalLocks ?? "1");
+      const nextCount = Math.max(0, currentLockCount - 1);
+
+      if (nextCount > 0) {
+        body.dataset.cloverImportModalLocks = String(nextCount);
+        return;
+      }
+
+      delete body.dataset.cloverImportModalLocks;
+      delete body.dataset.cloverImportModalOpen;
+    };
+  }, [backgroundOnly, launchInBackground, open]);
+
   const publishImportActivity = (
     snapshot:
       | (Partial<Omit<ImportActivitySnapshot, "updatedAt">> & {

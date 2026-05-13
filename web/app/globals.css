@@ -12502,15 +12502,39 @@ input.transaction-inline-edit--amount::placeholder {
 .modal-backdrop--import-fullscreen {
   position: fixed !important;
   inset: 0 !important;
-  width: 100vw !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 100dvw !important;
+  max-width: none !important;
+  height: 100dvh;
   min-height: 100dvh;
-  z-index: 9000;
+  margin: 0 !important;
+  box-sizing: border-box;
+  background: rgba(9, 15, 20, 0.36);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  isolation: isolate;
+  z-index: 2147483000 !important;
   pointer-events: auto;
 }
 
 .modal-backdrop--import-fullscreen .accounts-import-modal,
 .modal-backdrop--import-fullscreen .accounts-import-help {
+  position: relative;
+  z-index: 1;
   pointer-events: auto;
+}
+
+body[data-clover-import-modal-open="true"] .sidebar,
+body[data-clover-import-modal-open="true"] .sidebar-backdrop,
+body[data-clover-import-modal-open="true"] .sidebar-popover,
+body[data-clover-import-modal-open="true"] .shell-quick-add-button,
+body[data-clover-import-modal-open="true"] .shell-quick-add-popover,
+body[data-clover-import-modal-open="true"] .shell-bottom-nav {
+  pointer-events: none !important;
+  z-index: 1 !important;
 }
 
 body[data-clover-page-modal] .sidebar,
@@ -13182,7 +13206,7 @@ body[data-clover-drop-active="true"] .shell-quick-add-button {
 
 body[data-clover-drop-active="true"] .page-file-drop-zone {
   inset: 0;
-  z-index: 7000;
+  z-index: 2147482500;
 }
 
 .accounts-import-close {
