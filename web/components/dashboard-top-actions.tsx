@@ -911,7 +911,6 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
         onClose={closeImport}
         onImported={async () => {
           router.refresh();
-          closeImport();
         }}
       />
     </>

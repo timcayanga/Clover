@@ -1423,7 +1423,6 @@ export function CloverShell({
           onClose={closeQuickAddModal}
           onImported={async () => {
             router.refresh();
-            closeQuickAddModal();
           }}
         />
       ) : null}

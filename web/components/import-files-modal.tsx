@@ -5082,7 +5082,7 @@ export function ImportFilesModal({
       lastImportActivityRef.current = null;
       setBusy(false);
       onClose();
-    }, 500);
+    }, 10_000);
 
     return () => {
       if (autoCloseCompletedBatchTimerRef.current) {

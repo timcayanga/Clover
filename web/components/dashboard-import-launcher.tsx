@@ -57,7 +57,6 @@ export function DashboardImportLauncher({ workspaceId, accounts, initialOpen }: 
 
     setToastSummary(_summary);
     router.refresh();
-    handleClose();
   };
 
   return (
