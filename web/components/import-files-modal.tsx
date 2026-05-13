@@ -350,6 +350,7 @@ const getKnownPreviewTransactions = (params: {
   }
 
   const cached = findCachedTransactionsForAccount(params.accountId, {
+    workspaceId: params.workspaceId,
     optimisticAccountId: params.optimisticAccountId ?? null,
     name: params.accountName ?? null,
     institution: params.institution ?? null,
@@ -896,57 +897,6 @@ const isGenericSameInstitutionAccount = (account: AccountOption, institution: st
     account.institution?.trim().toLowerCase() === institution.trim().toLowerCase() &&
     !hasStatementSuffix(account.name)
   );
-};
-
-const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): UploadInsightsSummary => {
-  const [firstSummary] = summaries;
-  const rowsImported = summaries.reduce((total, summary) => total + summary.rowsImported, 0);
-  const incomeTotal = summaries.reduce((total, summary) => total + summary.incomeTotal, 0);
-  const expenseTotal = summaries.reduce((total, summary) => total + summary.expenseTotal, 0);
-  const netTotal = summaries.reduce((total, summary) => total + summary.netTotal, 0);
-  const sharedAccountName = summaries.every((summary) => summary.accountName === firstSummary.accountName)
-    ? firstSummary.accountName
-    : null;
-  const sharedInstitution = summaries.every((summary) => summary.institution === firstSummary.institution)
-    ? firstSummary.institution
-    : null;
-  const topCategory = [...summaries]
-    .filter((summary) => summary.topCategoryName && summary.topCategoryAmount !== null)
-    .sort((left, right) => (right.topCategoryAmount ?? 0) - (left.topCategoryAmount ?? 0))[0];
-  const topMerchant = [...summaries]
-    .filter((summary) => summary.topMerchantName && summary.topMerchantCount !== null)
-    .sort((left, right) => (right.topMerchantCount ?? 0) - (left.topMerchantCount ?? 0))[0];
-  const previewTransactions = summaries.flatMap((summary) => summary.previewTransactions ?? []);
-  const sharedAccountType = summaries.every((summary) => summary.accountType === firstSummary.accountType)
-    ? firstSummary.accountType ?? null
-    : null;
-
-  return {
-    fileName: summaries.length === 1 ? firstSummary.fileName : `${summaries.length} files`,
-    rowsImported,
-    accountId: summaries.every((summary) => summary.accountId === firstSummary.accountId)
-      ? firstSummary.accountId
-      : null,
-    accountName: sharedAccountName,
-    institution: sharedInstitution,
-    accountType: sharedAccountType,
-    balance: summaries.every((summary) => summary.balance === firstSummary.balance)
-      ? firstSummary.balance
-      : null,
-    incomeTotal,
-    expenseTotal,
-    netTotal,
-    topCategoryName: topCategory?.topCategoryName ?? null,
-    topCategoryAmount: topCategory?.topCategoryAmount ?? null,
-    topCategoryShare: topCategory?.topCategoryShare ?? null,
-    topMerchantName: topMerchant?.topMerchantName ?? null,
-    topMerchantCount: topMerchant?.topMerchantCount ?? null,
-    optimistic: false,
-    optimisticAccountId: summaries.every((summary) => summary.optimisticAccountId === firstSummary.optimisticAccountId)
-      ? firstSummary.optimisticAccountId ?? null
-      : null,
-    previewTransactions,
-  };
 };
 
 const friendlyImportPhaseLabel = (label: string, fileName?: string | null, importMode?: ImportImageMode | null) => {
@@ -5205,13 +5155,16 @@ export function ImportFilesModal({
         for (const summary of uploadInsightsSummaries) {
           seedImportedWorkspaceCaches(workspaceId, summary);
         }
-        await Promise.resolve(
-          onImported(
-          uploadInsightsSummaries.length === 1
-            ? uploadInsightsSummaries[0]
-            : combineUploadInsightsSummaries(uploadInsightsSummaries)
-          )
-        );
+
+        // Each file publishes its own account-specific summary as soon as it is visible.
+        // Replaying a combined multi-file summary here makes single-account pages merge
+        // unrelated previews and can cause accounts/transactions from different files to
+        // replace each other during cache hydration.
+        if (uploadInsightsSummaries.length === 1) {
+          await Promise.resolve(onImported(uploadInsightsSummaries[0]));
+        } else {
+          router.refresh();
+        }
       }
     }
   };

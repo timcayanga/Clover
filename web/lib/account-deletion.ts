@@ -19,11 +19,30 @@ export const deleteAccountsAndImportArtifacts = async (
   const importFileWhere = includeWorkspaceImportArtifacts
     ? { workspaceId }
     : { workspaceId, accountId: accountIdFilter };
-  const importFiles = await tx.importFile.findMany({
+  const directImportFiles = await tx.importFile.findMany({
     where: importFileWhere,
     select: { id: true },
   });
-  const importFileIds = importFiles.map((importFile: { id: string }) => importFile.id);
+  const importFileIds = new Set<string>(directImportFiles.map((importFile: { id: string }) => importFile.id));
+
+  if (!includeWorkspaceImportArtifacts && uniqueAccountIds.length > 0) {
+    const transactionImportFiles = await tx.transaction.findMany({
+      where: {
+        workspaceId,
+        accountId: accountIdFilter,
+        importFileId: { not: null },
+      },
+      select: { importFileId: true },
+    });
+
+    for (const transaction of transactionImportFiles as Array<{ importFileId: string | null }>) {
+      if (transaction.importFileId) {
+        importFileIds.add(transaction.importFileId);
+      }
+    }
+  }
+
+  const relatedImportFileIds = () => Array.from(importFileIds);
 
   const documentImportWhere = includeWorkspaceImportArtifacts
     ? { workspaceId }
@@ -31,14 +50,19 @@ export const deleteAccountsAndImportArtifacts = async (
         workspaceId,
         OR: [
           { accountId: accountIdFilter },
-          ...(importFileIds.length > 0 ? [{ importFileId: inList(importFileIds) }] : []),
+          ...(relatedImportFileIds().length > 0 ? [{ importFileId: inList(relatedImportFileIds()) }] : []),
         ],
       };
   const documentImports = await tx.documentImport.findMany({
     where: documentImportWhere,
-    select: { id: true },
+    select: { id: true, importFileId: true },
   });
   const documentImportIds = documentImports.map((documentImport: { id: string }) => documentImport.id);
+  for (const documentImport of documentImports as Array<{ importFileId: string | null }>) {
+    if (documentImport.importFileId) {
+      importFileIds.add(documentImport.importFileId);
+    }
+  }
 
   const checkpointWhere = includeWorkspaceImportArtifacts
     ? { workspaceId }
@@ -46,19 +70,33 @@ export const deleteAccountsAndImportArtifacts = async (
         workspaceId,
         OR: [
           { accountId: accountIdFilter },
-          ...(importFileIds.length > 0 ? [{ importFileId: inList(importFileIds) }] : []),
+          ...(relatedImportFileIds().length > 0 ? [{ importFileId: inList(relatedImportFileIds()) }] : []),
         ],
       };
   const checkpoints = await tx.accountStatementCheckpoint.findMany({
     where: checkpointWhere,
-    select: { id: true },
+    select: { id: true, importFileId: true },
   });
   const checkpointIds = checkpoints.map((checkpoint: { id: string }) => checkpoint.id);
+  for (const checkpoint of checkpoints as Array<{ importFileId: string | null }>) {
+    if (checkpoint.importFileId) {
+      importFileIds.add(checkpoint.importFileId);
+    }
+  }
+
+  const importFileDeleteWhere = includeWorkspaceImportArtifacts
+    ? { workspaceId }
+    : relatedImportFileIds().length > 0
+      ? { workspaceId, id: inList(relatedImportFileIds()) }
+      : importFileWhere;
 
   await tx.transaction.deleteMany({
     where: {
       workspaceId,
-      accountId: accountIdFilter,
+      OR: [
+        { accountId: accountIdFilter },
+        ...(relatedImportFileIds().length > 0 ? [{ importFileId: inList(relatedImportFileIds()) }] : []),
+      ],
     },
   });
 
@@ -128,7 +166,7 @@ export const deleteAccountsAndImportArtifacts = async (
   });
 
   await tx.importFile.deleteMany({
-    where: importFileWhere,
+    where: importFileDeleteWhere,
   });
 
   await tx.account.deleteMany({

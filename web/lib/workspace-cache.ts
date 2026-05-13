@@ -965,7 +965,8 @@ export const getCachedAccountsWorkspace = (workspaceId: string): AccountsWorkspa
   }
 
   const cache = readAccountsWorkspaceCache();
-  return cache?.snapshots[workspaceId] ?? null;
+  const snapshot = cache?.snapshots[workspaceId] ?? null;
+  return snapshot ? filterAccountsWorkspaceSnapshot(workspaceId, snapshot) : null;
 };
 
 export const persistAccountsWorkspaceCache = (
@@ -1027,7 +1028,8 @@ export const getCachedTransactionsWorkspace = (workspaceId: string): Transaction
   }
 
   const cache = readTransactionsWorkspaceCache();
-  return cache?.snapshots[workspaceId] ?? null;
+  const snapshot = cache?.snapshots[workspaceId] ?? null;
+  return snapshot ? filterTransactionsWorkspaceSnapshot(workspaceId, snapshot) : null;
 };
 
 export const findCachedImportedAccount = (accountId: string) => {
@@ -1063,6 +1065,7 @@ export const findCachedImportedAccount = (accountId: string) => {
 export const findCachedTransactionsForAccount = (
   accountId: string,
   accountIdentity?: {
+    workspaceId?: string | null;
     optimisticAccountId?: string | null;
     name?: string | null;
     institution?: string | null;
@@ -1079,7 +1082,16 @@ export const findCachedTransactionsForAccount = (
     return null;
   }
 
+  const targetWorkspaceId =
+    typeof accountIdentity?.workspaceId === "string" && accountIdentity.workspaceId.trim()
+      ? accountIdentity.workspaceId.trim()
+      : null;
+
   for (const snapshot of Object.values(transactionsCache.snapshots)) {
+    if (targetWorkspaceId && snapshot.workspaceId !== targetWorkspaceId) {
+      continue;
+    }
+
     const snapshotLike = snapshot as TransactionsWorkspaceSnapshotLike & {
       transactions: CachedRecord[];
       totalCount?: number;
