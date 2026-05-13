@@ -22,6 +22,18 @@ export const wipeLocalUserData = async (
       where: { userId: user.id },
     });
 
+    await tx.splitBill.deleteMany({
+      where: { userId: user.id },
+    });
+
+    await tx.splitBillGroup.deleteMany({
+      where: { userId: user.id },
+    });
+
+    await tx.splitBillPerson.deleteMany({
+      where: { userId: user.id },
+    });
+
     await tx.goalSetting.deleteMany({
       where: { userId: user.id },
     });

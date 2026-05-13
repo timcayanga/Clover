@@ -651,7 +651,9 @@ export function SettingsHub({
       confirmLabel: "Delete transactions",
       successTitle: "Transactions deleted",
       successBody: (count: number | null) =>
-        count === 0
+        count === null
+          ? "Transaction history was deleted."
+          : count === 0
           ? "No transactions matched the selected date."
           : `Deleted ${count.toLocaleString()} transaction${count === 1 ? "" : "s"}.`,
     },
@@ -661,7 +663,9 @@ export function SettingsHub({
       confirmLabel: "Delete accounts",
       successTitle: "Accounts deleted",
       successBody: (count: number | null) =>
-        count === 0
+        count === null
+          ? "Accounts and linked import data were deleted."
+          : count === 0
           ? "No non-cash accounts were available to delete."
           : `Deleted ${count.toLocaleString()} account${count === 1 ? "" : "s"}.`,
     },
@@ -767,6 +771,7 @@ export function SettingsHub({
           phase: "success",
           deletedCount: null,
         });
+        setStatusMessage("All Clover data was deleted successfully.");
         router.refresh();
         return;
       }
@@ -777,6 +782,7 @@ export function SettingsHub({
         phase: "success",
         deletedCount: deleted,
       });
+      setStatusMessage(dataDeleteCopy[dataDeleteModal.scope].successBody(deleted));
       router.refresh();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Something went wrong.");

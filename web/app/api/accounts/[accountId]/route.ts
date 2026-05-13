@@ -9,6 +9,7 @@ import { capturePostHogServerEvent } from "@/lib/analytics";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { ACCOUNT_TYPES } from "@/lib/account-types";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
+import { deleteAccountsAndImportArtifacts } from "@/lib/account-deletion";
 
 export const dynamic = "force-dynamic";
 
@@ -290,46 +291,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
 
     await assertWorkspaceAccess(userId, existingAccount.workspaceId);
 
-    const mergeTarget = await prisma.account.findFirst({
-      where: {
-        workspaceId: existingAccount.workspaceId,
-        id: { not: accountId },
-        name: existingAccount.name,
-        institution: existingAccount.institution,
-        type: existingAccount.type,
-      },
-      select: {
-        id: true,
-      },
-    });
-    const shouldMergeWithTarget = existingAccount.source !== "upload" && Boolean(mergeTarget);
-
     await prisma.$transaction(async (tx) => {
-      if (shouldMergeWithTarget && mergeTarget) {
-        await tx.transaction.updateMany({
-          where: { accountId },
-          data: { accountId: mergeTarget.id },
-        });
-
-        await tx.importFile.updateMany({
-          where: { accountId },
-          data: { accountId: mergeTarget.id },
-        });
-
-        await tx.accountStatementCheckpoint.updateMany({
-          where: { accountId },
-          data: { accountId: mergeTarget.id },
-        });
-
-        await tx.accountRule.updateMany({
-          where: { accountId },
-          data: { accountId: mergeTarget.id },
-        });
-      }
-
-      // Let the database relations handle cascade / set-null cleanup for the normal delete path.
-      await tx.account.delete({
-        where: { id: accountId },
+      await deleteAccountsAndImportArtifacts(tx, {
+        workspaceId: existingAccount.workspaceId,
+        accountIds: [accountId],
       });
     });
 

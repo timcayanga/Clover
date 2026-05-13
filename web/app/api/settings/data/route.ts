@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { hasCompatibleTable } from "@/lib/data-engine";
+import { deleteAccountsAndImportArtifacts } from "@/lib/account-deletion";
 
 export const dynamic = "force-dynamic";
 
@@ -74,47 +75,11 @@ export async function DELETE(request: Request) {
       })
     ).map((account) => account.id);
 
-    if (accountIds.length === 0) {
-      return NextResponse.json({ deleted: 0 });
-    }
-
     await prisma.$transaction(async (tx) => {
-      await tx.transaction.deleteMany({
-        where: {
-          workspaceId,
-          accountId: { in: accountIds },
-        },
-      });
-
-      await tx.importFile.updateMany({
-        where: {
-          workspaceId,
-          accountId: { in: accountIds },
-        },
-        data: { accountId: null },
-      });
-
-      if (await hasCompatibleTable("AccountStatementCheckpoint")) {
-        await tx.accountStatementCheckpoint.deleteMany({
-          where: {
-            workspaceId,
-            accountId: { in: accountIds },
-          },
-        });
-      }
-
-      await tx.accountRule.deleteMany({
-        where: {
-          workspaceId,
-          accountId: { in: accountIds },
-        },
-      });
-
-      await tx.account.deleteMany({
-        where: {
-          workspaceId,
-          id: { in: accountIds },
-        },
+      await deleteAccountsAndImportArtifacts(tx, {
+        workspaceId,
+        accountIds,
+        includeWorkspaceImportArtifacts: true,
       });
     });
 
