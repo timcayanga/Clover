@@ -41,6 +41,11 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { clearImportActivity, readImportActivity } from "@/lib/import-activity";
+import {
+  buildFinalizingNoticeDismissalKey,
+  dismissFinalizingNotice,
+  isFinalizingNoticeDismissed,
+} from "@/lib/finalizing-notice-dismissal";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
@@ -3011,22 +3016,32 @@ function TransactionsPageContent() {
     return () => window.clearInterval(intervalId);
   }, [hasActiveFinalizingImports]);
   const finalizingTimeLabel = useMemo(() => estimateEnrichmentTimeLabel(imports, finalizingNowMs), [finalizingNowMs, imports]);
-  const finalizingTransactionCount = useMemo(
+  const finalizingTransactions = useMemo(
     () =>
       visibleTransactions.filter(
         (transaction) =>
           isImportFinalizingTransaction(transaction) ||
           (transaction.importFileId ? activeFinalizingImportIds.has(transaction.importFileId) : false)
-      ).length,
+      ),
     [activeFinalizingImportIds, visibleTransactions]
   );
+  const finalizingTransactionCount = finalizingTransactions.length;
   const [finalizingNoticeDismissed, setFinalizingNoticeDismissed] = useState(false);
-  useEffect(() => {
-    if (!hasActiveFinalizingImports) {
-      setFinalizingNoticeDismissed(false);
-    }
-  }, [hasActiveFinalizingImports]);
   const finalizingNeedsReview = finalizingTimeLabel === "couldn't finalize automatically; please review";
+  const finalizingNoticeDismissalKey = useMemo(
+    () =>
+      finalizingNeedsReview && finalizingTransactionCount > 0
+        ? buildFinalizingNoticeDismissalKey({
+            workspaceId: selectedWorkspaceId,
+            importFileIds: finalizingTransactions.map((transaction) => transaction.importFileId ?? ""),
+            transactionIds: finalizingTransactions.map((transaction) => transaction.id),
+          })
+        : null,
+    [finalizingNeedsReview, finalizingTransactionCount, finalizingTransactions, selectedWorkspaceId]
+  );
+  useEffect(() => {
+    setFinalizingNoticeDismissed(isFinalizingNoticeDismissed(finalizingNoticeDismissalKey));
+  }, [finalizingNoticeDismissalKey]);
   useEffect(() => {
     if (visibleTransactions.length === 0) {
       return;
@@ -3045,6 +3060,13 @@ function TransactionsPageContent() {
     }
   }, [finalizingNeedsReview, finalizingTransactionCount, visibleTransactions]);
   const showFinalizingNotice = finalizingTransactionCount > 0 && !finalizingNoticeDismissed;
+  const dismissFinalizingStatusNotice = () => {
+    if (finalizingNeedsReview) {
+      dismissFinalizingNotice(finalizingNoticeDismissalKey);
+    }
+
+    setFinalizingNoticeDismissed(true);
+  };
   const totalTransactionPages = Math.max(1, Math.ceil(totalTransactionCountForDisplay / Math.max(transactionsPageSize, 1)));
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);
   const pageStartIndex = (currentTransactionPage - 1) * transactionsPageSize;
@@ -5672,7 +5694,7 @@ function TransactionsPageContent() {
               <button
                 type="button"
                 className="icon-button transactions-status-line__dismiss"
-                onClick={() => setFinalizingNoticeDismissed(true)}
+                onClick={dismissFinalizingStatusNotice}
                 aria-label="Dismiss status notice"
               >
                 <span aria-hidden="true">×</span>

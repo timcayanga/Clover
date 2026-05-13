@@ -19,6 +19,11 @@ import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantNam
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { clearImportActivity, readImportActivity } from "@/lib/import-activity";
+import {
+  buildFinalizingNoticeDismissalKey,
+  dismissFinalizingNotice,
+  isFinalizingNoticeDismissed,
+} from "@/lib/finalizing-notice-dismissal";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
@@ -1719,16 +1724,33 @@ function AccountDetailPageContent() {
     return () => window.clearInterval(intervalId);
   }, [hasActiveFinalizingImports]);
   const finalizingTimeLabel = useMemo(() => estimateEnrichmentTimeLabel(importFiles, finalizingNowMs), [finalizingNowMs, importFiles]);
-  const finalizingTransactionCount = useMemo(
+  const finalizingTransactions = useMemo(
     () =>
       visibleTransactions.filter(
         (transaction) =>
           isImportFinalizingTransaction(transaction) ||
           (transaction.importFileId ? activeFinalizingImportIds.has(transaction.importFileId) : false)
-      ).length,
+      ),
     [activeFinalizingImportIds, visibleTransactions]
   );
+  const finalizingTransactionCount = finalizingTransactions.length;
+  const [finalizingNoticeDismissed, setFinalizingNoticeDismissed] = useState(false);
   const finalizingNeedsReview = finalizingTimeLabel.toLowerCase().includes("couldn't finalize");
+  const finalizingNoticeDismissalKey = useMemo(
+    () =>
+      finalizingNeedsReview && finalizingTransactionCount > 0
+        ? buildFinalizingNoticeDismissalKey({
+            workspaceId: account?.workspaceId,
+            accountId: account?.id,
+            importFileIds: finalizingTransactions.map((transaction) => transaction.importFileId ?? ""),
+            transactionIds: finalizingTransactions.map((transaction) => transaction.id),
+          })
+        : null,
+    [account?.id, account?.workspaceId, finalizingNeedsReview, finalizingTransactionCount, finalizingTransactions]
+  );
+  useEffect(() => {
+    setFinalizingNoticeDismissed(isFinalizingNoticeDismissed(finalizingNoticeDismissalKey));
+  }, [finalizingNoticeDismissalKey]);
   useEffect(() => {
     if (!finalizingNeedsReview || finalizingTransactionCount === 0 || visibleTransactions.length === 0) {
       return;
@@ -1739,6 +1761,14 @@ function AccountDetailPageContent() {
       clearImportActivity();
     }
   }, [finalizingNeedsReview, finalizingTransactionCount, visibleTransactions.length]);
+  const showFinalizingNotice = finalizingTransactionCount > 0 && !finalizingNoticeDismissed;
+  const dismissFinalizingStatusNotice = () => {
+    if (finalizingNeedsReview) {
+      dismissFinalizingNotice(finalizingNoticeDismissalKey);
+    }
+
+    setFinalizingNoticeDismissed(true);
+  };
   const mobileTransactionGroups = useMemo(() => {
     const groups: Array<{ date: string; label: string; transactions: Transaction[] }> = [];
 
@@ -3031,9 +3061,19 @@ function AccountDetailPageContent() {
             </div>
             <div className="accounts-detail__transactions-actions">
               <span className="accounts-summary-chip is-neutral">{`${visibleTransactions.length} of ${transactionTotalCount} loaded`}</span>
-              {finalizingTransactionCount > 0 ? (
+              {showFinalizingNotice ? (
                 <span className="accounts-summary-chip is-neutral">
-                  {finalizingNeedsReview ? "Review needed" : "Finalizing"} {finalizingTransactionCount} detail{finalizingTransactionCount === 1 ? "" : "s"} · {finalizingTimeLabel}
+                  <span>
+                    {finalizingNeedsReview ? "Review needed" : "Finalizing"} {finalizingTransactionCount} detail{finalizingTransactionCount === 1 ? "" : "s"} · {finalizingTimeLabel}
+                  </span>
+                  <button
+                    className="icon-button transactions-status-line__dismiss"
+                    type="button"
+                    onClick={dismissFinalizingStatusNotice}
+                    aria-label="Dismiss status notice"
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
                 </span>
               ) : null}
               {selectedTransactionIds.length > 0 ? (
