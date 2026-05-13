@@ -993,6 +993,7 @@ const IMPORT_PROGRESS = {
   finalizing: 90,
   done: 100,
 } as const;
+const MAX_IMPORT_FILES_PER_BATCH = 25;
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
@@ -1519,8 +1520,10 @@ export function ImportFilesModal({
       flushSync(() => {
         setItems((current) => {
         const existing = new Set(current.map((item) => fileKey(item.file)));
-        const fileQueueLimit = monthlyUploadLimit === null ? Number.POSITIVE_INFINITY : Math.max(0, monthlyUploadLimit);
-        const availableSlots = Math.max(0, fileQueueLimit - current.length);
+        // The server enforces the monthly upload quota per file. The modal should
+        // only cap extreme UI batches, otherwise a stale user-limit payload can
+        // accidentally turn a multi-file selection into a one-file import.
+        const availableSlots = Math.max(0, MAX_IMPORT_FILES_PER_BATCH - current.length);
       let skippedTooMany = 0;
       let additionsCount = 0;
       const validationIssues: string[] = [];
@@ -1596,18 +1599,11 @@ export function ImportFilesModal({
       }
 
       if (validationIssues.length > 0 && skippedTooMany > 0) {
-        validationMessage = `Warning: ${validationIssues.join(" ")} Clover also skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the ${monthlyUploadLimit}-file limit.`;
+        validationMessage = `Warning: ${validationIssues.join(" ")} Clover also skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the ${MAX_IMPORT_FILES_PER_BATCH}-file queue limit.`;
       } else if (validationIssues.length > 0) {
         validationMessage = `Warning: ${validationIssues.join(" ")}`;
       } else if (skippedTooMany > 0) {
-        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the ${monthlyUploadLimit}-file limit.`;
-        if (monthlyUploadLimit !== null) {
-          showPlanLimitNudge({
-            planTier,
-            limitType: "upload_limit",
-            limitValue: monthlyUploadLimit,
-          });
-        }
+        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the ${MAX_IMPORT_FILES_PER_BATCH}-file queue limit.`;
       } else if (additions.length > 0) {
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"} to the queue.`;
       } else {
