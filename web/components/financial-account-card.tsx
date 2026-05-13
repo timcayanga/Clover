@@ -9,6 +9,8 @@ type FinancialAccountCardProps = {
   amount: string;
   openLabel?: string;
   onOpen?: () => void;
+  amountLabel?: string;
+  onAmountClick?: () => void;
   className?: string;
   state?: "deleting" | "loading" | undefined;
   showChevron?: boolean;
@@ -21,11 +23,14 @@ export function FinancialAccountCard({
   amount,
   openLabel,
   onOpen,
+  amountLabel,
+  onAmountClick,
   className,
   state,
   showChevron = true,
 }: FinancialAccountCardProps) {
   const interactive = typeof onOpen === "function";
+  const amountInteractive = typeof onAmountClick === "function";
   const handleOpen = () => {
     onOpen?.();
   };
@@ -82,7 +87,21 @@ export function FinancialAccountCard({
           {accountNumber ? <span className="financial-account-card__number">{accountNumber}</span> : <span aria-hidden="true" />}
         </div>
 
-        <div className="financial-account-card__amount">{amount}</div>
+        {amountInteractive ? (
+          <button
+            className="financial-account-card__amount financial-account-card__amount-button"
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onAmountClick?.();
+            }}
+            aria-label={amountLabel ?? `Change ${name} balance`}
+          >
+            {amount}
+          </button>
+        ) : (
+          <div className="financial-account-card__amount">{amount}</div>
+        )}
       </div>
     </article>
   );

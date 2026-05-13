@@ -460,6 +460,16 @@ const parseNullableNumber = (value: string | null | undefined) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const parseBalanceInput = (value: string) => {
+  const normalized = value.replace(/[₱,\s]/g, "").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => ({
   name: account.name,
   institution: account.institution ?? "",
@@ -714,7 +724,11 @@ function AccountDetailPageContent() {
   const [accountEditDraft, setAccountEditDraft] = useState({ name: "", accountNumber: "" });
   const [accountIdentityEditorOpen, setAccountIdentityEditorOpen] = useState(false);
   const [accountEditSaveState, setAccountEditSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [balanceEditorOpen, setBalanceEditorOpen] = useState(false);
+  const [balanceDraft, setBalanceDraft] = useState("");
+  const [balanceSaveState, setBalanceSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const stableBalanceRef = useRef<string | null>(null);
+  const balanceInputRef = useRef<HTMLInputElement | null>(null);
   const accountInvestmentDraftSyncKeyRef = useRef<string | null>(null);
   const [favoriteSaving, setFavoriteSaving] = useState(false);
   const [workspaceAccounts, setWorkspaceAccounts] = useState<Account[]>([]);
@@ -1577,6 +1591,80 @@ function AccountDetailPageContent() {
       : !hasMeaningfulBalance(account?.balance) && stableDisplayBalance
         ? stableDisplayBalance
         : currentBalance.toString();
+
+  useEffect(() => {
+    if (!account || balanceEditorOpen) {
+      return;
+    }
+
+    const nextDraft = Math.abs(parseAmount(displayBalance)).toFixed(2);
+    setBalanceDraft(nextDraft);
+    setBalanceSaveState("idle");
+  }, [account, balanceEditorOpen, displayBalance]);
+
+  useEffect(() => {
+    if (!balanceEditorOpen) {
+      return;
+    }
+
+    balanceInputRef.current?.focus();
+    balanceInputRef.current?.select();
+  }, [balanceEditorOpen]);
+
+  const openBalanceEditor = () => {
+    if (!account || isPendingBalance) {
+      return;
+    }
+
+    setBalanceDraft(Math.abs(parseAmount(displayBalance)).toFixed(2));
+    setBalanceSaveState("idle");
+    setBalanceEditorOpen(true);
+  };
+
+  const saveBalanceFromCard = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!account) {
+      return;
+    }
+
+    const parsedBalance = parseBalanceInput(balanceDraft);
+    if (parsedBalance === null) {
+      setBalanceSaveState("error");
+      setMessage("Enter a valid balance before saving.");
+      return;
+    }
+
+    const nextBalance = normalizeAccountBalance(account.type, parsedBalance).toFixed(2);
+    setBalanceSaveState("saving");
+
+    try {
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: account.workspaceId,
+          balance: nextBalance,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to update account balance.");
+      }
+
+      const payload = await response.json();
+      const nextAccount = (payload.account as Account | undefined) ?? { ...account, balance: nextBalance };
+      setAccount(nextAccount);
+      stableBalanceRef.current = nextAccount.balance ?? nextBalance;
+      setInvestmentEditDraft((current) => (current ? { ...current, balance: nextAccount.balance ?? nextBalance } : current));
+      setBalanceDraft(Math.abs(parseAmount(nextAccount.balance ?? nextBalance)).toFixed(2));
+      setBalanceSaveState("saved");
+      setBalanceEditorOpen(false);
+      setMessage("Account balance updated.");
+    } catch (error) {
+      setBalanceSaveState("error");
+      setMessage(error instanceof Error ? error.message : "Unable to update account balance.");
+    }
+  };
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {
       return null;
@@ -2549,6 +2637,8 @@ function AccountDetailPageContent() {
                 name={accountCardName}
                 accountNumber={liveCardNumber}
                 amount={isPendingBalance ? "Loading..." : formatAccountAmount(Math.abs(parseAmount(displayBalance)), account.currency)}
+                amountLabel={`Change ${accountCardName} balance`}
+                onAmountClick={openBalanceEditor}
                 showChevron={false}
                 onOpen={
                   account.type === "investment"
@@ -2604,6 +2694,41 @@ function AccountDetailPageContent() {
                   </div>
                 </div>
               </div>
+            ) : null}
+
+            {balanceEditorOpen ? (
+              <form className="accounts-detail__balance-editor" onSubmit={saveBalanceFromCard}>
+                <label>
+                  Balance
+                  <input
+                    ref={balanceInputRef}
+                    value={balanceDraft}
+                    onChange={(event) => {
+                      setBalanceDraft(event.target.value);
+                      setBalanceSaveState("idle");
+                    }}
+                    inputMode="decimal"
+                    aria-label="Account balance"
+                  />
+                </label>
+                <div className="accounts-detail__balance-editor-actions">
+                  <span className="accounts-detail__autosave-state">
+                    {balanceSaveState === "saving"
+                      ? "Saving..."
+                      : balanceSaveState === "saved"
+                        ? "Saved"
+                        : balanceSaveState === "error"
+                          ? "Needs attention"
+                          : ""}
+                  </span>
+                  <button className="button button-secondary button-small" type="button" onClick={() => setBalanceEditorOpen(false)}>
+                    Cancel
+                  </button>
+                  <button className="button button-primary button-small" type="submit" disabled={balanceSaveState === "saving"}>
+                    Save
+                  </button>
+                </div>
+              </form>
             ) : null}
           </div>
         ) : null}

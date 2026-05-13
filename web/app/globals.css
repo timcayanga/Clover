@@ -15334,6 +15334,60 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   text-transform: uppercase;
 }
 
+.accounts-detail__balance-editor {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 320px);
+  padding: 12px;
+  border: 1px solid var(--stroke);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.08);
+}
+
+.accounts-detail__balance-editor label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.accounts-detail__balance-editor input {
+  appearance: none;
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  padding: 0 12px;
+}
+
+.accounts-detail__balance-editor input:focus {
+  border-color: rgba(3, 168, 192, 0.58);
+  box-shadow: 0 0 0 4px rgba(3, 168, 192, 0.12);
+  outline: none;
+}
+
+.accounts-detail__balance-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.accounts-detail__balance-editor-actions .accounts-detail__autosave-state {
+  margin-right: auto;
+}
+
 .accounts-inline-edit__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -16337,6 +16391,30 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   line-height: 1.08;
   align-self: end;
   padding-bottom: 8px;
+}
+
+.financial-account-card__amount-button {
+  appearance: none;
+  width: max-content;
+  max-width: 100%;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.financial-account-card__amount-button:hover,
+.financial-account-card__amount-button:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .accounts-account-card {
