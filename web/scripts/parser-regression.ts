@@ -1853,13 +1853,14 @@ const main = async () => {
   if (
     jarandjamReceiptPreview.merchantName !== "JARANDJAM INC." ||
     jarandjamReceiptPreview.billDate !== "2025-12-22T00:00:00.000Z" ||
+    jarandjamReceiptPreview.currency !== "PHP" ||
     jarandjamReceiptPreview.subtotal !== "7145.00" ||
     jarandjamReceiptPreview.serviceCharge !== "637.95" ||
     jarandjamReceiptPreview.total !== "7782.95" ||
     jarandjamReceiptPreview.items.length !== 9
   ) {
     throw new Error(
-      `expected Jarandjam receipt parse to resolve merchant, subtotal, service charge, total, and 9 items, got merchant=${jarandjamReceiptPreview.merchantName ?? "null"} subtotal=${jarandjamReceiptPreview.subtotal ?? "null"} serviceCharge=${jarandjamReceiptPreview.serviceCharge ?? "null"} total=${jarandjamReceiptPreview.total ?? "null"} items=${jarandjamReceiptPreview.items.length}`
+      `expected Jarandjam receipt parse to resolve merchant, currency, subtotal, service charge, total, and 9 items, got merchant=${jarandjamReceiptPreview.merchantName ?? "null"} currency=${jarandjamReceiptPreview.currency ?? "null"} subtotal=${jarandjamReceiptPreview.subtotal ?? "null"} serviceCharge=${jarandjamReceiptPreview.serviceCharge ?? "null"} total=${jarandjamReceiptPreview.total ?? "null"} items=${jarandjamReceiptPreview.items.length}`
     );
   }
 

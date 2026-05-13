@@ -259,7 +259,7 @@ export const normalizeCurrencyCode = (value?: string | null) => {
 };
 
 const detectCurrencyFromText = (text: string) => {
-  if (/[₱]/.test(text) || /\bPHP\b/i.test(text)) {
+  if (/[₱]/.test(text) || /\bPHP\b/i.test(text) || looksLikePhilippineReceiptContext(text)) {
     return "PHP";
   }
 
@@ -272,6 +272,10 @@ const detectCurrencyFromText = (text: string) => {
   }
 
   if (/£/.test(text) || /\bGBP\b/i.test(text)) {
+    if (looksLikePhilippineReceiptContext(text)) {
+      return "PHP";
+    }
+
     return "GBP";
   }
 
@@ -329,6 +333,9 @@ const detectCurrencyMentionsFromText = (text: string) => {
 
   return mentions;
 };
+
+const looksLikePhilippineReceiptContext = (text: string) =>
+  /\b(VAT SALES|SERVICE CHARGE|TEMPORARY BILL|CITY OF MAKATI|NCR|PHILIPPINE|PHILIPPINES)\b/i.test(text);
 
 const parseBillDateFromText = (text: string) => {
   const datePatterns = [
