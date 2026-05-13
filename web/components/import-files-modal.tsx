@@ -728,7 +728,7 @@ const buildReceiptOptimisticSummary = (
     accountType,
   });
 
-  return buildOptimisticUploadSummary(
+  const summary = buildOptimisticUploadSummary(
     fileName,
     previewTransactions.length,
     account.id,
@@ -741,6 +741,11 @@ const buildReceiptOptimisticSummary = (
     null,
     false
   );
+
+  return {
+    ...summary,
+    optimistic: false,
+  };
 };
 
 const loadOptimisticPreviewTransactions = async (
@@ -1153,9 +1158,9 @@ export function ImportFilesModal({
       updatedAt: Date.now(),
     };
     if (
-      nextSnapshot.status === "active" &&
       nextSnapshot.fileName &&
-      retiredImportActivityFileNamesRef.current.has(nextSnapshot.fileName)
+      retiredImportActivityFileNamesRef.current.has(nextSnapshot.fileName) &&
+      nextSnapshot.status !== "error"
     ) {
       return;
     }
