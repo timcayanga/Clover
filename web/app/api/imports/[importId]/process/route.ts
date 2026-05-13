@@ -239,8 +239,33 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         effectiveFileType.toLowerCase().startsWith("image/") ||
         /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(effectiveFileName.toLowerCase());
       const shouldQueueDocumentUpload = isImageUpload || Boolean(importMode && importMode !== "statement");
-      const shouldPreflightPdf = isPdfUpload(effectiveFileName, effectiveFileType) && bytes.length <= 10_000_000;
-      if (shouldQueueDocumentUpload && localDev) {
+      if (shouldQueueDocumentUpload) {
+        stage = "scheduling background processing";
+        try {
+          await ensureImportProcessingWorker();
+          await enqueueImportProcessing({
+            importFileId: importId,
+            actorUserId: userId,
+            password,
+            allowDuplicateStatement,
+            bankName: formBankName || undefined,
+            importMode,
+            pdfJsBaseUrl,
+          });
+        } catch (error) {
+          console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
+          await updateImportFileCompat(importId, {
+            status: "failed",
+          });
+          return NextResponse.json(
+            {
+              error: "Unable to queue import processing",
+              stage,
+            },
+            { status: 400 }
+          );
+        }
+
         return NextResponse.json({
           ok: true,
           queued: true,
@@ -252,6 +277,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           metadata: null,
         });
       }
+      const shouldPreflightPdf = isPdfUpload(effectiveFileName, effectiveFileType) && bytes.length <= 10_000_000;
 
       if (shouldPreflightPdf) {
         stage = "reading statement metadata";
@@ -419,19 +445,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       stage = "scheduling background processing";
-      if (shouldQueueDocumentUpload && localDev) {
-        queued = true;
-        return NextResponse.json({
-          ok: true,
-          queued,
-          processed: false,
-          importedRows: 0,
-          duplicate: false,
-          status: "queued",
-          importFileId: importId,
-          metadata,
-        });
-      }
       try {
         if (!shouldQueueDocumentUpload) {
           await ensureImportProcessingWorker();
