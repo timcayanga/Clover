@@ -31,17 +31,45 @@ export async function GET() {
       },
     });
 
-    if (user?.dataWipedAt) {
+    if (user?.workspaces?.length && !user.workspaces.some((workspace) => workspace.type === "personal")) {
+      await ensureStarterWorkspace(user, clerkUser.email, clerkUser.verified);
+    }
+
+    const refreshedUser = user?.workspaces?.length
+      ? await prisma.user.findUnique({
+          where: { clerkUserId: clerkUser.clerkUserId },
+          include: {
+            workspaces: {
+              orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+            },
+          },
+        })
+      : user;
+
+    if (refreshedUser?.dataWipedAt) {
       return NextResponse.json({
-        workspaces: user.workspaces ?? [],
+        workspaces: refreshedUser.workspaces ?? [],
       });
     }
 
-    if (user?.workspaces?.length) {
-      void Promise.all(user.workspaces.map((workspace) => seedWorkspaceDefaults(workspace.id)));
+    if (refreshedUser?.workspaces?.length) {
+      const orderedWorkspaces = [...refreshedUser.workspaces].sort((left, right) => {
+        if (left.type === "personal" && right.type !== "personal") {
+          return -1;
+        }
+        if (right.type === "personal" && left.type !== "personal") {
+          return 1;
+        }
+
+        return new Date(left.updatedAt).getTime() === new Date(right.updatedAt).getTime()
+          ? new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+          : new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+      });
+
+      void Promise.all(orderedWorkspaces.map((workspace) => seedWorkspaceDefaults(workspace.id)));
 
       return NextResponse.json({
-        workspaces: user.workspaces,
+        workspaces: orderedWorkspaces,
       });
     }
 

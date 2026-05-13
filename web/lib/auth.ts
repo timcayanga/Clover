@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
 
-const stagingHosts = new Set(["staging.clover.ph"]);
+const stagingHosts = new Set(["staging.clover.ph", "clover-stage.vercel.app"]);
 const localDevHosts = new Set(["localhost", "127.0.0.1", "::1"]);
 const stagingGuestUserId = "staging-guest";
 

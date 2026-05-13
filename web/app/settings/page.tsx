@@ -2,7 +2,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { SettingsHub } from "@/components/settings-hub";
 import { getSessionContext } from "@/lib/auth";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
-import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
@@ -25,9 +25,10 @@ export default async function SettingsPage() {
     updatedAt: string;
   }> = [];
 
-  if (user && hasCompletedOnboarding(user) && user.dataWipedAt === null) {
+  if (user && user.dataWipedAt === null) {
     const cookieStore = await cookies();
     const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
+    await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
     const userWorkspaces = await prisma.workspace.findMany({
       where: { userId: user.id },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "asc" }],
@@ -81,24 +82,7 @@ export default async function SettingsPage() {
 
     workspaceId = selectedWorkspace?.id ?? "";
     workspaceName = selectedWorkspace?.name ?? "Personal";
-    const starterWorkspaceForProfiles = userWorkspaces.length
-      ? null
-      : await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
-    const nextProfileList = userWorkspaces.length
-      ? userWorkspaces
-      : starterWorkspaceForProfiles
-        ? [
-            {
-              id: starterWorkspaceForProfiles.id,
-              name: starterWorkspaceForProfiles.name,
-              type: starterWorkspaceForProfiles.type,
-              createdAt: starterWorkspaceForProfiles.createdAt.toISOString(),
-              updatedAt: starterWorkspaceForProfiles.updatedAt.toISOString(),
-            },
-          ]
-        : [];
-
-    profileList = nextProfileList.map((workspace) => ({
+    profileList = userWorkspaces.map((workspace) => ({
       ...workspace,
       createdAt: workspace.createdAt.toISOString(),
       updatedAt: workspace.updatedAt.toISOString(),

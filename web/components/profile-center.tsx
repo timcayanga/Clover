@@ -63,9 +63,9 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
     clearAllWorkspaceCaches();
 
     void signOut({
-      redirectUrl: "/",
+      redirectUrl: "/sign-in",
     }).catch(() => {
-      window.location.assign("/");
+      window.location.assign("/sign-in");
     });
   };
 

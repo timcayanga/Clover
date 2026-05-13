@@ -85,9 +85,9 @@ export function AccountActionsPanel({ isGuest = false }: AccountActionsPanelProp
     clearWorkspaceSelection();
 
     void signOut({
-      redirectUrl: "/",
+      redirectUrl: "/sign-in",
     }).catch(() => {
-      window.location.assign("/");
+      window.location.assign("/sign-in");
     });
   };
 
@@ -134,7 +134,7 @@ export function AccountActionsPanel({ isGuest = false }: AccountActionsPanelProp
         return;
       }
 
-      window.location.assign("/");
+      window.location.assign("/sign-in");
     });
   };
 
