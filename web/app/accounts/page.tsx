@@ -1236,6 +1236,7 @@ function AccountsPageContent() {
       setMessage("Unable to load workspaces.");
       setWorkspacesLoading(false);
       setAccountsLoading(false);
+      setHasInitialWorkspaceDataLoaded(true);
       return;
     }
 
@@ -1300,6 +1301,7 @@ function AccountsPageContent() {
       } else {
         if (!options?.silent) {
           setMessage("Unable to load accounts for this workspace.");
+          setHasInitialWorkspaceDataLoaded(true);
         }
       }
 
@@ -1923,6 +1925,22 @@ function AccountsPageContent() {
       window.clearInterval(interval);
     };
   }, [isColdLoading]);
+
+  useEffect(() => {
+    if (hasInitialWorkspaceDataLoaded) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setAccountsLoading(false);
+      setWorkspacesLoading(false);
+      setHasInitialWorkspaceDataLoaded(true);
+    }, PAGE_LOADING_TIMEOUT_MS);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [hasInitialWorkspaceDataLoaded]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
