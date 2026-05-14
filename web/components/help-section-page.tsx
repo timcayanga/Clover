@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { LandingNav } from "@/components/landing-nav";
 import { getHelpHomeHref, type HelpQuestion, type HelpSection } from "@/lib/help-center";
+import type { PublicAccountState } from "@/lib/public-account-state";
 
 type HelpSectionPageProps = {
   section: HelpSection;
   returnTo?: string | null;
+  accountState?: PublicAccountState | null;
 };
 
 function matchesQuestion(question: HelpQuestion, query: string) {
@@ -31,7 +33,7 @@ function AccordionItem({ question }: { question: HelpQuestion }) {
   );
 }
 
-export function HelpSectionPage({ section, returnTo }: HelpSectionPageProps) {
+export function HelpSectionPage({ section, returnTo, accountState }: HelpSectionPageProps) {
   const [query, setQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const homeHref = getHelpHomeHref(returnTo);
@@ -66,7 +68,7 @@ export function HelpSectionPage({ section, returnTo }: HelpSectionPageProps) {
       <div className="help-page__inner help-section-page__inner">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
 
-        <LandingNav />
+        <LandingNav accountState={accountState} />
 
         <div className="help-page__context-links" aria-label="Help context links">
           <Link className="help-page__nav-link" href={backHref} prefetch={false}>

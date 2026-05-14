@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { HelpArticlePage } from "@/components/help-article-page";
 import { findHelpSectionArticle, helpSectionMap, isHelpArticleSlug, isHelpSection } from "@/lib/help-center";
+import { resolvePublicAccountState } from "@/lib/public-account-state";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ export async function generateMetadata({ params }: HelpArticlePageProps): Promis
 export default async function HelpArticleRoute({ params, searchParams }: HelpArticlePageProps) {
   const resolvedParams = await params;
   const resolvedSearchParams = searchParams ? await searchParams : null;
+  const accountState = await resolvePublicAccountState();
 
   if (!isHelpSection(resolvedParams.section) || !isHelpArticleSlug(resolvedParams.section, resolvedParams.article)) {
     notFound();
@@ -67,5 +69,5 @@ export default async function HelpArticleRoute({ params, searchParams }: HelpArt
     notFound();
   }
 
-  return <HelpArticlePage section={section} article={article} returnTo={resolvedSearchParams?.returnTo ?? null} />;
+  return <HelpArticlePage section={section} article={article} returnTo={resolvedSearchParams?.returnTo ?? null} accountState={accountState} />;
 }

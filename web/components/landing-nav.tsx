@@ -4,6 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PublicAccountActions } from "@/components/public-account-actions";
+import type { PublicAccountState } from "@/lib/public-account-state";
+
+type LandingNavProps = {
+  accountState?: PublicAccountState | null;
+};
 
 function MenuIcon() {
   return (
@@ -15,7 +20,7 @@ function MenuIcon() {
   );
 }
 
-export function LandingNav() {
+export function LandingNav({ accountState }: LandingNavProps) {
   const pathname = usePathname();
   const currentPathname = pathname ?? "";
   const [isScrolled, setIsScrolled] = useState(false);
@@ -55,7 +60,7 @@ export function LandingNav() {
           <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
         </Link>
 
-        <PublicAccountActions />
+        <PublicAccountActions accountState={accountState} />
       </div>
 
       <div className="landing-nav__mobile" aria-label="Primary">
@@ -75,7 +80,7 @@ export function LandingNav() {
           <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
         </Link>
 
-        <PublicAccountActions variant="mobile" />
+        <PublicAccountActions variant="mobile" accountState={accountState} />
       </div>
 
       {mobileMenuOpen ? (

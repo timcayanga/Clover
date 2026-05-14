@@ -3,9 +3,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { getHelpSectionHref, getHelpSectionImageSrc, helpSections, type HelpSection } from "@/lib/help-center";
+import { PublicAccountActions } from "@/components/public-account-actions";
+import type { PublicAccountState } from "@/lib/public-account-state";
 
 type HelpCenterProps = {
   returnTo?: string | null;
+  accountState?: PublicAccountState | null;
 };
 
 function matchesQuery(section: HelpSection, query: string) {
@@ -35,7 +38,7 @@ function matchesQuery(section: HelpSection, query: string) {
   return haystack.includes(query);
 }
 
-export function HelpCenter({ returnTo }: HelpCenterProps) {
+export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
   const [query, setQuery] = useState("");
 
   const normalizedQuery = query.trim().toLowerCase();
@@ -62,6 +65,7 @@ export function HelpCenter({ returnTo }: HelpCenterProps) {
             <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
             <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
           </Link>
+          <PublicAccountActions accountState={accountState} />
         </nav>
 
         <label className="help-search help-search--hero" htmlFor="help-search">

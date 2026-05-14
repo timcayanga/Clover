@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { HelpSectionPage } from "@/components/help-section-page";
 import { helpSectionMap, isHelpSection } from "@/lib/help-center";
+import { resolvePublicAccountState } from "@/lib/public-account-state";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export async function generateMetadata({ params }: HelpSectionPageProps): Promis
 export default async function HelpSectionRoute({ params, searchParams }: HelpSectionPageProps) {
   const resolvedParams = await params;
   const resolvedSearchParams = searchParams ? await searchParams : null;
+  const accountState = await resolvePublicAccountState();
 
   if (!isHelpSection(resolvedParams.section)) {
     notFound();
@@ -57,5 +59,5 @@ export default async function HelpSectionRoute({ params, searchParams }: HelpSec
     notFound();
   }
 
-  return <HelpSectionPage section={section} returnTo={resolvedSearchParams?.returnTo ?? null} />;
+  return <HelpSectionPage section={section} returnTo={resolvedSearchParams?.returnTo ?? null} accountState={accountState} />;
 }

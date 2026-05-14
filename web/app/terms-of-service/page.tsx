@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { PublicAccountActions } from "@/components/public-account-actions";
+import { resolvePublicAccountState } from "@/lib/public-account-state";
 
-export default function TermsOfServicePage() {
+export default async function TermsOfServicePage() {
+  const accountState = await resolvePublicAccountState();
+
   return (
     <main className="legal-page">
       <div className="legal-page__inner">
@@ -9,7 +12,7 @@ export default function TermsOfServicePage() {
           <Link className="landing-brand" href="/" aria-label="Clover home">
             <img className="landing-brand__logo" src="/clover-logo-full.svg" alt="Clover" />
           </Link>
-          <PublicAccountActions />
+          <PublicAccountActions accountState={accountState} />
         </nav>
 
         <header className="legal-page__header">

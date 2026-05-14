@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { LandingNav } from "@/components/landing-nav";
 import { getHelpHomeHref, getHelpSectionHref, type HelpArticle, type HelpSection } from "@/lib/help-center";
+import type { PublicAccountState } from "@/lib/public-account-state";
 
 type HelpArticlePageProps = {
   section: HelpSection;
   article: HelpArticle;
   returnTo?: string | null;
+  accountState?: PublicAccountState | null;
 };
 
 function ArticleVisual({ section, article }: { section: HelpSection; article: HelpArticle }) {
@@ -23,7 +25,7 @@ function ArticleVisual({ section, article }: { section: HelpSection; article: He
   );
 }
 
-export function HelpArticlePage({ section, article, returnTo }: HelpArticlePageProps) {
+export function HelpArticlePage({ section, article, returnTo, accountState }: HelpArticlePageProps) {
   const homeHref = getHelpHomeHref(returnTo);
   const sectionHref = getHelpSectionHref(section.slug, returnTo);
   const backHref = returnTo ?? sectionHref;
@@ -45,7 +47,7 @@ export function HelpArticlePage({ section, article, returnTo }: HelpArticlePageP
     <main className="help-page">
       <div className="help-page__inner">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
-        <LandingNav />
+        <LandingNav accountState={accountState} />
 
         <div className="help-page__context-links" aria-label="Help context links">
           <Link className="help-page__nav-link" href={backHref} prefetch={false}>

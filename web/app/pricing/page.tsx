@@ -7,6 +7,7 @@ import { getSessionContext } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getUserBillingSubscription } from "@/lib/paypal-billing";
+import type { PublicAccountState } from "@/lib/public-account-state";
 
 function PlanIcon({ name }: { name: "starter" | "growth" }) {
   const common = {
@@ -50,6 +51,17 @@ export default async function PricingPage() {
   const env = getEnv();
   const user = session?.userId ? await getOrCreateCurrentUser(session.userId) : null;
   const billingSubscription = user ? await getUserBillingSubscription(user.id) : null;
+  const accountState: PublicAccountState = user
+    ? {
+        signedIn: true,
+        displayName: user.firstName ?? user.email?.split("@")[0] ?? "Account",
+        avatarUrl: user.imageUrl ?? null,
+      }
+    : {
+        signedIn: false,
+        displayName: null,
+        avatarUrl: null,
+      };
 
   return (
     <main className="legal-page pricing-page">
@@ -64,8 +76,8 @@ export default async function PricingPage() {
             <Link href="/pricing" aria-current="page">
               Pricing
             </Link>
-            {user ? <Link href="/settings#billing">Billing</Link> : <Link href="/sign-in">Log in</Link>}
-            {user ? <Link href="/settings">App</Link> : <Link href="/sign-up">Sign up</Link>}
+            {accountState.signedIn ? <Link href="/settings#billing">Billing</Link> : <Link href="/sign-in">Log in</Link>}
+            {accountState.signedIn ? <Link href="/settings">App</Link> : <Link href="/sign-up">Sign up</Link>}
           </div>
         </nav>
 
@@ -78,11 +90,11 @@ export default async function PricingPage() {
 
         <PostHogEvent
           event="upgrade_prompt_viewed"
-          onceKey={analyticsOnceKey("upgrade_prompt_viewed", `pricing:${user?.id ?? "guest"}`)}
+          onceKey={analyticsOnceKey("upgrade_prompt_viewed", `pricing:${accountState.signedIn ? "signed-in" : "guest"}`)}
           properties={{
-            plan_tier: user?.planTier ?? "guest",
+            plan_tier: accountState.signedIn ? "free" : "guest",
             prompt_location: "pricing_page",
-            cta_href: user ? "/settings#billing" : "/sign-up",
+            cta_href: accountState.signedIn ? "/settings#billing" : "/sign-up",
           }}
         />
 

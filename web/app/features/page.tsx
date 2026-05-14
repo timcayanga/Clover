@@ -1,6 +1,7 @@
 import { ScrollReveal } from "../../components/scroll-reveal";
 import { LandingNav } from "../../components/landing-nav";
 import Link from "next/link";
+import { resolvePublicAccountState } from "@/lib/public-account-state";
 
 function FeatureIcon({ name }: { name: "tracking" | "understanding" | "planning" }) {
   const common = {
@@ -63,10 +64,12 @@ function FeatureVisual({
   );
 }
 
-export default function FeaturesPage() {
+export default async function FeaturesPage() {
+  const accountState = await resolvePublicAccountState();
+
   return (
     <main className="features-page landing-page">
-      <LandingNav />
+      <LandingNav accountState={accountState} />
 
       <ScrollReveal as="section" className="features-page__hero">
         <div className="features-page__copy">

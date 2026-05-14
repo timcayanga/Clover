@@ -3,6 +3,7 @@ import Link from "next/link";
 import Script from "next/script";
 import { LandingNav } from "../components/landing-nav";
 import { ScrollReveal } from "../components/scroll-reveal";
+import { resolvePublicAccountState } from "@/lib/public-account-state";
 
 function SectionVisual({
   eyebrow,
@@ -55,7 +56,9 @@ function FeatureSection({
   );
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const accountState = await resolvePublicAccountState();
+
   return (
     <main className="landing-page landing-page--snap">
       <Script id="landing-force-light-theme" strategy="beforeInteractive">
@@ -68,7 +71,7 @@ export default function HomePage() {
           } catch (error) {}
         `}
       </Script>
-      <LandingNav />
+      <LandingNav accountState={accountState} />
 
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">

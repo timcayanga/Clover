@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ContactUsForm } from "@/components/contact-us-form";
 import { LandingNav } from "@/components/landing-nav";
+import { resolvePublicAccountState } from "@/lib/public-account-state";
 
 export const metadata: Metadata = {
   title: "Contact Us",
@@ -9,10 +10,12 @@ export const metadata: Metadata = {
   keywords: ["contact Clover", "Clover support", "help@clover.ph", "support request", "finance app help"],
 };
 
-export default function ContactUsPage() {
+export default async function ContactUsPage() {
+  const accountState = await resolvePublicAccountState();
+
   return (
     <main className="contact-page">
-      <LandingNav />
+      <LandingNav accountState={accountState} />
 
       <div className="contact-page__inner">
         <header className="contact-page__header">
