@@ -19,11 +19,13 @@ const normalizeDirectionText = (value: unknown) => String(value ?? "").trim().to
 
 const normalizeCategoryTypeText = (value: unknown) => String(value ?? "").trim().toLowerCase();
 
+const normalizeCategoryKey = (value: unknown) => normalizeCategoryTypeText(value).replace(/[^a-z0-9]+/g, " ").trim();
+
 export const coerceTransactionTypeFromCategoryName = (
   categoryName: unknown,
   fallback: TransactionType = "expense"
 ): TransactionType => {
-  const normalized = normalizeCategoryTypeText(categoryName);
+  const normalized = normalizeCategoryKey(categoryName);
 
   if (!normalized) {
     return fallback;
@@ -37,7 +39,11 @@ export const coerceTransactionTypeFromCategoryName = (
     return "transfer";
   }
 
-  return fallback;
+  if ((normalized === "financial" || normalized === "gifts donations") && fallback === "income") {
+    return "income";
+  }
+
+  return "expense";
 };
 
 export const coerceTransactionDirection = (value: unknown, amount?: unknown): TransactionDirection => {

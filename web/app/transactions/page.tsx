@@ -6011,8 +6011,7 @@ function TransactionsPageContent() {
                   guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
                   "Other";
                 const effectiveType = coerceTransactionTypeFromCategoryName(categoryLabel, transaction.type);
-                const isTransferTransaction =
-                  transaction.isTransfer || effectiveType === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
+                const isTransferTransaction = effectiveType === "transfer";
                 const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
                 const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
                 const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
@@ -6259,8 +6258,7 @@ function TransactionsPageContent() {
                           guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
                           "Other";
                         const effectiveType = coerceTransactionTypeFromCategoryName(categoryLabel, transaction.type);
-                        const isTransferTransaction =
-                          transaction.isTransfer || effectiveType === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
+                        const isTransferTransaction = effectiveType === "transfer";
                         const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
                         const merchantSummary =
                           transaction.merchantClean?.trim() ||

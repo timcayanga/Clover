@@ -296,7 +296,7 @@ const mapTransactionRow = (transaction: {
       institution: transaction.account.institution,
     }),
     description: transaction.description,
-    isTransfer: transaction.isTransfer || coerceTransactionTypeFromCategoryName(categoryName, transaction.type) === "transfer",
+    isTransfer: coerceTransactionTypeFromCategoryName(categoryName, transaction.type) === "transfer",
     isExcluded: transaction.isExcluded,
     createdAt: transaction.createdAt.toISOString(),
     warningReason: transaction.warningReason,
@@ -755,7 +755,17 @@ export async function POST(request: Request) {
             },
           })
         : Promise.resolve(null);
-    const [transactionCount, otherCategory] = await Promise.all([transactionCountPromise, otherCategoryPromise]);
+    const selectedCategoryPromise =
+      payload.categoryId === undefined || payload.categoryId === null
+        ? Promise.resolve(null)
+        : prisma.category.findFirst({
+            where: { id: payload.categoryId, workspaceId: payload.workspaceId },
+          });
+    const [transactionCount, otherCategory, selectedCategory] = await Promise.all([
+      transactionCountPromise,
+      otherCategoryPromise,
+      selectedCategoryPromise,
+    ]);
 
     if (effectiveLimits.transactionLimit !== null && transactionCount !== null && transactionCount >= effectiveLimits.transactionLimit) {
       const isFreePlan = user.planTier === "free";
@@ -773,6 +783,9 @@ export async function POST(request: Request) {
     }
 
     const resolvedCategoryId = payload.categoryId ?? otherCategory?.id ?? null;
+    const resolvedCategoryName = selectedCategory?.name ?? otherCategory?.name ?? null;
+    const resolvedType = coerceTransactionTypeFromCategoryName(resolvedCategoryName, payload.type);
+    const resolvedIsTransfer = resolvedType === "transfer";
 
     const transaction = await prisma.transaction.create({
       data: {
@@ -782,18 +795,18 @@ export async function POST(request: Request) {
         date: new Date(payload.date),
         amount: payload.amount.toString(),
         currency: payload.currency.toUpperCase(),
-        type: payload.type,
+        type: resolvedType,
         merchantRaw: payload.merchantRaw,
         merchantClean: payload.merchantClean ?? null,
         description: payload.description ?? null,
-        isTransfer: payload.isTransfer ?? false,
+        isTransfer: resolvedIsTransfer,
         isExcluded: payload.isExcluded ?? false,
         reviewStatus: "confirmed",
         parserConfidence: 100,
         categoryConfidence: resolvedCategoryId ? 100 : 0,
         accountMatchConfidence: 100,
         duplicateConfidence: 0,
-        transferConfidence: payload.isTransfer ? 100 : 0,
+        transferConfidence: resolvedIsTransfer ? 100 : 0,
         rawPayload: {
           source: "manual",
           merchantRaw: payload.merchantRaw,
@@ -810,7 +823,7 @@ export async function POST(request: Request) {
         normalizedPayload: {
           merchantClean: payload.merchantClean ?? payload.merchantRaw,
           categoryId: resolvedCategoryId,
-          type: payload.type,
+          type: resolvedType,
         },
         learnedRuleIdsApplied: [],
       },
@@ -842,7 +855,7 @@ export async function POST(request: Request) {
           merchantText: payload.merchantClean ?? payload.merchantRaw,
           categoryId: category.id,
           categoryName: category.name,
-          type: payload.type,
+          type: resolvedType,
           source: "manual_transaction_creation",
           confidence: 100,
           notes: payload.accountId ? "Manual transaction created in the app." : null,

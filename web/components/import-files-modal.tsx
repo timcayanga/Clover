@@ -28,6 +28,7 @@ import { parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { getImportErrorSpec, isResumableImportErrorCode, type ImportErrorStage, type ImportErrorSpec } from "@/lib/import-error-spec";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import {
   getCachedAccountsWorkspace,
   findCachedTransactionsForAccount,
@@ -626,9 +627,10 @@ const buildOptimisticPreviewTransactions = (
         typeof row.merchantClean === "string" && row.merchantClean.trim()
           ? row.merchantClean.trim()
           : merchantRaw;
-      const type = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
+      const parsedType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
       const categoryName = typeof row.categoryName === "string" && row.categoryName.trim() ? row.categoryName.trim() : null;
       const description = typeof row.description === "string" && row.description.trim() ? row.description.trim() : null;
+      const type = coerceTransactionTypeFromCategoryName(categoryName, parsedType);
       const isTransfer = type === "transfer";
 
       if (!date || !amount) {
