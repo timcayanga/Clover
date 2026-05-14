@@ -2545,6 +2545,20 @@ export const processImportFileText = async (
       genericParseLooksSuspicious ||
       gcashSuspiciouslySparse ||
       suspiciousDateCoverage);
+  const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
+  const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
+  const receiptPreviewLooksLikeReceipt =
+    Boolean(
+      receiptPreview &&
+        receiptPreview.items.length > 0 &&
+        receiptPreview.total !== null &&
+        receiptPreview.billDate &&
+        receiptPreview.confidence >= 80
+    );
+  const canUseFastImageParse =
+    imageImport &&
+    ((importMode === "receipt" && receiptPreviewLooksLikeReceipt) ||
+      (parsedRows.length > 0 && (metadataForParse.confidence ?? 0) >= 75 && !genericParseLooksSuspicious && !suspiciousDateCoverage));
   if (shouldUseVisionFallback && !pageImages) {
     try {
       if (imageImport) {
@@ -2575,61 +2589,54 @@ export const processImportFileText = async (
       pageImages = null;
     }
   }
-  const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
-  let openAiParsed = await parseImportTextWithOpenAIFallback({
-    text: textForParse,
-    fileName,
-    fileType,
-    detectedMetadata: metadataForParse,
-    parsedRows,
-    pageImages,
-    preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
-    importMode,
-  });
+  let openAiParsed: Awaited<ReturnType<typeof parseImportTextWithOpenAIFallback>> | null = null;
+  let openAiMetadata: typeof metadataForParse | null = null;
+  if (!canUseFastImageParse) {
+    const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
+    openAiParsed = await parseImportTextWithOpenAIFallback({
+      text: textForParse,
+      fileName,
+      fileType,
+      detectedMetadata: metadataForParse,
+      parsedRows,
+      pageImages,
+      preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
+      importMode,
+    });
 
-  let openAiMetadata = openAiParsed
-    ? mergeStatementMetadataWithTemplate(
-        {
-          ...openAiParsed.metadata,
-          currency: openAiParsed.metadata.currency ?? null,
-        },
-        {
-          institution:
-            typeof templateMetadata?.institution === "string" && templateMetadata.institution.trim()
-              ? templateMetadata.institution.trim()
-              : null,
-          accountNumber:
-            typeof templateMetadata?.accountNumber === "string" && templateMetadata.accountNumber.trim()
-              ? templateMetadata.accountNumber.trim()
-              : null,
-          accountName:
-            typeof templateMetadata?.accountName === "string" && templateMetadata.accountName.trim()
-              ? templateMetadata.accountName.trim()
-              : null,
-          currency:
-            typeof templateMetadata?.currency === "string" && templateMetadata.currency.trim()
-              ? templateMetadata.currency.trim()
-              : null,
-          openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
-          endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
-          paymentDueDate: typeof templateMetadata?.paymentDueDate === "string" ? templateMetadata.paymentDueDate : null,
-          totalAmountDue: typeof templateMetadata?.totalAmountDue === "number" ? templateMetadata.totalAmountDue : null,
-          startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
-          endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
-        }
-    )
-    : null;
-
-  const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
-  const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
-  const receiptPreviewLooksLikeReceipt =
-    Boolean(
-      receiptPreview &&
-        receiptPreview.items.length > 0 &&
-        receiptPreview.total !== null &&
-        receiptPreview.billDate &&
-        receiptPreview.confidence >= 80
-    );
+    openAiMetadata = openAiParsed
+      ? mergeStatementMetadataWithTemplate(
+          {
+            ...openAiParsed.metadata,
+            currency: openAiParsed.metadata.currency ?? null,
+          },
+          {
+            institution:
+              typeof templateMetadata?.institution === "string" && templateMetadata.institution.trim()
+                ? templateMetadata.institution.trim()
+                : null,
+            accountNumber:
+              typeof templateMetadata?.accountNumber === "string" && templateMetadata.accountNumber.trim()
+                ? templateMetadata.accountNumber.trim()
+                : null,
+            accountName:
+              typeof templateMetadata?.accountName === "string" && templateMetadata.accountName.trim()
+                ? templateMetadata.accountName.trim()
+                : null,
+            currency:
+              typeof templateMetadata?.currency === "string" && templateMetadata.currency.trim()
+                ? templateMetadata.currency.trim()
+                : null,
+            openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
+            endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
+            paymentDueDate: typeof templateMetadata?.paymentDueDate === "string" ? templateMetadata.paymentDueDate : null,
+            totalAmountDue: typeof templateMetadata?.totalAmountDue === "number" ? templateMetadata.totalAmountDue : null,
+            startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
+            endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
+          }
+        )
+      : null;
+  }
   const receiptDetails =
     importMode === "receipt" &&
     openAiParsed?.receiptDetails &&
@@ -2689,7 +2696,7 @@ export const processImportFileText = async (
         })()
       : null;
 
-  const imageTranscriptRequiresRetry = Boolean(imageImport && pageImages?.length);
+  const imageTranscriptRequiresRetry = Boolean(imageImport && pageImages?.length && !canUseFastImageParse);
   const openAiResultLooksSparse =
     !openAiParsed ||
     (importMode === "statement" && (openAiParsed.rows.length === 0 || !openAiMetadata?.accountNumber)) ||
