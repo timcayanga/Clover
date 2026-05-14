@@ -30,7 +30,7 @@ const socialProviders: Array<{
   },
 ];
 
-const completeRedirectUrl = "/dashboard";
+const completeRedirectUrl = "/home";
 const callbackUrl = "/sso-callback";
 
 function formatError(error: unknown) {

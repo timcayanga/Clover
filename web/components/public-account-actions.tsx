@@ -1,5 +1,6 @@
 "use client";
 
+import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 import type { PublicAccountState } from "@/lib/public-account-state";
@@ -10,9 +11,12 @@ type PublicAccountActionsProps = {
 };
 
 export function PublicAccountActions({ variant = "desktop", accountState }: PublicAccountActionsProps) {
-  if (accountState?.signedIn) {
-    const displayName = accountState.displayName ?? "Account";
-    const avatar = accountState.avatarUrl ?? null;
+  const { isLoaded, isSignedIn, user } = useUser();
+  const resolvedSignedIn = isLoaded ? isSignedIn : accountState?.signedIn ?? false;
+
+  if (resolvedSignedIn) {
+    const displayName = accountState?.displayName ?? user?.firstName ?? user?.emailAddresses[0]?.emailAddress?.split("@")[0] ?? "Account";
+    const avatar = accountState?.avatarUrl ?? user?.imageUrl ?? null;
 
     return (
       <Link className={`landing-account-link landing-account-link--${variant}`} href="/home" prefetch={false} aria-label="My Account">
@@ -24,7 +28,7 @@ export function PublicAccountActions({ variant = "desktop", accountState }: Publ
     );
   }
 
-  if (accountState && !accountState.signedIn) {
+  if (isLoaded ? !isSignedIn : accountState && !accountState.signedIn) {
     return variant === "mobile" ? (
       <Link className="button button-primary landing-nav__mobile-signup" href="/sign-up" prefetch={false}>
         Sign up
