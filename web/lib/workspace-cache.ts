@@ -227,6 +227,9 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
   if (leftLastFour && rightLastFour && leftLastFour === rightLastFour) {
     return 95;
   }
+  if (leftLastFour && rightLastFour && leftLastFour !== rightLastFour) {
+    return 0;
+  }
 
   const leftStem = normalizeImportedAccountNameStem(left.name ?? left.institution ?? null);
   const rightStem = normalizeImportedAccountNameStem(right.name ?? right.institution ?? null);

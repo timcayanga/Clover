@@ -1110,8 +1110,35 @@ export function ImportFilesModal({
       errorNextSteps: snapshot.errorNextSteps ?? null,
       updatedAt: Date.now(),
     };
+    const isPartialBatchCompletion =
+      nextSnapshot.status === "done" &&
+      nextSnapshot.fileTotal > 1 &&
+      nextSnapshot.completedFiles < nextSnapshot.fileTotal;
+    if (isPartialBatchCompletion) {
+      if (nextSnapshot.fileName) {
+        retiredImportActivityFileNamesRef.current.add(nextSnapshot.fileName);
+      }
+      nextSnapshot.status = "active";
+      nextSnapshot.summary = null;
+      nextSnapshot.errorMessage = null;
+      nextSnapshot.errorCode = null;
+      nextSnapshot.errorTitle = null;
+      nextSnapshot.errorNextSteps = null;
+      const partialBatchProgress = (nextSnapshot.completedFiles / nextSnapshot.fileTotal) * 100;
+      nextSnapshot.progress = Math.min(
+        99,
+        nextSnapshot.progress >= 100
+          ? partialBatchProgress
+          : Math.max(nextSnapshot.progress, partialBatchProgress)
+      );
+      nextSnapshot.detail =
+        nextSnapshot.detail && !/^all set$/i.test(nextSnapshot.detail)
+          ? nextSnapshot.detail
+          : "That file is visible in Clover. Continuing with the remaining files.";
+    }
     if (
       nextSnapshot.fileName &&
+      !isPartialBatchCompletion &&
       retiredImportActivityFileNamesRef.current.has(nextSnapshot.fileName) &&
       nextSnapshot.status !== "error"
     ) {
