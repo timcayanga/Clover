@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useClerk } from "@clerk/nextjs";
 import { persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches } from "@/lib/workspace-cache";
 
@@ -40,7 +39,6 @@ const destructiveCopy = {
 } as const;
 
 export function AccountActionsPanel({ isGuest = false }: AccountActionsPanelProps) {
-  const { signOut } = useClerk();
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeAction, setActiveAction] = useState<DestructiveAction>(null);
@@ -79,17 +77,7 @@ export function AccountActionsPanel({ isGuest = false }: AccountActionsPanelProp
 
   const handleSignOut = () => {
     clearWorkspaceSelection();
-
-    if (isGuest) {
-      window.location.assign("/sign-in");
-      return;
-    }
-
-    void signOut({
-      redirectUrl: "/sign-in",
-    }).catch(() => {
-      window.location.assign("/sign-in");
-    });
+    window.location.assign("/sign-out");
   };
 
   const closeDialog = () => {

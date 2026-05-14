@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { useClerk, useUser } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import { persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches } from "@/lib/workspace-cache";
 import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
@@ -15,7 +15,6 @@ type ProfileCenterProps = {
 
 export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
   const { isLoaded, isSignedIn, user } = useUser();
-  const { signOut } = useClerk();
   const pathname = usePathname();
   const currentDisplayName =
     user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account";
@@ -61,17 +60,7 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
 
     persistSelectedWorkspaceId("");
     clearAllWorkspaceCaches();
-
-    if (!isSignedIn) {
-      window.location.assign("/sign-in");
-      return;
-    }
-
-    void signOut({
-      redirectUrl: "/sign-in",
-    }).catch(() => {
-      window.location.assign("/sign-in");
-    });
+    window.location.assign("/sign-out");
   };
 
   return (

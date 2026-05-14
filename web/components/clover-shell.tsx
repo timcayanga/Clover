@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useClerk, useUser } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { persistSelectedWorkspaceId, readSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
@@ -475,7 +475,6 @@ export function CloverShell({
   children,
 }: CloverShellProps) {
   const { user } = useUser();
-  const { signOut } = useClerk();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -992,17 +991,7 @@ export function CloverShell({
   const handleSignOut = () => {
     persistSelectedWorkspaceId("");
     clearAllWorkspaceCaches();
-
-    if (!isLoaded || !isSignedIn) {
-      window.location.assign("/sign-in");
-      return;
-    }
-
-    void signOut({
-      redirectUrl: "/sign-in",
-    }).catch(() => {
-      window.location.assign("/sign-in");
-    });
+    window.location.assign("/sign-out");
   };
 
   return (
