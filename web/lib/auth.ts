@@ -25,23 +25,21 @@ export const isLocalDevHost = async () => {
 export const getSessionContext = async () => {
   const hostname = await getHostname();
   const localDevHost = localDevHosts.has(hostname);
+  const stagingHost = stagingHosts.has(hostname);
+
+  if (localDevHost || stagingHost) {
+    return { userId: stagingGuestUserId, isGuest: true };
+  }
+
   let session;
 
   try {
     session = await auth();
   } catch {
-    if (localDevHost) {
-      return { userId: stagingGuestUserId, isGuest: true };
-    }
-
     throw new Error("UNAUTHORIZED");
   }
 
   if (!session.userId) {
-    if (localDevHost) {
-      return { userId: stagingGuestUserId, isGuest: true };
-    }
-
     throw new Error("UNAUTHORIZED");
   }
 
