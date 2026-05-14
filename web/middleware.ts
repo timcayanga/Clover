@@ -35,7 +35,9 @@ const clerkAuthMiddleware = clerkMiddleware(async (auth, request) => {
     return NextResponse.next();
   }
 
-  if (!auth().userId) {
+  const session = await auth();
+
+  if (!session.userId) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
