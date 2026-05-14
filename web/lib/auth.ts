@@ -22,17 +22,15 @@ export const isLocalDevHost = async () => {
   return localDevHosts.has(hostname);
 };
 
-export const getSessionContext = async (options?: { preferGuestOnStaging?: boolean }) => {
-  const stagingHost = await isStagingHost();
+export const getSessionContext = async () => {
   const hostname = await getHostname();
   const localDevHost = localDevHosts.has(hostname);
-  const allowGuestSession = localDevHost || stagingHost;
   let session;
 
   try {
     session = await auth();
   } catch {
-    if (allowGuestSession) {
+    if (localDevHost) {
       return { userId: stagingGuestUserId, isGuest: true };
     }
 
@@ -40,7 +38,7 @@ export const getSessionContext = async (options?: { preferGuestOnStaging?: boole
   }
 
   if (!session.userId) {
-    if (allowGuestSession) {
+    if (localDevHost) {
       return { userId: stagingGuestUserId, isGuest: true };
     }
 

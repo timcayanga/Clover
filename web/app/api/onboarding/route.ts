@@ -19,13 +19,7 @@ const onboardingSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const stagingGuestRequested =
-      request.headers.get("x-staging-guest") === "1" &&
-      ((request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "")
-        .split(",")[0]
-        .split(":")[0]
-        .toLowerCase() === "staging.clover.ph");
-    const { userId } = stagingGuestRequested ? { userId: "staging-guest" } : await requireAuth();
+    const { userId } = await requireAuth();
     const payload = onboardingSchema.parse(await request.json());
     const user = await getOrCreateCurrentUser(userId);
     const primaryGoal = payload.skipped ? null : payload.goal ?? payload.goals[0] ?? null;

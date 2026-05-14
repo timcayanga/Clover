@@ -173,11 +173,7 @@ export function OnboardingForm({
       skipped: option.value === "skip",
       startAction: option.value,
     });
-    const isStagingHost = window.location.hostname === "staging.clover.ph";
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (isStagingHost) {
-      headers["x-staging-guest"] = "1";
-    }
 
     startTransition(() => {
       setMessage(`Opening ${option.title.toLowerCase()}...`);

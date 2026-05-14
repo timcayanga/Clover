@@ -7,7 +7,13 @@ export const ensureOnboardingAccess = async () => {
     return;
   }
 
-  const session = await getSessionContext({ preferGuestOnStaging: true });
+  let session;
+
+  try {
+    session = await getSessionContext();
+  } catch {
+    redirect("/sign-in");
+  }
 
   if (session.isGuest) {
     return;

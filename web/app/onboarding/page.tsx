@@ -11,7 +11,14 @@ export const metadata = {
 };
 
 export default async function OnboardingPage() {
-  const session = await getSessionContext({ preferGuestOnStaging: true });
+  let session;
+
+  try {
+    session = await getSessionContext();
+  } catch {
+    redirect("/sign-in");
+  }
+
   const user = await getOrCreateCurrentUser(session.userId);
   if (!session.isGuest && hasCompletedOnboarding(user)) {
     redirect("/dashboard");
