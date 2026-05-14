@@ -10,6 +10,7 @@ export type SyncedClerkUser = {
 };
 
 const stagingGuestUserId = "staging-guest";
+const syntheticUserIds = new Set([stagingGuestUserId, "local-admin", "seed-demo-user"]);
 
 export const syncClerkUser = async (clerkUserId: string): Promise<SyncedClerkUser> => {
   const fallback: SyncedClerkUser = {
@@ -21,7 +22,7 @@ export const syncClerkUser = async (clerkUserId: string): Promise<SyncedClerkUse
     verified: false,
   };
 
-  if (clerkUserId === stagingGuestUserId) {
+  if (syntheticUserIds.has(clerkUserId)) {
     return fallback;
   }
 
@@ -43,6 +44,12 @@ export const syncClerkUser = async (clerkUserId: string): Promise<SyncedClerkUse
       verified: clerkUser.emailAddresses.some((entry) => entry.verification?.status === "verified"),
     };
   } catch (error) {
+    const errorStatus = typeof error === "object" && error && "status" in error ? Number((error as { status?: unknown }).status) : null;
+
+    if (errorStatus === 404) {
+      throw error;
+    }
+
     console.warn("Falling back to placeholder Clerk user data.", {
       clerkUserId,
       error: error instanceof Error ? error.message : String(error),
