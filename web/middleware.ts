@@ -40,6 +40,10 @@ const clerkAuthMiddleware = clerkMiddleware(async (auth, request) => {
     return NextResponse.next();
   }
 
+  if (isStagingHost(request)) {
+    return NextResponse.next();
+  }
+
   auth.protect();
 }, {
   publishableKey,
