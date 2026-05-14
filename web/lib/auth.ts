@@ -25,9 +25,8 @@ export const isLocalDevHost = async () => {
 export const getSessionContext = async () => {
   const hostname = await getHostname();
   const localDevHost = localDevHosts.has(hostname);
-  const stagingHost = stagingHosts.has(hostname);
 
-  if (localDevHost || stagingHost) {
+  if (localDevHost) {
     return { userId: stagingGuestUserId, isGuest: true };
   }
 

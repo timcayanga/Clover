@@ -41,9 +41,14 @@ function PlanIcon({ name }: { name: "starter" | "growth" }) {
 }
 
 export default async function PricingPage() {
-  const session = await getSessionContext();
+  let session: Awaited<ReturnType<typeof getSessionContext>> | null = null;
+  try {
+    session = await getSessionContext();
+  } catch {
+    session = null;
+  }
   const env = getEnv();
-  const user = session.userId ? await getOrCreateCurrentUser(session.userId) : null;
+  const user = session?.userId ? await getOrCreateCurrentUser(session.userId) : null;
   const billingSubscription = user ? await getUserBillingSubscription(user.id) : null;
 
   return (
