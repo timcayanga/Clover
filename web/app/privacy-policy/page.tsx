@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PublicAccountActions } from "@/components/public-account-actions";
 
 export default function PrivacyPolicyPage() {
   return (
@@ -8,11 +9,7 @@ export default function PrivacyPolicyPage() {
           <Link className="landing-brand" href="/" aria-label="Clover home">
             <img className="landing-brand__logo" src="/clover-logo-full.svg" alt="Clover" />
           </Link>
-          <div className="legal-page__nav-links">
-            <Link href="/">Home</Link>
-            <Link href="/sign-in">Log in</Link>
-            <Link href="/sign-up">Sign up</Link>
-          </div>
+          <PublicAccountActions />
         </nav>
 
         <header className="legal-page__header">

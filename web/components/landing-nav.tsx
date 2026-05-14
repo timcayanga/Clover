@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { PublicAccountActions } from "@/components/public-account-actions";
 
 function MenuIcon() {
   return (
@@ -54,14 +55,7 @@ export function LandingNav() {
           <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
         </Link>
 
-        <div className="landing-nav__desktop-actions">
-          <Link className="landing-nav__link" href="/sign-in" prefetch={false} aria-current={currentPathname === "/sign-in" ? "page" : undefined}>
-            Log in
-          </Link>
-          <Link className="button button-primary landing-nav__button" href="/sign-up" prefetch={false}>
-            Sign up
-          </Link>
-        </div>
+        <PublicAccountActions />
       </div>
 
       <div className="landing-nav__mobile" aria-label="Primary">
@@ -81,9 +75,7 @@ export function LandingNav() {
           <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
         </Link>
 
-        <Link className="button button-primary landing-nav__mobile-signup" href="/sign-up" prefetch={false}>
-          Sign up
-        </Link>
+        <PublicAccountActions variant="mobile" />
       </div>
 
       {mobileMenuOpen ? (

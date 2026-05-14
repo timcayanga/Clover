@@ -24587,6 +24587,52 @@ button.accounts-detail__transaction-head-cell {
   gap: 12px;
 }
 
+.landing-account-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.landing-account-link--desktop {
+  justify-self: end;
+}
+
+.landing-account-link:hover,
+.landing-account-link:focus-visible {
+  color: var(--text);
+}
+
+.landing-account-link__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+}
+
+.landing-account-link__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.landing-account-link--mobile {
+  min-height: 32px;
+  padding: 0 10px 0 0;
+  font-size: 13px;
+  justify-self: end;
+  position: relative;
+  z-index: 2;
+}
+
 .landing-nav__mobile,
 .landing-nav__mobile-backdrop,
 .landing-nav__mobile-menu,
@@ -27253,6 +27299,15 @@ button.accounts-detail__transaction-head-cell {
     justify-self: end;
     position: relative;
     z-index: 2;
+  }
+
+  .landing-account-link--mobile {
+    gap: 8px;
+  }
+
+  .landing-account-link__avatar {
+    width: 28px;
+    height: 28px;
   }
 
   .landing-nav__mobile-backdrop {

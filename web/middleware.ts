@@ -26,11 +26,6 @@ const isLocalHost = (request: NextRequest) => {
   return /^(localhost|127\.0\.0\.1|\[::1\]|::1)(:\d+)?$/i.test(host.trim());
 };
 
-const isStagingHost = (request: NextRequest) => {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.hostname ?? "";
-  return host.split(",")[0].split(":")[0].trim().toLowerCase() === "staging.clover.ph";
-};
-
 const clerkAuthMiddleware = clerkMiddleware(async (auth, request) => {
   if (isPublicRoute(request)) {
     return NextResponse.next();
@@ -40,11 +35,11 @@ const clerkAuthMiddleware = clerkMiddleware(async (auth, request) => {
     return NextResponse.next();
   }
 
-  if (isStagingHost(request)) {
-    return NextResponse.next();
+  if (!auth().userId) {
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
-  auth.protect();
+  return NextResponse.next();
 }, {
   publishableKey,
   signInUrl: "/sign-in",
