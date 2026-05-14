@@ -735,9 +735,7 @@ export function SettingsHub({
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            reseedStarterWorkspace: false,
-          }),
+          body: JSON.stringify({}),
         });
 
         const payload = (await response.json().catch(() => ({}))) as { error?: string };

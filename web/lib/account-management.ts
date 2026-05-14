@@ -45,7 +45,7 @@ export const wipeLocalUserData = async (
         goalTargetAmount: null,
         goalTargetSource: null,
         goalPlan: Prisma.DbNull,
-        dataWipedAt: new Date(),
+        dataWipedAt: options?.reseedStarterWorkspace !== false ? null : new Date(),
       },
     });
   });
