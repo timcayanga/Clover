@@ -10,6 +10,8 @@ web/tmp/
 .env.vercel*
 .env.local
 web/.env.local
+.env.local.*
+.env.*.pull
 *.log
 *.app/
 *.app
@@ -17,3 +19,7 @@ web/.env.local
 *.app.bundle/
 .vercel
 .env*.local
+.tmp-bank-previews/
+*.traineddata
+pnpm-lock.yaml
+pnpm-workspace.yaml
