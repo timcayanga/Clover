@@ -1,9 +1,9 @@
-import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { BillingActions } from "@/components/billing-actions";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
+import { getSessionContext } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getUserBillingSubscription } from "@/lib/paypal-billing";
@@ -41,7 +41,7 @@ function PlanIcon({ name }: { name: "starter" | "growth" }) {
 }
 
 export default async function PricingPage() {
-  const session = await auth();
+  const session = await getSessionContext();
   const env = getEnv();
   const user = session.userId ? await getOrCreateCurrentUser(session.userId) : null;
   const billingSubscription = user ? await getUserBillingSubscription(user.id) : null;

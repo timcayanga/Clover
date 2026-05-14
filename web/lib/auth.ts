@@ -26,12 +26,13 @@ export const getSessionContext = async (options?: { preferGuestOnStaging?: boole
   const stagingHost = await isStagingHost();
   const hostname = await getHostname();
   const localDevHost = localDevHosts.has(hostname);
+  const allowGuestSession = localDevHost || stagingHost;
   let session;
 
   try {
     session = await auth();
   } catch {
-    if (localDevHost || (stagingHost && options?.preferGuestOnStaging)) {
+    if (allowGuestSession) {
       return { userId: stagingGuestUserId, isGuest: true };
     }
 
@@ -39,15 +40,11 @@ export const getSessionContext = async (options?: { preferGuestOnStaging?: boole
   }
 
   if (!session.userId) {
-    if (localDevHost || (stagingHost && options?.preferGuestOnStaging)) {
+    if (allowGuestSession) {
       return { userId: stagingGuestUserId, isGuest: true };
     }
 
     throw new Error("UNAUTHORIZED");
-  }
-
-  if ((stagingHost || localDevHost) && options?.preferGuestOnStaging) {
-    return { userId: stagingGuestUserId, isGuest: true };
   }
 
   return { userId: session.userId, isGuest: false };
