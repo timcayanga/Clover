@@ -86,6 +86,9 @@ const ACCOUNT_LOADING_TIMEOUT_MS = 45_000;
 const ACCOUNT_LOADING_PULSE_MS = 5_000;
 const PAGE_LOADING_TIMEOUT_MS = 12_000;
 
+const isImageImportFile = (file: File) =>
+  /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) || file.type.startsWith("image/");
+
 type Workspace = {
   id: string;
   name: string;
@@ -2325,6 +2328,7 @@ function AccountsPageContent() {
   };
 
   const openImportFiles = (files: File[] | null = null, backgroundOnly = false) => {
+    const shouldLaunchInBackground = backgroundOnly && !(files?.some(isImageImportFile) ?? false);
     flushSync(() => {
       closeChrome();
     });
@@ -2342,7 +2346,7 @@ function AccountsPageContent() {
     flushSync(() => {
       setPendingImportSummary(null);
       setAddOpen(false);
-      setImportBackgroundOnly(backgroundOnly);
+      setImportBackgroundOnly(shouldLaunchInBackground);
       setImportSessionId((current) => current + 1);
       setImportSeedFiles(files && files.length > 0 ? files : null);
       setImportOpen(true);

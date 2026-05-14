@@ -134,6 +134,9 @@ const matchesImportedAccountIdentity = (left: Account, right: Account) => {
 
 const transactionsEmptyStateIllustration = "/illustrations/clover-transactions-search-3d.png";
 
+const isImageImportFile = (file: File) =>
+  /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) || file.type.startsWith("image/");
+
 const mergeImportedPreviewTransactions = (
   currentTransactions: Transaction[],
   previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]>
@@ -1123,7 +1126,35 @@ const getCachedTransactionsWorkspace = (workspaceId: string): TransactionsWorksp
   }
 
   const cache = readTransactionsWorkspaceCache();
-  return cache?.snapshots[workspaceId] ?? null;
+  const snapshot = cache?.snapshots[workspaceId] ?? null;
+  if (!snapshot) {
+    return null;
+  }
+
+  const deletedAccountIds = new Set([
+    ...getDeletedWorkspaceAccountIds(workspaceId),
+    ...getDeletingWorkspaceAccountIds(workspaceId),
+  ]);
+
+  if (deletedAccountIds.size === 0) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    accounts: snapshot.accounts.filter((account) => {
+      const accountId = typeof account.id === "string" ? account.id : "";
+      return !deletedAccountIds.has(accountId);
+    }),
+    transactions: snapshot.transactions.filter((transaction) => {
+      const accountId = typeof transaction.accountId === "string" ? transaction.accountId : "";
+      return !deletedAccountIds.has(accountId);
+    }),
+    imports: snapshot.imports.filter((importFile) => {
+      const accountId = typeof importFile.accountId === "string" ? importFile.accountId : "";
+      return !accountId || !deletedAccountIds.has(accountId);
+    }),
+  };
 };
 
 const persistTransactionsWorkspaceCache = (
@@ -2280,10 +2311,13 @@ function TransactionsPageContent() {
       const visibleCachedWorkspaceTransactions = (cachedWorkspaceTransactions ?? []).filter(
         (transaction) => !deletedAccountIds.has(transaction.accountId)
       );
+      const hasFreshTransactions = fetchedTransactions.length > 0;
       const baseTransactions =
-        transactionsRef.current.length > 0
-          ? transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
-          : visibleCachedWorkspaceTransactions;
+        options?.append || !hasFreshTransactions
+          ? transactionsRef.current.length > 0
+            ? transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
+            : visibleCachedWorkspaceTransactions
+          : [];
       const mergedTransactions = options?.append
         ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
         : mergeImportedWorkspaceTransactions(baseTransactions, fetchedTransactions);
@@ -2764,11 +2798,12 @@ function TransactionsPageContent() {
   };
 
   const openImportFiles = (files: File[] | null = null, backgroundOnly = false) => {
+    const shouldLaunchInBackground = backgroundOnly && !(files?.some(isImageImportFile) ?? false);
     flushSync(() => {
       closeChrome();
       setPendingImportSummary(null);
       closeToolbarMenus();
-      setImportBackgroundOnly(backgroundOnly);
+      setImportBackgroundOnly(shouldLaunchInBackground);
       setImportSeedFiles(files && files.length > 0 ? files : null);
       setImportOpen(true);
     });
