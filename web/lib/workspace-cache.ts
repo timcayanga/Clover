@@ -1032,7 +1032,7 @@ export const getCachedTransactionsWorkspace = (workspaceId: string): Transaction
   return snapshot ? filterTransactionsWorkspaceSnapshot(workspaceId, snapshot) : null;
 };
 
-export const findCachedImportedAccount = (accountId: string) => {
+export const findCachedImportedAccount = (accountId: string, workspaceId?: string | null) => {
   if (!accountId) {
     return null;
   }
@@ -1042,8 +1042,15 @@ export const findCachedImportedAccount = (accountId: string) => {
     return null;
   }
 
+  const targetWorkspaceId = typeof workspaceId === "string" && workspaceId.trim() ? workspaceId.trim() : null;
+
   for (const snapshot of Object.values(accountsCache.snapshots)) {
-    const account = snapshot.accounts.find((entry) => {
+    if (targetWorkspaceId && snapshot.workspaceId !== targetWorkspaceId) {
+      continue;
+    }
+
+    const filteredSnapshot = filterAccountsWorkspaceSnapshot(snapshot.workspaceId, snapshot);
+    const account = filteredSnapshot.accounts.find((entry) => {
       const entryId = typeof entry.id === "string" ? entry.id : "";
       const optimisticId = typeof (entry as ImportedWorkspaceAccount).optimisticAccountId === "string"
         ? (entry as ImportedWorkspaceAccount).optimisticAccountId
@@ -1053,7 +1060,7 @@ export const findCachedImportedAccount = (accountId: string) => {
 
     if (account) {
       return {
-        workspaceId: snapshot.workspaceId,
+        workspaceId: filteredSnapshot.workspaceId,
         account,
       };
     }

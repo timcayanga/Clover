@@ -862,7 +862,7 @@ function AccountDetailPageContent() {
       const activeWorkspaceId = selectedWorkspaceId ?? "";
       const cachedAccountsWorkspace = getCachedAccountsWorkspace(activeWorkspaceId);
       const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(activeWorkspaceId);
-      const cachedAccountLookup = findCachedImportedAccount(accountId);
+      const cachedAccountLookup = findCachedImportedAccount(accountId, activeWorkspaceId);
       const cachedImportedAccount = cachedAccountLookup?.account as
         | {
             optimisticAccountId?: string | null;
@@ -874,6 +874,7 @@ function AccountDetailPageContent() {
         | null
         | undefined;
       const cachedTransactionsForAccount = findCachedTransactionsForAccount(accountId, {
+        workspaceId: activeWorkspaceId,
         optimisticAccountId: cachedImportedAccount?.optimisticAccountId ?? null,
         name: cachedImportedAccount?.name ?? null,
         institution: cachedImportedAccount?.institution ?? null,
@@ -1460,7 +1461,10 @@ function AccountDetailPageContent() {
     [importFiles, transactions]
   );
   const cachedImportedAccount = useMemo(
-    () => (account ? (findCachedImportedAccount(account.id)?.account as Account | null) ?? null : null),
+    () =>
+      account
+        ? (findCachedImportedAccount(account.id, account.workspaceId ?? readSelectedWorkspaceId())?.account as Account | null) ?? null
+        : null,
     [account]
   );
   const cachedImportedBalance = typeof cachedImportedAccount?.balance === "string" ? cachedImportedAccount.balance.trim() : "";
