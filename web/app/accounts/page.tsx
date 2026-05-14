@@ -1201,6 +1201,12 @@ function AccountsPageContent() {
     if (currentActivity?.status !== "active") {
       return;
     }
+    const importBatchStillRunning =
+      Number(currentActivity.fileTotal ?? 0) > 0 &&
+      Number(currentActivity.completedFiles ?? 0) < Number(currentActivity.fileTotal ?? 0);
+    if (importBatchStillRunning) {
+      return;
+    }
 
     const hasVisibleImportedAccount = reconciledAccounts.some(
       (account) => account.source === "upload" && !account.id.startsWith("optimistic-")

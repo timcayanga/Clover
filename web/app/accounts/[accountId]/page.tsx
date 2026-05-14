@@ -1762,6 +1762,13 @@ function AccountDetailPageContent() {
 
     const currentActivity = readImportActivity();
     if (currentActivity?.status === "active") {
+      const importBatchStillRunning =
+        Number(currentActivity.fileTotal ?? 0) > 0 &&
+        Number(currentActivity.completedFiles ?? 0) < Number(currentActivity.fileTotal ?? 0);
+      if (importBatchStillRunning) {
+        return;
+      }
+
       clearImportActivity();
     }
   }, [finalizingNeedsReview, finalizingTransactionCount, visibleTransactions.length]);

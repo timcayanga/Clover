@@ -1715,6 +1715,14 @@ export function ImportFilesModal({
         return;
       }
 
+      const batchStillRunning =
+        Number(previousActivity.fileTotal ?? 0) > 0 &&
+        Number(previousActivity.completedFiles ?? 0) < Number(previousActivity.fileTotal ?? 0);
+      if (batchStillRunning) {
+        lastImportActivityRef.current = null;
+        return;
+      }
+
       const canRetireVisibleImport = itemsRef.current.some(
         (item) =>
           (item.status === "importing" || item.status === "pending" || item.confirmationState === "staged") &&

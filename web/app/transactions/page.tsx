@@ -3101,6 +3101,12 @@ function TransactionsPageContent() {
     if (currentActivity?.status !== "active") {
       return;
     }
+    const importBatchStillRunning =
+      Number(currentActivity.fileTotal ?? 0) > 0 &&
+      Number(currentActivity.completedFiles ?? 0) < Number(currentActivity.fileTotal ?? 0);
+    if (importBatchStillRunning) {
+      return;
+    }
 
     const hasVisibleImportedTransactions = visibleTransactions.some(
       (transaction) => transaction.source === "upload" || Boolean(transaction.importFileId)

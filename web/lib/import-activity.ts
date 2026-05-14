@@ -144,17 +144,6 @@ export const setImportActivity = (
     errorNextSteps: snapshot.errorNextSteps ?? null,
     updatedAt: "updatedAt" in snapshot && Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now(),
   };
-  const visibleDataCompletion =
-    nextSnapshot.status === "active" &&
-    /accounts and transactions are visible|transactions are in clover|has the file|will keep cleaning|couldn'?t finalize automatically/i.test(
-      nextSnapshot.detail
-    );
-  if (visibleDataCompletion) {
-    nextSnapshot.status = "done";
-    nextSnapshot.progress = 100;
-    nextSnapshot.completedFiles = Math.max(nextSnapshot.completedFiles, nextSnapshot.fileTotal);
-  }
-
   writeSnapshotToStorage(nextSnapshot);
   broadcastImportActivityChange();
 };
