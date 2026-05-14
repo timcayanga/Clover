@@ -1168,6 +1168,21 @@ const persistTransactionsWorkspaceCache = (
   }
 
   const cache = readTransactionsWorkspaceCache();
+  const existingSnapshot = cache?.snapshots[workspaceId] ?? null;
+  const incomingHasData =
+    snapshot.accounts.length > 0 ||
+    snapshot.transactions.length > 0 ||
+    snapshot.imports.length > 0;
+  const existingHasData =
+    existingSnapshot !== null &&
+    (existingSnapshot.accounts.length > 0 ||
+      existingSnapshot.transactions.length > 0 ||
+      existingSnapshot.imports.length > 0);
+
+  if (existingHasData && !incomingHasData) {
+    return existingSnapshot.updatedAt;
+  }
+
   const nextSnapshot: TransactionsWorkspaceCacheSnapshot = {
     workspaceId,
     updatedAt: Date.now(),

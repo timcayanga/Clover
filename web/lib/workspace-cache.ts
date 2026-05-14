@@ -934,6 +934,34 @@ const filterTransactionsWorkspaceSnapshot = (
   };
 };
 
+const hasWorkspaceSnapshotData = (snapshot?: {
+  accounts?: CachedRecord[];
+  transactions?: CachedRecord[];
+  statementCheckpoints?: CachedRecord[];
+  imports?: CachedRecord[];
+} | null) =>
+  Boolean(
+    (Array.isArray(snapshot?.accounts) && snapshot.accounts.length > 0) ||
+      (Array.isArray(snapshot?.transactions) && snapshot.transactions.length > 0) ||
+      (Array.isArray(snapshot?.statementCheckpoints) && snapshot.statementCheckpoints.length > 0) ||
+      (Array.isArray(snapshot?.imports) && snapshot.imports.length > 0)
+  );
+
+const shouldPreservePopulatedSnapshot = (
+  existing: {
+    accounts?: CachedRecord[];
+    transactions?: CachedRecord[];
+    statementCheckpoints?: CachedRecord[];
+    imports?: CachedRecord[];
+  } | null | undefined,
+  incoming: {
+    accounts?: CachedRecord[];
+    transactions?: CachedRecord[];
+    statementCheckpoints?: CachedRecord[];
+    imports?: CachedRecord[];
+  }
+) => hasWorkspaceSnapshotData(existing) && !hasWorkspaceSnapshotData(incoming);
+
 export const readAccountsWorkspaceCache = (): AccountsWorkspaceCacheState | null => {
   const cache = readJsonCache<AccountsWorkspaceCacheState>(accountsWorkspaceCacheKey);
   if (!cache || typeof cache !== "object" || typeof cache.selectedWorkspaceId !== "string") {
@@ -978,6 +1006,11 @@ export const persistAccountsWorkspaceCache = (
   }
 
   const cache = readAccountsWorkspaceCache();
+  const existingSnapshot = cache?.snapshots[workspaceId] ?? null;
+  if (shouldPreservePopulatedSnapshot(existingSnapshot, snapshot)) {
+    return existingSnapshot?.updatedAt ?? 0;
+  }
+
   const updatedAt = Date.now();
   const nextSnapshot = filterAccountsWorkspaceSnapshot(workspaceId, {
     workspaceId,
@@ -1177,6 +1210,11 @@ export const persistTransactionsWorkspaceCache = (
   }
 
   const cache = readTransactionsWorkspaceCache();
+  const existingSnapshot = cache?.snapshots[workspaceId] ?? null;
+  if (shouldPreservePopulatedSnapshot(existingSnapshot, snapshot)) {
+    return existingSnapshot?.updatedAt ?? 0;
+  }
+
   const updatedAt = Date.now();
   const nextSnapshot = filterTransactionsWorkspaceSnapshot(workspaceId, {
     workspaceId,

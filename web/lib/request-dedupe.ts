@@ -69,7 +69,10 @@ export const fetchJsonOnce = async <T>(params: FetchJsonOnceParams): Promise<Fet
     });
 
     try {
-      const response = await fetch(params.input, params.init);
+      const response = await fetch(params.input, {
+        cache: "no-store",
+        ...params.init,
+      });
       const json = (await response.json().catch(() => null)) as T | null;
       pushBreadcrumb({
         route: params.route,
@@ -104,4 +107,3 @@ export const fetchJsonOnce = async <T>(params: FetchJsonOnceParams): Promise<Fet
   inFlightJsonRequests.set(params.key, promise as Promise<FetchJsonOnceResult<JsonValue>>);
   return promise;
 };
-
