@@ -19,12 +19,20 @@ export function PublicAccountActions({ variant = "desktop", accountState }: Publ
     const avatar = accountState?.avatarUrl ?? user?.imageUrl ?? null;
 
     return (
-      <Link className={`landing-account-link landing-account-link--${variant}`} href="/home" prefetch={false} aria-label="My Account">
+      <a
+        className={`landing-account-link landing-account-link--${variant}`}
+        href="/home"
+        aria-label="My Account"
+        onClick={(event) => {
+          event.preventDefault();
+          window.location.assign("/home");
+        }}
+      >
         <span className="landing-account-link__avatar" aria-hidden="true" style={avatar ? undefined : getAvatarBackgroundStyle(displayName)}>
           {avatar ? <img src={avatar} alt="" /> : <span>{getAvatarInitials(displayName)}</span>}
         </span>
         <span>My Account</span>
-      </Link>
+      </a>
     );
   }
 
