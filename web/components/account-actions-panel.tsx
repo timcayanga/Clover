@@ -78,11 +78,12 @@ export function AccountActionsPanel({ isGuest = false }: AccountActionsPanelProp
   };
 
   const handleSignOut = () => {
+    clearWorkspaceSelection();
+
     if (isGuest) {
+      window.location.assign("/sign-in");
       return;
     }
-
-    clearWorkspaceSelection();
 
     void signOut({
       redirectUrl: "/sign-in",

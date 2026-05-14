@@ -992,6 +992,12 @@ export function CloverShell({
   const handleSignOut = () => {
     persistSelectedWorkspaceId("");
     clearAllWorkspaceCaches();
+
+    if (!isLoaded || !isSignedIn) {
+      window.location.assign("/sign-in");
+      return;
+    }
+
     void signOut({
       redirectUrl: "/sign-in",
     }).catch(() => {

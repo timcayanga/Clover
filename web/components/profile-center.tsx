@@ -55,12 +55,17 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
   };
 
   const handleSignOut = () => {
-    if (!canSignOut || !isSignedIn) {
+    if (!canSignOut) {
       return;
     }
 
     persistSelectedWorkspaceId("");
     clearAllWorkspaceCaches();
+
+    if (!isSignedIn) {
+      window.location.assign("/sign-in");
+      return;
+    }
 
     void signOut({
       redirectUrl: "/sign-in",
