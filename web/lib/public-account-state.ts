@@ -1,5 +1,5 @@
 import { getSessionContext } from "@/lib/auth";
-import { getOrCreateCurrentUser } from "@/lib/user-context";
+import { syncClerkUser } from "@/lib/clerk";
 
 export type PublicAccountState = {
   signedIn: boolean;
@@ -18,7 +18,7 @@ export const resolvePublicAccountState = async (): Promise<PublicAccountState> =
       };
     }
 
-    const user = await getOrCreateCurrentUser(session.userId);
+    const user = await syncClerkUser(session.userId);
     const displayName = user.firstName ?? user.email?.split("@")[0] ?? "Account";
 
     return {
