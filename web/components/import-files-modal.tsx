@@ -1006,7 +1006,10 @@ const getImportVisibilityTimeoutMs = (fileCount: number) =>
 
 const summarizeVisibilityOutcome = (items: QueuedFile[]) => {
   const successful = items.filter(
-    (item) => item.confirmationState === "confirmed" && item.status !== "error" && item.status !== "needs_password"
+    (item) =>
+      item.status !== "error" &&
+      item.status !== "needs_password" &&
+      (item.confirmationState === "confirmed" || (item.importedRows !== null && item.importedRows > 0 && Boolean(item.targetAccountId)))
   );
   const failed = items.filter((item) => item.status === "error" || item.status === "needs_password");
   const partial = items.filter(
@@ -1287,7 +1290,7 @@ export function ImportFilesModal({
     autoCloseAfterStartRef.current = false;
   };
 
-  const hardStopVisibleImportModal = (reason: "deadline" | "background") => {
+  const hardStopVisibleImportModal = (reason: "deadline" | "background" | "visible") => {
     const currentItems = itemsRef.current;
     if (currentItems.length === 0) {
       setBusy(false);
@@ -1297,9 +1300,11 @@ export function ImportFilesModal({
 
     const outcome = summarizeVisibilityOutcome(currentItems);
     const outcomeMessage =
-      reason === "deadline"
-        ? `Initial visibility window ended. ${outcome.message}`
-        : outcome.message;
+      reason === "visible"
+        ? `Accounts and transactions are visible. ${outcome.message}`
+        : reason === "deadline"
+          ? `Initial visibility window ended. ${outcome.message}`
+          : outcome.message;
 
     for (const item of currentItems) {
       retiredImportActivityFileNamesRef.current.add(item.file.name);
@@ -1363,6 +1368,31 @@ export function ImportFilesModal({
       lastImportActivityRef.current = null;
       onClose();
     }, 10_000);
+  };
+
+  const closeVisibleImportModalIfPrimaryDataReady = () => {
+    const currentItems = itemsRef.current;
+    if (currentItems.length === 0 || !open || visibilityDeadlineRef.current === null) {
+      return;
+    }
+
+    const allPrimaryDataVisible = currentItems.every((item) => {
+      if (item.status === "error" || item.status === "needs_password") {
+        return true;
+      }
+
+      const localSummary = localPreparseSummaryByItemIdRef.current.get(item.id);
+      const localRows = Number(localSummary?.rowsImported ?? 0);
+      return (
+        item.confirmationState === "confirmed" ||
+        (item.importedRows !== null && item.importedRows > 0 && Boolean(item.targetAccountId)) ||
+        (localRows > 0 && Boolean(localSummary?.accountId))
+      );
+    });
+
+    if (allPrimaryDataVisible) {
+      hardStopVisibleImportModal("visible");
+    }
   };
 
   useEffect(() => {
@@ -3743,14 +3773,19 @@ export function ImportFilesModal({
       }
       const accountType = (localMetadata?.accountType ??
         inferAccountTypeFromStatement(institution, accountName, "bank")) as UploadInsightsSummary["accountType"];
-      const resolvedAccountId = resolveLocalAccountId(accountName, institution, accountNumber);
       const endingBalance = toBalanceString(localMetadata?.endingBalance ?? getTrailingBalanceFromParsedRows(parsedRows) ?? null);
-      const optimisticAccountId = resolvedAccountId.startsWith("optimistic-") ? resolvedAccountId : null;
 
       const currentItem = itemsRef.current.find((entry) => entry.id === itemId);
       if (!currentItem || currentItem.status === "done" || currentItem.status === "error" || currentItem.confirmationState === "confirmed") {
         return;
       }
+
+      const persistedAccountId =
+        accountName || institution || accountNumber
+          ? await ensureTargetAccountId(accountName, institution, accountType, accountNumber, endingBalance, parsedRows[0]?.currency ?? null)
+          : null;
+      const resolvedAccountId = persistedAccountId ?? resolveLocalAccountId(accountName, institution, accountNumber);
+      const optimisticAccountId = resolvedAccountId.startsWith("optimistic-") ? resolvedAccountId : null;
 
       const summary = buildOptimisticUploadSummary(
         item.file.name,
@@ -3779,6 +3814,7 @@ export function ImportFilesModal({
         importedRows: parsedRows.length,
         progressLabel: parsedRows.length > 0 ? "Preview ready" : "Reading locally",
       });
+      window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
     } catch (error) {
       if (isPasswordError(error)) {
         localPreparseStartedRef.current.delete(itemId);
@@ -5336,6 +5372,7 @@ export function ImportFilesModal({
         hardStopVisibleImportModal("deadline");
       }
     }, visibilityTimeoutMs);
+    closeVisibleImportModalIfPrimaryDataReady();
     capturePostHogClientEventOnce(
       "first_import_started",
       {

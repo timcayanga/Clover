@@ -3872,10 +3872,7 @@ function AccountsPageContent() {
                   nextTransactionsSnapshot = current;
                   return current;
                 }
-                const withoutImportedPlaceholders = current.filter(
-                  (transaction) => !(transaction.source === "upload" && transaction.accountId === importedAccountId)
-                );
-                const next = mergeImportedPreviewTransactions(withoutImportedPlaceholders, previewTransactions);
+                const next = mergeImportedPreviewTransactions(current, previewTransactions);
                 nextTransactionsSnapshot = next;
                 return next;
               });

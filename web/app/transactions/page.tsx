@@ -2349,11 +2349,16 @@ function TransactionsPageContent() {
         (transaction) => !deletedAccountIds.has(transaction.accountId)
       );
       const hasFreshTransactions = fetchedTransactions.length > 0;
+      const stableBaseTransactions =
+        transactionsRef.current.length > 0
+          ? transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
+          : visibleCachedWorkspaceTransactions;
+      const hasVisibleImportedBase = stableBaseTransactions.some(
+        (transaction) => transaction.source === "upload" || Boolean(transaction.importFileId)
+      );
       const baseTransactions =
-        options?.append || !hasFreshTransactions
-          ? transactionsRef.current.length > 0
-            ? transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
-            : visibleCachedWorkspaceTransactions
+        options?.append || !hasFreshTransactions || hasVisibleImportedBase
+          ? stableBaseTransactions
           : [];
       const mergedTransactions = options?.append
         ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
@@ -7535,10 +7540,7 @@ function TransactionsPageContent() {
                 if (previewTransactions.length === 0) {
                   return current;
                 }
-                const withoutImportedPlaceholders = current.filter(
-                  (transaction) => !(transaction.source === "upload" && transaction.accountId === importedAccountId)
-                );
-                return mergeImportedPreviewTransactions(withoutImportedPlaceholders, previewTransactions);
+                return mergeImportedPreviewTransactions(current, previewTransactions);
               });
             } else if (previewTransactions.length > 0) {
               setTransactions((current) => mergeImportedPreviewTransactions(current, previewTransactions));
