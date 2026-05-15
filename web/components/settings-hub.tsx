@@ -1424,14 +1424,17 @@ export function SettingsHub({
                       <p className="eyebrow">Deletion complete</p>
                       <h4 id="settings-delete-modal-title">{dataDeleteCopy[dataDeleteModal.scope].successTitle}</h4>
                     </div>
-                    <button className="button button-primary button-small" type="button" onClick={closeDeleteModal}>
-                      Done
-                    </button>
                   </div>
 
                   <p id="settings-delete-modal-copy" className="account-actions-modal__copy">
                     {dataDeleteCopy[dataDeleteModal.scope].successBody(dataDeleteModal.deletedCount)}
                   </p>
+
+                  <div className="account-actions-modal__actions">
+                    <button className="button button-primary button-small" type="button" onClick={closeDeleteModal}>
+                      Done
+                    </button>
+                  </div>
                 </>
               )}
             </section>
