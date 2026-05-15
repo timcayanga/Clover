@@ -88,6 +88,7 @@ export type EnrichedParsedImportRow = ParsedImportRow & {
   duplicateConfidence?: number;
   transferConfidence?: number;
   rowShapeConfidence?: number;
+  rowTeachabilityConfidence?: number;
   rawPayload?: Prisma.InputJsonValue | null;
   normalizedPayload?: Prisma.InputJsonValue | null;
   learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
@@ -3359,12 +3360,22 @@ export const enrichParsedRowsWithTraining = async (params: {
 
   const rowShapePenalty = scoreRowShapeLearningPenalty(rowShapeAssessment.score);
 
-  const isRowLowConfidence = (details: { effectiveConfidence: number; categoryName: string; categoryReason?: string | null; rowType?: ParsedImportRow["type"] }) => {
+  const isRowLowConfidence = (details: {
+    effectiveConfidence: number;
+    categoryName: string;
+    categoryReason?: string | null;
+    rowType?: ParsedImportRow["type"];
+    teachabilityScore?: number;
+  }) => {
     if (!details.rowType) {
       return true;
     }
 
     if (rowShapeAssessment.score < 65) {
+      return true;
+    }
+
+    if (typeof details.teachabilityScore === "number" && details.teachabilityScore < 55) {
       return true;
     }
 
@@ -3420,19 +3431,27 @@ export const enrichParsedRowsWithTraining = async (params: {
     const rowConfidence = normalizeConfidenceScore(row.confidence);
     const rowParserConfidence = normalizeConfidenceScore(rowWithInstitution.parserConfidence);
     const rowCategoryConfidence = normalizeConfidenceScore(rowWithInstitution.categoryConfidence);
+    const rowTeachability = assessParsedRowTeachability(row);
     const deterministicParserConfidence = parserSuppliedConcreteCategory
       ? Math.max(rowConfidence, rowParserConfidence, rowCategoryConfidence, Math.min(95, Math.max(90, statementConfidence)))
       : 0;
     const shapeConfidence = Math.max(0, Math.min(100, rowShapeAssessment.score));
+    const teachabilityPenalty = scoreRowShapeLearningPenalty(rowTeachability.score);
     const effectiveConfidence = Math.max(
       0,
       Math.min(
         100,
         Math.max(learned.confidence, deterministicParserConfidence, rowConfidence, rowCategoryConfidence, Math.round(shapeConfidence * 0.25)) -
-          rowShapePenalty
+          rowShapePenalty -
+          teachabilityPenalty
       )
     );
-    const parserConfidence = Math.max(0, Math.max(rowParserConfidence, rowConfidence, statementConfidence, Math.round(shapeConfidence * 0.2)) - Math.floor(rowShapePenalty * 0.5));
+    const parserConfidence = Math.max(
+      0,
+      Math.max(rowParserConfidence, rowConfidence, statementConfidence, Math.round(shapeConfidence * 0.2)) -
+        Math.floor(rowShapePenalty * 0.5) -
+        Math.floor(teachabilityPenalty * 0.5)
+    );
     const categoryConfidence = Math.max(rowCategoryConfidence, effectiveConfidence);
     const learnedRuleIdsApplied = [
       ...(Array.isArray(row.learnedRuleIdsApplied) ? (row.learnedRuleIdsApplied as string[]) : []),
@@ -3452,6 +3471,7 @@ export const enrichParsedRowsWithTraining = async (params: {
         categoryName,
         categoryReason: learned.categoryReason,
         rowType: nextType,
+        teachabilityScore: rowTeachability.score,
       })
         ? "pending_review"
         : "suggested",
@@ -3461,6 +3481,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       duplicateConfidence: 0,
       transferConfidence: nextType === "transfer" ? 100 : 0,
       rowShapeConfidence: shapeConfidence,
+      rowTeachabilityConfidence: rowTeachability.score,
       learnedRuleIdsApplied,
       normalizedPayload: {
         merchantClean: merchantClean || null,
@@ -3482,6 +3503,10 @@ export const enrichParsedRowsWithTraining = async (params: {
           statementConfidence,
           normalizedName: merchantClean || null,
           preferredType: nextType,
+          rowTeachability: {
+            score: rowTeachability.score,
+            issues: rowTeachability.issues,
+          },
         },
       },
       type: nextType,
