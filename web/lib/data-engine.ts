@@ -510,6 +510,10 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Income";
   }
 
+  if (/\bel\/?espay\b|\bespay\b/.test(lower) || /elespay|espay/.test(compact)) {
+    return "Income";
+  }
+
   if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) {
     return "Financial";
   }
@@ -3774,6 +3778,8 @@ export const enrichParsedRowsWithTraining = async (params: {
       categoryConfidence?: number | null;
     };
     const merchantText = row.merchantRaw || row.description || row.merchantClean || "";
+    const deterministicMerchantName = summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
+    const classificationMerchantText = deterministicMerchantName || merchantText;
     const normalizedPayload =
       rowWithInstitution.normalizedPayload &&
       typeof rowWithInstitution.normalizedPayload === "object" &&
@@ -3784,6 +3790,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       row.merchantRaw,
       row.merchantClean,
       row.description,
+      deterministicMerchantName,
       typeof normalizedPayload?.merchantClean === "string" ? normalizedPayload.merchantClean : null,
       typeof normalizedPayload?.categoryName === "string" ? normalizedPayload.categoryName : null,
     ]
@@ -3797,13 +3804,13 @@ export const enrichParsedRowsWithTraining = async (params: {
           categoryName: row.categoryName && row.categoryName.trim().toLowerCase() !== "other" ? row.categoryName : null,
           confidence: Math.max(20, rowTeachability.score),
           categoryReason: "row_teachability_blocked",
-          merchantKey: normalizeMerchantText(merchantText),
-          merchantTokens: tokenizeMerchant(merchantText),
-          normalizedName: summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null),
+          merchantKey: normalizeMerchantText(classificationMerchantText),
+          merchantTokens: tokenizeMerchant(classificationMerchantText),
+          normalizedName: deterministicMerchantName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null),
           preferredType: row.type ?? "expense",
         }
       : classifyMerchant({
-          merchantText,
+          merchantText: classificationMerchantText,
           categoryText,
           type: row.type ?? "expense",
           categoryName: row.categoryName ?? null,
@@ -3817,7 +3824,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       rowShapeScore: rowShapeAssessment.score,
       negativeSignalCount: negativeSignals.length,
     });
-    const merchantClean = learned.normalizedName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
+    const merchantClean = learned.normalizedName || deterministicMerchantName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
     const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(learned.preferredType ?? row.type ?? "expense");
     const nextType = coerceTransactionTypeFromCategoryName(
       categoryName,

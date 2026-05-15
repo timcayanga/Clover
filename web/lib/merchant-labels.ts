@@ -1471,6 +1471,10 @@ export const summarizeMerchantText = (value: string, institution?: string | null
     return simplified;
   }
 
+  if (institution === "BPI" && /\bel\/?espay\b|\bespay\b/i.test(value)) {
+    return "eL/ESPay";
+  }
+
   if (institution === "Metrobank") {
     if (/interbank\s+fund\s+transfer\s+credit\s+received\s+from\s+other\s+bank/i.test(rawLower)) {
       return "Incoming Interbank Transfer";
