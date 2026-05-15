@@ -609,6 +609,39 @@ export const scoreRowShapeLearningPenalty = (score: number) => {
   return 16;
 };
 
+export const assessParsedRowTeachability = (row: ParsedImportRow) => {
+  const assessment = assessParsedRowShapeConsistency([row]);
+  const merchantText = String(row.merchantClean ?? row.merchantRaw ?? row.description ?? "").trim();
+  const amount = Number(row.amount ?? NaN);
+  const hasMerchant = merchantText.length >= 2 && !/^(?:\?+|n\/a|null|undefined)$/i.test(merchantText);
+  const hasAmount = Number.isFinite(amount);
+  const hasType = row.type === "income" || row.type === "expense" || row.type === "transfer";
+  const hasDate = Boolean(parseDateValue(typeof row.date === "string" ? row.date : null));
+  const suspiciousTokens = /(?:\b(?:page|continued|statement|summary|account details)\b|^[^A-Za-z0-9]+$|[^\w\s]{4,})/i.test(merchantText);
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      assessment.score + (hasMerchant ? 10 : -20) + (hasAmount ? 10 : -25) + (hasType ? 8 : -12) + (hasDate ? 8 : -10) - (suspiciousTokens ? 15 : 0)
+    )
+  );
+  const issues = [...assessment.issues];
+  if (!hasMerchant) issues.push("merchant_missing");
+  if (!hasAmount) issues.push("amount_missing");
+  if (!hasDate) issues.push("date_missing");
+  if (!hasType) issues.push("type_missing");
+  if (suspiciousTokens) issues.push("merchant_noise");
+
+  return {
+    score,
+    issues,
+    hasMerchant,
+    hasAmount,
+    hasDate,
+    hasType,
+  };
+};
+
 export const buildTrainingSignalDedupeKey = (params: {
   source: "import_confirmation" | "manual_recategorization" | "training_upload" | "manual_transaction_creation";
   transactionId?: string | null;
@@ -3126,6 +3159,19 @@ export const applyDataQaReviewLearning = async (params: {
       continue;
     }
 
+    const parsedRowPreview = {
+      merchantRaw: merchantText,
+      merchantClean: normalizedName ?? merchantText,
+      categoryName,
+      type,
+      amount: parsedRecord.amount ?? parsedRecord.value ?? parsedRecord.total ?? null,
+      date: parsedRecord.date ?? parsedRecord.transactionDate ?? parsedRecord.postedDate ?? parsedRecord.statementDate ?? null,
+    } as ParsedImportRow;
+    const teachability = assessParsedRowTeachability(parsedRowPreview);
+    if (teachability.score < 55) {
+      continue;
+    }
+
     trainingSignals.push(
       recordTrainingSignal({
         workspaceId: params.workspaceId,
@@ -3136,7 +3182,7 @@ export const applyDataQaReviewLearning = async (params: {
         categoryName: category.name,
         type,
         source: "manual_recategorization",
-        confidence: readReviewString(reviewRow, "feedback") ? 90 : 100,
+        confidence: Math.max(60, (readReviewString(reviewRow, "feedback") ? 90 : 100) - scoreRowShapeLearningPenalty(teachability.score)),
         notes:
           readReviewString(reviewRow, "feedback") ??
           "Confirmed through Data QA review.",
@@ -3166,6 +3212,19 @@ export const applyDataQaReviewLearning = async (params: {
       continue;
     }
 
+    const parsedRowPreview = {
+      merchantRaw: merchantText,
+      merchantClean: normalizedName ?? merchantText,
+      categoryName,
+      type,
+      amount: output && isRecord(output) ? output.amount : null,
+      date: output && isRecord(output) ? output.date ?? null : null,
+    } as ParsedImportRow;
+    const teachability = assessParsedRowTeachability(parsedRowPreview);
+    if (teachability.score < 55) {
+      continue;
+    }
+
     trainingSignals.push(
       recordTrainingSignal({
         workspaceId: params.workspaceId,
@@ -3175,7 +3234,7 @@ export const applyDataQaReviewLearning = async (params: {
         categoryName: category.name,
         type,
         source: "manual_transaction_creation",
-        confidence: readReviewBoolean(reviewRow, "correct") ? 100 : 90,
+        confidence: Math.max(60, (readReviewBoolean(reviewRow, "correct") ? 100 : 90) - scoreRowShapeLearningPenalty(teachability.score)),
         notes:
           readReviewString(reviewRow, "feedback") ??
           "Added manually from Data QA because the parser missed this transaction.",

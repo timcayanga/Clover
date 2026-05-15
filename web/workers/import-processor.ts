@@ -548,6 +548,22 @@ const readCheckpointAccountType = (sourceMetadata: unknown): string | null => {
   return accountType ? accountType.toLowerCase() : null;
 };
 
+const readCheckpointStatementFamilySignature = (sourceMetadata: unknown): string | null => {
+  if (!isRecord(sourceMetadata)) {
+    return null;
+  }
+
+  const candidate =
+    (typeof sourceMetadata.statementFamilySignature === "string" && sourceMetadata.statementFamilySignature.trim()
+      ? sourceMetadata.statementFamilySignature
+      : null) ??
+    (typeof sourceMetadata.statement_family_signature === "string" && sourceMetadata.statement_family_signature.trim()
+      ? sourceMetadata.statement_family_signature
+      : null);
+
+  return candidate ? candidate.trim() : null;
+};
+
 const normalizeStatementImageOcrText = (text: string) => {
   const lines = text
     .split(/\r?\n/)
@@ -1486,9 +1502,14 @@ const replayRelatedImportsAfterLearning = async (params: {
   sourceImportFileId: string;
   sourceBankName: string | null;
   sourceAccountType?: string | null;
+  sourceStatementFamilySignature?: string | null;
   actorUserId?: string | null;
 }) => {
   const normalizedBankName = normalizeBankName(params.sourceBankName ?? "");
+  const normalizedSourceSignature =
+    typeof params.sourceStatementFamilySignature === "string" && params.sourceStatementFamilySignature.trim()
+      ? params.sourceStatementFamilySignature.trim()
+      : null;
   if (!normalizedBankName || normalizedBankName === "Unknown") {
     return { replayed: 0, candidates: 0 };
   }
@@ -1525,6 +1546,7 @@ const replayRelatedImportsAfterLearning = async (params: {
       select: {
         importFileId: true,
         sourceMetadata: true,
+        rowCount: true,
       },
     }).catch(() => []),
     prisma.dataQaRun.findMany({
@@ -1573,6 +1595,21 @@ const replayRelatedImportsAfterLearning = async (params: {
       const candidateAccountType = readCheckpointAccountType(checkpoint?.sourceMetadata);
       if (params.sourceAccountType && candidateAccountType && candidateAccountType !== params.sourceAccountType.toLowerCase()) {
         return false;
+      }
+
+      const candidateSignature = readCheckpointStatementFamilySignature(checkpoint?.sourceMetadata);
+      if (normalizedSourceSignature) {
+        if (!candidateSignature) {
+          return false;
+        }
+        if (candidateSignature !== normalizedSourceSignature) {
+          const sourceParts = normalizedSourceSignature.split("|").filter(Boolean);
+          const candidateParts = candidateSignature.split("|").filter(Boolean);
+          const overlap = sourceParts.filter((part) => candidateParts.includes(part)).length;
+          if (overlap < Math.max(1, Math.floor(sourceParts.length * 0.6))) {
+            return false;
+          }
+        }
       }
 
       const latestRun = latestRunByImportId.get(file.id);
@@ -3290,6 +3327,7 @@ export const processImportFileText = async (
         importMode,
         documentType: importMode,
         workflowStage: "identifying_transactions",
+        statementFamilySignature,
       } as Prisma.InputJsonValue;
       await prisma.accountStatementCheckpoint.upsert({
         where: { importFileId },
@@ -3593,6 +3631,7 @@ export const processImportFileText = async (
             sourceImportFileId: importFileId,
             sourceBankName: resolvedMetadata.institution,
             sourceAccountType: resolvedMetadata.accountType ?? null,
+            sourceStatementFamilySignature: statementFamilySignature,
             actorUserId: options.actorUserId ?? null,
           }).catch((error) => {
             console.warn("Continuous learning replay failed after import confirmation", {

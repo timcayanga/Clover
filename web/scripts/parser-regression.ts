@@ -571,6 +571,24 @@ const main = async () => {
     typeCoverage: number;
     issues: string[];
   };
+  const assessParsedRowTeachability = dataEngine.assessParsedRowTeachability as (
+    row: {
+      date?: string;
+      amount?: string | number | null;
+      merchantRaw?: string | null;
+      merchantClean?: string | null;
+      description?: string | null;
+      type?: string | null;
+      categoryName?: string | null;
+    }
+  ) => {
+    score: number;
+    issues: string[];
+    hasMerchant: boolean;
+    hasAmount: boolean;
+    hasDate: boolean;
+    hasType: boolean;
+  };
   const buildMerchantPrototypeLabel = dataEngine.buildMerchantPrototypeLabel as (
     merchantText: string,
     normalizedName?: string | null
@@ -994,6 +1012,24 @@ const main = async () => {
   ]);
   if (weakRowShape.score >= 50 || weakRowShape.issues.length === 0) {
     throw new Error(`expected weak row shape to score low, got ${JSON.stringify(weakRowShape)}`);
+  }
+
+  const teachabilityGood = assessParsedRowTeachability({
+    date: "2025-02-01",
+    amount: "120.00",
+    merchantRaw: "Coffee Shop",
+    merchantClean: "Coffee Shop",
+    type: "expense",
+    categoryName: "Shopping",
+  });
+  const teachabilityBad = assessParsedRowTeachability({
+    amount: "",
+    merchantRaw: "??",
+    merchantClean: "",
+    type: "",
+  });
+  if (teachabilityGood.score <= teachabilityBad.score || teachabilityBad.score >= 55) {
+    throw new Error(`expected teachability scoring to prefer clean rows, got ${JSON.stringify({ teachabilityGood, teachabilityBad })}`);
   }
 
   const layoutAwareText = buildLayoutAwarePdfTextFromContentItems([
