@@ -568,9 +568,10 @@ const isActiveEnrichmentJob = (importFile: ImportFile) => {
 const getEnrichmentNoticeState = (importFiles: ImportFile[], nowMs: number) => {
   const activeJobs = importFiles.filter(isActiveEnrichmentJob);
   if (activeJobs.length === 0) {
+    const failedJobs = importFiles.filter((importFile) => importFile.enrichmentJob?.status === "failed");
     return {
-      label: "Needs review",
-      detail: "couldn't finalize automatically; please review",
+      label: failedJobs.length > 0 ? "Needs review" : "Review suggested",
+      detail: failedJobs.length > 0 ? "couldn't finalize automatically; please review" : "some details may need a quick look",
       needsReview: true,
     };
   }

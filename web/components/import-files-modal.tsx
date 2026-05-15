@@ -1963,19 +1963,19 @@ export function ImportFilesModal({
   ): Promise<ImportProcessResult> => {
     const backgroundOnly = Boolean(options?.backgroundOnly);
     const emitItemUpdate = (patch: Partial<QueuedFile>) => {
-      const terminalPatch = patch.status === "done" || patch.status === "error" || patch.confirmationState === "confirmed";
-      if (!backgroundOnly || terminalPatch) {
+      if (!backgroundOnly) {
         updateItem(itemId, patch);
       }
     };
     const emitImportActivity = (payload: Parameters<typeof publishImportActivity>[0]) => {
-      const terminalActivity = payload?.status === "done" || payload?.status === "error";
-      if (!backgroundOnly || terminalActivity) {
+      if (!backgroundOnly) {
         publishImportActivity(payload);
       }
     };
     const emitImportError = (stage: ImportErrorStage, fileName: string, message: string | null | undefined) => {
-      closeImportAfterError(itemId, stage, fileName, message);
+      if (!backgroundOnly) {
+        closeImportAfterError(itemId, stage, fileName, message);
+      }
     };
     const resolvedAccountId =
       accountId && !accountId.startsWith("optimistic-")
