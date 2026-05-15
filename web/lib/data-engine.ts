@@ -552,6 +552,13 @@ const stripMerchantPrototypeNoise = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const splitMerchantPrototypeSegments = (value: string) =>
+  normalizeWhitespace(value)
+    .split(/(?:\s*[\/|•·,;]\s*|\s+(?:-+|–|—)\s+)/g)
+    .map((part) => normalizeWhitespace(part))
+    .filter((part) => part.length >= 3)
+    .filter((part) => !/^(?:bank|statement|payment|transfer|cash|atm|credit|debit)$/i.test(part));
+
 export const buildMerchantPrototypeVariants = (merchantText: string, normalizedName?: string | null) => {
   const variants = new Set<string>();
   const addVariant = (value: string | null | undefined) => {
@@ -574,6 +581,16 @@ export const buildMerchantPrototypeVariants = (merchantText: string, normalizedN
   addVariant(stripMerchantPrototypeNoise(String(normalizedName ?? "")));
   addVariant(summarizeMerchantText(merchantText));
 
+  for (const segment of splitMerchantPrototypeSegments(merchantText)) {
+    addVariant(segment);
+    addVariant(stripMerchantPrototypeNoise(segment));
+  }
+
+  for (const segment of splitMerchantPrototypeSegments(normalizedName ?? "")) {
+    addVariant(segment);
+    addVariant(stripMerchantPrototypeNoise(segment));
+  }
+
   return [...variants];
 };
 
@@ -593,11 +610,16 @@ export const estimateImportLearningConfidence = (params: {
       ? Math.max(0, Math.min(100, Math.round(params.rowShapeScore)))
       : 0;
   const negativeSignalCount = Math.max(0, Math.round(params.negativeSignalCount ?? 0));
-  const teachabilityBoost = Math.round(teachabilityScore * 0.35);
-  const shapeBoost = Math.round(rowShapeScore * 0.25);
+  const teachabilityBoost = Math.round(teachabilityScore * 0.38);
+  const shapeBoost = Math.round(rowShapeScore * 0.28);
+  const teachabilityPenalty = teachabilityScore < 60 ? Math.round((60 - teachabilityScore) * 0.8) : 0;
+  const shapePenalty = rowShapeScore < 60 ? Math.round((60 - rowShapeScore) * 0.55) : 0;
   const negativePenalty = Math.min(24, negativeSignalCount * 4);
 
-  return Math.max(0, Math.min(100, baseConfidence + teachabilityBoost + shapeBoost - negativePenalty));
+  return Math.max(
+    0,
+    Math.min(100, baseConfidence + teachabilityBoost + shapeBoost - teachabilityPenalty - shapePenalty - negativePenalty)
+  );
 };
 
 export const assessParsedRowShapeConsistency = (rows: ParsedImportRow[]) => {
@@ -715,7 +737,7 @@ export const shouldPromoteTrainingSignalForLearning = (params: {
   }
 
   if (teachabilityScore !== null) {
-    return teachabilityScore >= 55;
+    return teachabilityScore >= 60;
   }
 
   return (confidence ?? 0) >= 60;

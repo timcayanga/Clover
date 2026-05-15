@@ -1074,6 +1074,11 @@ const main = async () => {
     }) ||
     shouldPromoteTrainingSignalForLearning({
       confidence: 92,
+      teachabilityScore: 58,
+      merchantText: "GrabPay",
+    }) ||
+    shouldPromoteTrainingSignalForLearning({
+      confidence: 92,
       teachabilityScore: teachabilityBad.score,
       merchantText: "???",
     })
@@ -1214,6 +1219,15 @@ const main = async () => {
   const prototypeVariants = buildMerchantPrototypeVariants("Burger King 1234", "Burger King");
   if (!prototypeVariants.includes("Burger King 1234") || !prototypeVariants.some((variant) => /Burger King/i.test(variant))) {
     throw new Error(`expected prototype variants to keep merchant evidence and normalized variants, got ${JSON.stringify(prototypeVariants)}`);
+  }
+  const segmentedPrototypeVariants = buildMerchantPrototypeVariants("Burger King / SM North", "Burger King");
+  if (
+    !segmentedPrototypeVariants.some((variant) => /Burger King/i.test(variant)) ||
+    !segmentedPrototypeVariants.some((variant) => /SM North/i.test(variant))
+  ) {
+    throw new Error(
+      `expected segmented merchant prototype variants to keep both merchant segments, got ${JSON.stringify(segmentedPrototypeVariants)}`
+    );
   }
   const calibratedConfidence = estimateImportLearningConfidence({
     baseConfidence: 60,
