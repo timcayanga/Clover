@@ -558,6 +558,20 @@ const main = async () => {
     endDate: string | null;
     confidence: number;
   };
+  const assessParsedRowShapeConsistency = dataEngine.assessParsedRowShapeConsistency as (
+    rows: Array<{ date?: string; amount?: string; merchantRaw?: string; merchantClean?: string; description?: string; type?: string }>
+  ) => {
+    score: number;
+    dateCoverage: number;
+    amountCoverage: number;
+    merchantCoverage: number;
+    typeCoverage: number;
+    issues: string[];
+  };
+  const buildMerchantPrototypeLabel = dataEngine.buildMerchantPrototypeLabel as (
+    merchantText: string,
+    normalizedName?: string | null
+  ) => string | null;
   const mergeStatementMetadataWithTemplate = dataEngine.mergeStatementMetadataWithTemplate as (
     detected: {
       institution: string | null;
@@ -940,6 +954,27 @@ const main = async () => {
     throw new Error(`expected date-stamped upload display name to omit date text but got ${safeDisplayName}`);
   }
   console.log("[PASS] Bank label hygiene | date-stamped labels are rejected or sanitized");
+
+  const strongRowShape = assessParsedRowShapeConsistency([
+    { date: "2025-01-31", amount: "120.00", merchantRaw: "Burger King", merchantClean: "Burger King", type: "expense" },
+    { date: "2025-02-01", amount: "15.00", merchantRaw: "Transport Fee", merchantClean: "Transport Fee", type: "transfer" },
+  ]);
+  if (strongRowShape.score < 80 || strongRowShape.dateCoverage < 1 || strongRowShape.amountCoverage < 1) {
+    throw new Error(`expected strong row shape to score well, got ${JSON.stringify(strongRowShape)}`);
+  }
+
+  const weakRowShape = assessParsedRowShapeConsistency([
+    { amount: "120.00", merchantRaw: "??", type: "" },
+    { amount: "", merchantRaw: "", type: "" },
+  ]);
+  if (weakRowShape.score >= 50 || weakRowShape.issues.length === 0) {
+    throw new Error(`expected weak row shape to score low, got ${JSON.stringify(weakRowShape)}`);
+  }
+
+  const prototypeLabel = buildMerchantPrototypeLabel("Burger King 1234", "Burger King");
+  if (prototypeLabel !== "Burger King 1234" && prototypeLabel !== null) {
+    throw new Error(`expected prototype label helper to keep a useful merchant variant or null, got ${prototypeLabel}`);
+  }
 
   const rcbcCreditPath = join(root, "Samples/RCBC/728919236-Acfroga47rrwerw7v8xwjcyqjxnpvi1hv5climj2qkpdzsqlabwmr51pzid4mt-Ao-Swizece4lt1ycaubzsilpqnzohhyzqxuv2cfbldosfajyekhfijmkceso8yzz1vgjmwntbprxb5ribspge-G.pdf");
   const rcbcCreditBytes = await readFile(rcbcCreditPath);

@@ -437,37 +437,111 @@ const scoreStatementTextCandidate = (text: string) => {
 };
 
 const pickBestStatementTextCandidate = (candidates: Array<{ text: string; label: string }>) => {
-  let best = "";
-  let bestScore = Number.NEGATIVE_INFINITY;
-  let bestLabel = "";
+  const scoredCandidates = candidates
+    .map((candidate) => {
+      const text = candidate.text.trim();
+      if (!text) {
+        return null;
+      }
 
-  for (const candidate of candidates) {
-    const text = candidate.text.trim();
-    if (!text) {
-      continue;
-    }
+      return {
+        ...candidate,
+        text,
+        score: scoreStatementTextCandidate(text),
+      };
+    })
+    .filter((candidate): candidate is { text: string; label: string; score: number } => Boolean(candidate))
+    .sort((a, b) => b.score - a.score || b.text.length - a.text.length);
 
-    const score = scoreStatementTextCandidate(text);
-    if (score > bestScore || (score === bestScore && text.length > best.length)) {
-      best = text;
-      bestScore = score;
-      bestLabel = candidate.label;
-    }
-  }
-
+  const best = scoredCandidates[0];
   if (!best) {
     return "";
   }
 
+  const runnerUp = scoredCandidates[1] ?? null;
+  const merged = runnerUp ? mergeCompatibleStatementTextCandidates(best, runnerUp) : null;
+  if (merged) {
+    const mergedScore = scoreStatementTextCandidate(merged);
+    if (mergedScore >= best.score + 1) {
+      if (process.env.CLOVER_DEBUG_OCR_SELECTION === "1") {
+        console.log("Selected OCR merged candidate", {
+          labels: [best.label, runnerUp.label],
+          score: Number(mergedScore.toFixed(2)),
+          length: merged.length,
+        });
+      }
+      return merged;
+    }
+  }
+
   if (process.env.CLOVER_DEBUG_OCR_SELECTION === "1") {
     console.log("Selected OCR text candidate", {
-      label: bestLabel,
-      score: Number(bestScore.toFixed(2)),
-      length: best.length,
+      label: best.label,
+      score: Number(best.score.toFixed(2)),
+      length: best.text.length,
     });
   }
 
-  return best;
+  return best.text;
+};
+
+const mergeCompatibleStatementTextCandidates = (
+  left: { text: string; label: string; score: number },
+  right: { text: string; label: string; score: number }
+) => {
+  if (Math.abs(left.score - right.score) > 4) {
+    return null;
+  }
+
+  const leftLines = left.text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const rightLines = right.text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  if (leftLines.length === 0 || rightLines.length === 0) {
+    return null;
+  }
+
+  const leftSet = new Set(leftLines.map((line) => line.toLowerCase()));
+  const overlap = rightLines.filter((line) => leftSet.has(line.toLowerCase())).length / Math.max(leftLines.length, rightLines.length);
+  if (overlap < 0.3) {
+    return null;
+  }
+
+  const mergedLines: string[] = [];
+  const seen = new Set<string>();
+  const addLine = (line: string) => {
+    const key = line.toLowerCase();
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    mergedLines.push(line);
+  };
+
+  for (const line of leftLines) {
+    addLine(line);
+  }
+
+  for (const line of rightLines) {
+    const isUsefulLine =
+      /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i.test(line) ||
+      /\d{4}-\d{2}-\d{2}/.test(line) ||
+      /[₱$€£¥]|\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/.test(line) ||
+      /\b(?:balance|opening|closing|ending|running|available|transfer|payment|deposit|withdraw|credit|debit|merchant|reference)\b/i.test(line);
+    if (isUsefulLine) {
+      addLine(line);
+    }
+  }
+
+  const merged = mergedLines.join("\n").trim();
+  return merged.length > Math.max(left.text.length, right.text.length) ? merged : null;
 };
 
 const extractTextFromPdfBytesWithRenderFirstFallback = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {

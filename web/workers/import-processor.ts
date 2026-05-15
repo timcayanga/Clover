@@ -534,6 +534,19 @@ const readCheckpointImportMode = (sourceMetadata: unknown): ImportImageMode | nu
   return normalizeImportImageMode(sourceMetadata.importMode);
 };
 
+const readCheckpointAccountType = (sourceMetadata: unknown): string | null => {
+  if (!isRecord(sourceMetadata)) {
+    return null;
+  }
+
+  const accountType =
+    (typeof sourceMetadata.accountType === "string" && sourceMetadata.accountType.trim()) ||
+    (typeof sourceMetadata.account_type === "string" && sourceMetadata.account_type.trim()) ||
+    null;
+
+  return accountType ? accountType.toLowerCase() : null;
+};
+
 const normalizeStatementImageOcrText = (text: string) => {
   const lines = text
     .split(/\r?\n/)
@@ -1471,6 +1484,7 @@ const replayRelatedImportsAfterLearning = async (params: {
   workspaceId: string;
   sourceImportFileId: string;
   sourceBankName: string | null;
+  sourceAccountType?: string | null;
   actorUserId?: string | null;
 }) => {
   const normalizedBankName = normalizeBankName(params.sourceBankName ?? "");
@@ -1552,6 +1566,11 @@ const replayRelatedImportsAfterLearning = async (params: {
       const checkpoint = checkpointByImportId.get(file.id);
       const bankName = readCheckpointBankName(checkpoint?.sourceMetadata);
       if (bankName !== normalizedBankName) {
+        return false;
+      }
+
+      const candidateAccountType = readCheckpointAccountType(checkpoint?.sourceMetadata);
+      if (params.sourceAccountType && candidateAccountType && candidateAccountType !== params.sourceAccountType.toLowerCase()) {
         return false;
       }
 
@@ -2560,6 +2579,7 @@ export const processImportFileText = async (
           workspaceId: String(importFile.workspaceId),
           institution: metadata.institution,
           fileType: importFile.fileType,
+          accountType: metadata.accountType ?? null,
         })
       : null);
   const templateMetadata =
@@ -3554,6 +3574,7 @@ export const processImportFileText = async (
             workspaceId: String(importFile.workspaceId),
             sourceImportFileId: importFileId,
             sourceBankName: resolvedMetadata.institution,
+            sourceAccountType: resolvedMetadata.accountType ?? null,
             actorUserId: options.actorUserId ?? null,
           }).catch((error) => {
             console.warn("Continuous learning replay failed after import confirmation", {

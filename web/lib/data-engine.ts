@@ -80,6 +80,7 @@ export type EnrichedParsedImportRow = ParsedImportRow & {
   accountMatchConfidence?: number;
   duplicateConfidence?: number;
   transferConfidence?: number;
+  rowShapeConfidence?: number;
   rawPayload?: Prisma.InputJsonValue | null;
   normalizedPayload?: Prisma.InputJsonValue | null;
   learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
@@ -510,6 +511,79 @@ export const tokenizeMerchant = (value?: string | null) =>
     .split(" ")
     .map((token) => token.trim())
     .filter((token) => token.length > 1 && !COMMON_STOP_WORDS.has(token));
+
+export const buildMerchantPrototypeLabel = (merchantText: string, normalizedName?: string | null) => {
+  const base = summarizeMerchantText(merchantText);
+  const normalized = normalizeMerchantText(normalizedName ?? merchantText);
+  const prototype = normalizeWhitespace(base).trim();
+
+  if (!prototype) {
+    return null;
+  }
+
+  if (prototype.length < 4) {
+    return null;
+  }
+
+  if (normalizeMerchantText(prototype) === normalized) {
+    return null;
+  }
+
+  if (/^(?:bank transfer|cash payment|atm withdrawal|credit card payment|service charge|documentary stamp tax)$/i.test(prototype)) {
+    return null;
+  }
+
+  return prototype;
+};
+
+export const assessParsedRowShapeConsistency = (rows: ParsedImportRow[]) => {
+  const total = rows.length;
+  if (total === 0) {
+    return {
+      score: 0,
+      dateCoverage: 0,
+      amountCoverage: 0,
+      merchantCoverage: 0,
+      typeCoverage: 0,
+      issues: ["empty_rows"],
+    };
+  }
+
+  const parseableDateCount = rows.filter((row) => Boolean(parseDateValue(typeof row.date === "string" ? row.date : null))).length;
+  const amountCount = rows.filter((row) => Number.isFinite(Number(row.amount ?? NaN))).length;
+  const merchantCount = rows.filter((row) => {
+    const value = String(row.merchantClean ?? row.merchantRaw ?? row.description ?? "").trim();
+    return value.length >= 2;
+  }).length;
+  const typeCount = rows.filter((row) => row.type === "income" || row.type === "expense" || row.type === "transfer").length;
+  const dateCoverage = parseableDateCount / total;
+  const amountCoverage = amountCount / total;
+  const merchantCoverage = merchantCount / total;
+  const typeCoverage = typeCount / total;
+
+  const issues: string[] = [];
+  if (dateCoverage < 0.65) issues.push("date_coverage");
+  if (amountCoverage < 0.9) issues.push("amount_coverage");
+  if (merchantCoverage < 0.75) issues.push("merchant_coverage");
+  if (typeCoverage < 0.8) issues.push("type_coverage");
+
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(dateCoverage * 35 + amountCoverage * 30 + merchantCoverage * 20 + typeCoverage * 15 - Math.max(0, issues.length - 1) * 8)
+    )
+  );
+
+  return {
+    score,
+    dateCoverage,
+    amountCoverage,
+    merchantCoverage,
+    typeCoverage,
+    issues,
+  };
+};
 
 export const buildTrainingSignalDedupeKey = (params: {
   source: "import_confirmation" | "manual_recategorization" | "training_upload" | "manual_transaction_creation";
@@ -1046,6 +1120,7 @@ export const loadBestStatementTemplateForInstitution = async (params: {
   workspaceId: string;
   institution?: string | null;
   fileType?: string | null;
+  accountType?: ImportedAccountType | null;
 }) => {
   const columns = await getCompatibleStatementTemplateColumns();
   if (columns.length === 0) {
@@ -1068,7 +1143,40 @@ export const loadBestStatementTemplateForInstitution = async (params: {
       take: 5,
     });
 
-    return (templates[0] ?? null) as StatementTemplateRow | null;
+    const scoredTemplates = templates
+      .map((template) => {
+        const parserConfig =
+          template.parserConfig && typeof template.parserConfig === "object" && !Array.isArray(template.parserConfig)
+            ? (template.parserConfig as Record<string, unknown>)
+            : null;
+        const templateAccountType =
+          typeof parserConfig?.accountType === "string" ? parserConfig.accountType.trim().toLowerCase() : null;
+        const rowCount = typeof parserConfig?.rowCount === "number" ? parserConfig.rowCount : null;
+        let score = 0;
+
+        if (template.institution && institution && normalizeMerchantText(template.institution) === normalizeMerchantText(institution)) {
+          score += 40;
+        }
+
+        if (params.fileType && template.fileType && template.fileType === params.fileType) {
+          score += 20;
+        }
+
+        if (params.accountType && templateAccountType === params.accountType.toLowerCase()) {
+          score += 18;
+        }
+
+        if (typeof rowCount === "number") {
+          score += Math.min(10, Math.max(0, 10 - Math.floor(Math.abs(rowCount - 20) / 5)));
+        }
+
+        score += Math.min(12, Math.round((template.successCount ?? 0) * 2 + (template.exampleCount ?? 0)));
+
+        return { template, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    return (scoredTemplates[0]?.template ?? null) as StatementTemplateRow | null;
   } catch (error) {
     if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
       return null;
@@ -2511,6 +2619,19 @@ export const recordTrainingSignal = async (params: {
       confidence: params.confidence ?? 100,
     });
 
+    const prototypeLabel = buildMerchantPrototypeLabel(params.merchantText, normalizedMerchantLabel);
+    if (prototypeLabel) {
+      await upsertMerchantRule({
+        workspaceId: params.workspaceId,
+        merchantText: prototypeLabel,
+        normalizedName: normalizedMerchantLabel || prototypeLabel,
+        categoryId: params.categoryId,
+        categoryName: params.categoryName ?? category.name,
+        source: `${params.source}:prototype`,
+        confidence: Math.max(60, (params.confidence ?? 100) - 10),
+      });
+    }
+
     if (params.actorUserId) {
       void capturePostHogServerEvent(existingRule ? "merchant_rule_updated" : "merchant_rule_created", params.actorUserId, {
         workspace_id: params.workspaceId,
@@ -2892,6 +3013,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       ? Math.max(0, Math.min(100, params.statementConfidence))
       : 0;
   const statementConfidence = rawStatementConfidence > 0 ? rawStatementConfidence : 100;
+  const rowShapeAssessment = assessParsedRowShapeConsistency(params.rows);
   const normalizeConfidenceScore = (value: unknown) => {
     if (typeof value !== "number" || !Number.isFinite(value)) {
       return 0;
@@ -2960,8 +3082,12 @@ export const enrichParsedRowsWithTraining = async (params: {
     const deterministicParserConfidence = parserSuppliedConcreteCategory
       ? Math.max(rowConfidence, rowParserConfidence, rowCategoryConfidence, Math.min(95, Math.max(90, statementConfidence)))
       : 0;
-    const effectiveConfidence = Math.max(0, Math.min(100, Math.max(learned.confidence, deterministicParserConfidence, rowConfidence, rowCategoryConfidence)));
-    const parserConfidence = Math.max(rowParserConfidence, rowConfidence, statementConfidence);
+    const shapeConfidence = Math.max(0, Math.min(100, rowShapeAssessment.score));
+    const effectiveConfidence = Math.max(
+      0,
+      Math.min(100, Math.max(learned.confidence, deterministicParserConfidence, rowConfidence, rowCategoryConfidence, Math.round(shapeConfidence * 0.25)))
+    );
+    const parserConfidence = Math.max(rowParserConfidence, rowConfidence, statementConfidence, Math.round(shapeConfidence * 0.2));
     const categoryConfidence = Math.max(rowCategoryConfidence, effectiveConfidence);
     const learnedRuleIdsApplied = [
       ...(Array.isArray(row.learnedRuleIdsApplied) ? (row.learnedRuleIdsApplied as string[]) : []),
@@ -2989,6 +3115,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.max(70, accountMatch.score))) : 0,
       duplicateConfidence: 0,
       transferConfidence: nextType === "transfer" ? 100 : 0,
+      rowShapeConfidence: shapeConfidence,
       learnedRuleIdsApplied,
       normalizedPayload: {
         merchantClean: merchantClean || null,
