@@ -19,6 +19,7 @@ import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
+export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v1";
 
 type TrainingSignalRow = {
   categoryId: string;
@@ -72,6 +73,25 @@ type StatementTemplateRow = {
   successCount: number;
   failureCount: number;
   lastSeenAt: Date;
+};
+
+type ImportFileExtractionCacheRow = {
+  workspaceId: string;
+  fileFingerprint: string;
+  fileType: string;
+  importMode: string;
+  cacheVersion: string;
+  extractedText: string;
+  statementFingerprint: string | null;
+  statementFamilySignature: string | null;
+  metadata: Prisma.JsonValue | null;
+  parsedRows: Prisma.JsonValue | null;
+  pageCount: number;
+  confidence: number;
+  hitCount: number;
+  lastUsedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export type EnrichedParsedImportRow = ParsedImportRow & {
@@ -302,6 +322,26 @@ const RECURRING_PATTERN_COLUMNS = [
   "transactionCount",
   "confidence",
   "rawPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const IMPORT_FILE_EXTRACTION_CACHE_COLUMNS = [
+  "id",
+  "workspaceId",
+  "fileFingerprint",
+  "fileType",
+  "importMode",
+  "cacheVersion",
+  "extractedText",
+  "statementFingerprint",
+  "statementFamilySignature",
+  "metadata",
+  "parsedRows",
+  "pageCount",
+  "confidence",
+  "hitCount",
+  "lastUsedAt",
   "createdAt",
   "updatedAt",
 ] as const;
@@ -1321,6 +1361,25 @@ export const getCompatibleRecurringPatternColumns = async () => {
   return compatible as string[];
 };
 
+export const getCompatibleImportFileExtractionCacheColumns = async () => {
+  const cacheKey = "ImportFileExtractionCache";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'ImportFileExtractionCache'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = IMPORT_FILE_EXTRACTION_CACHE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
 export const loadStatementTemplate = async (params: {
   workspaceId: string;
   fingerprint: string;
@@ -1398,6 +1457,121 @@ export const loadBestStatementTemplateForInstitution = async (params: {
     return (scoredTemplates[0]?.template ?? null) as StatementTemplateRow | null;
   } catch (error) {
     if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return null;
+    }
+
+  throw error;
+  }
+};
+
+export const loadImportFileExtractionCache = async (params: {
+  workspaceId: string;
+  fileFingerprint: string;
+  fileType: string;
+  importMode: string;
+  cacheVersion?: string;
+}) => {
+  const columns = await getCompatibleImportFileExtractionCacheColumns();
+  if (columns.length === 0) {
+    return null;
+  }
+
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT ${columns.map((column) => `"${column}"`).join(", ")}
+       FROM "ImportFileExtractionCache"
+       WHERE "workspaceId" = $1 AND "fileFingerprint" = $2 AND "fileType" = $3 AND "importMode" = $4 AND "cacheVersion" = $5
+       LIMIT 1`,
+      params.workspaceId,
+      params.fileFingerprint,
+      params.fileType,
+      params.importMode,
+      params.cacheVersion ?? IMPORT_FILE_EXTRACTION_CACHE_VERSION
+    );
+
+    const row = rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return row as ImportFileExtractionCacheRow;
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "ImportFileExtractionCache")) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const upsertImportFileExtractionCache = async (params: {
+  workspaceId: string;
+  fileFingerprint: string;
+  fileType: string;
+  importMode: string;
+  extractedText: string;
+  statementFingerprint?: string | null;
+  statementFamilySignature?: string | null;
+  metadata?: Prisma.InputJsonValue | null;
+  parsedRows?: Prisma.InputJsonValue | null;
+  pageCount?: number;
+  confidence?: number;
+  hitCount?: number;
+  lastUsedAt?: Date;
+  cacheVersion?: string;
+}) => {
+  const columns = await getCompatibleImportFileExtractionCacheColumns();
+  if (columns.length === 0) {
+    return null;
+  }
+
+  const record: Record<string, unknown> = {};
+  if (columns.includes("workspaceId")) record.workspaceId = params.workspaceId;
+  if (columns.includes("fileFingerprint")) record.fileFingerprint = params.fileFingerprint;
+  if (columns.includes("fileType")) record.fileType = params.fileType;
+  if (columns.includes("importMode")) record.importMode = params.importMode;
+  if (columns.includes("cacheVersion")) record.cacheVersion = params.cacheVersion ?? IMPORT_FILE_EXTRACTION_CACHE_VERSION;
+  if (columns.includes("extractedText")) record.extractedText = params.extractedText;
+  if (columns.includes("statementFingerprint")) record.statementFingerprint = params.statementFingerprint ?? null;
+  if (columns.includes("statementFamilySignature")) record.statementFamilySignature = params.statementFamilySignature ?? null;
+  if (columns.includes("metadata")) record.metadata = params.metadata ?? null;
+  if (columns.includes("parsedRows")) record.parsedRows = params.parsedRows ?? null;
+  if (columns.includes("pageCount")) record.pageCount = Math.max(0, Number(params.pageCount ?? 0));
+  if (columns.includes("confidence")) record.confidence = Math.max(0, Math.min(100, Number(params.confidence ?? 0)));
+  if (columns.includes("hitCount")) record.hitCount = Math.max(0, Number(params.hitCount ?? 0));
+  if (columns.includes("lastUsedAt")) record.lastUsedAt = params.lastUsedAt ?? new Date();
+  if (columns.includes("createdAt")) record.createdAt = new Date();
+  if (columns.includes("updatedAt")) record.updatedAt = new Date();
+
+  const recordColumns = Object.keys(record);
+  if (recordColumns.length === 0) {
+    return null;
+  }
+
+  try {
+    const placeholders = recordColumns.map((_, index) => `$${index + 1}`).join(", ");
+    const updateColumns = recordColumns.filter((column) => !["workspaceId", "fileFingerprint", "fileType", "importMode", "cacheVersion", "createdAt"].includes(column));
+    const updateClause = updateColumns
+      .map((column, index) => `"${column}" = EXCLUDED."${column}"`)
+      .join(", ");
+
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "ImportFileExtractionCache" (${recordColumns.map((column) => `"${column}"`).join(", ")})
+       VALUES (${placeholders})
+       ON CONFLICT ("workspaceId", "fileFingerprint", "fileType", "importMode", "cacheVersion")
+       DO UPDATE SET ${updateClause || `"updatedAt" = EXCLUDED."updatedAt"`}`,
+      ...recordColumns.map((column) => record[column] ?? null)
+    );
+
+    return loadImportFileExtractionCache({
+      workspaceId: params.workspaceId,
+      fileFingerprint: params.fileFingerprint,
+      fileType: params.fileType,
+      importMode: params.importMode,
+      cacheVersion: params.cacheVersion ?? IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "ImportFileExtractionCache") || isMissingDatabaseColumnError(error)) {
       return null;
     }
 

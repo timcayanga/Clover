@@ -7,7 +7,11 @@ import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { countNonCashAccounts, getWorkspaceOwnerLimits } from "@/lib/plan-access";
 import { normalizeInstitutionCurrency, parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
-import { readImportedFileImageDataUrls, readImportedFileText, readImportedPdfPageImages } from "@/lib/import-file-text.server";
+import {
+  readImportedFileImageDataUrls,
+  readImportedFileTextWithCacheInfo,
+  readImportedPdfPageImages,
+} from "@/lib/import-file-text.server";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { parseReceiptText } from "@/lib/split-bill";
 import {
@@ -2566,32 +2570,28 @@ export const processImportFileText = async (
   const imageImport = isImageImportFile(fileType, fileName);
   const isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
+  let textCacheInfo: Awaited<ReturnType<typeof readImportedFileTextWithCacheInfo>> | null = null;
+  const storageKey = String(importFile.storageKey ?? "");
 
   if (imageImport || !text) {
-    const storageKey = String(importFile.storageKey ?? "");
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
 
-    if (imageImport) {
-      pageImages = await readImportedFileImageDataUrls({
-        storageKey,
-        fileType,
-        fileName,
-      });
-    }
-
     if (!text) {
       try {
-        text = await readImportedFileText(
+        textCacheInfo = await readImportedFileTextWithCacheInfo(
           {
             storageKey,
             fileType,
             fileName,
+            workspaceId: String(importFile.workspaceId),
+            importMode,
           },
           options.password,
           options.pdfJsBaseUrl
         );
+        text = textCacheInfo.text;
       } catch (error) {
         console.warn("Unable to read imported file text; continuing with vision fallback", {
           importFileId,
@@ -2602,21 +2602,47 @@ export const processImportFileText = async (
     }
   }
 
+  const canReuseCachedStatementParse =
+    importMode === "statement" &&
+    Boolean(textCacheInfo?.cacheHit) &&
+    Array.isArray(textCacheInfo?.cacheRecord?.parsedRows) &&
+    Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) &&
+    Boolean(textCacheInfo?.cacheRecord?.metadata);
+
+  if (imageImport && !canReuseCachedStatementParse) {
+    if (!storageKey) {
+      throw new Error("Missing imported file.");
+    }
+
+    pageImages = await readImportedFileImageDataUrls({
+      storageKey,
+      fileType,
+      fileName,
+    });
+  }
+
   if (isJsonImportFile(fileType, fileName)) {
     return processImportTrainingJson(importFileId, importFile, text, options, startedAt);
   }
 
   const textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
-  const metadata = detectStatementMetadataFromText(textForParse);
-  const statementFingerprint = buildStatementFingerprint(textForParse, metadata, importFile.fileName, importFile.fileType, importMode);
-  const statementFamilySignature = buildStatementFamilySignatureFromText(
-    textForParse,
-    {
-      institution: metadata.institution ?? null,
-      accountType: metadata.accountType ?? null,
-    },
-    importFile.fileType
-  );
+  const cachedParseRecord = canReuseCachedStatementParse ? textCacheInfo?.cacheRecord ?? null : null;
+  const metadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
+    ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
+    : detectStatementMetadataFromText(textForParse);
+  const statementFingerprint =
+    cachedParseRecord?.statementFingerprint ??
+    buildStatementFingerprint(textForParse, metadata, importFile.fileName, importFile.fileType, importMode);
+  const statementFamilySignature =
+    cachedParseRecord?.statementFamilySignature ??
+    buildStatementFamilySignatureFromText(
+      textForParse,
+      {
+        institution: metadata.institution ?? null,
+        accountType: metadata.accountType ?? null,
+      },
+      importFile.fileType
+    );
   const existingTemplate = await loadStatementTemplate({
     workspaceId: String(importFile.workspaceId),
     fingerprint: statementFingerprint,
@@ -2672,11 +2698,13 @@ export const processImportFileText = async (
     ...Object.fromEntries(Object.entries(metadataOverride).filter(([, value]) => value !== undefined)),
   } as typeof mergedMetadata;
 
-  const parsedRows = parseImportText(textForParse, importFile.fileName, importFile.fileType, {
-    institution: metadataForParse.institution,
-    accountName: metadataForParse.accountName,
-    accountNumber: metadataForParse.accountNumber,
-  });
+  const parsedRows = canReuseCachedStatementParse
+    ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
+    : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
+        institution: metadataForParse.institution,
+        accountName: metadataForParse.accountName,
+        accountNumber: metadataForParse.accountNumber,
+      });
   await updateImportFileCompat(importFileId, {
     status: "processing",
     processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "identifying_transactions",
@@ -2715,6 +2743,7 @@ export const processImportFileText = async (
       : (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 10 && parsedDateCoverage < 0.25;
   const shouldUseVisionFallback =
     (importFile.fileType === "application/pdf" || imageImport) &&
+    !canReuseCachedStatementParse &&
     (!text.trim() ||
       parsedRows.length === 0 ||
       prefersVisionFallbackForInstitution ||
@@ -2735,9 +2764,10 @@ export const processImportFileText = async (
         receiptPreview.confidence >= 80
     );
   const canUseFastImageParse =
-    imageImport &&
+    canReuseCachedStatementParse ||
+    (imageImport &&
     ((importMode === "receipt" && receiptPreviewLooksLikeReceipt) ||
-      (parsedRows.length > 0 && (metadataForParse.confidence ?? 0) >= 75 && !genericParseLooksSuspicious && !suspiciousDateCoverage));
+      (parsedRows.length > 0 && (metadataForParse.confidence ?? 0) >= 75 && !genericParseLooksSuspicious && !suspiciousDateCoverage)));
   if (shouldUseVisionFallback && !pageImages) {
     try {
       if (imageImport) {
@@ -3061,6 +3091,28 @@ export const processImportFileText = async (
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
   const rows = effectiveRows as EnrichedParsedImportRow[];
+
+  if (textCacheInfo?.fileFingerprint) {
+    void storeImportedFileTextCacheRecord({
+      workspaceId: String(importFile.workspaceId),
+      fileFingerprint: textCacheInfo.fileFingerprint,
+      fileType,
+      importMode,
+      extractedText: textForParse,
+      statementFingerprint,
+      statementFamilySignature,
+      metadata: resolvedMetadata,
+      parsedRows: rows as unknown as Prisma.InputJsonValue,
+      pageCount: pageImages?.length ?? 0,
+      confidence: resolvedMetadata.confidence ?? 0,
+      hitCount: (textCacheInfo.cacheRecord?.hitCount ?? 0) + 1,
+    }).catch((error) => {
+      console.warn("Import file extraction cache update failed", {
+        importFileId,
+        error,
+      });
+    });
+  }
 
   if (await hasCompatibleTable("ParsedTransaction")) {
     await prisma.parsedTransaction.deleteMany({

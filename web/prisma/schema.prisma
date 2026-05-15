@@ -527,6 +527,33 @@ model ImportFile {
   @@index([status])
 }
 
+model ImportFileExtractionCache {
+  id                    String   @id @default(cuid())
+  workspaceId           String
+  fileFingerprint       String
+  fileType              String
+  importMode            String
+  cacheVersion          String
+  extractedText         String
+  statementFingerprint  String?
+  statementFamilySignature String?
+  metadata              Json?
+  parsedRows            Json?
+  pageCount             Int      @default(0)
+  confidence            Int      @default(0)
+  hitCount              Int      @default(0)
+  lastUsedAt            DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, fileFingerprint, fileType, importMode, cacheVersion])
+  @@index([workspaceId])
+  @@index([fileFingerprint])
+  @@index([statementFingerprint])
+  @@index([cacheVersion])
+}
+
 model ImportEnrichmentJob {
   id             String                    @id @default(cuid())
   workspaceId    String
