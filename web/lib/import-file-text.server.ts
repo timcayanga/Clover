@@ -499,6 +499,140 @@ const countStatementTextLineConfusions = (line: string) => {
   return matches?.length ?? 0;
 };
 
+const isLikelyFragmentStatementLine = (line: string) => {
+  const normalized = normalizeStatementTextLine(line);
+  if (!normalized || isStatementUiNoiseLine(normalized)) {
+    return false;
+  }
+
+  if (/\d/.test(normalized)) {
+    return false;
+  }
+
+  if (/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i.test(normalized) || /\d{4}-\d{2}-\d{2}/.test(normalized)) {
+    return false;
+  }
+
+  if (/\b(?:balance|opening|closing|ending|running|available|transfer|payment|deposit|withdraw|credit|debit|merchant|reference)\b/i.test(normalized)) {
+    return false;
+  }
+
+  const compact = normalized.replace(/[^A-Za-z]+/g, "");
+  return compact.length > 0 && compact.length <= 6;
+};
+
+const collapseFragmentBuffer = (fragmentBuffer: string[]) => {
+  const collapsedTokens: string[] = [];
+  let characterRun: string[] = [];
+
+  const flushCharacterRun = () => {
+    if (characterRun.length > 0) {
+      collapsedTokens.push(characterRun.join(""));
+      characterRun = [];
+    }
+  };
+
+  for (const rawLine of fragmentBuffer) {
+    const line = normalizeStatementTextLine(rawLine);
+    const pieces = line.match(/[A-Za-z0-9]+/g) ?? [];
+
+    for (const piece of pieces) {
+      const token = piece.replace(/[^A-Za-z0-9]+/g, "");
+      if (!token) {
+        continue;
+      }
+
+      if (/^[A-Za-z]$/.test(token)) {
+        characterRun.push(token);
+        continue;
+      }
+
+      flushCharacterRun();
+      collapsedTokens.push(token);
+    }
+  }
+
+  flushCharacterRun();
+  return normalizeStatementTextLine(collapsedTokens.join(" "));
+};
+
+const repairStatementTextFragments = (lines: string[]) => {
+  const repaired: string[] = [];
+  let fragmentBuffer: string[] = [];
+  const datePattern = /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b)/i;
+  const amountPattern = /(?:[₱$€£¥]\s*)?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/;
+  const transactionPattern = /\b(?:debit|credit|withdraw|deposit|transfer|payment|purchase|refund|charge|fee|interest|cash|atm|branch|merchant|reference|pos|card)\b/i;
+
+  const flushFragments = () => {
+    if (fragmentBuffer.length === 0) {
+      return null;
+    }
+
+    const fragmentText = collapseFragmentBuffer(fragmentBuffer);
+    fragmentBuffer = [];
+
+    if (!fragmentText) {
+      return null;
+    }
+
+    return [fragmentText];
+  };
+
+  for (const rawLine of lines) {
+    const line = normalizeStatementTextLine(rawLine);
+    if (!line) {
+      continue;
+    }
+
+    if (isLikelyFragmentStatementLine(line)) {
+      fragmentBuffer.push(line);
+      continue;
+    }
+
+    if (fragmentBuffer.length > 0) {
+      const fragmentText = collapseFragmentBuffer(fragmentBuffer);
+      const shouldMergeWithLine =
+        Boolean(fragmentText) &&
+        !(
+          datePattern.test(line) &&
+          !amountPattern.test(line) &&
+          !transactionPattern.test(line)
+        );
+
+      if (shouldMergeWithLine) {
+        const mergedText = normalizeStatementTextLine(`${fragmentText} ${line}`);
+        if (mergedText && scoreStatementTextLineCandidate(mergedText) >= Math.max(scoreStatementTextLineCandidate(line), 0) - 0.5) {
+          repaired.push(mergedText);
+          fragmentBuffer = [];
+          continue;
+        }
+      }
+
+      const mergedFragments = flushFragments();
+      if (mergedFragments) {
+        repaired.push(...mergedFragments);
+      }
+    }
+
+    repaired.push(line);
+  }
+
+  if (fragmentBuffer.length > 0) {
+    const mergedFragments = flushFragments();
+    if (mergedFragments) {
+      repaired.push(...mergedFragments);
+    }
+  }
+
+  return repaired
+    .map((line) => normalizeStatementTextLine(line))
+    .filter(Boolean)
+    .map((line) => {
+      const collapsed = line.replace(/\s+/g, " ").trim();
+      return collapsed;
+    });
+};
+
 const isLikelySameStatementLine = (left: string, right: string) => {
   const leftNormalized = normalizeStatementTextLine(left);
   const rightNormalized = normalizeStatementTextLine(right);
@@ -576,11 +710,12 @@ export const mergeCompatibleStatementTextCandidateConsensus = (candidates: State
 
   const lineEntries: StatementTextLineEntry[] = [];
   for (const candidate of usefulCandidates.slice(0, 4)) {
-    const lines = candidate.text
-      .split(/\r?\n/)
-      .map((line) => normalizeStatementTextLine(line))
-      .filter(Boolean)
-      .filter((line) => isUsefulStatementLine(line) || scoreStatementTextLineCandidate(line) >= 0.5);
+    const lines = repairStatementTextFragments(
+      candidate.text
+        .split(/\r?\n/)
+        .map((line) => normalizeStatementTextLine(line))
+        .filter(Boolean)
+    ).filter((line) => isUsefulStatementLine(line) || scoreStatementTextLineCandidate(line) >= 0.5);
 
     lines.forEach((line, index) => {
       lineEntries.push({
@@ -659,7 +794,17 @@ export const mergeCompatibleStatementTextCandidateConsensus = (candidates: State
 
   const mergedText = merged.join("\n").trim();
   const bestCandidateLength = Math.max(...usefulCandidates.map((candidate) => candidate.text.trim().length));
-  if (!mergedText || mergedText.length < bestCandidateLength) {
+  const bestCandidateScore = Math.max(...usefulCandidates.map((candidate) => candidate.score));
+  const bestCandidateLineQuality = Math.max(...usefulCandidates.map((candidate) => scoreStatementTextCandidateLineQuality(candidate.text)));
+  const mergedScore = scoreStatementTextCandidate(mergedText);
+  const mergedLineQuality = scoreStatementTextCandidateLineQuality(mergedText);
+  const improvesEnough =
+    mergedText.length >= bestCandidateLength ||
+    mergedScore >= bestCandidateScore + 1 ||
+    mergedLineQuality >= bestCandidateLineQuality + 0.5 ||
+    (mergedScore >= bestCandidateScore && mergedLineQuality >= bestCandidateLineQuality + 0.25);
+
+  if (!mergedText || !improvesEnough) {
     return null;
   }
 
@@ -778,14 +923,18 @@ export const mergeCompatibleStatementTextCandidates = (
     return null;
   }
 
-  const leftLines = left.text
-    .split(/\r?\n/)
-    .map((line) => normalizeStatementTextLine(line))
-    .filter(Boolean);
-  const rightLines = right.text
-    .split(/\r?\n/)
-    .map((line) => normalizeStatementTextLine(line))
-    .filter(Boolean);
+  const leftLines = repairStatementTextFragments(
+    left.text
+      .split(/\r?\n/)
+      .map((line) => normalizeStatementTextLine(line))
+      .filter(Boolean)
+  ).filter((line) => isUsefulStatementLine(line) || scoreStatementTextLineCandidate(line) >= 0.5);
+  const rightLines = repairStatementTextFragments(
+    right.text
+      .split(/\r?\n/)
+      .map((line) => normalizeStatementTextLine(line))
+      .filter(Boolean)
+  ).filter((line) => isUsefulStatementLine(line) || scoreStatementTextLineCandidate(line) >= 0.5);
 
   if (leftLines.length === 0 || rightLines.length === 0) {
     return null;

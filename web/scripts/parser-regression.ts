@@ -1179,6 +1179,34 @@ const main = async () => {
     );
   }
 
+  const mergedFragmentedOcrConsensus = mergeCompatibleStatementTextCandidateConsensus?.([
+    {
+      text: "Jan 1\nB\nu\nr\ng\ne\nr Shop\n150.00",
+      label: "ocr-frag-a",
+      score: 20,
+    },
+    {
+      text: "Jan 1\nBurger Shop\n150.00\nBalance 1,000.00",
+      label: "ocr-frag-b",
+      score: 23,
+    },
+    {
+      text: "Burger Shop\nBalance 1,000.00",
+      label: "ocr-frag-c",
+      score: 22,
+    },
+  ]);
+  if (
+    !mergedFragmentedOcrConsensus ||
+    !/Burger Shop/.test(mergedFragmentedOcrConsensus) ||
+    !/150\.00/.test(mergedFragmentedOcrConsensus) ||
+    /B\s+u\s+r\s+g\s+e\s+r/i.test(mergedFragmentedOcrConsensus)
+  ) {
+    throw new Error(
+      `expected fragmented OCR shards to merge into a single merchant line, got ${mergedFragmentedOcrConsensus}`
+    );
+  }
+
   const prototypeLabel = buildMerchantPrototypeLabel("Burger King 1234", "Burger King");
   if (prototypeLabel !== "Burger King 1234" && prototypeLabel !== null) {
     throw new Error(`expected prototype label helper to keep a useful merchant variant or null, got ${prototypeLabel}`);
