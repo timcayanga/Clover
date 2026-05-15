@@ -589,6 +589,21 @@ const main = async () => {
     hasDate: boolean;
       hasType: boolean;
     };
+  const assessParsedRowAnomalies = dataEngine.assessParsedRowAnomalies as (
+    row: {
+      date?: string;
+      amount?: string | number | null;
+      merchantRaw?: string | null;
+      merchantClean?: string | null;
+      description?: string | null;
+      type?: string | null;
+      categoryName?: string | null;
+    }
+  ) => {
+    score: number;
+    issues: string[];
+    isAnomalous: boolean;
+  };
   const shouldPromoteTrainingSignalForLearning = dataEngine.shouldPromoteTrainingSignalForLearning as (
     params: { confidence?: number | null; teachabilityScore?: number | null; merchantText?: string | null }
   ) => boolean;
@@ -1102,6 +1117,27 @@ const main = async () => {
     );
   }
 
+  const anomalyGood = assessParsedRowAnomalies({
+    date: "2025-02-01",
+    amount: "120.00",
+    merchantRaw: "Coffee Shop",
+    merchantClean: "Coffee Shop",
+    type: "expense",
+    categoryName: "Shopping",
+  });
+  const anomalyBad = assessParsedRowAnomalies({
+    amount: "",
+    merchantRaw: "Statement Page 1",
+    merchantClean: "",
+    type: "",
+    categoryName: "Other",
+  });
+  if (anomalyGood.score <= anomalyBad.score || anomalyBad.isAnomalous !== true || anomalyGood.isAnomalous) {
+    throw new Error(
+      `expected anomaly scoring to prefer clean rows and block header noise, got ${JSON.stringify({ anomalyGood, anomalyBad })}`
+    );
+  }
+
   if (
     shouldExpandMerchantPrototypeMemory({
       confidence: 88,
@@ -1122,6 +1158,34 @@ const main = async () => {
         borderline: shouldExpandMerchantPrototypeMemory({ confidence: 80, teachabilityScore: 62 }),
         fallback: shouldExpandMerchantPrototypeMemory({ confidence: 90, teachabilityScore: null }),
       })}`
+    );
+  }
+
+  const mergedConsensusWithFragmentRecovery = mergeCompatibleStatementTextCandidateConsensus([
+    {
+      text: "B\na\nn\nk\n\nStatement\nJanuary 1\nCoffee Shop\n120.00",
+      label: "fragmented",
+      score: 18,
+    },
+    {
+      text: "Bank Statement\nJanuary 1\nCoffee Shop\n120.00",
+      label: "clean",
+      score: 24,
+    },
+    {
+      text: "Bank Statement\nJanuary 1\nCoffee Shop\n120.00\nEnding Balance 500.00",
+      label: "balance",
+      score: 22,
+    },
+  ]);
+  if (
+    !mergedConsensusWithFragmentRecovery ||
+    !/Bank Statement/.test(mergedConsensusWithFragmentRecovery) ||
+    !/Coffee Shop/.test(mergedConsensusWithFragmentRecovery) ||
+    !/120\.00/.test(mergedConsensusWithFragmentRecovery)
+  ) {
+    throw new Error(
+      `expected multi-candidate OCR consensus to keep the strongest row evidence, got ${mergedConsensusWithFragmentRecovery}`
     );
   }
 

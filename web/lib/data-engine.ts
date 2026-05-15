@@ -721,6 +721,66 @@ export const assessParsedRowTeachability = (row: ParsedImportRow) => {
   };
 };
 
+export const assessParsedRowAnomalies = (row: ParsedImportRow) => {
+  const teachability = assessParsedRowTeachability(row);
+  const merchantText = String(row.merchantClean ?? row.merchantRaw ?? row.description ?? "").trim();
+  const amount = Number(row.amount ?? NaN);
+  const dateValue = typeof row.date === "string" ? parseDateValue(row.date) : null;
+  const rawCategory = String(row.categoryName ?? "").trim().toLowerCase();
+  const issues = new Set<string>(teachability.issues);
+
+  if (merchantText.length === 0) {
+    issues.add("merchant_missing");
+  }
+
+  if (!Number.isFinite(amount)) {
+    issues.add("amount_missing");
+  }
+
+  if (!dateValue) {
+    issues.add("date_missing");
+  }
+
+  if (!row.type || !["income", "expense", "transfer"].includes(String(row.type))) {
+    issues.add("type_missing");
+  }
+
+  if (/^(?:statement|summary|continued|page \d+|account details|opening balance|closing balance)$/i.test(merchantText)) {
+    issues.add("merchant_header_noise");
+  }
+
+  if (/^(?:\?+|n\/a|null|undefined|unknown)$/i.test(merchantText)) {
+    issues.add("merchant_placeholder");
+  }
+
+  if (rawCategory === "other" && teachability.score < 70) {
+    issues.add("category_other_low_teachability");
+  }
+
+  const suspiciousAmount = Number.isFinite(amount) && Math.abs(amount) > 0 && Math.abs(amount) < 0.01;
+  if (suspiciousAmount) {
+    issues.add("amount_suspicious");
+  }
+
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      teachability.score -
+        (issues.has("merchant_header_noise") ? 30 : 0) -
+        (issues.has("merchant_placeholder") ? 25 : 0) -
+        (issues.has("category_other_low_teachability") ? 15 : 0) -
+        (issues.has("amount_suspicious") ? 10 : 0)
+    )
+  );
+
+  return {
+    score,
+    issues: [...issues],
+    isAnomalous: score < 50 || issues.has("merchant_header_noise") || issues.has("merchant_placeholder"),
+  };
+};
+
 export const shouldPromoteTrainingSignalForLearning = (params: {
   confidence?: number | null;
   teachabilityScore?: number | null;
@@ -3502,6 +3562,8 @@ export const enrichParsedRowsWithTraining = async (params: {
     categoryReason?: string | null;
     rowType?: ParsedImportRow["type"];
     teachabilityScore?: number;
+    anomalyScore?: number;
+    anomalyIssues?: string[];
   }) => {
     if (!details.rowType) {
       return true;
@@ -3512,6 +3574,14 @@ export const enrichParsedRowsWithTraining = async (params: {
     }
 
     if (typeof details.teachabilityScore === "number" && details.teachabilityScore < 55) {
+      return true;
+    }
+
+    if (typeof details.anomalyScore === "number" && details.anomalyScore < 55) {
+      return true;
+    }
+
+    if (Array.isArray(details.anomalyIssues) && details.anomalyIssues.some((issue) => issue === "merchant_header_noise" || issue === "merchant_placeholder")) {
       return true;
     }
 
@@ -3547,6 +3617,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       .join(" ");
     const accountMatch = findBestAccountRule(row.accountName ?? null, rowWithInstitution.institution ?? null, accountRules);
     const rowTeachability = assessParsedRowTeachability(row);
+    const rowAnomalies = assessParsedRowAnomalies(row);
     const learned = rowTeachability.score < 55
       ? {
           categoryName: row.categoryName && row.categoryName.trim().toLowerCase() !== "other" ? row.categoryName : null,
@@ -3598,11 +3669,13 @@ export const enrichParsedRowsWithTraining = async (params: {
           teachabilityPenalty
       )
     );
+    const anomalyPenalty = rowAnomalies.score < 55 ? Math.max(6, 55 - rowAnomalies.score) : 0;
     const parserConfidence = Math.max(
       0,
       Math.max(rowParserConfidence, rowConfidence, statementConfidence, Math.round(shapeConfidence * 0.2)) -
         Math.floor(rowShapePenalty * 0.5) -
-        Math.floor(teachabilityPenalty * 0.5)
+        Math.floor(teachabilityPenalty * 0.5) -
+        Math.floor(anomalyPenalty * 0.4)
     );
     const categoryConfidence = Math.max(rowCategoryConfidence, effectiveConfidence);
     const learnedRuleIdsApplied = [
@@ -3624,6 +3697,8 @@ export const enrichParsedRowsWithTraining = async (params: {
         categoryReason: learned.categoryReason,
         rowType: nextType,
         teachabilityScore: rowTeachability.score,
+        anomalyScore: rowAnomalies.score,
+        anomalyIssues: rowAnomalies.issues,
       })
         ? "pending_review"
         : "suggested",
@@ -3634,6 +3709,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       transferConfidence: nextType === "transfer" ? 100 : 0,
       rowShapeConfidence: shapeConfidence,
       rowTeachabilityConfidence: rowTeachability.score,
+      rowAnomalyConfidence: rowAnomalies.score,
       learnedRuleIdsApplied,
       normalizedPayload: {
         merchantClean: merchantClean || null,

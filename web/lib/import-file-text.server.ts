@@ -633,6 +633,40 @@ const repairStatementTextFragments = (lines: string[]) => {
     });
 };
 
+const stitchAdjacentStatementTextLines = (lines: string[]) => {
+  const stitched: string[] = [];
+
+  for (const rawLine of lines) {
+    const line = normalizeStatementTextLine(rawLine);
+    if (!line) {
+      continue;
+    }
+
+    const previous = stitched.at(-1);
+    if (!previous) {
+      stitched.push(line);
+      continue;
+    }
+
+    const previousScore = scoreStatementTextLineCandidate(previous);
+    const currentScore = scoreStatementTextLineCandidate(line);
+    const merged = normalizeStatementTextLine(`${previous} ${line}`);
+    const mergedScore = scoreStatementTextLineCandidate(merged);
+    const looksLikeSplitRow =
+      mergedScore >= Math.max(previousScore, currentScore) + 0.5 &&
+      (previousScore < 1 || currentScore < 1 || countStatementTextLineConfusions(previous) > 0 || countStatementTextLineConfusions(line) > 0);
+
+    if (looksLikeSplitRow) {
+      stitched[stitched.length - 1] = merged;
+      continue;
+    }
+
+    stitched.push(line);
+  }
+
+  return stitched;
+};
+
 const isLikelySameStatementLine = (left: string, right: string) => {
   const leftNormalized = normalizeStatementTextLine(left);
   const rightNormalized = normalizeStatementTextLine(right);
@@ -710,12 +744,14 @@ export const mergeCompatibleStatementTextCandidateConsensus = (candidates: State
 
   const lineEntries: StatementTextLineEntry[] = [];
   for (const candidate of usefulCandidates.slice(0, 4)) {
-    const lines = repairStatementTextFragments(
-      candidate.text
-        .split(/\r?\n/)
-        .map((line) => normalizeStatementTextLine(line))
-        .filter(Boolean)
-    ).filter((line) => isUsefulStatementLine(line) || scoreStatementTextLineCandidate(line) >= 0.5);
+    const lines = stitchAdjacentStatementTextLines(
+      repairStatementTextFragments(
+        candidate.text
+          .split(/\r?\n/)
+          .map((line) => normalizeStatementTextLine(line))
+          .filter(Boolean)
+      ).filter((line) => isUsefulStatementLine(line) || scoreStatementTextLineCandidate(line) >= 0.5)
+    );
 
     lines.forEach((line, index) => {
       lineEntries.push({
@@ -928,20 +964,27 @@ export const mergeCompatibleStatementTextCandidates = (
       .split(/\r?\n/)
       .map((line) => normalizeStatementTextLine(line))
       .filter(Boolean)
-  ).filter((line) => isUsefulStatementLine(line) || scoreStatementTextLineCandidate(line) >= 0.5);
+  );
   const rightLines = repairStatementTextFragments(
     right.text
       .split(/\r?\n/)
       .map((line) => normalizeStatementTextLine(line))
       .filter(Boolean)
-  ).filter((line) => isUsefulStatementLine(line) || scoreStatementTextLineCandidate(line) >= 0.5);
+  );
 
-  if (leftLines.length === 0 || rightLines.length === 0) {
+  const normalizedLeftLines = stitchAdjacentStatementTextLines(leftLines).filter(
+    (line) => isUsefulStatementLine(line) || scoreStatementTextLineCandidate(line) >= 0.5
+  );
+  const normalizedRightLines = stitchAdjacentStatementTextLines(rightLines).filter(
+    (line) => isUsefulStatementLine(line) || scoreStatementTextLineCandidate(line) >= 0.5
+  );
+
+  if (normalizedLeftLines.length === 0 || normalizedRightLines.length === 0) {
     return null;
   }
 
-  const leftSet = new Set(leftLines.map((line) => line.toLowerCase()));
-  const overlap = rightLines.filter((line) => leftSet.has(line.toLowerCase())).length / Math.max(leftLines.length, rightLines.length);
+  const leftSet = new Set(normalizedLeftLines.map((line) => line.toLowerCase()));
+  const overlap = normalizedRightLines.filter((line) => leftSet.has(line.toLowerCase())).length / Math.max(normalizedLeftLines.length, normalizedRightLines.length);
   if (overlap < 0.3) {
     return null;
   }
@@ -958,10 +1001,10 @@ export const mergeCompatibleStatementTextCandidates = (
     mergedLines.push(normalized);
   };
 
-  const mergedLength = Math.max(leftLines.length, rightLines.length);
+  const mergedLength = Math.max(normalizedLeftLines.length, normalizedRightLines.length);
   for (let index = 0; index < mergedLength; index += 1) {
-    const leftLine = leftLines[index] ?? null;
-    const rightLine = rightLines[index] ?? null;
+    const leftLine = normalizedLeftLines[index] ?? null;
+    const rightLine = normalizedRightLines[index] ?? null;
 
     if (leftLine && rightLine) {
       if (isLikelySameStatementLine(leftLine, rightLine)) {
