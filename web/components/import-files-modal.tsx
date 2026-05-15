@@ -542,6 +542,7 @@ const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsight
 
 const waitForImportSettledVisibility = async (params: {
   workspaceId: string;
+  importFileId?: string | null;
   accountId: string | null;
   importedRows: number;
   expectedBalance: string | null;
@@ -592,9 +593,25 @@ const waitForImportSettledVisibility = async (params: {
         continue;
       }
 
-      if (params.importedRows > 0) {
+      if (params.importedRows > 0 && params.importFileId) {
+        const statusResponse = await fetch(`/api/imports/${encodeURIComponent(params.importFileId)}/status`, {
+          cache: "no-store",
+        });
+        if (!statusResponse.ok) {
+          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
+          continue;
+        }
+
+        const statusPayload = await statusResponse.json().catch(() => null);
+        const confirmedTransactionsCount = Number(statusPayload?.confirmedTransactionsCount ?? 0);
+        const parsedRowsCount = Number(statusPayload?.parsedRowsCount ?? 0);
+        if (confirmedTransactionsCount < params.importedRows && parsedRowsCount < params.importedRows) {
+          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
+          continue;
+        }
+      } else if (params.importedRows > 0) {
         const transactionsResponse = await fetch(
-          `/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=all`,
+          `/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=${Math.min(Math.max(params.importedRows, 25), 100)}`,
           {
             cache: "no-store",
           }
@@ -606,8 +623,7 @@ const waitForImportSettledVisibility = async (params: {
 
         const transactionPayload = await transactionsResponse.json().catch(() => null);
         const totalCount = Number(transactionPayload?.totalCount ?? 0);
-        const rows = Array.isArray(transactionPayload?.transactions) ? transactionPayload.transactions : [];
-        if (totalCount < params.importedRows || rows.length < params.importedRows) {
+        if (totalCount < params.importedRows) {
           await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
           continue;
         }
@@ -2228,6 +2244,7 @@ export function ImportFilesModal({
         triggerImportEnrichment(importFileId);
         void waitForImportSettledVisibility({
           workspaceId,
+          importFileId,
           accountId: resolvedAccountId,
           importedRows,
           expectedBalance: summary.balance ?? null,
@@ -4512,6 +4529,7 @@ export function ImportFilesModal({
 
         void waitForImportSettledVisibility({
           workspaceId,
+          importFileId,
           accountId: serverConfirmedAccountId,
           importedRows: settledRows,
           expectedBalance: confirmedSummary.balance ?? null,
@@ -4674,6 +4692,7 @@ export function ImportFilesModal({
 
           void waitForImportSettledVisibility({
             workspaceId,
+            importFileId,
             accountId: queuedVisibleSummary.accountId ?? optimisticAccountId,
             importedRows: queuedVisibleRows,
             expectedBalance: queuedVisibleSummary.balance ?? null,
@@ -4923,6 +4942,7 @@ export function ImportFilesModal({
 
         void waitForImportSettledVisibility({
           workspaceId,
+          importFileId,
           accountId: targetAccountId,
           importedRows: Number(processPayload?.imported ?? 0) || 0,
           expectedBalance: optimisticPreviewSummary?.balance ?? null,
