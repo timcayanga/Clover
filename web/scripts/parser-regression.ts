@@ -657,6 +657,28 @@ const main = async () => {
     endDate: string | null;
     confidence: number;
   };
+  const scoreStatementTemplateCandidate = dataEngine.scoreStatementTemplateCandidate as (
+    params: {
+      template: {
+        fingerprint: string;
+        fileType: string | null;
+        institution: string | null;
+        accountNumber: string | null;
+        accountName: string | null;
+        parserVersion: string;
+        parserConfig: unknown;
+        metadata: unknown;
+        exampleCount: number;
+        successCount: number;
+        failureCount: number;
+        lastSeenAt: Date;
+      };
+      institution?: string | null;
+      fileType?: string | null;
+      accountType?: ImportedAccountType | null;
+      statementFamilySignature?: string | null;
+    }
+  ) => number;
   const normalizeBankName = dataQaBanksModule.normalizeBankName as (value: string | null | undefined) => string;
   const formatUploadAccountDisplayName = accountDisplayModule.formatUploadAccountDisplayName as (
     name?: string | null,
@@ -1082,6 +1104,58 @@ const main = async () => {
     throw new Error(
       `expected statement family signatures to include institution context, got ${familySignatureFromText} / ${familySignatureFromRows}`
     );
+  }
+
+  const templateScoreGood = scoreStatementTemplateCandidate({
+    template: {
+      fingerprint: "stmt_good",
+      fileType: "application/pdf",
+      institution: "BDO",
+      accountNumber: "1234",
+      accountName: "BDO 1234",
+      parserVersion: "v2",
+      parserConfig: {
+        accountType: "bank",
+        rowCount: 28,
+        statementFamilySignature: familySignatureFromRows,
+      },
+      metadata: {},
+      exampleCount: 4,
+      successCount: 6,
+      failureCount: 0,
+      lastSeenAt: new Date(),
+    },
+    institution: "BDO",
+    fileType: "application/pdf",
+    accountType: "bank",
+    statementFamilySignature: familySignatureFromRows,
+  });
+  const templateScoreBad = scoreStatementTemplateCandidate({
+    template: {
+      fingerprint: "stmt_bad",
+      fileType: "application/pdf",
+      institution: "BDO",
+      accountNumber: "1234",
+      accountName: "BDO 1234",
+      parserVersion: "v2",
+      parserConfig: {
+        accountType: "bank",
+        rowCount: 28,
+        statementFamilySignature: "other|signature|noise",
+      },
+      metadata: {},
+      exampleCount: 4,
+      successCount: 1,
+      failureCount: 5,
+      lastSeenAt: new Date(),
+    },
+    institution: "BDO",
+    fileType: "application/pdf",
+    accountType: "bank",
+    statementFamilySignature: familySignatureFromRows,
+  });
+  if (templateScoreGood <= templateScoreBad) {
+    throw new Error(`expected statement template scoring to prefer healthy templates, got ${templateScoreGood} vs ${templateScoreBad}`);
   }
 
   const lightPenalty = scoreRowShapeLearningPenalty(88);

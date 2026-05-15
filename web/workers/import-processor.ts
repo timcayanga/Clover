@@ -36,6 +36,7 @@ import {
   loadStatementTemplate,
   loadBestStatementTemplateForInstitution,
   mergeStatementMetadataWithTemplate,
+  recordStatementTemplateOutcome,
   updateImportFileCompat,
   upsertAccountRule,
   upsertStatementTemplate,
@@ -3490,6 +3491,18 @@ export const processImportFileText = async (
     const hasUsableParsedRows = rows.length > 0;
     const allowWarningFinalizeForImageStatement = false;
     const canFinalizeWithWarnings = hasUsableParsedRows && !hasCriticalFindings;
+    if (statementFingerprint && (hasCriticalFindings || qaRunResult.evaluation.score < 75)) {
+      await recordStatementTemplateOutcome({
+        workspaceId: String(importFile.workspaceId),
+        fingerprint: statementFingerprint,
+        outcome: "failure",
+      }).catch((error) => {
+        console.warn("Statement template failure memory update failed", {
+          importFileId,
+          error,
+        });
+      });
+    }
 
     // QA warnings should feed review/learning, not keep a usable statement in a
     // long auto-rerun loop after the account and transaction rows are ready.

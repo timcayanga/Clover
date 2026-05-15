@@ -1202,49 +1202,16 @@ export const loadBestStatementTemplateForInstitution = async (params: {
     });
 
     const scoredTemplates = templates
-      .map((template) => {
-        const parserConfig =
-          template.parserConfig && typeof template.parserConfig === "object" && !Array.isArray(template.parserConfig)
-            ? (template.parserConfig as Record<string, unknown>)
-            : null;
-        const templateAccountType =
-          typeof parserConfig?.accountType === "string" ? parserConfig.accountType.trim().toLowerCase() : null;
-        const rowCount = typeof parserConfig?.rowCount === "number" ? parserConfig.rowCount : null;
-        const templateFamilySignature =
-          typeof parserConfig?.statementFamilySignature === "string" ? parserConfig.statementFamilySignature.trim() : null;
-        let score = 0;
-
-        if (template.institution && institution && normalizeMerchantText(template.institution) === normalizeMerchantText(institution)) {
-          score += 40;
-        }
-
-        if (params.fileType && template.fileType && template.fileType === params.fileType) {
-          score += 20;
-        }
-
-        if (params.accountType && templateAccountType === params.accountType.toLowerCase()) {
-          score += 18;
-        }
-
-        if (typeof rowCount === "number") {
-          score += Math.min(10, Math.max(0, 10 - Math.floor(Math.abs(rowCount - 20) / 5)));
-        }
-
-        if (params.statementFamilySignature && templateFamilySignature) {
-          if (params.statementFamilySignature === templateFamilySignature) {
-            score += 30;
-          } else {
-            const familyParts = params.statementFamilySignature.split("|").filter(Boolean);
-            const templateParts = templateFamilySignature.split("|").filter(Boolean);
-            const overlap = familyParts.filter((part) => templateParts.includes(part)).length;
-            score += Math.min(12, overlap * 3);
-          }
-        }
-
-        score += Math.min(12, Math.round((template.successCount ?? 0) * 2 + (template.exampleCount ?? 0)));
-
-        return { template, score };
-      })
+      .map((template) => ({
+        template,
+        score: scoreStatementTemplateCandidate({
+          template,
+          institution,
+          fileType: params.fileType ?? null,
+          accountType: params.accountType ?? null,
+          statementFamilySignature: params.statementFamilySignature ?? null,
+        }),
+      }))
       .sort((a, b) => b.score - a.score);
 
     return (scoredTemplates[0]?.template ?? null) as StatementTemplateRow | null;
@@ -2754,6 +2721,100 @@ export const upsertStatementTemplate = async (params: {
 
     throw error;
   }
+};
+
+export const recordStatementTemplateOutcome = async (params: {
+  workspaceId: string;
+  fingerprint: string;
+  outcome: "success" | "failure";
+}) => {
+  try {
+    await prisma.statementTemplate.updateMany({
+      where: {
+        workspaceId: params.workspaceId,
+        fingerprint: params.fingerprint,
+      },
+      data:
+        params.outcome === "failure"
+          ? {
+              failureCount: { increment: 1 },
+              lastSeenAt: new Date(),
+            }
+          : {
+              successCount: { increment: 1 },
+              lastSeenAt: new Date(),
+            },
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return;
+    }
+
+    throw error;
+  }
+};
+
+export const scoreStatementTemplateCandidate = (params: {
+  template: StatementTemplateRow;
+  institution?: string | null;
+  fileType?: string | null;
+  accountType?: ImportedAccountType | null;
+  statementFamilySignature?: string | null;
+}) => {
+  const institution = sanitizeBankNameLabel(params.institution ?? null);
+  let score = 0;
+
+  if (params.template.institution && institution && normalizeMerchantText(params.template.institution) === normalizeMerchantText(institution)) {
+    score += 40;
+  }
+
+  if (params.fileType && params.template.fileType && params.template.fileType === params.fileType) {
+    score += 20;
+  }
+
+  const parserConfig =
+    params.template.parserConfig && typeof params.template.parserConfig === "object" && !Array.isArray(params.template.parserConfig)
+      ? (params.template.parserConfig as Record<string, unknown>)
+      : null;
+  const templateAccountType = typeof parserConfig?.accountType === "string" ? parserConfig.accountType.trim().toLowerCase() : null;
+  const rowCount = typeof parserConfig?.rowCount === "number" ? parserConfig.rowCount : null;
+  const templateFamilySignature = typeof parserConfig?.statementFamilySignature === "string" ? parserConfig.statementFamilySignature.trim() : null;
+
+  if (params.accountType && templateAccountType === params.accountType.toLowerCase()) {
+    score += 18;
+  }
+
+  if (typeof rowCount === "number") {
+    score += Math.min(10, Math.max(0, 10 - Math.floor(Math.abs(rowCount - 20) / 5)));
+  }
+
+  if (params.statementFamilySignature && templateFamilySignature) {
+    if (params.statementFamilySignature === templateFamilySignature) {
+      score += 30;
+    } else {
+      const familyParts = params.statementFamilySignature.split("|").filter(Boolean);
+      const templateParts = templateFamilySignature.split("|").filter(Boolean);
+      const overlap = familyParts.filter((part) => templateParts.includes(part)).length;
+      score += Math.min(12, overlap * 3);
+    }
+  }
+
+  const successCount = Math.max(0, Math.round(params.template.successCount ?? 0));
+  const failureCount = Math.max(0, Math.round(params.template.failureCount ?? 0));
+  const totalRuns = successCount + failureCount;
+  const reliability = totalRuns > 0 ? successCount / totalRuns : 1;
+  const balance = successCount - failureCount;
+
+  score += Math.min(14, Math.round(successCount * 1.6 + Math.max(0, params.template.exampleCount ?? 0) * 0.75));
+  score += Math.round(reliability * 8);
+  if (failureCount > 0) {
+    score -= Math.min(18, Math.round(failureCount * 2.5 + (1 - reliability) * 8));
+  }
+  if (balance < 0) {
+    score -= Math.min(12, Math.abs(balance) * 2);
+  }
+
+  return score;
 };
 
 export const recordTrainingSignal = async (params: {
