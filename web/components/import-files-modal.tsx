@@ -556,7 +556,7 @@ const waitForImportSettledVisibility = async (params: {
   const expectedBalance = toBalanceString(params.expectedBalance);
   const timeoutMs = params.timeoutMs ?? 10_000;
   const startedAt = Date.now();
-  const pollDelayMs = 500;
+  const pollDelayMs = 250;
 
   const normalizeBalance = (value: unknown) => {
     const text = toBalanceString(value);
@@ -570,16 +570,41 @@ const waitForImportSettledVisibility = async (params: {
 
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const accountResponse = await fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
+      const accountResponsePromise = fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
         cache: "no-store",
       });
+      const statusResponsePromise =
+        params.importedRows > 0 && params.importFileId
+          ? fetch(`/api/imports/${encodeURIComponent(params.importFileId)}/status`, {
+              cache: "no-store",
+            })
+          : null;
+      const transactionsResponsePromise =
+        params.importedRows > 0 && !params.importFileId
+          ? fetch(
+              `/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=${Math.min(Math.max(params.importedRows, 25), 100)}`,
+              {
+                cache: "no-store",
+              }
+            )
+          : null;
+
+      const [accountResponse, statusResponse, transactionsResponse] = await Promise.all([
+        accountResponsePromise,
+        statusResponsePromise ?? Promise.resolve(null),
+        transactionsResponsePromise ?? Promise.resolve(null),
+      ]);
 
       if (!accountResponse.ok) {
         await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
         continue;
       }
 
-      const accountPayload = await accountResponse.json().catch(() => null);
+      const [accountPayload, statusPayload, transactionPayload] = await Promise.all([
+        accountResponse.json().catch(() => null),
+        statusResponse && statusResponse.ok ? statusResponse.json().catch(() => null) : Promise.resolve(null),
+        transactionsResponse && transactionsResponse.ok ? transactionsResponse.json().catch(() => null) : Promise.resolve(null),
+      ]);
       const account = accountPayload?.account ?? null;
       const accountBalance = normalizeBalance(account?.balance);
       const accountLooksReady = Boolean(account && typeof account.id === "string" && account.id === accountId);
@@ -594,15 +619,6 @@ const waitForImportSettledVisibility = async (params: {
       }
 
       if (params.importedRows > 0 && params.importFileId) {
-        const statusResponse = await fetch(`/api/imports/${encodeURIComponent(params.importFileId)}/status`, {
-          cache: "no-store",
-        });
-        if (!statusResponse.ok) {
-          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
-          continue;
-        }
-
-        const statusPayload = await statusResponse.json().catch(() => null);
         const confirmedTransactionsCount = Number(statusPayload?.confirmedTransactionsCount ?? 0);
         const parsedRowsCount = Number(statusPayload?.parsedRowsCount ?? 0);
         if (confirmedTransactionsCount < params.importedRows && parsedRowsCount < params.importedRows) {
@@ -610,18 +626,6 @@ const waitForImportSettledVisibility = async (params: {
           continue;
         }
       } else if (params.importedRows > 0) {
-        const transactionsResponse = await fetch(
-          `/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=${Math.min(Math.max(params.importedRows, 25), 100)}`,
-          {
-            cache: "no-store",
-          }
-        );
-        if (!transactionsResponse.ok) {
-          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
-          continue;
-        }
-
-        const transactionPayload = await transactionsResponse.json().catch(() => null);
         const totalCount = Number(transactionPayload?.totalCount ?? 0);
         if (totalCount < params.importedRows) {
           await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
@@ -2579,7 +2583,7 @@ export function ImportFilesModal({
           }
 
           if (hasRecoverableImportSignal && attempt < 6) {
-      await sleep(500);
+      await sleep(300);
             continue;
           }
           const limitPayload = parsePlanLimitMessage(processingMessage, planTier);
@@ -2650,7 +2654,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(parsedRowsCount > 0 || hasVisibleImportDataSignal ? 500 : 300);
+          await sleep(parsedRowsCount > 0 || hasVisibleImportDataSignal ? 250 : 200);
           continue;
         }
 
@@ -2889,7 +2893,7 @@ export function ImportFilesModal({
             }
           }
           if (!latestResolvedAccountId || latestResolvedAccountId.startsWith("optimistic-")) {
-            await sleep(400);
+            await sleep(250);
             continue;
           }
         }
@@ -3021,7 +3025,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(400);
+          await sleep(250);
           continue;
         }
 
@@ -3148,7 +3152,7 @@ export function ImportFilesModal({
                     )
                   : null;
               if (!fallbackAccountId) {
-                await sleep(400);
+                await sleep(250);
                 continue;
               }
               latestResolvedAccountId = fallbackAccountId;
@@ -3236,7 +3240,7 @@ export function ImportFilesModal({
               errorMessage: null,
             });
             }
-            await sleep(parsedRowsCount > 0 ? 200 : 400);
+            await sleep(parsedRowsCount > 0 ? 150 : 250);
             continue;
           }
 
@@ -3316,7 +3320,7 @@ export function ImportFilesModal({
               summary: null,
               errorMessage: null,
             });
-            await sleep(400);
+            await sleep(250);
             continue;
           }
 
@@ -3538,7 +3542,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(500);
+          await sleep(250);
           continue;
         }
         capturePostHogClientEvent("import_retry_failed", {
@@ -3552,7 +3556,7 @@ export function ImportFilesModal({
         return;
       }
 
-      await sleep(400);
+      await sleep(250);
     }
 
     const latestItem = itemsRef.current.find((entry) => entry.id === itemId);
