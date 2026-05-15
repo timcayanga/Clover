@@ -31488,12 +31488,6 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   padding: 0 18px 18px;
 }
 
-.split-bill-mobile-home__hero {
-  display: grid;
-  gap: 12px;
-}
-
-.split-bill-mobile-home__hero h2,
 .split-bill-mobile-home__section-head h3 {
   margin: 0;
   font-size: 1.2rem;

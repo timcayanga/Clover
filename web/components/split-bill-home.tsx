@@ -69,14 +69,6 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
   return (
     <div className="split-bill-home">
       <section className="split-bill-mobile-home">
-        <section className="split-bill-mobile-home__hero panel glass">
-          <div>
-            <p className="eyebrow">Split Bills</p>
-            <h2>Keep shared expenses and people in one place.</h2>
-            <p className="split-bill-mobile-home__copy">Track bills, groups, and saved people with the same initials and detail flow everywhere.</p>
-          </div>
-        </section>
-
         <section className="split-bill-panel panel glass">
           <div className="split-bill-panel__head">
             <div>
@@ -129,12 +121,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                   </div>
                 );
               })
-            ) : (
-              <div className="split-bill-empty">
-                <strong>No split bills yet.</strong>
-                <p>Add your first bill or upload a receipt to start.</p>
-              </div>
-            )}
+            ) : null}
           </div>
           <div className="split-bill-table__footer">
             <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
@@ -219,13 +206,6 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
       </section>
 
       <section className="split-bill-panel panel glass split-bill-desktop-home">
-        <div className="split-bill-panel__head">
-          <div>
-            <p className="eyebrow">Split Bills</p>
-            <h2>Shared expenses at a glance</h2>
-          </div>
-        </div>
-
         <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
           <div className="split-bill-table__header" role="row">
             <span role="columnheader">Description</span>
@@ -271,12 +251,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                 </div>
               );
             })
-          ) : (
-            <div className="split-bill-empty">
-              <strong>No split bills yet.</strong>
-              <p>Add your first bill or upload a receipt to start.</p>
-            </div>
-          )}
+          ) : null}
         </div>
         <div className="split-bill-table__footer">
           <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
