@@ -120,6 +120,27 @@ const readImportMode = (value: unknown): ImportImageMode | null => {
   return normalizeImportImageMode(value);
 };
 
+const readImportedStatementTextWithCache = async (params: {
+  storageKey: string;
+  fileType: string;
+  fileName: string;
+  workspaceId: string;
+  importMode?: ImportImageMode | null;
+}, password?: string, pdfJsBaseUrl?: string | null) => {
+  const { readImportedFileTextWithCacheInfo } = await import("@/lib/import-file-text.server");
+  return readImportedFileTextWithCacheInfo(
+    {
+      storageKey: params.storageKey,
+      fileType: params.fileType,
+      fileName: params.fileName,
+      workspaceId: params.workspaceId,
+      importMode: params.importMode ?? null,
+    },
+    password,
+    pdfJsBaseUrl
+  );
+};
+
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   let stage = "initializing";
   let responsePlanTier: "free" | "pro" | "unknown" = "unknown";
@@ -282,16 +303,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       if (shouldPreflightPdf) {
         stage = "reading statement metadata";
         try {
-          const { readImportedFileText } = await import("@/lib/import-file-text.server");
-          extractedText = await readImportedFileText(
+          const preflightText = await readImportedStatementTextWithCache(
             {
               storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
               fileType: effectiveFileType || "application/octet-stream",
               fileName: effectiveFileName,
+              workspaceId: String(importFile.workspaceId),
+              importMode,
             },
             password,
             pdfJsBaseUrl
           );
+          extractedText = preflightText.text;
           const detectedMetadata = detectStatementMetadataFromText(extractedText);
           const statementFingerprint = buildStatementFingerprint(extractedText, detectedMetadata, effectiveFileName, effectiveFileType || "application/octet-stream");
           const template = await loadStatementTemplate({
@@ -368,16 +391,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       stage = "reading statement metadata";
       if (!metadata || !extractedText) {
         try {
-          const { readImportedFileText } = await import("@/lib/import-file-text.server");
-          extractedText = await readImportedFileText(
+          const preflightText = await readImportedStatementTextWithCache(
             {
               storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
               fileType: effectiveFileType || "application/octet-stream",
               fileName: effectiveFileName,
+              workspaceId: String(importFile.workspaceId),
+              importMode,
             },
             password,
             pdfJsBaseUrl
           );
+          extractedText = preflightText.text;
           const detectedMetadata = detectStatementMetadataFromText(extractedText);
           const statementFingerprint = buildStatementFingerprint(extractedText, detectedMetadata, effectiveFileName, effectiveFileType || "application/octet-stream");
           const template = await loadStatementTemplate({
