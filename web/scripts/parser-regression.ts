@@ -548,6 +548,9 @@ const main = async () => {
     file: { name?: string; type?: string; arrayBuffer: () => Promise<ArrayBuffer | SharedArrayBuffer> },
     password?: string
   ) => Promise<string>;
+  const buildLayoutAwarePdfTextFromContentItems = importFileTextModule.buildLayoutAwarePdfTextFromContentItems as (
+    items: Array<{ str?: string; transform?: number[]; width?: number; height?: number }>
+  ) => string;
   const detectStatementMetadataFromText = dataEngine.detectStatementMetadataFromText as (text: string) => {
     institution: string | null;
     accountNumber: string | null;
@@ -969,6 +972,18 @@ const main = async () => {
   ]);
   if (weakRowShape.score >= 50 || weakRowShape.issues.length === 0) {
     throw new Error(`expected weak row shape to score low, got ${JSON.stringify(weakRowShape)}`);
+  }
+
+  const layoutAwareText = buildLayoutAwarePdfTextFromContentItems([
+    { str: "January 1", transform: [1, 0, 0, 1, 12, 420], width: 42, height: 9 },
+    { str: "Coffee Shop", transform: [1, 0, 0, 1, 76, 419.3], width: 64, height: 9 },
+    { str: "150.00", transform: [1, 0, 0, 1, 380, 419.7], width: 36, height: 9 },
+    { str: "January 2", transform: [1, 0, 0, 1, 12, 399], width: 42, height: 9 },
+    { str: "ATM Withdrawal", transform: [1, 0, 0, 1, 78, 398.4], width: 88, height: 9 },
+    { str: "1,000.00", transform: [1, 0, 0, 1, 378, 398.8], width: 44, height: 9 },
+  ]);
+  if (!/January 1\s+Coffee Shop\s+150\.00/.test(layoutAwareText) || !/January 2\s+ATM Withdrawal\s+1,000\.00/.test(layoutAwareText)) {
+    throw new Error(`expected layout-aware PDF text reconstruction to keep rows together, got ${layoutAwareText}`);
   }
 
   const prototypeLabel = buildMerchantPrototypeLabel("Burger King 1234", "Burger King");

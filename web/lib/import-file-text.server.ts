@@ -174,6 +174,13 @@ type NormalizedImageBytes = {
   dataUrl: string;
 };
 
+export type PdfTextContentItemLike = {
+  str?: string;
+  transform?: number[];
+  width?: number;
+  height?: number;
+};
+
 const enhancePageImageBufferForOcr = async (buffer: Buffer) => {
   try {
     const sharpModule = await import("sharp");
@@ -719,28 +726,159 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
     const content = await page.getTextContent();
-    const lines = new Map<number, { x: number; text: string }[]>();
-
-    for (const item of content.items as Array<{ str?: string; transform?: number[] }>) {
-      if (typeof item.str !== "string" || !item.str.trim()) {
-        continue;
-      }
-
-      const y = Math.round(Number(item.transform?.[5] ?? 0));
-      const x = Number(item.transform?.[4] ?? 0);
-      const row = lines.get(y) ?? [];
-      row.push({ x, text: item.str.trim() });
-      lines.set(y, row);
-    }
-
-    const text = Array.from(lines.entries())
-      .sort((a, b) => b[0] - a[0])
-      .map(([, row]) => row.sort((a, b) => a.x - b.x).map((entry) => entry.text).join(" "))
-      .join("\n");
+    const simpleText = buildSimplePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
+    const layoutAwareText = buildLayoutAwarePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
+    const text = pickBetterPdfTextLayerCandidate(simpleText, layoutAwareText);
     pages.push(text);
   }
 
   return pages.join("\n");
+};
+
+export const buildLayoutAwarePdfTextFromContentItems = (items: PdfTextContentItemLike[]) => {
+  const normalizedItems = items
+    .map((item) => {
+      const text = typeof item.str === "string" ? item.str.replace(/\s+/g, " ").trim() : "";
+      const x = Number(item.transform?.[4] ?? 0);
+      const y = Number(item.transform?.[5] ?? 0);
+      const width = Number(item.width ?? 0);
+      const height = Number(item.height ?? 0);
+      return {
+        text,
+        x,
+        y,
+        width: Number.isFinite(width) ? width : 0,
+        height: Number.isFinite(height) ? height : 0,
+      };
+    })
+    .filter((item) => item.text.length > 0)
+    .sort((a, b) => b.y - a.y || a.x - b.x);
+
+  if (normalizedItems.length === 0) {
+    return "";
+  }
+
+  type RowCluster = {
+    centerY: number;
+    spread: number;
+    items: typeof normalizedItems;
+  };
+
+  const rows: RowCluster[] = [];
+  const rowTolerance = 2.75;
+
+  for (const item of normalizedItems) {
+    const lastRow = rows[rows.length - 1];
+    if (!lastRow) {
+      rows.push({
+        centerY: item.y,
+        spread: 0,
+        items: [item],
+      });
+      continue;
+    }
+
+    const allowedGap = Math.max(rowTolerance, lastRow.spread * 1.5 + 0.5);
+    if (Math.abs(lastRow.centerY - item.y) <= allowedGap) {
+      lastRow.items.push(item);
+      lastRow.centerY = (lastRow.centerY * (lastRow.items.length - 1) + item.y) / lastRow.items.length;
+      lastRow.spread = Math.max(lastRow.spread, Math.abs(item.y - lastRow.centerY));
+      continue;
+    }
+
+    rows.push({
+      centerY: item.y,
+      spread: 0,
+      items: [item],
+    });
+  }
+
+  const buildRowText = (row: RowCluster) => {
+    const sortedItems = row.items.slice().sort((a, b) => a.x - b.x || a.text.localeCompare(b.text));
+    let previous: (typeof sortedItems)[number] | null = null;
+    let line = "";
+
+    for (const item of sortedItems) {
+      if (!previous) {
+        line = item.text;
+        previous = item;
+        continue;
+      }
+
+      const estimatedPreviousEnd = previous.x + Math.max(previous.text.length * 3.2, previous.width || 0, 8);
+      const gap = item.x - estimatedPreviousEnd;
+      const spacer = gap > 36 ? "    " : gap > 22 ? "  " : " ";
+      line += `${spacer}${item.text}`;
+      previous = item;
+    }
+
+    return line.replace(/\s+/g, " ").trim();
+  };
+
+  return rows
+    .map((row) => buildRowText(row))
+    .filter((line) => line.length > 0)
+    .join("\n");
+};
+
+const buildSimplePdfTextFromContentItems = (items: PdfTextContentItemLike[]) => {
+  const lines = new Map<number, { x: number; text: string }[]>();
+
+  for (const item of items) {
+    if (typeof item.str !== "string" || !item.str.trim()) {
+      continue;
+    }
+
+    const y = Math.round(Number(item.transform?.[5] ?? 0));
+    const x = Number(item.transform?.[4] ?? 0);
+    const row = lines.get(y) ?? [];
+    row.push({ x, text: item.str.trim() });
+    lines.set(y, row);
+  }
+
+  return Array.from(lines.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([, row]) => row.sort((a, b) => a.x - b.x).map((entry) => entry.text).join(" "))
+    .join("\n");
+};
+
+const pickBetterPdfTextLayerCandidate = (simpleText: string, layoutAwareText: string) => {
+  const simple = simpleText.trim();
+  const layout = layoutAwareText.trim();
+
+  if (!simple && !layout) {
+    return "";
+  }
+
+  if (!simple) {
+    return layout;
+  }
+
+  if (!layout) {
+    return simple;
+  }
+
+  const simpleScore = scoreStatementTextCandidate(simple);
+  const layoutScore = scoreStatementTextCandidate(layout);
+
+  if (simpleScore >= 25) {
+    return simple;
+  }
+
+  if (layoutScore >= simpleScore + 6 && layoutScore >= 20) {
+    if (process.env.CLOVER_DEBUG_OCR_SELECTION === "1") {
+      console.log("Selected layout-aware PDF text layer candidate", {
+        simpleScore: Number(simpleScore.toFixed(2)),
+        layoutScore: Number(layoutScore.toFixed(2)),
+        simpleLength: simple.length,
+        layoutLength: layout.length,
+      });
+    }
+
+    return layout;
+  }
+
+  return simple;
 };
 
 const extractTextFromPdfBytesWithOcrFallback = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
