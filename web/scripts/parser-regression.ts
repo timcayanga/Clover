@@ -592,6 +592,9 @@ const main = async () => {
   const shouldPromoteTrainingSignalForLearning = dataEngine.shouldPromoteTrainingSignalForLearning as (
     params: { confidence?: number | null; teachabilityScore?: number | null; merchantText?: string | null }
   ) => boolean;
+  const shouldExpandMerchantPrototypeMemory = dataEngine.shouldExpandMerchantPrototypeMemory as (
+    params: { confidence?: number | null; teachabilityScore?: number | null }
+  ) => boolean;
   const buildMerchantPrototypeLabel = dataEngine.buildMerchantPrototypeLabel as (
     merchantText: string,
     normalizedName?: string | null
@@ -1095,6 +1098,29 @@ const main = async () => {
           teachabilityScore: teachabilityBad.score,
           merchantText: "???",
         }),
+      })}`
+    );
+  }
+
+  if (
+    shouldExpandMerchantPrototypeMemory({
+      confidence: 88,
+      teachabilityScore: 80,
+    }) !== true ||
+    shouldExpandMerchantPrototypeMemory({
+      confidence: 80,
+      teachabilityScore: 62,
+    }) !== false ||
+    shouldExpandMerchantPrototypeMemory({
+      confidence: 90,
+      teachabilityScore: null,
+    }) !== true
+  ) {
+    throw new Error(
+      `expected prototype expansion to prefer only strong rows, got ${JSON.stringify({
+        strong: shouldExpandMerchantPrototypeMemory({ confidence: 88, teachabilityScore: 80 }),
+        borderline: shouldExpandMerchantPrototypeMemory({ confidence: 80, teachabilityScore: 62 }),
+        fallback: shouldExpandMerchantPrototypeMemory({ confidence: 90, teachabilityScore: null }),
       })}`
     );
   }

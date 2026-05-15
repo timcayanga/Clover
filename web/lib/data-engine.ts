@@ -743,6 +743,26 @@ export const shouldPromoteTrainingSignalForLearning = (params: {
   return (confidence ?? 0) >= 60;
 };
 
+export const shouldExpandMerchantPrototypeMemory = (params: {
+  confidence?: number | null;
+  teachabilityScore?: number | null;
+}) => {
+  const confidence =
+    typeof params.confidence === "number" && Number.isFinite(params.confidence)
+      ? Math.max(0, Math.min(100, Math.round(params.confidence)))
+      : null;
+  const teachabilityScore =
+    typeof params.teachabilityScore === "number" && Number.isFinite(params.teachabilityScore)
+      ? Math.max(0, Math.min(100, Math.round(params.teachabilityScore)))
+      : null;
+
+  if (teachabilityScore !== null) {
+    return teachabilityScore >= 70 && (confidence ?? 0) >= 75;
+  }
+
+  return (confidence ?? 0) >= 85;
+};
+
 export const buildTrainingSignalDedupeKey = (params: {
   source: "import_confirmation" | "manual_recategorization" | "training_upload" | "manual_transaction_creation";
   transactionId?: string | null;
@@ -2943,6 +2963,10 @@ export const recordTrainingSignal = async (params: {
   const merchantKey = normalizeMerchantText(params.merchantText);
   const merchantTokens = tokenizeMerchant(params.merchantText);
   const normalizedMerchantLabel = params.normalizedName?.trim() || summarizeMerchantText(params.merchantText);
+  const expandMerchantPrototypeMemory = shouldExpandMerchantPrototypeMemory({
+    confidence: params.confidence ?? null,
+    teachabilityScore,
+  });
   const dedupeKey = buildTrainingSignalDedupeKey({
     source: params.source,
     transactionId: params.transactionId ?? null,
@@ -3025,17 +3049,19 @@ export const recordTrainingSignal = async (params: {
       confidence: params.confidence ?? 100,
     });
 
-    const prototypeVariants = buildMerchantPrototypeVariants(params.merchantText, normalizedMerchantLabel);
-    for (const [index, prototypeLabel] of prototypeVariants.entries()) {
-      await upsertMerchantRule({
-        workspaceId: params.workspaceId,
-        merchantText: prototypeLabel,
-        normalizedName: normalizedMerchantLabel || prototypeLabel,
-        categoryId: params.categoryId,
-        categoryName: params.categoryName ?? category.name,
-        source: `${params.source}:prototype${index > 0 ? `:${index + 1}` : ""}`,
-        confidence: Math.max(60, (params.confidence ?? 100) - 10 - index * 4),
-      });
+    if (expandMerchantPrototypeMemory) {
+      const prototypeVariants = buildMerchantPrototypeVariants(params.merchantText, normalizedMerchantLabel);
+      for (const [index, prototypeLabel] of prototypeVariants.entries()) {
+        await upsertMerchantRule({
+          workspaceId: params.workspaceId,
+          merchantText: prototypeLabel,
+          normalizedName: normalizedMerchantLabel || prototypeLabel,
+          categoryId: params.categoryId,
+          categoryName: params.categoryName ?? category.name,
+          source: `${params.source}:prototype${index > 0 ? `:${index + 1}` : ""}`,
+          confidence: Math.max(60, (params.confidence ?? 100) - 10 - index * 4),
+        });
+      }
     }
 
     if (params.actorUserId) {
@@ -3353,6 +3379,7 @@ export const applyDataQaReviewLearning = async (params: {
         type,
         source: "manual_recategorization",
         confidence: Math.max(60, (readReviewString(reviewRow, "feedback") ? 90 : 100) - scoreRowShapeLearningPenalty(teachability.score)),
+        teachabilityScore: teachability.score,
         notes:
           readReviewString(reviewRow, "feedback") ??
           "Confirmed through Data QA review.",
@@ -3405,6 +3432,7 @@ export const applyDataQaReviewLearning = async (params: {
         type,
         source: "manual_transaction_creation",
         confidence: Math.max(60, (readReviewBoolean(reviewRow, "correct") ? 100 : 90) - scoreRowShapeLearningPenalty(teachability.score)),
+        teachabilityScore: teachability.score,
         notes:
           readReviewString(reviewRow, "feedback") ??
           "Added manually from Data QA because the parser missed this transaction.",

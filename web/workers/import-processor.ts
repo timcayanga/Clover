@@ -1608,7 +1608,7 @@ const replayRelatedImportsAfterLearning = async (params: {
           const sourceParts = normalizedSourceSignature.split("|").filter(Boolean);
           const candidateParts = candidateSignature.split("|").filter(Boolean);
           const overlap = sourceParts.filter((part) => candidateParts.includes(part)).length;
-          if (overlap < Math.max(1, Math.floor(sourceParts.length * 0.6))) {
+          if (overlap < Math.max(1, Math.ceil(sourceParts.length * 0.7))) {
             return false;
           }
         }
