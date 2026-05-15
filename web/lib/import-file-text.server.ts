@@ -1,5 +1,6 @@
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { downloadImportObject } from "@/lib/import-storage.server";
 
@@ -172,6 +173,27 @@ type NormalizedImageBytes = {
   mimeType: string;
   buffer: Buffer;
   dataUrl: string;
+};
+
+const IMPORT_FILE_TEXT_CACHE_LIMIT = 24;
+const importedFileTextCache = new Map<string, Promise<string>>();
+const importedFilePageImageCache = new Map<string, Promise<Array<{ page: number; dataUrl: string }>>>();
+const importedFileImageDataUrlCache = new Map<string, Promise<Array<{ page: number; dataUrl: string }>>>();
+
+const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(Buffer.from(bytes)).digest("hex");
+
+const rememberImportCacheEntry = <T>(cache: Map<string, Promise<T>>, key: string, value: Promise<T>) => {
+  if (cache.has(key)) {
+    cache.delete(key);
+  }
+  cache.set(key, value);
+  if (cache.size > IMPORT_FILE_TEXT_CACHE_LIMIT) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey) {
+      cache.delete(oldestKey);
+    }
+  }
+  return value;
 };
 
 export type PdfTextContentItemLike = {
@@ -1607,37 +1629,63 @@ export const readImportedFileText = async (
 ) => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   const bytes = await downloadImportObject(params.storageKey);
-
-  if (
-    lowerName.endsWith(".csv") ||
-    /csv/.test(lowerName)
-  ) {
-    return new TextDecoder().decode(bytes);
+  const fileFingerprint = makeImportFileBytesFingerprint(bytes);
+  const cacheKey = [
+    "text",
+    fileFingerprint,
+    lowerName,
+    String(password ?? ""),
+    String(pdfJsBaseUrl ?? ""),
+    shouldPreferPdfOcrFirst(params.fileName) ? "ocr-first" : "text-first",
+  ].join(":");
+  const cachedText = importedFileTextCache.get(cacheKey);
+  if (cachedText) {
+    return cachedText;
   }
 
-  if (isImageImportFileName(params.fileType, params.fileName)) {
-    const normalized = await normalizeImportedImageBytes(bytes, params.fileType, params.fileName);
-    return extractTextFromImageBufferWithOcr(normalized.dataUrl);
-  }
+  const extraction = (async () => {
+    if (
+      lowerName.endsWith(".csv") ||
+      /csv/.test(lowerName)
+    ) {
+      return new TextDecoder().decode(bytes);
+    }
+
+    if (isImageImportFileName(params.fileType, params.fileName)) {
+      const normalized = await normalizeImportedImageBytes(bytes, params.fileType, params.fileName);
+      return extractTextFromImageBufferWithOcr(normalized.dataUrl);
+    }
+
+    try {
+      if (shouldPreferPdfOcrFirst(params.fileName)) {
+        return await extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, pdfJsBaseUrl);
+      }
+      return await extractTextFromPdfBytesWithOcrFallback(bytes, password, pdfJsBaseUrl);
+    } catch (error) {
+      if (!pdfJsBaseUrl) {
+        throw error;
+      }
+
+      console.warn("PDF text extraction failed with configured base URL; retrying without it", {
+        fileName: params.fileName,
+        error,
+      });
+      if (shouldPreferPdfOcrFirst(params.fileName)) {
+        return extractTextFromPdfBytesWithRenderFirstFallback(bytes, password);
+      }
+      return extractTextFromPdfBytesWithOcrFallback(bytes, password);
+    }
+  })();
+
+  rememberImportCacheEntry(importedFileTextCache, cacheKey, extraction);
 
   try {
-    if (shouldPreferPdfOcrFirst(params.fileName)) {
-      return await extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, pdfJsBaseUrl);
-    }
-    return await extractTextFromPdfBytesWithOcrFallback(bytes, password, pdfJsBaseUrl);
+    const text = await extraction;
+    importedFileTextCache.set(cacheKey, Promise.resolve(text));
+    return text;
   } catch (error) {
-    if (!pdfJsBaseUrl) {
-      throw error;
-    }
-
-    console.warn("PDF text extraction failed with configured base URL; retrying without it", {
-      fileName: params.fileName,
-      error,
-    });
-    if (shouldPreferPdfOcrFirst(params.fileName)) {
-      return extractTextFromPdfBytesWithRenderFirstFallback(bytes, password);
-    }
-    return extractTextFromPdfBytesWithOcrFallback(bytes, password);
+    importedFileTextCache.delete(cacheKey);
+    throw error;
   }
 };
 
@@ -1671,9 +1719,29 @@ export const readImportedPdfPageImages = async (
   }
 
   const bytes = await downloadImportObject(params.storageKey);
+  const fileFingerprint = makeImportFileBytesFingerprint(bytes);
+  const cacheKey = [
+    "pdf-pages",
+    fileFingerprint,
+    String(password ?? ""),
+    String(maxPages),
+    String(scale),
+    String(enhanceForOcr),
+    String(pdfJsBaseUrl ?? ""),
+  ].join(":");
+  const cachedPages = importedFilePageImageCache.get(cacheKey);
+  if (cachedPages) {
+    return cachedPages;
+  }
+
+  const render = renderPdfPageImagesFromBytes(bytes, password, maxPages, scale, enhanceForOcr);
+  rememberImportCacheEntry(importedFilePageImageCache, cacheKey, render);
   try {
-    return await renderPdfPageImagesFromBytes(bytes, password, maxPages, scale, enhanceForOcr);
+    const pages = await render;
+    importedFilePageImageCache.set(cacheKey, Promise.resolve(pages));
+    return pages;
   } catch (error) {
+    importedFilePageImageCache.delete(cacheKey);
     if (!pdfJsBaseUrl) {
       throw error;
     }
@@ -1693,8 +1761,23 @@ export const readImportedFileImageDataUrls = async (params: { storageKey: string
   }
 
   const bytes = await downloadImportObject(params.storageKey);
-  const normalized = await normalizeImportedImageBytes(bytes, params.fileType, params.fileName);
-  return [{ page: 1, dataUrl: normalized.dataUrl }];
+  const fileFingerprint = makeImportFileBytesFingerprint(bytes);
+  const cacheKey = ["image-data", fileFingerprint, lowerName].join(":");
+  const cachedDataUrls = importedFileImageDataUrlCache.get(cacheKey);
+  if (cachedDataUrls) {
+    return cachedDataUrls;
+  }
+
+  const normalized = normalizeImportedImageBytes(bytes, params.fileType, params.fileName).then((value) => [{ page: 1, dataUrl: value.dataUrl }]);
+  rememberImportCacheEntry(importedFileImageDataUrlCache, cacheKey, normalized);
+  try {
+    const dataUrls = await normalized;
+    importedFileImageDataUrlCache.set(cacheKey, Promise.resolve(dataUrls));
+    return dataUrls;
+  } catch (error) {
+    importedFileImageDataUrlCache.delete(cacheKey);
+    throw error;
+  }
 };
 
 export default {
