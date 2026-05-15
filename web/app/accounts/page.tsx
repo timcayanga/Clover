@@ -472,6 +472,31 @@ const formatAggregateAmount = (value: number, accounts: Array<{ currency: string
   return "Mixed currencies";
 };
 
+const formatSignedAggregateAmount = (value: number, accounts: Array<{ currency: string }>) => {
+  const currencies = getCurrencyCodes(accounts);
+  if (currencies.length !== 1) {
+    return formatAggregateAmount(value, accounts);
+  }
+
+  if (value === 0) {
+    return formatDisplayAccountAmount(value, currencies[0]);
+  }
+
+  return `${value > 0 ? "+" : "-"}${formatDisplayAccountAmount(value, currencies[0])}`;
+};
+
+const getNetWorthTone = (value: number) => {
+  if (value > 0) {
+    return "is-good";
+  }
+
+  if (value < 0) {
+    return "is-danger";
+  }
+
+  return "is-neutral";
+};
+
 const getInvestmentInstitutionName = (account: Account) =>
   account.institution?.trim() || account.name.trim() || "Investment institution";
 
@@ -2969,8 +2994,8 @@ function AccountsPageContent() {
           <section className="accounts-overview-grid" aria-label="Account summary">
             <article className="accounts-overview-card glass">
               <p className="eyebrow">Net Worth</p>
-              <strong className="accounts-overview-card__amount is-neutral">
-                {formatAggregateAmount(totals.netWorth, visibleAccounts)}
+              <strong className={`accounts-overview-card__amount ${getNetWorthTone(totals.netWorth)}`}>
+                {formatSignedAggregateAmount(totals.netWorth, visibleAccounts)}
               </strong>
             </article>
             <article className="accounts-overview-card glass">
