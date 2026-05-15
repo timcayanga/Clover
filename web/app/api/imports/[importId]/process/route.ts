@@ -254,6 +254,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
       let metadata: Record<string, unknown> | null = null;
       let extractedText = "";
+      let preflightText: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       const effectiveFileName = file.name || formFileName || "imported-file";
       const effectiveFileType = file.type || formFileType || "";
       const isImageUpload =
@@ -303,7 +304,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       if (shouldPreflightPdf) {
         stage = "reading statement metadata";
         try {
-          const preflightText = await readImportedStatementTextWithCache(
+          preflightText = await readImportedStatementTextWithCache(
             {
               storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
               fileType: effectiveFileType || "application/octet-stream",
@@ -334,18 +335,24 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       const parsedMetadataConfidence = Number((metadata as { confidence?: unknown } | null)?.confidence ?? 0);
       const hasExtractedText = extractedText.trim().length > 0;
+      const canReuseCachedParseSnapshot =
+        Boolean(preflightText?.cacheHit) &&
+        Boolean(preflightText?.cacheRecord?.parsedRows) &&
+        Boolean(preflightText?.cacheRecord?.statementFingerprint) &&
+        Boolean(preflightText?.cacheRecord?.metadata);
       const detectedInstitution = normalizeBankName(String((metadata as { institution?: unknown } | null)?.institution ?? ""));
       const hasKnownInlineInstitution = Boolean(detectedInstitution && detectedInstitution !== "Unknown");
       const shouldProcessKnownStatementInline =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
-        hasExtractedText &&
+        (hasExtractedText || canReuseCachedParseSnapshot) &&
         bytes.length <= 10_000_000 &&
-        hasKnownInlineInstitution;
+        (hasKnownInlineInstitution || canReuseCachedParseSnapshot);
       const shouldQueuePdfImmediately =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
         !forceInlineProcessing &&
         !shouldProcessKnownStatementInline &&
-        !(hasExtractedText && parsedMetadataConfidence >= 80);
+        !(hasExtractedText && parsedMetadataConfidence >= 80) &&
+        !canReuseCachedParseSnapshot;
 
       if (shouldQueuePdfImmediately) {
         stage = "scheduling background processing";
@@ -391,7 +398,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       stage = "reading statement metadata";
       if (!metadata || !extractedText) {
         try {
-          const preflightText = await readImportedStatementTextWithCache(
+          preflightText ??= await readImportedStatementTextWithCache(
             {
               storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
               fileType: effectiveFileType || "application/octet-stream",
@@ -423,7 +430,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const shouldProcessInlinePdf =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
         (forceInlineProcessing || shouldProcessKnownStatementInline) &&
-        hasExtractedText &&
+        (hasExtractedText || canReuseCachedParseSnapshot) &&
         (parsedMetadataConfidence >= 80 || shouldProcessKnownStatementInline);
       const shouldProcessInline =
         (!shouldQueueDocumentUpload &&
