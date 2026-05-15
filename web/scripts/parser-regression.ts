@@ -575,6 +575,23 @@ const main = async () => {
     merchantText: string,
     normalizedName?: string | null
   ) => string | null;
+  const buildStatementFamilySignature = dataEngine.buildStatementFamilySignature as (
+    params: {
+      rows: Array<{ merchantRaw?: string; merchantClean?: string; description?: string; name?: string; date?: string; transactionDate?: string; postedDate?: string; balance?: string | number; runningBalance?: string | number; type?: string }>;
+      metadata?: {
+        institution?: string | null;
+        accountType?: ImportedAccountType | null;
+        startDate?: string | null;
+        endDate?: string | null;
+      } | null;
+      fileType?: string | null;
+    }
+  ) => string | null;
+  const buildStatementFamilySignatureFromText = dataEngine.buildStatementFamilySignatureFromText as (
+    text: string,
+    metadata?: { institution?: string | null; accountType?: ImportedAccountType | null } | null,
+    fileType?: string | null
+  ) => string | null;
   const mergeStatementMetadataWithTemplate = dataEngine.mergeStatementMetadataWithTemplate as (
     detected: {
       institution: string | null;
@@ -989,6 +1006,108 @@ const main = async () => {
   const prototypeLabel = buildMerchantPrototypeLabel("Burger King 1234", "Burger King");
   if (prototypeLabel !== "Burger King 1234" && prototypeLabel !== null) {
     throw new Error(`expected prototype label helper to keep a useful merchant variant or null, got ${prototypeLabel}`);
+  }
+
+  const familySignatureFromText = buildStatementFamilySignatureFromText(
+    "BDO Statement\nAccount Summary\nOpening Balance 100.00\nClosing Balance 120.00",
+    { institution: "BDO", accountType: "bank" },
+    "application/pdf"
+  );
+  const familySignatureFromRows = buildStatementFamilySignature({
+    rows: [
+      { date: "2025-01-01", amount: "100.00", merchantRaw: "BDO Grocery", merchantClean: "BDO Grocery", type: "expense" },
+      { date: "2025-01-02", amount: "20.00", merchantRaw: "BDO Transfer", merchantClean: "BDO Transfer", type: "transfer" },
+    ],
+    metadata: { institution: "BDO", accountType: "bank", startDate: "2025-01-01", endDate: "2025-01-02" },
+    fileType: "application/pdf",
+  });
+  if (!familySignatureFromText || !familySignatureFromText.includes("BDO") || !familySignatureFromRows || !familySignatureFromRows.includes("BDO")) {
+    throw new Error(
+      `expected statement family signatures to include institution context, got ${familySignatureFromText} / ${familySignatureFromRows}`
+    );
+  }
+
+  const classifyMerchant = dataEngine.classifyMerchant as (
+    params: {
+      merchantText: string;
+      categoryText?: string | null;
+      type: "income" | "expense" | "transfer";
+      categoryName?: string | null;
+      merchantRules: Array<{
+        merchantKey: string;
+        merchantPattern: string | null;
+        normalizedName: string;
+        categoryId: string | null;
+        categoryName: string | null;
+        source: string;
+        confidence: number;
+        timesConfirmed: number;
+      }>;
+      trainingSignals: Array<{
+        categoryId: string;
+        categoryName: string | null;
+        merchantKey: string;
+        merchantTokens: string[];
+        type: "income" | "expense" | "transfer";
+        source: string;
+        confidence: number;
+      }>;
+      negativeSignals?: Array<{
+        merchantKey: string;
+        merchantTokens: string[];
+        source: string;
+        confidence: number;
+      }>;
+    }
+  ) => { categoryName: string | null; confidence: number; categoryReason: string | null; merchantKey: string; merchantTokens: string[]; normalizedName: string; preferredType: "income" | "expense" | "transfer" };
+  const positiveClassification = classifyMerchant({
+    merchantText: "Starbucks Coffee 1234",
+    type: "expense",
+    categoryText: "Starbucks Coffee 1234",
+    merchantRules: [
+      {
+        merchantKey: "starbuckscoffee1234",
+        merchantPattern: "Starbucks Coffee 1234",
+        normalizedName: "Starbucks Coffee",
+        categoryId: null,
+        categoryName: "Shopping",
+        source: "manual",
+        confidence: 95,
+        timesConfirmed: 3,
+      },
+    ],
+    trainingSignals: [],
+  });
+  const negativeClassification = classifyMerchant({
+    merchantText: "Starbucks Coffee 1234",
+    type: "expense",
+    categoryText: "Starbucks Coffee 1234",
+    merchantRules: [
+      {
+        merchantKey: "starbuckscoffee1234",
+        merchantPattern: "Starbucks Coffee 1234",
+        normalizedName: "Starbucks Coffee",
+        categoryId: null,
+        categoryName: "Shopping",
+        source: "manual",
+        confidence: 95,
+        timesConfirmed: 3,
+      },
+    ],
+    trainingSignals: [],
+    negativeSignals: [
+      {
+        merchantKey: "starbuckscoffee1234",
+        merchantTokens: ["starbucks", "coffee"],
+        source: "rejected_transaction",
+        confidence: 80,
+      },
+    ],
+  });
+  if (negativeClassification.confidence >= positiveClassification.confidence) {
+    throw new Error(
+      `expected negative merchant signal to reduce confidence, got ${negativeClassification.confidence} vs ${positiveClassification.confidence}`
+    );
   }
 
   const rcbcCreditPath = join(root, "Samples/RCBC/728919236-Acfroga47rrwerw7v8xwjcyqjxnpvi1hv5climj2qkpdzsqlabwmr51pzid4mt-Ao-Swizece4lt1ycaubzsilpqnzohhyzqxuv2cfbldosfajyekhfijmkceso8yzz1vgjmwntbprxb5ribspge-G.pdf");

@@ -30,6 +30,13 @@ type TrainingSignalRow = {
   confidence: number;
 };
 
+type NegativeMerchantSignalRow = {
+  merchantKey: string;
+  merchantTokens: string[];
+  source: string;
+  confidence: number;
+};
+
 type MerchantRuleRow = {
   merchantKey: string;
   merchantPattern: string | null;
@@ -1121,6 +1128,7 @@ export const loadBestStatementTemplateForInstitution = async (params: {
   institution?: string | null;
   fileType?: string | null;
   accountType?: ImportedAccountType | null;
+  statementFamilySignature?: string | null;
 }) => {
   const columns = await getCompatibleStatementTemplateColumns();
   if (columns.length === 0) {
@@ -1152,6 +1160,8 @@ export const loadBestStatementTemplateForInstitution = async (params: {
         const templateAccountType =
           typeof parserConfig?.accountType === "string" ? parserConfig.accountType.trim().toLowerCase() : null;
         const rowCount = typeof parserConfig?.rowCount === "number" ? parserConfig.rowCount : null;
+        const templateFamilySignature =
+          typeof parserConfig?.statementFamilySignature === "string" ? parserConfig.statementFamilySignature.trim() : null;
         let score = 0;
 
         if (template.institution && institution && normalizeMerchantText(template.institution) === normalizeMerchantText(institution)) {
@@ -1168,6 +1178,17 @@ export const loadBestStatementTemplateForInstitution = async (params: {
 
         if (typeof rowCount === "number") {
           score += Math.min(10, Math.max(0, 10 - Math.floor(Math.abs(rowCount - 20) / 5)));
+        }
+
+        if (params.statementFamilySignature && templateFamilySignature) {
+          if (params.statementFamilySignature === templateFamilySignature) {
+            score += 30;
+          } else {
+            const familyParts = params.statementFamilySignature.split("|").filter(Boolean);
+            const templateParts = templateFamilySignature.split("|").filter(Boolean);
+            const overlap = familyParts.filter((part) => templateParts.includes(part)).length;
+            score += Math.min(12, overlap * 3);
+          }
         }
 
         score += Math.min(12, Math.round((template.successCount ?? 0) * 2 + (template.exampleCount ?? 0)));
@@ -2242,6 +2263,104 @@ export const buildStatementFingerprint = (
   return `stmt_${fnv1a(fingerprintSource)}`;
 };
 
+export const buildStatementFamilySignature = (params: {
+  rows: ParsedImportRow[];
+  metadata?: {
+    institution?: string | null;
+    accountType?: ImportedAccountType | null;
+    startDate?: string | null;
+    endDate?: string | null;
+  } | null;
+  fileType?: string | null;
+}) => {
+  const rows = Array.isArray(params.rows) ? params.rows : [];
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const firstRow = rows[0] ?? null;
+  const lastRow = rows.at(-1) ?? null;
+  const firstMerchant = normalizeMerchantText(firstRow?.merchantClean || firstRow?.merchantRaw || firstRow?.description || firstRow?.name || "");
+  const lastMerchant = normalizeMerchantText(lastRow?.merchantClean || lastRow?.merchantRaw || lastRow?.description || lastRow?.name || "");
+  const firstDate = parseDateValue(firstRow?.date ?? firstRow?.transactionDate ?? firstRow?.postedDate ?? null);
+  const lastDate = parseDateValue(lastRow?.date ?? lastRow?.transactionDate ?? lastRow?.postedDate ?? null);
+  const rowCountBand = rows.length < 5 ? "tiny" : rows.length < 15 ? "small" : rows.length < 50 ? "medium" : "large";
+  const hasBalance = rows.some(
+    (row) => typeof row.balance === "string" || typeof row.balance === "number" || typeof row.runningBalance === "string" || typeof row.runningBalance === "number"
+  );
+  const typeCounts = rows.reduce(
+    (counts, row) => {
+      const type = String(row.type ?? "").toLowerCase();
+      if (type === "income" || type === "expense" || type === "transfer") {
+        counts[type] += 1;
+      }
+      return counts;
+    },
+    { income: 0, expense: 0, transfer: 0 }
+  );
+  const dominantType = (Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "mixed") as "income" | "expense" | "transfer" | "mixed";
+  const institution = sanitizeBankNameLabel(params.metadata?.institution ?? null);
+  const signatureParts = [
+    institution && institution !== "Unknown" ? institution : null,
+    params.metadata?.accountType ?? null,
+    params.fileType ? params.fileType.toLowerCase() : null,
+    rowCountBand,
+    dominantType,
+    hasBalance ? "balance" : "nobalance",
+    firstDate ? firstDate.toISOString().slice(0, 10) : null,
+    lastDate ? lastDate.toISOString().slice(0, 10) : null,
+    firstMerchant || null,
+    lastMerchant || null,
+  ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+
+  return signatureParts.length > 0 ? signatureParts.join("|") : null;
+};
+
+export const buildStatementFamilySignatureFromText = (
+  text: string,
+  metadata?: {
+    institution?: string | null;
+    accountType?: ImportedAccountType | null;
+  } | null,
+  fileType?: string | null
+) => {
+  const normalizedLines = text
+    .split(/\r?\n/)
+    .map((line) =>
+      normalizeWhitespace(line)
+        .replace(/[|¦]/g, " ")
+        .replace(/\b\d{1,2}[/-][A-Za-z0-9]{1,4}[/-]\d{2,4}\b/g, "<date>")
+        .replace(/\b[A-Z]{3}\s+\d{1,2},\s+\d{4}\b/g, "<date>")
+        .replace(/[0-9][0-9,]*\.\d{2}/g, "<amount>")
+        .replace(/\b\d{4,}\b/g, "<number>")
+    )
+    .filter(Boolean);
+
+  if (normalizedLines.length === 0) {
+    return null;
+  }
+
+  const firstLine = normalizedLines[0] ?? "";
+  const lastLine = normalizedLines.at(-1) ?? "";
+  const rowCountBand = normalizedLines.length < 5 ? "tiny" : normalizedLines.length < 15 ? "small" : normalizedLines.length < 50 ? "medium" : "large";
+  const balanceLike = normalizedLines.some((line) => /\b(?:balance|opening|closing|ending|running|available)\b/i.test(line));
+  const amountLike = normalizedLines.some((line) => /<amount>/.test(line));
+  const institution = sanitizeBankNameLabel(metadata?.institution ?? null);
+
+  const signatureParts = [
+    institution && institution !== "Unknown" ? institution : null,
+    metadata?.accountType ?? null,
+    fileType ? fileType.toLowerCase() : null,
+    rowCountBand,
+    balanceLike ? "balance" : "nobalance",
+    amountLike ? "amount" : "noamount",
+    firstLine ? firstLine.slice(0, 80) : null,
+    lastLine ? lastLine.slice(0, 80) : null,
+  ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+
+  return signatureParts.length > 0 ? signatureParts.join("|") : null;
+};
+
 export const findExistingImportedStatement = async (params: {
   workspaceId: string;
   statementFingerprint: string;
@@ -2326,6 +2445,7 @@ export const classifyMerchant = (params: {
   categoryName?: string | null;
   merchantRules: MerchantRuleRow[];
   trainingSignals: TrainingSignalRow[];
+  negativeSignals?: NegativeMerchantSignalRow[];
 }) => {
   const preferredTypeForCategory = (categoryName: string | null | undefined, fallback: TransactionType, categorySource?: string | null) => {
     if (categoryName?.trim().toLowerCase() === "shopping" && isStandaloneCashPaymentDescription(categorySource)) {
@@ -2341,6 +2461,7 @@ export const classifyMerchant = (params: {
   const providedCategory = params.categoryName?.trim();
   const heuristicCategory =
     providedCategory && providedCategory.toLowerCase() !== "other" ? providedCategory : guessCategoryFallback(categoryText || params.merchantText, params.type);
+  const negativeSignals = params.negativeSignals ?? [];
 
   let bestRule: MerchantRuleRow | null = null;
   let bestRuleScore = 0;
@@ -2355,13 +2476,36 @@ export const classifyMerchant = (params: {
     }
   }
 
+  const scoreNegativeSignal = (signal: NegativeMerchantSignalRow) => {
+    if (signal.merchantKey === normalizedMerchant) {
+      return 100 + signal.confidence;
+    }
+
+    const signalTokens = new Set(signal.merchantTokens);
+    let overlap = 0;
+    for (const token of tokens) {
+      if (signalTokens.has(token)) {
+        overlap += 1;
+      }
+    }
+
+    return overlap === 0 ? 0 : overlap * 18 + signal.confidence * 0.5;
+  };
+
+  let negativePenalty = 0;
+  for (const signal of negativeSignals) {
+    negativePenalty = Math.max(negativePenalty, scoreNegativeSignal(signal));
+  }
+
   if (bestRule && bestRuleScore >= 20) {
     const learnedCategory = bestRule.categoryName ?? heuristicCategory;
     const exact = bestRule.merchantKey === normalizedMerchant;
     const learnedType = params.trainingSignals.find((signal) => signal.merchantKey === normalizedMerchant)?.type ?? params.type;
+    const rawConfidence = Math.max(0, bestRuleScore) - Math.min(bestRuleScore * 0.75, negativePenalty * (exact ? 0.9 : 0.65));
+    const adjustedConfidence = Math.max(20, Math.round(Math.min(negativePenalty > 0 ? (exact ? 85 : 88) : 99, rawConfidence)));
     return {
       categoryName: learnedCategory,
-      confidence: Math.min(99, Math.round(Math.max(78, bestRuleScore))),
+      confidence: adjustedConfidence,
       categoryReason: exact ? "rule-exact" : "rule-pattern",
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
@@ -2380,7 +2524,8 @@ export const classifyMerchant = (params: {
 
   if (bestSignal && bestScore >= 18) {
     const learnedCategory = bestSignal.categoryName ?? heuristicCategory;
-    const confidence = Math.min(99, Math.round(Math.max(68, bestScore)));
+    const rawConfidence = Math.max(68, bestScore) - Math.min(bestScore * 0.6, negativePenalty * 0.45);
+    const confidence = Math.max(20, Math.round(Math.min(negativePenalty > 0 ? 80 : 99, rawConfidence)));
 
     return {
       categoryName: learnedCategory,
@@ -2419,13 +2564,54 @@ export const classifyMerchant = (params: {
 
   return {
     categoryName: heuristicCategory,
-    confidence: heuristicCategory === "Other" ? 35 : 62,
+    confidence: heuristicCategory === "Other" ? 35 : Math.max(35, 62 - Math.min(22, Math.round(negativePenalty * 0.25))),
     categoryReason: heuristicCategory === "Other" ? "heuristic-other" : "heuristic-rule",
     merchantKey: normalizedMerchant,
     merchantTokens: tokens,
     normalizedName: summarizeMerchantText(params.merchantText),
     preferredType: preferredTypeForCategory(heuristicCategory, params.type, categoryText || params.merchantText),
   };
+};
+
+export const loadNegativeMerchantSignals = async (workspaceId: string) => {
+  try {
+    const rows = await prisma.transaction.findMany({
+      where: {
+        workspaceId,
+        reviewStatus: "rejected",
+        deletedAt: null,
+      },
+      select: {
+        merchantRaw: true,
+        merchantClean: true,
+        description: true,
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 250,
+    });
+
+    return rows
+      .map((row) => {
+        const merchantText = row.merchantClean || row.merchantRaw || row.description || "";
+        const merchantKey = normalizeMerchantText(merchantText);
+        if (!merchantKey) {
+          return null;
+        }
+        return {
+          merchantKey,
+          merchantTokens: tokenizeMerchant(merchantText),
+          source: "rejected_transaction",
+          confidence: 80,
+        } satisfies NegativeMerchantSignalRow;
+      })
+      .filter((value): value is NegativeMerchantSignalRow => Boolean(value));
+  } catch (error) {
+    if (!isMissingDatabaseRelationError(error, "Transaction")) {
+      throw error;
+    }
+
+    return [];
+  }
 };
 
 export const loadTrainingSignals = async (workspaceId: string) => {
@@ -2844,6 +3030,16 @@ export const applyDataQaReviewLearning = async (params: {
     parserConfig: {
       source: "data_qa_review",
       rowCount: params.parsedRows.length,
+      statementFamilySignature: buildStatementFamilySignature({
+        rows: params.parsedRows as ParsedImportRow[],
+        metadata: {
+          institution: fingerprintMetadata.institution ?? null,
+          accountType: fingerprintMetadata.accountType ?? null,
+          startDate: fingerprintMetadata.startDate ?? null,
+          endDate: fingerprintMetadata.endDate ?? null,
+        },
+        fileType: params.fileType,
+      }),
       importFileId: params.importFileId ?? null,
       accountId: params.accountId ?? null,
       manualFeedback: Boolean(params.manualFeedback?.trim()),
@@ -3008,6 +3204,7 @@ export const enrichParsedRowsWithTraining = async (params: {
   const merchantRules = await loadMerchantRules(params.workspaceId);
   const accountRules = await loadAccountRules(params.workspaceId);
   const trainingSignals = await loadTrainingSignals(params.workspaceId);
+  const negativeSignals = await loadNegativeMerchantSignals(params.workspaceId);
   const rawStatementConfidence =
     typeof params.statementConfidence === "number" && Number.isFinite(params.statementConfidence)
       ? Math.max(0, Math.min(100, params.statementConfidence))
@@ -3066,6 +3263,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       categoryName: row.categoryName ?? null,
       merchantRules,
       trainingSignals,
+      negativeSignals,
     });
     const merchantClean = learned.normalizedName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
     const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(learned.preferredType ?? row.type ?? "expense");

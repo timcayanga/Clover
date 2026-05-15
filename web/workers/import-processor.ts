@@ -14,6 +14,7 @@ import {
   DATA_ENGINE_VERSION,
   applyDataQaReviewLearning,
   buildParsedTransactionInsertData,
+  buildStatementFamilySignatureFromText,
   buildStatementFingerprint,
   detectStatementMetadataFromText,
   type EnrichedParsedImportRow,
@@ -2568,6 +2569,14 @@ export const processImportFileText = async (
   const textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
   const metadata = detectStatementMetadataFromText(textForParse);
   const statementFingerprint = buildStatementFingerprint(textForParse, metadata, importFile.fileName, importFile.fileType, importMode);
+  const statementFamilySignature = buildStatementFamilySignatureFromText(
+    textForParse,
+    {
+      institution: metadata.institution ?? null,
+      accountType: metadata.accountType ?? null,
+    },
+    importFile.fileType
+  );
   const existingTemplate = await loadStatementTemplate({
     workspaceId: String(importFile.workspaceId),
     fingerprint: statementFingerprint,
@@ -2580,6 +2589,7 @@ export const processImportFileText = async (
           institution: metadata.institution,
           fileType: importFile.fileType,
           accountType: metadata.accountType ?? null,
+          statementFamilySignature,
         })
       : null);
   const templateMetadata =
@@ -3242,6 +3252,14 @@ export const processImportFileText = async (
       parserConfig: {
         accountType: resolvedMetadata.accountType ?? inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
         rowCount: rows.length,
+        statementFamilySignature: buildStatementFamilySignatureFromText(
+          textForParse,
+          {
+            institution: resolvedMetadata.institution ?? null,
+            accountType: resolvedMetadata.accountType ?? null,
+          },
+          importFile.fileType
+        ),
         firstMerchant:
           typeof rows[0]?.merchantClean === "string"
             ? rows[0]?.merchantClean
