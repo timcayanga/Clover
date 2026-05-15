@@ -77,68 +77,68 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
 
   return (
     <div className="split-bill-home">
-      <section className="split-bill-mobile-home">
-        <section className="split-bill-panel panel glass">
-          <div className="split-bill-panel__head">
-            <div>
-              <h2>Bills</h2>
-            </div>
+      <section className="split-bill-panel panel glass">
+        <div className="split-bill-panel__head">
+          <div>
+            <h2>Bills</h2>
           </div>
+        </div>
 
-          <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
-            <div className="split-bill-table__header" role="row">
-              <span role="columnheader">Description</span>
-              <span role="columnheader">Date</span>
-              <span role="columnheader">People</span>
-              <span role="columnheader">Total</span>
-              <span role="columnheader">Status</span>
-              <span role="columnheader" aria-hidden="true" />
-            </div>
-            {recentBills.length > 0 ? (
-              recentBills.map((bill) => {
-                const status = buildRowStatus(bill.settlement.transfers);
-                const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
+        <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
+          <div className="split-bill-table__header" role="row">
+            <span role="columnheader">Description</span>
+            <span role="columnheader">Date</span>
+            <span role="columnheader">People</span>
+            <span role="columnheader">Total</span>
+            <span role="columnheader">Status</span>
+            <span role="columnheader" aria-hidden="true" />
+          </div>
+          {recentBills.length > 0 ? (
+            recentBills.map((bill) => {
+              const status = buildRowStatus(bill.settlement.transfers);
+              const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
 
-                return (
-                  <div key={bill.id} className="split-bill-table__row split-bill-table__row--interactive" role="row">
-                    <div role="cell" className="split-bill-table__bill">
-                      <strong>{bill.title}</strong>
-                      <span>
-                        {sourceLabel}
-                        {bill.group?.name ? ` · ${bill.group.name}` : ""}
-                      </span>
-                    </div>
-                    <div role="cell">{formatDate(bill.billDate)}</div>
-                    <div role="cell" className="split-bill-table__chips">
-                      {bill.participants.length > 0 ? (
-                        bill.participants.map((participant) => (
-                          <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
-                            <SplitBillEntityAvatar name={participant.name} avatarUrl={null} sizeClass="split-bill-person-avatar--small" />
-                          </span>
-                        ))
-                      ) : (
-                        <span className="split-bill-subtle-empty">No people yet</span>
-                      )}
-                    </div>
-                    <div role="cell">{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</div>
-                    <div role="cell">{status}</div>
-                    <div role="cell" className="split-bill-table__row-action">
-                      <button className="split-bill-table__chevron" type="button" aria-label={`View ${bill.title}`} onClick={() => onOpenBill(bill.id)}>
-                        ›
-                      </button>
-                    </div>
+              return (
+                <div key={bill.id} className="split-bill-table__row split-bill-table__row--interactive" role="row">
+                  <div role="cell" className="split-bill-table__bill">
+                    <strong>{bill.title}</strong>
+                    <span>
+                      {sourceLabel}
+                      {bill.group?.name ? ` · ${bill.group.name}` : ""}
+                    </span>
                   </div>
-                );
-              })
-            ) : null}
-          </div>
-          <div className="split-bill-table__footer">
-            <button className="split-bill-table__more-link" type="button" onClick={toggleBills}>
-              {billToggleLabel}
-            </button>
-          </div>
-        </section>
+                  <div role="cell">{formatDate(bill.billDate)}</div>
+                  <div role="cell" className="split-bill-table__chips">
+                    {bill.participants.length > 0 ? (
+                      bill.participants.map((participant) => (
+                        <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
+                          <SplitBillEntityAvatar name={participant.name} avatarUrl={null} sizeClass="split-bill-person-avatar--small" />
+                        </span>
+                      ))
+                    ) : (
+                      <span className="split-bill-subtle-empty">No people yet</span>
+                    )}
+                  </div>
+                  <div role="cell">{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</div>
+                  <div role="cell">{status}</div>
+                  <div role="cell" className="split-bill-table__row-action">
+                    <button className="split-bill-table__chevron" type="button" aria-label={`View ${bill.title}`} onClick={() => onOpenBill(bill.id)}>
+                      ›
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          ) : null}
+        </div>
+        <div className="split-bill-table__footer">
+          <button className="split-bill-table__more-link" type="button" onClick={toggleBills}>
+            {billToggleLabel}
+          </button>
+        </div>
+      </section>
 
+      <section className="split-bill-mobile-home">
         <div className="split-bill-mobile-home__sections panel glass">
           <section className="split-bill-mobile-home__section">
             <div className="split-bill-mobile-home__section-head">
@@ -209,67 +209,6 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
               </button>
             </div>
           </section>
-        </div>
-      </section>
-
-      <section className="split-bill-panel panel glass split-bill-desktop-home">
-        <div className="split-bill-panel__head">
-          <div>
-            <h2>Bills</h2>
-          </div>
-        </div>
-
-        <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
-          <div className="split-bill-table__header" role="row">
-            <span role="columnheader">Description</span>
-            <span role="columnheader">Date</span>
-            <span role="columnheader">People</span>
-            <span role="columnheader">Total</span>
-            <span role="columnheader">Status</span>
-            <span role="columnheader" aria-hidden="true" />
-          </div>
-          {recentBills.length > 0 ? (
-            recentBills.map((bill) => {
-              const status = buildRowStatus(bill.settlement.transfers);
-              const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
-
-              return (
-                <div key={bill.id} className="split-bill-table__row split-bill-table__row--interactive" role="row">
-                  <div role="cell" className="split-bill-table__bill">
-                    <strong>{bill.title}</strong>
-                    <span>
-                      {sourceLabel}
-                      {bill.group?.name ? ` · ${bill.group.name}` : ""}
-                    </span>
-                  </div>
-                  <div role="cell">{formatDate(bill.billDate)}</div>
-                  <div role="cell" className="split-bill-table__chips">
-                    {bill.participants.length > 0 ? (
-                      bill.participants.map((participant) => (
-                        <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
-                          <SplitBillEntityAvatar name={participant.name} avatarUrl={null} sizeClass="split-bill-person-avatar--small" />
-                        </span>
-                      ))
-                    ) : (
-                      <span className="split-bill-subtle-empty">No people yet</span>
-                    )}
-                  </div>
-                  <div role="cell">{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</div>
-                  <div role="cell">{status}</div>
-                  <div role="cell" className="split-bill-table__row-action">
-                    <button className="split-bill-table__chevron" type="button" aria-label={`View ${bill.title}`} onClick={() => onOpenBill(bill.id)}>
-                      ›
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          ) : null}
-        </div>
-        <div className="split-bill-table__footer">
-          <button className="split-bill-table__more-link" type="button" onClick={toggleBills}>
-            {billToggleLabel}
-          </button>
         </div>
       </section>
 
