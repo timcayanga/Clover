@@ -556,7 +556,7 @@ const waitForImportSettledVisibility = async (params: {
   const expectedBalance = toBalanceString(params.expectedBalance);
   const timeoutMs = params.timeoutMs ?? 10_000;
   const startedAt = Date.now();
-  const pollDelayMs = 1000;
+  const pollDelayMs = 500;
 
   const normalizeBalance = (value: unknown) => {
     const text = toBalanceString(value);
@@ -2117,7 +2117,7 @@ export function ImportFilesModal({
               summary: null,
               errorMessage: null,
             });
-            await new Promise((resolve) => window.setTimeout(resolve, 750));
+            await new Promise((resolve) => window.setTimeout(resolve, 500));
             continue;
           }
 
@@ -2157,7 +2157,7 @@ export function ImportFilesModal({
             errorMessage: null,
           });
           if (stagedAttempt < 14) {
-            await new Promise((resolve) => window.setTimeout(resolve, 750));
+            await new Promise((resolve) => window.setTimeout(resolve, 500));
             continue;
           }
           return {
@@ -2579,7 +2579,7 @@ export function ImportFilesModal({
           }
 
           if (hasRecoverableImportSignal && attempt < 6) {
-            await sleep(800);
+      await sleep(500);
             continue;
           }
           const limitPayload = parsePlanLimitMessage(processingMessage, planTier);
@@ -2650,7 +2650,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(parsedRowsCount > 0 || hasVisibleImportDataSignal ? 1000 : 800);
+          await sleep(parsedRowsCount > 0 || hasVisibleImportDataSignal ? 500 : 300);
           continue;
         }
 
@@ -2889,7 +2889,7 @@ export function ImportFilesModal({
             }
           }
           if (!latestResolvedAccountId || latestResolvedAccountId.startsWith("optimistic-")) {
-            await sleep(600);
+            await sleep(400);
             continue;
           }
         }
@@ -3021,7 +3021,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(600);
+          await sleep(400);
           continue;
         }
 
@@ -3148,7 +3148,7 @@ export function ImportFilesModal({
                     )
                   : null;
               if (!fallbackAccountId) {
-                await sleep(600);
+                await sleep(400);
                 continue;
               }
               latestResolvedAccountId = fallbackAccountId;
@@ -3236,7 +3236,7 @@ export function ImportFilesModal({
               errorMessage: null,
             });
             }
-            await sleep(parsedRowsCount > 0 ? 300 : 600);
+            await sleep(parsedRowsCount > 0 ? 200 : 400);
             continue;
           }
 
@@ -3316,7 +3316,7 @@ export function ImportFilesModal({
               summary: null,
               errorMessage: null,
             });
-            await sleep(600);
+            await sleep(400);
             continue;
           }
 
@@ -3538,7 +3538,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(1000);
+          await sleep(500);
           continue;
         }
         capturePostHogClientEvent("import_retry_failed", {
@@ -3552,7 +3552,7 @@ export function ImportFilesModal({
         return;
       }
 
-      await sleep(600);
+      await sleep(400);
     }
 
     const latestItem = itemsRef.current.find((entry) => entry.id === itemId);
