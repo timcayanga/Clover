@@ -32,6 +32,7 @@ import {
   getCompatibleImportFileColumns,
   insertParsedTransactionsCompat,
   hasCompatibleTable,
+  assessParsedRowTeachability,
   recordTrainingSignal,
   loadStatementTemplate,
   loadBestStatementTemplateForInstitution,
@@ -4324,6 +4325,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     categoryName: string;
     type: "income" | "expense" | "transfer";
     confidence: number;
+    teachabilityScore: number;
     notes: string | null;
   }> = [];
   const preparedTransactions: PreparedImportTransaction[] = [];
@@ -4632,6 +4634,15 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       (typeof row.merchantClean === "string" && row.merchantClean) ||
       (typeof row.merchantRaw === "string" && row.merchantRaw) ||
       "Imported transaction";
+    const rowTeachability = assessParsedRowTeachability({
+      merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+      merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+      description: extractHumanReadableDescription(row.rawPayload ?? null),
+      categoryName,
+      type: canonicalType,
+      amount: row.amount,
+      date: row.date,
+    } as ParsedImportRow);
     const reviewOnlyRow = isWiseReviewOnlyTransaction({
       institution: statementInstitution,
       row: {
@@ -4723,6 +4734,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         categoryName,
         type: canonicalType,
         confidence: rowConfidence,
+        teachabilityScore: rowTeachability.score,
         notes: typeof row.categoryReason === "string" ? row.categoryReason : null,
       },
       });
@@ -4817,6 +4829,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       categoryName: entry.trainingSignal.categoryName,
       type: entry.trainingSignal.type,
       confidence: entry.trainingSignal.confidence,
+      teachabilityScore: entry.trainingSignal.teachabilityScore,
       notes: entry.trainingSignal.notes,
     });
   }
@@ -4912,6 +4925,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         type: entry.type,
         source: "import_confirmation",
         confidence: entry.confidence,
+        teachabilityScore: entry.teachabilityScore,
         notes: entry.notes,
       })
     )

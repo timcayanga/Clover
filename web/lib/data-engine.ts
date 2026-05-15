@@ -643,6 +643,28 @@ export const assessParsedRowTeachability = (row: ParsedImportRow) => {
   };
 };
 
+export const shouldPromoteTrainingSignalForLearning = (params: {
+  confidence?: number | null;
+  teachabilityScore?: number | null;
+  merchantText?: string | null;
+}) => {
+  const confidence = typeof params.confidence === "number" && Number.isFinite(params.confidence) ? Math.max(0, Math.min(100, Math.round(params.confidence))) : null;
+  const teachabilityScore =
+    typeof params.teachabilityScore === "number" && Number.isFinite(params.teachabilityScore)
+      ? Math.max(0, Math.min(100, Math.round(params.teachabilityScore)))
+      : null;
+  const merchantText = String(params.merchantText ?? "").trim();
+  if (!merchantText) {
+    return false;
+  }
+
+  if (teachabilityScore !== null) {
+    return teachabilityScore >= 55;
+  }
+
+  return (confidence ?? 0) >= 60;
+};
+
 export const buildTrainingSignalDedupeKey = (params: {
   source: "import_confirmation" | "manual_recategorization" | "training_upload" | "manual_transaction_creation";
   transactionId?: string | null;
@@ -2829,9 +2851,17 @@ export const recordTrainingSignal = async (params: {
   type: TransactionType;
   source: "import_confirmation" | "manual_recategorization" | "training_upload" | "manual_transaction_creation";
   confidence?: number;
+  teachabilityScore?: number | null;
   notes?: string | null;
   actorUserId?: string | null;
 }) => {
+  const teachabilityScore =
+    typeof params.teachabilityScore === "number" && Number.isFinite(params.teachabilityScore)
+      ? Math.max(0, Math.min(100, Math.round(params.teachabilityScore)))
+      : null;
+  if (!shouldPromoteTrainingSignalForLearning({ confidence: params.confidence ?? null, teachabilityScore, merchantText: params.merchantText })) {
+    return null;
+  }
   const merchantKey = normalizeMerchantText(params.merchantText);
   const merchantTokens = tokenizeMerchant(params.merchantText);
   const normalizedMerchantLabel = params.normalizedName?.trim() || summarizeMerchantText(params.merchantText);

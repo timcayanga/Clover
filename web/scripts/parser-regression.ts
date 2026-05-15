@@ -587,8 +587,11 @@ const main = async () => {
     hasMerchant: boolean;
     hasAmount: boolean;
     hasDate: boolean;
-    hasType: boolean;
-  };
+      hasType: boolean;
+    };
+  const shouldPromoteTrainingSignalForLearning = dataEngine.shouldPromoteTrainingSignalForLearning as (
+    params: { confidence?: number | null; teachabilityScore?: number | null; merchantText?: string | null }
+  ) => boolean;
   const buildMerchantPrototypeLabel = dataEngine.buildMerchantPrototypeLabel as (
     merchantText: string,
     normalizedName?: string | null
@@ -1055,6 +1058,33 @@ const main = async () => {
   });
   if (teachabilityGood.score <= teachabilityBad.score || teachabilityBad.score >= 55) {
     throw new Error(`expected teachability scoring to prefer clean rows, got ${JSON.stringify({ teachabilityGood, teachabilityBad })}`);
+  }
+  if (
+    !shouldPromoteTrainingSignalForLearning({
+      confidence: 92,
+      teachabilityScore: teachabilityGood.score,
+      merchantText: "GrabPay",
+    }) ||
+    shouldPromoteTrainingSignalForLearning({
+      confidence: 92,
+      teachabilityScore: teachabilityBad.score,
+      merchantText: "???",
+    })
+  ) {
+    throw new Error(
+      `expected training-signal promotion gating to keep clean rows and block noisy rows, got ${JSON.stringify({
+        teachabilityGood: shouldPromoteTrainingSignalForLearning({
+          confidence: 92,
+          teachabilityScore: teachabilityGood.score,
+          merchantText: "GrabPay",
+        }),
+        teachabilityBad: shouldPromoteTrainingSignalForLearning({
+          confidence: 92,
+          teachabilityScore: teachabilityBad.score,
+          merchantText: "???",
+        }),
+      })}`
+    );
   }
 
   const layoutAwareText = buildLayoutAwarePdfTextFromContentItems([
