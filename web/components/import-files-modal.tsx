@@ -1958,6 +1958,10 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
+          if (stagedAttempt < 14) {
+            await new Promise((resolve) => window.setTimeout(resolve, 750));
+            continue;
+          }
           return {
             status: "staged",
             importedRows,

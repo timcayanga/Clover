@@ -4127,6 +4127,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     notes: string | null;
   }> = [];
   const preparedTransactions: PreparedImportTransaction[] = [];
+  let duplicateSkippedTransactionsCount = 0;
   let qaMetadataForRun: {
     institution: string | null;
     accountNumber: string | null;
@@ -4496,6 +4497,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const currentOccurrence = (currentDedupeCounts.get(dedupeKey) ?? 0) + 1;
     currentDedupeCounts.set(dedupeKey, currentOccurrence);
     if ((existingDedupeCounts.get(dedupeKey) ?? 0) >= currentOccurrence) {
+      duplicateSkippedTransactionsCount += 1;
       continue;
     }
 
@@ -4548,6 +4550,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     });
   }
 
+  const visibleTransactionsCount = preparedTransactions.length + duplicateSkippedTransactionsCount + (openingBalanceInserted ? 1 : 0);
+
     await updateImportFileWithTxCompat(
       tx,
       importFileId,
@@ -4557,7 +4561,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         status: "done",
         processingPhase: "complete",
         processingMessage: "The file is imported and ready.",
-        confirmedTransactionsCount: preparedTransactions.length + (openingBalanceInserted ? 1 : 0),
+        confirmedTransactionsCount: visibleTransactionsCount,
       },
       compatibleImportFileColumns
     );
@@ -4686,10 +4690,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     : null;
 
     return {
-      imported: transactions.length,
+      imported: visibleTransactionsCount,
+      duplicate: duplicateSkippedTransactionsCount > 0 && preparedTransactions.length === 0,
       accountId: resolvedAccountId,
       insightSummary,
       accountBalance: reconciledAccountBalance,
+      confirmedTransactionsCount: visibleTransactionsCount,
+      status: "done",
     };
   }, { maxWait: 15_000, timeout: 30_000 });
 
