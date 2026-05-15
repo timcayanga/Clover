@@ -152,6 +152,8 @@ type ProcessImportResult = {
   status?: "done" | "staged";
 };
 
+type ImportFileTextCacheInfo = Awaited<ReturnType<typeof readImportedFileTextWithCacheInfo>>;
+
 let accountColumnCache: Set<string> | null = null;
 
 const getCompatibleAccountColumns = async () => {
@@ -2490,6 +2492,7 @@ export const processImportFileText = async (
   importFileId: string,
   options: {
     text?: string;
+    textCacheInfo?: ImportFileTextCacheInfo | null;
     password?: string;
     actorUserId?: string | null;
     qaSource?: DataQaSource;
@@ -2570,7 +2573,7 @@ export const processImportFileText = async (
   const imageImport = isImageImportFile(fileType, fileName);
   const isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
-  let textCacheInfo: Awaited<ReturnType<typeof readImportedFileTextWithCacheInfo>> | null = null;
+  let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
   const storageKey = String(importFile.storageKey ?? "");
 
   if (imageImport || !text) {
@@ -2578,7 +2581,7 @@ export const processImportFileText = async (
       throw new Error("Missing imported file.");
     }
 
-    if (!text) {
+    if (!text || !textCacheInfo) {
       try {
         textCacheInfo = await readImportedFileTextWithCacheInfo(
           {

@@ -445,6 +445,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         const { processImportFileText } = await import("@/workers/import-processor");
         const result = await processImportFileText(importId, {
           text: extractedText,
+          textCacheInfo: preflightText,
           password,
           actorUserId: userId,
           qaSource: "import_processing",
