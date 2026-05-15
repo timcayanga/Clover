@@ -996,6 +996,49 @@ const IMPORT_PROGRESS = {
   done: 100,
 } as const;
 const MAX_IMPORT_FILES_PER_BATCH = 25;
+const IMPORT_VISIBILITY_BASE_TIMEOUT_MS = 30_000;
+const IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 15_000;
+const IMPORT_BACKGROUND_HARD_STOP_MS = 10 * 60_000;
+
+const getImportVisibilityTimeoutMs = (fileCount: number) =>
+  IMPORT_VISIBILITY_BASE_TIMEOUT_MS +
+  Math.max(0, fileCount - 1) * IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS;
+
+const summarizeVisibilityOutcome = (items: QueuedFile[]) => {
+  const successful = items.filter(
+    (item) => item.confirmationState === "confirmed" && item.status !== "error" && item.status !== "needs_password"
+  );
+  const failed = items.filter((item) => item.status === "error" || item.status === "needs_password");
+  const partial = items.filter(
+    (item) =>
+      !successful.includes(item) &&
+      !failed.includes(item) &&
+      (item.importFileId ||
+        item.targetAccountId ||
+        item.importedRows !== null ||
+        item.confirmationState === "staged" ||
+        item.progress >= IMPORT_PROGRESS.uploading)
+  );
+
+  const listNames = (label: string, entries: QueuedFile[]) =>
+    entries.length > 0 ? `${label}: ${entries.map((entry) => entry.file.name).join(", ")}.` : "";
+
+  return {
+    successful,
+    partial,
+    failed,
+    message: [
+      `${successful.length} successful, ${partial.length} partially parsed, ${failed.length} failed.`,
+      listNames("Partial", partial),
+      listNames("Failed", failed),
+      partial.length > 0
+        ? `Clover will keep working in the background for up to ${Math.round(IMPORT_BACKGROUND_HARD_STOP_MS / 60_000)} minutes.`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+  };
+};
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
@@ -1041,6 +1084,8 @@ export function ImportFilesModal({
   const retiredImportActivityFileNamesRef = useRef(new Set<string>());
   const autoCloseAfterStartRef = useRef(false);
   const autoCloseCompletedBatchTimerRef = useRef<number | null>(null);
+  const visibilityDeadlineRef = useRef<number | null>(null);
+  const visibilityHardStopTimerRef = useRef<number | null>(null);
   const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
 
@@ -1242,6 +1287,84 @@ export function ImportFilesModal({
     autoCloseAfterStartRef.current = false;
   };
 
+  const hardStopVisibleImportModal = (reason: "deadline" | "background") => {
+    const currentItems = itemsRef.current;
+    if (currentItems.length === 0) {
+      setBusy(false);
+      onClose();
+      return;
+    }
+
+    const outcome = summarizeVisibilityOutcome(currentItems);
+    const outcomeMessage =
+      reason === "deadline"
+        ? `Initial visibility window ended. ${outcome.message}`
+        : outcome.message;
+
+    for (const item of currentItems) {
+      retiredImportActivityFileNamesRef.current.add(item.file.name);
+    }
+
+    setItems((current) =>
+      current.map((item) =>
+        item.confirmationState === "confirmed"
+          ? item
+          : {
+              ...item,
+              status: "done",
+              confirmationState: "confirmed",
+              progress: 100,
+              progressLabel:
+                item.status === "error" || item.status === "needs_password"
+                  ? "Needs attention"
+                  : "Continuing in background",
+            }
+      )
+    );
+    setMessage(outcomeMessage);
+    setBusy(false);
+    autoStartRef.current = false;
+    autoCloseAfterStartRef.current = false;
+    visibilityDeadlineRef.current = null;
+    if (visibilityHardStopTimerRef.current) {
+      window.clearTimeout(visibilityHardStopTimerRef.current);
+      visibilityHardStopTimerRef.current = null;
+    }
+
+    publishImportActivity({
+      workspaceId,
+      surface: "background",
+      status: outcome.failed.length > 0 ? "error" : "done",
+      fileName: currentItems[currentItems.length - 1]?.file.name ?? null,
+      fileIndex: currentItems.length,
+      fileTotal: currentItems.length,
+      completedFiles: outcome.successful.length,
+      progress: 100,
+      detail: outcomeMessage,
+      summary: null,
+      errorMessage: outcome.failed.length > 0 ? outcomeMessage : null,
+      errorTitle: outcome.failed.length > 0 ? "Import review needed" : null,
+      errorNextSteps:
+        outcome.failed.length > 0
+          ? [
+              "Check the files listed as failed or partially parsed.",
+              "Re-upload failed files one at a time if they do not appear in Clover.",
+              "Clover will keep finalizing partially parsed files in the background.",
+            ]
+          : null,
+    });
+
+    if (autoCloseCompletedBatchTimerRef.current) {
+      window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
+    }
+    autoCloseCompletedBatchTimerRef.current = window.setTimeout(() => {
+      autoCloseCompletedBatchTimerRef.current = null;
+      clearImportActivity();
+      lastImportActivityRef.current = null;
+      onClose();
+    }, 10_000);
+  };
+
   useEffect(() => {
     const wasOpen = wasOpenRef.current;
     wasOpenRef.current = open;
@@ -1264,6 +1387,11 @@ export function ImportFilesModal({
       localPreparseStartedRef.current.clear();
       localPreparseSummaryByItemIdRef.current.clear();
       autoCloseAfterStartRef.current = false;
+      visibilityDeadlineRef.current = null;
+      if (visibilityHardStopTimerRef.current) {
+        window.clearTimeout(visibilityHardStopTimerRef.current);
+        visibilityHardStopTimerRef.current = null;
+      }
       accountIdByKeyRef.current.clear();
       setMessage("");
       setValidationNotice(null);
@@ -1881,6 +2009,12 @@ export function ImportFilesModal({
 
     try {
       for (let stagedAttempt = 0; stagedAttempt < 15; stagedAttempt += 1) {
+        const visibilityDeadline = visibilityDeadlineRef.current;
+        if (!backgroundOnly && visibilityDeadline && Date.now() >= visibilityDeadline) {
+          hardStopVisibleImportModal("deadline");
+          return { status: "staged", importedRows: lastKnownConfirmedRows || null, summary: null };
+        }
+
         const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2239,10 +2373,16 @@ export function ImportFilesModal({
     };
     let seededFallbackSummary = false;
     const startedAt = Date.now();
-    const MAX_WAIT_MS = 180_000;
+    const MAX_WAIT_MS = backgroundOnly ? IMPORT_BACKGROUND_HARD_STOP_MS : 180_000;
     let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
+        const visibilityDeadline = visibilityDeadlineRef.current;
+        if (!backgroundOnly && visibilityDeadline && Date.now() >= visibilityDeadline) {
+          hardStopVisibleImportModal("deadline");
+          return;
+        }
+
         const response = await fetch(`/api/imports/${importFileId}/status`, {
           cache: "no-store",
         });
@@ -2829,7 +2969,7 @@ export function ImportFilesModal({
             return;
           }
 
-          const timeoutMessage = "Timed out after 180 seconds while Clover was still reading the document.";
+          const timeoutMessage = `Timed out after ${Math.round(MAX_WAIT_MS / 1000)} seconds while Clover was still reading the document.`;
           emitImportError("monitor", summaryContext.fileName, timeoutMessage);
           return;
         }
@@ -3357,7 +3497,11 @@ export function ImportFilesModal({
       return;
     }
 
-    emitImportError("monitor", summaryContext.fileName, "Timed out while Clover was still finalizing this import.");
+    emitImportError(
+      "monitor",
+      summaryContext.fileName,
+      `Timed out after ${Math.round(MAX_WAIT_MS / 60_000)} minutes while Clover was still finalizing this import.`
+    );
   };
 
   const preflightPasswordProtectedFiles = async () => {
@@ -5181,6 +5325,17 @@ export function ImportFilesModal({
     setBusy(true);
     setValidationNotice(null);
     setMessage("Clover is lining up your files...");
+    const visibilityTimeoutMs = getImportVisibilityTimeoutMs(Math.max(1, items.length));
+    visibilityDeadlineRef.current = Date.now() + visibilityTimeoutMs;
+    if (visibilityHardStopTimerRef.current) {
+      window.clearTimeout(visibilityHardStopTimerRef.current);
+    }
+    visibilityHardStopTimerRef.current = window.setTimeout(() => {
+      visibilityHardStopTimerRef.current = null;
+      if (busy || itemsRef.current.some((item) => item.status === "pending" || item.status === "parsing" || item.status === "importing")) {
+        hardStopVisibleImportModal("deadline");
+      }
+    }, visibilityTimeoutMs);
     capturePostHogClientEventOnce(
       "first_import_started",
       {
@@ -5208,6 +5363,12 @@ export function ImportFilesModal({
     }
 
     for (const item of items) {
+      const visibilityDeadline = visibilityDeadlineRef.current;
+      if (visibilityDeadline && Date.now() >= visibilityDeadline) {
+        hardStopVisibleImportModal("deadline");
+        return;
+      }
+
       if (item.confirmationState === "confirmed") {
         continue;
       }
@@ -5217,6 +5378,12 @@ export function ImportFilesModal({
       }
 
       const result = await processFile(item.id);
+      const postProcessVisibilityDeadline = visibilityDeadlineRef.current;
+      if (postProcessVisibilityDeadline && Date.now() >= postProcessVisibilityDeadline) {
+        hardStopVisibleImportModal("deadline");
+        return;
+      }
+
       if (result.status === "done") {
         importedCount += 1;
         if (result.summary) {
@@ -5253,6 +5420,11 @@ export function ImportFilesModal({
     }
 
     setBusy(false);
+    visibilityDeadlineRef.current = null;
+    if (visibilityHardStopTimerRef.current) {
+      window.clearTimeout(visibilityHardStopTimerRef.current);
+      visibilityHardStopTimerRef.current = null;
+    }
 
     const finishedEnough = blockedCount === 0 && errorCount === 0 && (importedCount > 0 || stagedCount > 0 || alreadyConfirmedCount === items.length);
 
@@ -5604,11 +5776,15 @@ export function ImportFilesModal({
         fileTotal={items.length}
         completedFiles={completedFileCount}
         progress={overallProgress}
-        detail={friendlyImportProgressLabel(
-          activeProgressItem ? activeProgressItem.progressLabel : completedFileCount > 0 ? "Done" : "Queued",
-          activeProgressItem?.file.name ?? null,
-          activeProgressItem?.importMode ?? null
-        )}
+        detail={
+          !activeProgressItem && hasCompletedBatch && message
+            ? message
+            : friendlyImportProgressLabel(
+                activeProgressItem ? activeProgressItem.progressLabel : completedFileCount > 0 ? "Done" : "Queued",
+                activeProgressItem?.file.name ?? null,
+                activeProgressItem?.importMode ?? null
+              )
+        }
         phaseLabel={
           activeProgressItem
             ? friendlyImportPhaseLabel(activeProgressItem.progressLabel, activeProgressItem.file.name, activeProgressItem.importMode)
