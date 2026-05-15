@@ -149,6 +149,7 @@ type ImportFile = {
 };
 
 const normalizeCategoryName = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+const ENRICHMENT_JOB_ACTIVE_STALE_MS = 10 * 60 * 1000;
 
 const isImportFinalizingTransaction = (transaction: Transaction) => {
   if (!transaction.importFileId) {
@@ -168,13 +169,21 @@ const isImportFinalizingTransaction = (transaction: Transaction) => {
 
 const isActiveEnrichmentJob = (importFile: ImportFile) => {
   const status = importFile.enrichmentJob?.status;
-  return Boolean(status && status !== "done" && status !== "failed");
+  if (!status || status === "done" || status === "failed") {
+    return false;
+  }
+
+  const updatedAt = importFile.enrichmentJob?.updatedAt;
+  const updatedAtMs = updatedAt ? new Date(updatedAt).getTime() : 0;
+  return !Number.isFinite(updatedAtMs) || updatedAtMs <= 0 || Date.now() - updatedAtMs < ENRICHMENT_JOB_ACTIVE_STALE_MS;
 };
+
+const isFailedEnrichmentJob = (importFile: ImportFile) => importFile.enrichmentJob?.status === "failed";
 
 const getEnrichmentNoticeState = (importFiles: ImportFile[], nowMs: number) => {
   const activeJobs = importFiles.filter(isActiveEnrichmentJob);
   if (activeJobs.length === 0) {
-    const failedJobs = importFiles.filter((importFile) => importFile.enrichmentJob?.status === "failed");
+    const failedJobs = importFiles.filter(isFailedEnrichmentJob);
     return {
       label: failedJobs.length > 0 ? "Review needed" : "Review suggested",
       detail: failedJobs.length > 0 ? "couldn't finalize automatically; please review" : "some details may need a quick look",
@@ -1738,6 +1747,10 @@ function AccountDetailPageContent() {
     () => new Set(importFiles.filter(isActiveEnrichmentJob).map((importFile) => importFile.id)),
     [importFiles]
   );
+  const failedFinalizingImportIds = useMemo(
+    () => new Set(importFiles.filter(isFailedEnrichmentJob).map((importFile) => importFile.id)),
+    [importFiles]
+  );
   const [finalizingNowMs, setFinalizingNowMs] = useState(() => Date.now());
   const hasActiveFinalizingImports = activeFinalizingImportIds.size > 0;
   useEffect(() => {
@@ -1753,11 +1766,19 @@ function AccountDetailPageContent() {
   const finalizingTransactions = useMemo(
     () =>
       visibleTransactions.filter(
-        (transaction) =>
-          isImportFinalizingTransaction(transaction) ||
-          (transaction.importFileId ? activeFinalizingImportIds.has(transaction.importFileId) : false)
+        (transaction) => {
+          if (!transaction.importFileId) {
+            return false;
+          }
+
+          if (activeFinalizingImportIds.has(transaction.importFileId)) {
+            return true;
+          }
+
+          return failedFinalizingImportIds.has(transaction.importFileId) && isImportFinalizingTransaction(transaction);
+        }
       ),
-    [activeFinalizingImportIds, visibleTransactions]
+    [activeFinalizingImportIds, failedFinalizingImportIds, visibleTransactions]
   );
   const finalizingTransactionCount = finalizingTransactions.length;
   const [finalizingNoticeDismissed, setFinalizingNoticeDismissed] = useState(false);

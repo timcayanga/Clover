@@ -178,6 +178,24 @@ const isPasswordError = (error: unknown) => {
 
 const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
 
+const requestedImportEnrichmentIds = new Set<string>();
+
+const triggerImportEnrichment = (importFileId: string) => {
+  if (!importFileId || requestedImportEnrichmentIds.has(importFileId)) {
+    return;
+  }
+
+  requestedImportEnrichmentIds.add(importFileId);
+  void fetch("/api/import-enrichment/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ importFileId, limit: 3, batchSize: 100 }),
+    keepalive: true,
+  }).catch(() => {
+    requestedImportEnrichmentIds.delete(importFileId);
+  });
+};
+
 const fileTypeLabel = (file: File) => {
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith(".pdf") || file.type === "application/pdf") return "PDF";
@@ -2207,6 +2225,7 @@ export function ImportFilesModal({
           summary,
           errorMessage: null,
         });
+        triggerImportEnrichment(importFileId);
         void waitForImportSettledVisibility({
           workspaceId,
           accountId: resolvedAccountId,
@@ -2507,6 +2526,7 @@ export function ImportFilesModal({
         );
 
         if (finalizationNeedsReview && visibleImportComplete) {
+          triggerImportEnrichment(importFileId);
           emitItemUpdate({
             status: "done",
             confirmationState: "confirmed",
@@ -2860,6 +2880,7 @@ export function ImportFilesModal({
         const hasSettledRows = visibleImportComplete;
 
         if (hasSettledRows) {
+          triggerImportEnrichment(importFileId);
           const completedAccountId =
             latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-")
               ? latestResolvedAccountId
