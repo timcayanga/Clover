@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { formatSplitBillAmount, normalizeCurrencyCode, type SplitBillSerializedBill } from "@/lib/split-bill";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
-import { getSplitBillOverview } from "@/lib/split-bill-view-models";
 
 type SplitBillHomeProps = {
   bills: SplitBillSerializedBill[];
@@ -43,7 +42,6 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
   const [showAllBills, setShowAllBills] = useState(false);
 
   const recentBills = showAllBills ? bills : bills.slice(0, 4);
-  const overview = useMemo(() => getSplitBillOverview(bills, groups.length, people.length), [bills, groups.length, people.length]);
 
   const visibleGroups = useMemo(() => {
     return groups.map((group) => {
@@ -77,31 +75,12 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
             <h2>Keep shared expenses and people in one place.</h2>
             <p className="split-bill-mobile-home__copy">Track bills, groups, and saved people with the same initials and detail flow everywhere.</p>
           </div>
-          <div className="split-bill-mobile-home__hero-stats">
-            <article>
-              <span>Bills</span>
-              <strong>{overview.totalBills}</strong>
-            </article>
-            <article>
-              <span>Open</span>
-              <strong>{overview.openBills}</strong>
-            </article>
-            <article>
-              <span>Groups</span>
-              <strong>{overview.groupsCount}</strong>
-            </article>
-            <article>
-              <span>People</span>
-              <strong>{overview.peopleCount}</strong>
-            </article>
-          </div>
         </section>
 
         <section className="split-bill-panel panel glass">
           <div className="split-bill-panel__head">
             <div>
               <h2>Bills</h2>
-              <p className="split-bill-mobile-home__copy">Tap a row to open the bill, edit it, or review the settlement.</p>
             </div>
           </div>
 
@@ -244,27 +223,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
           <div>
             <p className="eyebrow">Split Bills</p>
             <h2>Shared expenses at a glance</h2>
-            <p className="split-bill-mobile-home__copy">The same people, group, and initials power every Split Bills surface.</p>
           </div>
-        </div>
-
-        <div className="split-bill-home__summary-grid">
-          <article>
-            <span>Bills</span>
-            <strong>{overview.totalBills}</strong>
-          </article>
-          <article>
-            <span>Open</span>
-            <strong>{overview.openBills}</strong>
-          </article>
-          <article>
-            <span>Groups</span>
-            <strong>{overview.groupsCount}</strong>
-          </article>
-          <article>
-            <span>People</span>
-            <strong>{overview.peopleCount}</strong>
-          </article>
         </div>
 
         <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
@@ -331,7 +290,6 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
           <div className="split-bill-panel__head">
             <div>
               <h2>Groups</h2>
-              <p className="split-bill-mobile-home__copy">Browse group totals and members from the same list.</p>
             </div>
           </div>
 
@@ -361,7 +319,6 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
           <div className="split-bill-panel__head">
             <div>
               <h2>People</h2>
-              <p className="split-bill-mobile-home__copy">Each saved person keeps the same initials and color across Split Bills.</p>
             </div>
           </div>
 

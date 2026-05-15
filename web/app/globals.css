@@ -31504,35 +31504,6 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-size: 0.92rem;
 }
 
-.split-bill-mobile-home__hero-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.split-bill-mobile-home__hero-stats article {
-  display: grid;
-  gap: 4px;
-  padding: 12px;
-  border-radius: 18px;
-  background: rgba(3, 168, 192, 0.06);
-  border: 1px solid rgba(3, 168, 192, 0.12);
-}
-
-.split-bill-mobile-home__hero-stats span,
-.split-bill-mobile-home__hero-stats strong {
-  line-height: 1.15;
-}
-
-.split-bill-mobile-home__hero-stats span {
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.split-bill-mobile-home__hero-stats strong {
-  font-size: 1.1rem;
-}
-
 .split-bill-mobile-home__actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -31713,14 +31684,12 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-size: 0.9rem;
 }
 
-.split-bill-home__summary-grid,
 .split-bill-detail-modal__summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
-.split-bill-home__summary-grid article,
 .split-bill-detail-modal__summary-grid article {
   display: grid;
   gap: 4px;
@@ -31729,13 +31698,11 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   background: rgba(15, 23, 42, 0.04);
 }
 
-.split-bill-home__summary-grid span,
 .split-bill-detail-modal__summary-grid span {
   color: var(--text-secondary);
   font-size: 0.8rem;
 }
 
-.split-bill-home__summary-grid strong,
 .split-bill-detail-modal__summary-grid strong {
   font-size: 1rem;
 }
@@ -32548,6 +32515,17 @@ body[data-split-bill-modal-open="true"] .app-shell {
   grid-template-columns: minmax(0, 1fr);
 }
 
+@media (max-width: 1180px) {
+  .split-bill-mobile-home {
+    display: grid;
+  }
+
+  .split-bill-desktop-home,
+  .split-bill-desktop-home__secondary {
+    display: none;
+  }
+}
+
 @media (max-width: 1024px) {
   .split-bill-hero,
   .split-bill-grid,
@@ -32603,7 +32581,6 @@ body[data-split-bill-modal-open="true"] .app-shell {
     flex-wrap: wrap;
   }
 
-  .split-bill-home__summary-grid,
   .split-bill-detail-modal__summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -32625,8 +32602,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
     margin-left: 0;
   }
 
-  .split-bill-detail-modal__summary-grid,
-  .split-bill-home__summary-grid {
+  .split-bill-detail-modal__summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
