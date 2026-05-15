@@ -304,6 +304,7 @@ type ImportFile = {
   fileName: string;
   status: string;
   uploadedAt: string;
+  accountId?: string | null;
   enrichmentJob?: {
     status?: string | null;
     phase?: string | null;
@@ -564,11 +565,16 @@ const isActiveEnrichmentJob = (importFile: ImportFile) => {
   return Boolean(status && status !== "done" && status !== "failed");
 };
 
-const estimateEnrichmentTimeLabel = (importFiles: ImportFile[], nowMs: number) => {
+const getEnrichmentNoticeState = (importFiles: ImportFile[], nowMs: number) => {
   const activeJobs = importFiles.filter(isActiveEnrichmentJob);
   if (activeJobs.length === 0) {
-    return "couldn't finalize automatically; please review";
+    return {
+      label: "Needs review",
+      detail: "couldn't finalize automatically; please review",
+      needsReview: true,
+    };
   }
+
   const remainingRows = activeJobs.reduce((total, importFile) => {
       const totalRows = Number(importFile.enrichmentJob?.totalRows ?? 0);
       const processedRows = Number(importFile.enrichmentJob?.processedRows ?? 0);
@@ -585,19 +591,35 @@ const estimateEnrichmentTimeLabel = (importFiles: ImportFile[], nowMs: number) =
   const remainingSeconds = estimatedSeconds - elapsedSeconds;
 
   if (remainingRows <= 0) {
-    return elapsedSeconds >= 120 ? "couldn't finalize automatically; please review" : "finishing now";
+    return {
+      label: "Enriching data",
+      detail: "finishing now",
+      needsReview: false,
+    };
   }
 
   if (remainingSeconds <= -60 || elapsedSeconds >= 300) {
-    return "couldn't finalize automatically; please review";
+    return {
+      label: "Enriching data",
+      detail: "taking longer than expected",
+      needsReview: false,
+    };
   }
 
   if (remainingSeconds <= 60) {
-    return "less than 1 min left";
+    return {
+      label: "Enriching data",
+      detail: "less than 1 min left",
+      needsReview: false,
+    };
   }
 
   const minutes = Math.max(1, Math.ceil(remainingSeconds / 60));
-  return `about ${minutes} min${minutes === 1 ? "" : "s"} left`;
+  return {
+    label: "Enriching data",
+    detail: `about ${minutes} min${minutes === 1 ? "" : "s"} left`,
+    needsReview: false,
+  };
 };
 
 function InlineEditableCell({
@@ -3065,7 +3087,7 @@ function TransactionsPageContent() {
     const intervalId = window.setInterval(() => setFinalizingNowMs(Date.now()), 30_000);
     return () => window.clearInterval(intervalId);
   }, [hasActiveFinalizingImports]);
-  const finalizingTimeLabel = useMemo(() => estimateEnrichmentTimeLabel(imports, finalizingNowMs), [finalizingNowMs, imports]);
+  const finalizingNoticeState = useMemo(() => getEnrichmentNoticeState(imports, finalizingNowMs), [finalizingNowMs, imports]);
   const finalizingTransactions = useMemo(
     () =>
       visibleTransactions.filter(
@@ -3077,7 +3099,7 @@ function TransactionsPageContent() {
   );
   const finalizingTransactionCount = finalizingTransactions.length;
   const [finalizingNoticeDismissed, setFinalizingNoticeDismissed] = useState(false);
-  const finalizingNeedsReview = finalizingTimeLabel === "couldn't finalize automatically; please review";
+  const finalizingNeedsReview = finalizingNoticeState.needsReview;
   const finalizingNoticeDismissalKey = useMemo(
     () =>
       finalizingNeedsReview && finalizingTransactionCount > 0
@@ -5739,12 +5761,12 @@ function TransactionsPageContent() {
             <div className="transactions-status-line" role="status" aria-live="polite">
               <div className="transactions-status-line__meta">
                 <span className={`pill ${finalizingNeedsReview ? "pill-neutral" : "pill-neutral"}`}>
-                  {finalizingNeedsReview ? "Needs review" : "Finalizing details"}
+                  {finalizingNoticeState.label}
                 </span>
                 <span className="panel-muted">
                   {finalizingNeedsReview
                     ? `Clover couldn't finalize automatically for ${finalizingTransactionCount} visible transaction${finalizingTransactionCount === 1 ? "" : "s"}; please review.`
-                    : `Clover is cleaning up names and categories for ${finalizingTransactionCount} visible transaction${finalizingTransactionCount === 1 ? "" : "s"} · ${finalizingTimeLabel}.`}
+                    : `Clover is enriching names and categories for ${finalizingTransactionCount} visible transaction${finalizingTransactionCount === 1 ? "" : "s"} · ${finalizingNoticeState.detail}.`}
                 </span>
               </div>
               <button
