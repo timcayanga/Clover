@@ -592,6 +592,23 @@ export const assessParsedRowShapeConsistency = (rows: ParsedImportRow[]) => {
   };
 };
 
+export const scoreRowShapeLearningPenalty = (score: number) => {
+  const normalizedScore = Math.max(0, Math.min(100, Math.round(Number(score) || 0)));
+  if (normalizedScore >= 85) {
+    return 0;
+  }
+
+  if (normalizedScore >= 70) {
+    return 4;
+  }
+
+  if (normalizedScore >= 55) {
+    return 10;
+  }
+
+  return 16;
+};
+
 export const buildTrainingSignalDedupeKey = (params: {
   source: "import_confirmation" | "manual_recategorization" | "training_upload" | "manual_transaction_creation";
   transactionId?: string | null;
@@ -3220,8 +3237,14 @@ export const enrichParsedRowsWithTraining = async (params: {
     return Math.max(0, Math.min(100, Math.round(scaled)));
   };
 
+  const rowShapePenalty = scoreRowShapeLearningPenalty(rowShapeAssessment.score);
+
   const isRowLowConfidence = (details: { effectiveConfidence: number; categoryName: string; categoryReason?: string | null; rowType?: ParsedImportRow["type"] }) => {
     if (!details.rowType) {
+      return true;
+    }
+
+    if (rowShapeAssessment.score < 65) {
       return true;
     }
 
@@ -3283,9 +3306,13 @@ export const enrichParsedRowsWithTraining = async (params: {
     const shapeConfidence = Math.max(0, Math.min(100, rowShapeAssessment.score));
     const effectiveConfidence = Math.max(
       0,
-      Math.min(100, Math.max(learned.confidence, deterministicParserConfidence, rowConfidence, rowCategoryConfidence, Math.round(shapeConfidence * 0.25)))
+      Math.min(
+        100,
+        Math.max(learned.confidence, deterministicParserConfidence, rowConfidence, rowCategoryConfidence, Math.round(shapeConfidence * 0.25)) -
+          rowShapePenalty
+      )
     );
-    const parserConfidence = Math.max(rowParserConfidence, rowConfidence, statementConfidence, Math.round(shapeConfidence * 0.2));
+    const parserConfidence = Math.max(0, Math.max(rowParserConfidence, rowConfidence, statementConfidence, Math.round(shapeConfidence * 0.2)) - Math.floor(rowShapePenalty * 0.5));
     const categoryConfidence = Math.max(rowCategoryConfidence, effectiveConfidence);
     const learnedRuleIdsApplied = [
       ...(Array.isArray(row.learnedRuleIdsApplied) ? (row.learnedRuleIdsApplied as string[]) : []),

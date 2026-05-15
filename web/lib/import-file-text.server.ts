@@ -443,6 +443,132 @@ const scoreStatementTextCandidate = (text: string) => {
   return score;
 };
 
+const normalizeStatementTextLine = (line: string) =>
+  line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim();
+
+const compactStatementTextLine = (line: string) => normalizeStatementTextLine(line).toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+const scoreStatementTextLineCandidate = (line: string) => {
+  const normalized = normalizeStatementTextLine(line);
+  if (!normalized) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const datePattern = /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:,\s*\d{4})?\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i;
+  const amountPattern = /(?:[₱$€£¥]\s*)?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/;
+  const balancePattern = /\b(?:balance|opening|closing|ending|running|available|statement balance|total amount due|minimum amount due)\b/i;
+  const transactionPattern = /\b(?:debit|credit|withdraw|deposit|transfer|payment|purchase|refund|charge|fee|interest|cash|atm|branch|merchant|reference|pos|card)\b/i;
+
+  let score = Math.min(1.25, normalized.length / 50);
+  if (datePattern.test(normalized)) {
+    score += 1.75;
+  }
+  if (amountPattern.test(normalized)) {
+    score += 1.5;
+  }
+  if (balancePattern.test(normalized)) {
+    score += 1;
+  }
+  if (transactionPattern.test(normalized)) {
+    score += 1;
+  }
+  if (/[A-Za-z]{4,}/.test(normalized) && /[0-9]/.test(normalized)) {
+    score += 0.4;
+  }
+  if (/\b(?:[A-Za-z]+\d+[A-Za-z]+|[A-Za-z]+\d+|\d+[A-Za-z]+)\b/.test(normalized)) {
+    score -= 2;
+  }
+  if (/^(?:[A-Za-z]\.?){2,}$/.test(normalized) || (/^[A-Za-z0-9\s.]+$/.test(normalized) && normalized.length <= 4)) {
+    score -= 1.5;
+  }
+
+  return score;
+};
+
+const scoreStatementTextCandidateLineQuality = (text: string) =>
+  text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeStatementTextLine(line))
+    .filter(Boolean)
+    .reduce((total, line) => total + Math.max(0, scoreStatementTextLineCandidate(line)), 0);
+
+const countStatementTextLineConfusions = (line: string) => {
+  const normalized = normalizeStatementTextLine(line);
+  const matches = normalized.match(/\b(?:[A-Za-z]*\d+[A-Za-z]+|[A-Za-z]+\d+|\d+[A-Za-z]+)\b/g);
+  return matches?.length ?? 0;
+};
+
+const isLikelySameStatementLine = (left: string, right: string) => {
+  const leftNormalized = normalizeStatementTextLine(left);
+  const rightNormalized = normalizeStatementTextLine(right);
+  if (!leftNormalized || !rightNormalized) {
+    return false;
+  }
+
+  const leftCompact = compactStatementTextLine(leftNormalized);
+  const rightCompact = compactStatementTextLine(rightNormalized);
+
+  if (leftCompact === rightCompact) {
+    return true;
+  }
+
+  if (leftCompact.includes(rightCompact) || rightCompact.includes(leftCompact)) {
+    return true;
+  }
+
+  const datePattern = /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:,\s*\d{4})?\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i;
+  const amountPattern = /(?:[₱$€£¥]\s*)?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/;
+
+  const leftHasDate = datePattern.test(leftNormalized);
+  const rightHasDate = datePattern.test(rightNormalized);
+  const leftHasAmount = amountPattern.test(leftNormalized);
+  const rightHasAmount = amountPattern.test(rightNormalized);
+
+  if (leftHasDate !== rightHasDate || leftHasAmount !== rightHasAmount) {
+    return false;
+  }
+
+  const leftTokens = leftCompact.split(/[^a-z0-9]+/).filter(Boolean);
+  const rightTokens = rightCompact.split(/[^a-z0-9]+/).filter(Boolean);
+  const leftTokenSet = new Set(leftTokens);
+  const overlap = rightTokens.filter((token) => leftTokenSet.has(token)).length / Math.max(1, Math.max(leftTokens.length, rightTokens.length));
+
+  return overlap >= 0.6;
+};
+
+const pickBetterStatementTextLine = (left: string, right: string) => {
+  const leftConfusions = countStatementTextLineConfusions(left);
+  const rightConfusions = countStatementTextLineConfusions(right);
+  if (leftConfusions !== rightConfusions) {
+    return leftConfusions < rightConfusions ? left : right;
+  }
+
+  const leftScore = scoreStatementTextLineCandidate(left);
+  const rightScore = scoreStatementTextLineCandidate(right);
+
+  if (leftScore === rightScore) {
+    return normalizeStatementTextLine(left).length >= normalizeStatementTextLine(right).length ? left : right;
+  }
+
+  return leftScore >= rightScore ? left : right;
+};
+
+const isUsefulStatementLine = (line: string) => {
+  const normalized = normalizeStatementTextLine(line);
+  if (!normalized) {
+    return false;
+  }
+
+  const structuralUseful =
+    /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i.test(normalized) ||
+    /\d{4}-\d{2}-\d{2}/.test(normalized) ||
+    /[₱$€£¥]|\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/.test(normalized) ||
+    /\b(?:balance|opening|closing|ending|running|available|transfer|payment|deposit|withdraw|credit|debit|merchant|reference)\b/i.test(normalized);
+
+  return structuralUseful || (/[A-Za-z]{4,}/.test(normalized) && !isStatementUiNoiseLine(normalized));
+};
+
 const pickBestStatementTextCandidate = (candidates: Array<{ text: string; label: string }>) => {
   const scoredCandidates = candidates
     .map((candidate) => {
@@ -469,11 +595,14 @@ const pickBestStatementTextCandidate = (candidates: Array<{ text: string; label:
   const merged = runnerUp ? mergeCompatibleStatementTextCandidates(best, runnerUp) : null;
   if (merged) {
     const mergedScore = scoreStatementTextCandidate(merged);
-    if (mergedScore >= best.score + 1) {
+    const mergedLineQuality = scoreStatementTextCandidateLineQuality(merged);
+    const bestLineQuality = scoreStatementTextCandidateLineQuality(best.text);
+    if (mergedScore >= best.score + 1 || mergedLineQuality >= bestLineQuality + 0.15) {
       if (process.env.CLOVER_DEBUG_OCR_SELECTION === "1") {
         console.log("Selected OCR merged candidate", {
           labels: [best.label, runnerUp.label],
           score: Number(mergedScore.toFixed(2)),
+          lineQuality: Number(mergedLineQuality.toFixed(2)),
           length: merged.length,
         });
       }
@@ -492,7 +621,7 @@ const pickBestStatementTextCandidate = (candidates: Array<{ text: string; label:
   return best.text;
 };
 
-const mergeCompatibleStatementTextCandidates = (
+export const mergeCompatibleStatementTextCandidates = (
   left: { text: string; label: string; score: number },
   right: { text: string; label: string; score: number }
 ) => {
@@ -501,14 +630,12 @@ const mergeCompatibleStatementTextCandidates = (
   }
 
   const leftLines = left.text
-    .replace(/\u00a0/g, " ")
     .split(/\r?\n/)
-    .map((line) => line.replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
+    .map((line) => normalizeStatementTextLine(line))
     .filter(Boolean);
   const rightLines = right.text
-    .replace(/\u00a0/g, " ")
     .split(/\r?\n/)
-    .map((line) => line.replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
+    .map((line) => normalizeStatementTextLine(line))
     .filter(Boolean);
 
   if (leftLines.length === 0 || rightLines.length === 0) {
@@ -524,31 +651,56 @@ const mergeCompatibleStatementTextCandidates = (
   const mergedLines: string[] = [];
   const seen = new Set<string>();
   const addLine = (line: string) => {
-    const key = line.toLowerCase();
+    const normalized = normalizeStatementTextLine(line);
+    const key = normalized.toLowerCase();
     if (seen.has(key)) {
       return;
     }
     seen.add(key);
-    mergedLines.push(line);
+    mergedLines.push(normalized);
   };
 
-  for (const line of leftLines) {
-    addLine(line);
+  const mergedLength = Math.max(leftLines.length, rightLines.length);
+  for (let index = 0; index < mergedLength; index += 1) {
+    const leftLine = leftLines[index] ?? null;
+    const rightLine = rightLines[index] ?? null;
+
+    if (leftLine && rightLine) {
+      if (isLikelySameStatementLine(leftLine, rightLine)) {
+        addLine(pickBetterStatementTextLine(leftLine, rightLine));
+      } else {
+        const leftUseful = isUsefulStatementLine(leftLine);
+        const rightUseful = isUsefulStatementLine(rightLine);
+        if (leftUseful && !rightUseful) {
+          addLine(leftLine);
+        } else if (!leftUseful && rightUseful) {
+          addLine(rightLine);
+        } else if (leftUseful && rightUseful) {
+          addLine(pickBetterStatementTextLine(leftLine, rightLine));
+        } else {
+          addLine(leftLine);
+        }
+      }
+      continue;
+    }
+
+    if (leftLine) {
+      addLine(leftLine);
+    }
+
+    if (rightLine) {
+      addLine(rightLine);
+    }
   }
 
   for (const line of rightLines) {
-    const isUsefulLine =
-      /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i.test(line) ||
-      /\d{4}-\d{2}-\d{2}/.test(line) ||
-      /[₱$€£¥]|\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/.test(line) ||
-      /\b(?:balance|opening|closing|ending|running|available|transfer|payment|deposit|withdraw|credit|debit|merchant|reference)\b/i.test(line);
-    if (isUsefulLine) {
+    if (isUsefulStatementLine(line)) {
       addLine(line);
     }
   }
 
   const merged = mergedLines.join("\n").trim();
-  return merged.length > Math.max(left.text.length, right.text.length) ? merged : null;
+  return merged.length >= Math.max(left.text.length, right.text.length) ? merged : null;
 };
 
 const extractTextFromPdfBytesWithRenderFirstFallback = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {

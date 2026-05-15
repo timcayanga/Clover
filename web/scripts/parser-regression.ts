@@ -575,6 +575,7 @@ const main = async () => {
     merchantText: string,
     normalizedName?: string | null
   ) => string | null;
+  const scoreRowShapeLearningPenalty = dataEngine.scoreRowShapeLearningPenalty as (score: number) => number;
   const buildStatementFamilySignature = dataEngine.buildStatementFamilySignature as (
     params: {
       rows: Array<{ merchantRaw?: string; merchantClean?: string; description?: string; name?: string; date?: string; transactionDate?: string; postedDate?: string; balance?: string | number; runningBalance?: string | number; type?: string }>;
@@ -591,6 +592,10 @@ const main = async () => {
     text: string,
     metadata?: { institution?: string | null; accountType?: ImportedAccountType | null } | null,
     fileType?: string | null
+  ) => string | null;
+  const mergeCompatibleStatementTextCandidates = importFileTextModule.mergeCompatibleStatementTextCandidates as (
+    left: { text: string; label: string; score: number },
+    right: { text: string; label: string; score: number }
   ) => string | null;
   const mergeStatementMetadataWithTemplate = dataEngine.mergeStatementMetadataWithTemplate as (
     detected: {
@@ -1003,6 +1008,22 @@ const main = async () => {
     throw new Error(`expected layout-aware PDF text reconstruction to keep rows together, got ${layoutAwareText}`);
   }
 
+  const mergedOcrText = mergeCompatibleStatementTextCandidates(
+    {
+      text: "Jan 1\nCoffee S1op\n150.00\nBalance 1,000.00",
+      label: "ocr-a",
+      score: 24,
+    },
+    {
+      text: "Jan 1\nCoffee Shop\n150.00\nBalance 1,000.00",
+      label: "ocr-b",
+      score: 23,
+    }
+  );
+  if (!mergedOcrText || !/Coffee Shop/.test(mergedOcrText) || /Coffee S1op/.test(mergedOcrText)) {
+    throw new Error(`expected OCR candidates to merge toward the cleaner line, got ${mergedOcrText}`);
+  }
+
   const prototypeLabel = buildMerchantPrototypeLabel("Burger King 1234", "Burger King");
   if (prototypeLabel !== "Burger King 1234" && prototypeLabel !== null) {
     throw new Error(`expected prototype label helper to keep a useful merchant variant or null, got ${prototypeLabel}`);
@@ -1025,6 +1046,12 @@ const main = async () => {
     throw new Error(
       `expected statement family signatures to include institution context, got ${familySignatureFromText} / ${familySignatureFromRows}`
     );
+  }
+
+  const lightPenalty = scoreRowShapeLearningPenalty(88);
+  const heavyPenalty = scoreRowShapeLearningPenalty(42);
+  if (lightPenalty !== 0 || heavyPenalty <= lightPenalty) {
+    throw new Error(`expected row-shape learning penalty to prefer strong rows, got ${lightPenalty} / ${heavyPenalty}`);
   }
 
   const classifyMerchant = dataEngine.classifyMerchant as (
