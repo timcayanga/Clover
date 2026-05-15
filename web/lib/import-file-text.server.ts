@@ -268,12 +268,13 @@ const extractTextFromImageBufferWithOcr = async (
 const extractTextFromImageBufferWithOcrBestEffort = async (imageSource: Buffer | Uint8Array | string) => {
   const firstPass = await extractTextFromImageBufferWithOcr(imageSource, "6");
   const secondPass = await extractTextFromImageBufferWithOcr(imageSource, "11");
+  const thirdPass = await extractTextFromImageBufferWithOcr(imageSource, "4");
 
-  if (secondPass.trim().length > firstPass.trim().length) {
-    return secondPass;
-  }
-
-  return firstPass;
+  return pickBestStatementTextCandidate([
+    { text: firstPass, label: "ocr-psm-6" },
+    { text: secondPass, label: "ocr-psm-11" },
+    { text: thirdPass, label: "ocr-psm-4" },
+  ]);
 };
 
 const renderPdfPagesToOcrText = async (data: Uint8Array, password?: string, baseUrl?: string | null, maxPages = 6, scale = 3.2) => {
@@ -315,23 +316,158 @@ const shouldPreferPdfOcrFirst = (fileName?: string | null) => {
   );
 };
 
-const looksLikeFragmentedStatementText = (text: string) => {
+const isStatementUiNoiseLine = (line: string) => {
+  if (/^(Transactions?|Transaction History|Wallet History|Portfolio|Accounts?|Today|Yesterday|Home|Inbox|QR|Pay|Cards?|Save & Invest|More)$/i.test(line)) {
+    return true;
+  }
+
+  if (/^\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:AM|PM))?$/i.test(line)) {
+    return true;
+  }
+
+  if (/^\d{1,2}:\d{2}/.test(line) && !/[₹₱$£€¥]|[A-Za-z].*\d/.test(line)) {
+    return true;
+  }
+
+  if (
+    /^\d{1,2}:\d{2}/.test(line) &&
+    !/[₹₱$£€¥]/.test(line) &&
+    !/\b(?:received|sent|cash|card|transfer|deposit|withdraw|refund|purchase|payment|balance|account|transactions?|history|buy|sell)\b/i.test(line) &&
+    !/\b[A-Za-z]{4,}\b/.test(line)
+  ) {
+    return true;
+  }
+
+  if (/^(?:Status|Signal|Battery|Wi-?Fi)$/i.test(line)) {
+    return true;
+  }
+
+  return false;
+};
+
+const scoreStatementTextCandidate = (text: string) => {
   const lines = text
     .replace(/\u00a0/g, " ")
     .split(/\r?\n/)
-    .map((line) => line.trim())
+    .map((line) => line.replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
-  if (lines.length < 20) {
-    return false;
+  if (lines.length === 0) {
+    return Number.NEGATIVE_INFINITY;
   }
 
-  const monthPattern = /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?(?:\s+\d{1,2}(?:,\s*\d{4})?)?$/i;
-  const dateOnlyCount = lines.filter((line) => monthPattern.test(line) || /^(?:\d{1,2}\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:,\s*\d{4})?$/i.test(line)).length;
-  const moneyOnlyCount = lines.filter((line) => /^[0-9][0-9,]*\.\d{2}$/.test(line)).length;
-  const combinedCount = lines.filter((line) => /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}.*[0-9][0-9,]*\.\d{2}/i.test(line)).length;
+  const datePattern = /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:,\s*\d{4})?\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i;
+  const amountPattern = /(?:[₱$€£¥]\s*)?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/;
+  const balancePattern = /\b(?:balance|opening|closing|ending|running|available|statement balance|total amount due|minimum amount due)\b/i;
+  const transactionPattern = /\b(?:debit|credit|withdraw|deposit|transfer|payment|purchase|refund|charge|fee|interest|cash|atm|branch|merchant|reference|pos|card)\b/i;
 
-  return (dateOnlyCount >= 8 || moneyOnlyCount >= 8) && combinedCount < 6;
+  let score = 0;
+  let dateLikeCount = 0;
+  let amountLikeCount = 0;
+  let combinedCount = 0;
+  let balanceCount = 0;
+  let transactionCount = 0;
+  let noiseCount = 0;
+  let fragmentCount = 0;
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    const isNoise = isStatementUiNoiseLine(line);
+    if (isNoise) {
+      noiseCount += 1;
+    }
+
+    const dateLike = datePattern.test(line);
+    const amountLike = amountPattern.test(line);
+    const balanceLike = balancePattern.test(line);
+    const transactionLike = transactionPattern.test(line);
+
+    if (dateLike) {
+      dateLikeCount += 1;
+    }
+    if (amountLike) {
+      amountLikeCount += 1;
+    }
+    if (dateLike && amountLike) {
+      combinedCount += 1;
+    }
+    if (balanceLike) {
+      balanceCount += 1;
+    }
+    if (transactionLike) {
+      transactionCount += 1;
+    }
+
+    if (/^(?:[A-Za-z]\.?){2,}$/.test(line) || (/^[A-Za-z0-9\s.]+$/.test(line) && line.length <= 4)) {
+      fragmentCount += 1;
+    }
+
+    score += Math.min(1.5, line.length / 40);
+    if (dateLike) {
+      score += 3;
+    }
+    if (amountLike) {
+      score += 2.25;
+    }
+    if (balanceLike) {
+      score += 1.5;
+    }
+    if (transactionLike) {
+      score += 1.25;
+    }
+    if (/[A-Za-z]{4,}/.test(line) && /[0-9]/.test(line)) {
+      score += 0.75;
+    }
+    if (isNoise) {
+      score -= 3;
+    }
+    if (dateLike && amountLike) {
+      score += 2.5;
+    }
+    if (lower.includes("page ") || lower.includes("continued")) {
+      score -= 1.5;
+    }
+  }
+
+  score += Math.min(4, dateLikeCount * 0.5 + amountLikeCount * 0.5 + combinedCount + balanceCount * 0.5 + transactionCount * 0.5);
+  score -= Math.max(0, noiseCount - 2) * 0.5;
+  score -= Math.max(0, fragmentCount - 2) * 0.25;
+
+  return score;
+};
+
+const pickBestStatementTextCandidate = (candidates: Array<{ text: string; label: string }>) => {
+  let best = "";
+  let bestScore = Number.NEGATIVE_INFINITY;
+  let bestLabel = "";
+
+  for (const candidate of candidates) {
+    const text = candidate.text.trim();
+    if (!text) {
+      continue;
+    }
+
+    const score = scoreStatementTextCandidate(text);
+    if (score > bestScore || (score === bestScore && text.length > best.length)) {
+      best = text;
+      bestScore = score;
+      bestLabel = candidate.label;
+    }
+  }
+
+  if (!best) {
+    return "";
+  }
+
+  if (process.env.CLOVER_DEBUG_OCR_SELECTION === "1") {
+    console.log("Selected OCR text candidate", {
+      label: bestLabel,
+      score: Number(bestScore.toFixed(2)),
+      length: best.length,
+    });
+  }
+
+  return best;
 };
 
 const extractTextFromPdfBytesWithRenderFirstFallback = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
@@ -541,10 +677,6 @@ const extractTextFromPdfBytesWithOcrFallback = async (data: Uint8Array, password
     console.warn("PDF text extraction failed; retrying with rendered page OCR", error);
   }
 
-  if (extractedText.trim().length >= 40) {
-    return extractedText;
-  }
-
   try {
     const pageImages = await renderPdfPageImagesFromBytes(data, password, 2, 3.5, true);
     const ocrPages: string[] = [];
@@ -568,12 +700,15 @@ const extractTextFromPdfBytesWithOcrFallback = async (data: Uint8Array, password
       }
     }
 
-    const ocrJoinedText = ocrPages.join("\n").trim();
-    if (ocrJoinedText.length > extractedText.trim().length) {
-      return ocrJoinedText;
-    }
-    if (looksLikeFragmentedStatementText(extractedText)) {
-      return ocrJoinedText || extractedText;
+    const compactOcrText = ocrPages.join("\n").trim();
+    const lighterOcrText = await renderPdfPagesToOcrText(data, password, baseUrl, 6, 2.2);
+    const bestText = pickBestStatementTextCandidate([
+      { text: extractedText, label: "text-layer" },
+      { text: compactOcrText, label: "ocr-render-3.5" },
+      { text: lighterOcrText, label: "ocr-render-2.2" },
+    ]);
+    if (bestText) {
+      return bestText;
     }
     return extractedText;
   } catch (error) {
@@ -601,11 +736,12 @@ const extractTextFromPdfBytesWithOcrFallback = async (data: Uint8Array, password
       }
 
       const ocrJoinedText = ocrPages.join("\n").trim();
-      if (ocrJoinedText.length > extractedText.trim().length) {
-        return ocrJoinedText;
-      }
-      if (looksLikeFragmentedStatementText(extractedText)) {
-        return ocrJoinedText || extractedText;
+      const bestText = pickBestStatementTextCandidate([
+        { text: extractedText, label: "text-layer" },
+        { text: ocrJoinedText, label: "ocr-render-2.2" },
+      ]);
+      if (bestText) {
+        return bestText;
       }
       return extractedText;
     } catch (retryError) {
