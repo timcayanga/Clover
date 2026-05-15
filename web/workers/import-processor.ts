@@ -2432,8 +2432,9 @@ export const processImportEnrichmentJobs = async (options: {
 };
 
 const processImportEnrichmentJobsInBackground = (importFileId: string, totalRows?: number | null) => {
-  const limit = Math.max(1, Math.min(10, Math.ceil(Math.max(1, Number(totalRows ?? 50)) / 50)));
-  void processImportEnrichmentJobs({ importFileId, limit }).catch((error) => {
+  const normalizedTotalRows = Math.max(1, Number(totalRows ?? 50));
+  const limit = Math.max(1, Math.min(10, Math.ceil(normalizedTotalRows / 100)));
+  void processImportEnrichmentJobs({ importFileId, limit, batchSize: 100 }).catch((error) => {
     console.warn("Background import enrichment job failed", {
       importFileId,
       error,
@@ -4913,7 +4914,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     };
   }, { maxWait: 15_000, timeout: 30_000 });
 
-  void Promise.allSettled(
+  await Promise.allSettled(
     trainingSignals.map((entry) =>
       recordTrainingSignal({
         workspaceId: importFile.workspaceId,
