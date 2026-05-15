@@ -3095,6 +3095,17 @@ export const processImportFileText = async (
   }
   const rows = effectiveRows as EnrichedParsedImportRow[];
 
+  await updateImportFileCompat(importFileId, {
+    status: "processing",
+    processingPhase: rows.length > 0 ? "reconciling" : "identifying_transactions",
+    processingMessage:
+      rows.length > 0
+        ? canReuseCachedStatementParse
+          ? "Clover is reusing the cached parse and saving the results."
+          : "Clover is saving the visible rows."
+        : "Clover is identifying transactions.",
+  });
+
   if (textCacheInfo?.fileFingerprint) {
     void storeImportedFileTextCacheRecord({
       workspaceId: String(importFile.workspaceId),
@@ -3422,6 +3433,11 @@ export const processImportFileText = async (
 
   if (!isDocumentImport) {
     try {
+      await updateImportFileCompat(importFileId, {
+        status: "processing",
+        processingPhase: "reconciling",
+        processingMessage: "Clover is matching the visible rows to the account.",
+      });
       confirmedImportResult = await confirmImportFile(importFileId, null);
       if (confirmedImportResult.status === "staged") {
         await updateImportFileCompat(importFileId, {
@@ -3696,6 +3712,11 @@ export const processImportFileText = async (
           typeof resolvedMetadata.institution === "string" &&
           resolvedMetadata.institution.trim()
         ) {
+          await updateImportFileCompat(importFileId, {
+            status: "done",
+            processingPhase: "finalizing_enrichment",
+            processingMessage: "Transactions are visible. Clover is updating learning from similar imports in the background.",
+          }).catch(() => null);
           void replayRelatedImportsAfterLearning({
             workspaceId: String(importFile.workspaceId),
             sourceImportFileId: importFileId,
