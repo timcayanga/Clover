@@ -338,6 +338,7 @@ model Workspace {
   categories               Category[]
   transactions             Transaction[]
   importFiles              ImportFile[]
+  importFileExtractionCaches ImportFileExtractionCache[]
   importEnrichmentJobs     ImportEnrichmentJob[]
   documentImports          DocumentImport[]
   statementCheckpoints     AccountStatementCheckpoint[]
