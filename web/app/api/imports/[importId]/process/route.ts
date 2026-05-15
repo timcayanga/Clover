@@ -432,15 +432,26 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             : null,
         });
 
+        const visibleRows =
+          result.status === "done"
+            ? Number(result.confirmedTransactionsCount ?? result.imported ?? 0)
+            : Number(result.confirmedTransactionsCount ?? 0);
+
         return NextResponse.json({
           ok: true,
           queued: false,
           processed: true,
           importedRows: result.imported,
           duplicate: Boolean(result.duplicate),
-          status: "done",
+          status: result.status ?? "done",
           importFileId: importId,
           metadata: result.metadata,
+          accountId: result.accountId ?? null,
+          confirmedTransactionsCount: result.confirmedTransactionsCount ?? (result.status === "done" ? result.imported : 0),
+          insightSummary: result.insightSummary ?? null,
+          accountBalance: result.accountBalance ?? null,
+          visibleImportComplete: visibleRows > 0,
+          finalizationInBackground: result.status === "done" && visibleRows > 0,
         });
       }
 
@@ -532,15 +543,26 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           : null,
       });
 
+      const visibleRows =
+        result.status === "done"
+          ? Number(result.confirmedTransactionsCount ?? result.imported ?? 0)
+          : Number(result.confirmedTransactionsCount ?? 0);
+
       return NextResponse.json({
         ok: true,
         queued: false,
         processed: true,
         importedRows: result.imported,
         duplicate: Boolean(result.duplicate),
-        status: "done",
+        status: result.status ?? "done",
         importFileId: importId,
         metadata: result.metadata,
+        accountId: result.accountId ?? null,
+        confirmedTransactionsCount: result.confirmedTransactionsCount ?? (result.status === "done" ? result.imported : 0),
+        insightSummary: result.insightSummary ?? null,
+        accountBalance: result.accountBalance ?? null,
+        visibleImportComplete: visibleRows > 0,
+        finalizationInBackground: result.status === "done" && visibleRows > 0,
       });
     }
   } catch (error) {
@@ -562,6 +584,22 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               : "Account details are visible. Clover is finishing transaction cleanup in the background.",
           confirmedTransactionsCount: savedTransactionsCount,
         }).catch(() => null);
+        if (savedTransactionsCount > 0) {
+          return NextResponse.json({
+            ok: true,
+            queued: false,
+            processed: true,
+            importedRows: savedTransactionsCount,
+            duplicate: false,
+            status: "done",
+            importFileId: importId,
+            metadata: null,
+            accountId: null,
+            confirmedTransactionsCount: savedTransactionsCount,
+            visibleImportComplete: true,
+            finalizationInBackground: true,
+          });
+        }
       } else {
         await updateImportFileCompat(importId, {
           status: "failed",

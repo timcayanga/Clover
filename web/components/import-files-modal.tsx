@@ -2254,6 +2254,13 @@ export function ImportFilesModal({
         const finalizationNeedsReview = Boolean(payload.finalizationNeedsReview);
         const processingPhase = typeof importFile?.processingPhase === "string" ? importFile.processingPhase : null;
         const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
+        const statusAccountId =
+          typeof importFile?.accountId === "string" && importFile.accountId.trim() && !importFile.accountId.startsWith("optimistic-")
+            ? importFile.accountId.trim()
+            : null;
+        if (statusAccountId) {
+          latestResolvedAccountId = statusAccountId;
+        }
         const telemetryPhase = typeof payload.telemetryPhase === "string" ? payload.telemetryPhase : null;
         const telemetryLabel = typeof payload.telemetryLabel === "string" ? payload.telemetryLabel : null;
         const telemetryMessage = typeof payload.telemetryMessage === "string" ? payload.telemetryMessage : null;
@@ -2325,12 +2332,28 @@ export function ImportFilesModal({
             processingIdentity?.accountNumber
         );
 
-        if (finalizationNeedsReview && hasVisibleImportDataSignal) {
-          emitImportRecoverable(
-            summaryContext.fileName,
-            "Accounts and transactions are visible. Some details could not be finalized automatically; please review them.",
-            "Needs review"
-          );
+        if (finalizationNeedsReview && visibleImportComplete) {
+          emitItemUpdate({
+            status: "done",
+            confirmationState: "confirmed",
+            progress: 100,
+            progressLabel: "Review needed",
+            targetAccountId: latestResolvedAccountId ?? accountId,
+            importedRows: confirmedTransactionsCount || parsedRowsCount || null,
+          });
+          emitImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "done",
+            fileName: summaryContext.fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount + 1,
+            progress: 100,
+            detail: "Accounts and transactions are visible. Some details could not be finalized automatically; please review them.",
+            summary: null,
+            errorMessage: null,
+          });
           return;
         }
 
@@ -2360,6 +2383,64 @@ export function ImportFilesModal({
           });
           emitImportError("background", summaryContext.fileName, processingMessage);
           return;
+        }
+
+        if (!visibleImportComplete) {
+          const waitingProgress = Math.max(
+            IMPORT_PROGRESS.uploading,
+            Math.min(
+              90,
+              parsedRowsCount > 0 || hasVisibleImportDataSignal
+                ? IMPORT_PROGRESS.loadingAccount
+                : processingPhase === "identifying_transactions"
+                  ? IMPORT_PROGRESS.parsing
+                  : IMPORT_PROGRESS.uploading
+            )
+          );
+          const waitingLabel =
+            telemetryLabel ??
+            processingMessage ??
+            (parsedRowsCount > 0 || hasVisibleImportDataSignal
+              ? "Saving visible rows"
+              : processingPhase === "identifying_transactions"
+                ? "Reading transactions"
+                : "Uploading statement");
+          emitItemUpdate({
+            status: "importing",
+            confirmationState: "pending",
+            progress: waitingProgress,
+            progressLabel: waitingLabel,
+            targetAccountId: latestResolvedAccountId ?? accountId,
+          });
+          emitImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName: summaryContext.fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: waitingProgress,
+            detail: getTelemetryDetail(
+              parsedRowsCount > 0 || hasVisibleImportDataSignal
+                ? "Clover is saving the account and transactions so they stay visible."
+                : getProgressDetail(
+                    {
+                      accountName: processingIdentity?.accountName ?? summaryContext.accountName,
+                      institution: processingIdentity?.institution ?? summaryContext.institution,
+                      accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber,
+                    },
+                    parsedRowsCount
+                  ),
+              telemetryMessage ?? processingMessage,
+              telemetryLabel,
+              resumeReason
+            ),
+            summary: null,
+            errorMessage: null,
+          });
+          await sleep(parsedRowsCount > 0 || hasVisibleImportDataSignal ? 1000 : 800);
+          continue;
         }
 
         if (importFile?.status === "processing" && processingPhase && confirmedTransactionsCount === 0) {

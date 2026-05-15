@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 
 export type ImportEnrichmentJobStatus = "queued" | "running" | "done" | "failed" | "retrying";
 
-export const MAX_IMPORT_ENRICHMENT_ATTEMPTS = 3;
+export const MAX_IMPORT_ENRICHMENT_ATTEMPTS = 2;
 
 export type ImportEnrichmentJobRow = {
   id: string;
