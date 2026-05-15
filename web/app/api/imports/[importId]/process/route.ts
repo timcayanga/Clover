@@ -247,33 +247,41 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         processingMessage: "Uploading file...",
       });
       const bytes = new Uint8Array(await file.arrayBuffer());
-      await uploadObject(String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)), bytes, file.type || "application/octet-stream");
       const fileFingerprint = makeImportFileBytesFingerprint(bytes);
-      await upsertUploadBankHint({
-        importFileId: importId,
-        workspaceId: String(importFile.workspaceId),
-        bankName: formBankName || null,
-        importMode,
-        trainingMode: formTrainingMode,
-      });
-      let metadata: Record<string, unknown> | null = null;
-      let extractedText = "";
-      let cachedDocTextInfo: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
-      let preflightText: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       const effectiveFileName = file.name || formFileName || "imported-file";
       const effectiveFileType = file.type || formFileType || "";
       const isImageUpload =
         effectiveFileType.toLowerCase().startsWith("image/") ||
         /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(effectiveFileName.toLowerCase());
       const shouldQueueDocumentUpload = isImageUpload || Boolean(importMode && importMode !== "statement");
+      const uploadPromise = uploadObject(
+        String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
+        bytes,
+        file.type || "application/octet-stream"
+      );
+      const uploadBankHintPromise = upsertUploadBankHint({
+        importFileId: importId,
+        workspaceId: String(importFile.workspaceId),
+        bankName: formBankName || null,
+        importMode,
+        trainingMode: formTrainingMode,
+      });
+      const cachedDocRecordPromise = shouldQueueDocumentUpload
+        ? loadImportFileExtractionCache({
+            workspaceId: String(importFile.workspaceId),
+            fileFingerprint,
+            fileType: effectiveFileType || "application/octet-stream",
+            importMode: importMode ?? "statement",
+            cacheVersion: IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+          }).catch(() => null)
+        : null;
+      await Promise.all([uploadPromise, uploadBankHintPromise]);
+      let metadata: Record<string, unknown> | null = null;
+      let extractedText = "";
+      let cachedDocTextInfo: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
+      let preflightText: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       if (shouldQueueDocumentUpload) {
-        const cachedDocRecord = await loadImportFileExtractionCache({
-          workspaceId: String(importFile.workspaceId),
-          fileFingerprint,
-          fileType: effectiveFileType || "application/octet-stream",
-          importMode: importMode ?? "statement",
-          cacheVersion: IMPORT_FILE_EXTRACTION_CACHE_VERSION,
-        }).catch(() => null);
+        const cachedDocRecord = await cachedDocRecordPromise;
 
         if (cachedDocRecord?.parsedRows && cachedDocRecord.statementFingerprint && cachedDocRecord.metadata) {
           cachedDocTextInfo = {
