@@ -2993,24 +2993,48 @@ function AccountsPageContent() {
         {visibleAccounts.length > 0 ? (
           <section className="accounts-overview-grid" aria-label="Account summary">
             <article className="accounts-overview-card glass">
+              <button className="accounts-overview-card__info" type="button" aria-label="How Net Worth is calculated">
+                i
+                <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                  Assets minus liabilities across visible accounts. Positive balances add to net worth; credit cards, loans, and other debts subtract from it.
+                </span>
+              </button>
               <p className="eyebrow">Net Worth</p>
               <strong className={`accounts-overview-card__amount ${getNetWorthTone(totals.netWorth)}`}>
                 {formatSignedAggregateAmount(totals.netWorth, visibleAccounts)}
               </strong>
             </article>
             <article className="accounts-overview-card glass">
+              <button className="accounts-overview-card__info" type="button" aria-label="How Spendable is calculated">
+                i
+                <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                  Positive balances from spendable accounts, such as bank, wallet, and cash accounts. Debts and tracked assets are excluded.
+                </span>
+              </button>
               <p className="eyebrow">Spendable</p>
               <strong className="accounts-overview-card__amount is-good">
                 {formatAggregateAmount(totals.spendable, visibleAccounts)}
               </strong>
             </article>
             <article className="accounts-overview-card glass">
+              <button className="accounts-overview-card__info" type="button" aria-label="How Assets is calculated">
+                i
+                <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                  Sum of visible account balances that count as positive value after Clover applies each account type's balance rules.
+                </span>
+              </button>
               <p className="eyebrow">Assets</p>
               <strong className="accounts-overview-card__amount is-good">
                 {formatAggregateAmount(totals.assets, visibleAccounts)}
               </strong>
             </article>
             <article className="accounts-overview-card glass">
+              <button className="accounts-overview-card__info" type="button" aria-label="How Liabilities is calculated">
+                i
+                <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                  Sum of visible credit card, loan, and other debt balances. Clover shows this as a positive total so the amount is easy to scan.
+                </span>
+              </button>
               <p className="eyebrow">Liabilities</p>
               <strong className="accounts-overview-card__amount is-danger">
                 {formatAggregateAmount(totals.liabilities, visibleAccounts)}
