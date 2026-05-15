@@ -3176,6 +3176,10 @@ function TransactionsPageContent() {
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);
   const pageStartIndex = (currentTransactionPage - 1) * transactionsPageSize;
   const pageEndIndex = pageStartIndex + transactionsPageSize;
+  const desktopPageTransactions = useMemo(
+    () => visibleTransactions.slice(pageStartIndex, pageEndIndex),
+    [pageEndIndex, pageStartIndex, visibleTransactions]
+  );
   const mobileVisibleTransactions = useMemo(
     () => visibleTransactions.slice(0, Math.max(mobileVisibleCount, MOBILE_TRANSACTIONS_BATCH_SIZE)),
     [mobileVisibleCount, visibleTransactions]
@@ -3198,10 +3202,14 @@ function TransactionsPageContent() {
     return groups;
   }, [mobileVisibleTransactions]);
   const hasVisibleTransactions = visibleTransactions.length > 0;
-  const visibleTransactionIds = useMemo(() => visibleTransactions.map((transaction) => transaction.id), [visibleTransactions]);
+  const desktopPageTransactionIds = useMemo(
+    () => desktopPageTransactions.map((transaction) => transaction.id),
+    [desktopPageTransactions]
+  );
   const allVisibleSelected =
-    visibleTransactionIds.length > 0 && visibleTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
-  const someVisibleSelected = visibleTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
+    desktopPageTransactionIds.length > 0 &&
+    desktopPageTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
+  const someVisibleSelected = desktopPageTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
   const hasMoreMobileTransactions =
     isCompactViewport &&
     !searchText &&
@@ -3567,13 +3575,13 @@ function TransactionsPageContent() {
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      focusTransactionRow(visibleTransactions[index + 1]?.id);
+      focusTransactionRow(desktopPageTransactions[index + 1]?.id);
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      focusTransactionRow(visibleTransactions[index - 1]?.id);
+      focusTransactionRow(desktopPageTransactions[index - 1]?.id);
       return;
     }
 
@@ -6008,9 +6016,9 @@ function TransactionsPageContent() {
                     setSelectedTransactionIds((current) => {
                       const next = new Set(current);
                       if (shouldSelect) {
-                        visibleTransactionIds.forEach((transactionId) => next.add(transactionId));
+                        desktopPageTransactionIds.forEach((transactionId) => next.add(transactionId));
                       } else {
-                        visibleTransactionIds.forEach((transactionId) => next.delete(transactionId));
+                        desktopPageTransactionIds.forEach((transactionId) => next.delete(transactionId));
                       }
                       return Array.from(next);
                     });
@@ -6098,7 +6106,7 @@ function TransactionsPageContent() {
                 ))}
               </div>
             ) : transactionsSummary.totalCount > 0 ? (
-              visibleTransactions.map((transaction, index) => {
+              desktopPageTransactions.map((transaction, index) => {
                 const warningReason = warningReasonFor(transaction);
                 const amount = Number(transaction.amount);
                 const categoryValue = transaction.categoryId ?? otherCategoryId;
