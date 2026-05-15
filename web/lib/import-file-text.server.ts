@@ -529,12 +529,12 @@ const isLikelySameStatementLine = (left: string, right: string) => {
     return false;
   }
 
-  const leftTokens = leftCompact.split(/[^a-z0-9]+/).filter(Boolean);
-  const rightTokens = rightCompact.split(/[^a-z0-9]+/).filter(Boolean);
+  const leftTokens = leftNormalized.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const rightTokens = rightNormalized.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
   const leftTokenSet = new Set(leftTokens);
   const overlap = rightTokens.filter((token) => leftTokenSet.has(token)).length / Math.max(1, Math.max(leftTokens.length, rightTokens.length));
 
-  return overlap >= 0.6;
+  return overlap >= 0.5;
 };
 
 const pickBetterStatementTextLine = (left: string, right: string) => {
@@ -552,6 +552,118 @@ const pickBetterStatementTextLine = (left: string, right: string) => {
   }
 
   return leftScore >= rightScore ? left : right;
+};
+
+type StatementTextCandidate = {
+  text: string;
+  label: string;
+  score: number;
+};
+
+type StatementTextLineEntry = {
+  line: string;
+  compact: string;
+  index: number;
+  candidateScore: number;
+  candidateLabel: string;
+};
+
+export const mergeCompatibleStatementTextCandidateConsensus = (candidates: StatementTextCandidate[]) => {
+  const usefulCandidates = candidates.filter((candidate) => candidate.text.trim().length > 0);
+  if (usefulCandidates.length < 2) {
+    return null;
+  }
+
+  const lineEntries: StatementTextLineEntry[] = [];
+  for (const candidate of usefulCandidates.slice(0, 4)) {
+    const lines = candidate.text
+      .split(/\r?\n/)
+      .map((line) => normalizeStatementTextLine(line))
+      .filter(Boolean)
+      .filter((line) => isUsefulStatementLine(line) || scoreStatementTextLineCandidate(line) >= 0.5);
+
+    lines.forEach((line, index) => {
+      lineEntries.push({
+        line,
+        compact: compactStatementTextLine(line).toLowerCase(),
+        index,
+        candidateScore: candidate.score,
+        candidateLabel: candidate.label,
+      });
+    });
+  }
+
+  if (lineEntries.length < 2) {
+    return null;
+  }
+
+  const clusters: Array<{
+    representative: string;
+    lines: StatementTextLineEntry[];
+    position: number;
+  }> = [];
+
+  for (const entry of lineEntries) {
+    const cluster = clusters.find((candidateCluster) =>
+      isLikelySameStatementLine(candidateCluster.representative, entry.line)
+    );
+
+    if (cluster) {
+      cluster.lines.push(entry);
+      cluster.representative = pickBetterStatementTextLine(cluster.representative, entry.line);
+      const positions = cluster.lines.map((item) => item.index).sort((left, right) => left - right);
+      cluster.position = positions[Math.floor(positions.length / 2)] ?? cluster.position;
+      continue;
+    }
+
+    clusters.push({
+      representative: entry.line,
+      lines: [entry],
+      position: entry.index,
+    });
+  }
+
+  if (clusters.length < 2) {
+    return null;
+  }
+
+  const mergedLines = clusters
+    .map((cluster) => {
+      const bestLine = cluster.lines.reduce((best, entry) => pickBetterStatementTextLine(best, entry.line), cluster.representative);
+      const positions = cluster.lines.map((entry) => entry.index).sort((left, right) => left - right);
+      const position = positions[Math.floor(positions.length / 2)] ?? cluster.position;
+      const support = cluster.lines.length;
+      const bestCandidateScore = Math.max(...cluster.lines.map((entry) => entry.candidateScore));
+      return {
+        line: bestLine,
+        compact: compactStatementTextLine(bestLine).toLowerCase(),
+        position,
+        support,
+        bestCandidateScore,
+      };
+    })
+    .sort((left, right) => left.position - right.position || right.support - left.support || right.bestCandidateScore - left.bestCandidateScore);
+
+  const merged: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of mergedLines) {
+    if (!entry.line) {
+      continue;
+    }
+    if (seen.has(entry.compact)) {
+      continue;
+    }
+    seen.add(entry.compact);
+    merged.push(entry.line);
+  }
+
+  const mergedText = merged.join("\n").trim();
+  const bestCandidateLength = Math.max(...usefulCandidates.map((candidate) => candidate.text.trim().length));
+  if (!mergedText || mergedText.length < bestCandidateLength) {
+    return null;
+  }
+
+  return mergedText;
 };
 
 const isUsefulStatementLine = (line: string) => {
@@ -595,6 +707,20 @@ const pickBestStatementTextCandidate = (candidates: Array<{ text: string; label:
   let currentScore = best.score;
   let currentLineQuality = scoreStatementTextCandidateLineQuality(best.text);
   let currentLabel = best.label;
+
+  const consensus = mergeCompatibleStatementTextCandidateConsensus(scoredCandidates.slice(0, 4));
+  if (consensus) {
+    const consensusScore = scoreStatementTextCandidate(consensus);
+    const consensusLineQuality = scoreStatementTextCandidateLineQuality(consensus);
+    const improvesEnough = consensusScore >= currentScore || consensusLineQuality >= currentLineQuality + 0.25;
+
+    if (improvesEnough) {
+      currentText = consensus;
+      currentScore = consensusScore;
+      currentLineQuality = consensusLineQuality;
+      currentLabel = `${best.label}+consensus`;
+    }
+  }
 
   for (const runnerUp of scoredCandidates.slice(1, 4)) {
     const merged = mergeCompatibleStatementTextCandidates(

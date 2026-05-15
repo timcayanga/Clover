@@ -615,6 +615,9 @@ const main = async () => {
     left: { text: string; label: string; score: number },
     right: { text: string; label: string; score: number }
   ) => string | null;
+  const mergeCompatibleStatementTextCandidateConsensus = importFileTextModule.mergeCompatibleStatementTextCandidateConsensus as (
+    candidates: Array<{ text: string; label: string; score: number }>
+  ) => string | null;
   const mergeStatementMetadataWithTemplate = dataEngine.mergeStatementMetadataWithTemplate as (
     detected: {
       institution: string | null;
@@ -1108,6 +1111,35 @@ const main = async () => {
   );
   if (!mergedOcrTextConsensus || !/Service Charge 10\.00/.test(mergedOcrTextConsensus) || /Coffee S1op/.test(mergedOcrTextConsensus)) {
     throw new Error(`expected multi-pass OCR merge to keep the clean merchant line and recover extra useful lines, got ${mergedOcrTextConsensus}`);
+  }
+
+  const mergedOcrConsensusFromThree = mergeCompatibleStatementTextCandidateConsensus?.([
+    {
+      text: "Jan 1\nCoffee S1op\n150.00",
+      label: "ocr-a",
+      score: 24,
+    },
+    {
+      text: "Coffee Shop\nBalance 1,000.00",
+      label: "ocr-b",
+      score: 22,
+    },
+    {
+      text: "Jan 1\nService Charge 10.00\nBalance 1,000.00",
+      label: "ocr-c",
+      score: 21,
+    },
+  ]);
+  if (
+    !mergedOcrConsensusFromThree ||
+    !/Coffee Shop/.test(mergedOcrConsensusFromThree) ||
+    !/Balance 1,000\.00/.test(mergedOcrConsensusFromThree) ||
+    !/Service Charge 10\.00/.test(mergedOcrConsensusFromThree) ||
+    /Coffee S1op/.test(mergedOcrConsensusFromThree)
+  ) {
+    throw new Error(
+      `expected consensus OCR fusion to combine clean lines from multiple passes, got ${mergedOcrConsensusFromThree}`
+    );
   }
 
   const prototypeLabel = buildMerchantPrototypeLabel("Burger King 1234", "Burger King");
