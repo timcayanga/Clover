@@ -171,11 +171,16 @@ const isActiveEnrichmentJob = (importFile: ImportFile) => {
   return Boolean(status && status !== "done" && status !== "failed");
 };
 
-const estimateEnrichmentTimeLabel = (importFiles: ImportFile[], nowMs: number) => {
+const getEnrichmentNoticeState = (importFiles: ImportFile[], nowMs: number) => {
   const activeJobs = importFiles.filter(isActiveEnrichmentJob);
   if (activeJobs.length === 0) {
-    return "couldn't finalize automatically; please review";
+    return {
+      label: "Review needed",
+      detail: "couldn't finalize automatically; please review",
+      needsReview: true,
+    };
   }
+
   const remainingRows = activeJobs.reduce((total, importFile) => {
       const totalRows = Number(importFile.enrichmentJob?.totalRows ?? 0);
       const processedRows = Number(importFile.enrichmentJob?.processedRows ?? 0);
@@ -192,19 +197,35 @@ const estimateEnrichmentTimeLabel = (importFiles: ImportFile[], nowMs: number) =
   const remainingSeconds = estimatedSeconds - elapsedSeconds;
 
   if (remainingRows <= 0) {
-    return elapsedSeconds >= 120 ? "couldn't finalize automatically; please review" : "finishing now";
+    return {
+      label: "Enriching data",
+      detail: "finishing now",
+      needsReview: false,
+    };
   }
 
   if (remainingSeconds <= -60 || elapsedSeconds >= 300) {
-    return "couldn't finalize automatically; please review";
+    return {
+      label: "Enriching data",
+      detail: "taking longer than expected",
+      needsReview: false,
+    };
   }
 
   if (remainingSeconds <= 60) {
-    return "less than 1 min left";
+    return {
+      label: "Enriching data",
+      detail: "less than 1 min left",
+      needsReview: false,
+    };
   }
 
   const minutes = Math.max(1, Math.ceil(remainingSeconds / 60));
-  return `about ${minutes} min${minutes === 1 ? "" : "s"} left`;
+  return {
+    label: "Enriching data",
+    detail: `about ${minutes} min${minutes === 1 ? "" : "s"} left`,
+    needsReview: false,
+  };
 };
 
 type StatementCheckpoint = {
@@ -1727,7 +1748,7 @@ function AccountDetailPageContent() {
     const intervalId = window.setInterval(() => setFinalizingNowMs(Date.now()), 30_000);
     return () => window.clearInterval(intervalId);
   }, [hasActiveFinalizingImports]);
-  const finalizingTimeLabel = useMemo(() => estimateEnrichmentTimeLabel(importFiles, finalizingNowMs), [finalizingNowMs, importFiles]);
+  const finalizingNoticeState = useMemo(() => getEnrichmentNoticeState(importFiles, finalizingNowMs), [finalizingNowMs, importFiles]);
   const finalizingTransactions = useMemo(
     () =>
       visibleTransactions.filter(
@@ -1739,7 +1760,7 @@ function AccountDetailPageContent() {
   );
   const finalizingTransactionCount = finalizingTransactions.length;
   const [finalizingNoticeDismissed, setFinalizingNoticeDismissed] = useState(false);
-  const finalizingNeedsReview = finalizingTimeLabel.toLowerCase().includes("couldn't finalize");
+  const finalizingNeedsReview = finalizingNoticeState.needsReview;
   const finalizingNoticeDismissalKey = useMemo(
     () =>
       finalizingNeedsReview && finalizingTransactionCount > 0
@@ -3075,7 +3096,7 @@ function AccountDetailPageContent() {
               {showFinalizingNotice ? (
                 <span className="accounts-summary-chip is-neutral">
                   <span>
-                    {finalizingNeedsReview ? "Review needed" : "Finalizing"} {finalizingTransactionCount} detail{finalizingTransactionCount === 1 ? "" : "s"} · {finalizingTimeLabel}
+                    {finalizingNoticeState.label} {finalizingTransactionCount} detail{finalizingTransactionCount === 1 ? "" : "s"} · {finalizingNoticeState.detail}
                   </span>
                   <button
                     className="icon-button transactions-status-line__dismiss"
