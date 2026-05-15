@@ -31485,7 +31485,12 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 }
 
 .split-bill-mobile-home__section {
-  padding: 0 18px 18px;
+  padding: 0;
+}
+
+.split-bill-mobile-home__section + .split-bill-mobile-home__section {
+  padding-top: 16px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .split-bill-mobile-home__section-head h3 {

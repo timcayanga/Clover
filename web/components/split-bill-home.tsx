@@ -42,6 +42,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
   const [showAllBills, setShowAllBills] = useState(false);
 
   const recentBills = showAllBills ? bills : bills.slice(0, 4);
+  const canToggleBills = bills.length > 4;
 
   const visibleGroups = useMemo(() => {
     return groups.map((group) => {
@@ -123,19 +124,20 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
               })
             ) : null}
           </div>
-          <div className="split-bill-table__footer">
-            <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
-              {showAllBills ? "Show fewer" : "Show all bills"}
-            </button>
-          </div>
+          {canToggleBills ? (
+            <div className="split-bill-table__footer">
+              <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
+                {showAllBills ? "Show fewer" : "Show all bills"}
+              </button>
+            </div>
+          ) : null}
         </section>
 
-        <div className="split-bill-mobile-home__sections">
+        <div className="split-bill-mobile-home__sections panel glass">
           <section className="split-bill-mobile-home__section">
             <div className="split-bill-mobile-home__section-head">
               <div>
                 <h3>People</h3>
-                <p className="split-bill-mobile-home__copy">Saved people are shared across manual bills, receipts, and groups.</p>
               </div>
             </div>
 
@@ -162,7 +164,6 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
             <div className="split-bill-mobile-home__section-head">
               <div>
                 <h3>Groups</h3>
-                <p className="split-bill-mobile-home__copy">Groups collect people, initials, and shared bills together.</p>
               </div>
             </div>
 
@@ -253,11 +254,13 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
             })
           ) : null}
         </div>
-        <div className="split-bill-table__footer">
-          <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
-            {showAllBills ? "Show fewer" : "Show all bills"}
-          </button>
-        </div>
+        {canToggleBills ? (
+          <div className="split-bill-table__footer">
+            <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
+              {showAllBills ? "Show fewer" : "Show all bills"}
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <div className="split-bill-desktop-home split-bill-desktop-home__secondary">
