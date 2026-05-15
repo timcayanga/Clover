@@ -596,7 +596,14 @@ const main = async () => {
     merchantText: string,
     normalizedName?: string | null
   ) => string | null;
+  const buildMerchantPrototypeVariants = dataEngine.buildMerchantPrototypeVariants as (
+    merchantText: string,
+    normalizedName?: string | null
+  ) => string[];
   const scoreRowShapeLearningPenalty = dataEngine.scoreRowShapeLearningPenalty as (score: number) => number;
+  const estimateImportLearningConfidence = dataEngine.estimateImportLearningConfidence as (
+    params: { baseConfidence?: number | null; teachabilityScore?: number | null; rowShapeScore?: number | null; negativeSignalCount?: number | null }
+  ) => number;
   const buildStatementFamilySignature = dataEngine.buildStatementFamilySignature as (
     params: {
       rows: Array<{ merchantRaw?: string; merchantClean?: string; description?: string; name?: string; date?: string; transactionDate?: string; postedDate?: string; balance?: string | number; runningBalance?: string | number; type?: string }>;
@@ -1175,6 +1182,27 @@ const main = async () => {
   const prototypeLabel = buildMerchantPrototypeLabel("Burger King 1234", "Burger King");
   if (prototypeLabel !== "Burger King 1234" && prototypeLabel !== null) {
     throw new Error(`expected prototype label helper to keep a useful merchant variant or null, got ${prototypeLabel}`);
+  }
+  const prototypeVariants = buildMerchantPrototypeVariants("Burger King 1234", "Burger King");
+  if (!prototypeVariants.includes("Burger King 1234") || !prototypeVariants.some((variant) => /Burger King/i.test(variant))) {
+    throw new Error(`expected prototype variants to keep merchant evidence and normalized variants, got ${JSON.stringify(prototypeVariants)}`);
+  }
+  const calibratedConfidence = estimateImportLearningConfidence({
+    baseConfidence: 60,
+    teachabilityScore: 90,
+    rowShapeScore: 88,
+    negativeSignalCount: 0,
+  });
+  const suppressedConfidence = estimateImportLearningConfidence({
+    baseConfidence: 60,
+    teachabilityScore: 12,
+    rowShapeScore: 20,
+    negativeSignalCount: 3,
+  });
+  if (calibratedConfidence <= suppressedConfidence || calibratedConfidence <= 60 || suppressedConfidence >= 60) {
+    throw new Error(
+      `expected learning confidence calibration to boost clean rows and suppress noisy rows, got ${calibratedConfidence} vs ${suppressedConfidence}`
+    );
   }
 
   const familySignatureFromText = buildStatementFamilySignatureFromText(

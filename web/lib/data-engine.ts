@@ -544,6 +544,62 @@ export const buildMerchantPrototypeLabel = (merchantText: string, normalizedName
   return prototype;
 };
 
+const stripMerchantPrototypeNoise = (value: string) =>
+  normalizeWhitespace(value)
+    .replace(/\b(?:card|acct|account|ending|ending in|ending with|ref|reference|txn|transaction)\b.*$/i, "")
+    .replace(/\b(?:visa|mastercard|amex|gcash|maya|paypal|wise)\b.*?(?:\d{4})\b/gi, (match) => match.replace(/\d{4}\b/g, "").trim())
+    .replace(/\b\d{4,}\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+export const buildMerchantPrototypeVariants = (merchantText: string, normalizedName?: string | null) => {
+  const variants = new Set<string>();
+  const addVariant = (value: string | null | undefined) => {
+    const trimmed = normalizeWhitespace(String(value ?? "")).trim();
+    if (!trimmed || trimmed.length < 4) {
+      return;
+    }
+
+    const normalized = normalizeMerchantText(trimmed);
+    if (!normalized || /^(?:bank transfer|cash payment|atm withdrawal|credit card payment|service charge|documentary stamp tax)$/i.test(trimmed)) {
+      return;
+    }
+
+    variants.add(trimmed);
+  };
+
+  const prototype = buildMerchantPrototypeLabel(merchantText, normalizedName);
+  addVariant(prototype);
+  addVariant(stripMerchantPrototypeNoise(String(prototype ?? merchantText)));
+  addVariant(stripMerchantPrototypeNoise(String(normalizedName ?? "")));
+  addVariant(summarizeMerchantText(merchantText));
+
+  return [...variants];
+};
+
+export const estimateImportLearningConfidence = (params: {
+  baseConfidence?: number | null;
+  teachabilityScore?: number | null;
+  rowShapeScore?: number | null;
+  negativeSignalCount?: number | null;
+}) => {
+  const baseConfidence = typeof params.baseConfidence === "number" && Number.isFinite(params.baseConfidence) ? Math.max(0, Math.min(100, Math.round(params.baseConfidence))) : 0;
+  const teachabilityScore =
+    typeof params.teachabilityScore === "number" && Number.isFinite(params.teachabilityScore)
+      ? Math.max(0, Math.min(100, Math.round(params.teachabilityScore)))
+      : 0;
+  const rowShapeScore =
+    typeof params.rowShapeScore === "number" && Number.isFinite(params.rowShapeScore)
+      ? Math.max(0, Math.min(100, Math.round(params.rowShapeScore)))
+      : 0;
+  const negativeSignalCount = Math.max(0, Math.round(params.negativeSignalCount ?? 0));
+  const teachabilityBoost = Math.round(teachabilityScore * 0.35);
+  const shapeBoost = Math.round(rowShapeScore * 0.25);
+  const negativePenalty = Math.min(24, negativeSignalCount * 4);
+
+  return Math.max(0, Math.min(100, baseConfidence + teachabilityBoost + shapeBoost - negativePenalty));
+};
+
 export const assessParsedRowShapeConsistency = (rows: ParsedImportRow[]) => {
   const total = rows.length;
   if (total === 0) {
@@ -2947,16 +3003,16 @@ export const recordTrainingSignal = async (params: {
       confidence: params.confidence ?? 100,
     });
 
-    const prototypeLabel = buildMerchantPrototypeLabel(params.merchantText, normalizedMerchantLabel);
-    if (prototypeLabel) {
+    const prototypeVariants = buildMerchantPrototypeVariants(params.merchantText, normalizedMerchantLabel);
+    for (const [index, prototypeLabel] of prototypeVariants.entries()) {
       await upsertMerchantRule({
         workspaceId: params.workspaceId,
         merchantText: prototypeLabel,
         normalizedName: normalizedMerchantLabel || prototypeLabel,
         categoryId: params.categoryId,
         categoryName: params.categoryName ?? category.name,
-        source: `${params.source}:prototype`,
-        confidence: Math.max(60, (params.confidence ?? 100) - 10),
+        source: `${params.source}:prototype${index > 0 ? `:${index + 1}` : ""}`,
+        confidence: Math.max(60, (params.confidence ?? 100) - 10 - index * 4),
       });
     }
 
@@ -3460,6 +3516,12 @@ export const enrichParsedRowsWithTraining = async (params: {
           trainingSignals,
           negativeSignals,
         });
+    const learningConfidence = estimateImportLearningConfidence({
+      baseConfidence: learned.confidence,
+      teachabilityScore: rowTeachability.score,
+      rowShapeScore: rowShapeAssessment.score,
+      negativeSignalCount: negativeSignals.length,
+    });
     const merchantClean = learned.normalizedName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
     const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(learned.preferredType ?? row.type ?? "expense");
     const nextType = coerceTransactionTypeFromCategoryName(
@@ -3481,7 +3543,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       0,
       Math.min(
         100,
-        Math.max(learned.confidence, deterministicParserConfidence, rowConfidence, rowCategoryConfidence, Math.round(shapeConfidence * 0.25)) -
+        Math.max(learningConfidence, deterministicParserConfidence, rowConfidence, rowCategoryConfidence, Math.round(shapeConfidence * 0.25)) -
           rowShapePenalty -
           teachabilityPenalty
       )
