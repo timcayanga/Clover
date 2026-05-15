@@ -1042,6 +1042,42 @@ export const loadStatementTemplate = async (params: {
   }
 };
 
+export const loadBestStatementTemplateForInstitution = async (params: {
+  workspaceId: string;
+  institution?: string | null;
+  fileType?: string | null;
+}) => {
+  const columns = await getCompatibleStatementTemplateColumns();
+  if (columns.length === 0) {
+    return null;
+  }
+
+  const institution = sanitizeBankNameLabel(params.institution ?? null);
+  if (!institution || institution === "Unknown") {
+    return null;
+  }
+
+  try {
+    const templates = await prisma.statementTemplate.findMany({
+      where: {
+        workspaceId: params.workspaceId,
+        institution,
+        ...(params.fileType ? { fileType: params.fileType } : {}),
+      },
+      orderBy: [{ successCount: "desc" }, { exampleCount: "desc" }, { updatedAt: "desc" }],
+      take: 5,
+    });
+
+    return (templates[0] ?? null) as StatementTemplateRow | null;
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
 const toNullableDecimal = (value: unknown) => {
   if (value === null || value === undefined) {
     return null;

@@ -558,6 +558,48 @@ const main = async () => {
     endDate: string | null;
     confidence: number;
   };
+  const mergeStatementMetadataWithTemplate = dataEngine.mergeStatementMetadataWithTemplate as (
+    detected: {
+      institution: string | null;
+      accountNumber: string | null;
+      accountName: string | null;
+      accountType: ImportedAccountType | null;
+      currency?: string | null;
+      openingBalance: number | null;
+      endingBalance: number | null;
+      paymentDueDate?: string | null;
+      totalAmountDue?: number | null;
+      startDate: string | null;
+      endDate: string | null;
+      confidence: number;
+    },
+    template?: {
+      institution?: string | null;
+      accountNumber?: string | null;
+      accountName?: string | null;
+      accountType?: ImportedAccountType | null;
+      currency?: string | null;
+      openingBalance?: number | null;
+      endingBalance?: number | null;
+      paymentDueDate?: string | null;
+      totalAmountDue?: number | null;
+      startDate?: string | null;
+      endDate?: string | null;
+    } | null
+  ) => {
+    institution: string | null;
+    accountNumber: string | null;
+    accountName: string | null;
+    accountType: ImportedAccountType | null;
+    currency: string | null;
+    openingBalance: number | null;
+    endingBalance: number | null;
+    paymentDueDate: string | null;
+    totalAmountDue: number | null;
+    startDate: string | null;
+    endDate: string | null;
+    confidence: number;
+  };
   const normalizeBankName = dataQaBanksModule.normalizeBankName as (value: string | null | undefined) => string;
   const formatUploadAccountDisplayName = accountDisplayModule.formatUploadAccountDisplayName as (
     name?: string | null,
@@ -853,6 +895,44 @@ const main = async () => {
   const dateStampedAlias = normalizeBankName("2026-05-01 BDO");
   if (dateStampedAlias !== "BDO") {
     throw new Error(`expected bank alias inside date-stamped label to normalize to BDO but got ${dateStampedAlias}`);
+  }
+
+  const bankTemplateMerge = mergeStatementMetadataWithTemplate(
+    {
+      institution: null,
+      accountNumber: null,
+      accountName: null,
+      accountType: null,
+      currency: "PHP",
+      openingBalance: null,
+      endingBalance: null,
+      paymentDueDate: null,
+      totalAmountDue: null,
+      startDate: null,
+      endDate: null,
+      confidence: 42,
+    },
+    {
+      institution: "Metrobank",
+      accountNumber: "000007048866",
+      accountName: "JOHN NEIL RIVERA",
+      accountType: "bank",
+      currency: "PHP",
+      openingBalance: 57105.51,
+      endingBalance: 55072.01,
+      startDate: "2025-01-31",
+      endDate: "2025-01-31",
+    }
+  );
+
+  if (
+    bankTemplateMerge.institution !== "Metrobank" ||
+    bankTemplateMerge.accountNumber !== "000007048866" ||
+    bankTemplateMerge.accountName !== "JOHN NEIL RIVERA" ||
+    bankTemplateMerge.accountType !== "bank" ||
+    bankTemplateMerge.confidence < 80
+  ) {
+    throw new Error(`expected low-confidence metadata to merge with a bank template, got ${JSON.stringify(bankTemplateMerge)}`);
   }
 
   const safeDisplayName = formatUploadAccountDisplayName("2026-05-01 22.01.12 0112", "2026-05-01 22.01.12 0112", "001234567890", "bank");

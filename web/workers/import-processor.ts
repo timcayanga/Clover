@@ -33,6 +33,7 @@ import {
   hasCompatibleTable,
   recordTrainingSignal,
   loadStatementTemplate,
+  loadBestStatementTemplateForInstitution,
   mergeStatementMetadataWithTemplate,
   updateImportFileCompat,
   upsertAccountRule,
@@ -2552,9 +2553,18 @@ export const processImportFileText = async (
     workspaceId: String(importFile.workspaceId),
     fingerprint: statementFingerprint,
   });
+  const institutionTemplate =
+    existingTemplate ??
+    (metadata.confidence < 80
+      ? await loadBestStatementTemplateForInstitution({
+          workspaceId: String(importFile.workspaceId),
+          institution: metadata.institution,
+          fileType: importFile.fileType,
+        })
+      : null);
   const templateMetadata =
-    existingTemplate?.metadata && typeof existingTemplate.metadata === "object" && !Array.isArray(existingTemplate.metadata)
-      ? (existingTemplate.metadata as Record<string, unknown>)
+    institutionTemplate?.metadata && typeof institutionTemplate.metadata === "object" && !Array.isArray(institutionTemplate.metadata)
+      ? (institutionTemplate.metadata as Record<string, unknown>)
       : null;
   const mergedMetadata = mergeStatementMetadataWithTemplate(
     {
@@ -2882,7 +2892,7 @@ export const processImportFileText = async (
       if (shouldAdoptTranscriptParse) {
         openAiParsed = transcriptParsed;
         openAiMetadata = transcriptParsed
-          ? mergeStatementMetadataWithTemplate(
+      ? mergeStatementMetadataWithTemplate(
               {
                 ...transcriptParsed.metadata,
                 currency: transcriptParsed.metadata.currency ?? null,
