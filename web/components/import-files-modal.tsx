@@ -568,6 +568,120 @@ const waitForImportSettledVisibility = async (params: {
     return Number.isFinite(numeric) ? numeric : null;
   };
 
+  const waitWithStatusStream = async () => {
+    if (!params.importFileId || typeof EventSource === "undefined") {
+      return null;
+    }
+
+    const eventUrl = `/api/imports/${encodeURIComponent(params.importFileId)}/events`;
+    const latestStatusRef = { current: null as null | { confirmedTransactionsCount?: number; parsedRowsCount?: number } };
+
+    return await new Promise<boolean | null>((resolve) => {
+      let cleanup = () => undefined;
+      const timeout = window.setTimeout(() => {
+        cleanup();
+        resolve(null);
+      }, timeoutMs);
+      const source = new EventSource(eventUrl);
+      let finished = false;
+
+      cleanup = () => {
+        if (finished) {
+          return;
+        }
+        finished = true;
+        window.clearTimeout(timeout);
+        window.clearInterval(accountPoll);
+        try {
+          source.close();
+        } catch {
+          // ignore close errors
+        }
+      };
+
+      const evaluate = (account: { id?: unknown; balance?: unknown } | null) => {
+        if (!account || account.id !== accountId) {
+          return false;
+        }
+
+        const accountBalance = normalizeBalance(account.balance);
+        const balanceLooksReady =
+          expectedBalance === null ? true : accountBalance !== null && normalizeBalance(expectedBalance) === accountBalance;
+        if (!balanceLooksReady) {
+          return false;
+        }
+
+        if (params.importedRows > 0 && params.importFileId) {
+          const confirmedTransactionsCount = Number(latestStatusRef.current?.confirmedTransactionsCount ?? 0);
+          const parsedRowsCount = Number(latestStatusRef.current?.parsedRowsCount ?? 0);
+          return confirmedTransactionsCount >= params.importedRows || parsedRowsCount >= params.importedRows;
+        }
+
+        return true;
+      };
+
+      source.addEventListener("snapshot", (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent<string>).data) as {
+            importFile?: { accountId?: string | null } | null;
+            confirmedTransactionsCount?: number | null;
+            parsedRowsCount?: number | null;
+          };
+          latestStatusRef.current = {
+            confirmedTransactionsCount: Number(payload.confirmedTransactionsCount ?? 0),
+            parsedRowsCount: Number(payload.parsedRowsCount ?? 0),
+          };
+        } catch {
+          // ignore malformed payloads and keep the fallback poll running
+        }
+      });
+
+      source.addEventListener("complete", (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent<string>).data) as {
+            confirmedTransactionsCount?: number | null;
+            parsedRowsCount?: number | null;
+          };
+          latestStatusRef.current = {
+            confirmedTransactionsCount: Number(payload.confirmedTransactionsCount ?? 0),
+            parsedRowsCount: Number(payload.parsedRowsCount ?? 0),
+          };
+        } catch {
+          // ignore malformed payloads
+        }
+      });
+
+      source.onerror = () => {
+        cleanup();
+        resolve(null);
+      };
+
+      const accountPoll = window.setInterval(async () => {
+        try {
+          const response = await fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
+            cache: "no-store",
+          });
+          if (!response.ok) {
+            return;
+          }
+
+          const payload = (await response.json().catch(() => null)) as { account?: { id?: string; balance?: unknown } } | null;
+          if (evaluate(payload?.account ?? null)) {
+            cleanup();
+            resolve(true);
+          }
+        } catch {
+          // keep waiting until timeout or a later poll succeeds
+        }
+      }, pollDelayMs);
+    });
+  };
+
+  const streamResult = await waitWithStatusStream();
+  if (streamResult !== null) {
+    return streamResult;
+  }
+
   while (Date.now() - startedAt < timeoutMs) {
     try {
       const accountResponsePromise = fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
