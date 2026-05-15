@@ -1193,6 +1193,19 @@ const processImportTrainingJson = async (
     actorUserId: options.actorUserId ?? null,
   });
 
+  const directLearningSummary = await applyJsonTrainingRowsToMerchantMemory({
+    workspaceId: String(importFile?.workspaceId ?? ""),
+    importFileId,
+    parsedRows,
+    actorUserId: options.actorUserId ?? null,
+  }).catch((error) => {
+    console.warn("Direct merchant memory application failed for JSON training import", {
+      importFileId,
+      error,
+    });
+    return { applied: 0, skipped: parsedRows.length, categoriesCreated: 0 };
+  });
+
   await applyDataQaReviewLearning({
     workspaceId: String(importFile?.workspaceId ?? ""),
     importFileId,
@@ -1244,8 +1257,8 @@ const processImportTrainingJson = async (
         : parsed.rows.length === 0
         ? "JSON training file saved metadata, but it did not include transaction rows for generic parser learning."
         : replaySummary.replayed > 0
-        ? `JSON training file processed and replayed ${replaySummary.replayed} related file${replaySummary.replayed === 1 ? "" : "s"}.`
-        : "JSON training file processed and applied to the learning loop.",
+        ? `JSON training file taught ${directLearningSummary.applied} merchant rule${directLearningSummary.applied === 1 ? "" : "s"} and replayed ${replaySummary.replayed} related file${replaySummary.replayed === 1 ? "" : "s"}.`
+        : `JSON training file taught ${directLearningSummary.applied} merchant rule${directLearningSummary.applied === 1 ? "" : "s"}.`,
   });
 
   return {
@@ -1253,6 +1266,92 @@ const processImportTrainingJson = async (
     duplicate: false,
     metadata,
   };
+};
+
+const applyJsonTrainingRowsToMerchantMemory = async (params: {
+  workspaceId: string;
+  importFileId: string;
+  parsedRows: EnrichedParsedImportRow[];
+  actorUserId?: string | null;
+}) => {
+  if (!params.workspaceId || params.parsedRows.length === 0) {
+    return { applied: 0, skipped: params.parsedRows.length, categoriesCreated: 0 };
+  }
+
+  const existingCategories = await prisma.category.findMany({
+    where: { workspaceId: params.workspaceId },
+    select: { id: true, name: true, type: true },
+  });
+  const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category]));
+  const seenRuleKeys = new Set<string>();
+  let applied = 0;
+  let skipped = 0;
+  let categoriesCreated = 0;
+
+  for (const row of params.parsedRows) {
+    const rawMerchantText = String(row.merchantRaw ?? row.description ?? row.merchantClean ?? "").trim();
+    const normalizedName = String(row.merchantClean ?? row.merchantRaw ?? row.description ?? "").trim();
+    const fallbackType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
+    const categoryName = String(row.categoryName ?? defaultCategoryForType(fallbackType)).trim();
+
+    if (!rawMerchantText || !normalizedName || !categoryName || categoryName.toLowerCase() === "other") {
+      skipped += 1;
+      continue;
+    }
+
+    const canonicalType = coerceTransactionTypeFromCategoryName(categoryName, fallbackType);
+    const ruleKey = [
+      rawMerchantText.toLowerCase().replace(/\s+/g, " "),
+      normalizedName.toLowerCase().replace(/\s+/g, " "),
+      categoryName.toLowerCase(),
+      canonicalType,
+    ].join("|");
+
+    if (seenRuleKeys.has(ruleKey)) {
+      skipped += 1;
+      continue;
+    }
+    seenRuleKeys.add(ruleKey);
+
+    let category = categoryByName.get(categoryName.toLowerCase());
+    if (!category) {
+      category = await prisma.category.create({
+        data: {
+          workspaceId: params.workspaceId,
+          name: categoryName,
+          type: canonicalType,
+          isSystem: false,
+        },
+        select: { id: true, name: true, type: true },
+      });
+      categoryByName.set(category.name.toLowerCase(), category);
+      categoriesCreated += 1;
+    }
+
+    const confidence = Math.max(
+      95,
+      normalizeImportConfidenceScore(row.categoryConfidence),
+      normalizeImportConfidenceScore(row.confidence),
+      normalizeImportConfidenceScore(row.parserConfidence)
+    );
+
+    await recordTrainingSignal({
+      workspaceId: params.workspaceId,
+      importFileId: params.importFileId,
+      merchantText: rawMerchantText,
+      normalizedName,
+      categoryId: category.id,
+      categoryName: category.name,
+      type: canonicalType,
+      source: "training_upload",
+      confidence,
+      notes: "Learned directly from confirmed JSON training data.",
+      actorUserId: params.actorUserId ?? null,
+    });
+    applied += 1;
+  }
+
+  return { applied, skipped, categoriesCreated };
 };
 
 const replayRelatedImportsAfterGenericTraining = async (params: {

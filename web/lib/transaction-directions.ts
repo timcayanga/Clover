@@ -39,7 +39,7 @@ export const coerceTransactionTypeFromCategoryName = (
     return "transfer";
   }
 
-  if ((normalized === "financial" || normalized === "gifts donations") && fallback === "income") {
+  if (normalized === "gifts donations" && fallback === "income") {
     return "income";
   }
 
