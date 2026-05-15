@@ -6,10 +6,12 @@ import {
   countTransactionsByImportFileCompat,
   fetchImportFileCompat,
   insertImportFileCompat,
+  loadImportFileExtractionCache,
   loadStatementTemplate,
   mergeStatementMetadataWithTemplate,
   updateImportFileCompat,
   buildStatementFingerprint,
+  IMPORT_FILE_EXTRACTION_CACHE_VERSION,
 } from "@/lib/data-engine";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { enqueueImportProcessing } from "@/lib/import-queue";
@@ -26,6 +28,7 @@ import { hasCompatibleTable } from "@/lib/data-engine";
 import { prisma } from "@/lib/prisma";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import type { Prisma } from "@prisma/client";
+import { makeImportFileBytesFingerprint } from "@/lib/import-file-text.server";
 
 export const dynamic = "force-dynamic";
 
@@ -245,6 +248,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
       const bytes = new Uint8Array(await file.arrayBuffer());
       await uploadObject(String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)), bytes, file.type || "application/octet-stream");
+      const fileFingerprint = makeImportFileBytesFingerprint(bytes);
       await upsertUploadBankHint({
         importFileId: importId,
         workspaceId: String(importFile.workspaceId),
@@ -254,6 +258,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
       let metadata: Record<string, unknown> | null = null;
       let extractedText = "";
+      let cachedDocTextInfo: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       let preflightText: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       const effectiveFileName = file.name || formFileName || "imported-file";
       const effectiveFileType = file.type || formFileType || "";
@@ -262,46 +267,71 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(effectiveFileName.toLowerCase());
       const shouldQueueDocumentUpload = isImageUpload || Boolean(importMode && importMode !== "statement");
       if (shouldQueueDocumentUpload) {
-        stage = "scheduling background processing";
-        try {
-          await ensureImportProcessingWorker();
-          await enqueueImportProcessing({
-            importFileId: importId,
-            actorUserId: userId,
-            password,
-            allowDuplicateStatement,
-            bankName: formBankName || undefined,
-            importMode,
-            pdfJsBaseUrl,
-          });
-        } catch (error) {
-          console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
-          await updateImportFileCompat(importId, {
-            status: "failed",
-          });
-          return NextResponse.json(
-            {
-              error: "Unable to queue import processing",
-              stage,
-            },
-            { status: 400 }
-          );
+        const cachedDocRecord = await loadImportFileExtractionCache({
+          workspaceId: String(importFile.workspaceId),
+          fileFingerprint,
+          fileType: effectiveFileType || "application/octet-stream",
+          importMode: importMode ?? "statement",
+          cacheVersion: IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+        }).catch(() => null);
+
+        if (cachedDocRecord?.parsedRows && cachedDocRecord.statementFingerprint && cachedDocRecord.metadata) {
+          cachedDocTextInfo = {
+            fileFingerprint,
+            text: String(cachedDocRecord.extractedText ?? ""),
+            cacheHit: true,
+            cacheRecord: cachedDocRecord as unknown as NonNullable<Awaited<ReturnType<typeof readImportedStatementTextWithCache>>["cacheRecord"]>,
+          };
+          preflightText = cachedDocTextInfo;
+          extractedText = cachedDocTextInfo.text;
+          metadata =
+            cachedDocRecord.metadata && typeof cachedDocRecord.metadata === "object" && !Array.isArray(cachedDocRecord.metadata)
+              ? (cachedDocRecord.metadata as Record<string, unknown>)
+              : null;
         }
 
-        return NextResponse.json({
-          ok: true,
-          queued: true,
-          processed: false,
-          importedRows: 0,
-          duplicate: false,
-          status: "queued",
-          importFileId: importId,
-          metadata: null,
-        });
+        if (!cachedDocTextInfo) {
+          stage = "scheduling background processing";
+          try {
+            await ensureImportProcessingWorker();
+            await enqueueImportProcessing({
+              importFileId: importId,
+              actorUserId: userId,
+              password,
+              allowDuplicateStatement,
+              bankName: formBankName || undefined,
+              importMode,
+              pdfJsBaseUrl,
+            });
+          } catch (error) {
+            console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
+            await updateImportFileCompat(importId, {
+              status: "failed",
+            });
+            return NextResponse.json(
+              {
+                error: "Unable to queue import processing",
+                stage,
+              },
+              { status: 400 }
+            );
+          }
+
+          return NextResponse.json({
+            ok: true,
+            queued: true,
+            processed: false,
+            importedRows: 0,
+            duplicate: false,
+            status: "queued",
+            importFileId: importId,
+            metadata: null,
+          });
+        }
       }
       const shouldPreflightPdf = isPdfUpload(effectiveFileName, effectiveFileType) && bytes.length <= 10_000_000;
 
-      if (shouldPreflightPdf) {
+      if (shouldPreflightPdf && !preflightText) {
         stage = "reading statement metadata";
         try {
           preflightText = await readImportedStatementTextWithCache(
@@ -437,9 +467,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           !isPdfUpload(effectiveFileName, effectiveFileType) &&
           ((hasExtractedText && parsedMetadataConfidence >= 95 && bytes.length <= 8_000_000) ||
             (!hasExtractedText && bytes.length <= 2_500_000))) ||
-        shouldProcessInlinePdf;
+        shouldProcessInlinePdf ||
+        Boolean(cachedDocTextInfo);
 
-      const shouldProcessInlineRequest = (shouldProcessInline || forceInlineProcessing) && !shouldQueueDocumentUpload;
+      const shouldProcessInlineRequest =
+        (shouldProcessInline || forceInlineProcessing || Boolean(cachedDocTextInfo)) &&
+        (!shouldQueueDocumentUpload || Boolean(cachedDocTextInfo));
 
       if (shouldProcessInlineRequest) {
         stage = "processing statement text";

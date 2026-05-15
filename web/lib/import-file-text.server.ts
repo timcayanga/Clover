@@ -187,7 +187,7 @@ const importedFileTextCacheRecordMap = new Map<string, ImportFileTextCacheRecord
 const importedFilePageImageCache = new Map<string, Promise<Array<{ page: number; dataUrl: string }>>>();
 const importedFileImageDataUrlCache = new Map<string, Promise<Array<{ page: number; dataUrl: string }>>>();
 
-const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(Buffer.from(bytes)).digest("hex");
+export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(Buffer.from(bytes)).digest("hex");
 
 const makeImportFileTextCacheRecordKey = (params: {
   workspaceId?: string | null;
