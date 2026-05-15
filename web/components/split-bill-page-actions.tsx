@@ -236,8 +236,6 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
               <input className="settings-input" value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Weekend trip crew" autoFocus />
             </label>
 
-            <p className="split-bill-manual-modal__hint">Groups use initials only now.</p>
-
             <label className="settings-field">
               <span>People</span>
               <SplitBillPeoplePicker people={groupPeople} onPeopleChange={setGroupPeople} />

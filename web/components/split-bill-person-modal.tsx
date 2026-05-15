@@ -87,7 +87,6 @@ export function SplitBillPersonModal({ open, onClose, onSaved }: SplitBillPerson
         <div className="split-bill-manual-modal__head">
           <div>
             <p className="eyebrow">Add People</p>
-            <h3>Saved name</h3>
           </div>
           <button className="split-bill-icon-button" type="button" onClick={closeModal} aria-label="Close people window">
             ×
@@ -104,8 +103,6 @@ export function SplitBillPersonModal({ open, onClose, onSaved }: SplitBillPerson
             autoFocus
           />
         </label>
-
-        <p className="split-bill-manual-modal__hint">People use initials only now.</p>
 
         {error ? <p className="split-bill-editor__error">{error}</p> : null}
 
