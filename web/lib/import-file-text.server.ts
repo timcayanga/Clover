@@ -591,42 +591,46 @@ const pickBestStatementTextCandidate = (candidates: Array<{ text: string; label:
     return "";
   }
 
-  const bestLineQuality = scoreStatementTextCandidateLineQuality(best.text);
-  let bestMergedText: string | null = null;
-  let bestMergedScore = Number.NEGATIVE_INFINITY;
-  let bestMergedLineQuality = Number.NEGATIVE_INFINITY;
-  let bestMergedLabels: string[] = [];
+  let currentText = best.text;
+  let currentScore = best.score;
+  let currentLineQuality = scoreStatementTextCandidateLineQuality(best.text);
+  let currentLabel = best.label;
 
   for (const runnerUp of scoredCandidates.slice(1, 4)) {
-    const merged = mergeCompatibleStatementTextCandidates(best, runnerUp);
+    const merged = mergeCompatibleStatementTextCandidates(
+      {
+        text: currentText,
+        label: currentLabel,
+        score: currentScore,
+      },
+      runnerUp
+    );
     if (!merged) {
       continue;
     }
 
     const mergedScore = scoreStatementTextCandidate(merged);
     const mergedLineQuality = scoreStatementTextCandidateLineQuality(merged);
-    const improvesEnough = mergedScore >= best.score + 1 || mergedLineQuality >= bestLineQuality + 0.15;
-    const beatsCurrent =
-      mergedScore > bestMergedScore || (mergedScore === bestMergedScore && mergedLineQuality > bestMergedLineQuality);
+    const improvesEnough = mergedScore >= currentScore + 1 || mergedLineQuality >= currentLineQuality + 0.15;
 
-    if (improvesEnough && beatsCurrent) {
-      bestMergedText = merged;
-      bestMergedScore = mergedScore;
-      bestMergedLineQuality = mergedLineQuality;
-      bestMergedLabels = [best.label, runnerUp.label];
+    if (improvesEnough) {
+      currentText = merged;
+      currentScore = mergedScore;
+      currentLineQuality = mergedLineQuality;
+      currentLabel = `${currentLabel}+${runnerUp.label}`;
     }
   }
 
-  if (bestMergedText) {
+  if (currentText !== best.text) {
     if (process.env.CLOVER_DEBUG_OCR_SELECTION === "1") {
       console.log("Selected OCR merged candidate", {
-        labels: bestMergedLabels,
-        score: Number(bestMergedScore.toFixed(2)),
-        lineQuality: Number(bestMergedLineQuality.toFixed(2)),
-        length: bestMergedText.length,
+        labels: currentLabel,
+        score: Number(currentScore.toFixed(2)),
+        lineQuality: Number(currentLineQuality.toFixed(2)),
+        length: currentText.length,
       });
     }
-    return bestMergedText;
+    return currentText;
   }
 
   if (process.env.CLOVER_DEBUG_OCR_SELECTION === "1") {

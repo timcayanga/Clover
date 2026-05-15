@@ -1082,6 +1082,34 @@ const main = async () => {
     throw new Error(`expected OCR candidates to merge toward the cleaner line, got ${mergedOcrText}`);
   }
 
+  const mergedOcrTextThreeWay = mergeCompatibleStatementTextCandidates(
+    {
+      text: "Jan 1\nCoffee S1op\n150.00\nBalance 1,000.00",
+      label: "ocr-a",
+      score: 24,
+    },
+    {
+      text: "Jan 1\nCoffee Shop\n150.00\nBalance 1,000.00",
+      label: "ocr-b",
+      score: 23,
+    }
+  );
+  const mergedOcrTextConsensus = mergeCompatibleStatementTextCandidates(
+    {
+      text: mergedOcrTextThreeWay ?? "Jan 1\nCoffee Shop\n150.00\nBalance 1,000.00",
+      label: "ocr-merged",
+      score: 25,
+    },
+    {
+      text: "Jan 1\nCoffee Shop\n150.00\nBalance 1,000.00\nService Charge 10.00",
+      label: "ocr-c",
+      score: 22,
+    }
+  );
+  if (!mergedOcrTextConsensus || !/Service Charge 10\.00/.test(mergedOcrTextConsensus) || /Coffee S1op/.test(mergedOcrTextConsensus)) {
+    throw new Error(`expected multi-pass OCR merge to keep the clean merchant line and recover extra useful lines, got ${mergedOcrTextConsensus}`);
+  }
+
   const prototypeLabel = buildMerchantPrototypeLabel("Burger King 1234", "Burger King");
   if (prototypeLabel !== "Burger King 1234" && prototypeLabel !== null) {
     throw new Error(`expected prototype label helper to keep a useful merchant variant or null, got ${prototypeLabel}`);
@@ -1967,6 +1995,34 @@ const main = async () => {
   );
   if (!resolvedReceiptAccount || resolvedReceiptAccount.accountId !== "acct-visa-1") {
     throw new Error(`expected receipt account hint to resolve to Visa 4321, got ${resolvedReceiptAccount?.accountId ?? "null"}`);
+  }
+
+  const typedReceiptAccount = resolveReceiptAccountHintToAccount(
+    {
+      accountName: "Visa",
+      accountLast4: "4321",
+      confidence: 95,
+      reason: "explicit receipt hint",
+    },
+    [
+      {
+        id: "acct-visa-cc",
+        name: "Visa 4321",
+        institution: "BPI",
+        accountNumber: "**** 4321",
+        type: "credit_card",
+      },
+      {
+        id: "acct-visa-wallet",
+        name: "Visa 4321",
+        institution: "BPI",
+        accountNumber: "**** 4321",
+        type: "wallet",
+      },
+    ]
+  );
+  if (!typedReceiptAccount || typedReceiptAccount.accountId !== "acct-visa-cc") {
+    throw new Error(`expected receipt account hint to prefer matching account type, got ${typedReceiptAccount?.accountId ?? "null"}`);
   }
 
   const ambiguousReceiptAccount = resolveReceiptAccountHintToAccount(

@@ -58,6 +58,11 @@ const accountNameSignals = [
 const getCandidateLast4 = (account: CandidateAccount) =>
   extractLastFourDigits(account.accountNumber) ?? extractLastFourDigits(account.name);
 
+const getHintAccountType = (hintName: string) => {
+  const signal = accountNameSignals.find((entry) => entry.pattern.test(hintName));
+  return signal?.type ?? null;
+};
+
 export const resolveReceiptAccountHintToAccount = (
   hint: ReceiptAccountHint | null,
   accounts: CandidateAccount[]
@@ -68,6 +73,7 @@ export const resolveReceiptAccountHintToAccount = (
 
   const hintName = normalizeToken(hint.accountName ?? "");
   const hintLast4 = hint.accountLast4?.replace(/\D/g, "").slice(-4) ?? null;
+  const hintAccountType = getHintAccountType(hintName);
 
   const scored = accounts
     .map((account) => {
@@ -97,10 +103,15 @@ export const resolveReceiptAccountHintToAccount = (
         }
       }
 
-      const signal = accountNameSignals.find((entry) => entry.pattern.test(hintName));
-      if (signal && account.type === signal.type) {
-        score += 8;
-        reasons.push(`matching ${signal.type}`);
+      const signal = hintAccountType;
+      if (signal) {
+        if (account.type === signal) {
+          score += 16;
+          reasons.push(`matching ${signal}`);
+        } else {
+          score -= 10;
+          reasons.push(`type mismatch`);
+        }
       }
 
       if (hint.confidence >= 90) {

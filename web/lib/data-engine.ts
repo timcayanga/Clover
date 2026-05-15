@@ -3410,15 +3410,26 @@ export const enrichParsedRowsWithTraining = async (params: {
       .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
       .join(" ");
     const accountMatch = findBestAccountRule(row.accountName ?? null, rowWithInstitution.institution ?? null, accountRules);
-    const learned = classifyMerchant({
-      merchantText,
-      categoryText,
-      type: row.type ?? "expense",
-      categoryName: row.categoryName ?? null,
-      merchantRules,
-      trainingSignals,
-      negativeSignals,
-    });
+    const rowTeachability = assessParsedRowTeachability(row);
+    const learned = rowTeachability.score < 55
+      ? {
+          categoryName: row.categoryName && row.categoryName.trim().toLowerCase() !== "other" ? row.categoryName : null,
+          confidence: Math.max(20, rowTeachability.score),
+          categoryReason: "row_teachability_blocked",
+          merchantKey: normalizeMerchantText(merchantText),
+          merchantTokens: tokenizeMerchant(merchantText),
+          normalizedName: summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null),
+          preferredType: row.type ?? "expense",
+        }
+      : classifyMerchant({
+          merchantText,
+          categoryText,
+          type: row.type ?? "expense",
+          categoryName: row.categoryName ?? null,
+          merchantRules,
+          trainingSignals,
+          negativeSignals,
+        });
     const merchantClean = learned.normalizedName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
     const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(learned.preferredType ?? row.type ?? "expense");
     const nextType = coerceTransactionTypeFromCategoryName(
@@ -3431,7 +3442,6 @@ export const enrichParsedRowsWithTraining = async (params: {
     const rowConfidence = normalizeConfidenceScore(row.confidence);
     const rowParserConfidence = normalizeConfidenceScore(rowWithInstitution.parserConfidence);
     const rowCategoryConfidence = normalizeConfidenceScore(rowWithInstitution.categoryConfidence);
-    const rowTeachability = assessParsedRowTeachability(row);
     const deterministicParserConfidence = parserSuppliedConcreteCategory
       ? Math.max(rowConfidence, rowParserConfidence, rowCategoryConfidence, Math.min(95, Math.max(90, statementConfidence)))
       : 0;
