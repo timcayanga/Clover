@@ -35,11 +35,9 @@ const clerkAuthMiddleware = clerkMiddleware(async (auth, request) => {
     return NextResponse.next();
   }
 
-  const session = await auth();
-
-  if (!session.userId) {
-    return NextResponse.redirect(new URL("/", request.url));
-  }
+  await auth.protect({
+    unauthenticatedUrl: new URL("/", request.url).toString(),
+  });
 
   return NextResponse.next();
 }, {

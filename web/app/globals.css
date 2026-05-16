@@ -417,6 +417,24 @@ body.dashboard-modal-open .app-shell {
   box-shadow: 0 0 0 4px rgba(3, 168, 192, 0.14);
 }
 
+.clover-auth-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.35;
+  margin-top: -2px;
+}
+
+.clover-auth-remember input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+
 .clover-auth-primary,
 .clover-auth-secondary,
 .clover-auth-social {

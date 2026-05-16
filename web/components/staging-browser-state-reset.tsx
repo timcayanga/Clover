@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const STAGING_HOSTNAME = "staging.clover.ph";
 const RESET_MARKER_KEY = "clover.staging-browser-state-reset.v1";
+const STAY_SIGNED_IN_KEY = "clover.staging.keep-signed-in.v1";
 
 const COOKIE_PREFIXES = ["__clerk_", "__client_uat"];
 const WINDOW_NAME_MARKER = "clover-staging-browser-state-reset:v1";
@@ -64,8 +65,29 @@ export function StagingBrowserStateReset() {
       return;
     }
 
-    if (pathname.startsWith("/sign-in") || pathname.startsWith("/sign-up")) {
+    const isPublicLandingRoute =
+      pathname === "/" ||
+      pathname.startsWith("/features") ||
+      pathname.startsWith("/pricing") ||
+      pathname.startsWith("/help") ||
+      pathname.startsWith("/privacy-policy") ||
+      pathname.startsWith("/terms-of-service") ||
+      pathname.startsWith("/sign-in") ||
+      pathname.startsWith("/sign-up") ||
+      pathname.startsWith("/sign-out") ||
+      pathname.startsWith("/sso-callback") ||
+      pathname.startsWith("/onboarding");
+
+    if (!isPublicLandingRoute) {
       return;
+    }
+
+    try {
+      if (window.localStorage.getItem(STAY_SIGNED_IN_KEY) === "true") {
+        return;
+      }
+    } catch {
+      // If storage is blocked, proceed with the cleanup once.
     }
 
     if (window.name.includes(WINDOW_NAME_MARKER)) {

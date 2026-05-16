@@ -32,6 +32,7 @@ const socialProviders: Array<{
 
 const completeRedirectUrl = "/home";
 const callbackUrl = "/sso-callback";
+const staySignedInStorageKey = "clover.staging.keep-signed-in.v1";
 
 function formatError(error: unknown) {
   if (typeof error === "string") {
@@ -189,6 +190,7 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
   const [touchedResetEmail, setTouchedResetEmail] = useState(false);
   const [touchedResetPassword, setTouchedResetPassword] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [staySignedIn, setStaySignedIn] = useState(true);
 
   const isReady = auth.isLoaded && signInState.isLoaded && signUpState.isLoaded;
   const trimmedEmail = email.trim();
@@ -221,6 +223,31 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
       router.replace(completeRedirectUrl);
     }
   }, [auth.isLoaded, auth.isSignedIn, router]);
+
+  useEffect(() => {
+    if (mode !== "sign-in") {
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(staySignedInStorageKey);
+      setStaySignedIn(stored !== "false");
+    } catch {
+      setStaySignedIn(true);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode !== "sign-in") {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(staySignedInStorageKey, staySignedIn ? "true" : "false");
+    } catch {
+      // Best effort only.
+    }
+  }, [mode, staySignedIn]);
 
   useEffect(() => {
     setPhase("form");
@@ -857,6 +884,17 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
             >
               {busy ? "Please wait..." : mode === "sign-in" ? "Sign In" : "Continue"}
             </button>
+
+            {mode === "sign-in" ? (
+              <label className="clover-auth-remember">
+                <input
+                  type="checkbox"
+                  checked={staySignedIn}
+                  onChange={(event) => setStaySignedIn(event.target.checked)}
+                />
+                <span>Stay signed in on this device</span>
+              </label>
+            ) : null}
 
             {mode === "sign-in" ? (
               <button
