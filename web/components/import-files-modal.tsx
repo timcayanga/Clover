@@ -191,9 +191,15 @@ const triggerImportEnrichment = (importFileId: string) => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ importFileId, limit: 3, batchSize: 100 }),
     keepalive: true,
-  }).catch(() => {
-    requestedImportEnrichmentIds.delete(importFileId);
-  });
+  })
+    .then((response) => {
+      if (!response.ok) {
+        requestedImportEnrichmentIds.delete(importFileId);
+      }
+    })
+    .catch(() => {
+      requestedImportEnrichmentIds.delete(importFileId);
+    });
 };
 
 const fileTypeLabel = (file: File) => {

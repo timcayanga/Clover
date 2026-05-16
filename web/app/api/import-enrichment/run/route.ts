@@ -1,5 +1,7 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { fetchImportFileCompat } from "@/lib/data-engine";
+import { upsertImportEnrichmentJob } from "@/lib/import-enrichment-jobs";
+import { prisma } from "@/lib/prisma";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { processImportEnrichmentJobs } from "@/workers/import-processor";
 import { NextResponse } from "next/server";
@@ -26,6 +28,26 @@ export async function POST(request: Request) {
       }
       if (!localDev) {
         await assertWorkspaceAccess(userId, String(importFile.workspaceId));
+      }
+      const [parsedRowCount, needsCleanupCount] = await Promise.all([
+        prisma.parsedTransaction.count({ where: { importFileId: payload.importFileId } }),
+        prisma.transaction.count({
+          where: {
+            importFileId: payload.importFileId,
+            deletedAt: null,
+            reviewStatus: { notIn: ["edited", "rejected"] },
+            OR: [{ merchantClean: null }, { categoryId: null }, { category: { name: "Other" } }],
+          },
+        }),
+      ]);
+      if (parsedRowCount > 0 && needsCleanupCount > 0) {
+        await upsertImportEnrichmentJob({
+          workspaceId: String(importFile.workspaceId),
+          importFileId: payload.importFileId,
+          totalRows: parsedRowCount,
+          phase: "queued",
+          forceRequeue: true,
+        });
       }
     } else if (!localDev) {
       return NextResponse.json({ error: "importFileId is required" }, { status: 400 });

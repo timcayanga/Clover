@@ -11,6 +11,7 @@ import {
   readImportedFileImageDataUrls,
   readImportedFileTextWithCacheInfo,
   readImportedPdfPageImages,
+  storeImportedFileTextCacheRecord,
 } from "@/lib/import-file-text.server";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { parseReceiptText } from "@/lib/split-bill";
@@ -3487,6 +3488,7 @@ export const processImportFileText = async (
         importFileId,
         totalRows: rows.length,
         phase: "queued",
+        forceRequeue: true,
       });
       processImportEnrichmentJobsInBackground(importFileId, rows.length);
 

@@ -291,7 +291,7 @@ const readImportedFileTextCacheRecord = async (params: {
   } satisfies ImportFileTextCacheRecord);
 };
 
-const storeImportedFileTextCacheRecord = async (params: {
+export const storeImportedFileTextCacheRecord = async (params: {
   workspaceId?: string | null;
   fileFingerprint: string;
   fileType: string;
