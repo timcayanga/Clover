@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import {
+  appendSplitBillActivity,
   serializeSplitBillRecord,
   splitBillGroupMemberOrderBy,
   splitBillItemOrderBy,
@@ -302,6 +303,11 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
     };
   });
   const resolvedRawPayload = await resolveReceiptAccountResolution(userId, input.rawPayload ?? null);
+  const rawPayloadWithActivity = appendSplitBillActivity(
+    resolvedRawPayload,
+    existingBillId ? "edited" : "created",
+    existingBillId ? `Edited ${input.title.trim()}` : `Created ${input.title.trim()}`
+  );
 
     return {
     groupId,
@@ -325,7 +331,7 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
       tip: normalizeOptionalDecimal(input.tip ?? null),
       discount: normalizeOptionalDecimal(input.discount ?? null),
       total: normalizeOptionalDecimal(input.total ?? null),
-      rawPayload: resolvedRawPayload ?? undefined,
+      rawPayload: rawPayloadWithActivity,
     } as Omit<Prisma.SplitBillUncheckedCreateInput, "userId">,
   };
 };

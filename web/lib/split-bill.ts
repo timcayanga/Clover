@@ -14,11 +14,20 @@ export type SplitBillPaymentDraft = {
   note?: string | null;
 };
 
+export type SplitBillSplitMethod = "equal" | "exact" | "percentage" | "shares";
+
+export type SplitBillItemAllocation = {
+  participantId: string;
+  value: string;
+};
+
 export type SplitBillItemDraft = {
   id?: string;
   description: string;
   amount: string;
   participantIds: string[];
+  splitMethod?: SplitBillSplitMethod;
+  allocations?: SplitBillItemAllocation[];
 };
 
 export type SplitBillDraft = {
@@ -131,6 +140,13 @@ export type SplitBillTransferSettlementRecord = {
   updatedAt: string;
 };
 
+export type SplitBillActivityRecord = {
+  id: string;
+  type: "created" | "edited" | "settled" | "deleted" | "note";
+  message: string;
+  createdAt: string;
+};
+
 export const splitBillGroupMemberOrderBy: Prisma.SplitBillGroupMemberOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
   { createdAt: "asc" },
@@ -176,6 +192,8 @@ export type SplitBillSerializedBill = {
     amount: string;
     sortOrder: number;
     participantIds: string[];
+    splitMethod?: SplitBillSplitMethod;
+    allocations?: SplitBillItemAllocation[];
   }>;
   payments: Array<{
     id: string;
@@ -195,6 +213,7 @@ export type SplitBillSerializedBill = {
     } | null;
   } | null;
   transferSettlements?: SplitBillTransferSettlementRecord[];
+  activity?: SplitBillActivityRecord[];
   settlement: SplitBillSettlement;
 };
 
@@ -1632,6 +1651,11 @@ export const buildSplitBillSettlement = (params: {
   items: Array<{
     amount: string | number;
     participantIds: string[];
+    splitMethod?: SplitBillSplitMethod;
+    allocations?: Array<{
+      participantId: string;
+      value: string | number;
+    }>;
   }>;
   payments: Array<{
     participantId: string;
@@ -1668,6 +1692,56 @@ export const buildSplitBillSettlement = (params: {
   for (const item of params.items) {
     const itemAmount = parseAmountValue(item.amount) ?? 0;
     const participantIds = item.participantIds.length > 0 ? item.participantIds : params.participants.map((participant) => participant.id);
+    const splitMethod = item.splitMethod ?? "equal";
+
+    if (splitMethod !== "equal" && item.allocations && item.allocations.length > 0) {
+      const allocationByParticipantId = new Map(
+        item.allocations.map((allocation) => [allocation.participantId, parseAmountValue(allocation.value) ?? 0])
+      );
+      const allocationTargets = participantIds.filter((participantId) => participantMap.has(participantId));
+
+      if (splitMethod === "exact") {
+        for (const participantId of allocationTargets) {
+          const participant = participantMap.get(participantId);
+          if (!participant) {
+            continue;
+          }
+
+          participant.owed += Math.max(0, allocationByParticipantId.get(participantId) ?? 0);
+        }
+        continue;
+      }
+
+      if (splitMethod === "percentage") {
+        for (const participantId of allocationTargets) {
+          const participant = participantMap.get(participantId);
+          if (!participant) {
+            continue;
+          }
+
+          const percentage = Math.max(0, allocationByParticipantId.get(participantId) ?? 0);
+          participant.owed += itemAmount * (percentage / 100);
+        }
+        continue;
+      }
+
+      if (splitMethod === "shares") {
+        const totalShares = allocationTargets.reduce((sum, participantId) => sum + Math.max(0, allocationByParticipantId.get(participantId) ?? 0), 0);
+        if (totalShares > 0) {
+          for (const participantId of allocationTargets) {
+            const participant = participantMap.get(participantId);
+            if (!participant) {
+              continue;
+            }
+
+            const shares = Math.max(0, allocationByParticipantId.get(participantId) ?? 0);
+            participant.owed += itemAmount * (shares / totalShares);
+          }
+          continue;
+        }
+      }
+    }
+
     const share = participantIds.length > 0 ? itemAmount / participantIds.length : 0;
 
     for (const participantId of participantIds) {
@@ -1778,10 +1852,127 @@ export const createBlankSplitBillDraft = (): SplitBillDraft => ({
   total: "",
   groupId: "",
   participants: [],
-  items: [{ description: "Total", amount: "", participantIds: [] }],
+  items: [{ description: "Total", amount: "", participantIds: [], splitMethod: "equal", allocations: [] }],
   payments: [],
   rawPayload: null,
 });
+
+const isSplitBillSplitMethod = (value: unknown): value is SplitBillSplitMethod =>
+  value === "equal" || value === "exact" || value === "percentage" || value === "shares";
+
+const getSplitBillItemSplitMetadata = (rawPayload: Record<string, unknown> | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return {};
+  }
+
+  const metadata = rawPayload.splitBillItemSplits;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+
+  return metadata as Record<
+    string,
+    {
+      splitMethod?: unknown;
+      allocations?: unknown;
+    }
+  >;
+};
+
+const normalizeSplitBillItemAllocations = (value: unknown): SplitBillItemAllocation[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return [];
+    }
+
+    const record = entry as Record<string, unknown>;
+    const participantId = typeof record.participantId === "string" ? record.participantId : "";
+    const allocationValue = typeof record.value === "string" || typeof record.value === "number" ? String(record.value) : "";
+    if (!participantId) {
+      return [];
+    }
+
+    return [{ participantId, value: allocationValue }];
+  });
+};
+
+export const getSplitBillActivity = (rawPayload: Record<string, unknown> | null | undefined): SplitBillActivityRecord[] => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return [];
+  }
+
+  const activity = rawPayload.splitBillActivity;
+  if (!Array.isArray(activity)) {
+    return [];
+  }
+
+  return activity.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return [];
+    }
+
+    const record = entry as Record<string, unknown>;
+    const id = typeof record.id === "string" ? record.id : "";
+    const type = typeof record.type === "string" ? record.type : "";
+    const message = typeof record.message === "string" ? record.message : "";
+    const createdAt = typeof record.createdAt === "string" ? record.createdAt : "";
+
+    if (!id || !message || !createdAt || !["created", "edited", "settled", "deleted", "note"].includes(type)) {
+      return [];
+    }
+
+    return [{ id, type: type as SplitBillActivityRecord["type"], message, createdAt }];
+  });
+};
+
+export const appendSplitBillActivity = (
+  rawPayload: Record<string, unknown> | null | undefined,
+  type: SplitBillActivityRecord["type"],
+  message: string
+) => {
+  const payload = rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload) ? { ...rawPayload } : {};
+  const currentActivity = getSplitBillActivity(payload);
+
+  payload.splitBillActivity = [
+    {
+      id: globalThis.crypto?.randomUUID?.() ?? `activity-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      type,
+      message,
+      createdAt: new Date().toISOString(),
+    },
+    ...currentActivity,
+  ].slice(0, 80);
+
+  return payload;
+};
+
+export const mergeSplitBillItemSplitMetadata = (
+  rawPayload: Record<string, unknown> | null | undefined,
+  items: SplitBillItemDraft[]
+) => {
+  const payload = rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload) ? { ...rawPayload } : {};
+  const metadata: Record<string, { splitMethod: SplitBillSplitMethod; allocations: SplitBillItemAllocation[] }> = {};
+
+  for (const item of items) {
+    const itemId = item.id;
+    if (!itemId) {
+      continue;
+    }
+
+    const splitMethod = item.splitMethod ?? "equal";
+    metadata[itemId] = {
+      splitMethod,
+      allocations: item.allocations ?? [],
+    };
+  }
+
+  payload.splitBillItemSplits = metadata;
+  return payload;
+};
 
 export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult): SplitBillDraft => {
   const total = preview.total ?? "";
@@ -1884,16 +2075,18 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
       preview.items.length > 0
         ? preview.items.map((item, index) => {
             const matchedParticipantNames = inferItemParticipantIds(item.description, receiptParticipantNames);
-            return {
+          return {
               id: `${index}`,
               description: item.description,
               amount: item.amount,
               participantIds: matchedParticipantNames
                 .map((participantName) => participantIdByName.get(participantName.toLowerCase()))
                 .filter((participantId): participantId is string => typeof participantId === "string" && participantId.length > 0),
+              splitMethod: "equal",
+              allocations: [],
             };
           })
-        : [{ description: "Total", amount: total, participantIds: [] }],
+        : [{ description: "Total", amount: total, participantIds: [], splitMethod: "equal", allocations: [] }],
     payments: [...receiptPayments, ...payerSeededPayments],
     rawPayload: mergeSplitBillReceiptSummary(
       {
@@ -1953,6 +2146,8 @@ export const splitBillDraftFromSerializedBill = (bill: SplitBillSerializedBill):
     description: item.description,
     amount: item.amount,
     participantIds: item.participantIds,
+    splitMethod: item.splitMethod ?? "equal",
+    allocations: item.allocations ?? [],
   })),
   payments: bill.payments.map((payment) => ({
     id: payment.id,
@@ -2108,12 +2303,19 @@ export const serializeSplitBillRecord = (bill: {
   } | null;
 }): SplitBillSerializedBill => {
   const transferSettlements = bill.transferSettlements ?? [];
+  const itemSplitMetadata = getSplitBillItemSplitMetadata(bill.rawPayload);
+  const getItemSplitMethod = (itemId: string): SplitBillSplitMethod => {
+    const splitMethod = itemSplitMetadata[itemId]?.splitMethod;
+    return isSplitBillSplitMethod(splitMethod) ? splitMethod : "equal";
+  };
   const settlement = applyTransferSettlementsToSettlement(
     buildSplitBillSettlement({
       participants: bill.participants,
       items: bill.items.map((item) => ({
         amount: item.amount.toString(),
         participantIds: item.participants.map((entry) => entry.participantId),
+        splitMethod: getItemSplitMethod(item.id),
+        allocations: normalizeSplitBillItemAllocations(itemSplitMetadata[item.id]?.allocations),
       })),
       payments: bill.payments.map((payment) => ({
         participantId: payment.participantId,
@@ -2172,6 +2374,8 @@ export const serializeSplitBillRecord = (bill: {
         amount: item.amount.toString(),
         sortOrder: item.sortOrder,
         participantIds: item.participants.map((entry) => entry.participantId),
+        splitMethod: getItemSplitMethod(item.id),
+        allocations: normalizeSplitBillItemAllocations(itemSplitMetadata[item.id]?.allocations),
       })),
     payments: bill.payments.map((payment) => ({
       id: payment.id,
@@ -2206,6 +2410,7 @@ export const serializeSplitBillRecord = (bill: {
       createdAt: transferSettlement.createdAt.toISOString(),
       updatedAt: transferSettlement.updatedAt.toISOString(),
     })),
+    activity: getSplitBillActivity(bill.rawPayload),
     settlement,
   };
 };

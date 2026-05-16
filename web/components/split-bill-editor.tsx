@@ -7,6 +7,7 @@ import {
   buildSplitBillSettlement,
   createBlankSplitBillDraft,
   formatSplitBillAmount,
+  mergeSplitBillItemSplitMetadata,
   mergeSplitBillReceiptSummary,
   splitBillDraftFromReceiptPreview,
   splitBillDraftFromSerializedBill,
@@ -38,7 +39,7 @@ const makeInitialDraft = (initialBill?: SplitBillSerializedBill | null): SplitBi
   }
 
   if (draft.items.length === 0) {
-    draft.items = [{ id: createDraftId(), description: "Total", amount: "", participantIds: [] }];
+    draft.items = [{ id: createDraftId(), description: "Total", amount: "", participantIds: [], splitMethod: "equal", allocations: [] }];
   }
 
   if (draft.payments.length === 0) {
@@ -118,6 +119,8 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
           ...item,
           id: createDraftId(),
           participantIds: [],
+          splitMethod: item.splitMethod ?? "equal",
+          allocations: item.allocations ?? [],
         })),
         payments:
           receiptDraft.payments.length > 0
@@ -201,6 +204,8 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
       .map((item) => ({
         amount: item.amount,
         participantIds: item.participantIds,
+        splitMethod: item.splitMethod ?? "equal",
+        allocations: item.allocations ?? [],
       }))
       .filter((item) => item.amount !== ""),
     payments: draft.payments
@@ -261,6 +266,8 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
           description: "",
           amount: "",
           participantIds: current.participants.filter((participant) => participant.name.trim()).map((participant) => participant.id ?? ""),
+          splitMethod: "equal",
+          allocations: [],
         },
       ],
     }));
@@ -270,6 +277,24 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
     setDraft((current) => ({
       ...current,
       items: current.items.map((item) => (item.id === itemId ? { ...item, ...patch } : item)),
+    }));
+  };
+
+  const updateItemAllocation = (itemId: string, participantId: string, value: string) => {
+    setDraft((current) => ({
+      ...current,
+      items: current.items.map((item) => {
+        if (item.id !== itemId) {
+          return item;
+        }
+
+        const allocations = item.allocations ?? [];
+        const nextAllocations = allocations.some((allocation) => allocation.participantId === participantId)
+          ? allocations.map((allocation) => (allocation.participantId === participantId ? { ...allocation, value } : allocation))
+          : [...allocations, { participantId, value }];
+
+        return { ...item, allocations: nextAllocations };
+      }),
     }));
   };
 
@@ -321,7 +346,11 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
           ? item.participantIds.filter((id) => id !== participantId)
           : [...item.participantIds, participantId];
 
-        return { ...item, participantIds };
+        return {
+          ...item,
+          participantIds,
+          allocations: (item.allocations ?? []).filter((allocation) => participantIds.includes(allocation.participantId)),
+        };
       }),
     }));
   };
@@ -398,6 +427,8 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
             ...item,
             id: createDraftId(),
             participantIds: [],
+            splitMethod: item.splitMethod ?? "equal",
+            allocations: item.allocations ?? [],
           })),
         };
       });
@@ -426,6 +457,8 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
           description: item.description.trim(),
           amount: item.amount,
           participantIds: item.participantIds,
+          splitMethod: item.splitMethod ?? "equal",
+          allocations: item.allocations ?? [],
         }));
       const payments = draft.payments
         .filter((payment) => payment.participantId && payment.amount.trim())
@@ -448,15 +481,18 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
         participants,
         items,
         payments,
-        rawPayload: mergeSplitBillReceiptSummary(draft.rawPayload, {
-          subtotal: draft.subtotal?.trim() || null,
-          serviceCharge: draft.serviceCharge?.trim() || null,
-          tax: draft.tax?.trim() || null,
-          tip: draft.tip?.trim() || null,
-          rounding: draft.rounding?.trim() || null,
-          discount: draft.discount?.trim() || null,
-          total: draft.total?.trim() || null,
-        }),
+        rawPayload: mergeSplitBillItemSplitMetadata(
+          mergeSplitBillReceiptSummary(draft.rawPayload, {
+            subtotal: draft.subtotal?.trim() || null,
+            serviceCharge: draft.serviceCharge?.trim() || null,
+            tax: draft.tax?.trim() || null,
+            tip: draft.tip?.trim() || null,
+            rounding: draft.rounding?.trim() || null,
+            discount: draft.discount?.trim() || null,
+            total: draft.total?.trim() || null,
+          }),
+          items
+        ),
       };
 
       const response = await fetch(mode === "edit" && initialBill ? `/api/split-bills/${initialBill.id}` : "/api/split-bills", {
@@ -721,6 +757,22 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
                     <div className="split-bill-editor__item-people-head">
                       <span>Split with</span>
                       <div className="split-bill-editor__item-actions">
+                        <select
+                          className="settings-input split-bill-editor__split-method"
+                          value={item.splitMethod ?? "equal"}
+                          onChange={(event) =>
+                            updateItem(item.id ?? "", {
+                              splitMethod: event.target.value as SplitBillDraft["items"][number]["splitMethod"],
+                              allocations: [],
+                            })
+                          }
+                          aria-label={`Split method for ${item.description || "item"}`}
+                        >
+                          <option value="equal">Equal</option>
+                          <option value="exact">Exact amount</option>
+                          <option value="percentage">Percentage</option>
+                          <option value="shares">Shares</option>
+                        </select>
                         <button className="button button-secondary button-small" type="button" onClick={() => applyAllPeopleToItem(item.id ?? "")}>
                           All people
                         </button>
@@ -752,6 +804,30 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
                         <span className="split-bill-editor__chip-note">Add people first to assign items.</span>
                       )}
                     </div>
+                    {item.splitMethod && item.splitMethod !== "equal" && item.participantIds.length > 0 ? (
+                      <div className="split-bill-editor__allocation-grid">
+                        {participantOptions
+                          .filter((participant) => item.participantIds.includes(participant.id))
+                          .map((participant) => {
+                            const allocation = item.allocations?.find((entry) => entry.participantId === participant.id);
+                            const suffix = item.splitMethod === "percentage" ? "%" : item.splitMethod === "shares" ? "shares" : draft.currency;
+
+                            return (
+                              <label key={participant.id} className="settings-field">
+                                <span>
+                                  {participant.name} {suffix ? `(${suffix})` : ""}
+                                </span>
+                                <input
+                                  className="settings-input"
+                                  value={allocation?.value ?? ""}
+                                  onChange={(event) => updateItemAllocation(item.id ?? "", participant.id, event.target.value)}
+                                  placeholder={item.splitMethod === "shares" ? "1" : "0.00"}
+                                />
+                              </label>
+                            );
+                          })}
+                      </div>
+                    ) : null}
                   </div>
                 </article>
               ))}

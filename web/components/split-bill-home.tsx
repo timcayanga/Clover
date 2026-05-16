@@ -40,9 +40,32 @@ const groupBillsByCurrency = (items: SplitBillSerializedBill[]) =>
 
 export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, onOpenPerson }: SplitBillHomeProps) {
   const [showAllBills, setShowAllBills] = useState(false);
+  const [billSearch, setBillSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "settled">("all");
 
-  const recentBills = showAllBills ? bills : bills.slice(0, 4);
-  const hasHiddenBills = bills.length > 4;
+  const filteredBills = useMemo(() => {
+    const query = billSearch.trim().toLowerCase();
+    return bills.filter((bill) => {
+      const isSettled = bill.settlement.transfers.length === 0;
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "settled" && isSettled) ||
+        (statusFilter === "open" && !isSettled);
+      const searchBlob = [
+        bill.title,
+        bill.group?.name ?? "",
+        bill.merchantName ?? "",
+        bill.participants.map((participant) => participant.name).join(" "),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return matchesStatus && (!query || searchBlob.includes(query));
+    });
+  }, [billSearch, bills, statusFilter]);
+
+  const recentBills = showAllBills ? filteredBills : filteredBills.slice(0, 4);
+  const hasHiddenBills = filteredBills.length > 4;
   const billToggleLabel = showAllBills && hasHiddenBills ? "Show fewer" : "Show all bills";
   const toggleBills = () => {
     if (!hasHiddenBills) {
@@ -81,6 +104,33 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
         <div className="split-bill-panel__head">
           <div>
             <h2>Bills</h2>
+          </div>
+        </div>
+        <div className="split-bill-filter-bar">
+          <input
+            className="settings-input split-bill-filter-bar__search"
+            value={billSearch}
+            onChange={(event) => {
+              setBillSearch(event.target.value);
+              setShowAllBills(false);
+            }}
+            placeholder="Search bills, people, or groups"
+            aria-label="Search split bills"
+          />
+          <div className="split-bill-filter-bar__chips" aria-label="Filter split bills by status">
+            {(["all", "open", "settled"] as const).map((filter) => (
+              <button
+                key={filter}
+                className={`split-bill-filter-bar__chip${statusFilter === filter ? " is-selected" : ""}`}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(filter);
+                  setShowAllBills(false);
+                }}
+              >
+                {filter === "all" ? "All" : filter === "open" ? "Open" : "Settled"}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -129,7 +179,9 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                 </div>
               );
             })
-          ) : null}
+          ) : (
+            <div className="split-bill-table__empty-state">No bills match this view.</div>
+          )}
         </div>
         <div className="split-bill-table__footer">
           <button className="split-bill-table__more-link" type="button" onClick={toggleBills}>

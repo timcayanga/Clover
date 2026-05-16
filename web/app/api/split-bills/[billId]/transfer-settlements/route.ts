@@ -1,8 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
-import { parseAmountValue, serializeSplitBillRecord, splitBillGroupMemberOrderBy, splitBillItemOrderBy } from "@/lib/split-bill";
+import { appendSplitBillActivity, parseAmountValue, serializeSplitBillRecord, splitBillGroupMemberOrderBy, splitBillItemOrderBy } from "@/lib/split-bill";
 import { createSplitBillTransferSettlement, loadSplitBillTransferSettlementsForBill } from "@/lib/split-bill-transfer-settlements";
 
 export const dynamic = "force-dynamic";
@@ -93,11 +94,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
       note: body.note ?? null,
     });
 
+    const rawPayload = appendSplitBillActivity(
+      bill.rawPayload as Record<string, unknown> | null,
+      "settled",
+      `${fromParticipant.name} paid ${toParticipant.name} ${amount.toFixed(2)}`
+    );
+    const updatedBill = await prisma.splitBill.update({
+      where: { id: bill.id },
+      data: { rawPayload: rawPayload as Prisma.InputJsonValue },
+      include: getBillInclude,
+    });
     const transferSettlements = await loadSplitBillTransferSettlementsForBill(bill.id);
 
     return NextResponse.json({
       bill: serializeSplitBillRecord({
-        ...bill,
+        ...updatedBill,
         transferSettlements,
       } as Parameters<typeof serializeSplitBillRecord>[0]),
     });
