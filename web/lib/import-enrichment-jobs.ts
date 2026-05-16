@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 export type ImportEnrichmentJobStatus = "queued" | "running" | "done" | "failed" | "retrying";
 
 export const MAX_IMPORT_ENRICHMENT_ATTEMPTS = 2;
+export const DEFAULT_IMPORT_ENRICHMENT_STALE_AFTER_MS = 60_000;
 
 export type ImportEnrichmentJobRow = {
   id: string;
@@ -148,13 +149,30 @@ export const listImportEnrichmentJobsByWorkspace = async (workspaceId: string) =
   return rows.map(normalizeJob);
 };
 
+export const isImportEnrichmentJobStale = (
+  job: Pick<ImportEnrichmentJobRow, "status" | "lockedAt" | "updatedAt"> | null | undefined,
+  staleAfterMs = DEFAULT_IMPORT_ENRICHMENT_STALE_AFTER_MS
+) => {
+  if (!job || job.status !== "running") {
+    return false;
+  }
+
+  const referenceTime = job.lockedAt ?? job.updatedAt;
+  const referenceMs = referenceTime ? new Date(referenceTime).getTime() : 0;
+  if (!Number.isFinite(referenceMs) || referenceMs <= 0) {
+    return true;
+  }
+
+  return Date.now() - referenceMs > Math.max(10_000, staleAfterMs);
+};
+
 export const claimNextImportEnrichmentJob = async (params: {
   workerId: string;
   staleAfterMs?: number;
   importFileId?: string | null;
 }) => {
   await ensureImportEnrichmentJobTable();
-  const staleAfterMs = Math.max(10_000, params.staleAfterMs ?? 60_000);
+  const staleAfterMs = Math.max(10_000, params.staleAfterMs ?? DEFAULT_IMPORT_ENRICHMENT_STALE_AFTER_MS);
   const rows = await prisma.$queryRawUnsafe<ImportEnrichmentJobRow[]>(
     `
       WITH candidate AS (

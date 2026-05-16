@@ -1,7 +1,11 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { fetchImportFileCompat } from "@/lib/data-engine";
-import { upsertImportEnrichmentJob } from "@/lib/import-enrichment-jobs";
+import {
+  completeImportEnrichmentJob,
+  isImportEnrichmentJobStale,
+  upsertImportEnrichmentJob,
+} from "@/lib/import-enrichment-jobs";
 import { loadImportStatusSnapshot } from "@/lib/import-status-snapshot";
 import { prisma } from "@/lib/prisma";
 import { processImportEnrichmentJobs } from "@/workers/import-processor";
@@ -35,7 +39,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 
     const shouldSelfHealEnrichment =
       snapshot.visibleImportComplete &&
-      (!snapshot.enrichmentJob || snapshot.enrichmentJob.status === "done" || snapshot.enrichmentJob.status === "failed");
+      (!snapshot.enrichmentJob ||
+        snapshot.enrichmentJob.status === "queued" ||
+        snapshot.enrichmentJob.status === "retrying" ||
+        snapshot.enrichmentJob.status === "done" ||
+        snapshot.enrichmentJob.status === "failed" ||
+        isImportEnrichmentJobStale(snapshot.enrichmentJob));
     if (shouldSelfHealEnrichment) {
       const [parsedRowCount, needsCleanupCount] = await Promise.all([
         prisma.parsedTransaction.count({ where: { importFileId: importId } }),
@@ -80,6 +89,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         });
         if (refreshedSnapshot) {
           return NextResponse.json({ ...refreshedSnapshot, enrichmentSelfHeal: result });
+        }
+      } else if (snapshot.enrichmentJob && needsCleanupCount === 0 && snapshot.enrichmentJob.status !== "done") {
+        await completeImportEnrichmentJob({ id: snapshot.enrichmentJob.id, totalRows: parsedRowCount });
+        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
+          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+          promoteFailedVisibleImport: true,
+        });
+        if (refreshedSnapshot) {
+          return NextResponse.json({ ...refreshedSnapshot, enrichmentSelfHeal: { processedJobs: 0, results: [] } });
         }
       }
     }

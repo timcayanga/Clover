@@ -99,7 +99,7 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/travel|airbnb|hotel|airline|flight|tour|holiday/.test(lower)) return "Travel & Lifestyle";
   if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox/.test(lower))
     return "Entertainment";
-  if (/shop|shopping|mall|amazon|lazada|shopee|retail/.test(lower)) return "Shopping";
+  if (/puregold|shop|shopping|mall|amazon|lazada|shopee|retail/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
   if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
   if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";
@@ -7775,6 +7775,10 @@ const guessBpiCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
   const compact = compactWhitespace(description).toLowerCase();
   if (/^beginning balance$/i.test(description)) return "Opening Balance";
+  if (/puregold|shopee|lazada|supermarket|department\s*store|store\b|mall\b/i.test(lower)) return "Shopping";
+  if (/to:\s*gcash\s*cash\s*in|gcashcashin|edl\/?mbpay/i.test(lower) || /togcashcashin|gcashcashin|edlmbpay/.test(compact)) return "Transfers";
+  if (/elink\s*transfer|el\/?es\s*pay|el\/?espay|espay/i.test(lower) || /elinktransfer|elespay|elspay|espay/.test(compact)) return "Income";
+  if (/eps\s*at\s*en|epsaten/i.test(lower) || /epsaten/.test(compact)) return type === "expense" ? "Cash & ATM" : "Income";
   if (type === "transfer") return "Transfers";
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";
   if (/instapay transfer fee|instapaytransferfee|transfer fee|transferfee/.test(lower) || /instapaytransferfee|transferfee/.test(compact)) {
@@ -7789,6 +7793,38 @@ const guessBpiCategoryName = (description: string, type: TransactionType) => {
   if (/bills payment|utility|bill|payment/.test(lower)) return "Bills & Utilities";
   if (/interest earned|interest/.test(lower)) return "Income";
   return guessCategoryName(description, type);
+};
+
+const inferBpiTransactionType = (description: string, amountDelta: number): TransactionType => {
+  const classificationText = compactWhitespace(description).toLowerCase();
+  const isCredit = amountDelta >= 0;
+
+  if (/to:gcashcashin|gcashcashin|edl\/?mbpay|edlmbpay/.test(classificationText)) {
+    return "transfer";
+  }
+
+  if (/elinktransfer|el\/?espay|elespay|espay/.test(classificationText)) {
+    return isCredit ? "income" : "transfer";
+  }
+
+  if (/epsaten|from:non-bpiterminal/.test(classificationText)) {
+    return isCredit ? "income" : "expense";
+  }
+
+  if (/transfer/.test(classificationText) && !/fee/.test(classificationText)) {
+    return "transfer";
+  }
+  if (/instapaytransferfee|transferfee/.test(classificationText)) {
+    return "transfer";
+  }
+  if (/fee|taxwithheld|withheldtax|billspayment|payment|withdrawal|servicecharge/.test(classificationText)) {
+    return "expense";
+  }
+  if (/interestearned/.test(classificationText)) {
+    return "income";
+  }
+
+  return isCredit ? "income" : "expense";
 };
 
 const parseBpiTransactionLine = (
@@ -7882,7 +7918,6 @@ const parseBpiTransactionLine = (
     .replace(/\s{2,}/g, " ")
     .trim()
   );
-  const classificationText = compactWhitespace(description).toLowerCase();
 
   const isOpeningBalance = /^BEGINNING\s+BALANCE\b/i.test(description);
   if (isOpeningBalance) {
@@ -7893,16 +7928,7 @@ const parseBpiTransactionLine = (
     return null;
   }
 
-  let type: TransactionType = amountDelta >= 0 ? "income" : "expense";
-  if (/transfer/.test(classificationText) && !/fee/.test(classificationText)) {
-    type = "transfer";
-  } else if (/instapaytransferfee|transferfee/.test(classificationText)) {
-    type = "transfer";
-  } else if (/fee|taxwithheld|withheldtax|billspayment|payment|withdrawal|servicecharge/.test(classificationText)) {
-    type = "expense";
-  } else if (/interestearned/.test(classificationText)) {
-    type = "income";
-  }
+  const type = inferBpiTransactionType(description, amountDelta);
 
   const amount = Math.abs(amountDelta).toFixed(2);
   const displayText = description || normalized;

@@ -36,6 +36,8 @@ Use these rules for BPI savings and related statement imports.
 - Do not emit the synthetic `Beginning balance` row as a transaction row for BPI savings imports; keep the balance only in statement metadata.
 - The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable BPI simplifications such as `Payroll Credit`, `GCash Cash In`, `ATM Withdrawal`, `Service Charge`, `Merchant Payment`, and `Bank Transfer`.
 - Treat `EPSATEN` and `eL/ESPay` as payroll-credit style income rows unless another statement field proves otherwise.
+- Direction matters for compact BPI rows: positive `ELINK`/`eL/ESPay` rows should classify as income, negative GCash cash-in / MBPay rows should classify as transfers, and debit-side `EPSATEN`/non-BPI-terminal rows should classify as `Cash & ATM`.
+- BPI card merchant rows for `Puregold` and `Shopee` should normalize to durable merchant labels and classify as `Shopping`.
 
 ## Notes Handling
 

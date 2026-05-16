@@ -14,7 +14,13 @@ import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { prisma } from "@/lib/prisma";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode } from "@/lib/import-image-mode";
-import { listImportEnrichmentJobsByWorkspace } from "@/lib/import-enrichment-jobs";
+import {
+  completeImportEnrichmentJob,
+  isImportEnrichmentJobStale,
+  listImportEnrichmentJobsByWorkspace,
+  upsertImportEnrichmentJob,
+} from "@/lib/import-enrichment-jobs";
+import { processImportEnrichmentJobs } from "@/workers/import-processor";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +28,83 @@ export const dynamic = "force-dynamic";
 const attachEnrichmentJobs = async (workspaceId: string, importFiles: any[]) => {
   const jobs = await listImportEnrichmentJobsByWorkspace(workspaceId).catch(() => []);
   const jobByImportFileId = new Map(jobs.map((job) => [job.importFileId, job]));
+  const staleVisibleJobs = jobs.filter((job) => isImportEnrichmentJobStale(job)).slice(0, 2);
+
+  for (const job of staleVisibleJobs) {
+    const importFile = importFiles.find((candidate) => String(candidate.id) === job.importFileId);
+    const visibleRows = Math.max(
+      Number(importFile?.confirmedTransactionsCount ?? 0),
+      await prisma.transaction
+        .count({
+          where: {
+            deletedAt: null,
+            OR: [
+              { importFileId: job.importFileId },
+              {
+                rawPayload: {
+                  path: ["sourceImportFileId"],
+                  equals: job.importFileId,
+                },
+              },
+            ],
+          },
+        })
+        .catch(() => 0)
+    );
+    if (visibleRows <= 0) {
+      continue;
+    }
+
+    const [parsedRowCount, needsCleanupCount] = await Promise.all([
+      prisma.parsedTransaction.count({ where: { importFileId: job.importFileId } }).catch(() => 0),
+      prisma.transaction
+        .count({
+          where: {
+            deletedAt: null,
+            OR: [
+              { importFileId: job.importFileId },
+              {
+                rawPayload: {
+                  path: ["sourceImportFileId"],
+                  equals: job.importFileId,
+                },
+              },
+            ],
+            reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
+            AND: [
+              {
+                OR: [{ merchantClean: null }, { categoryId: null }, { category: { is: { name: "Other" } } }],
+              },
+            ],
+          },
+        })
+        .catch(() => 0),
+    ]);
+
+    if (parsedRowCount > 0 && needsCleanupCount > 0) {
+      await upsertImportEnrichmentJob({
+        workspaceId,
+        importFileId: job.importFileId,
+        totalRows: parsedRowCount,
+        phase: "queued",
+        forceRequeue: true,
+      }).catch(() => null);
+      await processImportEnrichmentJobs({
+        importFileId: job.importFileId,
+        limit: 1,
+        batchSize: 100,
+        workerId: `imports-list-self-heal-${workspaceId}`,
+      }).catch(() => null);
+    } else if (needsCleanupCount === 0 && job.status !== "done") {
+      await completeImportEnrichmentJob({ id: job.id, totalRows: parsedRowCount }).catch(() => null);
+    }
+  }
+
+  const refreshedJobs = staleVisibleJobs.length > 0 ? await listImportEnrichmentJobsByWorkspace(workspaceId).catch(() => jobs) : jobs;
+  const refreshedJobByImportFileId = new Map(refreshedJobs.map((job) => [job.importFileId, job]));
   return importFiles.map((importFile) => ({
     ...importFile,
-    enrichmentJob: jobByImportFileId.get(String(importFile.id)) ?? null,
+    enrichmentJob: refreshedJobByImportFileId.get(String(importFile.id)) ?? jobByImportFileId.get(String(importFile.id)) ?? null,
   }));
 };
 
