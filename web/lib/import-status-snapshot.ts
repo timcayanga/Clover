@@ -93,7 +93,7 @@ export const loadImportStatusSnapshot = async (
   const hasConfirmedRows = confirmedTransactionsCountBefore > 0 || statementCheckpoint?.status === "reconciled";
 
   let parsedRowsCount = Math.max(Number(importFile.parsedRowsCount ?? 0), checkpointRowCount);
-  const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
+  const savedTransactionsCount = await countTransactionsByImportFileCompat(importFileId).catch(() => 0);
   let confirmedTransactionsCount = Math.max(
     Number(importFile.confirmedTransactionsCount ?? 0),
     savedTransactionsCount,
@@ -104,7 +104,7 @@ export const loadImportStatusSnapshot = async (
 
   if (options?.promoteFailedVisibleImport && importFile.status === "failed" && hasVisibleImportData) {
     importFile =
-      (await updateImportFileCompat(importId, {
+      (await updateImportFileCompat(importFileId, {
         status: "done",
         processingPhase: "finalizing_enrichment",
         processingMessage:
@@ -115,7 +115,7 @@ export const loadImportStatusSnapshot = async (
       }).catch(() => null)) ?? importFile;
   }
 
-  const enrichmentJob = await getImportEnrichmentJobByImportFileId(importId).catch(() => null);
+  const enrichmentJob = await getImportEnrichmentJobByImportFileId(importFileId).catch(() => null);
   const finalizationRemainingRows = enrichmentJob
     ? Math.max(0, Number(enrichmentJob.totalRows ?? 0) - Number(enrichmentJob.processedRows ?? 0))
     : 0;
