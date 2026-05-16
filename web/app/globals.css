@@ -32435,6 +32435,13 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-size: 0.82rem;
 }
 
+.split-bill-detail-modal__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .split-bill-detail-modal__list-row--button {
   cursor: pointer;
 }

@@ -6,7 +6,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import { SplitBillHome } from "@/components/split-bill-home";
 import { SplitBillPageActions } from "@/components/split-bill-page-actions";
-import { formatSplitBillAmount, normalizeCurrencyCode, type SplitBillSerializedBill } from "@/lib/split-bill";
+import { formatSplitBillAmount, type SplitBillSerializedBill } from "@/lib/split-bill";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 import { getSplitBillBillsForGroup, getSplitBillBillsForPerson } from "@/lib/split-bill-view-models";
 
@@ -23,20 +23,76 @@ type DetailSelection =
   | { kind: "person"; id: string }
   | null;
 
-const buildSummaryTotal = (bills: SplitBillSerializedBill[]) => {
-  const currencies = Array.from(new Set(bills.map((bill) => normalizeCurrencyCode(bill.currency))));
-  if (currencies.length === 0) {
-    return "No total";
+const getParticipantName = (bill: SplitBillSerializedBill, participantId: string) =>
+  bill.participants.find((participant) => participant.id === participantId)?.name ?? "Unknown";
+
+const formatPaymentContributions = (bill: SplitBillSerializedBill) => {
+  if (bill.payments.length === 0) {
+    return "No payments recorded";
   }
 
-  if (currencies.length === 1) {
-    return formatSplitBillAmount(
-      bills.reduce((sum, bill) => sum + (bill.total ? Number(bill.total) || 0 : 0), 0),
-      currencies[0]
-    );
+  return bill.payments
+    .map((payment) => `${getParticipantName(bill, payment.participantId)} contributed ${formatSplitBillAmount(Number(payment.amount), bill.currency)}`)
+    .join(" · ");
+};
+
+const formatSettlementTransfers = (bill: SplitBillSerializedBill) => {
+  if (bill.settlement.transfers.length === 0) {
+    return "Fully settled";
   }
 
-  return "Mixed";
+  return bill.settlement.transfers
+    .map((transfer) => `${transfer.fromParticipantName} owes ${transfer.toParticipantName} ${formatSplitBillAmount(transfer.amount, bill.currency)}`)
+    .join(" · ");
+};
+
+const formatParticipantShare = (bill: SplitBillSerializedBill, participantName: string) => {
+  const participant = bill.settlement.participants.find((entry) => entry.name === participantName);
+  if (!participant) {
+    return "No settlement share";
+  }
+
+  return `Paid ${formatSplitBillAmount(participant.paid, bill.currency)} · Owes ${formatSplitBillAmount(participant.owed, bill.currency)}`;
+};
+
+const buildBillUpdatePayload = (bill: SplitBillSerializedBill, participants: SplitBillSerializedBill["participants"]) => {
+  const participantIds = new Set(participants.map((participant) => participant.id));
+
+  return {
+    transactionId: bill.transactionId,
+    title: bill.title,
+    note: bill.note,
+    billDate: bill.billDate,
+    currency: bill.currency,
+    sourceType: bill.sourceType,
+    groupId: bill.groupId,
+    merchantName: bill.merchantName,
+    receiptFileName: bill.receiptFileName,
+    receiptMimeType: bill.receiptMimeType,
+    receiptText: bill.receiptText,
+    receiptConfidence: bill.receiptConfidence,
+    subtotal: bill.subtotal,
+    tax: bill.tax,
+    tip: bill.tip,
+    discount: bill.discount,
+    total: bill.total,
+    rawPayload: bill.rawPayload,
+    participants,
+    items: bill.items.map((item) => ({
+      id: item.id,
+      description: item.description,
+      amount: item.amount,
+      participantIds: item.participantIds.filter((participantId) => participantIds.has(participantId)),
+    })),
+    payments: bill.payments
+      .filter((payment) => participantIds.has(payment.participantId))
+      .map((payment) => ({
+        id: payment.id,
+        participantId: payment.participantId,
+        amount: payment.amount,
+        note: payment.note,
+      })),
+  };
 };
 
 export function SplitBillWorkspace({
@@ -149,6 +205,42 @@ export function SplitBillWorkspace({
     }
   };
 
+  const removeParticipantFromBill = async (billId: string, participantId: string) => {
+    const bill = bills.find((entry) => entry.id === billId);
+    const participant = bill?.participants.find((entry) => entry.id === participantId);
+    if (!bill || !participant) {
+      return;
+    }
+
+    if (bill.participants.length <= 1) {
+      window.alert("A split bill needs at least one person.");
+      return;
+    }
+
+    if (!window.confirm(`Remove ${participant.name} from ${bill.title}?`)) {
+      return;
+    }
+
+    const nextParticipants = bill.participants.filter((entry) => entry.id !== participantId);
+    const response = await fetch(`/api/split-bills/${billId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(buildBillUpdatePayload(bill, nextParticipants)),
+    });
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = (await response.json()) as { bill?: SplitBillSerializedBill };
+    if (!payload.bill) {
+      return;
+    }
+
+    setBills((current) => current.map((entry) => (entry.id === billId ? payload.bill! : entry)));
+  };
+
   const selectedDetailLabel = useMemo(() => {
     if (selectedBill) {
       return selectedBill.title;
@@ -220,15 +312,26 @@ export function SplitBillWorkspace({
                 <div className="split-bill-detail-modal__summary">
                   <span>Total</span>
                   <strong>{selectedBill.total ? formatSplitBillAmount(Number(selectedBill.total), selectedBill.currency) : "No total"}</strong>
-                  <span>{selectedBill.billDate}</span>
-                  <span>{selectedBill.settlement.transfers.length === 0 ? "Settled" : `${selectedBill.settlement.transfers.length} transfer${selectedBill.settlement.transfers.length === 1 ? "" : "s"}`}</span>
                 </div>
                 <div className="split-bill-detail-modal__chips">
                   {selectedBill.participants.map((participant) => (
-                    <span key={participant.id} className="split-bill-table__chip">
+                    <span key={participant.id} className="split-bill-table__chip split-bill-table__chip--editable">
                       {participant.name}
+                      <button className="split-bill-table__chip-remove" type="button" aria-label={`Remove ${participant.name}`} onClick={() => void removeParticipantFromBill(selectedBill.id, participant.id)}>
+                        ×
+                      </button>
                     </span>
                   ))}
+                </div>
+                <div className="split-bill-detail-modal__list">
+                  <div className="split-bill-detail-modal__list-row">
+                    <strong>Contributions</strong>
+                    <span>{formatPaymentContributions(selectedBill)}</span>
+                  </div>
+                  <div className="split-bill-detail-modal__list-row">
+                    <strong>Settlement</strong>
+                    <span>{formatSettlementTransfers(selectedBill)}</span>
+                  </div>
                 </div>
                 <div className="split-bill-detail-modal__list">
                   {selectedBill.items.map((item) => (
@@ -240,7 +343,7 @@ export function SplitBillWorkspace({
                 </div>
                 <div className="split-bill-detail-modal__actions">
                   <Link className="button button-secondary button-small" href={`/split-bill/${selectedBill.id}/edit`} prefetch={false}>
-                    Edit bill
+                    Edit people, payments, and line items
                   </Link>
                 </div>
               </div>
@@ -252,33 +355,7 @@ export function SplitBillWorkspace({
                   <SplitBillEntityAvatar name={selectedGroup.name} avatarUrl={selectedGroup.avatarUrl} sizeClass="split-bill-person-avatar--medium" />
                   <div>
                     <strong>{selectedGroup.name}</strong>
-                    <p>Groups use initials only now, keeping the same look everywhere.</p>
                   </div>
-                </div>
-                <div className="split-bill-detail-modal__summary-grid">
-                  <article>
-                    <span>People</span>
-                    <strong>{selectedGroup.members.length}</strong>
-                  </article>
-                  <article>
-                    <span>Bills</span>
-                    <strong>{selectedGroupBills.length}</strong>
-                  </article>
-                  <article>
-                    <span>Total</span>
-                    <strong>{buildSummaryTotal(selectedGroupBills)}</strong>
-                  </article>
-                </div>
-                <div className="split-bill-detail-modal__chips">
-                  {selectedGroup.members.length > 0 ? (
-                    selectedGroup.members.map((member) => (
-                      <span key={member.id} className="split-bill-table__chip">
-                        {member.name}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="split-bill-subtle-empty">No people yet</span>
-                  )}
                 </div>
                 <div className="split-bill-detail-modal__list">
                   {selectedGroupBills.map((bill) => (
@@ -286,10 +363,17 @@ export function SplitBillWorkspace({
                       <button type="button" className="split-bill-detail-modal__list-main" onClick={() => openBill(bill.id)}>
                         <strong>{bill.title}</strong>
                         <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
+                        <span className="split-bill-detail-modal__row-meta">{formatPaymentContributions(bill)}</span>
+                        <span className="split-bill-detail-modal__row-meta">{formatSettlementTransfers(bill)}</span>
                       </button>
-                      <button className="button button-danger button-small" type="button" onClick={() => void removeBill(bill.id)}>
-                        Delete
-                      </button>
+                      <div className="split-bill-detail-modal__row-actions">
+                        <Link className="button button-secondary button-small" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
+                          Edit split
+                        </Link>
+                        <button className="button button-danger button-small" type="button" onClick={() => void removeBill(bill.id)}>
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -307,22 +391,7 @@ export function SplitBillWorkspace({
                   <SplitBillEntityAvatar name={selectedPerson.name} avatarUrl={selectedPerson.avatarUrl} sizeClass="split-bill-person-avatar--medium" />
                   <div>
                     <strong>{selectedPerson.name}</strong>
-                    <p>People use initials only now, so every view stays consistent.</p>
                   </div>
-                </div>
-                <div className="split-bill-detail-modal__summary-grid">
-                  <article>
-                    <span>Bills</span>
-                    <strong>{selectedPersonBills.length}</strong>
-                  </article>
-                  <article>
-                    <span>Lookup</span>
-                    <strong>By saved name</strong>
-                  </article>
-                  <article>
-                    <span>Format</span>
-                    <strong>Initials only</strong>
-                  </article>
                 </div>
                 <div className="split-bill-detail-modal__list">
                   {selectedPersonBills.map((bill) => (
@@ -330,11 +399,17 @@ export function SplitBillWorkspace({
                       <button type="button" className="split-bill-detail-modal__list-main" onClick={() => openBill(bill.id)}>
                         <strong>{bill.title}</strong>
                         <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
-                        <span className="split-bill-detail-modal__row-meta">{bill.settlement.transfers.length === 0 ? "Settled" : `${bill.settlement.transfers.length} transfer${bill.settlement.transfers.length === 1 ? "" : "s"}`}</span>
+                        <span className="split-bill-detail-modal__row-meta">{formatParticipantShare(bill, selectedPerson.name)}</span>
+                        <span className="split-bill-detail-modal__row-meta">{formatSettlementTransfers(bill)}</span>
                       </button>
-                      <button className="button button-danger button-small" type="button" onClick={() => void removeBill(bill.id)}>
-                        Delete
-                      </button>
+                      <div className="split-bill-detail-modal__row-actions">
+                        <Link className="button button-secondary button-small" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
+                          Edit split
+                        </Link>
+                        <button className="button button-danger button-small" type="button" onClick={() => void removeBill(bill.id)}>
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
