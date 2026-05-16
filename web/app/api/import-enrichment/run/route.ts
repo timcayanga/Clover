@@ -33,10 +33,22 @@ export async function POST(request: Request) {
         prisma.parsedTransaction.count({ where: { importFileId: payload.importFileId } }),
         prisma.transaction.count({
           where: {
-            importFileId: payload.importFileId,
             deletedAt: null,
-            reviewStatus: { notIn: ["confirmed", "edited", "rejected"] },
-            OR: [{ merchantClean: null }, { categoryId: null }, { category: { is: { name: "Other" } } }],
+            OR: [
+              { importFileId: payload.importFileId },
+              {
+                rawPayload: {
+                  path: ["sourceImportFileId"],
+                  equals: payload.importFileId,
+                },
+              },
+            ],
+            reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
+            AND: [
+              {
+                OR: [{ merchantClean: null }, { categoryId: null }, { category: { is: { name: "Other" } } }],
+              },
+            ],
           },
         }),
       ]);

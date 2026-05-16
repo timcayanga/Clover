@@ -2388,7 +2388,7 @@ const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
 
   const groups = new Map<string, typeof transactions>();
   for (const transaction of transactions) {
-    if (transaction.reviewStatus === "confirmed" || transaction.reviewStatus === "edited" || transaction.reviewStatus === "rejected") {
+    if (transaction.reviewStatus === "edited" || transaction.reviewStatus === "rejected") {
       continue;
     }
 
@@ -2457,13 +2457,25 @@ const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
 const countImportTransactionsNeedingCleanup = async (importFileId: string) =>
   prisma.transaction.count({
     where: {
-      importFileId,
       deletedAt: null,
-      reviewStatus: { notIn: ["confirmed", "edited", "rejected", "duplicate_skipped"] },
       OR: [
-        { merchantClean: null },
-        { categoryId: null },
-        { category: { is: { name: "Other" } } },
+        { importFileId },
+        {
+          rawPayload: {
+            path: ["sourceImportFileId"],
+            equals: importFileId,
+          },
+        },
+      ],
+      reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
+      AND: [
+        {
+          OR: [
+            { merchantClean: null },
+            { categoryId: null },
+            { category: { is: { name: "Other" } } },
+          ],
+        },
       ],
     },
   });
@@ -2552,7 +2564,18 @@ export const processImportEnrichmentJobs = async (options: {
 
       const sourceIndexes = enrichedRows.map((_, index) => nextStartIndex + index + 1);
       const transactions = await prisma.transaction.findMany({
-        where: { importFileId: job.importFileId },
+        where: {
+          deletedAt: null,
+          OR: [
+            { importFileId: job.importFileId },
+            {
+              rawPayload: {
+                path: ["sourceImportFileId"],
+                equals: job.importFileId,
+              },
+            },
+          ],
+        },
         select: {
           id: true,
           rawPayload: true,
@@ -2622,7 +2645,6 @@ export const processImportEnrichmentJobs = async (options: {
             : fallbackTransaction ?? null;
         if (
           !transaction ||
-          transaction.reviewStatus === "confirmed" ||
           transaction.reviewStatus === "edited" ||
           transaction.reviewStatus === "rejected"
         ) {

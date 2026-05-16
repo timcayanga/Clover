@@ -59,6 +59,8 @@ type TransactionApiRow = {
   warningReason: string | null;
   rawPayload: Prisma.JsonValue;
   normalizedPayload: Prisma.JsonValue;
+  importFileId?: string | null;
+  source: "upload" | "manual";
   splitBill: { id: string; title: string } | null;
 };
 
@@ -182,6 +184,22 @@ const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefin
   return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
 };
 
+const isImportedTransactionPayload = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return false;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  return Boolean(
+    payload.importFileId ||
+      payload.sourceImportFileId ||
+      payload.importId ||
+      payload.source === "upload" ||
+      payload.source === "import" ||
+      payload.source === "statement"
+  );
+};
+
 const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplicateCounts: Map<string, number>) => {
   if (isResolvedReviewStatus(transaction.reviewStatus)) {
     return null;
@@ -189,12 +207,7 @@ const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplica
 
   const importedFromStatement =
     Boolean(transaction.importFileId) ||
-    ((transaction.rawPayload &&
-      typeof transaction.rawPayload === "object" &&
-      !Array.isArray(transaction.rawPayload) &&
-      ("importFileId" in (transaction.rawPayload as Record<string, unknown>) ||
-        "source" in (transaction.rawPayload as Record<string, unknown>))) ||
-      false);
+    isImportedTransactionPayload(transaction.rawPayload);
 
   if (importedFromStatement) {
     return null;
@@ -262,6 +275,8 @@ const mapTransactionRow = (transaction: {
       transaction.currency,
       transaction.account.name
     ) ?? transaction.currency;
+  const importedFromStatement = Boolean(transaction.importFileId) || isImportedTransactionPayload(transaction.rawPayload);
+  const source = importedFromStatement ? "upload" : "manual";
   const categoryName = getEffectiveTransactionCategoryName({
     categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
     rawPayload: transaction.rawPayload,
@@ -269,7 +284,7 @@ const mapTransactionRow = (transaction: {
     merchantClean: transaction.merchantClean,
     description: transaction.description,
     institution: transaction.account.institution,
-    source: transaction.importFileId ? "upload" : "manual",
+    source,
     type: transaction.type,
   });
 
@@ -304,6 +319,8 @@ const mapTransactionRow = (transaction: {
     warningReason: transaction.warningReason,
     rawPayload: transaction.rawPayload,
     normalizedPayload: transaction.normalizedPayload,
+    importFileId: transaction.importFileId ?? null,
+    source,
     splitBill: transaction.splitBill,
     categoryName,
   };

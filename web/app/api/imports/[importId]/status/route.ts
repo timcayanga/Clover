@@ -41,10 +41,22 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         prisma.parsedTransaction.count({ where: { importFileId: importId } }),
         prisma.transaction.count({
           where: {
-            importFileId: importId,
             deletedAt: null,
-            reviewStatus: { notIn: ["confirmed", "edited", "rejected"] },
-            OR: [{ merchantClean: null }, { categoryId: null }, { category: { is: { name: "Other" } } }],
+            OR: [
+              { importFileId: importId },
+              {
+                rawPayload: {
+                  path: ["sourceImportFileId"],
+                  equals: importId,
+                },
+              },
+            ],
+            reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
+            AND: [
+              {
+                OR: [{ merchantClean: null }, { categoryId: null }, { category: { is: { name: "Other" } } }],
+              },
+            ],
           },
         }),
       ]);

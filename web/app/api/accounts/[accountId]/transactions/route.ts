@@ -71,6 +71,8 @@ const mapTransactionRow = (transaction: {
       transaction.currency,
       transaction.accountName ?? null
     ) ?? transaction.currency;
+  const importedFromStatement = Boolean(transaction.importFileId) || isImportedTransactionPayload(transaction.rawPayload);
+  const source = importedFromStatement ? "upload" : "manual";
   const categoryName = getEffectiveTransactionCategoryName({
     categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
     rawPayload: transaction.rawPayload,
@@ -78,7 +80,7 @@ const mapTransactionRow = (transaction: {
     merchantClean: transaction.merchantClean,
     description: transaction.description,
     institution: transaction.institution ?? null,
-    source: transaction.importFileId ? "upload" : "manual",
+    source,
     type: transaction.type,
   });
 
@@ -105,7 +107,7 @@ const mapTransactionRow = (transaction: {
     description: transaction.description,
     isExcluded: transaction.isExcluded,
     importFileId: transaction.importFileId,
-    source: transaction.importFileId ? "upload" : "manual",
+    source,
     rawPayload: transaction.rawPayload,
     createdAt: transaction.createdAt.toISOString(),
   };
@@ -119,6 +121,22 @@ const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefin
   const payload = rawPayload as Record<string, unknown>;
   const candidate = payload.categoryName ?? payload.category ?? payload.normalizedCategory;
   return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
+};
+
+const isImportedTransactionPayload = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return false;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  return Boolean(
+    payload.importFileId ||
+      payload.sourceImportFileId ||
+      payload.importId ||
+      payload.source === "upload" ||
+      payload.source === "import" ||
+      payload.source === "statement"
+  );
 };
 
 const getLastFourDigits = (value?: string | null) => {
