@@ -58,6 +58,7 @@ type TransactionApiRow = {
   createdAt: string;
   warningReason: string | null;
   rawPayload: Prisma.JsonValue;
+  normalizedPayload: Prisma.JsonValue;
   splitBill: { id: string; title: string } | null;
 };
 
@@ -232,6 +233,7 @@ const mapTransactionRow = (transaction: {
   account: { name: string; institution: string | null };
   categoryId: string | null;
   rawPayload: Prisma.JsonValue;
+  normalizedPayload: Prisma.JsonValue;
   category: { name: string } | null;
   reviewStatus: string | null;
   createdAt: Date;
@@ -301,6 +303,7 @@ const mapTransactionRow = (transaction: {
     createdAt: transaction.createdAt.toISOString(),
     warningReason: transaction.warningReason,
     rawPayload: transaction.rawPayload,
+    normalizedPayload: transaction.normalizedPayload,
     splitBill: transaction.splitBill,
     categoryName,
   };
@@ -434,6 +437,7 @@ export async function GET(request: Request) {
             importFileId: true,
             categoryId: true,
             rawPayload: true,
+            normalizedPayload: true,
             reviewStatus: true,
             parserConfidence: true,
             categoryConfidence: true,
@@ -512,6 +516,7 @@ export async function GET(request: Request) {
           account: transaction.account,
           categoryId: transaction.categoryId,
           rawPayload: transaction.rawPayload,
+          normalizedPayload: transaction.normalizedPayload,
           category: transaction.category,
           reviewStatus: transaction.reviewStatus,
           parserConfidence: transaction.parserConfidence,
@@ -589,6 +594,7 @@ export async function GET(request: Request) {
         merchantClean: true,
         categoryId: true,
         rawPayload: true,
+        normalizedPayload: true,
         reviewStatus: true,
         parserConfidence: true,
         categoryConfidence: true,
@@ -661,6 +667,7 @@ export async function GET(request: Request) {
         accountNumber: transaction.account?.accountNumber ?? null,
         categoryId: transaction.categoryId,
         rawPayload: transaction.rawPayload,
+        normalizedPayload: transaction.normalizedPayload,
         category: transaction.category,
         reviewStatus: transaction.reviewStatus,
         parserConfidence: transaction.parserConfidence,

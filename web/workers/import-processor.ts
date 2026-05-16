@@ -2,11 +2,12 @@ import type { AccountType, Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { findDeletedAccountTombstoneMatch } from "@/lib/account-tombstones";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { countNonCashAccounts, getWorkspaceOwnerLimits } from "@/lib/plan-access";
-import { normalizeInstitutionCurrency, parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
+import { normalizeInstitutionCurrency, parseAmountValue, parseDateValue, parseImportText, type ParsedImportRow } from "@/lib/import-parser";
 import {
   readImportedFileImageDataUrls,
   readImportedFileTextWithCacheInfo,
@@ -97,6 +98,7 @@ type PreparedImportTransaction = {
     categoryName: string;
     type: "income" | "expense" | "transfer";
     confidence: number;
+    teachabilityScore: number;
     notes: string | null;
   };
 };
@@ -1806,7 +1808,7 @@ const readAutoRerunValue = (entry: unknown) => {
 };
 
 const resolveConfirmationAccount = async (params: {
-  importFile: { workspaceId: unknown; fileName?: unknown };
+  importFile: { id?: unknown; workspaceId: unknown; fileName?: unknown };
   statementMetadata?: {
     accountName?: unknown;
     institution?: unknown;
@@ -2046,6 +2048,37 @@ const resolveConfirmationAccount = async (params: {
     return updatedAccount;
   }
 
+  const deletedAccountMatch = await findDeletedAccountTombstoneMatch(workspaceId, {
+    name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
+    institution: inferredInstitution,
+    accountNumber: inferredAccountNumber,
+    type: accountIdentityType,
+    currency: inferredCurrency,
+    source: "upload",
+  });
+  if (deletedAccountMatch) {
+    console.info("[import-account-match] statement matched a deleted account tombstone", {
+      workspaceId,
+      importFileId: params.importFile.id,
+      tombstoneId: deletedAccountMatch.tombstone.id,
+      confidence: deletedAccountMatch.confidence,
+      reason: deletedAccountMatch.reason,
+    });
+    const importFileIdForStatus = typeof params.importFile.id === "string" ? params.importFile.id : null;
+    if (importFileIdForStatus) {
+      await updateImportFileCompat(importFileIdForStatus, {
+        status: "processing",
+        processingPhase: "account_match_needs_confirmation",
+        processingMessage: `This statement looks like a deleted ${deletedAccountMatch.tombstone.institution ?? "account"} account. Confirm before Clover recreates it.`,
+      });
+    }
+    throw new Error(
+      `This statement appears to belong to a deleted account${
+        deletedAccountMatch.tombstone.institution ? ` (${deletedAccountMatch.tombstone.institution})` : ""
+      }. Please confirm before recreating it.`
+    );
+  }
+
   if (inferredAccountName || inferredAccountNumber) {
     const nonCashAccountCount = countNonCashAccounts(workspaceAccounts);
     if (params.planLimits?.accountLimit != null && accountIdentityType !== "cash" && nonCashAccountCount >= params.planLimits.accountLimit) {
@@ -2274,6 +2307,167 @@ const buildImportEnrichmentMatchKey = (params: {
   return [normalizeEnrichmentMatchDate(params.date), normalizeEnrichmentMatchAmount(params.amount), merchant].join("|");
 };
 
+const getImportSourceRowIndex = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const sourceRowIndex = Number((rawPayload as Record<string, unknown>).sourceRowIndex);
+  return Number.isFinite(sourceRowIndex) && sourceRowIndex > 0 ? sourceRowIndex : null;
+};
+
+const getImportSourceFileId = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const sourceImportFileId = (rawPayload as Record<string, unknown>).sourceImportFileId;
+  return typeof sourceImportFileId === "string" && sourceImportFileId.trim() ? sourceImportFileId.trim() : null;
+};
+
+const buildImportTransactionCollapseKey = (transaction: {
+  date: Date;
+  amount: unknown;
+  currency: string;
+  merchantRaw: string;
+  merchantClean: string | null;
+  description: string | null;
+  rawPayload: Prisma.JsonValue | null;
+}) => {
+  const sourceRowIndex = getImportSourceRowIndex(transaction.rawPayload);
+  if (sourceRowIndex !== null) {
+    return `source-row:${sourceRowIndex}`;
+  }
+
+  const merchant =
+    normalizeTransactionDedupeText(transaction.merchantRaw) ||
+    normalizeTransactionDedupeText(transaction.merchantClean) ||
+    normalizeTransactionDedupeText(transaction.description);
+
+  return [
+    "fallback",
+    normalizeEnrichmentMatchDate(transaction.date),
+    normalizeEnrichmentMatchAmount(transaction.amount),
+    normalizeTransactionDedupeText(transaction.currency || "PHP").toUpperCase(),
+    merchant,
+    normalizeTransactionDedupeText(transaction.description),
+  ].join("|");
+};
+
+const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      deletedAt: null,
+      OR: [
+        { importFileId },
+        {
+          rawPayload: {
+            path: ["sourceImportFileId"],
+            equals: importFileId,
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      importFileId: true,
+      reviewStatus: true,
+      parserConfidence: true,
+      categoryConfidence: true,
+      date: true,
+      amount: true,
+      currency: true,
+      merchantRaw: true,
+      merchantClean: true,
+      description: true,
+      rawPayload: true,
+      category: { select: { name: true } },
+      updatedAt: true,
+    },
+  });
+
+  const groups = new Map<string, typeof transactions>();
+  for (const transaction of transactions) {
+    if (transaction.reviewStatus === "confirmed" || transaction.reviewStatus === "edited" || transaction.reviewStatus === "rejected") {
+      continue;
+    }
+
+    const sourceImportFileId = getImportSourceFileId(transaction.rawPayload);
+    const belongsToImport = transaction.importFileId === importFileId || sourceImportFileId === importFileId;
+    if (!belongsToImport) {
+      continue;
+    }
+
+    const collapseKey = buildImportTransactionCollapseKey(transaction);
+    const bucket = groups.get(collapseKey) ?? [];
+    bucket.push(transaction);
+    groups.set(collapseKey, bucket);
+  }
+
+  const duplicateIds: string[] = [];
+  for (const group of groups.values()) {
+    if (group.length <= 1) {
+      continue;
+    }
+
+    const ranked = [...group].sort((a, b) => {
+      const aCanonical = a.importFileId === importFileId ? 1 : 0;
+      const bCanonical = b.importFileId === importFileId ? 1 : 0;
+      if (aCanonical !== bCanonical) return bCanonical - aCanonical;
+
+      const aCategorized = a.category?.name && a.category.name !== "Other" ? 1 : 0;
+      const bCategorized = b.category?.name && b.category.name !== "Other" ? 1 : 0;
+      if (aCategorized !== bCategorized) return bCategorized - aCategorized;
+
+      const aNamed = a.merchantClean && a.merchantClean !== a.merchantRaw ? 1 : 0;
+      const bNamed = b.merchantClean && b.merchantClean !== b.merchantRaw ? 1 : 0;
+      if (aNamed !== bNamed) return bNamed - aNamed;
+
+      const aConfidence = Number(a.parserConfidence ?? 0) + Number(a.categoryConfidence ?? 0);
+      const bConfidence = Number(b.parserConfidence ?? 0) + Number(b.categoryConfidence ?? 0);
+      if (aConfidence !== bConfidence) return bConfidence - aConfidence;
+
+      return b.updatedAt.getTime() - a.updatedAt.getTime();
+    });
+
+    duplicateIds.push(...ranked.slice(1).map((transaction) => transaction.id));
+  }
+
+  if (duplicateIds.length === 0) {
+    return { removed: 0 };
+  }
+
+  await prisma.transaction.updateMany({
+    where: { id: { in: duplicateIds } },
+    data: {
+      deletedAt: new Date(),
+      reviewStatus: "duplicate_skipped",
+      duplicateConfidence: 100,
+    },
+  });
+
+  console.info("[import-dedupe] collapsed duplicate import transactions", {
+    importFileId,
+    removed: duplicateIds.length,
+  });
+
+  return { removed: duplicateIds.length };
+};
+
+const countImportTransactionsNeedingCleanup = async (importFileId: string) =>
+  prisma.transaction.count({
+    where: {
+      importFileId,
+      deletedAt: null,
+      reviewStatus: { notIn: ["confirmed", "edited", "rejected", "duplicate_skipped"] },
+      OR: [
+        { merchantClean: null },
+        { categoryId: null },
+        { category: { is: { name: "Other" } } },
+      ],
+    },
+  });
+
 export const processImportEnrichmentJobs = async (options: {
   importFileId?: string | null;
   limit?: number;
@@ -2426,7 +2620,12 @@ export const processImportEnrichmentJobs = async (options: {
           sourceIndexedTransaction && !usedTransactionIds.has(sourceIndexedTransaction.id)
             ? sourceIndexedTransaction
             : fallbackTransaction ?? null;
-        if (!transaction || transaction.reviewStatus === "edited" || transaction.reviewStatus === "rejected") {
+        if (
+          !transaction ||
+          transaction.reviewStatus === "confirmed" ||
+          transaction.reviewStatus === "edited" ||
+          transaction.reviewStatus === "rejected"
+        ) {
           skippedRows += 1;
           continue;
         }
@@ -2500,10 +2699,37 @@ export const processImportEnrichmentJobs = async (options: {
 
       const processedRows = Math.min(totalRows, nextStartIndex + batchRows.length);
       if (processedRows >= totalRows) {
+        await collapseDuplicateTransactionsForImport(job.importFileId).catch((error) => {
+          console.warn("Import transaction duplicate collapse failed after enrichment", {
+            importFileId: job.importFileId,
+            error,
+          });
+        });
+        const remainingCleanupCount = await countImportTransactionsNeedingCleanup(job.importFileId).catch(() => 0);
+        if (remainingCleanupCount > 0 && job.attempts < MAX_IMPORT_ENRICHMENT_ATTEMPTS) {
+          await updateImportEnrichmentJobProgress({
+            id: job.id,
+            phase: "reviewing",
+            lastRowIndex: 0,
+            processedRows: 0,
+            totalRows,
+            workerId,
+          });
+          await updateImportFileCompat(job.importFileId, {
+            processingPhase: "finalizing_enrichment",
+            processingMessage: "Clover is retrying transaction cleanup for rows that still need categories.",
+          }).catch(() => null);
+          results.push({ importFileId: job.importFileId, status: "running", processedRows, totalRows });
+          continue;
+        }
+
         await completeImportEnrichmentJob({ id: job.id, totalRows });
         await updateImportFileCompat(job.importFileId, {
-          processingPhase: "complete",
-          processingMessage: "Transaction details finalized.",
+          processingPhase: remainingCleanupCount > 0 ? "repair_needed" : "complete",
+          processingMessage:
+            remainingCleanupCount > 0
+              ? "Clover couldn't finalize all transaction details automatically; please review the remaining items."
+              : "Transaction details finalized.",
         });
         results.push({ importFileId: job.importFileId, status: "done", processedRows, totalRows });
       } else {
@@ -2911,8 +3137,8 @@ export const processImportFileText = async (
   }
   let openAiParsed: Awaited<ReturnType<typeof parseImportTextWithOpenAIFallback>> | null = null;
   let openAiMetadata: typeof metadataForParse | null = null;
+  const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
   if (!canUseFastImageParse) {
-    const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
     openAiParsed = await parseImportTextWithOpenAIFallback({
       text: textForParse,
       fileName,
@@ -3214,10 +3440,11 @@ export const processImportFileText = async (
         : "Clover is identifying transactions.",
   });
 
-  if (textCacheInfo?.fileFingerprint) {
+  const extractedTextFileFingerprint = textCacheInfo?.cacheRecord?.fileFingerprint ?? null;
+  if (extractedTextFileFingerprint) {
     void storeImportedFileTextCacheRecord({
       workspaceId: String(importFile.workspaceId),
-      fileFingerprint: textCacheInfo.fileFingerprint,
+      fileFingerprint: extractedTextFileFingerprint,
       fileType,
       importMode,
       extractedText: textForParse,
@@ -3227,7 +3454,7 @@ export const processImportFileText = async (
       parsedRows: rows as unknown as Prisma.InputJsonValue,
       pageCount: pageImages?.length ?? 0,
       confidence: resolvedMetadata.confidence ?? 0,
-      hitCount: (textCacheInfo.cacheRecord?.hitCount ?? 0) + 1,
+      hitCount: (textCacheInfo?.cacheRecord?.hitCount ?? 0) + 1,
     }).catch((error) => {
       console.warn("Import file extraction cache update failed", {
         importFileId,
@@ -5096,6 +5323,26 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       status: "done",
     };
   }, { maxWait: 15_000, timeout: 30_000 });
+
+  const duplicateCollapse = await collapseDuplicateTransactionsForImport(importFileId).catch((error) => {
+    console.warn("Import transaction duplicate collapse failed after confirmation", {
+      importFileId,
+      error,
+    });
+    return { removed: 0 };
+  });
+  if (duplicateCollapse.removed > 0) {
+    const visibleTransactionsCount = await prisma.transaction.count({
+      where: { importFileId, deletedAt: null },
+    }).catch(() => null);
+    if (visibleTransactionsCount !== null) {
+      await updateImportFileCompat(importFileId, {
+        confirmedTransactionsCount: visibleTransactionsCount,
+      }).catch(() => null);
+      confirmationResult.confirmedTransactionsCount = visibleTransactionsCount;
+      confirmationResult.imported = visibleTransactionsCount;
+    }
+  }
 
   await Promise.allSettled(
     trainingSignals.map((entry) =>

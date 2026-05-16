@@ -1,3 +1,5 @@
+import { recordAccountTombstones } from "@/lib/account-tombstones";
+
 type DeleteAccountArtifactsOptions = {
   workspaceId: string;
   accountIds: string[];
@@ -16,6 +18,30 @@ export const deleteAccountsAndImportArtifacts = async (
   }
 
   const accountIdFilter = inList(uniqueAccountIds);
+  const accountsToDelete =
+    uniqueAccountIds.length > 0
+      ? await tx.account.findMany({
+          where: {
+            workspaceId,
+            id: accountIdFilter,
+          },
+          select: {
+            id: true,
+            name: true,
+            institution: true,
+            accountNumber: true,
+            type: true,
+            currency: true,
+            source: true,
+          },
+        })
+      : [];
+  await recordAccountTombstones(tx, {
+    workspaceId,
+    accounts: accountsToDelete,
+    reason: includeWorkspaceImportArtifacts ? "workspace_data_deleted" : "account_deleted",
+  });
+
   const importFileWhere = includeWorkspaceImportArtifacts
     ? { workspaceId }
     : { workspaceId, accountId: accountIdFilter };

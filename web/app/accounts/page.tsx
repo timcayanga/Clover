@@ -36,6 +36,7 @@ import {
   markDeletedWorkspaceAccount,
   markDeletingWorkspaceAccount,
   clearDeletingWorkspaceAccount,
+  clearWorkspaceCache,
   normalizeImportedAccountKey,
   findBestImportedAccountMatch as findBestImportedAccountIdentityMatch,
   matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
@@ -1014,6 +1015,7 @@ function AccountsPageContent() {
   const [message, setMessage] = useState("Select a workspace to review accounts.");
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsLoadFailed, setAccountsLoadFailed] = useState(false);
   const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(Boolean(initialCachedWorkspace));
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
@@ -1283,6 +1285,7 @@ function AccountsPageContent() {
       setAccountRules([]);
       setTransactions([]);
       setAccountsLoading(false);
+      setAccountsLoadFailed(false);
       setHasInitialWorkspaceDataLoaded(true);
       return;
     }
@@ -1304,6 +1307,7 @@ function AccountsPageContent() {
       }
 
       if (accountsResponse.ok) {
+        setAccountsLoadFailed(false);
         const payload = accountsResponse.json;
         fetchedAccounts = Array.isArray(payload?.accounts) ? (payload.accounts as Account[]) : [];
         const cachedWorkspaceAccounts = getCachedAccountsWorkspace(workspaceId)?.accounts as Account[] | undefined;
@@ -1326,6 +1330,7 @@ function AccountsPageContent() {
       } else {
         if (!options?.silent) {
           setMessage("Unable to load accounts for this workspace.");
+          setAccountsLoadFailed(true);
           setHasInitialWorkspaceDataLoaded(true);
         }
       }
@@ -2686,6 +2691,7 @@ function AccountsPageContent() {
       markDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
       deletedAccountIdsRef.current.add(accountToDelete.id);
       applyOptimisticWorkspaceAccountDeletion(selectedWorkspaceId, accountToDelete.id);
+      clearWorkspaceCache(selectedWorkspaceId);
       flushSync(() => {
         setAccounts((current) => current.filter((account) => account.id !== accountToDelete.id));
         setTransactions((current) => current.filter((transaction) => transaction.accountId !== accountToDelete.id));
@@ -3052,7 +3058,22 @@ function AccountsPageContent() {
                   </div>
                 </section>
               ) : null}
-              {accounts.length === 0 ? (
+              {accountsLoadFailed ? (
+                <div className="empty-state accounts-empty-state accounts-empty-state--error">
+                  <strong>Couldn&apos;t load accounts.</strong>
+                  <p>Your accounts may still be there, but Clover could not reach the latest workspace data. Try again before adding anything new.</p>
+                  <div className="accounts-empty-state__actions">
+                    <button className="button button-primary button-small" type="button" onClick={() => void loadWorkspaceData(selectedWorkspaceId)}>
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              ) : accountsLoading && accounts.length === 0 ? (
+                <div className="empty-state accounts-empty-state">
+                  <strong>Loading accounts...</strong>
+                  <p>Clover is syncing your accounts, balances, and recent import status.</p>
+                </div>
+              ) : accounts.length === 0 ? (
                 <div className="empty-state accounts-empty-state">
                   <strong>It's quiet in here.</strong>
                   <p>Add your first account to start seeing balances, history, and helpful review flags.</p>

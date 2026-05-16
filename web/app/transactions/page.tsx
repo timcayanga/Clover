@@ -282,6 +282,7 @@ type Transaction = {
   importFileId?: string | null;
   warningReason?: string | null;
   rawPayload?: unknown;
+  normalizedPayload?: unknown;
 };
 
 type TransactionPageMeta = {
@@ -448,6 +449,22 @@ const todayIso = new Date().toISOString().slice(0, 10);
 const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v1";
 
 const formatTransactionAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
+
+const formatAuditPayloadPreview = (value: unknown) => {
+  if (value === null || value === undefined || value === "") {
+    return "Not available";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return "Not available";
+  }
+};
 
 const getCurrencyCodes = (transactions: Array<{ currency: string }>) =>
   Array.from(new Set(transactions.map((transaction) => formatCurrencyCode(transaction.currency))));
@@ -1984,6 +2001,7 @@ function TransactionsPageContent() {
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
+  const [transactionsLoadFailed, setTransactionsLoadFailed] = useState(false);
   const [, setHasInitialTransactionsLoaded] = useState(false);
   const [hasLoadedWorkspaceList, setHasLoadedWorkspaceList] = useState(false);
   const [workspaceCurrencyCodes, setWorkspaceCurrencyCodes] = useState<string[]>(() => ["PHP"]);
@@ -2278,6 +2296,7 @@ function TransactionsPageContent() {
 
     if (!workspaceId) {
       setTransactions([]);
+      setTransactionsLoadFailed(false);
       setTransactionsSummary({
         totalCount: 0,
         income: 0,
@@ -2346,6 +2365,7 @@ function TransactionsPageContent() {
         return;
       }
 
+      setTransactionsLoadFailed(false);
       const payload = response.json;
       const deletedAccountIds = new Set([
         ...getDeletedWorkspaceAccountIds(workspaceId),
@@ -2470,6 +2490,7 @@ function TransactionsPageContent() {
 
       if (!options?.background) {
         setMessage("Unable to load transactions.");
+        setTransactionsLoadFailed(true);
         setIsWorkspaceDataReady(true);
         setHasInitialTransactionsLoaded(true);
       }
@@ -6075,7 +6096,15 @@ function TransactionsPageContent() {
               className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !isTableLoading ? " transactions-table-wrap--empty" : ""}`}
               aria-busy={isTableLoading}
             >
-            {isTableLoading ? (
+            {transactionsLoadFailed ? (
+              <div className="empty-state transactions-empty-state--table">
+                <strong>Couldn&apos;t load transactions.</strong>
+                <p>Your transactions may still be there, but Clover could not reach the latest workspace data. Try again before importing or editing.</p>
+                <button className="button button-primary button-small" type="button" onClick={() => selectedWorkspaceId && void loadTransactionsPage(selectedWorkspaceId)}>
+                  Retry
+                </button>
+              </div>
+            ) : isTableLoading ? (
               <div className="transactions-loading-state" role="status" aria-live="polite" aria-label="Loading transactions">
                 <div className="transactions-loading-header">
                   <span className="skeleton-block skeleton-block--checkbox" />
@@ -6336,7 +6365,15 @@ function TransactionsPageContent() {
           <div
             className={`transactions-mobile-view${!hasVisibleTransactions && !isTableLoading ? " transactions-table-wrap--empty" : ""}`}
           >
-            {isTableLoading ? (
+            {transactionsLoadFailed ? (
+              <div className="empty-state transactions-empty-state--table">
+                <strong>Couldn&apos;t load transactions.</strong>
+                <p>Your transactions may still be there. Retry to refresh the latest workspace data.</p>
+                <button className="button button-primary button-small" type="button" onClick={() => selectedWorkspaceId && void loadTransactionsPage(selectedWorkspaceId)}>
+                  Retry
+                </button>
+              </div>
+            ) : isTableLoading ? (
               <div className="transactions-mobile-list" role="status" aria-live="polite" aria-label="Loading transactions">
                 {Array.from({ length: 4 }).map((_, index) => (
                   <div key={index} className="transactions-mobile-simple-row transactions-mobile-simple-row--loading">
@@ -6484,7 +6521,7 @@ function TransactionsPageContent() {
             <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
               <div className="table-footer__summary">
                 {transactionsSummary.totalCount > 0 ? (
-                  <span className="pill pill-subtle">Showing {currentPageLabel}</span>
+                  <span className="pill pill-subtle">Showing filtered {currentPageLabel}</span>
                 ) : null}
                 {warningTransactionCount > 0 ? (
                   <button
@@ -6562,7 +6599,7 @@ function TransactionsPageContent() {
                   </select>
                 </label>
               </div>
-              <div className="transactions-footer-snapshot" aria-label="Cash flow snapshot">
+              <div className="transactions-footer-snapshot" aria-label="Cash flow snapshot for all filtered transactions">
                 <div className="transactions-footer-snapshot__metrics">
                   <div className="transactions-footer-snapshot__metric">
                     <span className="transactions-footer-snapshot__metric-label">Spending</span>
@@ -7250,6 +7287,29 @@ function TransactionsPageContent() {
                   placeholder="Optional note or review context"
                 />
               </label>
+
+              <details className="transaction-drawer-audit">
+                <summary>How Clover read this</summary>
+                <div className="transaction-drawer-audit__grid">
+                  <div>
+                    <span>Source</span>
+                    <strong>{selectedTransaction.importFileId ? "Imported statement" : selectedTransaction.source ?? "Manual"}</strong>
+                  </div>
+                  <div>
+                    <span>Raw name</span>
+                    <strong>{selectedTransaction.merchantRaw}</strong>
+                  </div>
+                  <div>
+                    <span>Normalized name</span>
+                    <strong>{selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw}</strong>
+                  </div>
+                  <div>
+                    <span>Category</span>
+                    <strong>{detailSelectedCategory?.name ?? selectedTransaction.categoryName ?? "Other"}</strong>
+                  </div>
+                </div>
+                <pre>{formatAuditPayloadPreview(selectedTransaction.normalizedPayload ?? selectedTransaction.rawPayload)}</pre>
+              </details>
 
               {selectedTransactionReceiptLineItems.length > 0 ? (
                 <div className="transaction-drawer-receipt-lines">

@@ -41,6 +41,7 @@ import {
   normalizeImportedAccountKey,
   findBestImportedAccountMatch as findBestImportedAccountIdentityMatch,
   mergeImportedWorkspaceTransactions,
+  clearWorkspaceCache,
   type ImportedWorkspaceTransaction,
 } from "@/lib/workspace-cache";
 import {
@@ -2620,6 +2621,7 @@ function AccountDetailPageContent() {
         clearDeletingWorkspaceAccount(workspaceId, accountId);
         markDeletedWorkspaceAccount(workspaceId, accountId);
         applyOptimisticWorkspaceAccountDeletion(workspaceId, accountId);
+        clearWorkspaceCache(workspaceId);
       }
 
       router.replace("/accounts");

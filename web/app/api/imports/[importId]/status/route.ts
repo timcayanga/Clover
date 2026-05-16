@@ -43,7 +43,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           where: {
             importFileId: importId,
             deletedAt: null,
-            reviewStatus: { notIn: ["edited", "rejected"] },
+            reviewStatus: { notIn: ["confirmed", "edited", "rejected"] },
             OR: [{ merchantClean: null }, { categoryId: null }, { category: { is: { name: "Other" } } }],
           },
         }),

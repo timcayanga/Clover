@@ -35,7 +35,7 @@ export async function POST(request: Request) {
           where: {
             importFileId: payload.importFileId,
             deletedAt: null,
-            reviewStatus: { notIn: ["edited", "rejected"] },
+            reviewStatus: { notIn: ["confirmed", "edited", "rejected"] },
             OR: [{ merchantClean: null }, { categoryId: null }, { category: { is: { name: "Other" } } }],
           },
         }),

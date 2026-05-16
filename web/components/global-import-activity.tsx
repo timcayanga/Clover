@@ -11,6 +11,15 @@ import { getImportErrorNextSteps, getImportErrorSpecForCode } from "@/lib/import
 const isCompletedSummary = (activity: ImportActivitySnapshot | null) =>
   Boolean(activity && activity.status === "done" && activity.summary);
 
+const isBackgroundFinalizationActivity = (activity: ImportActivitySnapshot | null) =>
+  Boolean(
+    activity &&
+      activity.status !== "error" &&
+      /visible in clover|accounts and transactions are visible|cleaning up names and categories|finalizing_enrichment/i.test(
+        activity.detail ?? ""
+      )
+  );
+
 const IMPORT_ACTIVITY_APP_PATH_PREFIXES = [
   "/accounts",
   "/admin",
@@ -85,6 +94,10 @@ export function GlobalImportActivity() {
   const dismissedKeysRef = useRef<Set<string>>(readDismissedKeys());
   const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => {
     const snapshot = readImportActivity();
+    if (isBackgroundFinalizationActivity(snapshot)) {
+      clearImportActivity();
+      return null;
+    }
     const dismissKey = getDismissKey(snapshot);
     return dismissKey && dismissedKeysRef.current.has(dismissKey) ? null : snapshot;
   });
@@ -100,6 +113,11 @@ export function GlobalImportActivity() {
     () =>
       subscribeImportActivity(() => {
         const snapshot = readImportActivity();
+        if (isBackgroundFinalizationActivity(snapshot)) {
+          clearImportActivity();
+          setActivity(null);
+          return;
+        }
         const dismissKey = getDismissKey(snapshot);
         if (dismissKey && dismissedKeysRef.current.has(dismissKey)) {
           setActivity(null);

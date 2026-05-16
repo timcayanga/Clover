@@ -11951,6 +11951,63 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--text);
 }
 
+.transaction-drawer-audit {
+  grid-column: 1 / -1;
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.82);
+  padding: 10px 12px;
+}
+
+.transaction-drawer-audit summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.transaction-drawer-audit__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.transaction-drawer-audit__grid div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.transaction-drawer-audit__grid span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.transaction-drawer-audit__grid strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-drawer-audit pre {
+  max-height: 180px;
+  overflow: auto;
+  margin: 10px 0 0;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
 .table-footer__summary {
   display: flex;
   align-items: center;
@@ -30410,6 +30467,16 @@ html[data-theme="dark"] .accounts-overview-card__info-tooltip {
   border-color: rgba(148, 163, 184, 0.22);
   box-shadow: 0 18px 46px rgba(0, 0, 0, 0.36);
   color: var(--text);
+}
+
+html[data-theme="dark"] .transaction-drawer-audit {
+  background: rgba(15, 23, 42, 0.56);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+html[data-theme="dark"] .transaction-drawer-audit pre {
+  background: rgba(2, 6, 23, 0.42);
+  color: rgba(203, 213, 225, 0.82);
 }
 
 html[data-theme="dark"] .accounts-overview-card__amount.is-good {

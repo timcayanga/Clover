@@ -335,6 +335,7 @@ model Workspace {
   updatedAt                DateTime                     @updatedAt
   user                     User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
   accounts                 Account[]
+  accountTombstones        AccountTombstone[]
   categories               Category[]
   transactions             Transaction[]
   importFiles              ImportFile[]
@@ -396,6 +397,29 @@ model Account {
   recurringPatterns       RecurringPattern[]
 
   @@index([workspaceId])
+}
+
+model AccountTombstone {
+  id                   String      @id @default(cuid())
+  workspaceId          String
+  accountId            String?
+  name                 String?
+  institution          String?
+  accountNumber        String?
+  normalizedAccountKey String
+  accountType          AccountType @default(bank)
+  currency             String      @default("PHP")
+  source               String?
+  reason               String      @default("account_deleted")
+  rawPayload           Json?
+  deletedAt            DateTime    @default(now())
+  createdAt            DateTime    @default(now())
+  workspace            Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([accountId])
+  @@index([normalizedAccountKey])
+  @@index([deletedAt])
 }
 
 model InvestmentPurchase {
