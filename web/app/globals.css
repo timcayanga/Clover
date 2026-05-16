@@ -32416,6 +32416,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 
 .split-bill-detail-modal__list-row--split {
   align-items: flex-start;
+  flex-wrap: wrap;
 }
 
 .split-bill-detail-modal__list-main {
@@ -32440,6 +32441,60 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.split-bill-detail-modal__settlement-panel {
+  display: grid;
+  flex: 1 0 100%;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(3, 168, 192, 0.14);
+  border-radius: 18px;
+  background: rgba(3, 168, 192, 0.06);
+}
+
+.split-bill-detail-modal__settlement-panel--settled {
+  border-color: rgba(4, 120, 87, 0.14);
+  background: rgba(4, 120, 87, 0.07);
+  color: var(--success, #047857);
+}
+
+.split-bill-detail-modal__settlement-panel--settled span {
+  color: var(--text-secondary);
+}
+
+.split-bill-detail-modal__settlement-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.split-bill-detail-modal__settlement-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.split-bill-detail-modal__settlement-copy span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.split-bill-detail-modal__settlement-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.split-bill-detail-modal__settlement-input {
+  width: 120px;
+  min-height: 36px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text-primary);
 }
 
 .split-bill-detail-modal__list-row--button {
@@ -32610,6 +32665,16 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .split-bill-detail-modal__summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .split-bill-detail-modal__settlement-control,
+  .split-bill-detail-modal__settlement-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .split-bill-detail-modal__settlement-input {
+    width: 100%;
   }
 
   .split-bill-group-detail__meta {

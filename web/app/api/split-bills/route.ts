@@ -10,6 +10,7 @@ import {
   splitBillGroupMemberOrderBy,
   splitBillItemOrderBy,
 } from "@/lib/split-bill";
+import { loadSplitBillTransferSettlementsForBill, loadSplitBillTransferSettlementsForBills } from "@/lib/split-bill-transfer-settlements";
 
 export const dynamic = "force-dynamic";
 
@@ -484,9 +485,15 @@ export async function GET() {
       orderBy: [{ billDate: "desc" }, { updatedAt: "desc" }],
       include: getBillInclude,
     });
+    const transferSettlementsByBillId = await loadSplitBillTransferSettlementsForBills(bills.map((bill) => bill.id));
 
     return NextResponse.json({
-      bills: bills.map((bill) => serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0])),
+      bills: bills.map((bill) =>
+        serializeSplitBillRecord({
+          ...bill,
+          transferSettlements: transferSettlementsByBillId.get(bill.id) ?? [],
+        } as Parameters<typeof serializeSplitBillRecord>[0])
+      ),
     });
   } catch (error) {
     return NextResponse.json({ error: "Unable to load split bills" }, { status: 400 });
@@ -498,8 +505,17 @@ export async function POST(request: Request) {
     const user = await getSplitBillCurrentUser();
     const body = billSchema.parse(await request.json());
     const bill = await persistSplitBill(user.id, body, "create");
+    const transferSettlements = await loadSplitBillTransferSettlementsForBill(bill.id);
 
-    return NextResponse.json({ bill: serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0]) }, { status: 201 });
+    return NextResponse.json(
+      {
+        bill: serializeSplitBillRecord({
+          ...bill,
+          transferSettlements,
+        } as Parameters<typeof serializeSplitBillRecord>[0]),
+      },
+      { status: 201 }
+    );
   } catch (error) {
     return NextResponse.json(
       {

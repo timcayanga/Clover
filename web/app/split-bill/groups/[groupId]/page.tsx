@@ -11,6 +11,7 @@ import {
   splitBillGroupMemberOrderBy,
   splitBillItemOrderBy,
 } from "@/lib/split-bill";
+import { loadSplitBillTransferSettlementsForBills } from "@/lib/split-bill-transfer-settlements";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +68,13 @@ export default async function SplitBillGroupPage({ params }: { params: Promise<{
     notFound();
   }
 
-  const serializedBills = bills.map((bill) => serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0]));
+  const transferSettlementsByBillId = await loadSplitBillTransferSettlementsForBills(bills.map((bill) => bill.id));
+  const serializedBills = bills.map((bill) =>
+    serializeSplitBillRecord({
+      ...bill,
+      transferSettlements: transferSettlementsByBillId.get(bill.id) ?? [],
+    } as Parameters<typeof serializeSplitBillRecord>[0])
+  );
   const isFullySettled = serializedBills.length > 0 && serializedBills.every((bill) => bill.settlement.transfers.length === 0);
   const totalCurrencies = Array.from(new Set(serializedBills.map((bill) => normalizeCurrencyCode(bill.currency))));
   const summaryTotal =

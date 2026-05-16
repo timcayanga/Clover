@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { serializeSplitBillRecord, splitBillGroupMemberOrderBy, splitBillItemOrderBy } from "@/lib/split-bill";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
+import { loadSplitBillTransferSettlementsForBills } from "@/lib/split-bill-transfer-settlements";
 
 const billInclude = {
   transaction: {
@@ -74,9 +75,15 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
       },
     }),
   ]);
+  const transferSettlementsByBillId = await loadSplitBillTransferSettlementsForBills(bills.map((bill) => bill.id));
 
   return {
-    bills: bills.map((bill) => serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0])),
+    bills: bills.map((bill) =>
+      serializeSplitBillRecord({
+        ...bill,
+        transferSettlements: transferSettlementsByBillId.get(bill.id) ?? [],
+      } as Parameters<typeof serializeSplitBillRecord>[0])
+    ),
     groups: groups as unknown as SplitBillGroupSummary[],
     people: people as unknown as SplitBillPersonSummary[],
   };
@@ -93,14 +100,25 @@ export const loadSplitBillEditorGroups = async (userId: string) =>
     },
   });
 
-export const loadSplitBillBill = async (userId: string, billId: string) =>
-  prisma.splitBill.findFirst({
+export const loadSplitBillBill = async (userId: string, billId: string) => {
+  const bill = await prisma.splitBill.findFirst({
     where: {
       id: billId,
       userId,
     },
     include: billInclude,
   });
+
+  if (!bill) {
+    return null;
+  }
+
+  const transferSettlements = await loadSplitBillTransferSettlementsForBills([bill.id]);
+  return {
+    ...bill,
+    transferSettlements: transferSettlements.get(bill.id) ?? [],
+  };
+};
 
 export const loadSplitBillGroup = async (userId: string, groupId: string) =>
   prisma.splitBillGroup.findFirst({

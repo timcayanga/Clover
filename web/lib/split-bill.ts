@@ -118,6 +118,19 @@ export type SplitBillSettlement = {
   totalOwed: number;
 };
 
+export type SplitBillTransferSettlementRecord = {
+  id: string;
+  billId: string;
+  fromParticipantId: string;
+  fromParticipantName: string;
+  toParticipantId: string;
+  toParticipantName: string;
+  amount: string;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export const splitBillGroupMemberOrderBy: Prisma.SplitBillGroupMemberOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
   { createdAt: "asc" },
@@ -181,6 +194,7 @@ export type SplitBillSerializedBill = {
       name: string;
     } | null;
   } | null;
+  transferSettlements?: SplitBillTransferSettlementRecord[];
   settlement: SplitBillSettlement;
 };
 
@@ -850,15 +864,16 @@ const parseReceiptTableItemLine = (line: string) => {
   const amountIndex = amountToken ? rest.lastIndexOf(amountToken) : -1;
   const descriptionSource = amountIndex >= 0 ? rest.slice(0, amountIndex) : rest;
   const description = cleanReceiptDescription(descriptionSource);
-  if (!description || description.length < 2) {
+  if (!description || description.length < 2 || amount === null) {
     return null;
   }
 
+  const itemAmount = amount.toFixed(2);
   const unitPrice = amount !== null && Number.isFinite(quantity) && quantity > 0 ? amount / quantity : null;
 
   return {
     description,
-    amount: amount !== null ? amount.toFixed(2) : null,
+    amount: itemAmount,
     quantity: Number.isFinite(quantity) ? quantity : null,
     unitPrice: unitPrice !== null && Number.isFinite(unitPrice) ? unitPrice.toFixed(2) : null,
     wrapped: false,
@@ -1990,6 +2005,42 @@ export const mergeSplitBillReceiptSummary = (
   return payload;
 };
 
+const getSplitBillTransferSettlementKey = (fromParticipantId: string, toParticipantId: string) =>
+  `${fromParticipantId}::${toParticipantId}`;
+
+const applyTransferSettlementsToSettlement = (
+  settlement: SplitBillSettlement,
+  transferSettlements: Array<{
+    fromParticipantId: string;
+    toParticipantId: string;
+    amount: { toString: () => string };
+  }>
+): SplitBillSettlement => {
+  if (transferSettlements.length === 0 || settlement.transfers.length === 0) {
+    return settlement;
+  }
+
+  const settledByTransfer = new Map<string, number>();
+  for (const settledTransfer of transferSettlements) {
+    const amount = parseAmountValue(settledTransfer.amount.toString()) ?? 0;
+    if (amount <= 0) {
+      continue;
+    }
+
+    const key = getSplitBillTransferSettlementKey(settledTransfer.fromParticipantId, settledTransfer.toParticipantId);
+    settledByTransfer.set(key, (settledByTransfer.get(key) ?? 0) + amount);
+  }
+
+  return {
+    ...settlement,
+    transfers: settlement.transfers.flatMap((transfer) => {
+      const key = getSplitBillTransferSettlementKey(transfer.fromParticipantId, transfer.toParticipantId);
+      const remaining = Math.max(0, transfer.amount - (settledByTransfer.get(key) ?? 0));
+      return remaining > 0.005 ? [{ ...transfer, amount: Math.round(remaining * 100) / 100 }] : [];
+    }),
+  };
+};
+
 export const serializeSplitBillRecord = (bill: {
   id: string;
   userId: string;
@@ -2032,6 +2083,18 @@ export const serializeSplitBillRecord = (bill: {
     amount: { toString: () => string };
     note: string | null;
   }>;
+  transferSettlements?: Array<{
+    id: string;
+    billId: string;
+    fromParticipantId: string;
+    fromParticipantName: string;
+    toParticipantId: string;
+    toParticipantName: string;
+    amount: { toString: () => string };
+    note: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
   transaction?: {
     id: string;
     merchantRaw: string;
@@ -2044,26 +2107,30 @@ export const serializeSplitBillRecord = (bill: {
     } | null;
   } | null;
 }): SplitBillSerializedBill => {
-  const settlement = buildSplitBillSettlement({
-    participants: bill.participants,
-    items: bill.items.map((item) => ({
-      amount: item.amount.toString(),
-      participantIds: item.participants.map((entry) => entry.participantId),
-    })),
-    payments: bill.payments.map((payment) => ({
-      participantId: payment.participantId,
-      amount: payment.amount.toString(),
-    })),
-    serviceCharge:
-      getReceiptSummaryFromRawPayload(bill.rawPayload)?.serviceCharge ??
-      getRawPayloadTextValue(bill.rawPayload, "serviceCharge"),
-    tax: bill.tax?.toString() ?? null,
-    tip: bill.tip?.toString() ?? null,
-    rounding:
-      getReceiptSummaryFromRawPayload(bill.rawPayload)?.rounding ??
-      getRawPayloadTextValue(bill.rawPayload, "rounding"),
-    discount: bill.discount?.toString() ?? null,
-  });
+  const transferSettlements = bill.transferSettlements ?? [];
+  const settlement = applyTransferSettlementsToSettlement(
+    buildSplitBillSettlement({
+      participants: bill.participants,
+      items: bill.items.map((item) => ({
+        amount: item.amount.toString(),
+        participantIds: item.participants.map((entry) => entry.participantId),
+      })),
+      payments: bill.payments.map((payment) => ({
+        participantId: payment.participantId,
+        amount: payment.amount.toString(),
+      })),
+      serviceCharge:
+        getReceiptSummaryFromRawPayload(bill.rawPayload)?.serviceCharge ??
+        getRawPayloadTextValue(bill.rawPayload, "serviceCharge"),
+      tax: bill.tax?.toString() ?? null,
+      tip: bill.tip?.toString() ?? null,
+      rounding:
+        getReceiptSummaryFromRawPayload(bill.rawPayload)?.rounding ??
+        getRawPayloadTextValue(bill.rawPayload, "rounding"),
+      discount: bill.discount?.toString() ?? null,
+    }),
+    transferSettlements
+  );
 
   return {
     id: bill.id,
@@ -2127,6 +2194,18 @@ export const serializeSplitBillRecord = (bill: {
             : null,
         }
       : null,
+    transferSettlements: transferSettlements.map((transferSettlement) => ({
+      id: transferSettlement.id,
+      billId: transferSettlement.billId,
+      fromParticipantId: transferSettlement.fromParticipantId,
+      fromParticipantName: transferSettlement.fromParticipantName,
+      toParticipantId: transferSettlement.toParticipantId,
+      toParticipantName: transferSettlement.toParticipantName,
+      amount: transferSettlement.amount.toString(),
+      note: transferSettlement.note,
+      createdAt: transferSettlement.createdAt.toISOString(),
+      updatedAt: transferSettlement.updatedAt.toISOString(),
+    })),
     settlement,
   };
 };

@@ -9,6 +9,7 @@ import {
   splitBillGroupMemberOrderBy,
   splitBillItemOrderBy,
 } from "@/lib/split-bill";
+import { loadSplitBillTransferSettlementsForBill } from "@/lib/split-bill-transfer-settlements";
 
 export const dynamic = "force-dynamic";
 
@@ -344,7 +345,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ bil
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ bill: serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0]) });
+    const transferSettlements = await loadSplitBillTransferSettlementsForBill(bill.id);
+
+    return NextResponse.json({
+      bill: serializeSplitBillRecord({
+        ...bill,
+        transferSettlements,
+      } as Parameters<typeof serializeSplitBillRecord>[0]),
+    });
   } catch (error) {
     return NextResponse.json({ error: "Unable to load split bill" }, { status: 400 });
   }
@@ -436,7 +444,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bi
       });
     });
 
-    return NextResponse.json({ bill: serializeSplitBillRecord(updated as Parameters<typeof serializeSplitBillRecord>[0]) });
+    const transferSettlements = await loadSplitBillTransferSettlementsForBill(updated.id);
+
+    return NextResponse.json({
+      bill: serializeSplitBillRecord({
+        ...updated,
+        transferSettlements,
+      } as Parameters<typeof serializeSplitBillRecord>[0]),
+    });
   } catch (error) {
     return NextResponse.json(
       {

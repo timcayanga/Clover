@@ -917,6 +917,7 @@ model SplitBill {
   participants        SplitBillParticipant[]
   items               SplitBillItem[]
   payments            SplitBillPayment[]
+  transferSettlements SplitBillTransferSettlement[]
 
   @@index([userId])
   @@index([transactionId])
@@ -978,6 +979,24 @@ model SplitBillPayment {
 
   @@index([billId])
   @@index([participantId])
+}
+
+model SplitBillTransferSettlement {
+  id                    String   @id @default(cuid())
+  billId                String
+  fromParticipantId     String
+  fromParticipantName   String
+  toParticipantId       String
+  toParticipantName     String
+  amount                Decimal  @db.Decimal(18, 2)
+  note                  String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  bill                  SplitBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
+  @@index([fromParticipantId])
+  @@index([toParticipantId])
 }
 
 model FinancialCommitment {
