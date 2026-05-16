@@ -189,7 +189,7 @@ const triggerImportEnrichment = (importFileId: string) => {
   void fetch("/api/import-enrichment/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ importFileId, limit: 3, batchSize: 100 }),
+    body: JSON.stringify({ importFileId, limit: 10, batchSize: 100 }),
     keepalive: true,
   })
     .then((response) => {
@@ -1316,7 +1316,14 @@ export function ImportFilesModal({
       errorNextSteps: snapshot.errorNextSteps ?? null,
       updatedAt: Date.now(),
     };
+    const isVisiblePrimaryCompletion =
+      nextSnapshot.status === "done" &&
+      nextSnapshot.progress >= 100 &&
+      /accounts and transactions are visible|visible in clover|keep cleaning up names and categories/i.test(
+        nextSnapshot.detail
+      );
     const isPartialBatchCompletion =
+      !isVisiblePrimaryCompletion &&
       nextSnapshot.status === "done" &&
       nextSnapshot.fileTotal > 1 &&
       nextSnapshot.completedFiles < nextSnapshot.fileTotal;
@@ -3021,6 +3028,11 @@ export function ImportFilesModal({
         const hasSettledRows = visibleImportComplete;
 
         if (hasSettledRows) {
+          if (backgroundOnly) {
+            triggerImportEnrichment(importFileId);
+            return;
+          }
+
           triggerImportEnrichment(importFileId);
           const completedAccountId =
             latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-")

@@ -2220,6 +2220,48 @@ const coerceParsedTransactionRowsForEnrichment = (rows: Array<Record<string, unk
       }) as EnrichedParsedImportRow
   );
 
+const normalizeEnrichmentMatchDate = (value: unknown) => {
+  const parsed =
+    value instanceof Date
+      ? value
+      : typeof value === "string"
+        ? parseDateValue(value)
+        : null;
+
+  if (parsed instanceof Date && !Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  return normalizeTransactionDedupeText(value).slice(0, 10);
+};
+
+const normalizeEnrichmentMatchAmount = (value: unknown) => {
+  const parsed = parseAmountValue(
+    typeof value === "number" || typeof value === "string"
+      ? String(value)
+      : value && typeof value === "object" && "toString" in value
+        ? String((value as { toString?: () => string }).toString?.() ?? "")
+        : null
+  );
+
+  return parsed === null ? "" : parsed.toFixed(2);
+};
+
+const buildImportEnrichmentMatchKey = (params: {
+  date: unknown;
+  amount: unknown;
+  merchantRaw: unknown;
+  merchantClean?: unknown;
+  description?: unknown;
+}) => {
+  const merchant =
+    normalizeTransactionDedupeText(params.merchantRaw) ||
+    normalizeTransactionDedupeText(params.merchantClean) ||
+    normalizeTransactionDedupeText(params.description);
+
+  return [normalizeEnrichmentMatchDate(params.date), normalizeEnrichmentMatchAmount(params.amount), merchant].join("|");
+};
+
 export const processImportEnrichmentJobs = async (options: {
   importFileId?: string | null;
   limit?: number;
@@ -2305,9 +2347,19 @@ export const processImportEnrichmentJobs = async (options: {
       const sourceIndexes = enrichedRows.map((_, index) => nextStartIndex + index + 1);
       const transactions = await prisma.transaction.findMany({
         where: { importFileId: job.importFileId },
-        select: { id: true, rawPayload: true, reviewStatus: true },
+        select: {
+          id: true,
+          rawPayload: true,
+          reviewStatus: true,
+          date: true,
+          amount: true,
+          merchantRaw: true,
+          merchantClean: true,
+          description: true,
+        },
       });
       const transactionBySourceIndex = new Map<number, { id: string; reviewStatus: string }>();
+      const transactionsByFallbackKey = new Map<string, Array<{ id: string; reviewStatus: string }>>();
       for (const transaction of transactions) {
         const rawPayload = transaction.rawPayload;
         const sourceRowIndex =
@@ -2320,6 +2372,21 @@ export const processImportEnrichmentJobs = async (options: {
             reviewStatus: transaction.reviewStatus,
           });
         }
+        const fallbackKey = buildImportEnrichmentMatchKey({
+          date: transaction.date,
+          amount: transaction.amount,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          description: transaction.description,
+        });
+        if (fallbackKey.replace(/\|/g, "")) {
+          const bucket = transactionsByFallbackKey.get(fallbackKey) ?? [];
+          bucket.push({
+            id: transaction.id,
+            reviewStatus: transaction.reviewStatus,
+          });
+          transactionsByFallbackKey.set(fallbackKey, bucket);
+        }
       }
 
       const existingCategories = await prisma.category.findMany({
@@ -2327,13 +2394,31 @@ export const processImportEnrichmentJobs = async (options: {
         select: { id: true, name: true },
       });
       const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
+      const usedTransactionIds = new Set<string>();
+      let updatedRows = 0;
+      let skippedRows = 0;
 
       for (const [index, row] of enrichedRows.entries()) {
         const sourceRowIndex = sourceIndexes[index] ?? nextStartIndex + index + 1;
-        const transaction = transactionBySourceIndex.get(sourceRowIndex);
+        const sourceIndexedTransaction = transactionBySourceIndex.get(sourceRowIndex);
+        const fallbackKey = buildImportEnrichmentMatchKey({
+          date: batchRows[index]?.date ?? row.date,
+          amount: batchRows[index]?.amount ?? row.amount,
+          merchantRaw: batchRows[index]?.merchantRaw ?? row.merchantRaw,
+          merchantClean: batchRows[index]?.merchantClean ?? row.merchantClean,
+          description: batchRows[index]?.description ?? row.description,
+        });
+        const fallbackBucket = transactionsByFallbackKey.get(fallbackKey) ?? [];
+        const fallbackTransaction = fallbackBucket.find((candidate) => !usedTransactionIds.has(candidate.id));
+        const transaction =
+          sourceIndexedTransaction && !usedTransactionIds.has(sourceIndexedTransaction.id)
+            ? sourceIndexedTransaction
+            : fallbackTransaction ?? null;
         if (!transaction || transaction.reviewStatus === "edited" || transaction.reviewStatus === "rejected") {
+          skippedRows += 1;
           continue;
         }
+        usedTransactionIds.add(transaction.id);
 
         const rowType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
         const categoryName =
@@ -2389,7 +2474,17 @@ export const processImportEnrichmentJobs = async (options: {
             learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
           },
         });
+        updatedRows += 1;
       }
+
+      console.info("[import-enrichment] processed batch", {
+        importFileId: job.importFileId,
+        totalRows,
+        batchRows: batchRows.length,
+        nextStartIndex,
+        updatedRows,
+        skippedRows,
+      });
 
       const processedRows = Math.min(totalRows, nextStartIndex + batchRows.length);
       if (processedRows >= totalRows) {
