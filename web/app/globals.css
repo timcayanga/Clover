@@ -32020,6 +32020,13 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   background: rgba(15, 23, 42, 0.035);
 }
 
+.split-bill-editor__allocation-help {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
 .split-bill-editor__summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -32462,6 +32469,52 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-size: 1.05rem;
 }
 
+.split-bill-detail-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(14px);
+}
+
+.split-bill-detail-tabs__button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.split-bill-detail-tabs__button.is-selected {
+  background: rgba(3, 168, 192, 0.12);
+  color: var(--accent);
+}
+
+.split-bill-detail-modal__quick-summary {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(3, 168, 192, 0.14);
+  background: rgba(3, 168, 192, 0.06);
+}
+
+.split-bill-detail-modal__quick-summary span,
+.split-bill-detail-modal__empty,
+.split-bill-settlement-board__head span,
+.split-bill-settlement-board__bill-head span {
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
 .split-bill-settle-all {
   display: flex;
   align-items: flex-start;
@@ -32485,12 +32538,56 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   background: rgba(15, 23, 42, 0.035);
 }
 
+.split-bill-activity__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.split-bill-activity__head span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
 .split-bill-activity__row {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   padding-top: 8px;
   border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.split-bill-settlement-board {
+  display: grid;
+  gap: 12px;
+}
+
+.split-bill-settlement-board__head,
+.split-bill-settlement-board__bill-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.split-bill-settlement-board__head > div,
+.split-bill-settlement-board__bill-head > div {
+  display: grid;
+  gap: 4px;
+}
+
+.split-bill-settlement-board__list {
+  display: grid;
+  gap: 10px;
+}
+
+.split-bill-settlement-board__bill {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .split-bill-detail-modal__photo-actions {
@@ -32830,10 +32927,18 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .split-bill-settle-all,
+  .split-bill-settlement-board__head,
+  .split-bill-settlement-board__bill-head,
   .split-bill-activity__row,
   .split-bill-filter-bar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .split-bill-detail-tabs {
+    overflow-x: auto;
+    grid-template-columns: repeat(4, minmax(96px, 1fr));
+    border-radius: 20px;
   }
 
   .split-bill-group-detail__meta {

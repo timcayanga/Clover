@@ -23,6 +23,8 @@ type DetailSelection =
   | { kind: "person"; id: string }
   | null;
 
+type DetailTab = "overview" | "bills" | "settle" | "activity";
+
 const getParticipantName = (bill: SplitBillSerializedBill, participantId: string) =>
   bill.participants.find((participant) => participant.id === participantId)?.name ?? "Unknown";
 
@@ -226,6 +228,7 @@ export function SplitBillWorkspace({
   const [groups, setGroups] = useState(initialGroups);
   const [people, setPeople] = useState(initialPeople);
   const [selected, setSelected] = useState<DetailSelection>(null);
+  const [detailTab, setDetailTab] = useState<DetailTab>("overview");
   const [transferSettlementDrafts, setTransferSettlementDrafts] = useState<Record<string, string>>({});
   const [transferSettlementNotes, setTransferSettlementNotes] = useState<Record<string, string>>({});
 
@@ -449,20 +452,26 @@ export function SplitBillWorkspace({
     }
   };
 
-  const renderTransferSettlementControls = (bill: SplitBillSerializedBill) => {
-    if (bill.settlement.transfers.length === 0) {
+  const renderTransferSettlementControls = (bill: SplitBillSerializedBill, participantName?: string) => {
+    const transfers = participantName
+      ? bill.settlement.transfers.filter(
+          (transfer) => transfer.fromParticipantName === participantName || transfer.toParticipantName === participantName
+        )
+      : bill.settlement.transfers;
+
+    if (transfers.length === 0) {
       const recordedSettlements = formatRecordedTransferSettlements(bill);
       return (
         <div className="split-bill-detail-modal__settlement-panel split-bill-detail-modal__settlement-panel--settled">
-          <strong>Fully settled</strong>
-          {recordedSettlements ? <span>{recordedSettlements}</span> : null}
+          <strong>{bill.settlement.transfers.length === 0 ? "Fully settled" : "No open transfer for this person"}</strong>
+          {recordedSettlements && bill.settlement.transfers.length === 0 ? <span>{recordedSettlements}</span> : null}
         </div>
       );
     }
 
     return (
       <div className="split-bill-detail-modal__settlement-panel">
-        {bill.settlement.transfers.map((transfer) => {
+        {transfers.map((transfer) => {
           const draftKey = getTransferDraftKey(bill.id, transfer);
 
           return (
@@ -530,6 +539,164 @@ export function SplitBillWorkspace({
 
   const selectedDetailKind = selected?.kind ?? null;
   const closeDetail = () => setSelected(null);
+
+  useEffect(() => {
+    setDetailTab("overview");
+  }, [selected?.kind, selected?.id]);
+
+  const renderDetailTabs = () => {
+    if (!selectedGroup && !selectedPerson) {
+      return null;
+    }
+
+    const tabs: Array<{ id: DetailTab; label: string }> = [
+      { id: "overview", label: "Overview" },
+      { id: "bills", label: "Bills" },
+      { id: "settle", label: "Settle" },
+      { id: "activity", label: "Activity" },
+    ];
+
+    return (
+      <div className="split-bill-detail-tabs" role="tablist" aria-label={`${selectedDetailLabel} sections`}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            className={`split-bill-detail-tabs__button${detailTab === tab.id ? " is-selected" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={detailTab === tab.id}
+            onClick={() => setDetailTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  const renderActivityList = (activities: ReturnType<typeof getRecentActivityForBills>, emptyLabel = "No activity yet") => (
+    <div className="split-bill-activity">
+      <div className="split-bill-activity__head">
+        <strong>Recent activity</strong>
+        <span>{activities.length} updates</span>
+      </div>
+      {activities.length > 0 ? (
+        activities.map((activity) => (
+          <div key={activity.id} className="split-bill-activity__row">
+            <span>
+              {activity.billTitle}: {activity.message}
+            </span>
+            <small>{formatActivityTime(activity.createdAt)}</small>
+          </div>
+        ))
+      ) : (
+        <span className="split-bill-subtle-empty">{emptyLabel}</span>
+      )}
+    </div>
+  );
+
+  const renderBillRows = (targetBills: SplitBillSerializedBill[], participantName?: string) => (
+    <div className="split-bill-detail-modal__list">
+      {targetBills.length > 0 ? (
+        targetBills.map((bill) => (
+          <div key={bill.id} className="split-bill-detail-modal__list-row split-bill-detail-modal__list-row--split">
+            <button type="button" className="split-bill-detail-modal__list-main" onClick={() => openBill(bill.id)}>
+              <strong>{bill.title}</strong>
+              <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
+              <span className="split-bill-detail-modal__row-meta">
+                {participantName ? formatParticipantShare(bill, participantName) : formatPaymentContributions(bill)}
+              </span>
+              <span className="split-bill-detail-modal__row-meta">{formatSettlementTransfers(bill)}</span>
+            </button>
+            <div className="split-bill-detail-modal__row-actions">
+              <Link className="button button-secondary button-small" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
+                Edit split
+              </Link>
+              <button className="button button-danger button-small" type="button" onClick={() => void removeBill(bill.id)}>
+                Delete
+              </button>
+            </div>
+          </div>
+        ))
+      ) : (
+        <p className="split-bill-detail-modal__empty">No bills here yet.</p>
+      )}
+    </div>
+  );
+
+  const renderSettlementBoard = (targetBills: SplitBillSerializedBill[], participantName?: string) => {
+    const openBills = targetBills.filter((bill) =>
+      participantName
+        ? bill.settlement.transfers.some(
+            (transfer) => transfer.fromParticipantName === participantName || transfer.toParticipantName === participantName
+          )
+        : bill.settlement.transfers.length > 0
+    );
+
+    return (
+      <div className="split-bill-settlement-board">
+        <div className="split-bill-settlement-board__head">
+          <div>
+            <strong>{participantName ? `${participantName}'s settlement view` : "Settle all view"}</strong>
+            <span>
+              {openBills.length > 0
+                ? `${openBills.length} bill${openBills.length === 1 ? "" : "s"} with open transfers`
+                : "No open settlement work right now."}
+            </span>
+          </div>
+          {!participantName ? (
+            <button
+              className="button button-primary button-small"
+              type="button"
+              disabled={openBills.length === 0}
+              onClick={() => void settleAllTransfers(targetBills)}
+            >
+              Mark group settled
+            </button>
+          ) : null}
+        </div>
+
+        {!participantName ? (
+          <div className="split-bill-settle-all">
+            <div>
+              <strong>Simplified transfers</strong>
+              {selectedGroupSimplifiedTransfers.length > 0 ? (
+                selectedGroupSimplifiedTransfers.map((transfer) => (
+                  <span key={`${transfer.currency}-${transfer.fromName}-${transfer.toName}`}>
+                    {transfer.fromName} pays {transfer.toName} {formatSplitBillAmount(transfer.amount, transfer.currency)}
+                  </span>
+                ))
+              ) : (
+                <span>No group settlement needed.</span>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="split-bill-settlement-board__list">
+          {targetBills.length > 0 ? (
+            targetBills.map((bill) => (
+              <article key={bill.id} className="split-bill-settlement-board__bill">
+                <div className="split-bill-settlement-board__bill-head">
+                  <div>
+                    <strong>{bill.title}</strong>
+                    <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
+                  </div>
+                  <Link className="button button-secondary button-small" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
+                    Edit split
+                  </Link>
+                </div>
+                {renderTransferSettlementControls(bill, participantName)}
+              </article>
+            ))
+          ) : (
+            <p className="split-bill-detail-modal__empty">No bills to settle yet.</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   useEffect(() => {
     const createdBill = sessionStorage.getItem("split-bill:created-bill");
     if (!createdBill) {
@@ -647,80 +814,40 @@ export function SplitBillWorkspace({
                     <strong>{selectedGroup.name}</strong>
                   </div>
                 </div>
-                <div className="split-bill-balance-dashboard">
-                  <article>
-                    <span>You owe</span>
-                    <strong>{formatSplitBillAmount(selectedGroupBalance?.owes ?? 0, selectedGroupBills[0]?.currency ?? "PHP")}</strong>
-                  </article>
-                  <article>
-                    <span>You are owed</span>
-                    <strong>{formatSplitBillAmount(selectedGroupBalance?.isOwed ?? 0, selectedGroupBills[0]?.currency ?? "PHP")}</strong>
-                  </article>
-                  <article>
-                    <span>Settled</span>
-                    <strong>{selectedGroupBalance?.settledBills ?? 0}/{selectedGroupBills.length}</strong>
-                  </article>
-                </div>
-                <div className="split-bill-settle-all">
-                  <div>
-                    <strong>Settle all view</strong>
-                    {selectedGroupSimplifiedTransfers.length > 0 ? (
-                      selectedGroupSimplifiedTransfers.map((transfer) => (
-                        <span key={`${transfer.currency}-${transfer.fromName}-${transfer.toName}`}>
-                          {transfer.fromName} pays {transfer.toName} {formatSplitBillAmount(transfer.amount, transfer.currency)}
-                        </span>
-                      ))
-                    ) : (
-                      <span>No group settlement needed.</span>
-                    )}
-                  </div>
-                  <button
-                    className="button button-primary button-small"
-                    type="button"
-                    disabled={selectedGroupBills.every((bill) => bill.settlement.transfers.length === 0)}
-                    onClick={() => void settleAllTransfers(selectedGroupBills)}
-                  >
-                    Mark group settled
-                  </button>
-                </div>
-                <div className="split-bill-detail-modal__list">
-                  {selectedGroupBills.map((bill) => (
-                    <div key={bill.id} className="split-bill-detail-modal__list-row split-bill-detail-modal__list-row--split">
-                      <button type="button" className="split-bill-detail-modal__list-main" onClick={() => openBill(bill.id)}>
-                        <strong>{bill.title}</strong>
-                        <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
-                        <span className="split-bill-detail-modal__row-meta">{formatPaymentContributions(bill)}</span>
-                        <span className="split-bill-detail-modal__row-meta">{formatSettlementTransfers(bill)}</span>
-                      </button>
-                      <div className="split-bill-detail-modal__row-actions">
-                        <Link className="button button-secondary button-small" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                          Edit split
-                        </Link>
-                        <button className="button button-danger button-small" type="button" onClick={() => void removeBill(bill.id)}>
-                          Delete
-                        </button>
-                      </div>
-                      {renderTransferSettlementControls(bill)}
+                {renderDetailTabs()}
+                {detailTab === "overview" ? (
+                  <>
+                    <div className="split-bill-balance-dashboard">
+                      <article>
+                        <span>You owe</span>
+                        <strong>{formatSplitBillAmount(selectedGroupBalance?.owes ?? 0, selectedGroupBills[0]?.currency ?? "PHP")}</strong>
+                      </article>
+                      <article>
+                        <span>You are owed</span>
+                        <strong>{formatSplitBillAmount(selectedGroupBalance?.isOwed ?? 0, selectedGroupBills[0]?.currency ?? "PHP")}</strong>
+                      </article>
+                      <article>
+                        <span>Settled</span>
+                        <strong>{selectedGroupBalance?.settledBills ?? 0}/{selectedGroupBills.length}</strong>
+                      </article>
                     </div>
-                  ))}
-                </div>
+                    <div className="split-bill-detail-modal__quick-summary">
+                      <strong>Next best action</strong>
+                      <span>
+                        {selectedGroupSimplifiedTransfers.length > 0
+                          ? `${selectedGroupSimplifiedTransfers[0].fromName} pays ${selectedGroupSimplifiedTransfers[0].toName} ${formatSplitBillAmount(selectedGroupSimplifiedTransfers[0].amount, selectedGroupSimplifiedTransfers[0].currency)}`
+                          : "This group is settled."}
+                      </span>
+                    </div>
+                  </>
+                ) : null}
+                {detailTab === "bills" ? renderBillRows(selectedGroupBills) : null}
+                {detailTab === "settle" ? renderSettlementBoard(selectedGroupBills) : null}
+                {detailTab === "activity" ? renderActivityList(selectedGroupActivity) : null}
                 <div className="split-bill-detail-modal__actions">
                   <button className="button button-danger button-small" type="button" onClick={() => void removeGroup(selectedGroup.id)}>
                     Delete group
                   </button>
-                </div>
-                <div className="split-bill-activity">
-                  <strong>Recent activity</strong>
-                  {selectedGroupActivity.length > 0 ? (
-                    selectedGroupActivity.map((activity) => (
-                      <div key={activity.id} className="split-bill-activity__row">
-                        <span>{activity.billTitle}: {activity.message}</span>
-                        <small>{formatActivityTime(activity.createdAt)}</small>
-                      </div>
-                    ))
-                  ) : (
-                    <span className="split-bill-subtle-empty">No activity yet</span>
-                  )}
                 </div>
               </div>
             ) : null}
@@ -733,58 +860,30 @@ export function SplitBillWorkspace({
                     <strong>{selectedPerson.name}</strong>
                   </div>
                 </div>
-                <div className="split-bill-balance-dashboard">
-                  <article>
-                    <span>They owe</span>
-                    <strong>{formatSplitBillAmount(selectedPersonBalance?.owes ?? 0, selectedPersonBills[0]?.currency ?? "PHP")}</strong>
-                  </article>
-                  <article>
-                    <span>They are owed</span>
-                    <strong>{formatSplitBillAmount(selectedPersonBalance?.isOwed ?? 0, selectedPersonBills[0]?.currency ?? "PHP")}</strong>
-                  </article>
-                  <article>
-                    <span>Settled</span>
-                    <strong>{selectedPersonBalance?.settledBills ?? 0}/{selectedPersonBills.length}</strong>
-                  </article>
-                </div>
-                <div className="split-bill-detail-modal__list">
-                  {selectedPersonBills.map((bill) => (
-                    <div key={bill.id} className="split-bill-detail-modal__list-row split-bill-detail-modal__list-row--split">
-                      <button type="button" className="split-bill-detail-modal__list-main" onClick={() => openBill(bill.id)}>
-                        <strong>{bill.title}</strong>
-                        <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
-                        <span className="split-bill-detail-modal__row-meta">{formatParticipantShare(bill, selectedPerson.name)}</span>
-                        <span className="split-bill-detail-modal__row-meta">{formatSettlementTransfers(bill)}</span>
-                      </button>
-                      <div className="split-bill-detail-modal__row-actions">
-                        <Link className="button button-secondary button-small" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                          Edit split
-                        </Link>
-                        <button className="button button-danger button-small" type="button" onClick={() => void removeBill(bill.id)}>
-                          Delete
-                        </button>
-                      </div>
-                      {renderTransferSettlementControls(bill)}
-                    </div>
-                  ))}
-                </div>
+                {renderDetailTabs()}
+                {detailTab === "overview" ? (
+                  <div className="split-bill-balance-dashboard">
+                    <article>
+                      <span>They owe</span>
+                      <strong>{formatSplitBillAmount(selectedPersonBalance?.owes ?? 0, selectedPersonBills[0]?.currency ?? "PHP")}</strong>
+                    </article>
+                    <article>
+                      <span>They are owed</span>
+                      <strong>{formatSplitBillAmount(selectedPersonBalance?.isOwed ?? 0, selectedPersonBills[0]?.currency ?? "PHP")}</strong>
+                    </article>
+                    <article>
+                      <span>Settled</span>
+                      <strong>{selectedPersonBalance?.settledBills ?? 0}/{selectedPersonBills.length}</strong>
+                    </article>
+                  </div>
+                ) : null}
+                {detailTab === "bills" ? renderBillRows(selectedPersonBills, selectedPerson.name) : null}
+                {detailTab === "settle" ? renderSettlementBoard(selectedPersonBills, selectedPerson.name) : null}
+                {detailTab === "activity" ? renderActivityList(selectedPersonActivity) : null}
                 <div className="split-bill-detail-modal__actions">
                   <button className="button button-danger button-small" type="button" onClick={() => void removePerson(selectedPerson.id)}>
                     Delete person
                   </button>
-                </div>
-                <div className="split-bill-activity">
-                  <strong>Recent activity</strong>
-                  {selectedPersonActivity.length > 0 ? (
-                    selectedPersonActivity.map((activity) => (
-                      <div key={activity.id} className="split-bill-activity__row">
-                        <span>{activity.billTitle}: {activity.message}</span>
-                        <small>{formatActivityTime(activity.createdAt)}</small>
-                      </div>
-                    ))
-                  ) : (
-                    <span className="split-bill-subtle-empty">No activity yet</span>
-                  )}
                 </div>
               </div>
             ) : null}

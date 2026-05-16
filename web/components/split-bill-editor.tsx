@@ -9,6 +9,7 @@ import {
   formatSplitBillAmount,
   mergeSplitBillItemSplitMetadata,
   mergeSplitBillReceiptSummary,
+  parseAmountValue,
   splitBillDraftFromReceiptPreview,
   splitBillDraftFromSerializedBill,
   type ReceiptPreviewResult,
@@ -55,6 +56,84 @@ const readJsonResponse = async <T,>(response: Response): Promise<T> => {
     throw new Error(payload?.error ?? "Request failed");
   }
   return payload;
+};
+
+const AMOUNT_TOLERANCE = 0.01;
+
+const getItemLabel = (item: SplitBillDraft["items"][number], index: number) => item.description.trim() || `Item ${index + 1}`;
+
+const validateSplitBillDraft = (
+  participants: Array<{ id?: string; name: string }>,
+  items: SplitBillDraft["items"],
+  payments: SplitBillDraft["payments"],
+  currency: string
+) => {
+  if (participants.length === 0) {
+    return "Add at least one person before saving.";
+  }
+
+  if (items.length === 0) {
+    return "Add at least one item or total before saving.";
+  }
+
+  const participantIds = new Set(participants.map((participant) => participant.id).filter(Boolean));
+
+  for (const [index, item] of items.entries()) {
+    const itemLabel = getItemLabel(item, index);
+    const itemAmount = parseAmountValue(item.amount);
+
+    if (itemAmount === null || itemAmount <= 0) {
+      return `${itemLabel} needs an amount greater than zero.`;
+    }
+
+    const selectedParticipantIds = item.participantIds.filter((participantId) => participantIds.has(participantId));
+    const splitMethod = item.splitMethod ?? "equal";
+
+    if (splitMethod !== "equal" && selectedParticipantIds.length === 0) {
+      return `${itemLabel} needs people selected before using ${splitMethod} splitting.`;
+    }
+
+    if (splitMethod === "equal") {
+      continue;
+    }
+
+    const allocationByParticipantId = new Map(
+      (item.allocations ?? []).map((allocation) => [allocation.participantId, parseAmountValue(allocation.value)])
+    );
+
+    for (const participantId of selectedParticipantIds) {
+      const allocation = allocationByParticipantId.get(participantId);
+      if (allocation === null || allocation === undefined || allocation < 0) {
+        return `${itemLabel} needs a valid ${splitMethod} value for every selected person.`;
+      }
+    }
+
+    const allocationTotal = selectedParticipantIds.reduce(
+      (sum, participantId) => sum + Math.max(0, allocationByParticipantId.get(participantId) ?? 0),
+      0
+    );
+
+    if (splitMethod === "exact" && Math.abs(allocationTotal - itemAmount) > AMOUNT_TOLERANCE) {
+      return `${itemLabel} exact amounts must add up to ${formatSplitBillAmount(itemAmount, currency)}.`;
+    }
+
+    if (splitMethod === "percentage" && Math.abs(allocationTotal - 100) > AMOUNT_TOLERANCE) {
+      return `${itemLabel} percentages must add up to 100%.`;
+    }
+
+    if (splitMethod === "shares" && allocationTotal <= 0) {
+      return `${itemLabel} needs at least one positive share.`;
+    }
+  }
+
+  for (const payment of payments) {
+    const amount = parseAmountValue(payment.amount);
+    if (amount === null || amount < 0) {
+      return "Payments cannot be negative or invalid.";
+    }
+  }
+
+  return null;
 };
 
 export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorProps) {
@@ -468,6 +547,11 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
           amount: payment.amount,
           note: payment.note?.trim() || null,
         }));
+      const validationError = validateSplitBillDraft(participants, items, payments, draft.currency);
+
+      if (validationError) {
+        throw new Error(validationError);
+      }
 
       const payload = {
         ...draft,
@@ -684,7 +768,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
                 <p className="eyebrow">Payments</p>
                 <h2>Who actually paid?</h2>
               </div>
-                  <button className="button button-secondary button-small" type="button" onClick={addPayment}>
+              <button className="button button-secondary button-small" type="button" onClick={addPayment}>
                 Add payment
               </button>
             </div>
@@ -729,6 +813,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
               <div>
                 <p className="eyebrow">Items</p>
                 <h2>What gets split?</h2>
+                <p className="panel-muted">Use equal splits for quick bills, or exact, percentage, and shares when receipt lines need review.</p>
               </div>
               <button className="button button-secondary button-small" type="button" onClick={addItem}>
                 Add item
@@ -806,6 +891,13 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
                     </div>
                     {item.splitMethod && item.splitMethod !== "equal" && item.participantIds.length > 0 ? (
                       <div className="split-bill-editor__allocation-grid">
+                        <p className="split-bill-editor__allocation-help">
+                          {item.splitMethod === "exact"
+                            ? "Exact amounts must match the item amount."
+                            : item.splitMethod === "percentage"
+                              ? "Percentages must total 100%."
+                              : "Shares can be any positive weights, like 2 and 1."}
+                        </p>
                         {participantOptions
                           .filter((participant) => item.participantIds.includes(participant.id))
                           .map((participant) => {
