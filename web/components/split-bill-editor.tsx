@@ -303,6 +303,30 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
   const participantOptions = draft.participants.filter(
     (participant): participant is { id: string; name: string } => Boolean(participant.id && participant.name.trim())
   );
+  const billItemsWithAmount = draft.items.filter((item) => item.description.trim() || item.amount.trim());
+  const paymentsWithAmount = draft.payments.filter((payment) => payment.participantId && (parseAmountValue(payment.amount) ?? 0) > 0);
+  const readyChecks = [
+    {
+      label: "People",
+      value: participantOptions.length > 0 ? `${participantOptions.length} added` : "Add at least one person",
+      isReady: participantOptions.length > 0,
+    },
+    {
+      label: "Items",
+      value: billItemsWithAmount.length > 0 ? `${billItemsWithAmount.length} line${billItemsWithAmount.length === 1 ? "" : "s"}` : "Add a total or receipt line",
+      isReady: billItemsWithAmount.length > 0,
+    },
+    {
+      label: "Payments",
+      value: paymentsWithAmount.length > 0 ? `${paymentsWithAmount.length} payer${paymentsWithAmount.length === 1 ? "" : "s"}` : "Record who paid",
+      isReady: paymentsWithAmount.length > 0,
+    },
+    {
+      label: "Settlement",
+      value: settlement.transfers.length > 0 ? `${settlement.transfers.length} transfer${settlement.transfers.length === 1 ? "" : "s"} to settle` : "No transfers yet",
+      isReady: settlement.participants.length > 0 && billItemsWithAmount.length > 0,
+    },
+  ];
 
   const updateParticipant = (participantId: string, value: string) => {
     setDraft((current) => ({
@@ -995,6 +1019,24 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
         </div>
 
         <aside className="split-bill-editor__side">
+          <section className="split-bill-editor__section panel glass">
+            <div className="split-bill-panel__head">
+              <div>
+                <p className="eyebrow">Ready check</p>
+                <h2>Before you save</h2>
+              </div>
+            </div>
+
+            <div className="split-bill-editor__ready-list">
+              {readyChecks.map((check) => (
+                <div key={check.label} className={`split-bill-editor__ready-row${check.isReady ? " is-ready" : ""}`}>
+                  <span>{check.label}</span>
+                  <strong>{check.value}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section className="split-bill-editor__section panel glass">
             <div className="split-bill-panel__head">
               <div>

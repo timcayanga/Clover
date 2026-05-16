@@ -58,6 +58,10 @@ const addCurrencyTotal = (totals: Map<string, number>, currency: string, amount:
   totals.set(currency, (totals.get(currency) ?? 0) + amount);
 };
 
+const openSplitBillAdd = (mode: "manual" | "import") => {
+  window.dispatchEvent(new CustomEvent("clover:open-split-bill-add", { detail: { mode } }));
+};
+
 export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBill, onOpenGroup, onOpenPerson }: SplitBillHomeProps) {
   const [showAllBills, setShowAllBills] = useState(false);
   const [billSearch, setBillSearch] = useState("");
@@ -277,7 +281,30 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
               );
             })
           ) : (
-            <div className="split-bill-table__empty-state">No bills match this view.</div>
+            <div className="split-bill-table__empty-state">
+              {bills.length === 0 ? (
+                <div className="split-bill-empty-launchpad">
+                  <div>
+                    <p className="eyebrow">Start clean</p>
+                    <h3>Your first split starts with one bill.</h3>
+                    <p>Add people as plain names, upload a receipt, or create a group first. No one else needs a Clover account.</p>
+                  </div>
+                  <div className="split-bill-empty-launchpad__actions">
+                    <button className="button button-primary button-small" type="button" onClick={() => openSplitBillAdd("manual")}>
+                      Add expense
+                    </button>
+                    <button className="button button-secondary button-small" type="button" onClick={() => openSplitBillAdd("import")}>
+                      Upload receipt
+                    </button>
+                    <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-group"))}>
+                      Create group
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                "No bills match this view."
+              )}
+            </div>
           )}
         </div>
         <div className="split-bill-table__footer">

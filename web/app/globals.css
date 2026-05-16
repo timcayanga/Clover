@@ -31776,6 +31776,32 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   color: var(--text-secondary);
 }
 
+.split-bill-empty-launchpad {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px;
+}
+
+.split-bill-empty-launchpad h3 {
+  margin: 0 0 4px;
+  color: var(--text-primary);
+  font-size: 1.2rem;
+}
+
+.split-bill-empty-launchpad p {
+  margin: 0;
+  max-width: 520px;
+}
+
+.split-bill-empty-launchpad__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .split-bill-list,
 .split-bill-group-list,
 .split-bill-editor__rows,
@@ -32108,6 +32134,38 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 
 .split-bill-editor__summary-card small {
   color: var(--text-secondary);
+}
+
+.split-bill-editor__ready-list {
+  display: grid;
+  gap: 8px;
+}
+
+.split-bill-editor__ready-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.18);
+  border-radius: 16px;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.split-bill-editor__ready-row.is-ready {
+  border-color: rgba(4, 120, 87, 0.16);
+  background: rgba(4, 120, 87, 0.07);
+}
+
+.split-bill-editor__ready-row span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.split-bill-editor__ready-row strong {
+  text-align: right;
+  font-size: 0.9rem;
 }
 
 .split-bill-editor__transfer {
@@ -32747,6 +32805,37 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   background: rgba(3, 168, 192, 0.06);
 }
 
+.split-bill-settlement-story {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.split-bill-settlement-story > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.split-bill-settlement-story span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.split-bill-settlement-story__meter {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.split-bill-settlement-story__meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), #34d399);
+}
+
 .split-bill-detail-modal__settlement-panel--settled {
   border-color: rgba(4, 120, 87, 0.14);
   background: rgba(4, 120, 87, 0.07);
@@ -32998,6 +33087,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .split-bill-settle-all,
+  .split-bill-empty-launchpad,
+  .split-bill-settlement-story > div:first-child,
   .split-bill-settlement-board__head,
   .split-bill-settlement-board__bill-head,
   .split-bill-activity__row,

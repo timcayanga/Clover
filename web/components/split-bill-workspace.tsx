@@ -76,6 +76,26 @@ const formatRecordedTransferSettlements = (bill: SplitBillSerializedBill) => {
     .join(" · ");
 };
 
+const getSettlementProgress = (bill: SplitBillSerializedBill) => {
+  const remaining = bill.settlement.transfers.reduce((sum, transfer) => sum + transfer.amount, 0);
+  const recorded = (bill.transferSettlements ?? []).reduce((sum, transferSettlement) => sum + Number(transferSettlement.amount), 0);
+  const total = remaining + recorded;
+
+  if (total <= 0.005) {
+    return {
+      percent: 100,
+      remaining,
+      recorded,
+    };
+  }
+
+  return {
+    percent: Math.min(100, Math.round((recorded / total) * 100)),
+    remaining,
+    recorded,
+  };
+};
+
 const getPersonBalanceSummary = (bills: SplitBillSerializedBill[], personName: string) => {
   const summary = bills.reduce(
     (totals, bill) => {
@@ -458,6 +478,7 @@ export function SplitBillWorkspace({
           (transfer) => transfer.fromParticipantName === participantName || transfer.toParticipantName === participantName
         )
       : bill.settlement.transfers;
+    const progress = getSettlementProgress(bill);
 
     if (transfers.length === 0) {
       const recordedSettlements = formatRecordedTransferSettlements(bill);
@@ -471,6 +492,18 @@ export function SplitBillWorkspace({
 
     return (
       <div className="split-bill-detail-modal__settlement-panel">
+        <div className="split-bill-settlement-story">
+          <div>
+            <strong>{participantName ? "Settle this person's open transfers" : "Settle this bill"}</strong>
+            <span>
+              {formatSplitBillAmount(progress.remaining, bill.currency)} left
+              {progress.recorded > 0 ? ` · ${formatSplitBillAmount(progress.recorded, bill.currency)} already recorded` : ""}
+            </span>
+          </div>
+          <div className="split-bill-settlement-story__meter" aria-label={`${progress.percent}% settled`}>
+            <span style={{ width: `${progress.percent}%` }} />
+          </div>
+        </div>
         {transfers.map((transfer) => {
           const draftKey = getTransferDraftKey(bill.id, transfer);
 
