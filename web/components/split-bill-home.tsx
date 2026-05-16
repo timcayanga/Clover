@@ -9,6 +9,7 @@ type SplitBillHomeProps = {
   bills: SplitBillSerializedBill[];
   groups: SplitBillGroupSummary[];
   people: SplitBillPersonSummary[];
+  currentUserName: string;
   onOpenBill: (billId: string) => void;
   onOpenGroup: (groupId: string) => void;
   onOpenPerson: (personId: string) => void;
@@ -38,10 +39,71 @@ const groupBillsByCurrency = (items: SplitBillSerializedBill[]) =>
     return acc;
   }, {});
 
-export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, onOpenPerson }: SplitBillHomeProps) {
+const formatCurrencyTotals = (totals: Map<string, number>) => {
+  const entries = Array.from(totals.entries()).filter(([, amount]) => Math.abs(amount) > 0.005);
+
+  if (entries.length === 0) {
+    return "Settled";
+  }
+
+  if (entries.length > 1) {
+    return "Mixed";
+  }
+
+  const [currency, amount] = entries[0];
+  return formatSplitBillAmount(amount, currency);
+};
+
+const addCurrencyTotal = (totals: Map<string, number>, currency: string, amount: number) => {
+  totals.set(currency, (totals.get(currency) ?? 0) + amount);
+};
+
+export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBill, onOpenGroup, onOpenPerson }: SplitBillHomeProps) {
   const [showAllBills, setShowAllBills] = useState(false);
   const [billSearch, setBillSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "settled">("all");
+
+  const balancePulse = useMemo(() => {
+    const owes = new Map<string, number>();
+    const isOwed = new Map<string, number>();
+    const openBills = bills.filter((bill) => bill.settlement.transfers.length > 0);
+    const nextTransfer = bills
+      .flatMap((bill) =>
+        bill.settlement.transfers.map((transfer) => ({
+          ...transfer,
+          billId: bill.id,
+          billTitle: bill.title,
+          currency: bill.currency,
+          billDate: bill.billDate,
+        }))
+      )
+      .filter((transfer) => transfer.fromParticipantName === currentUserName || transfer.toParticipantName === currentUserName)
+      .sort((left, right) => {
+        const leftPriority = left.fromParticipantName === currentUserName ? 0 : 1;
+        const rightPriority = right.fromParticipantName === currentUserName ? 0 : 1;
+        return leftPriority - rightPriority || new Date(right.billDate).getTime() - new Date(left.billDate).getTime();
+      })[0];
+
+    for (const bill of bills) {
+      for (const transfer of bill.settlement.transfers) {
+        const currency = normalizeCurrencyCode(bill.currency);
+        if (transfer.fromParticipantName === currentUserName) {
+          addCurrencyTotal(owes, currency, transfer.amount);
+        }
+        if (transfer.toParticipantName === currentUserName) {
+          addCurrencyTotal(isOwed, currency, transfer.amount);
+        }
+      }
+    }
+
+    return {
+      owesLabel: formatCurrencyTotals(owes),
+      isOwedLabel: formatCurrencyTotals(isOwed),
+      settledCount: bills.filter((bill) => bill.settlement.transfers.length === 0).length,
+      openCount: openBills.length,
+      nextTransfer,
+    };
+  }, [bills, currentUserName]);
 
   const filteredBills = useMemo(() => {
     const query = billSearch.trim().toLowerCase();
@@ -100,6 +162,39 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
 
   return (
     <div className="split-bill-home">
+      <section className="split-bill-pulse panel glass" aria-label="Split Bills balance summary">
+        <div className="split-bill-pulse__copy">
+          <p className="eyebrow">Balance pulse</p>
+          <h2>{balancePulse.openCount > 0 ? `${balancePulse.openCount} bill${balancePulse.openCount === 1 ? "" : "s"} still open` : "Everything is settled"}</h2>
+          <span>
+            {balancePulse.nextTransfer
+              ? balancePulse.nextTransfer.fromParticipantName === currentUserName
+                ? `Next: you pay ${balancePulse.nextTransfer.toParticipantName} for ${balancePulse.nextTransfer.billTitle}.`
+                : `Next: ${balancePulse.nextTransfer.fromParticipantName} pays you for ${balancePulse.nextTransfer.billTitle}.`
+              : "No open transfers for your profile right now."}
+          </span>
+        </div>
+        <div className="split-bill-pulse__metrics">
+          <article>
+            <span>You owe</span>
+            <strong>{balancePulse.owesLabel}</strong>
+          </article>
+          <article>
+            <span>You are owed</span>
+            <strong>{balancePulse.isOwedLabel}</strong>
+          </article>
+          <article>
+            <span>Settled bills</span>
+            <strong>{balancePulse.settledCount}/{bills.length}</strong>
+          </article>
+        </div>
+        {balancePulse.nextTransfer ? (
+          <button className="button button-primary button-small" type="button" onClick={() => onOpenBill(balancePulse.nextTransfer.billId)}>
+            Review next transfer
+          </button>
+        ) : null}
+      </section>
+
       <section className="split-bill-panel panel glass">
         <div className="split-bill-panel__head">
           <div>
@@ -170,7 +265,9 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                     )}
                   </div>
                   <div role="cell">{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</div>
-                  <div role="cell">{status}</div>
+                  <div role="cell">
+                    <span className={`split-bill-status-pill${bill.settlement.transfers.length === 0 ? " is-settled" : ""}`}>{status}</span>
+                  </div>
                   <div role="cell" className="split-bill-table__row-action">
                     <button className="split-bill-table__chevron" type="button" aria-label={`View ${bill.title}`} onClick={() => onOpenBill(bill.id)}>
                       ›

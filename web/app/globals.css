@@ -31226,6 +31226,57 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   gap: 8px;
 }
 
+.split-bill-pulse {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 1.45fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.split-bill-pulse__copy {
+  display: grid;
+  gap: 5px;
+}
+
+.split-bill-pulse__copy h2 {
+  margin: 0;
+  font-size: clamp(1.3rem, 2vw, 1.9rem);
+}
+
+.split-bill-pulse__copy span {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+}
+
+.split-bill-pulse__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.split-bill-pulse__metrics article {
+  display: grid;
+  gap: 4px;
+  min-height: 84px;
+  padding: 14px;
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(248, 251, 252, 0.74)),
+    rgba(3, 168, 192, 0.05);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+.split-bill-pulse__metrics span {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.split-bill-pulse__metrics strong {
+  align-self: end;
+  font-size: 1.18rem;
+}
+
 .split-bill-table__footer {
   display: flex;
   justify-content: flex-end;
@@ -31371,6 +31422,24 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 .split-bill-table__empty-chip {
   color: var(--text-secondary);
   font-size: 0.84rem;
+}
+
+.split-bill-status-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.split-bill-status-pill.is-settled {
+  background: rgba(4, 120, 87, 0.11);
+  color: var(--success, #047857);
 }
 
 .split-bill-home__people-list,
@@ -32843,6 +32912,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .split-bill-card__body,
   .split-bill-form-grid,
+  .split-bill-pulse,
+  .split-bill-pulse__metrics,
   .split-bill-balance-dashboard,
   .split-bill-editor__allocation-grid,
   .split-bill-editor__summary-grid,

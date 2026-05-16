@@ -731,7 +731,15 @@ export function SplitBillWorkspace({
         />
       }
     >
-      <SplitBillHome bills={bills} groups={groups} people={people} onOpenBill={openBill} onOpenGroup={openGroup} onOpenPerson={openPerson} />
+      <SplitBillHome
+        bills={bills}
+        groups={groups}
+        people={people}
+        currentUserName={currentUserName}
+        onOpenBill={openBill}
+        onOpenGroup={openGroup}
+        onOpenPerson={openPerson}
+      />
 
       {selected ? (
         <div className="split-bill-modal" role="presentation" onClick={closeDetail}>
@@ -774,6 +782,7 @@ export function SplitBillWorkspace({
                     <span>{formatSettlementTransfers(selectedBill)}</span>
                   </div>
                 </div>
+                {renderTransferSettlementControls(selectedBill)}
                 <div className="split-bill-detail-modal__list">
                   {selectedBill.items.map((item) => (
                     <div key={item.id} className="split-bill-detail-modal__list-row">
