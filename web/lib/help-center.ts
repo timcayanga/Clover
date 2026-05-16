@@ -72,32 +72,33 @@ export const helpSections: HelpSection[] = [
     slug: "getting-started",
     eyebrow: "Start here",
     title: "Getting started",
-    summary: "Create your Clover account, finish onboarding, and understand what to do first.",
+    summary: "Create your Clover account, finish onboarding, and make your first import without getting lost.",
     icon: "spark",
     accent: "teal",
-    keywords: ["start", "setup", "onboarding", "getting started", "first steps", "first statement"],
+    keywords: ["start", "setup", "onboarding", "getting started", "first steps", "home page", "workspace", "imports"],
     searchPhrases: [
       "how to set up Clover for the first time",
       "how to start using Clover",
       "what to do after signing up",
-      "best first statement to upload",
+      "what to upload first in Clover",
     ],
     highlights: [
       "Create your account and finish onboarding.",
-      "Pick a workspace and start with one statement.",
-      "Review what Clover imported before you add more data.",
+      "Pick a workspace and start from Home.",
+      "Upload a statement, receipt, screenshot, or manual entry.",
     ],
     articles: [
       createArticle(
         "how-to-set-up-clover-for-the-first-time",
         "How to set up Clover for the first time",
         "Follow the first-run setup flow, choose a workspace, and prepare your first import.",
-        "Step-by-step guidance for setting up Clover for the first time, including onboarding and your first workspace.",
-        ["setup", "first time setup", "onboarding", "workspace"],
+        "Step-by-step guidance for setting up Clover for the first time, including onboarding, Home, and your first workspace.",
+        ["setup", "first time setup", "onboarding", "workspace", "home"],
         [
           "Create your Clover account.",
           "Complete onboarding and choose your starter workspace.",
-          "Upload your first statement or receipt.",
+          "Open Home to confirm you are in the right place.",
+          "Upload your first statement, receipt, screenshot, or manual entry.",
           "Check the parsed result before you add more files.",
         ],
         [
@@ -109,7 +110,7 @@ export const helpSections: HelpSection[] = [
           {
             question: "What should I do after signing up for Clover?",
             answer:
-              "Pick the setup flow, choose a workspace, and upload one clear statement so you can verify the import is working as expected.",
+              "Pick the setup flow, choose a workspace, open Home, and upload one clear file so you can verify the import is working as expected.",
           },
         ],
         [
@@ -122,25 +123,25 @@ export const helpSections: HelpSection[] = [
       ),
       createArticle(
         "what-to-upload-first-to-clover",
-        "What to upload first in Clover",
-        "Choose the right first statement or receipt so Clover can build the cleanest starting point.",
-        "Learn what file to upload first in Clover and how to choose a statement that is easy to verify.",
-        ["first upload", "first statement", "receipts", "statement upload"],
+        "What to import first in Clover",
+        "Choose the right first file so Clover can build the cleanest starting point.",
+        "Learn what to import first in Clover and how to choose a file that is easy to verify.",
+        ["first upload", "first statement", "receipts", "statement upload", "screenshots", "manual entry"],
         [
-          "Pick a statement that covers one account and one time period.",
+          "Pick a statement, receipt, or screenshot that covers one account or time period.",
           "Use a file with clean, readable descriptions if possible.",
-          "Avoid uploading too many unrelated files on day one.",
+          "Add manual entries later when you want to fill gaps or adjust older months.",
         ],
         [
           {
-            question: "What is the best first file to upload?",
+            question: "What is the best first file to import?",
             answer:
-              "Pick a statement or receipt that clearly covers one account and one time period. That makes the first review much easier.",
+              "Pick a statement, receipt, or screenshot that clearly covers one account and one time period. That makes the first review much easier.",
           },
           {
             question: "Can I upload more files later?",
             answer:
-              "Yes. Start with one clean file, then add more statements and receipts as you build confidence in the workflow.",
+              "Yes. Start with one clean file, then add more statements, receipts, screenshots, or manual entries as you build confidence in the workflow.",
           },
         ],
         [
@@ -160,6 +161,7 @@ export const helpSections: HelpSection[] = [
         [
           "Finish onboarding.",
           "Choose the workspace where your finances should live.",
+          "Open Home and check the current account state.",
           "Upload a statement.",
           "Open Transactions to confirm Clover read it correctly.",
         ],
@@ -264,39 +266,39 @@ export const helpSections: HelpSection[] = [
     slug: "importing-reviewing",
     eyebrow: "Statements",
     title: "Importing and reviewing",
-    summary: "Upload files, understand parsing results, and review anything Clover is unsure about.",
+    summary: "Upload statements, receipts, screenshots, or manual entries, then review parsed data before confirming it.",
     icon: "inbox",
     accent: "lime",
-    keywords: ["import", "uploads", "upload", "review", "parsing", "parser", "files", "statements", "receipts"],
+    keywords: ["import", "uploads", "upload", "review", "parsing", "parser", "files", "statements", "receipts", "screenshots", "manual entry"],
     searchPhrases: [
-      "how to import a bank statement into Clover",
-      "how to review imported transactions",
-      "why Clover flagged my rows for review",
+      "how to import statements into Clover",
+      "how to upload receipts to Clover",
+      "how to review imported data in Clover",
       "what file types does Clover support",
     ],
     highlights: [
-      "Upload statements and receipts from the right workspace.",
+      "Upload statements, receipts, screenshots, or manual entries from the right workspace.",
       "Check parsed rows before they become confirmed data.",
       "Low-confidence results should go to review.",
     ],
     articles: [
       createArticle(
-        "how-to-import-a-bank-statement-into-clover",
-        "How to import a bank statement into Clover",
-        "Use the import flow to upload a statement and review the parsed rows.",
-        "Step-by-step guide to importing a bank statement into Clover and checking the parsed output.",
-        ["import bank statement", "statement upload", "bank statement import"],
+        "how-to-import-statements-receipts-and-screenshots-into-clover",
+        "How to import statements, receipts, and screenshots into Clover",
+        "Use the import flow to upload a file or add a transaction manually, then review the parsed rows.",
+        "Step-by-step guide to importing statements, receipts, and screenshots into Clover and checking the parsed output.",
+        ["import statement", "statement upload", "bank statement import", "receipt upload", "screenshot import", "manual entry"],
         [
           "Open Imports.",
           "Choose the workspace and upload your file.",
-          "Wait for Clover to parse the statement.",
+          "Wait for Clover to parse the file or add the transaction manually.",
           "Review the output before confirming anything.",
         ],
         [
           {
-            question: "What happens after I upload a statement?",
+            question: "What happens after I upload a file?",
             answer:
-              "Clover processes the file, extracts rows, and presents the results so you can check whether the data looks right before confirming it.",
+              "Clover processes the file, extracts rows, and presents the results so you can check whether the data looks right before confirming it. Manual entries follow the same review mindset.",
           },
           {
             question: "Can I upload another file for the same account?",
@@ -316,7 +318,7 @@ export const helpSections: HelpSection[] = [
         "how-to-review-imported-transactions-in-clover",
         "How to review imported transactions in Clover",
         "Check parsed rows, fix mismatches, and confirm what Clover imported.",
-        "Learn how to review imported transactions in Clover, correct parsing issues, and confirm results safely.",
+        "Learn how to review imported data in Clover, correct parsing issues, and confirm results safely.",
         ["review imported transactions", "parsed rows", "confirm transactions"],
         [
           "Open the imported file or review queue.",
@@ -349,7 +351,7 @@ export const helpSections: HelpSection[] = [
         "Supported import file types and passwords",
         "Know what Clover can handle and what to do when a file is password-protected.",
         "Find out which import files Clover supports and how to handle password-protected statements.",
-        ["supported file types", "password protected file", "import troubleshooting", "png", "jpg", "jpeg", "webp", "heic", "heif", "pdf", "csv"],
+        ["supported file types", "password protected file", "import troubleshooting", "png", "jpg", "jpeg", "webp", "heic", "heif", "pdf", "csv", "receipts", "screenshots"],
         [
           "Use PDF, CSV, or supported image files that match Clover’s import flow.",
           "If prompted, enter the document password.",
@@ -376,8 +378,8 @@ export const helpSections: HelpSection[] = [
         ]
       ),
       createArticle(
-        "how-to-fix-a-bad-import-in-clover",
-        "How to fix a bad import in Clover",
+        "how-to-fix-an-import-in-clover",
+        "How to fix an import in Clover",
         "Recover from a messy upload by checking the source file and re-running the import.",
         "Learn how to fix a bad import in Clover when the parsed rows do not match the original file.",
         ["bad import", "fix import", "re-import", "parsed rows"],
@@ -456,10 +458,10 @@ export const helpSections: HelpSection[] = [
     slug: "transactions-categories",
     eyebrow: "Daily use",
     title: "Transactions and categories",
-    summary: "Edit transactions, clean up merchants, and keep categories consistent over time.",
+    summary: "Edit transactions, clean up merchants, and keep categories consistent as your data grows.",
     icon: "play",
     accent: "mint",
-    keywords: ["transactions", "categories", "merchant", "spend", "categorize", "edit", "split", "review"],
+    keywords: ["transactions", "categories", "merchant", "spend", "categorize", "edit", "split", "review", "manual entry", "merchant rules"],
     searchPhrases: [
       "how to change a transaction category in Clover",
       "how to edit a transaction",
@@ -561,7 +563,7 @@ export const helpSections: HelpSection[] = [
         [
           {
             label: "Open dashboard",
-            href: "/dashboard",
+            href: "/transactions",
             description: "See activity in context.",
           },
         ]
@@ -650,7 +652,7 @@ export const helpSections: HelpSection[] = [
     summary: "Understand how Clover groups accounts, balances, and workspaces so the right data stays together.",
     icon: "wallet",
     accent: "sky",
-    keywords: ["accounts", "workspace", "workspaces", "balance", "cash", "bank", "investment", "delete account"],
+    keywords: ["accounts", "workspace", "workspaces", "balance", "cash", "bank", "investment", "delete account", "home", "login"],
     searchPhrases: [
       "how workspaces work in Clover",
       "how to add an account in Clover",
@@ -819,6 +821,11 @@ export const helpSections: HelpSection[] = [
         answer:
           "Use the workspace selector or the account context you are already in so you do not accidentally mix data from different finances.",
       },
+      {
+        question: "Why am I sent back to the landing page when I open a protected page?",
+        answer:
+          "That usually means Clover does not see an active session yet. Log in first, then open Accounts, Transactions, Reports, or other protected pages from the signed-in app.",
+      },
     ],
     links: [
       {
@@ -834,21 +841,181 @@ export const helpSections: HelpSection[] = [
     ],
   },
   {
+    slug: "split-bills",
+    eyebrow: "Shared expenses",
+    title: "Split bills",
+    summary: "Track shared expenses, see balances, and settle up without manual math.",
+    icon: "wallet",
+    accent: "mint",
+    keywords: ["split bills", "shared expenses", "settle up", "roommates", "travel", "people", "balances", "receipts", "split bill"],
+    searchPhrases: [
+      "how to split a bill in Clover",
+      "how to add a shared expense",
+      "how to settle balances in Clover",
+      "how receipt-based split bills work",
+    ],
+    highlights: [
+      "Create one shared bill for trips, homes, or recurring expenses.",
+      "Add people and assign shares in a few clicks.",
+      "Review balances before you settle up.",
+    ],
+    articles: [
+      createArticle(
+        "how-to-create-a-split-bill-in-clover",
+        "How to create a split bill in Clover",
+        "Start a new shared expense and keep the math in one place.",
+        "Learn how to create a split bill in Clover for trips, homes, and recurring shared expenses.",
+        ["create split bill", "shared expense", "split expense"],
+        [
+          "Open Split Bills.",
+          "Create a new bill or import a receipt preview.",
+          "Add the expense details and save it.",
+        ],
+        [
+          {
+            question: "What can I split in Clover?",
+            answer:
+              "You can split shared expenses like meals, rent, groceries, trips, or any cost you want to settle with other people.",
+          },
+          {
+            question: "Can I start from a receipt?",
+            answer:
+              "Yes. You can create a split bill from a receipt preview or enter the expense manually if that is easier.",
+          },
+        ],
+        [
+          {
+            label: "Open split bills",
+            href: "/split-bill",
+            description: "View your shared expenses.",
+          },
+        ]
+      ),
+      createArticle(
+        "how-to-add-people-and-shares-to-a-split-bill",
+        "How to add people and shares to a split bill",
+        "Assign participants and decide how the total should be divided.",
+        "Learn how to add people and shares to a split bill in Clover.",
+        ["split bill shares", "add people", "who owes what"],
+        [
+          "Open the bill.",
+          "Add the people involved.",
+          "Choose how to divide the total.",
+          "Save the shares and review the balance summary.",
+        ],
+        [
+          {
+            question: "How do I decide who pays what?",
+            answer:
+              "You can split the total evenly or assign custom shares so the bill matches the real arrangement.",
+          },
+          {
+            question: "Can I change the people later?",
+            answer:
+              "Yes. You can update the people attached to a bill before settling it if the group changes.",
+          },
+        ],
+        [
+          {
+            label: "Open split bills",
+            href: "/split-bill",
+            description: "Edit the bill and its shares.",
+          },
+        ]
+      ),
+      createArticle(
+        "how-to-settle-a-split-bill-in-clover",
+        "How to settle a split bill in Clover",
+        "Mark balances as settled once everyone has paid their share.",
+        "Learn how to settle a split bill in Clover and keep the remaining balance clear.",
+        ["settle bill", "mark settled", "split bill balance"],
+        [
+          "Open the bill or person detail.",
+          "Record the settlement or transfer.",
+          "Confirm the remaining balance updates correctly.",
+        ],
+        [
+          {
+            question: "What happens after I settle a bill?",
+            answer:
+              "Clover updates the balance so it is clear what is still owed and what has already been settled.",
+          },
+          {
+            question: "Can I keep using split bills over time?",
+            answer:
+              "Yes. You can keep building on the same shared expenses workflow for trips, homes, or ongoing groups.",
+          },
+        ],
+        [
+          {
+            label: "Open split bills",
+            href: "/split-bill",
+            description: "Review the shared balance state.",
+          },
+        ]
+      ),
+    ],
+    questions: [
+      {
+        question: "What can I split in Clover?",
+        answer:
+          "You can split shared expenses like meals, rent, groceries, trips, or any cost you want to settle with other people.",
+      },
+      {
+        question: "Can I start from a receipt?",
+        answer:
+          "Yes. You can create a split bill from a receipt preview or enter the expense manually if that is easier.",
+      },
+      {
+        question: "How do I decide who pays what?",
+        answer:
+          "You can split the total evenly or assign custom shares so the bill matches the real arrangement.",
+      },
+      {
+        question: "Can I change the people later?",
+        answer:
+          "Yes. You can update the people attached to a bill before settling it if the group changes.",
+      },
+      {
+        question: "What happens after I settle a bill?",
+        answer:
+          "Clover updates the balance so it is clear what is still owed and what has already been settled.",
+      },
+      {
+        question: "Can I keep using split bills over time?",
+        answer:
+          "Yes. You can keep building on the same shared expenses workflow for trips, homes, or ongoing groups.",
+      },
+    ],
+    links: [
+      {
+        label: "Open split bills",
+        href: "/split-bill",
+        description: "View and settle shared expenses.",
+      },
+      {
+        label: "Import a receipt",
+        href: "/imports",
+        description: "Start from a receipt preview.",
+      },
+    ],
+  },
+  {
     slug: "reports-insights-goals",
     eyebrow: "Analysis",
     title: "Reports, insights, and goals",
-    summary: "Use Clover’s summaries, patterns, and goals to understand where your money is going.",
+    summary: "Use reports, insights, goals, and investment views to understand what your numbers mean.",
     icon: "play",
     accent: "gold",
-    keywords: ["reports", "insights", "goals", "dashboard", "analysis", "trend", "summary", "investments"],
+    keywords: ["reports", "insights", "goals", "dashboard", "analysis", "trend", "summary", "investments", "awareness", "visibility"],
     searchPhrases: [
       "how to read Clover reports",
-      "what insights mean in Clover",
+      "how to use insights in Clover",
       "how to set a goal in Clover",
       "where to find investment tracking",
     ],
     highlights: [
-      "Reports show structured summaries.",
+      "Reports show structured summaries and trends.",
       "Insights point out patterns and changes.",
       "Goals and investments turn the data into action.",
     ],
@@ -1031,16 +1198,16 @@ export const helpSections: HelpSection[] = [
     summary: "Compare Free and Pro, understand limits, and manage billing from your account.",
     icon: "pricing",
     accent: "violet",
-    keywords: ["pricing", "plan", "billing", "free", "pro", "upgrade", "subscription", "refund", "limits"],
+    keywords: ["pricing", "plan", "billing", "free", "pro", "upgrade", "subscription", "refund", "limits", "investment tools"],
     searchPhrases: [
       "Free vs Pro Clover pricing",
       "how to upgrade Clover plan",
       "how to manage Clover billing",
-      "what is included in Clover Free plan",
+      "what is included in Clover Pro plan",
     ],
     highlights: [
       "Free is useful for trying Clover and starting small.",
-      "Pro gives you more room for accounts, uploads, and analysis.",
+      "Pro gives you more room for accounts, uploads, analysis, and investing.",
       "Billing lives in Settings once you are signed in.",
     ],
     articles: [
@@ -1059,7 +1226,7 @@ export const helpSections: HelpSection[] = [
           {
             question: "What is the difference between Free and Pro in Clover?",
             answer:
-              "Free is best for trying the product or managing a smaller setup, while Pro unlocks more room for accounts, uploads, and deeper analysis.",
+              "Free is best for trying the product or managing a smaller setup, while Pro unlocks more room for accounts, uploads, deeper analysis, and investment tools.",
           },
           {
             question: "What is included in the Free plan?",
@@ -1126,7 +1293,7 @@ export const helpSections: HelpSection[] = [
           {
             question: "What does Pro unlock?",
             answer:
-              "Pro gives you more headroom for accounts, uploads, transactions, and the deeper reports and goals features that benefit from a fuller data set.",
+              "Pro gives you more headroom for accounts, uploads, transactions, the deeper reports and goals features that benefit from a fuller data set, and investment tools for a more complete view of your finances.",
           },
         ],
         [
@@ -1178,7 +1345,7 @@ export const helpSections: HelpSection[] = [
       {
         question: "What does Pro unlock?",
         answer:
-          "Pro gives you more headroom for accounts, uploads, transactions, and the deeper reports and goals features that benefit from a fuller data set.",
+          "Pro gives you more headroom for accounts, uploads, transactions, the deeper reports and goals features that benefit from a fuller data set, and investment tools for a more complete view of your finances.",
       },
       {
         question: "Where do I manage billing?",
@@ -1188,7 +1355,7 @@ export const helpSections: HelpSection[] = [
       {
         question: "What is the difference between Free and Pro in Clover?",
         answer:
-          "Free is best for trying the product or managing a smaller setup, while Pro unlocks more room for accounts, uploads, and deeper analysis.",
+          "Free is best for trying the product or managing a smaller setup, while Pro unlocks more room for accounts, uploads, deeper analysis, and investment tools.",
       },
       {
         question: "How do I upgrade my Clover plan?",
@@ -1218,15 +1385,16 @@ export const helpSections: HelpSection[] = [
     slug: "privacy-security-data",
     eyebrow: "Safety",
     title: "Privacy, security, and data",
-    summary: "See how Clover protects accounts, stores data, and handles sensitive actions.",
+    summary: "See how Clover protects sign-in sessions, preserves audit trails, and handles sensitive data.",
     icon: "shield",
     accent: "coral",
-    keywords: ["trust", "security", "safety", "auth", "privacy", "review queue", "confirm", "delete", "wipe", "storage", "retention"],
+    keywords: ["trust", "security", "safety", "auth", "privacy", "review queue", "confirm", "delete", "wipe", "storage", "retention", "audit trail"],
     searchPhrases: [
       "how Clover protects my account",
       "where Clover stores my data",
       "raw statement file retention in Clover",
       "what browser storage Clover uses",
+      "does Clover overwrite confirmed data",
     ],
     highlights: [
       "Clerk handles authentication and sessions.",
@@ -1413,22 +1581,55 @@ export const helpSections: HelpSection[] = [
     slug: "troubleshooting",
     eyebrow: "Fixes",
     title: "Troubleshooting",
-    summary: "Find fast answers for import issues, missing data, and sync problems.",
+    summary: "Find fast answers for login issues, import problems, duplicates, and missing data.",
     icon: "wrench",
     accent: "rose",
-    keywords: ["troubleshooting", "problem", "issue", "error", "sync", "missing", "duplicate", "password", "failed"],
+    keywords: ["troubleshooting", "problem", "issue", "error", "sync", "missing", "duplicate", "password", "failed", "login", "accounts", "home"],
     searchPhrases: [
       "Clover file will not import",
       "why rows are missing after import",
       "duplicate transactions in Clover",
       "statement password problems",
+      "Clover sends me back to the landing page",
     ],
     highlights: [
+      "If a protected page bounces you back to the landing page, check your sign-in session first.",
       "Start by checking the original file and the parsed result.",
       "Password-protected files often need a separate password step.",
       "Duplicates and missing rows usually come from file overlap or import timing.",
     ],
     articles: [
+      createArticle(
+        "why-protected-pages-send-me-back-to-the-landing-page",
+        "Why protected pages send me back to the landing page",
+        "Check your session when Clover keeps redirecting you out of Accounts, Transactions, or similar pages.",
+        "Learn why Clover may send signed-in users back to the landing page and how to confirm your session is active.",
+        ["landing page redirect", "protected page", "accounts", "transactions", "session"],
+        [
+          "Confirm you are signed in with an active session.",
+          "Open the page again from the app navigation.",
+          "If needed, sign out and sign back in.",
+        ],
+        [
+          {
+            question: "Why am I sent back to the landing page?",
+            answer:
+              "That usually means Clover cannot see an active sign-in session yet. Log in first, then open the page again from the signed-in app.",
+          },
+          {
+            question: "What pages should only be available after I log in?",
+            answer:
+              "Pages like Home, Accounts, Transactions, Reports, Goals, and Split Bills are intended for signed-in users only.",
+          },
+        ],
+        [
+          {
+            label: "Log in",
+            href: "/sign-in",
+            description: "Refresh your session and try again.",
+          },
+        ]
+      ),
       createArticle(
         "file-will-not-import-in-clover",
         "File will not import in Clover",
@@ -1556,6 +1757,11 @@ export const helpSections: HelpSection[] = [
     ],
     questions: [
       {
+        question: "Why am I sent back to the landing page?",
+        answer:
+          "That usually means Clover cannot see an active sign-in session yet. Log in first, then open the page again from the signed-in app.",
+      },
+      {
         question: "My file will not import. What should I check?",
         answer:
           "Confirm the file type, file size, and whether the file is password protected. If the issue persists, re-upload the file from Imports and compare the result.",
@@ -1645,6 +1851,8 @@ export const getHelpSectionImageSrc = (sectionSlug: HelpSection["slug"]) => {
     case "transactions-categories":
       return "/help-icons/transactions-and-categories.png";
     case "accounts-workspaces":
+      return "/help-icons/accounts-and-workspaces.png";
+    case "split-bills":
       return "/help-icons/accounts-and-workspaces.png";
     case "reports-insights-goals":
       return "/help-icons/reports-insights-goals.png";

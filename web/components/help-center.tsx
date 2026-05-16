@@ -68,6 +68,32 @@ export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
           <PublicAccountActions accountState={accountState} />
         </nav>
 
+        <section className="help-hero help-hero--simple glass" aria-labelledby="help-center-title">
+          <div className="help-hero__copy">
+            <p className="eyebrow">Help Center</p>
+            <h1 id="help-center-title">Find the answer that moves you forward.</h1>
+            <p className="help-hero__lede">
+              Get help with statements, receipts, screenshots, split bills, reports, billing, privacy, and the most common Clover troubleshooting
+              steps.
+            </p>
+            <div className="help-hero__actions help-hero__actions--simple">
+              <Link className="button button-primary button-pill" href={getHelpSectionHref("getting-started", returnTo)} prefetch={false}>
+                Getting started
+              </Link>
+              <Link className="button button-secondary button-pill" href={getHelpSectionHref("importing-reviewing", returnTo)} prefetch={false}>
+                Imports
+              </Link>
+              <Link className="button button-secondary button-pill" href={getHelpSectionHref("split-bills", returnTo)} prefetch={false}>
+                Split bills
+              </Link>
+            </div>
+          </div>
+          <div className="help-hero__note">
+            Search for a topic or jump into a section to find step-by-step answers, related links, and support that matches the way Clover works
+            today.
+          </div>
+        </section>
+
         <label className="help-search help-search--hero" htmlFor="help-search">
           <span className="sr-only">Search help</span>
           <input
