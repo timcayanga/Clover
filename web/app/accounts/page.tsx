@@ -378,6 +378,12 @@ type Transaction = {
   isExcluded: boolean;
   source?: string | null;
   importFileId?: string | null;
+  rawPayload?: {
+    amountDelta?: string | number | null;
+    balance?: string | number | null;
+    openingBalance?: string | number | null;
+    kind?: string;
+  } | null;
 };
 
 type StatementCheckpoint = {
@@ -410,6 +416,9 @@ type InvestmentInstitutionCard = {
   updatedAt: string;
   accounts: Account[];
 };
+
+const isInvestmentInstitutionCard = (row: Account | InvestmentInstitutionCard): row is InvestmentInstitutionCard =>
+  "kind" in row && row.kind === "investment_institution";
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
@@ -2408,7 +2417,7 @@ function AccountsPageContent() {
   };
 
   const renderAccountCard = (row: Account | InvestmentInstitutionCard, key: string) => {
-    if ("kind" in row && row.kind === "investment_institution") {
+    if (isInvestmentInstitutionCard(row)) {
       const accountBrand = getAccountBrand({
         institution: row.institution,
         name: row.institution,
@@ -2468,7 +2477,7 @@ function AccountsPageContent() {
   };
 
   const renderMobileListRow = (row: Account | InvestmentInstitutionCard, key: string) => {
-    if ("kind" in row && row.kind === "investment_institution") {
+    if (isInvestmentInstitutionCard(row)) {
       const accountBrand = getAccountBrand({
         institution: row.institution,
         name: row.institution,
@@ -2614,7 +2623,8 @@ function AccountsPageContent() {
       return;
     }
     closeChrome();
-    window.location.assign(getAccountPath(resolveNavigableAccount(account)));
+    const targetAccount = resolveNavigableAccount(account) ?? account;
+    window.location.assign(getAccountPath(targetAccount));
   };
 
   const saveAccountChanges = async (event?: FormEvent<HTMLFormElement>) => {

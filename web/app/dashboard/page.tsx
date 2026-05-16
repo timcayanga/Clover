@@ -627,6 +627,40 @@ async function DashboardStream({
   const daysSinceLastImport = latestImport
     ? Math.max(0, Math.floor((now.getTime() - latestImport.uploadedAt.getTime()) / 86400000))
     : null;
+  const latestBalanceCheckpointAccount = dashboardAccounts
+    .map((account) => ({ account, checkpoint: account.statementCheckpoints[0] ?? null }))
+    .filter((entry): entry is { account: (typeof dashboardAccounts)[number]; checkpoint: NonNullable<(typeof dashboardAccounts)[number]["statementCheckpoints"][number]> } =>
+      Boolean(entry.checkpoint)
+    )
+    .sort((left, right) => right.checkpoint.createdAt.getTime() - left.checkpoint.createdAt.getTime())[0];
+  const insightItems = [
+    currentSummary.current.expense > 0 || currentSummary.previous.expense > 0
+      ? {
+          label: "Spending",
+          copy:
+            Math.abs(currentSummary.expenseDelta) < 0.01
+              ? "Spending is flat vs the previous 30 days."
+              : `Spending is ${currentSummary.expenseDelta > 0 ? "up" : "down"} ${formatCurrency(Math.abs(currentSummary.expenseDelta))} vs the previous 30 days.`,
+        }
+      : null,
+    latestBalanceCheckpointAccount
+      ? {
+          label: "Latest import",
+          copy: `${latestBalanceCheckpointAccount.account.institution ?? latestBalanceCheckpointAccount.account.name} balance changed after the latest import.`,
+        }
+      : latestImport
+        ? {
+            label: "Latest import",
+            copy: `${latestImport.fileName} was added ${daysSinceLastImport === 0 ? "today" : `${daysSinceLastImport ?? 0} day${daysSinceLastImport === 1 ? "" : "s"} ago`}.`,
+          }
+        : null,
+    currentSummary.topCategory
+      ? {
+          label: "Top category",
+          copy: `${currentSummary.topCategory[0]} leads spending at ${formatCurrency(currentSummary.topCategory[1])} this period.`,
+        }
+      : null,
+  ].filter((item): item is { label: string; copy: string } => Boolean(item));
   const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
   const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
   const totalBalanceLabel = formatCurrency(savingsTotal, displayCurrency);
@@ -718,6 +752,20 @@ async function DashboardStream({
             </article>
           ))}
         </section>
+
+        {insightItems.length > 0 ? (
+          <article className="dashboard-home__insight-strip glass" aria-label="Home insights">
+            <p className="eyebrow">Insights</p>
+            <div className="dashboard-home__insight-strip-list">
+              {insightItems.map((item) => (
+                <div key={item.label} className="dashboard-home__insight-strip-item">
+                  <span>{item.label}</span>
+                  <strong>{item.copy}</strong>
+                </div>
+              ))}
+            </div>
+          </article>
+        ) : null}
 
         <div className="dashboard-home__story-row">
           <article className="dashboard-home__activity-card glass">

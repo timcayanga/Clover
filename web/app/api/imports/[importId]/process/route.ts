@@ -285,7 +285,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
         if (cachedDocRecord?.parsedRows && cachedDocRecord.statementFingerprint && cachedDocRecord.metadata) {
           cachedDocTextInfo = {
-            fileFingerprint,
             text: String(cachedDocRecord.extractedText ?? ""),
             cacheHit: true,
             cacheRecord: cachedDocRecord as unknown as NonNullable<Awaited<ReturnType<typeof readImportedStatementTextWithCache>>["cacheRecord"]>,

@@ -4052,6 +4052,45 @@ body.transactions-manual-open .shell-quick-add-button {
   align-items: stretch;
 }
 
+.dashboard-home__insight-strip {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--stroke);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-soft);
+}
+
+.dashboard-home__insight-strip-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dashboard-home__insight-strip-item {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: rgba(3, 168, 192, 0.06);
+}
+
+.dashboard-home__insight-strip-item span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dashboard-home__insight-strip-item strong {
+  color: var(--text-strong);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .dashboard-home__hero-side {
   display: grid;
   gap: 12px;
@@ -23208,6 +23247,10 @@ button.accounts-detail__transaction-head-cell {
     grid-template-columns: 1fr;
   }
 
+  .dashboard-home__insight-strip-list {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-home__movement-grid,
   .dashboard-home__activity-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -30256,6 +30299,7 @@ html[data-theme="dark"] .reports-next,
 html[data-theme="dark"] .dashboard-home__hero,
 html[data-theme="dark"] .dashboard-home__movement-card,
 html[data-theme="dark"] .dashboard-home__activity-card,
+html[data-theme="dark"] .dashboard-home__insight-strip,
 html[data-theme="dark"] .dashboard-home__review-strip,
 html[data-theme="dark"] .dashboard-home__mini-card,
 html[data-theme="dark"] .accounts-group,
