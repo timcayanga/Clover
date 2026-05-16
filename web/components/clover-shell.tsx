@@ -258,6 +258,8 @@ const navItems = [
   { href: "/more", label: "More", key: "more" as const },
 ];
 
+const shouldPrefetchNavHref = (href: string) => href !== "/split-bill";
+
 type IconName =
   | "dashboard"
   | "accounts"
@@ -663,9 +665,12 @@ export function CloverShell({
   }, [pathname]);
 
   useEffect(() => {
-    const prefetchTargets = ["/home", "/transactions", "/split-bill", "/more", "/settings"];
+    const prefetchTargets = ["/home", "/transactions", "/more", "/settings"];
 
     for (const href of prefetchTargets) {
+      if (pathname === href) {
+        continue;
+      }
       void router.prefetch(href);
     }
   }, [router, pathname]);
@@ -977,6 +982,10 @@ export function CloverShell({
   };
 
   const prefetchNavTarget = (href: string) => {
+    if (!shouldPrefetchNavHref(href)) {
+      return;
+    }
+
     void router.prefetch(href);
   };
 
@@ -1233,7 +1242,7 @@ export function CloverShell({
                 className={`nav-link ${active === item.key ? "is-active" : ""}`}
                 aria-current={active === item.key ? "page" : undefined}
                 href={item.href}
-                prefetch
+                prefetch={shouldPrefetchNavHref(item.href)}
                 onClick={closeChrome}
                 onMouseEnter={() => prefetchNavTarget(item.href)}
                 onTouchStart={() => prefetchNavTarget(item.href)}
@@ -1463,7 +1472,7 @@ export function CloverShell({
           className={`shell-bottom-nav__item${active === "split-bill" || pathname?.startsWith("/split-bill") ? " is-active" : ""}`}
           aria-current={active === "split-bill" || pathname?.startsWith("/split-bill") ? "page" : undefined}
           href="/split-bill"
-          prefetch
+          prefetch={false}
           onMouseEnter={() => prefetchNavTarget("/split-bill")}
           onTouchStart={() => prefetchNavTarget("/split-bill")}
         >

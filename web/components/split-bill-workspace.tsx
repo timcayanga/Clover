@@ -114,6 +114,16 @@ const buildBillUpdatePayload = (bill: SplitBillSerializedBill, participants: Spl
   };
 };
 
+const loadFullSplitBill = async (billId: string) => {
+  const response = await fetch(`/api/split-bills/${billId}`);
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as { bill?: SplitBillSerializedBill };
+  return payload.bill ?? null;
+};
+
 export function SplitBillWorkspace({
   bills: initialBills,
   groups: initialGroups,
@@ -226,18 +236,23 @@ export function SplitBillWorkspace({
   };
 
   const removeParticipantFromBill = async (billId: string, participantId: string) => {
-    const bill = bills.find((entry) => entry.id === billId);
-    const participant = bill?.participants.find((entry) => entry.id === participantId);
-    if (!bill || !participant) {
+    const summaryBill = bills.find((entry) => entry.id === billId);
+    const participant = summaryBill?.participants.find((entry) => entry.id === participantId);
+    if (!summaryBill || !participant) {
       return;
     }
 
-    if (bill.participants.length <= 1) {
+    if (summaryBill.participants.length <= 1) {
       window.alert("A split bill needs at least one person.");
       return;
     }
 
-    if (!window.confirm(`Remove ${participant.name} from ${bill.title}?`)) {
+    if (!window.confirm(`Remove ${participant.name} from ${summaryBill.title}?`)) {
+      return;
+    }
+
+    const bill = await loadFullSplitBill(billId);
+    if (!bill) {
       return;
     }
 

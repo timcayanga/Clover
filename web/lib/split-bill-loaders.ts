@@ -36,12 +36,93 @@ const billInclude = {
   payments: true,
 };
 
+const workspaceBillSelect = {
+  id: true,
+  userId: true,
+  transactionId: true,
+  groupId: true,
+  title: true,
+  note: true,
+  billDate: true,
+  currency: true,
+  sourceType: true,
+  merchantName: true,
+  receiptFileName: true,
+  receiptMimeType: true,
+  receiptConfidence: true,
+  subtotal: true,
+  tax: true,
+  tip: true,
+  discount: true,
+  total: true,
+  rawPayload: true,
+  createdAt: true,
+  updatedAt: true,
+  transaction: {
+    select: {
+      id: true,
+      merchantRaw: true,
+      merchantClean: true,
+      date: true,
+      amount: true,
+      currency: true,
+      account: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  },
+  group: {
+    select: {
+      id: true,
+      name: true,
+      members: {
+        orderBy: splitBillGroupMemberOrderBy,
+        select: {
+          id: true,
+          name: true,
+          sortOrder: true,
+        },
+      },
+    },
+  },
+  participants: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
+  items: {
+    select: {
+      id: true,
+      description: true,
+      amount: true,
+      sortOrder: true,
+      participants: {
+        select: {
+          participantId: true,
+        },
+      },
+    },
+    orderBy: splitBillItemOrderBy,
+  },
+  payments: {
+    select: {
+      id: true,
+      participantId: true,
+      amount: true,
+      note: true,
+    },
+  },
+};
+
 export const loadSplitBillWorkspaceData = async (userId: string) => {
   const [bills, groups, people] = await Promise.all([
     prisma.splitBill.findMany({
       where: { userId },
       orderBy: [{ billDate: "desc" }, { updatedAt: "desc" }],
-      include: billInclude,
+      select: workspaceBillSelect,
     }),
     prisma.splitBillGroup.findMany({
       where: { userId },
@@ -81,6 +162,7 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
     bills: bills.map((bill) =>
       serializeSplitBillRecord({
         ...bill,
+        receiptText: null,
         transferSettlements: transferSettlementsByBillId.get(bill.id) ?? [],
       } as Parameters<typeof serializeSplitBillRecord>[0])
     ),
