@@ -665,7 +665,7 @@ export function CloverShell({
   }, [pathname]);
 
   useEffect(() => {
-    const prefetchTargets = ["/home", "/transactions", "/more", "/settings"];
+    const prefetchTargets = ["/home", "/accounts", "/transactions", "/split-bill", "/reports", "/insights", "/goals", "/more", "/settings", "/help"];
 
     for (const href of prefetchTargets) {
       if (pathname === href) {
@@ -759,23 +759,13 @@ export function CloverShell({
   }, [searchWorkspaceId]);
 
   useEffect(() => {
-    const reloadOnceForChunkFailure = () => {
-      const storageKey = "clover.chunk-reload.v1";
-      if (window.sessionStorage.getItem(storageKey) === "1") {
-        return;
-      }
-
-      window.sessionStorage.setItem(storageKey, "1");
-      window.location.reload();
-    };
-
     const shouldReload = (message: string) =>
       /Loading chunk|ChunkLoadError|Failed to fetch dynamically imported module|Importing a module script failed/i.test(message);
 
     const handleError = (event: ErrorEvent) => {
       const message = [event.message, event.error instanceof Error ? event.error.message : ""].join(" ");
       if (shouldReload(message)) {
-        reloadOnceForChunkFailure();
+        console.warn("[Clover] Ignoring transient chunk load error during deployment:", message);
       }
     };
 
@@ -791,7 +781,7 @@ export function CloverShell({
               : "";
 
       if (shouldReload(message)) {
-        reloadOnceForChunkFailure();
+        console.warn("[Clover] Ignoring transient chunk load error during deployment:", message);
       }
     };
 
