@@ -2202,6 +2202,18 @@ const recordImportDataQaInBackground = (params: {
   });
 };
 
+const deleteTransactionsForImportWithTx = async (tx: Prisma.TransactionClient, importFileId: string) => {
+  await tx.$executeRawUnsafe(
+    `DELETE FROM "Transaction"
+      WHERE "importFileId" = $1
+        OR (
+          "rawPayload" IS NOT NULL
+          AND "rawPayload"->>'sourceImportFileId' = $1
+        )`,
+    importFileId
+  );
+};
+
 const coerceParsedTransactionRowsForEnrichment = (rows: Array<Record<string, unknown>>) =>
   rows.map(
     (row) =>
@@ -4549,9 +4561,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   };
 
   const confirmationResult = await prisma.$transaction(async (tx) => {
-    await tx.transaction.deleteMany({
-      where: { importFileId },
-    });
+    await deleteTransactionsForImportWithTx(tx, importFileId);
 
     await tx.trainingSignal.deleteMany({
       where: {
