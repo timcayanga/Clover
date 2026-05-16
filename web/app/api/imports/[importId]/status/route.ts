@@ -1,7 +1,10 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { fetchImportFileCompat } from "@/lib/data-engine";
+import { upsertImportEnrichmentJob } from "@/lib/import-enrichment-jobs";
 import { loadImportStatusSnapshot } from "@/lib/import-status-snapshot";
+import { prisma } from "@/lib/prisma";
+import { processImportEnrichmentJobs } from "@/workers/import-processor";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +31,45 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 
     if (!snapshot) {
       return NextResponse.json({ error: "Import not found" }, { status: 404 });
+    }
+
+    const shouldSelfHealEnrichment =
+      snapshot.visibleImportComplete &&
+      (!snapshot.enrichmentJob || snapshot.enrichmentJob.status === "done" || snapshot.enrichmentJob.status === "failed");
+    if (shouldSelfHealEnrichment) {
+      const [parsedRowCount, needsCleanupCount] = await Promise.all([
+        prisma.parsedTransaction.count({ where: { importFileId: importId } }),
+        prisma.transaction.count({
+          where: {
+            importFileId: importId,
+            deletedAt: null,
+            reviewStatus: { notIn: ["edited", "rejected"] },
+            OR: [{ merchantClean: null }, { categoryId: null }, { category: { is: { name: "Other" } } }],
+          },
+        }),
+      ]);
+      if (parsedRowCount > 0 && needsCleanupCount > 0) {
+        await upsertImportEnrichmentJob({
+          workspaceId: String(importFile.workspaceId),
+          importFileId: importId,
+          totalRows: parsedRowCount,
+          phase: "queued",
+          forceRequeue: true,
+        });
+        const result = await processImportEnrichmentJobs({
+          importFileId: importId,
+          limit: 1,
+          batchSize: 100,
+          workerId: `status-import-enrichment-${userId}`,
+        });
+        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
+          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+          promoteFailedVisibleImport: true,
+        });
+        if (refreshedSnapshot) {
+          return NextResponse.json({ ...refreshedSnapshot, enrichmentSelfHeal: result });
+        }
+      }
     }
 
     return NextResponse.json(snapshot);

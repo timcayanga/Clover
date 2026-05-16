@@ -27,6 +27,7 @@ export type ImportStatusSnapshot = {
   };
   parsedRowsCount: number;
   confirmedTransactionsCount: number;
+  visibleImportComplete: boolean;
   confirmationStatus: string;
   telemetryPhase: string;
   telemetryLabel: string;
@@ -168,6 +169,7 @@ export const loadImportStatusSnapshot = async (
     },
     parsedRowsCount,
     confirmedTransactionsCount,
+    visibleImportComplete,
     confirmationStatus,
     telemetryPhase: telemetry.phase,
     telemetryLabel: telemetry.phaseLabel,
