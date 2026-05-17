@@ -120,7 +120,14 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <HelperTextSync />
         <GlobalImportActivity />
         {publishableKey ? (
-          <ClerkProvider publishableKey={publishableKey} signInUrl="/sign-in" signUpUrl="/sign-up" localization={clerkLocalization}>
+          <ClerkProvider
+            publishableKey={publishableKey}
+            signInUrl="/sign-in"
+            signUpUrl="/sign-up"
+            localization={clerkLocalization}
+            touchSession
+            experimental={{ persistClient: true }}
+          >
             <PostHogAnalytics />
             <PostHogClerkIdentity />
             {children}
