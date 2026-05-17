@@ -1416,16 +1416,18 @@ function AccountsPageContent() {
                 !deletingAccountIdsRef.current.has(transaction.accountId)
             );
             setTransactions((current) =>
-              mergeImportedWorkspaceTransactions(
-                current.length > 0
-                  ? current.filter(
-                      (transaction) =>
-                        !deletedAccountIdsRef.current.has(transaction.accountId) &&
-                        !deletingAccountIdsRef.current.has(transaction.accountId)
-                    )
-                  : visibleCachedWorkspaceTransactions,
-                visibleFetchedTransactions
-              )
+              visibleFetchedTransactions.length > 0
+                ? mergeImportedWorkspaceTransactions([], visibleFetchedTransactions)
+                : mergeImportedWorkspaceTransactions(
+                    current.length > 0
+                      ? current.filter(
+                          (transaction) =>
+                            !deletedAccountIdsRef.current.has(transaction.accountId) &&
+                            !deletingAccountIdsRef.current.has(transaction.accountId)
+                        )
+                      : visibleCachedWorkspaceTransactions,
+                    visibleFetchedTransactions
+                  )
             );
           }
         } catch {

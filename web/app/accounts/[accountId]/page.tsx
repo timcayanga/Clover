@@ -1328,7 +1328,7 @@ function AccountDetailPageContent() {
                 : [];
               const mergedTransactions =
                 nextTransactions.length > 0
-                  ? mergeImportedWorkspaceTransactions(cachedTransactions.length > 0 ? cachedTransactions : [], nextTransactions)
+                  ? mergeImportedWorkspaceTransactions([], nextTransactions)
                   : cachedTransactions.length > 0
                     ? cachedTransactions
                     : [];

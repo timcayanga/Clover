@@ -2383,11 +2383,8 @@ function TransactionsPageContent() {
         transactionsRef.current.length > 0
           ? transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
           : visibleCachedWorkspaceTransactions;
-      const hasVisibleImportedBase = stableBaseTransactions.some(
-        (transaction) => transaction.source === "upload" || Boolean(transaction.importFileId)
-      );
       const baseTransactions =
-        options?.append || !hasFreshTransactions || hasVisibleImportedBase
+        options?.append || !hasFreshTransactions
           ? stableBaseTransactions
           : [];
       const mergedTransactions = options?.append
