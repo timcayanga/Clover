@@ -1483,6 +1483,10 @@ export const summarizeMerchantText = (value: string, institution?: string | null
     return "eL/ESPay";
   }
 
+  if (/to:\s*gcash\s+cash\s+in|gcash\s*cash\s*in|edl\/?mbpay/i.test(rawLower) || compact.includes("gcashcashin")) {
+    return "GCash Cash In";
+  }
+
   if (institution === "Metrobank") {
     if (/interbank\s+fund\s+transfer\s+credit\s+received\s+from\s+other\s+bank/i.test(rawLower)) {
       return "Incoming Interbank Transfer";

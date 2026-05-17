@@ -487,6 +487,10 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Transfers";
   }
 
+  if (/to:\s*gcash\s+cash\s+in|gcash\s+cash\s+in|edl\/?mbpay/.test(lower) || /togcashcashin|gcashcashin|edlmbpay/.test(compact)) {
+    return "Transfers";
+  }
+
   if (
     /atm\s+withdrawal|atm\s+withdrawal\s+acquirer\s+fee|cash\s+withdrawal|cash\s+out|expressnet|megalink/.test(lower) ||
     /atmwithdrawal|atmwithdrawalacquirerfee|cashwithdrawal|cashout|expressnet|megalink/.test(compact)
@@ -2844,6 +2848,18 @@ export const classifyMerchant = (params: {
   let bestSignal: TrainingSignalRow | null = null;
   let bestScore = 0;
 
+  if (hardcodedOverride) {
+    return {
+      categoryName: hardcodedOverride,
+      confidence: 99,
+      categoryReason: "hardcoded-override",
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+      normalizedName: summarizeMerchantText(params.merchantText),
+      preferredType: preferredTypeForCategory(hardcodedOverride, params.type, categoryText || params.merchantText),
+    };
+  }
+
   for (const rule of params.merchantRules) {
     const score = scoreMerchantRule(tokens, normalizedMerchant, rule);
     if (score > bestRuleScore) {
@@ -2923,18 +2939,6 @@ export const classifyMerchant = (params: {
       merchantTokens: tokens,
       normalizedName: summarizeMerchantText(params.merchantText),
       preferredType: preferredTypeForCategory(heuristicCategory, params.type, categoryText || params.merchantText),
-    };
-  }
-
-  if (hardcodedOverride) {
-    return {
-      categoryName: hardcodedOverride,
-      confidence: 99,
-      categoryReason: "hardcoded-override",
-      merchantKey: normalizedMerchant,
-      merchantTokens: tokens,
-      normalizedName: summarizeMerchantText(params.merchantText),
-      preferredType: preferredTypeForCategory(hardcodedOverride, params.type, categoryText || params.merchantText),
     };
   }
 

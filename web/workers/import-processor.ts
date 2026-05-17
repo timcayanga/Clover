@@ -3449,7 +3449,21 @@ export const processImportFileText = async (
     });
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
-  const rows = effectiveRows as EnrichedParsedImportRow[];
+  let rows = effectiveRows as EnrichedParsedImportRow[];
+  if (rows.length > 0 && importMode === "statement") {
+    try {
+      rows = await enrichParsedRowsWithTraining({
+        workspaceId: String(importFile.workspaceId),
+        rows,
+        statementConfidence: resolvedMetadata.confidence ?? 0,
+      });
+    } catch (error) {
+      console.warn("Initial import enrichment failed before confirmation; continuing with parsed rows", {
+        importFileId,
+        error,
+      });
+    }
+  }
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
