@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { buildTransactionQueryWhere } from "@/lib/transaction-query";
-import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
@@ -140,15 +139,6 @@ const isImportedTransactionPayload = (rawPayload: Prisma.JsonValue | null | unde
   );
 };
 
-const getLastFourDigits = (value?: string | null) => {
-  if (!value) {
-    return null;
-  }
-
-  const digits = String(value).replace(/\D/g, "");
-  return digits.length >= 4 ? digits.slice(-4) : null;
-};
-
 const normalizeLegacyTransactionVisibility = async (workspaceId: string) => {
   await prisma.$executeRaw`
     UPDATE "Transaction"
@@ -182,45 +172,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
 
     const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const pageSize = Math.max(1, Number(searchParams.get("pageSize") ?? "25") || 25);
-    const identityKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
-    const accountLastFour = getLastFourDigits(account.accountNumber ?? account.name);
-    const siblingAccounts = await prisma.account.findMany({
-      where: {
-        workspaceId: account.workspaceId,
-      },
-      select: {
-        id: true,
-        name: true,
-        institution: true,
-        type: true,
-        accountNumber: true,
-      },
-    });
-    const accountIds = siblingAccounts
-      .filter((candidate) => {
-        const candidateKey = normalizeImportedAccountKey(
-          candidate.name,
-          candidate.institution,
-          candidate.accountNumber,
-          candidate.type
-        );
-        const candidateLastFour = getLastFourDigits(candidate.accountNumber ?? candidate.name);
-
-        return (
-          candidate.id === accountId ||
-          candidateKey === identityKey ||
-          Boolean(
-            account.institution &&
-              candidate.institution &&
-              account.institution.trim().toLowerCase() === candidate.institution.trim().toLowerCase() &&
-              accountLastFour &&
-              candidateLastFour &&
-              accountLastFour === candidateLastFour
-          )
-        );
-      })
-      .map((candidate) => candidate.id);
-    const where = buildTransactionQueryWhere(account.workspaceId, { accountIds });
+    const where = buildTransactionQueryWhere(account.workspaceId, { accountIds: [account.id] });
     const skip = (page - 1) * pageSize;
 
     const [totalCount, rows] = await Promise.all([

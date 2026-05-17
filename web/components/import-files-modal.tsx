@@ -5580,7 +5580,6 @@ export function ImportFilesModal({
       const visibilityDeadline = visibilityDeadlineRef.current;
       if (visibilityDeadline && Date.now() >= visibilityDeadline) {
         hardStopVisibleImportModal("deadline");
-        return;
       }
 
       if (item.confirmationState === "confirmed") {
@@ -5595,7 +5594,6 @@ export function ImportFilesModal({
       const postProcessVisibilityDeadline = visibilityDeadlineRef.current;
       if (postProcessVisibilityDeadline && Date.now() >= postProcessVisibilityDeadline) {
         hardStopVisibleImportModal("deadline");
-        return;
       }
 
       if (result.status === "done") {

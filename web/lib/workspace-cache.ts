@@ -1196,7 +1196,7 @@ export const findCachedTransactionsForAccount = (
       return {
         workspaceId: snapshotLike.workspaceId,
         transactions: dedupedTransactions,
-        totalCount: typeof snapshotLike.totalCount === "number" ? snapshotLike.totalCount : dedupedTransactions.length,
+        totalCount: dedupedTransactions.length,
       };
     }
   }

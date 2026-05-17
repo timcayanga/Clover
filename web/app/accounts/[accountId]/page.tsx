@@ -1923,7 +1923,7 @@ function AccountDetailPageContent() {
         }
       );
       searchParams.set("summaryMode", "light");
-      const response = await fetch(`/api/transactions?${searchParams.toString()}`);
+      const response = await fetch(`/api/accounts/${encodeURIComponent(account.id)}/transactions?${searchParams.toString()}`);
       if (!response.ok) {
         throw new Error("Unable to load more transactions.");
       }
