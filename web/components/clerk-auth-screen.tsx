@@ -5,6 +5,11 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useSignIn, useSignUp } from "@clerk/nextjs";
 import { PasswordIcon } from "@/components/password-icon";
+import {
+  persistRememberedSessionId,
+  persistStaySignedInPreference,
+  readStaySignedInPreference,
+} from "@/lib/clerk-session-persistence";
 
 type ClerkAuthScreenProps = {
   enabled: boolean;
@@ -32,8 +37,6 @@ const socialProviders: Array<{
 
 const completeRedirectUrl = "/home";
 const callbackUrl = "/sso-callback";
-const staySignedInStorageKey = "clover.staging.keep-signed-in.v1";
-
 function formatError(error: unknown) {
   if (typeof error === "string") {
     return error;
@@ -229,12 +232,7 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
       return;
     }
 
-    try {
-      const stored = window.localStorage.getItem(staySignedInStorageKey);
-      setStaySignedIn(stored !== "false");
-    } catch {
-      setStaySignedIn(true);
-    }
+    setStaySignedIn(readStaySignedInPreference());
   }, [mode]);
 
   useEffect(() => {
@@ -242,11 +240,7 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
       return;
     }
 
-    try {
-      window.localStorage.setItem(staySignedInStorageKey, staySignedIn ? "true" : "false");
-    } catch {
-      // Best effort only.
-    }
+    persistStaySignedInPreference(staySignedIn);
   }, [mode, staySignedIn]);
 
   useEffect(() => {
@@ -295,6 +289,7 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
       });
 
       if (response.status === "complete" && response.createdSessionId) {
+        persistRememberedSessionId(staySignedIn ? response.createdSessionId : null);
         await signInState.setActive({
           session: response.createdSessionId,
           redirectUrl: completeRedirectUrl,
@@ -484,6 +479,7 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
       });
 
       if (response.status === "complete" && response.createdSessionId) {
+        persistRememberedSessionId(response.createdSessionId);
         await signUpState.setActive({
           session: response.createdSessionId,
           redirectUrl: completeRedirectUrl,
@@ -532,6 +528,7 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
       });
 
       if (response.status === "complete" && response.createdSessionId) {
+        persistRememberedSessionId(response.createdSessionId);
         await signUpState.setActive({
           session: response.createdSessionId,
           redirectUrl: completeRedirectUrl,

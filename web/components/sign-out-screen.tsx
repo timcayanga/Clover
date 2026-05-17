@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useClerk } from "@clerk/nextjs";
+import { persistRememberedSessionId } from "@/lib/clerk-session-persistence";
 
 export function SignOutScreen() {
   const { signOut } = useClerk();
   const [message, setMessage] = useState("Signing you out...");
 
   useEffect(() => {
+    persistRememberedSessionId(null);
     void signOut({ redirectUrl: "/sign-in" }).catch(() => {
       window.location.assign("/sign-in");
     });

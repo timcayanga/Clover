@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
 import { cookies } from "next/headers";
 import Script from "next/script";
 import "./globals.css";
 import { GlobalImportActivity } from "@/components/global-import-activity";
+import { ClerkAppProvider } from "@/components/clerk-app-provider";
 import { PostHogAnalytics, PostHogClerkIdentity } from "@/components/posthog-analytics";
 import { getAppBuildInfo } from "@/lib/build-info";
 import { ThemeSync } from "@/components/theme-sync";
@@ -120,18 +120,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <HelperTextSync />
         <GlobalImportActivity />
         {publishableKey ? (
-          <ClerkProvider
-            publishableKey={publishableKey}
-            signInUrl="/sign-in"
-            signUpUrl="/sign-up"
-            localization={clerkLocalization}
-            touchSession
-            experimental={{ persistClient: true }}
-          >
+          <ClerkAppProvider publishableKey={publishableKey} localization={clerkLocalization}>
             <PostHogAnalytics />
             <PostHogClerkIdentity />
             {children}
-          </ClerkProvider>
+          </ClerkAppProvider>
         ) : (
           <>
             <PostHogAnalytics />
