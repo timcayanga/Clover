@@ -87,7 +87,7 @@ const attachEnrichmentJobs = async (workspaceId: string, importFiles: any[]) => 
         importFileId: job.importFileId,
         totalRows: parsedRowCount,
         phase: "queued",
-        forceRequeue: true,
+        forceRequeue: false,
       }).catch(() => null);
       await processImportEnrichmentJobs({
         importFileId: job.importFileId,

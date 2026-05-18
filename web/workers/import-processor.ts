@@ -138,9 +138,7 @@ const buildConfirmedTransactionDedupeKey = (params: {
     date,
     amount === null ? "" : amount.toFixed(2),
     normalizeTransactionDedupeText(params.currency || "PHP").toUpperCase(),
-    normalizeTransactionDedupeText(params.type),
     merchant,
-    normalizeTransactionDedupeText(params.description),
   ].join("|");
 };
 
@@ -2721,12 +2719,6 @@ export const processImportEnrichmentJobs = async (options: {
 
       const processedRows = Math.min(totalRows, nextStartIndex + batchRows.length);
       if (processedRows >= totalRows) {
-        await collapseDuplicateTransactionsForImport(job.importFileId).catch((error) => {
-          console.warn("Import transaction duplicate collapse failed after enrichment", {
-            importFileId: job.importFileId,
-            error,
-          });
-        });
         const remainingCleanupCount = await countImportTransactionsNeedingCleanup(job.importFileId).catch(() => 0);
         if (remainingCleanupCount > 0 && job.attempts < MAX_IMPORT_ENRICHMENT_ATTEMPTS) {
           await updateImportEnrichmentJobProgress({
@@ -2738,8 +2730,8 @@ export const processImportEnrichmentJobs = async (options: {
             workerId,
           });
           await updateImportFileCompat(job.importFileId, {
-            processingPhase: "finalizing_enrichment",
-            processingMessage: "Clover is retrying transaction cleanup for rows that still need categories.",
+            processingPhase: "complete",
+            processingMessage: "The file is visible in Clover. Clover is cleaning up names and categories in the background.",
           }).catch(() => null);
           results.push({ importFileId: job.importFileId, status: "running", processedRows, totalRows });
           continue;
@@ -2747,10 +2739,10 @@ export const processImportEnrichmentJobs = async (options: {
 
         await completeImportEnrichmentJob({ id: job.id, totalRows });
         await updateImportFileCompat(job.importFileId, {
-          processingPhase: remainingCleanupCount > 0 ? "repair_needed" : "complete",
+          processingPhase: "complete",
           processingMessage:
             remainingCleanupCount > 0
-              ? "Clover couldn't finalize all transaction details automatically; please review the remaining items."
+              ? "Some transaction details may need review."
               : "Transaction details finalized.",
         });
         results.push({ importFileId: job.importFileId, status: "done", processedRows, totalRows });
@@ -2776,8 +2768,8 @@ export const processImportEnrichmentJobs = async (options: {
       });
       if (!retryable) {
         await updateImportFileCompat(job.importFileId, {
-          processingPhase: "repair_needed",
-          processingMessage: "Clover couldn't finalize all transaction details automatically; please review the remaining items.",
+          processingPhase: "complete",
+          processingMessage: "Some transaction details may need review.",
         }).catch(() => null);
       }
       results.push({
@@ -3831,8 +3823,8 @@ export const processImportFileText = async (
 
       await updateImportFileCompat(importFileId, {
         status: "done",
-        processingPhase: "finalizing_enrichment",
-        processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
+        processingPhase: "complete",
+        processingMessage: "The file is imported and ready. Clover is cleaning up names and categories in the background.",
         confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? confirmedImportResult.imported,
       });
       emitImportProcessingEvent("import_processing_completed", {
@@ -3853,14 +3845,17 @@ export const processImportFileText = async (
         usedOpenAiFallback: Boolean(useOpenAiParse),
         actorUserId: options.actorUserId ?? null,
       });
-      await upsertImportEnrichmentJob({
-        workspaceId: String(importFile.workspaceId),
-        importFileId,
-        totalRows: rows.length,
-        phase: "queued",
-        forceRequeue: true,
-      });
-      processImportEnrichmentJobsInBackground(importFileId, rows.length);
+      const cleanupRowsAfterConfirmation = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
+      if (cleanupRowsAfterConfirmation > 0) {
+        await upsertImportEnrichmentJob({
+          workspaceId: String(importFile.workspaceId),
+          importFileId,
+          totalRows: rows.length,
+          phase: "queued",
+          forceRequeue: true,
+        });
+        processImportEnrichmentJobsInBackground(importFileId, rows.length);
+      }
 
       return {
         imported: confirmedImportResult.imported,
@@ -4086,8 +4081,8 @@ export const processImportFileText = async (
         ) {
           await updateImportFileCompat(importFileId, {
             status: "done",
-            processingPhase: "finalizing_enrichment",
-            processingMessage: "Transactions are visible. Clover is updating learning from similar imports in the background.",
+            processingPhase: "complete",
+            processingMessage: "The file is imported and ready. Clover is updating learning from similar imports in the background.",
           }).catch(() => null);
           void replayRelatedImportsAfterLearning({
             workspaceId: String(importFile.workspaceId),

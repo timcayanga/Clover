@@ -39,7 +39,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     if (importFile.status === "failed" && hasVisibleImportData) {
       await updateImportFileCompat(importId, {
         status: "done",
-        processingPhase: "finalizing_enrichment",
+        processingPhase: "complete",
         processingMessage:
           confirmedTransactionsCount > 0
             ? "Transactions are visible. Clover is cleaning up names and categories in the background."
@@ -47,7 +47,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         confirmedTransactionsCount,
       });
       importFile.status = "done";
-      importFile.processingPhase = "finalizing_enrichment";
+      importFile.processingPhase = "complete";
       importFile.processingMessage =
         confirmedTransactionsCount > 0
           ? "Transactions are visible. Clover is cleaning up names and categories in the background."
@@ -112,7 +112,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         telemetryLabel: telemetry.phaseLabel,
         telemetryMessage: "Accounts and transactions are already visible. Clover will keep cleaning names and categories in the background.",
         canResume: false,
-        resumeReason: "finalizing_enrichment",
+        resumeReason: "background_enrichment",
       });
     }
 

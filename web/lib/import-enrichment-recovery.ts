@@ -52,42 +52,21 @@ export const recoverWorkspaceImportEnrichment = async (params: {
   maxJobs?: number;
 }) => {
   const jobs = await listImportEnrichmentJobsByWorkspace(params.workspaceId).catch(() => []);
-  const doneJobByImportFileId = new Map(jobs.filter((job) => job.status === "done").map((job) => [job.importFileId, job]));
-  const finalizingDoneImports = await prisma.importFile
-    .findMany({
-      where: {
-        workspaceId: params.workspaceId,
-        status: "done",
-        processingPhase: "finalizing_enrichment",
-        id: { in: Array.from(doneJobByImportFileId.keys()) },
-      },
-      select: { id: true },
-      orderBy: { updatedAt: "desc" },
-      take: 5,
-    })
-    .catch(() => []);
-  const finalizingDoneJobs = finalizingDoneImports
-    .map((importFile) => doneJobByImportFileId.get(importFile.id))
-    .filter((job): job is NonNullable<typeof job> => Boolean(job));
   const candidateByImportFileId = new Map(
     [
       ...jobs.filter(
         (job) =>
           job.status === "queued" ||
           job.status === "retrying" ||
-          job.status === "failed" ||
           isImportEnrichmentJobStale(job)
       ),
-      ...finalizingDoneJobs,
     ].map((job) => [job.importFileId, job])
   );
   const candidates = Array.from(candidateByImportFileId.values())
     .filter(
       (job) =>
-        job.status === "done" ||
         job.status === "queued" ||
         job.status === "retrying" ||
-        job.status === "failed" ||
         isImportEnrichmentJobStale(job)
     )
     .slice(0, Math.max(1, Math.min(params.maxJobs ?? 2, 5)));
@@ -122,21 +101,12 @@ export const recoverWorkspaceImportEnrichment = async (params: {
       continue;
     }
 
-    if (job.status === "done") {
-      await updateImportFileCompat(job.importFileId, {
-        processingPhase: "repair_needed",
-        processingMessage: "Clover couldn't finalize all transaction details automatically; please review the remaining items.",
-      }).catch(() => null);
-      results.push({ importFileId: job.importFileId, action: "skipped", visibleRows, parsedRows, cleanupRows });
-      continue;
-    }
-
     await upsertImportEnrichmentJob({
       workspaceId: params.workspaceId,
       importFileId: job.importFileId,
       totalRows: parsedRows,
       phase: "queued",
-      forceRequeue: true,
+      forceRequeue: false,
     }).catch(() => null);
     await processImportEnrichmentJobs({
       importFileId: job.importFileId,

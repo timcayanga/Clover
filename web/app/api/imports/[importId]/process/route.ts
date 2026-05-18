@@ -650,7 +650,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       if (savedTransactionsCount > 0 || parsedRowsCount > 0) {
         await updateImportFileCompat(importId, {
           status: "done",
-          processingPhase: "finalizing_enrichment",
+          processingPhase: "complete",
           processingMessage:
             savedTransactionsCount > 0
               ? "Transactions are visible. Clover is cleaning up names and categories in the background."

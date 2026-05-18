@@ -72,9 +72,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
               send("snapshot", snapshot);
             }
 
-            const finished =
-              snapshot.confirmationStatus === "confirmed" &&
-              (!snapshot.finalizationStatus || snapshot.finalizationStatus === "done" || snapshot.finalizationStatus === "failed");
+            const finished = snapshot.confirmationStatus === "confirmed";
 
             if (finished) {
               send("complete", snapshot);

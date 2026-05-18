@@ -107,7 +107,7 @@ export const loadImportStatusSnapshot = async (
     importFile =
       (await updateImportFileCompat(importFileId, {
         status: "done",
-        processingPhase: "finalizing_enrichment",
+        processingPhase: "complete",
         processingMessage:
           confirmedTransactionsCount > 0
             ? "Transactions are visible. Clover is cleaning up names and categories in the background."
