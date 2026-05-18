@@ -2246,6 +2246,28 @@ const deleteTransactionsForImportWithTx = async (tx: Prisma.TransactionClient, i
   );
 };
 
+const mergeImportJsonPayload = (preferred: unknown, fallback: unknown) => {
+  const preferredIsObject = preferred && typeof preferred === "object" && !Array.isArray(preferred);
+  const fallbackIsObject = fallback && typeof fallback === "object" && !Array.isArray(fallback);
+
+  if (preferredIsObject && fallbackIsObject) {
+    return {
+      ...(fallback as Record<string, unknown>),
+      ...(preferred as Record<string, unknown>),
+    };
+  }
+
+  if (preferredIsObject) {
+    return preferred as Record<string, unknown>;
+  }
+
+  if (fallbackIsObject) {
+    return fallback as Record<string, unknown>;
+  }
+
+  return {};
+};
+
 const coerceParsedTransactionRowsForEnrichment = (rows: Array<Record<string, unknown>>) =>
   rows.map(
     (row) =>
@@ -4891,7 +4913,46 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   };
 
   const confirmationResult = await prisma.$transaction(async (tx) => {
-    await deleteTransactionsForImportWithTx(tx, importFileId);
+    const existingImportTransactions = await tx.transaction.findMany({
+      where: {
+        deletedAt: null,
+        OR: [
+          { importFileId },
+          {
+            rawPayload: {
+              path: ["sourceImportFileId"],
+              equals: importFileId,
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        rawPayload: true,
+        date: true,
+        amount: true,
+        currency: true,
+        type: true,
+        merchantRaw: true,
+        merchantClean: true,
+        description: true,
+      },
+    });
+    const existingImportTransactionBySourceIndex = new Map<number, (typeof existingImportTransactions)[number]>();
+    const existingImportTransactionsByDedupeKey = new Map<string, Array<(typeof existingImportTransactions)[number]>>();
+    for (const transaction of existingImportTransactions) {
+      const sourceRowIndex = getImportSourceRowIndex(transaction.rawPayload);
+      if (sourceRowIndex !== null && !existingImportTransactionBySourceIndex.has(sourceRowIndex)) {
+        existingImportTransactionBySourceIndex.set(sourceRowIndex, transaction);
+      }
+
+      const dedupeKey = buildConfirmedTransactionDedupeKey(transaction);
+      const bucket = existingImportTransactionsByDedupeKey.get(dedupeKey) ?? [];
+      bucket.push(transaction);
+      existingImportTransactionsByDedupeKey.set(dedupeKey, bucket);
+    }
+    const retainedExistingImportTransactionIds = new Set<string>();
+    let retainedExistingImportTransactionsCount = 0;
 
     await tx.trainingSignal.deleteMany({
       where: {
@@ -5219,6 +5280,48 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       merchantClean: unknown;
       description: unknown;
     });
+    const existingImportTransaction =
+      existingImportTransactionBySourceIndex.get(index + 1) ??
+      (existingImportTransactionsByDedupeKey.get(dedupeKey) ?? []).find(
+        (candidate) => !retainedExistingImportTransactionIds.has(candidate.id)
+      ) ??
+      null;
+    if (existingImportTransaction) {
+      retainedExistingImportTransactionIds.add(existingImportTransaction.id);
+      retainedExistingImportTransactionsCount += 1;
+      await tx.transaction.update({
+        where: { id: existingImportTransaction.id },
+        data: {
+          accountId: resolvedAccountId,
+          importFileId,
+          date: insertRow.date as Date,
+          amount: insertRow.amount as Prisma.Decimal | string | number,
+          currency: String(insertRow.currency ?? "PHP"),
+          merchantRaw: String(insertRow.merchantRaw ?? "Imported transaction"),
+          description:
+            typeof insertRow.description === "string" && insertRow.description.trim()
+              ? insertRow.description
+              : null,
+          rawPayload: mergeImportJsonPayload(insertRow.rawPayload, existingImportTransaction.rawPayload) as Prisma.InputJsonValue,
+          isExcluded: Boolean(insertRow.isExcluded),
+        },
+      });
+      transactions.push({
+        amount: row.amount,
+        type: canonicalType,
+        merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+        merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+        description: extractHumanReadableDescription(row.rawPayload ?? null),
+        categoryName,
+        rawPayload: {
+          ...(row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : {}),
+          sourceRowIndex: index + 1,
+          sourceImportFileId: importFileId,
+        } as Prisma.InputJsonValue,
+      });
+      continue;
+    }
+
     const currentOccurrence = (currentDedupeCounts.get(dedupeKey) ?? 0) + 1;
     currentDedupeCounts.set(dedupeKey, currentOccurrence);
     if ((existingDedupeCounts.get(dedupeKey) ?? 0) >= currentOccurrence) {
@@ -5276,7 +5379,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     });
   }
 
-  const visibleTransactionsCount = preparedTransactions.length + duplicateSkippedTransactionsCount + (openingBalanceInserted ? 1 : 0);
+  const visibleTransactionsCount =
+    retainedExistingImportTransactionsCount +
+    preparedTransactions.length +
+    duplicateSkippedTransactionsCount +
+    (openingBalanceInserted ? 1 : 0);
 
     await updateImportFileWithTxCompat(
       tx,

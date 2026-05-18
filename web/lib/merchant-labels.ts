@@ -136,7 +136,7 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     },
     {
       patterns: [/\bel\/?espay\b/i, /\bespay\b/i],
-      replacement: "eL/ESPay",
+      replacement: "Payroll Credit",
     },
     {
       patterns: [/elink\s+transfer/i, /elink\s+payment/i],

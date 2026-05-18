@@ -4,7 +4,7 @@ import { strict as assert } from "node:assert";
 import { prisma } from "@/lib/prisma";
 import { readUploadedFileText } from "@/lib/import-file-text.server";
 import { upsertImportEnrichmentJob } from "@/lib/import-enrichment-jobs";
-import { processImportEnrichmentJobs, processImportFileText } from "@/workers/import-processor";
+import { confirmImportFile, processImportEnrichmentJobs, processImportFileText } from "@/workers/import-processor";
 
 const statementRoot = process.env.CLOVER_STATEMENT_ROOT ?? "/Users/TimCayanga1/Documents/Bank Statements";
 
@@ -86,6 +86,30 @@ const main = async () => {
       },
     });
     assert.equal(initialTransactions.length, 64, `Initial upload should keep 64 raw rows visible, got ${initialTransactions.length}.`);
+
+    const initialTransactionIds = new Set(initialTransactions.map((transaction) => transaction.id));
+    for (const importFileId of importIds) {
+      await confirmImportFile(importFileId, null);
+    }
+    const reconfirmedTransactions = await prisma.transaction.findMany({
+      where: {
+        workspaceId,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+      },
+    });
+    assert.equal(
+      reconfirmedTransactions.length,
+      initialTransactions.length,
+      `Re-confirming imports must not duplicate or delete visible rows; got ${reconfirmedTransactions.length}.`
+    );
+    assert.equal(
+      reconfirmedTransactions.filter((transaction) => !initialTransactionIds.has(transaction.id)).length,
+      0,
+      "Re-confirming imports must preserve existing transaction IDs instead of recreating rows."
+    );
 
     const otherCategory =
       (await prisma.category.findFirst({
