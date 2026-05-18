@@ -3109,6 +3109,10 @@ function TransactionsPageContent() {
     () => new Set(imports.filter(isActiveEnrichmentJob).map((importFile) => importFile.id)),
     [imports]
   );
+  const activeFinalizingImportKey = useMemo(
+    () => Array.from(activeFinalizingImportIds).sort().join("|"),
+    [activeFinalizingImportIds]
+  );
   const failedFinalizingImportIds = useMemo(
     () => new Set(imports.filter(isFailedEnrichmentJob).map((importFile) => importFile.id)),
     [imports]
@@ -3124,6 +3128,49 @@ function TransactionsPageContent() {
     const intervalId = window.setInterval(() => setFinalizingNowMs(Date.now()), 30_000);
     return () => window.clearInterval(intervalId);
   }, [hasActiveFinalizingImports]);
+  useEffect(() => {
+    if (!selectedWorkspaceId || !activeFinalizingImportKey) {
+      return;
+    }
+
+    let cancelled = false;
+    const refreshEnrichmentDeltas = async () => {
+      const importFileIds = activeFinalizingImportKey.split("|").filter(Boolean);
+      await Promise.allSettled(
+        importFileIds.map((importFileId) =>
+          fetch("/api/import-enrichment/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ importFileId, limit: 3, batchSize: 500 }),
+            keepalive: true,
+          })
+        )
+      );
+      if (cancelled) {
+        return;
+      }
+      await loadWorkspaceMetadata(selectedWorkspaceId, { background: true });
+      if (cancelled) {
+        return;
+      }
+      await loadTransactionsPage(selectedWorkspaceId, {
+        background: true,
+        pageOverride: transactionsPage,
+        pageSizeOverride: transactionsPageSize,
+        summaryMode: "full",
+      });
+    };
+
+    void refreshEnrichmentDeltas();
+    const intervalId = window.setInterval(() => {
+      void refreshEnrichmentDeltas();
+    }, 30_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [activeFinalizingImportKey, selectedWorkspaceId, transactionsPage, transactionsPageSize]);
   const finalizingNoticeState = useMemo(() => getEnrichmentNoticeState(imports, finalizingNowMs), [finalizingNowMs, imports]);
   const finalizingTransactions = useMemo(
     () =>

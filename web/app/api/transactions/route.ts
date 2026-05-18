@@ -13,7 +13,6 @@ import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantNam
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
-import { recoverWorkspaceImportEnrichment } from "@/lib/import-enrichment-recovery";
 import {
   buildTransactionQueryWhere,
   buildTransactionQueryOrderBy,
@@ -397,10 +396,6 @@ export async function GET(request: Request) {
 
     await assertWorkspaceAccess(userId, workspaceId);
     await normalizeLegacyTransactionVisibility(workspaceId);
-    await recoverWorkspaceImportEnrichment({
-      workspaceId,
-      workerId: `transactions-route-enrichment-${userId}`,
-    }).catch(() => null);
 
     const parsedFilters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
     const expandedAccountIds = await expandImportedAccountFilters(workspaceId, parsedFilters.accountIds);

@@ -78,7 +78,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         const result = await processImportEnrichmentJobs({
           importFileId: importId,
           limit: 1,
-          batchSize: 100,
+          batchSize: 500,
           workerId: `status-import-enrichment-${userId}`,
         });
         const refreshedSnapshot = await loadImportStatusSnapshot(importId, {

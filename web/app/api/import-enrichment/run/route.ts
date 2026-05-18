@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const runSchema = z.object({
   importFileId: z.string().min(1).optional(),
   limit: z.number().int().min(1).max(10).optional(),
-  batchSize: z.number().int().min(10).max(100).optional(),
+  batchSize: z.number().int().min(10).max(500).optional(),
 });
 
 export async function POST(request: Request) {
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
           importFileId: payload.importFileId,
           totalRows: parsedRowCount,
           phase: "queued",
-          forceRequeue: true,
+          forceRequeue: false,
         });
       }
     } else if (!localDev) {

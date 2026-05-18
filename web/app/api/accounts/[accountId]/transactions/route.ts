@@ -7,7 +7,6 @@ import { buildTransactionQueryWhere } from "@/lib/transaction-query";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
-import { recoverWorkspaceImportEnrichment } from "@/lib/import-enrichment-recovery";
 
 export const dynamic = "force-dynamic";
 
@@ -165,10 +164,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
 
     await assertWorkspaceAccess(userId, account.workspaceId);
     await normalizeLegacyTransactionVisibility(account.workspaceId);
-    await recoverWorkspaceImportEnrichment({
-      workspaceId: account.workspaceId,
-      workerId: `account-transactions-route-enrichment-${userId}`,
-    }).catch(() => null);
 
     const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const pageSize = Math.max(1, Number(searchParams.get("pageSize") ?? "25") || 25);

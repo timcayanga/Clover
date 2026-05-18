@@ -3,7 +3,8 @@ import { basename, join } from "node:path";
 import { strict as assert } from "node:assert";
 import { prisma } from "@/lib/prisma";
 import { readUploadedFileText } from "@/lib/import-file-text.server";
-import { processImportFileText } from "@/workers/import-processor";
+import { upsertImportEnrichmentJob } from "@/lib/import-enrichment-jobs";
+import { processImportEnrichmentJobs, processImportFileText } from "@/workers/import-processor";
 
 const statementRoot = process.env.CLOVER_STATEMENT_ROOT ?? "/Users/TimCayanga1/Documents/Bank Statements";
 
@@ -73,6 +74,81 @@ const main = async () => {
       assert.equal(result.status, "done", `${fileName} should finish initial import.`);
     }
 
+    const initialTransactions = await prisma.transaction.findMany({
+      where: {
+        workspaceId,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        importFileId: true,
+        rawPayload: true,
+      },
+    });
+    assert.equal(initialTransactions.length, 64, `Initial upload should keep 64 raw rows visible, got ${initialTransactions.length}.`);
+
+    const otherCategory =
+      (await prisma.category.findFirst({
+        where: { workspaceId, name: "Other" },
+        select: { id: true },
+      })) ??
+      (await prisma.category.create({
+        data: {
+          workspaceId,
+          name: "Other",
+          type: "expense",
+          isSystem: true,
+        },
+        select: { id: true },
+      }));
+
+    // Deliberately degrade the visible rows after the raw import succeeds.
+    // The enrichment worker must patch these same transaction IDs in place,
+    // not delete, recreate, or collapse them into a different import.
+    await prisma.transaction.updateMany({
+      where: {
+        workspaceId,
+        deletedAt: null,
+      },
+      data: {
+        categoryId: otherCategory.id,
+        merchantClean: null,
+        parserConfidence: 45,
+        categoryConfidence: 0,
+        reviewStatus: "suggested",
+        normalizedPayload: null,
+        learnedRuleIdsApplied: null,
+      },
+    });
+
+    for (const importFileId of importIds) {
+      const totalRows = await prisma.transaction.count({
+        where: { workspaceId, importFileId, deletedAt: null },
+      });
+      await upsertImportEnrichmentJob({
+        workspaceId,
+        importFileId,
+        totalRows,
+        phase: "normalizing",
+        forceRequeue: true,
+      });
+    }
+
+    for (const importFileId of importIds) {
+      for (let pass = 0; pass < 3; pass += 1) {
+        await processImportEnrichmentJobs({
+          importFileId,
+          limit: 3,
+          batchSize: 500,
+          workerId: `${runId}-${importFileId}-${pass}`,
+        });
+        const job = await prisma.importEnrichmentJob.findUnique({ where: { importFileId } });
+        if (!job || job.status === "done" || job.status === "failed") {
+          break;
+        }
+      }
+    }
+
     const transactions = await prisma.transaction.findMany({
       where: {
         workspaceId,
@@ -124,6 +200,9 @@ const main = async () => {
       duplicateKeys.set(key, (duplicateKeys.get(key) ?? 0) + 1);
     }
     const duplicateCount = Array.from(duplicateKeys.values()).filter((count) => count > 1).length;
+    const missingInitialRows = initialTransactions.filter(
+      (initial) => !transactions.some((transaction) => transaction.id === initial.id)
+    );
 
     console.table(
       imports.map((importFile) => ({
@@ -135,6 +214,7 @@ const main = async () => {
     );
 
     assert.equal(transactions.length, 64, `Expected 64 visible BPI transactions, got ${transactions.length}.`);
+    assert.equal(missingInitialRows.length, 0, `Expected enrichment to preserve every initial row, lost ${missingInitialRows.length}.`);
     assert.equal(otherRows.length, 0, `Expected 0 BPI rows in Other, got ${otherRows.length}.`);
     assert.equal(rawishRows.length, 0, `Expected no compact/all-caps BPI raw labels, got ${rawishRows.length}.`);
     assert.equal(duplicateCount, 0, `Expected no duplicate rows by import/source index, got ${duplicateCount}.`);

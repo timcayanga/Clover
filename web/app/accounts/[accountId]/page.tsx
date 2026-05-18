@@ -1748,6 +1748,10 @@ function AccountDetailPageContent() {
     () => new Set(importFiles.filter(isActiveEnrichmentJob).map((importFile) => importFile.id)),
     [importFiles]
   );
+  const activeFinalizingImportKey = useMemo(
+    () => Array.from(activeFinalizingImportIds).sort().join("|"),
+    [activeFinalizingImportIds]
+  );
   const failedFinalizingImportIds = useMemo(
     () => new Set(importFiles.filter(isFailedEnrichmentJob).map((importFile) => importFile.id)),
     [importFiles]
@@ -1763,6 +1767,89 @@ function AccountDetailPageContent() {
     const intervalId = window.setInterval(() => setFinalizingNowMs(Date.now()), 30_000);
     return () => window.clearInterval(intervalId);
   }, [hasActiveFinalizingImports]);
+  useEffect(() => {
+    if (!account?.id || !account.workspaceId || !activeFinalizingImportKey) {
+      return;
+    }
+
+    let cancelled = false;
+    const refreshEnrichmentDeltas = async () => {
+      const importFileIds = activeFinalizingImportKey.split("|").filter(Boolean);
+      await Promise.allSettled(
+        importFileIds.map((importFileId) =>
+          fetch("/api/import-enrichment/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ importFileId, limit: 3, batchSize: 500 }),
+            keepalive: true,
+          })
+        )
+      );
+      if (cancelled) {
+        return;
+      }
+
+      const transactionsSearchParams = buildTransactionQuerySearchParams(
+        account.workspaceId,
+        { accountIds: [account.id] },
+        { page: 1, pageSize: Math.max(transactionTotalCount, TRANSACTION_PAGE_SIZE) }
+      );
+      transactionsSearchParams.set("summaryMode", "light");
+      const [transactionsResponse, importsResponse, categoriesResponse] = await Promise.all([
+        fetch(`/api/transactions?${transactionsSearchParams.toString()}`),
+        fetch(`/api/imports?workspaceId=${encodeURIComponent(account.workspaceId)}`),
+        fetch(`/api/categories?workspaceId=${encodeURIComponent(account.workspaceId)}`),
+      ]);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (transactionsResponse.ok) {
+        const transactionsPayload = (await transactionsResponse.json()) as {
+          transactions?: Transaction[];
+          totalCount?: number;
+        } | null;
+        const nextTransactions = Array.isArray(transactionsPayload?.transactions)
+          ? mergeImportedWorkspaceTransactions([], transactionsPayload.transactions)
+          : [];
+        if (nextTransactions.length > 0) {
+          setTransactions(nextTransactions);
+          setTransactionTotalCount(
+            typeof transactionsPayload?.totalCount === "number"
+              ? Math.max(transactionsPayload.totalCount, nextTransactions.length)
+              : nextTransactions.length
+          );
+        }
+      }
+
+      if (importsResponse.ok) {
+        const importsPayload = (await importsResponse.json()) as { importFiles?: ImportFile[] } | null;
+        setImportFiles(
+          Array.isArray(importsPayload?.importFiles)
+            ? importsPayload.importFiles.filter((importFile) => !importFile.accountId || importFile.accountId === account.id)
+            : []
+        );
+      }
+
+      if (categoriesResponse.ok) {
+        const categoriesPayload = (await categoriesResponse.json()) as { categories?: Category[] } | null;
+        if (Array.isArray(categoriesPayload?.categories) && categoriesPayload.categories.length > 0) {
+          setCategories(categoriesPayload.categories);
+        }
+      }
+    };
+
+    void refreshEnrichmentDeltas();
+    const intervalId = window.setInterval(() => {
+      void refreshEnrichmentDeltas();
+    }, 30_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [account?.id, account?.workspaceId, activeFinalizingImportKey, transactionTotalCount]);
   const finalizingNoticeState = useMemo(() => getEnrichmentNoticeState(importFiles, finalizingNowMs), [finalizingNowMs, importFiles]);
   const finalizingTransactions = useMemo(
     () =>

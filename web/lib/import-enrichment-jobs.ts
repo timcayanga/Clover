@@ -101,11 +101,13 @@ export const upsertImportEnrichmentJob = async (params: {
         "status" = CASE
           WHEN $6::boolean THEN 'queued'::"ImportEnrichmentJobStatus"
           WHEN "ImportEnrichmentJob"."status" = 'done' THEN 'done'::"ImportEnrichmentJobStatus"
+          WHEN "ImportEnrichmentJob"."status" = 'failed' THEN 'failed'::"ImportEnrichmentJobStatus"
           ELSE 'queued'::"ImportEnrichmentJobStatus"
         END,
         "phase" = CASE
           WHEN $6::boolean THEN EXCLUDED."phase"
           WHEN "ImportEnrichmentJob"."status" = 'done' THEN "ImportEnrichmentJob"."phase"
+          WHEN "ImportEnrichmentJob"."status" = 'failed' THEN "ImportEnrichmentJob"."phase"
           ELSE EXCLUDED."phase"
         END,
         "totalRows" = GREATEST("ImportEnrichmentJob"."totalRows", EXCLUDED."totalRows"),
@@ -242,6 +244,40 @@ export const updateImportEnrichmentJobProgress = async (params: {
   return rows[0] ? normalizeJob(rows[0]) : null;
 };
 
+export const updateRunningImportEnrichmentJobProgress = async (params: {
+  id: string;
+  phase: string;
+  lastRowIndex: number;
+  processedRows: number;
+  totalRows: number;
+  workerId: string;
+}) => {
+  await ensureImportEnrichmentJobTable();
+  const rows = await prisma.$queryRawUnsafe<ImportEnrichmentJobRow[]>(
+    `
+      UPDATE "ImportEnrichmentJob"
+      SET
+        "status" = 'running',
+        "phase" = $2,
+        "lastRowIndex" = $3,
+        "processedRows" = $4,
+        "totalRows" = $5,
+        "lockedAt" = NOW(),
+        "lockedBy" = $6,
+        "updatedAt" = NOW()
+      WHERE "id" = $1
+      RETURNING *
+    `,
+    params.id,
+    params.phase,
+    Math.max(0, params.lastRowIndex),
+    Math.max(0, params.processedRows),
+    Math.max(0, params.totalRows),
+    params.workerId
+  );
+  return rows[0] ? normalizeJob(rows[0]) : null;
+};
+
 export const completeImportEnrichmentJob = async (params: { id: string; totalRows: number }) => {
   await ensureImportEnrichmentJobTable();
   const rows = await prisma.$queryRawUnsafe<ImportEnrichmentJobRow[]>(
@@ -278,7 +314,7 @@ export const failImportEnrichmentJob = async (params: {
       UPDATE "ImportEnrichmentJob"
       SET
         "status" = $2::"ImportEnrichmentJobStatus",
-        "phase" = 'failed',
+        "phase" = CASE WHEN $2::"ImportEnrichmentJobStatus" = 'retrying' THEN 'retrying' ELSE 'failed' END,
         "errorCode" = $3,
         "errorMessage" = $4,
         "lockedAt" = NULL,
