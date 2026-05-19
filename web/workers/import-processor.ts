@@ -4610,7 +4610,50 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         receiptDocument?.accountId ??
         (documentImport?.accountId && !String(documentImport.accountId).startsWith("optimistic-") ? documentImport.accountId : null) ??
         (await resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency));
-      const receiptCategoryName = guessCategoryName(receiptMerchantClean || receiptMerchantRaw, "expense");
+      const receiptCategoryName = (() => {
+        const receiptTypeText =
+          typeof receiptDetailsRecord?.receipt_type === "string"
+            ? receiptDetailsRecord.receipt_type.trim().toLowerCase()
+            : typeof receiptDetailsRecord?.receiptType === "string"
+              ? receiptDetailsRecord.receiptType.trim().toLowerCase()
+              : typeof receiptDocument?.rawPayload === "object" && receiptDocument?.rawPayload && !Array.isArray(receiptDocument.rawPayload)
+                ? String(
+                    (receiptDocument.rawPayload as Record<string, unknown>).receipt_type ??
+                      (receiptDocument.rawPayload as Record<string, unknown>).receiptType ??
+                      ""
+                  )
+                    .trim()
+                    .toLowerCase()
+                : "";
+        const lineItemText = receiptLineItems.map((item) => item.description).join(" ").toLowerCase();
+        const receiptContextText = `${receiptMerchantClean || ""} ${receiptMerchantRaw || ""} ${receiptTypeText} ${lineItemText}`.trim();
+
+        if (
+          /\btemporary bill\b/.test(receiptTypeText) ||
+          /\bdine\s*in\b/.test(receiptTypeText) ||
+          /\brestaurant\b/.test(receiptTypeText) ||
+          /\bcafe\b/.test(receiptTypeText) ||
+          /\bbar\b/.test(receiptTypeText)
+        ) {
+          return "Food & Dining";
+        }
+
+        if (
+          /\b(adobo|pares|kare|salmon|lemonade|fizz|tonic|pasta|burger|noodle|rice|meal|dish|grill|steak|sushi|ramen|coffee|latte|dessert)\b/.test(
+            lineItemText
+          )
+        ) {
+          return "Food & Dining";
+        }
+
+        const merchantGuess = guessCategoryName(receiptMerchantClean || receiptMerchantRaw, "expense");
+        if (merchantGuess !== "Other") {
+          return merchantGuess;
+        }
+
+        const contextualGuess = guessCategoryName(receiptContextText, "expense");
+        return contextualGuess !== "Other" ? contextualGuess : "Food & Dining";
+      })();
       let createdTransactionId = receiptDocument?.transactionId ?? null;
 
       if (!createdTransactionId && cashAccountId && receiptAmount !== null && receiptDate) {
@@ -4707,6 +4750,28 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               ? insertedTransaction.id
               : null;
         }
+      }
+
+      const cleanupRowsAfterConfirmation = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
+      if (cleanupRowsAfterConfirmation > 0) {
+        await upsertImportEnrichmentJob({
+          workspaceId: String(importFile.workspaceId),
+          importFileId,
+          totalRows: Math.max(1, cleanupRowsAfterConfirmation),
+          phase: "queued",
+          forceRequeue: false,
+        });
+        await processImportEnrichmentJobs({
+          importFileId,
+          limit: MAX_IMPORT_ENRICHMENT_ATTEMPTS,
+          batchSize: 500,
+          workerId: `receipt-import-enrichment-${importFileId}`,
+        }).catch((error) => {
+          console.warn("Unable to finalize receipt enrichment immediately after import", {
+            importFileId,
+            error,
+          });
+        });
       }
 
       if (createdTransactionId && documentImport?.id) {
