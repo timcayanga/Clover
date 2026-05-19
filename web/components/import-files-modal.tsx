@@ -1423,30 +1423,6 @@ export function ImportFilesModal({
     itemsRef.current = items;
   }, [items]);
 
-  useEffect(() => {
-    if (typeof document === "undefined" || !open || backgroundOnly || launchInBackground) {
-      return;
-    }
-
-    const body = document.body;
-    const nextLockCount = Number(body.dataset.cloverImportModalLocks ?? "0") + 1;
-    body.dataset.cloverImportModalLocks = String(nextLockCount);
-    body.dataset.cloverImportModalOpen = "true";
-
-    return () => {
-      const currentLockCount = Number(body.dataset.cloverImportModalLocks ?? "1");
-      const nextCount = Math.max(0, currentLockCount - 1);
-
-      if (nextCount > 0) {
-        body.dataset.cloverImportModalLocks = String(nextCount);
-        return;
-      }
-
-      delete body.dataset.cloverImportModalLocks;
-      delete body.dataset.cloverImportModalOpen;
-    };
-  }, [backgroundOnly, launchInBackground, open]);
-
   const publishImportActivity = (
     snapshot:
       | (Partial<Omit<ImportActivitySnapshot, "updatedAt">> & {
@@ -5700,6 +5676,10 @@ export function ImportFilesModal({
   const overallProgress = items.length > 0
     ? ((completedFileCount + (activeProgressItem ? activeProgressItem.progress / 100 : 0)) / items.length) * 100
     : 0;
+  const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
+  const showCompactProgress = busy || Boolean(activeItem) || hasCompletedBatch;
+  const shouldLockPageInteraction =
+    open && !backgroundOnly && !launchInBackground && (Boolean(activePasswordItem) || !showCompactProgress);
   const hasImportIssue = items.some((item) => item.status === "error" || item.status === "needs_password") || Boolean(validationNotice);
   const currentErrorItem = items.find((item) => item.status === "error") ?? null;
   const showImportHelp = hasImportIssue || items.some((item) => item.confirmationState === "staged");
@@ -5730,6 +5710,30 @@ export function ImportFilesModal({
         ];
   const canResumeImport = (item: QueuedFile) =>
     Boolean(item.importFileId && (item.confirmationState === "staged" || isResumableImportErrorCode(item.errorCode)));
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !shouldLockPageInteraction) {
+      return;
+    }
+
+    const body = document.body;
+    const nextLockCount = Number(body.dataset.cloverImportModalLocks ?? "0") + 1;
+    body.dataset.cloverImportModalLocks = String(nextLockCount);
+    body.dataset.cloverImportModalOpen = "true";
+
+    return () => {
+      const currentLockCount = Number(body.dataset.cloverImportModalLocks ?? "1");
+      const nextCount = Math.max(0, currentLockCount - 1);
+
+      if (nextCount > 0) {
+        body.dataset.cloverImportModalLocks = String(nextCount);
+        return;
+      }
+
+      delete body.dataset.cloverImportModalLocks;
+      delete body.dataset.cloverImportModalOpen;
+    };
+  }, [shouldLockPageInteraction]);
 
   useEffect(() => {
     if (!open || !workspaceId) {
@@ -6248,9 +6252,6 @@ export function ImportFilesModal({
   if (backgroundOnly || launchInBackground) {
     return null;
   }
-
-  const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
-  const showCompactProgress = busy || Boolean(activeItem) || hasCompletedBatch;
 
   const modalContent = activePasswordItem ? (
       <ImportPasswordModal
