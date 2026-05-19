@@ -4674,6 +4674,61 @@ export function ImportFilesModal({
                 summary: precomputedReceiptSummary,
               };
             }
+
+            const inlineReceiptSummary =
+              processPayload?.receiptDocument
+                ? buildReceiptSummaryFromReceiptDocument({
+                    fileName: item.file.name,
+                    importFileId,
+                    receiptDocument: processPayload.receiptDocument,
+                    accountId: typeof processPayload.accountId === "string" ? processPayload.accountId : null,
+                    accountType: null,
+                    previewAccountName: null,
+                  })
+                : processPayload?.receiptTransaction
+                  ? buildReceiptSummaryFromReceiptTransaction({
+                      fileName: item.file.name,
+                      importFileId,
+                      receiptTransaction: processPayload.receiptTransaction,
+                      accountType: null,
+                    })
+                  : null;
+
+            if (inlineReceiptSummary) {
+              seedImportedWorkspaceCaches(workspaceId, inlineReceiptSummary);
+              await Promise.resolve(onImported(inlineReceiptSummary));
+
+              updateItem(itemId, {
+                status: "done",
+                confirmationState: "confirmed",
+                error: null,
+                importFileId,
+                targetAccountId: inlineReceiptSummary.accountId,
+                importedRows: inlineReceiptSummary.rowsImported,
+                progress: 100,
+                progressLabel: "Receipt imported",
+              });
+              publishImportActivity({
+                workspaceId,
+                surface: importActivitySurfaceRef.current,
+                status: "done",
+                fileName: item.file.name,
+                fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+                fileTotal: items.length,
+                completedFiles: completedFileCount + 1,
+                progress: 100,
+                detail: "Receipt imported",
+                summary: inlineReceiptSummary,
+                errorMessage: null,
+              });
+              setMessage(`Imported ${item.file.name}.`);
+              router.refresh();
+              return {
+                status: "done",
+                importedRows: inlineReceiptSummary.rowsImported,
+                summary: inlineReceiptSummary,
+              };
+            }
           }
           const monitorResult = await monitorQueuedDocumentImport(itemId, importFileId, itemImportMode, item.file.name);
           if (!monitorResult.completed) {

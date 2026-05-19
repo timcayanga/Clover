@@ -7,6 +7,7 @@ import {
   fetchImportFileCompat,
   insertImportFileCompat,
   loadImportFileExtractionCache,
+  loadImportStatusSnapshot,
   loadStatementTemplate,
   mergeStatementMetadataWithTemplate,
   updateImportFileCompat,
@@ -502,8 +503,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           statementMetadataOverride: formBankName
             ? {
                 institution: formBankName,
-              }
-            : null,
+            }
+          : null,
+        });
+        const statusSnapshot = await loadImportStatusSnapshot(importId, {
+          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+          promoteFailedVisibleImport: true,
         });
 
         const visibleRows =
@@ -526,6 +531,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           accountBalance: result.accountBalance ?? null,
           visibleImportComplete: visibleRows > 0,
           finalizationInBackground: result.status === "done" && visibleRows > 0,
+          receiptDocument: statusSnapshot?.receiptDocument ?? null,
+          receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
         });
       }
 
@@ -616,6 +623,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             }
           : null,
       });
+      const statusSnapshot = await loadImportStatusSnapshot(importId, {
+        importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+        promoteFailedVisibleImport: true,
+      });
 
       const visibleRows =
         result.status === "done"
@@ -637,6 +648,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         accountBalance: result.accountBalance ?? null,
         visibleImportComplete: visibleRows > 0,
         finalizationInBackground: result.status === "done" && visibleRows > 0,
+        receiptDocument: statusSnapshot?.receiptDocument ?? null,
+        receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
       });
     }
   } catch (error) {
