@@ -22,6 +22,7 @@ import {
   buildParsedTransactionInsertData,
   buildStatementFamilySignatureFromText,
   buildStatementFingerprint,
+  countTransactionsByImportFileCompat,
   detectStatementMetadataFromText,
   type EnrichedParsedImportRow,
   findExistingImportedStatement,
@@ -3044,6 +3045,36 @@ export const processImportFileText = async (
   const importMode = readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? options.importMode ?? "statement";
   const isDocumentImportMode =
     importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes";
+  const previouslyVisibleRows = isDocumentImportMode ? 0 : await countTransactionsByImportFileCompat(importFileId).catch(() => 0);
+  if (previouslyVisibleRows > 0) {
+    const cleanupRows = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
+    if (cleanupRows > 0) {
+      await upsertImportEnrichmentJob({
+        workspaceId: String(importFile.workspaceId),
+        importFileId,
+        totalRows: Math.max(previouslyVisibleRows, cleanupRows),
+        phase: "queued",
+        forceRequeue: false,
+      }).catch(() => null);
+      processImportEnrichmentJobsInBackground(importFileId, Math.max(previouslyVisibleRows, cleanupRows));
+    }
+    await updateImportFileCompat(importFileId, {
+      status: "done",
+      processingPhase: "complete",
+      processingMessage: "The file is visible in Clover. Clover is cleaning up names and categories in the background.",
+      confirmedTransactionsCount: Math.max(Number(importFile.confirmedTransactionsCount ?? 0), previouslyVisibleRows),
+    }).catch(() => null);
+    return {
+      imported: previouslyVisibleRows,
+      duplicate: false,
+      metadata: detectStatementMetadataFromText(""),
+      accountId: typeof importFile.accountId === "string" ? importFile.accountId : null,
+      confirmedTransactionsCount: previouslyVisibleRows,
+      insightSummary: undefined,
+      accountBalance: null,
+      status: "done",
+    };
+  }
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
@@ -5467,6 +5498,16 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         notes: typeof row.categoryReason === "string" ? row.categoryReason : null,
       },
       });
+    }
+
+    if (existingImportTransactions.length > 0 && preparedTransactions.length > 0) {
+      duplicateSkippedTransactionsCount += preparedTransactions.length;
+      console.warn("[import-confirmation] skipped appending rows to visible import", {
+        importFileId,
+        existingRows: existingImportTransactions.length,
+        skippedRows: preparedTransactions.length,
+      });
+      preparedTransactions.length = 0;
     }
 
     if (planLimits?.transactionLimit != null) {
