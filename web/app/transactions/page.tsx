@@ -2383,10 +2383,8 @@ function TransactionsPageContent() {
         transactionsRef.current.length > 0
           ? transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
           : visibleCachedWorkspaceTransactions;
-      const baseTransactions =
-        options?.append || !hasFreshTransactions
-          ? stableBaseTransactions
-          : [];
+      const shouldPatchExistingTransactions = Boolean(options?.background || options?.append || !hasFreshTransactions);
+      const baseTransactions = shouldPatchExistingTransactions ? stableBaseTransactions : [];
       const mergedTransactions = options?.append
         ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
         : mergeImportedWorkspaceTransactions(baseTransactions, fetchedTransactions);
