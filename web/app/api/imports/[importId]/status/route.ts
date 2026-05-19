@@ -3,6 +3,7 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { fetchImportFileCompat } from "@/lib/data-engine";
 import {
   completeImportEnrichmentJob,
+  MAX_IMPORT_ENRICHMENT_ATTEMPTS,
   isImportEnrichmentJobStale,
   upsertImportEnrichmentJob,
 } from "@/lib/import-enrichment-jobs";
@@ -77,7 +78,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         });
         const result = await processImportEnrichmentJobs({
           importFileId: importId,
-          limit: 1,
+          limit: MAX_IMPORT_ENRICHMENT_ATTEMPTS,
           batchSize: 500,
           workerId: `status-import-enrichment-${userId}`,
         });

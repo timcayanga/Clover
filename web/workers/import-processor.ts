@@ -2921,7 +2921,12 @@ export const processImportEnrichmentJobs = async (options: {
 
 const processImportEnrichmentJobsInBackground = (importFileId: string, totalRows?: number | null) => {
   const normalizedTotalRows = Math.max(1, Number(totalRows ?? 50));
-  const limit = Math.max(1, Math.min(MAX_IMPORT_ENRICHMENT_ATTEMPTS, Math.ceil(normalizedTotalRows / 500)));
+  // Give tiny receipt imports enough room to retry immediately in the same session.
+  // A one-row receipt can legitimately need multiple passes before it stops on "Other".
+  const limit = Math.max(
+    MAX_IMPORT_ENRICHMENT_ATTEMPTS,
+    Math.min(10, Math.ceil(normalizedTotalRows / 500))
+  );
   void processImportEnrichmentJobs({ importFileId, limit, batchSize: 500 }).catch((error) => {
     console.warn("Background import enrichment job failed", {
       importFileId,
@@ -3974,7 +3979,20 @@ export const processImportFileText = async (
           phase: "queued",
           forceRequeue: false,
         });
-        processImportEnrichmentJobsInBackground(importFileId, rows.length);
+        // Receipt imports often need immediate retry passes to move off the fallback category.
+        // We await the enrichment run here so stage users do not have to keep the Transactions page open
+        // just to let the background poller pick the job back up.
+        await processImportEnrichmentJobs({
+          importFileId,
+          limit: MAX_IMPORT_ENRICHMENT_ATTEMPTS,
+          batchSize: 500,
+          workerId: `receipt-import-enrichment-${importFileId}`,
+        }).catch((error) => {
+          console.warn("Unable to finalize receipt enrichment immediately after import", {
+            importFileId,
+            error,
+          });
+        });
       }
 
       return {
