@@ -2838,6 +2838,12 @@ export const processImportEnrichmentJobs = async (options: {
       });
 
       if (processedRows >= totalRows) {
+        await collapseDuplicateTransactionsForImport(job.importFileId).catch((error) => {
+          console.warn("Unable to collapse duplicate transactions after enrichment", {
+            importFileId: job.importFileId,
+            error,
+          });
+        });
         const remainingCleanupCount = await countImportTransactionsNeedingCleanup(job.importFileId).catch(() => 0);
         if (remainingCleanupCount > 0 && attempt < MAX_IMPORT_ENRICHMENT_ATTEMPTS) {
           await updateImportEnrichmentJobProgress({

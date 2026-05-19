@@ -2281,7 +2281,7 @@ export const buildParsedTransactionInsertData = async (params: {
 }) => {
   const columns = new Set(await getCompatibleParsedTransactionColumns());
 
-  return params.rows.flatMap((row) => {
+  return params.rows.flatMap((row, index) => {
     const amount = parseAmountValue(row.amount ?? null);
     if (amount === null) {
       return [];
@@ -2311,7 +2311,14 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("categoryReason")) record.categoryReason = row.categoryReason ?? null;
     if (columns.has("parserVersion")) record.parserVersion = row.parserVersion ?? DATA_ENGINE_VERSION;
     if (columns.has("statementFingerprint")) record.statementFingerprint = params.statementFingerprint;
-    if (columns.has("rawPayload")) record.rawPayload = (row.rawPayload ?? {}) as Prisma.InputJsonValue;
+    if (columns.has("rawPayload")) {
+      record.rawPayload = {
+        ...(row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+          ? (row.rawPayload as Record<string, unknown>)
+          : {}),
+        sourceRowIndex: index + 1,
+      } as Prisma.InputJsonValue;
+    }
     if (columns.has("reviewStatus")) record.reviewStatus = row.reviewStatus ?? "suggested";
     if (columns.has("parserConfidence")) record.parserConfidence = row.parserConfidence ?? row.confidence ?? 0;
     if (columns.has("categoryConfidence")) record.categoryConfidence = row.categoryConfidence ?? row.confidence ?? 0;
@@ -2360,7 +2367,26 @@ export const fetchParsedTransactionRows = async (importFileId: string) => {
   }
 
   const selectColumns = columns.map((column) => `"${column}"`).join(", ");
-  const orderBy = columns.includes("createdAt") ? ' ORDER BY "createdAt" ASC' : "";
+  const orderByParts: string[] = [];
+  if (columns.includes("rawPayload")) {
+    orderByParts.push(
+      `CASE
+        WHEN "rawPayload" IS NOT NULL
+          AND jsonb_typeof("rawPayload"::jsonb) = 'object'
+          AND ("rawPayload"::jsonb ? 'sourceRowIndex')
+          AND ("rawPayload"::jsonb->>'sourceRowIndex') ~ '^[0-9]+$'
+        THEN ("rawPayload"::jsonb->>'sourceRowIndex')::integer
+        ELSE NULL
+      END ASC NULLS LAST`
+    );
+  }
+  if (columns.includes("createdAt")) {
+    orderByParts.push('"createdAt" ASC');
+  }
+  if (columns.includes("id")) {
+    orderByParts.push('"id" ASC');
+  }
+  const orderBy = orderByParts.length > 0 ? ` ORDER BY ${orderByParts.join(", ")}` : "";
   return prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
     `SELECT ${selectColumns} FROM "ParsedTransaction" WHERE "importFileId" = $1${orderBy}`,
     importFileId
