@@ -25,6 +25,43 @@ export type ImportStatusSnapshot = {
     uploadedAt: string;
     updatedAt: string;
   };
+  receiptTransaction: {
+    id: string;
+    accountId: string;
+    accountName: string;
+    institution: string | null;
+    accountNumber: string | null;
+    categoryId: string | null;
+    reviewStatus: string | null;
+    date: string;
+    amount: string;
+    currency: string;
+    type: "income" | "expense" | "transfer";
+    merchantRaw: string;
+    merchantClean: string | null;
+    description: string | null;
+    rawPayload: Record<string, unknown> | null;
+    normalizedPayload: Record<string, unknown> | null;
+    isTransfer: boolean;
+    isExcluded: boolean;
+    createdAt: string;
+  } | null;
+  receiptDocument: {
+    id: string;
+    accountId: string | null;
+    transactionId: string | null;
+    merchantRaw: string | null;
+    merchantClean: string | null;
+    transactionDate: string | null;
+    transactionTime: string | null;
+    currency: string | null;
+    subtotal: string | null;
+    tax: string | null;
+    total: string | null;
+    paymentMethod: string | null;
+    accountMatch: Record<string, unknown> | null;
+    rawPayload: Record<string, unknown> | null;
+  } | null;
   parsedRowsCount: number;
   confirmedTransactionsCount: number;
   visibleImportComplete: boolean;
@@ -83,6 +120,68 @@ export const loadImportStatusSnapshot = async (
 
   const parsedRowsCountBefore = Number(importFile.parsedRowsCount ?? 0);
   const confirmedTransactionsCountBefore = Number(importFile.confirmedTransactionsCount ?? 0);
+  const documentImport = (await hasCompatibleTable("DocumentImport"))
+    ? await prisma.documentImport.findUnique({
+        where: { importFileId },
+        select: { id: true },
+      }).catch(() => null)
+    : null;
+  const receiptDocument =
+    documentImport?.id && (await hasCompatibleTable("ReceiptDocument"))
+      ? await prisma.receiptDocument.findUnique({
+          where: { documentImportId: documentImport.id },
+          select: {
+            id: true,
+            accountId: true,
+            transactionId: true,
+            merchantRaw: true,
+            merchantClean: true,
+            transactionDate: true,
+            transactionTime: true,
+            currency: true,
+            subtotal: true,
+            tax: true,
+            total: true,
+            paymentMethod: true,
+            accountMatch: true,
+            rawPayload: true,
+          },
+        }).catch(() => null)
+      : null;
+  const receiptTransaction =
+    importFile.status === "done"
+      ? await prisma.transaction.findFirst({
+          where: {
+            importFileId,
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            accountId: true,
+            date: true,
+            amount: true,
+            currency: true,
+            type: true,
+            merchantRaw: true,
+            merchantClean: true,
+            description: true,
+            rawPayload: true,
+            normalizedPayload: true,
+            reviewStatus: true,
+            isTransfer: true,
+            isExcluded: true,
+            createdAt: true,
+            account: {
+              select: {
+                name: true,
+                institution: true,
+                accountNumber: true,
+              },
+            },
+          },
+          orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+        }).catch(() => null)
+      : null;
   let statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
     ? await prisma.accountStatementCheckpoint.findUnique({
         where: { importFileId },
@@ -144,7 +243,6 @@ export const loadImportStatusSnapshot = async (
     processingMessage: importFile.processingMessage,
     parsedRowsCount,
     confirmedTransactionsCount,
-    visibleImportComplete,
     confirmationStatus,
     checkpointStatus: statementCheckpoint?.status ?? null,
     workflowStage: checkpointWorkflowStage,
@@ -167,6 +265,59 @@ export const loadImportStatusSnapshot = async (
       uploadedAt: importFile.uploadedAt.toISOString(),
       updatedAt: importFile.updatedAt.toISOString(),
     },
+    receiptDocument: receiptDocument
+      ? {
+          id: receiptDocument.id,
+          accountId: receiptDocument.accountId ?? null,
+          transactionId: receiptDocument.transactionId ?? null,
+          merchantRaw: receiptDocument.merchantRaw ?? null,
+          merchantClean: receiptDocument.merchantClean ?? null,
+          transactionDate: receiptDocument.transactionDate?.toISOString() ?? null,
+          transactionTime: receiptDocument.transactionTime ?? null,
+          currency: receiptDocument.currency ?? null,
+          subtotal: receiptDocument.subtotal?.toString() ?? null,
+          tax: receiptDocument.tax?.toString() ?? null,
+          total: receiptDocument.total?.toString() ?? null,
+          paymentMethod: receiptDocument.paymentMethod ?? null,
+          accountMatch:
+            receiptDocument.accountMatch && typeof receiptDocument.accountMatch === "object" && !Array.isArray(receiptDocument.accountMatch)
+              ? (receiptDocument.accountMatch as Record<string, unknown>)
+              : null,
+          rawPayload:
+            receiptDocument.rawPayload && typeof receiptDocument.rawPayload === "object" && !Array.isArray(receiptDocument.rawPayload)
+              ? (receiptDocument.rawPayload as Record<string, unknown>)
+              : null,
+        }
+      : null,
+    receiptTransaction: receiptTransaction
+      ? {
+          id: receiptTransaction.id,
+          accountId: receiptTransaction.accountId,
+          accountName: receiptTransaction.account?.name ?? "Receipt",
+          institution: receiptTransaction.account?.institution ?? null,
+          accountNumber: receiptTransaction.account?.accountNumber ?? null,
+          categoryId: null,
+          reviewStatus: receiptTransaction.reviewStatus,
+          date: receiptTransaction.date.toISOString(),
+          amount: receiptTransaction.amount.toString(),
+          currency: receiptTransaction.currency,
+          type: receiptTransaction.type,
+          merchantRaw: receiptTransaction.merchantRaw,
+          merchantClean: receiptTransaction.merchantClean ?? null,
+          description: receiptTransaction.description ?? null,
+          rawPayload:
+            receiptTransaction.rawPayload && typeof receiptTransaction.rawPayload === "object" && !Array.isArray(receiptTransaction.rawPayload)
+              ? (receiptTransaction.rawPayload as Record<string, unknown>)
+              : null,
+          normalizedPayload:
+            receiptTransaction.normalizedPayload && typeof receiptTransaction.normalizedPayload === "object" && !Array.isArray(receiptTransaction.normalizedPayload)
+              ? (receiptTransaction.normalizedPayload as Record<string, unknown>)
+              : null,
+          isTransfer: receiptTransaction.isTransfer,
+          isExcluded: receiptTransaction.isExcluded,
+          createdAt: receiptTransaction.createdAt.toISOString(),
+        }
+      : null,
     parsedRowsCount,
     confirmedTransactionsCount,
     visibleImportComplete,

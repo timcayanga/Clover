@@ -152,6 +152,42 @@ type ImportStatusPayload = {
     processingTargetScore?: number | null;
     processingCurrentScore?: number | null;
   };
+  receiptDocument?: {
+    id?: string;
+    accountId?: string | null;
+    transactionId?: string | null;
+    merchantRaw?: string | null;
+    merchantClean?: string | null;
+    transactionDate?: string | null;
+    transactionTime?: string | null;
+    currency?: string | null;
+    subtotal?: string | null;
+    tax?: string | null;
+    total?: string | null;
+    paymentMethod?: string | null;
+    accountMatch?: Record<string, unknown> | null;
+    rawPayload?: Record<string, unknown> | null;
+  } | null;
+  receiptTransaction?: {
+    id?: string;
+    accountId?: string;
+    accountName?: string;
+    institution?: string | null;
+    accountNumber?: string | null;
+    reviewStatus?: string | null;
+    date?: string;
+    amount?: string;
+    currency?: string;
+    type?: "income" | "expense" | "transfer";
+    merchantRaw?: string;
+    merchantClean?: string | null;
+    description?: string | null;
+    rawPayload?: Record<string, unknown> | null;
+    normalizedPayload?: Record<string, unknown> | null;
+    isTransfer?: boolean;
+    isExcluded?: boolean;
+    createdAt?: string;
+  } | null;
   parsedRowsCount?: number;
   confirmedTransactionsCount?: number;
   visibleImportComplete?: boolean;
@@ -833,12 +869,15 @@ const resolveCashAccountOption = (accounts: AccountOption[]) =>
     return name === "cash" || institution === "cash" || type === "cash";
   }) ?? null;
 
+const findAccountOptionById = (accounts: AccountOption[], accountId: string | null) =>
+  accountId ? accounts.find((account) => account.id === accountId) ?? null : null;
+
 const buildReceiptPreviewTransactions = (
   preview: ReceiptPreviewResult,
   params: {
     importFileId: string;
     accountId: string;
-    accountName: string;
+    accountName: string | null;
     institution: string | null;
     accountType: UploadAccountType;
   }
@@ -856,7 +895,7 @@ const buildReceiptPreviewTransactions = (
       importFileId: params.importFileId,
       sourceRowIndex: 1,
       accountId: params.accountId,
-      accountName: params.accountName,
+      accountName: params.accountName ?? "Receipt",
       categoryId: null,
       categoryName: null,
       reviewStatus: "pending_review",
@@ -905,6 +944,136 @@ const buildReceiptOptimisticSummary = (
 
   return {
     ...summary,
+    optimistic: false,
+  };
+};
+
+const buildReceiptSummaryFromReceiptDocument = (params: {
+  fileName: string;
+  importFileId: string;
+  receiptDocument: NonNullable<ImportStatusPayload["receiptDocument"]>;
+  accountId: string | null;
+  accountType: UploadAccountType;
+  previewAccountName?: string | null;
+}): UploadInsightsSummary | null => {
+  const total = typeof params.receiptDocument.total === "string" ? params.receiptDocument.total.trim() : "";
+  const transactionDate = typeof params.receiptDocument.transactionDate === "string" ? params.receiptDocument.transactionDate.trim() : "";
+  if (!total || !transactionDate) {
+    return null;
+  }
+
+  const merchantName =
+    typeof params.receiptDocument.merchantClean === "string" && params.receiptDocument.merchantClean.trim()
+      ? params.receiptDocument.merchantClean.trim()
+      : typeof params.receiptDocument.merchantRaw === "string" && params.receiptDocument.merchantRaw.trim()
+        ? params.receiptDocument.merchantRaw.trim()
+        : "Receipt";
+
+  const normalizedAccountId = params.accountId ?? `receipt-${params.importFileId}`;
+  const previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]> = [
+    {
+      id: `optimistic-${params.importFileId}-receipt`,
+      importFileId: params.importFileId,
+      sourceRowIndex: 1,
+      accountId: normalizedAccountId,
+      accountName: params.previewAccountName ?? "Receipt",
+      categoryId: null,
+      categoryName: null,
+      reviewStatus: "pending_review",
+      date: transactionDate,
+      amount: total,
+      currency: params.receiptDocument.currency?.trim().toUpperCase() || "PHP",
+      type: "expense",
+      merchantRaw: merchantName,
+      merchantClean: merchantName,
+      description: merchantName,
+      isTransfer: false,
+      isExcluded: false,
+      source: "upload",
+    },
+  ];
+
+  return {
+    ...buildOptimisticUploadSummary(
+      params.fileName,
+      previewTransactions.length,
+      params.accountId,
+      null,
+      null,
+      params.accountType,
+      null,
+      null,
+      previewTransactions,
+      null,
+      false
+    ),
+    optimistic: false,
+  };
+};
+
+const buildReceiptSummaryFromReceiptTransaction = (params: {
+  fileName: string;
+  importFileId: string;
+  receiptTransaction: NonNullable<ImportStatusPayload["receiptTransaction"]>;
+  accountType: UploadAccountType;
+}): UploadInsightsSummary | null => {
+  const amount = typeof params.receiptTransaction.amount === "string" ? params.receiptTransaction.amount.trim() : "";
+  const date = typeof params.receiptTransaction.date === "string" ? params.receiptTransaction.date.trim() : "";
+  const accountId = typeof params.receiptTransaction.accountId === "string" ? params.receiptTransaction.accountId.trim() : "";
+  const accountName =
+    typeof params.receiptTransaction.accountName === "string" && params.receiptTransaction.accountName.trim()
+      ? params.receiptTransaction.accountName.trim()
+      : "Receipt";
+  if (!amount || !date || !accountId) {
+    return null;
+  }
+
+  const merchantName =
+    typeof params.receiptTransaction.merchantClean === "string" && params.receiptTransaction.merchantClean.trim()
+      ? params.receiptTransaction.merchantClean.trim()
+      : typeof params.receiptTransaction.merchantRaw === "string" && params.receiptTransaction.merchantRaw.trim()
+        ? params.receiptTransaction.merchantRaw.trim()
+        : typeof params.receiptTransaction.description === "string" && params.receiptTransaction.description.trim()
+          ? params.receiptTransaction.description.trim()
+          : "Receipt";
+
+  const previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]> = [
+    {
+      id: `optimistic-${params.importFileId}-receipt`,
+      importFileId: params.importFileId,
+      sourceRowIndex: 1,
+      accountId,
+      accountName,
+      categoryId: null,
+      categoryName: null,
+      reviewStatus: "pending_review",
+      date,
+      amount,
+      currency: params.receiptTransaction.currency?.trim().toUpperCase() || "PHP",
+      type: params.receiptTransaction.type ?? "expense",
+      merchantRaw: merchantName,
+      merchantClean: merchantName,
+      description: merchantName,
+      isTransfer: Boolean(params.receiptTransaction.isTransfer),
+      isExcluded: Boolean(params.receiptTransaction.isExcluded),
+      source: "upload",
+    },
+  ];
+
+  return {
+    ...buildOptimisticUploadSummary(
+      params.fileName,
+      previewTransactions.length,
+      accountId,
+      accountName,
+      params.receiptTransaction.institution ?? null,
+      params.accountType,
+      null,
+      null,
+      previewTransactions,
+      params.receiptTransaction.accountNumber ?? null,
+      false
+    ),
     optimistic: false,
   };
 };
@@ -4085,11 +4254,15 @@ export function ImportFilesModal({
     itemId: string,
     importFileId: string,
     importMode: ImportImageMode,
-    fileName: string
-  ) => {
+    fileName: string,
+    options?: {
+      deliverSummary?: boolean;
+    }
+  ): Promise<{ completed: boolean; summary: UploadInsightsSummary | null }> => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     const startedAt = Date.now();
     const MAX_WAIT_MS = importMode === "receipt" ? 12_000 : 20_000;
+    const deliverSummary = options?.deliverSummary ?? true;
     const progressLabel =
       importMode === "receipt"
         ? "Reading receipt in background"
@@ -4139,7 +4312,7 @@ export function ImportFilesModal({
             "The file is visible in Clover. Clover will keep cleaning up names and categories in the background.",
             "Visible in Clover"
           );
-          return true;
+          return { completed: true, summary: null };
         }
         closeImportAfterError(
           itemId,
@@ -4147,16 +4320,77 @@ export function ImportFilesModal({
           fileName,
           processingMessage ?? "Clover couldn't finish reading this file."
         );
-        return false;
+        return { completed: false, summary: null };
       }
 
       if (importStatus === "done") {
+        const receiptAccountId =
+          typeof importFile?.accountId === "string" && importFile.accountId.trim()
+            ? importFile.accountId.trim()
+            : typeof payload.receiptDocument?.accountId === "string" && payload.receiptDocument.accountId.trim()
+              ? payload.receiptDocument.accountId.trim()
+              : null;
+        const accountOption = findAccountOptionById(accounts, receiptAccountId);
+        const localReceiptSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
+        const receiptTransactionSummary =
+          importMode === "receipt" && payload.receiptTransaction
+            ? buildReceiptSummaryFromReceiptTransaction({
+                fileName,
+                importFileId,
+                receiptTransaction: payload.receiptTransaction,
+                accountType: (accountOption?.type as UploadAccountType) ?? null,
+              })
+            : null;
+        const receiptSummary =
+          importMode === "receipt"
+            ? (payload.receiptDocument
+                ? buildReceiptSummaryFromReceiptDocument({
+                    fileName,
+                    importFileId,
+                    receiptDocument: payload.receiptDocument,
+                    accountId: receiptAccountId,
+                    accountType: (accountOption?.type as UploadAccountType) ?? null,
+                    previewAccountName: accountOption?.name ?? null,
+                  })
+                : receiptTransactionSummary) ?? localReceiptSummary
+            : null;
+
+        if (importMode === "receipt" && !receiptSummary) {
+          updateItem(itemId, {
+            status: "importing",
+            confirmationState: "pending",
+            progress: 100,
+            progressLabel: "Receipt imported",
+            targetAccountId: receiptAccountId ?? null,
+          });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: 100,
+            detail: "Receipt imported; waiting for the transaction to appear",
+            summary: null,
+            errorMessage: null,
+          });
+          await sleep(500);
+          continue;
+        }
+
         updateItem(itemId, {
           status: "done",
           confirmationState: "confirmed",
           progress: 100,
           progressLabel: doneLabel,
+          targetAccountId: receiptSummary?.accountId ?? receiptAccountId ?? null,
         });
+        if (receiptSummary && deliverSummary) {
+          seedImportedWorkspaceCaches(workspaceId, receiptSummary);
+          await Promise.resolve(onImported(receiptSummary));
+        }
         publishImportActivity({
           workspaceId,
           surface: importActivitySurfaceRef.current,
@@ -4167,11 +4401,11 @@ export function ImportFilesModal({
           completedFiles: completedFileCount + 1,
           progress: 100,
           detail: doneLabel,
-          summary: null,
+          summary: receiptSummary && deliverSummary ? receiptSummary : null,
           errorMessage: null,
         });
         router.refresh();
-        return true;
+        return { completed: true, summary: receiptSummary };
       }
 
       updateItem(itemId, {
@@ -4214,19 +4448,19 @@ export function ImportFilesModal({
             "Clover parsed the file and is still finalizing the import.",
             "Finalizing import"
           );
-          return false;
+          return { completed: true, summary: null };
         }
 
         const timeoutMessage = "Timed out after 2 minutes while Clover was still reading the document.";
         closeImportAfterError(itemId, "monitor", fileName, timeoutMessage);
-        return false;
+        return { completed: false, summary: null };
       }
 
       await sleep(500);
     }
 
     closeImportAfterError(itemId, "monitor", fileName, "Timed out while Clover was still reading the document.");
-    return false;
+    return { completed: false, summary: null };
   };
 
   const processFile = async (itemId: string): Promise<ImportProcessResult> => {
@@ -4431,7 +4665,9 @@ export function ImportFilesModal({
                 errorMessage: null,
               });
 
-              void monitorQueuedDocumentImport(itemId, importFileId, itemImportMode, item.file.name).finally(() => router.refresh());
+              void monitorQueuedDocumentImport(itemId, importFileId, itemImportMode, item.file.name, {
+                deliverSummary: false,
+              }).finally(() => router.refresh());
               return {
                 status: "done",
                 importedRows: precomputedReceiptSummary.rowsImported,
@@ -4439,14 +4675,14 @@ export function ImportFilesModal({
               };
             }
           }
-          const completed = await monitorQueuedDocumentImport(itemId, importFileId, itemImportMode, item.file.name);
-          if (!completed) {
+          const monitorResult = await monitorQueuedDocumentImport(itemId, importFileId, itemImportMode, item.file.name);
+          if (!monitorResult.completed) {
             return { status: "error", importedRows: null, summary: null };
           }
           return {
             status: "done",
-            importedRows: 0,
-            summary: null,
+            importedRows: monitorResult.summary?.rowsImported ?? 0,
+            summary: monitorResult.summary,
           };
         }
         updateItem(itemId, {
