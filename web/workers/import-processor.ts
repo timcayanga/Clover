@@ -5026,6 +5026,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         merchantRaw: true,
         merchantClean: true,
         description: true,
+        reviewStatus: true,
       },
     });
     const existingImportTransactionBySourceIndex = new Map<number, (typeof existingImportTransactions)[number]>();
@@ -5379,6 +5380,9 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     if (existingImportTransaction) {
       retainedExistingImportTransactionIds.add(existingImportTransaction.id);
       retainedExistingImportTransactionsCount += 1;
+      const canPatchImportedClassification =
+        existingImportTransaction.reviewStatus !== "edited" &&
+        existingImportTransaction.reviewStatus !== "rejected";
       await tx.transaction.update({
         where: { id: existingImportTransaction.id },
         data: {
@@ -5394,6 +5398,24 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               : null,
           rawPayload: mergeImportJsonPayload(insertRow.rawPayload, existingImportTransaction.rawPayload) as Prisma.InputJsonValue,
           isExcluded: Boolean(insertRow.isExcluded),
+          ...(canPatchImportedClassification
+            ? {
+                categoryId,
+                type: canonicalType,
+                merchantClean:
+                  typeof insertRow.merchantClean === "string" && insertRow.merchantClean.trim()
+                    ? insertRow.merchantClean
+                    : typeof insertRow.merchantRaw === "string"
+                      ? insertRow.merchantRaw
+                      : null,
+                categoryConfidence: rowCategoryConfidence,
+                parserConfidence: rowParserConfidence,
+                reviewStatus: insertRow.reviewStatus as Prisma.EnumReviewStatusFieldUpdateOperationsInput | Prisma.ReviewStatus,
+                isTransfer: canonicalType === "transfer",
+                normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
+                learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
+              }
+            : {}),
         },
       });
       transactions.push({
