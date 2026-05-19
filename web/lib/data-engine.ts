@@ -31,6 +31,8 @@ type TrainingSignalRow = {
   confidence: number;
 };
 
+const USER_CONFIRMED_LEARNING_SOURCES = new Set(["manual_recategorization", "manual_transaction_creation"]);
+
 type NegativeMerchantSignalRow = {
   merchantKey: string;
   merchantTokens: string[];
@@ -2853,6 +2855,7 @@ export const classifyMerchant = (params: {
       categoryName: hardcodedOverride,
       confidence: 99,
       categoryReason: "hardcoded-override",
+      categorySource: "deterministic_override",
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
       normalizedName: summarizeMerchantText(params.merchantText),
@@ -2899,6 +2902,7 @@ export const classifyMerchant = (params: {
       categoryName: learnedCategory,
       confidence: adjustedConfidence,
       categoryReason: exact ? "rule-exact" : "rule-pattern",
+      categorySource: bestRule.source,
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
       normalizedName: bestRule.normalizedName || summarizeMerchantText(params.merchantText),
@@ -2923,6 +2927,7 @@ export const classifyMerchant = (params: {
       categoryName: learnedCategory,
       confidence,
       categoryReason: bestSignal.merchantKey === normalizedMerchant ? "learned-exact" : "learned-pattern",
+      categorySource: bestSignal.source,
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
       normalizedName: summarizeMerchantText(params.merchantText),
@@ -2935,6 +2940,7 @@ export const classifyMerchant = (params: {
       categoryName: heuristicCategory,
       confidence: 99,
       categoryReason: "hardcoded-exact",
+      categorySource: "deterministic_exact",
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
       normalizedName: summarizeMerchantText(params.merchantText),
@@ -2946,6 +2952,7 @@ export const classifyMerchant = (params: {
     categoryName: heuristicCategory,
     confidence: heuristicCategory === "Other" ? 35 : Math.max(35, 62 - Math.min(22, Math.round(negativePenalty * 0.25))),
     categoryReason: heuristicCategory === "Other" ? "heuristic-other" : "heuristic-rule",
+    categorySource: "deterministic_heuristic",
     merchantKey: normalizedMerchant,
     merchantTokens: tokens,
     normalizedName: summarizeMerchantText(params.merchantText),
@@ -3829,14 +3836,25 @@ export const enrichParsedRowsWithTraining = async (params: {
       negativeSignalCount: negativeSignals.length,
     });
     const merchantClean = learned.normalizedName || deterministicMerchantName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
-    const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(learned.preferredType ?? row.type ?? "expense");
-    const nextType = coerceTransactionTypeFromCategoryName(
-      categoryName,
-      learned.preferredType ?? row.type ?? "expense"
-    );
     const accountName = row.accountName ?? null;
     const parserCategoryName = typeof row.categoryName === "string" ? row.categoryName.trim() : "";
     const parserSuppliedConcreteCategory = Boolean(parserCategoryName) && parserCategoryName.toLowerCase() !== "other";
+    const learnedCategorySource = typeof learned.categorySource === "string" ? learned.categorySource : null;
+    const learnedCategoryName = typeof learned.categoryName === "string" ? learned.categoryName.trim() : "";
+    const learnedConflictsWithParser =
+      parserSuppliedConcreteCategory &&
+      learnedCategoryName.length > 0 &&
+      normalizeMerchantText(learnedCategoryName) !== normalizeMerchantText(parserCategoryName);
+    const shouldKeepParserCategory =
+      learnedConflictsWithParser &&
+      (!learnedCategorySource || !USER_CONFIRMED_LEARNING_SOURCES.has(learnedCategorySource));
+    const categoryName = shouldKeepParserCategory
+      ? parserCategoryName
+      : learned.categoryName || row.categoryName || defaultCategoryForType(learned.preferredType ?? row.type ?? "expense");
+    const nextType = coerceTransactionTypeFromCategoryName(
+      categoryName,
+      shouldKeepParserCategory ? row.type ?? "expense" : learned.preferredType ?? row.type ?? "expense"
+    );
     const rowConfidence = normalizeConfidenceScore(row.confidence);
     const rowParserConfidence = normalizeConfidenceScore(rowWithInstitution.parserConfidence);
     const rowCategoryConfidence = normalizeConfidenceScore(rowWithInstitution.categoryConfidence);
@@ -3909,7 +3927,9 @@ export const enrichParsedRowsWithTraining = async (params: {
           engineVersion: DATA_ENGINE_VERSION,
           merchantKey: learned.merchantKey,
           merchantTokens: learned.merchantTokens,
-          categoryReason: learned.categoryReason,
+          categoryReason: shouldKeepParserCategory ? "parser-category-preserved" : learned.categoryReason,
+          categorySource: learnedCategorySource,
+          learnedCategoryName: learnedCategoryName || null,
           confidence: effectiveConfidence,
           accountRuleKey: accountMatch?.rule.ruleKey ?? null,
           accountRuleConfidence: accountMatch ? Math.round(accountMatch.score) : null,

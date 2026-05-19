@@ -125,6 +125,52 @@ const main = async () => {
         },
         select: { id: true },
       }));
+    const incomeCategory =
+      (await prisma.category.findFirst({
+        where: { workspaceId, name: "Income" },
+        select: { id: true },
+      })) ??
+      (await prisma.category.create({
+        data: {
+          workspaceId,
+          name: "Income",
+          type: "income",
+          isSystem: true,
+        },
+        select: { id: true },
+      }));
+
+    // Previous bad imports may have taught broad income rules. Deterministic
+    // statement categories should still win unless the user explicitly edited
+    // that merchant to Income.
+    for (const merchantText of ["ATM Withdrawal", "Service Charge"]) {
+      await prisma.merchantRule.upsert({
+        where: {
+          workspaceId_merchantKey: {
+            workspaceId,
+            merchantKey: merchantText.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(),
+          },
+        },
+        create: {
+          workspaceId,
+          merchantKey: merchantText.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(),
+          merchantPattern: merchantText,
+          normalizedName: merchantText,
+          categoryId: incomeCategory.id,
+          categoryName: "Income",
+          source: "import_confirmation",
+          confidence: 100,
+          timesConfirmed: 20,
+        },
+        update: {
+          categoryId: incomeCategory.id,
+          categoryName: "Income",
+          source: "import_confirmation",
+          confidence: 100,
+          timesConfirmed: 20,
+        },
+      });
+    }
 
     // Deliberately degrade the visible rows after the raw import succeeds.
     // The enrichment worker must patch these same transaction IDs in place,
@@ -185,6 +231,7 @@ const main = async () => {
         amount: true,
         merchantRaw: true,
         merchantClean: true,
+        type: true,
         category: { select: { name: true } },
         rawPayload: true,
       },
@@ -227,6 +274,17 @@ const main = async () => {
     const missingInitialRows = initialTransactions.filter(
       (initial) => !transactions.some((transaction) => transaction.id === initial.id)
     );
+    const misclassifiedKnownRows = transactions.filter((transaction) => {
+      const clean = String(transaction.merchantClean ?? transaction.merchantRaw ?? "").toLowerCase();
+      const categoryName = transaction.category?.name ?? "Other";
+      if (/atm withdrawal|expressnet|megalink/.test(clean)) {
+        return categoryName !== "Cash & ATM" || transaction.type !== "expense";
+      }
+      if (/service charge|tax withheld/.test(clean)) {
+        return categoryName !== "Financial" || transaction.type !== "expense";
+      }
+      return false;
+    });
 
     console.table(
       imports.map((importFile) => ({
@@ -240,6 +298,13 @@ const main = async () => {
     assert.equal(transactions.length, 64, `Expected 64 visible BPI transactions, got ${transactions.length}.`);
     assert.equal(missingInitialRows.length, 0, `Expected enrichment to preserve every initial row, lost ${missingInitialRows.length}.`);
     assert.equal(otherRows.length, 0, `Expected 0 BPI rows in Other, got ${otherRows.length}.`);
+    assert.equal(
+      misclassifiedKnownRows.length,
+      0,
+      `Expected deterministic BPI categories to beat stale learned Income rules, got ${misclassifiedKnownRows
+        .map((row) => `${row.merchantClean ?? row.merchantRaw}:${row.category?.name ?? "Other"}/${row.type}`)
+        .join(", ")}.`
+    );
     assert.equal(rawishRows.length, 0, `Expected no compact/all-caps BPI raw labels, got ${rawishRows.length}.`);
     assert.equal(duplicateCount, 0, `Expected no duplicate rows by import/source index, got ${duplicateCount}.`);
     assert.equal(
