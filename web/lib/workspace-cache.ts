@@ -965,6 +965,40 @@ const shouldPreservePopulatedSnapshot = (
   }
 ) => hasWorkspaceSnapshotData(existing) && !hasWorkspaceSnapshotData(incoming);
 
+const shouldMergeImportedTransactionSnapshot = (
+  existing: { transactions?: CachedRecord[] } | null | undefined,
+  incoming: { transactions?: CachedRecord[] }
+) => {
+  const existingTransactions = Array.isArray(existing?.transactions) ? existing.transactions : [];
+  const incomingTransactions = Array.isArray(incoming.transactions) ? incoming.transactions : [];
+  if (existingTransactions.length <= incomingTransactions.length || incomingTransactions.length === 0) {
+    return false;
+  }
+
+  const incomingSignatures = new Set(
+    incomingTransactions.map((transaction) => getImportedTransactionSignature(transaction)).filter(Boolean)
+  );
+  if (incomingSignatures.size === 0) {
+    return false;
+  }
+
+  let hasIncomingMatch = false;
+  let hasExistingOutsideIncoming = false;
+  for (const transaction of existingTransactions) {
+    const signature = getImportedTransactionSignature(transaction);
+    if (!signature) {
+      continue;
+    }
+    if (incomingSignatures.has(signature)) {
+      hasIncomingMatch = true;
+    } else {
+      hasExistingOutsideIncoming = true;
+    }
+  }
+
+  return hasIncomingMatch && hasExistingOutsideIncoming;
+};
+
 export const readAccountsWorkspaceCache = (): AccountsWorkspaceCacheState | null => {
   const cache = readJsonCache<AccountsWorkspaceCacheState>(accountsWorkspaceCacheKey);
   if (!cache || typeof cache !== "object" || typeof cache.selectedWorkspaceId !== "string") {
@@ -1219,11 +1253,30 @@ export const persistTransactionsWorkspaceCache = (
   }
 
   const updatedAt = Date.now();
-  const nextSnapshot = filterTransactionsWorkspaceSnapshot(workspaceId, {
+  const incomingSnapshot = filterTransactionsWorkspaceSnapshot(workspaceId, {
     workspaceId,
     updatedAt,
     ...snapshot,
   });
+  const shouldMergeExistingTransactions = shouldMergeImportedTransactionSnapshot(existingSnapshot, incomingSnapshot);
+  const mergedTransactions =
+    shouldMergeExistingTransactions && existingSnapshot
+      ? mergeImportedTransactions(existingSnapshot.transactions, incomingSnapshot.transactions as ImportedWorkspaceTransaction[])
+      : incomingSnapshot.transactions;
+  const nextSnapshot = {
+    ...incomingSnapshot,
+    categories: shouldMergeExistingTransactions
+      ? mergeCachedCategories(incomingSnapshot.categories, deriveCachedCategoriesFromTransactions(mergedTransactions))
+      : incomingSnapshot.categories,
+    transactions: mergedTransactions,
+    totalCount: shouldMergeExistingTransactions
+      ? Math.max(
+          typeof incomingSnapshot.totalCount === "number" ? incomingSnapshot.totalCount : 0,
+          typeof existingSnapshot?.totalCount === "number" ? existingSnapshot.totalCount : 0,
+          mergedTransactions.length
+        )
+      : incomingSnapshot.totalCount,
+  };
 
   const nextState: TransactionsWorkspaceCacheState = {
     selectedWorkspaceId: workspaceId,

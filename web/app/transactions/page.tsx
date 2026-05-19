@@ -56,6 +56,7 @@ import {
   getDeletingWorkspaceAccountIds,
   normalizeImportedAccountKey,
   matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
+  type ImportedWorkspaceTransaction,
 } from "@/lib/workspace-cache";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
@@ -1206,6 +1207,24 @@ const getCachedTransactionsWorkspace = (workspaceId: string): TransactionsWorksp
   };
 };
 
+const hasImportedTransactionIdentity = (transaction: Transaction) => {
+  if (typeof transaction.importFileId === "string" && transaction.importFileId.trim()) {
+    return true;
+  }
+
+  const rawPayload = transaction.rawPayload;
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return false;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  return (
+    (typeof payload.sourceImportFileId === "string" && payload.sourceImportFileId.trim().length > 0) ||
+    typeof payload.sourceRowIndex === "number" ||
+    (typeof payload.sourceRowIndex === "string" && payload.sourceRowIndex.trim().length > 0)
+  );
+};
+
 const persistTransactionsWorkspaceCache = (
   workspaceId: string,
   snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
@@ -1232,10 +1251,27 @@ const persistTransactionsWorkspaceCache = (
     return existingSnapshot.updatedAt;
   }
 
+  const shouldMergeExistingTransactions =
+    existingSnapshot !== null &&
+    existingSnapshot.transactions.length > snapshot.transactions.length &&
+    snapshot.transactions.length > 0 &&
+    snapshot.transactions.some(hasImportedTransactionIdentity) &&
+    existingSnapshot.transactions.some(hasImportedTransactionIdentity);
+  const mergedTransactions = shouldMergeExistingTransactions
+    ? mergeImportedWorkspaceTransactions(
+        existingSnapshot.transactions,
+        snapshot.transactions as unknown as ImportedWorkspaceTransaction[]
+      )
+    : snapshot.transactions;
+
   const nextSnapshot: TransactionsWorkspaceCacheSnapshot = {
     workspaceId,
     updatedAt: Date.now(),
     ...snapshot,
+    transactions: mergedTransactions,
+    totalCount: shouldMergeExistingTransactions
+      ? Math.max(existingSnapshot?.totalCount ?? 0, snapshot.totalCount ?? 0, mergedTransactions.length)
+      : snapshot.totalCount,
   };
 
   const nextState: TransactionsWorkspaceCacheState = {
