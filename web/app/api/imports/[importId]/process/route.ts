@@ -7,7 +7,6 @@ import {
   fetchImportFileCompat,
   insertImportFileCompat,
   loadImportFileExtractionCache,
-  loadImportStatusSnapshot,
   loadStatementTemplate,
   mergeStatementMetadataWithTemplate,
   updateImportFileCompat,
@@ -17,6 +16,7 @@ import {
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { enqueueImportProcessing } from "@/lib/import-queue";
 import { ensureImportProcessingWorker } from "@/lib/import-worker-runtime";
+import { loadImportStatusSnapshot } from "@/lib/import-status-snapshot";
 import { uploadObject } from "@/lib/s3";
 import { validateImportFile } from "@/lib/import-file-validation";
 import { countWorkspaceImportFilesThisMonth } from "@/lib/plan-access";
@@ -32,6 +32,7 @@ import type { Prisma } from "@prisma/client";
 import { makeImportFileBytesFingerprint } from "@/lib/import-file-text.server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 const upsertUploadBankHint = async (params: {
   importFileId: string;
@@ -277,6 +278,59 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           }).catch(() => null)
         : null;
       await Promise.all([uploadPromise, uploadBankHintPromise]);
+
+      if (importMode === "receipt") {
+        stage = "processing receipt text";
+        await updateImportFileCompat(importId, {
+          status: "processing",
+          processingPhase: "reading_account_details",
+          processingMessage: "Reading receipt details...",
+        });
+
+        const { processImportFileText } = await import("@/workers/import-processor");
+        const result = await processImportFileText(importId, {
+          password,
+          actorUserId: userId,
+          qaSource: "import_processing",
+          allowDuplicateStatement,
+          importMode,
+          pdfJsBaseUrl,
+          statementMetadataOverride: formBankName
+            ? {
+                institution: formBankName,
+              }
+            : null,
+        });
+        const statusSnapshot = await loadImportStatusSnapshot(importId, {
+          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+          promoteFailedVisibleImport: true,
+        });
+
+        const visibleRows =
+          result.status === "done"
+            ? Number(result.confirmedTransactionsCount ?? result.imported ?? 0)
+            : Number(result.confirmedTransactionsCount ?? 0);
+
+        return NextResponse.json({
+          ok: true,
+          queued: false,
+          processed: true,
+          importedRows: result.imported,
+          duplicate: Boolean(result.duplicate),
+          status: result.status ?? "done",
+          importFileId: importId,
+          metadata: result.metadata,
+          accountId: result.accountId ?? null,
+          confirmedTransactionsCount: result.confirmedTransactionsCount ?? (result.status === "done" ? result.imported : 0),
+          insightSummary: result.insightSummary ?? null,
+          accountBalance: result.accountBalance ?? null,
+          visibleImportComplete: visibleRows > 0,
+          finalizationInBackground: result.status === "done" && visibleRows > 0,
+          receiptDocument: statusSnapshot?.receiptDocument ?? null,
+          receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
+        });
+      }
+
       let metadata: Record<string, unknown> | null = null;
       let extractedText = "";
       let cachedDocTextInfo: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
