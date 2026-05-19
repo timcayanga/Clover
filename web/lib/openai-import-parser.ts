@@ -805,6 +805,8 @@ const openAIJsonSchema = {
     "institution_raw",
     "statement_type",
     "document_type",
+    "receipt_account_match",
+    "receipt_details",
     "payment_due_date",
     "total_amount_due",
     "account",
