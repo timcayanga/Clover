@@ -4224,6 +4224,7 @@ export const processImportFileText = async (
                   : importMode === "account_detail"
                     ? "Account detail snapshot saved."
               : "Document import saved.",
+            confirmedTransactionsCount: confirmedImportResult.imported,
           });
           emitImportProcessingEvent("import_processing_completed", {
             processing_status: "done",
