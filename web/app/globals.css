@@ -31326,6 +31326,14 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   align-items: flex-start;
 }
 
+.split-bill-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .split-bill-panel__head h2,
 .split-bill-panel__head h3 {
   margin: 0;

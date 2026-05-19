@@ -204,6 +204,16 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
           <div>
             <h2>Bills</h2>
           </div>
+          {bills.length === 0 ? (
+            <div className="split-bill-panel__actions">
+              <button className="button button-primary button-small" type="button" onClick={() => openSplitBillAdd("manual")}>
+                Add expense
+              </button>
+              <button className="button button-secondary button-small" type="button" onClick={() => openSplitBillAdd("import")}>
+                Upload receipt
+              </button>
+            </div>
+          ) : null}
         </div>
         <div className="split-bill-filter-bar">
           <input
@@ -282,23 +292,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
             })
           ) : (
             <div className="split-bill-table__empty-state">
-              {bills.length === 0 ? (
-                <div className="split-bill-empty-launchpad">
-                  <div className="split-bill-empty-launchpad__actions">
-                    <button className="button button-primary button-small" type="button" onClick={() => openSplitBillAdd("manual")}>
-                      Add expense
-                    </button>
-                    <button className="button button-secondary button-small" type="button" onClick={() => openSplitBillAdd("import")}>
-                      Upload receipt
-                    </button>
-                    <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-group"))}>
-                      Create group
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                "No bills match this view."
-              )}
+              {bills.length === 0 ? null : "No bills match this view."}
             </div>
           )}
         </div>
