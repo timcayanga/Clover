@@ -31,7 +31,10 @@ type TrainingSignalRow = {
   confidence: number;
 };
 
-const USER_CONFIRMED_LEARNING_SOURCES = new Set(["manual_recategorization", "manual_transaction_creation"]);
+const isDeterministicLearningSource = (source: string | null | undefined) =>
+  typeof source === "string" && source.startsWith("deterministic_");
+const isExactLearningReason = (reason: string | null | undefined) =>
+  reason === "rule-exact" || reason === "learned-exact" || reason === "hardcoded-exact" || reason === "hardcoded-override";
 
 type NegativeMerchantSignalRow = {
   merchantKey: string;
@@ -3864,13 +3867,14 @@ export const enrichParsedRowsWithTraining = async (params: {
     const learnedNormalizedName = typeof learned.normalizedName === "string" ? learned.normalizedName.trim() : "";
     const deterministicNormalizedName = deterministicMerchantName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
     const learnedNameSource = typeof learned.categorySource === "string" ? learned.categorySource : null;
+    const learnedCategoryReason = typeof learned.categoryReason === "string" ? learned.categoryReason : null;
     const learnedNameConflictsWithParser =
       Boolean(deterministicNormalizedName) &&
       Boolean(learnedNormalizedName) &&
       normalizeMerchantText(deterministicNormalizedName) !== normalizeMerchantText(learnedNormalizedName);
     const shouldKeepParserMerchantName =
       learnedNameConflictsWithParser &&
-      (!learnedNameSource || !USER_CONFIRMED_LEARNING_SOURCES.has(learnedNameSource));
+      !isDeterministicLearningSource(learnedNameSource);
     const merchantClean = shouldKeepParserMerchantName
       ? deterministicNormalizedName
       : learnedNormalizedName || deterministicNormalizedName;
@@ -3883,9 +3887,18 @@ export const enrichParsedRowsWithTraining = async (params: {
       parserSuppliedConcreteCategory &&
       learnedCategoryName.length > 0 &&
       normalizeMerchantText(learnedCategoryName) !== normalizeMerchantText(parserCategoryName);
+    const learnedCanSafelyReplaceOther =
+      !parserSuppliedConcreteCategory &&
+      learnedCategoryName.length > 0 &&
+      parserCategoryName.toLowerCase() === "other" &&
+      (isDeterministicLearningSource(learnedCategorySource) ||
+        (isExactLearningReason(learnedCategoryReason) && normalizeConfidenceScore(learned.confidence) >= 85));
     const shouldKeepParserCategory =
-      learnedConflictsWithParser &&
-      (!learnedCategorySource || !USER_CONFIRMED_LEARNING_SOURCES.has(learnedCategorySource));
+      (learnedConflictsWithParser && !isDeterministicLearningSource(learnedCategorySource)) ||
+      (!parserSuppliedConcreteCategory &&
+        parserCategoryName.toLowerCase() === "other" &&
+        learnedCategoryName.length > 0 &&
+        !learnedCanSafelyReplaceOther);
     const categoryName = shouldKeepParserCategory
       ? parserCategoryName
       : learned.categoryName || row.categoryName || defaultCategoryForType(learned.preferredType ?? row.type ?? "expense");
