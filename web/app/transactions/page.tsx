@@ -1225,6 +1225,9 @@ const hasImportedTransactionIdentity = (transaction: Transaction) => {
   );
 };
 
+const getImportedTransactionsToPreserve = (transactions: Transaction[]) =>
+  transactions.filter(hasImportedTransactionIdentity);
+
 const persistTransactionsWorkspaceCache = (
   workspaceId: string,
   snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
@@ -2414,6 +2417,10 @@ function TransactionsPageContent() {
       const visibleCachedWorkspaceTransactions = (cachedWorkspaceTransactions ?? []).filter(
         (transaction) => !deletedAccountIds.has(transaction.accountId)
       );
+      const importedTransactionsToPreserve =
+        transactionsRef.current.length > 0
+          ? getImportedTransactionsToPreserve(transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId)))
+          : getImportedTransactionsToPreserve(visibleCachedWorkspaceTransactions);
       const hasFreshTransactions = fetchedTransactions.length > 0;
       const stableBaseTransactions =
         transactionsRef.current.length > 0
@@ -2424,16 +2431,20 @@ function TransactionsPageContent() {
       const mergedTransactions = options?.append
         ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
         : mergeImportedWorkspaceTransactions(baseTransactions, fetchedTransactions);
+      const mergedTransactionsWithImports =
+        importedTransactionsToPreserve.length > 0
+          ? mergeImportedWorkspaceTransactions(mergedTransactions, importedTransactionsToPreserve as unknown as ImportedWorkspaceTransaction[])
+          : mergedTransactions;
       const summaryPayload = payload?.summary && typeof payload.summary === "object" ? payload.summary : null;
       const responseCurrencyCodes = Array.isArray(payload?.currencyCodes)
         ? payload.currencyCodes.map((value: unknown) => formatCurrencyCode(String(value ?? ""))).filter(Boolean)
         : [];
       const workspaceCurrencyCodesFromData = getWorkspaceCurrencyCodes(
-        mergedTransactions.length > 0 ? mergedTransactions : fetchedTransactions
+        mergedTransactionsWithImports.length > 0 ? mergedTransactionsWithImports : fetchedTransactions
       );
       const nextCurrencyCodes = responseCurrencyCodes.length > 0 ? responseCurrencyCodes : workspaceCurrencyCodesFromData;
       setWorkspaceCurrencyCodes(nextCurrencyCodes);
-      setTransactions(mergedTransactions);
+      setTransactions(mergedTransactionsWithImports);
       if (options?.append) {
         setMobileVisibleCount((current) => current + fetchedTransactions.length);
       } else {
@@ -2443,15 +2454,20 @@ function TransactionsPageContent() {
         setIsMobileLoadingMore(false);
       }
       const visibleSummaryFallback =
-        mergedTransactions.length > 0 ? buildVisibleTransactionSummary(mergedTransactions, { totalCount: Math.max(Number(payload?.totalCount ?? 0), mergedTransactions.length), currencyCodes: nextCurrencyCodes }) : null;
+        mergedTransactionsWithImports.length > 0
+          ? buildVisibleTransactionSummary(mergedTransactionsWithImports, {
+              totalCount: Math.max(Number(payload?.totalCount ?? 0), mergedTransactionsWithImports.length),
+              currencyCodes: nextCurrencyCodes,
+            })
+          : null;
       setTransactionsSummary(
         summaryPayload
           ? {
               totalCount:
                   typeof payload?.totalCount === "number"
-                    ? Math.max(payload.totalCount, mergedTransactions.length)
+                    ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
                   : typeof summaryPayload.totalCount === "number"
-                    ? Math.max(summaryPayload.totalCount, mergedTransactions.length)
+                    ? Math.max(summaryPayload.totalCount, mergedTransactionsWithImports.length)
                     : fetchedTransactions.length,
               income: typeof summaryPayload.income === "number" && summaryPayload.income !== 0 ? summaryPayload.income : visibleSummaryFallback?.income ?? 0,
               spending: typeof summaryPayload.spending === "number" && summaryPayload.spending !== 0 ? summaryPayload.spending : visibleSummaryFallback?.spending ?? 0,
@@ -2476,8 +2492,8 @@ function TransactionsPageContent() {
           : {
               totalCount:
                 typeof payload?.totalCount === "number"
-                  ? Math.max(payload.totalCount, mergedTransactions.length)
-                  : mergedTransactions.length,
+                  ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
+                  : mergedTransactionsWithImports.length,
               income: visibleSummaryFallback?.income ?? 0,
               spending: visibleSummaryFallback?.spending ?? 0,
               transfers: visibleSummaryFallback?.transfers ?? 0,
