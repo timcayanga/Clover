@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { SplitBillDeleteButton } from "@/components/split-bill-delete-button";
@@ -93,9 +92,6 @@ export default async function SplitBillDetailPage({ params }: { params: Promise<
       subtitle="A separate mini-ledger for receipts, shares, and settlements."
       actions={
         <div className="split-bill-detail__actions">
-          <Link className="button button-secondary button-small" href={`/split-bill/${splitBill.id}/edit`} prefetch={false}>
-            Edit
-          </Link>
           <SplitBillDeleteButton billId={splitBill.id} />
         </div>
       }
@@ -122,7 +118,13 @@ export default async function SplitBillDetailPage({ params }: { params: Promise<
             </article>
             <article>
               <span>Status</span>
-              <strong>{splitBill.settlement.transfers.length === 0 ? "Settled" : `${splitBill.settlement.transfers.length} transfer${splitBill.settlement.transfers.length === 1 ? "" : "s"}`}</strong>
+              <strong>
+                {splitBill.settlement.transfers.length === 0
+                  ? splitBill.payments.length > 0
+                    ? "No open transfers"
+                    : "Awaiting allocation"
+                  : `${splitBill.settlement.transfers.length} transfer${splitBill.settlement.transfers.length === 1 ? "" : "s"}`}
+              </strong>
             </article>
           </div>
         </section>

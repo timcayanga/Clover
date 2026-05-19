@@ -1,12 +1,19 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import { SplitBillHome } from "@/components/split-bill-home";
 import { SplitBillPageActions } from "@/components/split-bill-page-actions";
-import { formatSplitBillAmount, mergeSplitBillItemSplitMetadata, type SplitBillSerializedBill } from "@/lib/split-bill";
+import {
+  formatSplitBillAmount,
+  mergeSplitBillItemSplitMetadata,
+  parseAmountValue,
+  splitBillDraftFromSerializedBill,
+  type SplitBillDraft,
+  type SplitBillSerializedBill,
+} from "@/lib/split-bill";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 import { getSplitBillBillsForGroup, getSplitBillBillsForPerson } from "@/lib/split-bill-view-models";
 
@@ -30,6 +37,87 @@ const getParticipantName = (bill: SplitBillSerializedBill, participantId: string
 
 type SplitBillTransferRow = SplitBillSerializedBill["settlement"]["transfers"][number];
 
+type BillEditorParticipant = {
+  id: string;
+  name: string;
+};
+
+type BillEditorPayment = SplitBillDraft["payments"][number];
+type BillEditorItem = SplitBillDraft["items"][number];
+
+const createSplitBillDraftId = () => globalThis.crypto?.randomUUID?.() ?? `split-bill-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const getPersonInitials = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "?"
+
+const ensureDraftDefaults = (draft: SplitBillDraft): SplitBillDraft => {
+  const next = draft.id ? draft : { ...draft, id: createSplitBillDraftId() };
+
+  if (next.participants.length === 0) {
+    next.participants = [{ id: createSplitBillDraftId(), name: "" }];
+  }
+
+  if (next.items.length === 0) {
+    next.items = [{ id: createSplitBillDraftId(), description: "Total", amount: "", participantIds: [], splitMethod: "equal", allocations: [] }];
+  }
+
+  if (next.payments.length === 0) {
+    next.payments = [{ id: createSplitBillDraftId(), participantId: next.participants[0]?.id ?? "", amount: "", note: "" }];
+  }
+
+  return next;
+};
+
+const buildBillEditorDraft = (bill: SplitBillSerializedBill): SplitBillDraft => ensureDraftDefaults(splitBillDraftFromSerializedBill(bill));
+
+const getBillEditorValidationError = (
+  participants: BillEditorParticipant[],
+  items: BillEditorItem[],
+  payments: BillEditorPayment[]
+) => {
+  if (participants.length === 0) {
+    return "Add at least one person before saving.";
+  }
+
+  if (items.length === 0) {
+    return "Add at least one item before saving.";
+  }
+
+  const participantIds = new Set(participants.map((participant) => participant.id));
+
+  for (const [index, item] of items.entries()) {
+    const itemAmount = parseAmountValue(item.amount);
+    const label = item.description.trim() || `Item ${index + 1}`;
+
+    if (itemAmount === null || itemAmount <= 0) {
+      return `${label} needs an amount greater than zero.`;
+    }
+
+    if (item.participantIds.length > 0 && item.participantIds.some((participantId) => !participantIds.has(participantId))) {
+      return `${label} has an invalid person selected.`;
+    }
+  }
+
+  for (const payment of payments) {
+    if (!participantIds.has(payment.participantId) && payment.participantId) {
+      return "Every payment must be assigned to a listed person.";
+    }
+
+    const amount = parseAmountValue(payment.amount);
+    if (amount === null || amount < 0) {
+      return "Payments cannot be negative or invalid.";
+    }
+  }
+
+  return null;
+};
+
 const getTransferDraftKey = (billId: string, transfer: SplitBillTransferRow) =>
   `${billId}:${transfer.fromParticipantId}:${transfer.toParticipantId}`;
 
@@ -45,7 +133,7 @@ const formatPaymentContributions = (bill: SplitBillSerializedBill) => {
 
 const formatSettlementTransfers = (bill: SplitBillSerializedBill) => {
   if (bill.settlement.transfers.length === 0) {
-    return "Fully settled";
+    return bill.payments.length > 0 ? "No open transfers" : "No payments recorded";
   }
 
   return bill.settlement.transfers
@@ -244,6 +332,7 @@ export function SplitBillWorkspace({
   people: initialPeople,
   currentUserName,
 }: SplitBillWorkspaceProps) {
+  const searchParams = useSearchParams();
   const [bills, setBills] = useState(initialBills);
   const [groups, setGroups] = useState(initialGroups);
   const [people, setPeople] = useState(initialPeople);
@@ -251,6 +340,10 @@ export function SplitBillWorkspace({
   const [detailTab, setDetailTab] = useState<DetailTab>("overview");
   const [transferSettlementDrafts, setTransferSettlementDrafts] = useState<Record<string, string>>({});
   const [transferSettlementNotes, setTransferSettlementNotes] = useState<Record<string, string>>({});
+  const [selectedBillDraft, setSelectedBillDraft] = useState<SplitBillDraft | null>(null);
+  const [isEditingBill, setIsEditingBill] = useState(false);
+  const [billEditError, setBillEditError] = useState<string | null>(null);
+  const [isSavingBillEdit, setIsSavingBillEdit] = useState(false);
 
   const selectedBill = selected?.kind === "bill" ? bills.find((bill) => bill.id === selected.id) ?? null : null;
   const selectedGroup = selected?.kind === "group" ? groups.find((group) => group.id === selected.id) ?? null : null;
@@ -484,7 +577,7 @@ export function SplitBillWorkspace({
       const recordedSettlements = formatRecordedTransferSettlements(bill);
       return (
         <div className="split-bill-detail-modal__settlement-panel split-bill-detail-modal__settlement-panel--settled">
-          <strong>{bill.settlement.transfers.length === 0 ? "Fully settled" : "No open transfer for this person"}</strong>
+          <strong>{bill.settlement.transfers.length === 0 ? "No open transfers" : "No open transfer for this person"}</strong>
           {recordedSettlements && bill.settlement.transfers.length === 0 ? <span>{recordedSettlements}</span> : null}
         </div>
       );
@@ -496,7 +589,7 @@ export function SplitBillWorkspace({
           <div>
             <strong>{participantName ? "Settle this person's open transfers" : "Settle this bill"}</strong>
             <span>
-              {formatSplitBillAmount(progress.remaining, bill.currency)} left
+              {progress.remaining > 0 ? `${formatSplitBillAmount(progress.remaining, bill.currency)} left` : "No open transfers"}
               {progress.recorded > 0 ? ` · ${formatSplitBillAmount(progress.recorded, bill.currency)} already recorded` : ""}
             </span>
           </div>
@@ -577,6 +670,256 @@ export function SplitBillWorkspace({
     setDetailTab("overview");
   }, [selected?.kind, selected?.id]);
 
+  useEffect(() => {
+    if (!selectedBill) {
+      setSelectedBillDraft(null);
+      setIsEditingBill(false);
+      setBillEditError(null);
+      setIsSavingBillEdit(false);
+      return;
+    }
+
+    const draft = buildBillEditorDraft(selectedBill);
+    const normalizedCurrentUserName = currentUserName.trim().toLowerCase();
+    if (normalizedCurrentUserName && !draft.participants.some((participant) => participant.name.trim().toLowerCase() === normalizedCurrentUserName)) {
+      draft.participants = [...draft.participants, { id: createSplitBillDraftId(), name: currentUserName.trim() }];
+    }
+
+    setSelectedBillDraft(draft);
+    setIsEditingBill(false);
+    setBillEditError(null);
+    setIsSavingBillEdit(false);
+  }, [currentUserName, selectedBill]);
+
+  useEffect(() => {
+    const billId = searchParams.get("bill");
+    if (!billId || selected?.kind === "bill") {
+      return;
+    }
+
+    const bill = bills.find((entry) => entry.id === billId);
+    if (!bill) {
+      return;
+    }
+
+    setSelected({ kind: "bill", id: billId });
+  }, [bills, searchParams, selected?.kind]);
+
+  const billEditorParticipants = selectedBillDraft?.participants ?? [];
+  const billEditorItems = selectedBillDraft?.items ?? [];
+  const billEditorPayments = selectedBillDraft?.payments ?? [];
+
+  const updateSelectedBillDraft = (updater: (draft: SplitBillDraft) => SplitBillDraft) => {
+    setSelectedBillDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return ensureDraftDefaults(updater({ ...current }));
+    });
+  };
+
+  const startEditingSelectedBill = () => {
+    setIsEditingBill(true);
+    setBillEditError(null);
+  };
+
+  const cancelEditingSelectedBill = () => {
+    if (!selectedBill) {
+      setIsEditingBill(false);
+      setSelectedBillDraft(null);
+      return;
+    }
+
+    setSelectedBillDraft(buildBillEditorDraft(selectedBill));
+    setIsEditingBill(false);
+    setBillEditError(null);
+  };
+
+  const addBillEditorParticipant = () => {
+    updateSelectedBillDraft((draft) => ({
+      ...draft,
+      participants: [...draft.participants, { id: createSplitBillDraftId(), name: "" }],
+    }));
+  };
+
+  const updateBillEditorParticipant = (participantId: string, value: string) => {
+    updateSelectedBillDraft((draft) => ({
+      ...draft,
+      participants: draft.participants.map((participant) => (participant.id === participantId ? { ...participant, name: value } : participant)),
+    }));
+  };
+
+  const removeBillEditorParticipant = (participantId: string) => {
+    updateSelectedBillDraft((draft) => ({
+      ...draft,
+      participants: draft.participants.filter((participant) => participant.id !== participantId),
+      items: draft.items.map((item) => ({
+        ...item,
+        participantIds: item.participantIds.filter((id) => id !== participantId),
+      })),
+      payments: draft.payments.filter((payment) => payment.participantId !== participantId),
+    }));
+  };
+
+  const addBillEditorPayment = () => {
+    updateSelectedBillDraft((draft) => ({
+      ...draft,
+      payments: [...draft.payments, { id: createSplitBillDraftId(), participantId: draft.participants[0]?.id ?? "", amount: "", note: "" }],
+    }));
+  };
+
+  const updateBillEditorPayment = (paymentId: string, patch: Partial<BillEditorPayment>) => {
+    updateSelectedBillDraft((draft) => ({
+      ...draft,
+      payments: draft.payments.map((payment) => (payment.id === paymentId ? { ...payment, ...patch } : payment)),
+    }));
+  };
+
+  const removeBillEditorPayment = (paymentId: string) => {
+    updateSelectedBillDraft((draft) => ({
+      ...draft,
+      payments: draft.payments.filter((payment) => payment.id !== paymentId),
+    }));
+  };
+
+  const addBillEditorItem = () => {
+    updateSelectedBillDraft((draft) => ({
+      ...draft,
+      items: [
+        ...draft.items,
+        {
+          id: createSplitBillDraftId(),
+          description: "",
+          amount: "",
+          participantIds: [],
+          splitMethod: "equal",
+          allocations: [],
+        },
+      ],
+    }));
+  };
+
+  const updateBillEditorItem = (itemId: string, patch: Partial<BillEditorItem>) => {
+    updateSelectedBillDraft((draft) => ({
+      ...draft,
+      items: draft.items.map((item) => (item.id === itemId ? { ...item, ...patch } : item)),
+    }));
+  };
+
+  const toggleBillEditorItemParticipant = (itemId: string, participantId: string) => {
+    updateSelectedBillDraft((draft) => ({
+      ...draft,
+      items: draft.items.map((item) => {
+        if (item.id !== itemId) {
+          return item;
+        }
+
+        const participantIds = item.participantIds.includes(participantId)
+          ? item.participantIds.filter((id) => id !== participantId)
+          : [...item.participantIds, participantId];
+
+        return {
+          ...item,
+          participantIds,
+        };
+      }),
+    }));
+  };
+
+  const removeBillEditorItem = (itemId: string) => {
+    updateSelectedBillDraft((draft) => ({
+      ...draft,
+      items: draft.items.filter((item) => item.id !== itemId),
+    }));
+  };
+
+  const saveSelectedBillDraft = async () => {
+    if (!selectedBill || !selectedBillDraft) {
+      return;
+    }
+
+    const participants = billEditorParticipants
+      .filter((participant) => participant.name.trim())
+      .map((participant) => ({
+      id: participant.id,
+      name: participant.name.trim(),
+    }));
+    const items = billEditorItems
+      .filter((item) => item.description.trim() || item.amount.trim())
+      .map((item) => ({
+      id: item.id,
+      description: item.description.trim(),
+      amount: item.amount,
+      participantIds: item.participantIds.filter((participantId) => participants.some((participant) => participant.id === participantId)),
+      splitMethod: item.splitMethod ?? "equal",
+      allocations: item.allocations ?? [],
+    }));
+    const payments = billEditorPayments
+      .filter((payment) => payment.participantId && payment.amount.trim())
+      .map((payment) => ({
+        id: payment.id,
+        participantId: payment.participantId,
+        amount: payment.amount,
+        note: payment.note?.trim() || null,
+      }));
+    const validationError = getBillEditorValidationError(participants, items, payments);
+
+    if (validationError) {
+      setBillEditError(validationError);
+      return;
+    }
+
+    setIsSavingBillEdit(true);
+    setBillEditError(null);
+
+    try {
+      const response = await fetch(`/api/split-bills/${selectedBill.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          transactionId: selectedBill.transactionId,
+          title: selectedBillDraft.title.trim(),
+          note: selectedBillDraft.note?.trim() || null,
+          billDate: selectedBillDraft.billDate,
+          currency: selectedBillDraft.currency,
+          sourceType: selectedBillDraft.sourceType,
+          groupId: selectedBillDraft.groupId || null,
+          merchantName: selectedBillDraft.merchantName?.trim() || null,
+          receiptFileName: selectedBillDraft.receiptFileName?.trim() || null,
+          receiptMimeType: selectedBillDraft.receiptMimeType?.trim() || null,
+          receiptText: selectedBillDraft.receiptText?.trim() || null,
+          receiptConfidence: selectedBillDraft.receiptConfidence ?? 0,
+          subtotal: selectedBillDraft.subtotal?.trim() || null,
+          tax: selectedBillDraft.tax?.trim() || null,
+          tip: selectedBillDraft.tip?.trim() || null,
+          discount: selectedBillDraft.discount?.trim() || null,
+          total: selectedBillDraft.total?.trim() || null,
+          rawPayload: mergeSplitBillItemSplitMetadata(selectedBillDraft.rawPayload, items),
+          participants,
+          items,
+          payments,
+        }),
+      });
+
+      const payload = (await response.json()) as { bill?: SplitBillSerializedBill; error?: string };
+      if (!response.ok || !payload.bill) {
+        throw new Error(payload.error ?? "Unable to save split bill");
+      }
+
+      setBills((current) => current.map((entry) => (entry.id === selectedBill.id ? payload.bill! : entry)));
+      setSelectedBillDraft(buildBillEditorDraft(payload.bill));
+      setIsEditingBill(false);
+      setSelected({ kind: "bill", id: payload.bill.id });
+    } catch (error) {
+      setBillEditError(error instanceof Error ? error.message : "Unable to save split bill");
+    } finally {
+      setIsSavingBillEdit(false);
+    }
+  };
+
   const renderDetailTabs = () => {
     if (!selectedGroup && !selectedPerson) {
       return null;
@@ -642,9 +985,9 @@ export function SplitBillWorkspace({
               <span className="split-bill-detail-modal__row-meta">{formatSettlementTransfers(bill)}</span>
             </button>
             <div className="split-bill-detail-modal__row-actions">
-              <Link className="button button-secondary button-small" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                Edit split
-              </Link>
+              <button className="button button-secondary button-small" type="button" onClick={() => openBill(bill.id)}>
+                Open
+              </button>
               <button className="button button-danger button-small" type="button" onClick={() => void removeBill(bill.id)}>
                 Delete
               </button>
@@ -715,9 +1058,9 @@ export function SplitBillWorkspace({
                     <strong>{bill.title}</strong>
                     <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
                   </div>
-                  <Link className="button button-secondary button-small" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                    Edit split
-                  </Link>
+                  <button className="button button-secondary button-small" type="button" onClick={() => openBill(bill.id)}>
+                    Open
+                  </button>
                 </div>
                 {renderTransferSettlementControls(bill, participantName)}
               </article>
@@ -726,6 +1069,95 @@ export function SplitBillWorkspace({
             <p className="split-bill-detail-modal__empty">No bills to settle yet.</p>
           )}
         </div>
+      </div>
+    );
+  };
+
+  const renderBillItemsTable = (bill: SplitBillSerializedBill, editable: boolean) => {
+    const participants = editable
+      ? billEditorParticipants
+      : bill.participants;
+    const items = editable
+      ? billEditorItems
+      : bill.items;
+
+    return (
+      <div className="split-bill-detail-modal__table-wrap">
+        <table className="split-bill-detail-modal__items-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th className="split-bill-detail-modal__amount-col">Amount</th>
+              {participants.map((participant) => (
+                <th key={participant.id} title={participant.name}>
+                  {getPersonInitials(participant.name)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {items.length > 0 ? (
+              items.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    {editable ? (
+                      <div className="split-bill-detail-modal__item-fields">
+                        <input
+                          className="settings-input"
+                          value={item.description}
+                          onChange={(event) => updateBillEditorItem(item.id, { description: event.target.value })}
+                          placeholder="Item description"
+                        />
+                        <button className="button button-secondary button-small" type="button" onClick={() => removeBillEditorItem(item.id)}>
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <strong>{item.description}</strong>
+                    )}
+                  </td>
+                  <td className="split-bill-detail-modal__amount-col">
+                    {editable ? (
+                      <input
+                        className="settings-input"
+                        value={item.amount}
+                        onChange={(event) => updateBillEditorItem(item.id, { amount: event.target.value })}
+                        placeholder="Amount"
+                      />
+                    ) : (
+                      formatSplitBillAmount(Number(item.amount), bill.currency)
+                    )}
+                  </td>
+                  {participants.map((participant) => {
+                    const checked = item.participantIds.includes(participant.id);
+                    return (
+                      <td key={participant.id} className="split-bill-detail-modal__check-cell">
+                        {editable ? (
+                          <label className="split-bill-detail-modal__check-label">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleBillEditorItemParticipant(item.id, participant.id)}
+                              aria-label={`${item.description || "Item"} for ${participant.name}`}
+                            />
+                          </label>
+                        ) : (
+                          <span className={`split-bill-detail-modal__checkmark${checked ? " is-checked" : ""}`}>{checked ? "✓" : ""}</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={2 + participants.length} className="split-bill-detail-modal__table-empty">
+                  No line items yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     );
   };
@@ -794,57 +1226,213 @@ export function SplitBillWorkspace({
                 <div className="split-bill-detail-modal__summary">
                   <span>Total</span>
                   <strong>{selectedBill.total ? formatSplitBillAmount(Number(selectedBill.total), selectedBill.currency) : "No total"}</strong>
+                  <span className="split-bill-detail-modal__summary-status">
+                    {selectedBill.settlement.transfers.length === 0
+                      ? selectedBill.payments.length > 0
+                        ? "No open transfers"
+                        : "Awaiting allocation"
+                      : `${selectedBill.settlement.transfers.length} open transfer${selectedBill.settlement.transfers.length === 1 ? "" : "s"}`}
+                  </span>
                 </div>
-                <div className="split-bill-detail-modal__chips">
-                  {selectedBill.participants.map((participant) => (
-                    <span key={participant.id} className="split-bill-table__chip split-bill-table__chip--editable">
-                      {participant.name}
-                      <button className="split-bill-table__chip-remove" type="button" aria-label={`Remove ${participant.name}`} onClick={() => void removeParticipantFromBill(selectedBill.id, participant.id)}>
-                        ×
+                <div className="split-bill-detail-modal__summary-actions">
+                  {isEditingBill ? (
+                    <>
+                      <button className="button button-primary button-small" type="button" onClick={() => void saveSelectedBillDraft()} disabled={isSavingBillEdit}>
+                        {isSavingBillEdit ? "Saving..." : "Save changes"}
                       </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="split-bill-detail-modal__list">
-                  <div className="split-bill-detail-modal__list-row">
-                    <strong>Contributions</strong>
-                    <span>{formatPaymentContributions(selectedBill)}</span>
-                  </div>
-                  <div className="split-bill-detail-modal__list-row">
-                    <strong>Settlement</strong>
-                    <span>{formatSettlementTransfers(selectedBill)}</span>
-                  </div>
-                </div>
-                {renderTransferSettlementControls(selectedBill)}
-                <div className="split-bill-detail-modal__list">
-                  {selectedBill.items.map((item) => (
-                    <div key={item.id} className="split-bill-detail-modal__list-row">
-                      <strong>{item.description}</strong>
-                      <span>
-                        {formatSplitBillAmount(Number(item.amount), selectedBill.currency)}
-                        {item.splitMethod && item.splitMethod !== "equal" ? ` · ${item.splitMethod}` : ""}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="split-bill-activity">
-                  <strong>Activity</strong>
-                  {(selectedBill.activity ?? []).length > 0 ? (
-                    (selectedBill.activity ?? []).slice(0, 6).map((activity) => (
-                      <div key={activity.id} className="split-bill-activity__row">
-                        <span>{activity.message}</span>
-                        <small>{formatActivityTime(activity.createdAt)}</small>
-                      </div>
-                    ))
+                      <button className="button button-secondary button-small" type="button" onClick={cancelEditingSelectedBill}>
+                        Cancel
+                      </button>
+                    </>
                   ) : (
-                    <span className="split-bill-subtle-empty">No activity yet</span>
+                    <button className="button button-secondary button-small" type="button" onClick={startEditingSelectedBill}>
+                      Edit bill
+                    </button>
                   )}
                 </div>
-                <div className="split-bill-detail-modal__actions">
-                  <Link className="button button-secondary button-small" href={`/split-bill/${selectedBill.id}/edit`} prefetch={false}>
-                    Edit people, payments, and line items
-                  </Link>
-                </div>
+                {isEditingBill && selectedBillDraft ? (
+                  <>
+                    <div className="split-bill-detail-modal__editor-grid">
+                      <label className="settings-field">
+                        <span>Title</span>
+                        <input
+                          className="settings-input"
+                          value={selectedBillDraft.title}
+                          onChange={(event) => setSelectedBillDraft((current) => (current ? { ...current, title: event.target.value } : current))}
+                        />
+                      </label>
+                      <label className="settings-field">
+                        <span>Date</span>
+                        <input
+                          className="settings-input"
+                          type="date"
+                          value={selectedBillDraft.billDate}
+                          onChange={(event) => setSelectedBillDraft((current) => (current ? { ...current, billDate: event.target.value } : current))}
+                        />
+                      </label>
+                      <label className="settings-field">
+                        <span>Currency</span>
+                        <input
+                          className="settings-input"
+                          value={selectedBillDraft.currency}
+                          onChange={(event) =>
+                            setSelectedBillDraft((current) => (current ? { ...current, currency: event.target.value.toUpperCase() } : current))
+                          }
+                        />
+                      </label>
+                      <label className="settings-field">
+                        <span>Group</span>
+                        <select
+                          className="settings-input"
+                          value={selectedBillDraft.groupId ?? ""}
+                          onChange={(event) => setSelectedBillDraft((current) => (current ? { ...current, groupId: event.target.value } : current))}
+                        >
+                          <option value="">Ad hoc people</option>
+                          {groups.map((group) => (
+                            <option key={group.id} value={group.id}>
+                              {group.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="settings-field">
+                        <span>Merchant</span>
+                        <input
+                          className="settings-input"
+                          value={selectedBillDraft.merchantName ?? ""}
+                          onChange={(event) => setSelectedBillDraft((current) => (current ? { ...current, merchantName: event.target.value } : current))}
+                        />
+                      </label>
+                      <label className="settings-field">
+                        <span>Note</span>
+                        <textarea
+                          className="settings-input split-bill-editor__textarea"
+                          value={selectedBillDraft.note ?? ""}
+                          onChange={(event) => setSelectedBillDraft((current) => (current ? { ...current, note: event.target.value } : current))}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="split-bill-detail-modal__section-head">
+                      <strong>People</strong>
+                      <button className="button button-secondary button-small" type="button" onClick={addBillEditorParticipant}>
+                        Add person
+                      </button>
+                    </div>
+                    <div className="split-bill-detail-modal__stack">
+                      {billEditorParticipants.map((participant) => (
+                        <div key={participant.id} className="split-bill-detail-modal__edit-row">
+                          <input
+                            className="settings-input"
+                            value={participant.name}
+                            onChange={(event) => updateBillEditorParticipant(participant.id, event.target.value)}
+                            placeholder="Person name"
+                          />
+                          <button className="button button-secondary button-small" type="button" onClick={() => removeBillEditorParticipant(participant.id)}>
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="split-bill-detail-modal__section-head">
+                      <strong>Payments</strong>
+                      <button className="button button-secondary button-small" type="button" onClick={addBillEditorPayment}>
+                        Add payment
+                      </button>
+                    </div>
+                    <div className="split-bill-detail-modal__stack">
+                      {billEditorPayments.map((payment) => (
+                        <div key={payment.id} className="split-bill-detail-modal__edit-payment">
+                          <select
+                            className="settings-input"
+                            value={payment.participantId}
+                            onChange={(event) => updateBillEditorPayment(payment.id, { participantId: event.target.value })}
+                          >
+                            <option value="">Select payer</option>
+                            {billEditorParticipants.map((participant) => (
+                              <option key={participant.id} value={participant.id}>
+                                {participant.name}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            className="settings-input"
+                            value={payment.amount}
+                            onChange={(event) => updateBillEditorPayment(payment.id, { amount: event.target.value })}
+                            placeholder="Amount"
+                          />
+                          <input
+                            className="settings-input"
+                            value={payment.note ?? ""}
+                            onChange={(event) => updateBillEditorPayment(payment.id, { note: event.target.value })}
+                            placeholder="Note"
+                          />
+                          <button className="button button-secondary button-small" type="button" onClick={() => removeBillEditorPayment(payment.id)}>
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="split-bill-detail-modal__section-head">
+                      <strong>Line items</strong>
+                      <button className="button button-secondary button-small" type="button" onClick={addBillEditorItem}>
+                        Add line item
+                      </button>
+                    </div>
+                    {renderBillItemsTable(selectedBill, true)}
+
+                    {billEditError ? <p className="split-bill-editor__error">{billEditError}</p> : null}
+                  </>
+                ) : (
+                  <>
+                    <div className="split-bill-detail-modal__chips">
+                      {selectedBill.participants.map((participant) => (
+                        <span key={participant.id} className="split-bill-table__chip split-bill-table__chip--editable">
+                          {participant.name}
+                          <button
+                            className="split-bill-table__chip-remove"
+                            type="button"
+                            aria-label={`Remove ${participant.name}`}
+                            onClick={() => void removeParticipantFromBill(selectedBill.id, participant.id)}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="split-bill-detail-modal__list">
+                      <div className="split-bill-detail-modal__list-row">
+                        <strong>Contributions</strong>
+                        <span>{formatPaymentContributions(selectedBill)}</span>
+                      </div>
+                      <div className="split-bill-detail-modal__list-row">
+                        <strong>Settlement</strong>
+                        <span>{formatSettlementTransfers(selectedBill)}</span>
+                      </div>
+                    </div>
+                    {renderBillItemsTable(selectedBill, false)}
+                    <div className="split-bill-activity">
+                      <strong>Activity</strong>
+                      {(selectedBill.activity ?? []).length > 0 ? (
+                        (selectedBill.activity ?? []).slice(0, 6).map((activity) => (
+                          <div key={activity.id} className="split-bill-activity__row">
+                            <span>{activity.message}</span>
+                            <small>{formatActivityTime(activity.createdAt)}</small>
+                          </div>
+                        ))
+                      ) : (
+                        <span className="split-bill-subtle-empty">No activity yet</span>
+                      )}
+                    </div>
+                    <div className="split-bill-detail-modal__actions">
+                      <button className="button button-danger button-small" type="button" onClick={() => void removeBill(selectedBill.id)}>
+                        Delete bill
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ) : null}
 

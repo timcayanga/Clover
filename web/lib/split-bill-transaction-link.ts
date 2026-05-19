@@ -3,6 +3,11 @@ export type SplitBillTransactionLinkDraft = {
   participantNames: string[];
 };
 
+export type SplitBillTransactionLinkItem = {
+  description: string;
+  amount: string;
+};
+
 export type SplitBillTransactionLinkParams = {
   workspaceId: string;
   transactionId: string;
@@ -11,6 +16,7 @@ export type SplitBillTransactionLinkParams = {
   currency: string;
   amount: string;
   draft: SplitBillTransactionLinkDraft;
+  receiptLineItems?: SplitBillTransactionLinkItem[];
 };
 
 export const createSplitBillFromTransaction = async ({
@@ -21,7 +27,24 @@ export const createSplitBillFromTransaction = async ({
   currency,
   amount,
   draft,
+  receiptLineItems = [],
 }: SplitBillTransactionLinkParams) => {
+  const items =
+    receiptLineItems.length > 0
+      ? receiptLineItems.map((lineItem, index) => ({
+          id: `${transactionId}-line-${index}`,
+          description: lineItem.description,
+          amount: lineItem.amount,
+          participantIds: [],
+        }))
+      : [
+          {
+            description: transactionTitle || "Total",
+            amount,
+            participantIds: [],
+          },
+        ];
+
   const response = await fetch("/api/split-bills", {
     method: "POST",
     headers: {
@@ -35,18 +58,16 @@ export const createSplitBillFromTransaction = async ({
       transactionId,
       groupId: draft.groupId || null,
       participants: draft.participantNames.map((name) => ({ name })),
-      items: [
-        {
-          description: transactionTitle || "Total",
-          amount,
-          participantIds: [],
-        },
-      ],
+      items,
       payments: [],
       total: amount,
       rawPayload: {
         sourceTransactionId: transactionId,
         workspaceId,
+        receiptLineItems: receiptLineItems.map((item) => ({
+          description: item.description,
+          amount: item.amount,
+        })),
       },
     }),
   });

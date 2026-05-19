@@ -370,6 +370,7 @@ type TransactionDetailDraft = {
   description: string;
   isExcluded: boolean;
   isTransfer: boolean;
+  receiptLineItems: ReceiptLineItemDraft[];
 };
 
 type ReceiptLineItemDraft = {
@@ -1438,6 +1439,40 @@ const sanitizeReceiptLineItems = (lineItems: ReceiptLineItemDraft[]) =>
       amount: item.amount || null,
     }));
 
+const receiptLineItemToDraft = (lineItem: ReceiptLineItem): ReceiptLineItemDraft => ({
+  description: lineItem.description ?? "",
+  quantity: lineItem.quantity ?? "",
+  unitPrice: lineItem.unitPrice ?? "",
+  amount: lineItem.amount ?? "",
+});
+
+const receiptLineItemSignature = (lineItems: ReceiptLineItemDraft[] | ReceiptLineItem[]) =>
+  JSON.stringify(
+    sanitizeReceiptLineItems(
+      lineItems.map((lineItem) => ({
+        description: lineItem.description ?? "",
+        quantity: lineItem.quantity ?? "",
+        unitPrice: lineItem.unitPrice ?? "",
+        amount: lineItem.amount ?? "",
+      }))
+    )
+  );
+
+const mergeReceiptLineItemsIntoPayload = (rawPayload: unknown, lineItems: ReceiptLineItemDraft[]) => {
+  const sanitizedLineItems = sanitizeReceiptLineItems(lineItems);
+  const nextPayload: Record<string, unknown> = isRecord(rawPayload) ? { ...rawPayload } : {};
+  nextPayload.receiptLineItems = sanitizedLineItems;
+
+  if (isRecord(nextPayload.receiptDetails)) {
+    nextPayload.receiptDetails = {
+      ...nextPayload.receiptDetails,
+      lineItems: sanitizedLineItems,
+    };
+  }
+
+  return nextPayload;
+};
+
 const normalizeMerchantGroupKey = (value: string) =>
   value
     .replace(/\u00a0/g, " ")
@@ -1578,6 +1613,7 @@ const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => 
     description: normalizeTransactionNotes(transaction.description),
     isExcluded: transaction.isExcluded,
     isTransfer: transaction.isTransfer,
+    receiptLineItems: parseReceiptLineItemsFromPayload(transaction.rawPayload).map(receiptLineItemToDraft),
   };
 };
 
@@ -3588,10 +3624,13 @@ function TransactionsPageContent() {
       detailDraft.accountId !== selectedTransaction.accountId ||
       (detailDraft.categoryId || otherCategoryId) !== (selectedTransaction.categoryId ?? otherCategoryId) ||
       detailDraft.amount !== selectedTransaction.amount ||
+      detailDraft.currency !== selectedTransaction.currency ||
       detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
       normalizeTransactionNotes(detailDraft.description) !== normalizeTransactionNotes(selectedTransaction.description ?? "") ||
       detailDraft.isExcluded !== selectedTransaction.isExcluded ||
-      detailDraft.isTransfer !== selectedTransaction.isTransfer
+      detailDraft.isTransfer !== selectedTransaction.isTransfer ||
+      receiptLineItemSignature(detailDraft.receiptLineItems) !==
+        receiptLineItemSignature(parseReceiptLineItemsFromPayload(selectedTransaction.rawPayload))
     );
   }, [detailDraft, otherCategoryId, selectedTransaction]);
 
@@ -3653,6 +3692,11 @@ function TransactionsPageContent() {
   const selectedTransactionReceiptLineItems = useMemo(
     () => parseReceiptLineItemsFromPayload(selectedTransaction?.rawPayload),
     [selectedTransaction?.rawPayload]
+  );
+  const detailReceiptLineItems = detailDraft?.receiptLineItems ?? selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
+  const detailReceiptLineItemTotal = useMemo(
+    () => getManualReceiptLineItemTotal(detailReceiptLineItems),
+    [detailReceiptLineItems]
   );
   const manualReceiptLineItemTotal = useMemo(
     () => getManualReceiptLineItemTotal(manualForm.receiptLineItems),
@@ -3866,6 +3910,12 @@ function TransactionsPageContent() {
         currency: transactionCurrency,
         amount: transactionAmount,
         draft: transactionSplitBillDraft,
+        receiptLineItems: selectedTransactionReceiptLineItems.map((lineItem) => ({
+          description: lineItem.description,
+          amount:
+            lineItem.amount ??
+            (getReceiptLineItemComputedAmount(lineItem) !== null ? String(getReceiptLineItemComputedAmount(lineItem)) : ""),
+        })),
       })) as { id: string; title: string } | null;
 
       setTransactionSplitBillOpen(false);
@@ -3883,6 +3933,50 @@ function TransactionsPageContent() {
     } finally {
       setTransactionSplitBillSaving(false);
     }
+  };
+
+  const updateDetailReceiptLineItem = (index: number, field: keyof ReceiptLineItemDraft, value: string) => {
+    setDetailDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const nextLineItems = current.receiptLineItems.length > 0 ? [...current.receiptLineItems] : selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
+      nextLineItems[index] = {
+        ...(nextLineItems[index] ?? createEmptyReceiptLineItem()),
+        [field]: value,
+      };
+      return {
+        ...current,
+        receiptLineItems: nextLineItems,
+      };
+    });
+  };
+
+  const addDetailReceiptLineItem = () => {
+    setDetailDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        receiptLineItems: [...current.receiptLineItems, createEmptyReceiptLineItem()],
+      };
+    });
+  };
+
+  const deleteDetailReceiptLineItem = (index: number) => {
+    setDetailDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        receiptLineItems: current.receiptLineItems.filter((_, itemIndex) => itemIndex !== index),
+      };
+    });
   };
 
   const toggleSelectedTransaction = (transactionId: string, selected: boolean) => {
@@ -5050,6 +5144,7 @@ function TransactionsPageContent() {
         description: detailDraft.description || null,
         isExcluded: detailDraft.isExcluded,
         isTransfer: detailDraft.isTransfer,
+        rawPayload: mergeReceiptLineItemsIntoPayload(selectedTransaction.rawPayload, detailDraft.receiptLineItems),
       };
 
       await updateTransaction(selectedTransaction.id, payload);
@@ -7273,15 +7368,29 @@ function TransactionsPageContent() {
                 />
               </label>
 
-              <label>
-                Amount
-                <input
-                  type="number"
-                  step="0.01"
-                  value={detailDraft?.amount ?? selectedTransaction.amount}
-                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
-                />
-              </label>
+              <div className="transaction-drawer-form__amount-field">
+                <span className="transaction-drawer-field-label">
+                  <span>Amount</span>
+                </span>
+                <div className="transaction-drawer-form__money-row">
+                  <CurrencySelector
+                    value={detailDraft?.currency ?? selectedTransaction.currency}
+                    onChange={(value) => setDetailDraft((current) => (current ? { ...current, currency: value } : current))}
+                    options={currencyCatalogCodes}
+                    ariaLabel="Select transaction currency"
+                    className="transaction-drawer-form__currency-selector"
+                    buttonClassName="transaction-drawer-form__currency-button"
+                    menuClassName="transaction-drawer-form__currency-menu"
+                    optionClassName="transaction-drawer-form__currency-option"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={detailDraft?.amount ?? selectedTransaction.amount}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
+                  />
+                </div>
+              </div>
 
               <label>
                 <span className="transactions-manual-type-label">
@@ -7355,22 +7464,6 @@ function TransactionsPageContent() {
                     ))}
                   </select>
                 </div>
-              </label>
-
-              <label className="transaction-drawer-form__currency">
-                <span className="sr-only">Currency</span>
-                <CurrencySelector
-                  value={detailDraft?.currency ?? selectedTransaction.currency}
-                  onChange={(value) => setDetailDraft((current) => (current ? { ...current, currency: value } : current))}
-                  options={currencyCatalogCodes}
-                  ariaLabel="Select transaction currency"
-                  className="transaction-drawer-form__currency-selector"
-                  buttonClassName="transaction-drawer-form__currency-button"
-                  menuClassName="transaction-drawer-form__currency-menu"
-                  optionClassName="transaction-drawer-form__currency-option"
-                  menuAlignment="end"
-                />
-                <span className="field-help">Change this if the transaction should display in a different currency than the account.</span>
               </label>
 
               <label className="transaction-drawer-form__notes">
@@ -7459,7 +7552,7 @@ function TransactionsPageContent() {
 
             <div className="transaction-drawer-split-bill">
               {selectedTransaction.splitBill ? (
-                <Link className="button button-secondary button-small" href={`/split-bill/${selectedTransaction.splitBill.id}`} prefetch={false}>
+                <Link className="button button-secondary button-small" href={`/split-bill?bill=${selectedTransaction.splitBill.id}`} prefetch={false}>
                   Open In Split Bills
                 </Link>
               ) : (
