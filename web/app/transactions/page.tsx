@@ -452,22 +452,6 @@ const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v1";
 
 const formatTransactionAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
 
-const formatAuditPayloadPreview = (value: unknown) => {
-  if (value === null || value === undefined || value === "") {
-    return "Not available";
-  }
-
-  if (typeof value === "string") {
-    return value;
-  }
-
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return "Not available";
-  }
-};
-
 const getCurrencyCodes = (transactions: Array<{ currency: string }>) =>
   Array.from(new Set(transactions.map((transaction) => formatCurrencyCode(transaction.currency))));
 
@@ -7475,79 +7459,63 @@ function TransactionsPageContent() {
                 />
               </label>
 
-              <details className="transaction-drawer-audit">
-                <summary>How Clover read this</summary>
-                <div className="transaction-drawer-audit__grid">
-                  <div>
-                    <span>Source</span>
-                    <strong>{selectedTransaction.importFileId ? "Imported statement" : selectedTransaction.source ?? "Manual"}</strong>
-                  </div>
-                  <div>
-                    <span>Raw name</span>
-                    <strong>{selectedTransaction.merchantRaw}</strong>
-                  </div>
-                  <div>
-                    <span>Normalized name</span>
-                    <strong>{selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw}</strong>
-                  </div>
-                  <div>
-                    <span>Category</span>
-                    <strong>{detailSelectedCategory?.name ?? selectedTransaction.categoryName ?? "Other"}</strong>
-                  </div>
+              <div className="transaction-drawer-receipt-lines">
+                <div className="transaction-drawer-receipt-lines__head">
+                  <span className="transaction-drawer-field-label">
+                    <span>Receipt line items</span>
+                  </span>
+                  <span className="field-help">
+                    {formatTransactionAmount(detailReceiptLineItemTotal, detailDraft?.currency ?? selectedTransaction.currency)}
+                  </span>
                 </div>
-                <pre>{formatAuditPayloadPreview(selectedTransaction.normalizedPayload ?? selectedTransaction.rawPayload)}</pre>
-              </details>
-
-              {selectedTransactionReceiptLineItems.length > 0 ? (
-                <div className="transaction-drawer-receipt-lines">
-                  <div className="transaction-drawer-receipt-lines__head">
-                    <span className="transaction-drawer-field-label">
-                      <span>Receipt line items</span>
-                    </span>
-                    <span className="field-help">
-                      {formatTransactionAmount(
-                        selectedTransactionReceiptLineItems.reduce(
-                          (total, item) => total + (getReceiptLineItemComputedAmount(item) ?? 0),
-                          0
-                        ),
-                        selectedTransaction.currency
-                      )}
-                    </span>
+                <div className="transaction-drawer-receipt-table" role="table" aria-label="Receipt line items">
+                  <div className="transaction-drawer-receipt-table__row transaction-drawer-receipt-table__row--head" role="row">
+                    <span role="columnheader">Name</span>
+                    <span role="columnheader">Quantity</span>
+                    <span role="columnheader">Amount</span>
+                    <span role="columnheader" className="sr-only">Actions</span>
                   </div>
-                  <div className="transaction-drawer-receipt-lines__list">
-                    {selectedTransactionReceiptLineItems.map((lineItem, index) => {
-                      const lineAmount = getReceiptLineItemComputedAmount(lineItem);
-                      return (
-                        <div key={`${lineItem.description}-${index}`} className="transaction-drawer-receipt-line">
-                          <div className="transaction-drawer-receipt-line__meta">
-                            <strong>{lineItem.description}</strong>
-                            <span className="field-help">
-                              {[
-                                lineItem.quantity !== null && lineItem.quantity !== undefined ? `Qty ${lineItem.quantity}` : null,
-                                lineItem.unitPrice !== null && lineItem.unitPrice !== undefined
-                                  ? (() => {
-                                      const unitPrice = parseReceiptLineItemNumber(lineItem.unitPrice);
-                                      return unitPrice !== null
-                                        ? `Unit ${formatTransactionAmount(unitPrice, selectedTransaction.currency)}`
-                                        : `Unit ${lineItem.unitPrice}`;
-                                    })()
-                                  : null,
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </span>
-                          </div>
-                          <span className="transaction-drawer-receipt-line__amount">
-                            {lineAmount !== null
-                              ? formatTransactionAmount(lineAmount, selectedTransaction.currency)
-                              : lineItem.amount ?? "—"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {detailReceiptLineItems.length > 0 ? (
+                    detailReceiptLineItems.map((lineItem, index) => (
+                      <div key={`${lineItem.description || "line"}-${index}`} className="transaction-drawer-receipt-table__row" role="row">
+                        <input
+                          aria-label={`Receipt line item ${index + 1} name`}
+                          value={lineItem.description}
+                          placeholder="Item name"
+                          onChange={(event) => updateDetailReceiptLineItem(index, "description", event.target.value)}
+                        />
+                        <input
+                          aria-label={`Receipt line item ${index + 1} quantity`}
+                          value={lineItem.quantity}
+                          placeholder="1"
+                          inputMode="decimal"
+                          onChange={(event) => updateDetailReceiptLineItem(index, "quantity", event.target.value)}
+                        />
+                        <input
+                          aria-label={`Receipt line item ${index + 1} amount`}
+                          value={lineItem.amount}
+                          placeholder="0.00"
+                          inputMode="decimal"
+                          onChange={(event) => updateDetailReceiptLineItem(index, "amount", event.target.value)}
+                        />
+                        <button
+                          className="button button-ghost button-small transaction-drawer-receipt-table__delete"
+                          type="button"
+                          onClick={() => deleteDetailReceiptLineItem(index)}
+                          aria-label={`Delete receipt line item ${index + 1}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="transaction-drawer-receipt-table__empty">No line items yet.</div>
+                  )}
                 </div>
-              ) : null}
+                <button className="button button-secondary button-small transaction-drawer-receipt-lines__add" type="button" onClick={addDetailReceiptLineItem}>
+                  Add line item
+                </button>
+              </div>
             </div>
 
             <div className="transaction-drawer-split-bill">
@@ -7626,7 +7594,7 @@ function TransactionsPageContent() {
             ) : null}
 
             <div className="form-actions detail-actions">
-              {!selectedTransactionWarningReason ? (
+              {!selectedTransactionWarningReason && !transactionDeleteConfirmOpen ? (
                 <button
                   className="button button-secondary"
                   type="button"

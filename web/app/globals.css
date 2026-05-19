@@ -12346,6 +12346,113 @@ input.transaction-inline-edit--amount::placeholder {
   width: 100%;
 }
 
+.transaction-drawer-form__amount-field {
+  display: grid;
+  gap: 6px;
+}
+
+.transaction-drawer-form__money-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.transaction-drawer-form__money-row input {
+  min-width: 0;
+}
+
+.transaction-drawer-form__money-row .transaction-drawer-form__currency-selector {
+  width: auto;
+}
+
+.transaction-drawer-form__money-row .transaction-drawer-form__currency-button {
+  width: auto;
+  min-width: 58px;
+}
+
+.transaction-drawer-form__money-row .transaction-drawer-form__currency-selector .currency-selector__button {
+  width: auto;
+  min-width: 58px;
+  justify-content: center;
+  padding-inline: 10px;
+}
+
+.transaction-drawer-receipt-lines {
+  display: grid;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.transaction-drawer-receipt-lines__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.transaction-drawer-receipt-table {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.transaction-drawer-receipt-table__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(78px, 0.45fr) minmax(112px, 0.65fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border-top: 1px solid rgba(215, 228, 233, 0.72);
+}
+
+.transaction-drawer-receipt-table__row:first-child {
+  border-top: 0;
+}
+
+.transaction-drawer-receipt-table__row--head {
+  padding-block: 9px;
+  background: rgba(3, 168, 192, 0.06);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.transaction-drawer-receipt-table__row input {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+
+.transaction-drawer-receipt-table__delete {
+  min-height: 32px;
+  padding-inline: 10px;
+}
+
+.transaction-drawer-receipt-table__empty {
+  padding: 16px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.transaction-drawer-receipt-lines__add {
+  justify-self: start;
+}
+
+.detail-actions {
+  align-items: stretch;
+}
+
+.detail-actions .transaction-delete-confirm {
+  flex: 1 1 100%;
+}
+
 .detail-warning-box--compact {
   margin-top: 10px;
   padding: 10px 12px;
@@ -12512,6 +12619,19 @@ input.transaction-inline-edit--amount::placeholder {
 
   .transaction-drawer__head {
     padding-top: 14px;
+  }
+
+  .transaction-drawer-receipt-table__row {
+    grid-template-columns: minmax(0, 1fr) minmax(68px, 0.35fr) minmax(96px, 0.5fr);
+  }
+
+  .transaction-drawer-receipt-table__row > :last-child {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
+  .transaction-drawer-receipt-table__row--head > :last-child {
+    display: none;
   }
 }
 
@@ -30580,9 +30700,18 @@ html[data-theme="dark"] .settings-category-card,
 html[data-theme="dark"] .settings-category-table__row,
 html[data-theme="dark"] .settings-plan-card__body,
 html[data-theme="dark"] .settings-plan-usage__card,
-html[data-theme="dark"] .settings-plan-usage__card--plan {
+html[data-theme="dark"] .settings-plan-usage__card--plan,
+html[data-theme="dark"] .transaction-drawer-receipt-table {
   background: rgba(14, 23, 37, 0.88);
   border-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .transaction-drawer-receipt-table__row {
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+html[data-theme="dark"] .transaction-drawer-receipt-table__row--head {
+  background: rgba(71, 215, 232, 0.08);
 }
 
 html[data-theme="dark"] .settings-category-card--locked,

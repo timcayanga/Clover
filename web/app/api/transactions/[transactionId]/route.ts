@@ -23,6 +23,7 @@ const patchSchema = z.object({
   date: z.string().optional(),
   amount: z.union([z.string(), z.number()]).optional(),
   currency: z.string().min(1).optional(),
+  rawPayload: z.unknown().optional(),
   reviewStatus: z.enum(["pending_review", "suggested", "confirmed", "edited", "rejected", "duplicate_skipped"]).optional(),
 });
 
@@ -107,7 +108,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       payload.description !== undefined ||
       payload.date !== undefined ||
       payload.amount !== undefined ||
-      payload.currency !== undefined;
+      payload.currency !== undefined ||
+      payload.rawPayload !== undefined;
 
     const updated = await prisma.transaction.update({
       where: { id: transactionId },
@@ -123,6 +125,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         date: payload.date ? new Date(payload.date) : undefined,
         amount: payload.amount === undefined ? undefined : payload.amount.toString(),
         currency: payload.currency ? payload.currency.toUpperCase() : undefined,
+        rawPayload: payload.rawPayload === undefined ? undefined : (payload.rawPayload as Prisma.InputJsonValue),
         reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : undefined),
         parserConfidence: transaction.parserConfidence,
         categoryConfidence: payload.categoryId ? 100 : transaction.categoryConfidence,
@@ -144,6 +147,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
               date: payload.date ? new Date(payload.date).toISOString() : transaction.date.toISOString(),
               amount: payload.amount === undefined ? transaction.amount.toString() : payload.amount.toString(),
               currency: payload.currency ? payload.currency.toUpperCase() : transaction.currency,
+              rawPayload: payload.rawPayload === undefined ? transaction.rawPayload : (payload.rawPayload as Prisma.JsonValue),
               isTransfer: resolvedIsTransfer,
               isExcluded: payload.isExcluded ?? transaction.isExcluded,
               reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : transaction.reviewStatus),
