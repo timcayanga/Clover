@@ -287,7 +287,6 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
                   <div>
                     <p className="eyebrow">Start clean</p>
                     <h3>Your first split starts with one bill.</h3>
-                    <p>Add people as plain names, upload a receipt, or create a group first. No one else needs a Clover account.</p>
                   </div>
                   <div className="split-bill-empty-launchpad__actions">
                     <button className="button button-primary button-small" type="button" onClick={() => openSplitBillAdd("manual")}>

@@ -216,7 +216,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
       ) : null}
 
       <SplitBillManualModal open={openAddMode === "manual"} currentUserName={currentUserName} people={people} groups={groups} onClose={closeAddModal} onSaved={onBillSaved} />
-      <SplitBillImportModal open={openAddMode === "import"} onClose={closeAddModal} />
+      <SplitBillImportModal open={openAddMode === "import"} currentUserName={currentUserName} onClose={closeAddModal} onSaved={onBillSaved} />
       <SplitBillPersonModal open={isPersonModalOpen} onClose={closePersonModal} onSaved={onPersonSaved} />
 
       {isGroupModalOpen ? (
