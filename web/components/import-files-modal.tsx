@@ -4261,7 +4261,7 @@ export function ImportFilesModal({
   ): Promise<{ completed: boolean; summary: UploadInsightsSummary | null }> => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     const startedAt = Date.now();
-    const MAX_WAIT_MS = importMode === "receipt" ? 12_000 : 20_000;
+    const MAX_WAIT_MS = importMode === "receipt" ? 30_000 : 20_000;
     const deliverSummary = options?.deliverSummary ?? true;
     const progressLabel =
       importMode === "receipt"

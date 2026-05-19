@@ -254,8 +254,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const isImageUpload =
         effectiveFileType.toLowerCase().startsWith("image/") ||
         /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(effectiveFileName.toLowerCase());
-      const shouldQueueDocumentUpload =
-        (isImageUpload && importMode !== "receipt") || Boolean(importMode && importMode !== "statement" && importMode !== "receipt");
+      const shouldQueueDocumentUpload = isImageUpload || Boolean(importMode && importMode !== "statement");
       const uploadPromise = uploadObject(
         String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
         bytes,
