@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import {
   mergeSplitBillItemSplitMetadata,
@@ -25,6 +26,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     throw new Error(payload?.error ?? "Request failed");
   }
+
   return payload;
 }
 
@@ -47,10 +49,12 @@ const validateFile = (file: File | null) => {
 const createId = () => globalThis.crypto?.randomUUID?.() ?? `receipt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }: SplitBillImportModalProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState("Drop a receipt file here or browse from your computer.");
+  const [dragActive, setDragActive] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadMessage, setUploadMessage] = useState("Choose a receipt and Clover will read it for you.");
 
   useLayoutEffect(() => {
     if (!open) {
@@ -73,13 +77,10 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
 
     setFile(null);
     setError(null);
+    setDragActive(false);
     setIsUploading(false);
-    setUploadMessage("Choose a receipt and Clover will read it for you.");
+    setMessage("Drop a receipt file here or browse from your computer.");
   }, [open]);
-
-  if (!open) {
-    return null;
-  }
 
   const closeModal = () => {
     if (isUploading) {
@@ -87,6 +88,15 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
     }
 
     onClose();
+  };
+
+  const openFilePicker = () => {
+    if (!fileInputRef.current) {
+      return;
+    }
+
+    fileInputRef.current.value = "";
+    fileInputRef.current.click();
   };
 
   const saveReceiptBill = async (preview: ReceiptPreviewResult, fileToSave: File) => {
@@ -97,8 +107,7 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
         .map((participant) => ({
           id: participant.id ?? createId(),
           name: participant.name.trim(),
-        })) ||
-      [];
+        })) || [];
 
     if (participants.length === 0) {
       participants.push({
@@ -180,14 +189,14 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
       return;
     }
 
+    const selectedFile = file as File;
     setIsUploading(true);
     setError(null);
-    setUploadMessage("Reading your receipt...");
-    let savedBill: SplitBillSerializedBill | null = null;
+    setMessage("Reading your receipt...");
 
     try {
       const formData = new FormData();
-      formData.set("file", file as File);
+      formData.set("file", selectedFile);
 
       const response = await fetch("/api/split-bill-receipts/preview", {
         method: "POST",
@@ -195,38 +204,85 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
       });
       const payload = await readJsonResponse<{ preview: ReceiptPreviewResult }>(response);
 
-      setUploadMessage("Saving your split bill...");
-      savedBill = await saveReceiptBill(payload.preview, file as File);
+      setMessage("Saving your split bill...");
+      const savedBill = await saveReceiptBill(payload.preview, selectedFile);
+      onSaved?.(savedBill);
+      onClose();
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Unable to read that receipt.");
-      setUploadMessage("Choose a receipt and Clover will read it for you.");
+      setMessage("Drop a receipt file here or browse from your computer.");
     } finally {
       setIsUploading(false);
     }
-
-    if (savedBill) {
-      onSaved?.(savedBill);
-      onClose();
-    }
   };
 
-  return (
-    <div className="split-bill-modal" role="presentation" onClick={closeModal}>
+  if (!open) {
+    return null;
+  }
+
+  const portalTarget = typeof document === "undefined" ? null : document.body;
+  if (!portalTarget) {
+    return null;
+  }
+
+  return createPortal(
+    <div className="modal-backdrop modal-backdrop--import-fullscreen" role="presentation" onClick={closeModal}>
       <section
-        className="split-bill-modal__card glass split-bill-import-modal"
+        className="modal-card modal-card--wide accounts-import-modal glass split-bill-import-modal"
         role="dialog"
         aria-modal="true"
         aria-label="Import receipt"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="split-bill-manual-modal__head">
-          <div>
-            <p className="eyebrow">Upload receipts</p>
-            <h3>Upload a receipt</h3>
-            <p className="split-bill-manual-modal__lead">Choose one receipt file. Clover will preview it before it becomes a bill.</p>
-          </div>
-          <button className="split-bill-icon-button" type="button" onClick={closeModal} aria-label="Close import window" disabled={isUploading}>
+        <div className="accounts-import-modal__toolbar">
+          <button className="accounts-import-close" type="button" onClick={closeModal} aria-label="Close import files" disabled={isUploading}>
             ×
+          </button>
+        </div>
+
+        <div
+          className={`accounts-import-dropzone accounts-import-dropzone--hero ${dragActive ? "is-active" : ""}`}
+          role="presentation"
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+            const nextFile = event.dataTransfer.files[0] ?? null;
+            setFile(nextFile);
+            setError(validateFile(nextFile));
+          }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              openFilePicker();
+            }
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            className="hidden-file-input"
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/png,image/jpeg,image/webp"
+            onChange={(event) => {
+              const nextFile = event.target.files?.[0] ?? null;
+              setFile(nextFile);
+              setError(validateFile(nextFile));
+            }}
+          />
+          <strong>Drop a receipt here</strong>
+          <span>or browse for a file from your computer.</span>
+          <button className="button button-secondary button-small" type="button" onClick={openFilePicker}>
+            Choose file
           </button>
         </div>
 
@@ -237,45 +293,52 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
             fileIndex={1}
             fileTotal={1}
             completedFiles={0}
-            progress={65}
-            detail={uploadMessage}
+            progress={55}
+            detail={message}
             phaseLabel="Receipt preview"
           />
-        ) : (
-          <>
-            <label className="settings-field">
-              <span>Receipt file</span>
-              <input
-                className="settings-input"
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"
-                onChange={(event) => {
-                  const nextFile = event.target.files?.[0] ?? null;
-                  setFile(nextFile);
-                  setError(nextFile ? validateFile(nextFile) : null);
-                }}
-              />
-            </label>
+        ) : null}
 
-            <div className="split-bill-import-modal__notes">
-              <p>Accepted: PDF, PNG, JPG, or WEBP.</p>
-              <p>Maximum size: 10 MB.</p>
-              <p>Stays inside Split Bills while Clover reads the file.</p>
-            </div>
+        <div className="accounts-import-footer-copy">
+          {error ? <p className="accounts-import-footer-copy__warning">{error}</p> : null}
+          {message ? <p className="accounts-import-footer-copy__status">{message}</p> : null}
+          <p>
+            Accepted files: PDF, JPG, JPEG, PNG, and WEBP.
+            <br />
+            This stays inside Split Bills and saves a bill after Clover previews it.
+          </p>
+        </div>
 
-            {error ? <p className="split-bill-editor__error">{error}</p> : null}
-
-            <div className="split-bill-manual-modal__actions">
-              <button className="button button-secondary" type="button" onClick={closeModal}>
-                Cancel
-              </button>
-              <button className="button button-primary" type="button" onClick={() => void handleUpload()} disabled={!file}>
-                Preview receipt
-              </button>
-            </div>
-          </>
-        )}
+        <div className="accounts-import-files">
+          {file ? (
+            <article className="accounts-import-file accounts-import-file--pending">
+              <div className="accounts-import-file__head">
+                <div className="accounts-import-file__meta">
+                  <strong>{file.name}</strong>
+                  <span>
+                    {file.type.startsWith("image/") ? "Image" : "PDF"} · {Math.max(1, Math.round(file.size / 1024))} KB
+                  </span>
+                </div>
+                <div className="accounts-import-file__badges">
+                  <span className="accounts-import-badge is-pending">queued</span>
+                </div>
+              </div>
+              <div className="accounts-import-file__foot">
+                <span>{isUploading ? "Reading receipt..." : "Ready to preview"}</span>
+                <div className="accounts-import-file__actions">
+                  <button className="button button-secondary button-small" type="button" onClick={() => setFile(null)} disabled={isUploading}>
+                    Remove
+                  </button>
+                  <button className="button button-primary button-small" type="button" onClick={() => void handleUpload()} disabled={isUploading || !file}>
+                    {isUploading ? "Uploading..." : "Preview receipt"}
+                  </button>
+                </div>
+              </div>
+            </article>
+          ) : null}
+        </div>
       </section>
-    </div>
+    </div>,
+    portalTarget
   );
 }
