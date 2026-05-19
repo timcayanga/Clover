@@ -285,6 +285,11 @@ const main = async () => {
       }
       return false;
     });
+    const overNormalizedPayrollRows = transactions.filter((transaction) => {
+      const clean = String(transaction.merchantClean ?? "").trim().toLowerCase();
+      const raw = String(transaction.merchantRaw ?? "").trim().toLowerCase();
+      return clean === "payroll credit" && !/payroll|salary/.test(raw);
+    });
 
     console.table(
       imports.map((importFile) => ({
@@ -303,6 +308,13 @@ const main = async () => {
       0,
       `Expected deterministic BPI categories to beat stale learned Income rules, got ${misclassifiedKnownRows
         .map((row) => `${row.merchantClean ?? row.merchantRaw}:${row.category?.name ?? "Other"}/${row.type}`)
+        .join(", ")}.`
+    );
+    assert.equal(
+      overNormalizedPayrollRows.length,
+      0,
+      `Expected BPI enrichment to preserve non-payroll merchant labels, got ${overNormalizedPayrollRows
+        .map((row) => `${row.merchantRaw} -> ${row.merchantClean}`)
         .join(", ")}.`
     );
     assert.equal(rawishRows.length, 0, `Expected no compact/all-caps BPI raw labels, got ${rawishRows.length}.`);

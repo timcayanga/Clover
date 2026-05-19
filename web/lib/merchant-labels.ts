@@ -131,16 +131,20 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
   ],
   BPI: [
     {
-      patterns: [/\bepsaten\b/i, /\bepsaten\s*0+\s*from:\s*non-bpi\s*terminal\b/i],
-      replacement: "Payroll Credit",
+      patterns: [/\beps\s*at\s*en\b.*from:\s*non-bpi\s*terminal\b/i, /\bepsaten\s*0+\s*from:\s*non-bpi\s*terminal\b/i],
+      replacement: "ATM Withdrawal",
+    },
+    {
+      patterns: [/\beps\s*at\s*en\b/i, /\bepsaten\b/i],
+      replacement: "EPSATEN",
     },
     {
       patterns: [/\bel\/?espay\b/i, /\bespay\b/i],
-      replacement: "Payroll Credit",
+      replacement: "eL/ESPay",
     },
     {
       patterns: [/elink\s+transfer/i, /elink\s+payment/i],
-      replacement: "Payroll Credit",
+      replacement: "Inter-bank Fund Transfer",
     },
     {
       patterns: [/e-wallet\s+load-?gcash/i, /to:\s*gcash\s+cash\s+in/i, /\bmbpay\b.*\bgcashcashin\b/i, /\bgcashcashin\b/i],

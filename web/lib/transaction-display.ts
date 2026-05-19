@@ -132,7 +132,7 @@ const getGenericCategoryOverride = (merchantText: string) => {
     return "Cash & ATM";
   }
 
-  if (/epsaten|el\/?espay|payroll credit|interest earned|interest applied|cash deposit|check deposit/.test(lower)) {
+  if (/payroll credit|interest earned|interest applied|cash deposit|check deposit/.test(lower)) {
     return "Income";
   }
 

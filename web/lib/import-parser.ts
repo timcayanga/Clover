@@ -90,7 +90,9 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/expressnet|megalinkw?|\/drw\b|cash\s*(?:withdrawal|out)|atm\b|automated\s+teller|cash\s+advance/.test(lower)) return "Cash & ATM";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
   if (/salary|payroll|income|deposit|cash\s*(?:in|deposit)|credit memo/.test(lower)) return "Income";
-  if (/epsaten|el\/?espay|payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
+  if (/epsaten/.test(lower)) return type === "expense" ? "Cash & ATM" : "Income";
+  if (/el\/?espay/.test(lower)) return type === "expense" || type === "transfer" ? "Transfers" : "Income";
+  if (/payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";

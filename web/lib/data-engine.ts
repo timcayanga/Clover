@@ -3835,7 +3835,19 @@ export const enrichParsedRowsWithTraining = async (params: {
       rowShapeScore: rowShapeAssessment.score,
       negativeSignalCount: negativeSignals.length,
     });
-    const merchantClean = learned.normalizedName || deterministicMerchantName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
+    const learnedNormalizedName = typeof learned.normalizedName === "string" ? learned.normalizedName.trim() : "";
+    const deterministicNormalizedName = deterministicMerchantName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
+    const learnedNameSource = typeof learned.categorySource === "string" ? learned.categorySource : null;
+    const learnedNameConflictsWithParser =
+      Boolean(deterministicNormalizedName) &&
+      Boolean(learnedNormalizedName) &&
+      normalizeMerchantText(deterministicNormalizedName) !== normalizeMerchantText(learnedNormalizedName);
+    const shouldKeepParserMerchantName =
+      learnedNameConflictsWithParser &&
+      (!learnedNameSource || !USER_CONFIRMED_LEARNING_SOURCES.has(learnedNameSource));
+    const merchantClean = shouldKeepParserMerchantName
+      ? deterministicNormalizedName
+      : learnedNormalizedName || deterministicNormalizedName;
     const accountName = row.accountName ?? null;
     const parserCategoryName = typeof row.categoryName === "string" ? row.categoryName.trim() : "";
     const parserSuppliedConcreteCategory = Boolean(parserCategoryName) && parserCategoryName.toLowerCase() !== "other";
@@ -3930,6 +3942,9 @@ export const enrichParsedRowsWithTraining = async (params: {
           categoryReason: shouldKeepParserCategory ? "parser-category-preserved" : learned.categoryReason,
           categorySource: learnedCategorySource,
           learnedCategoryName: learnedCategoryName || null,
+          merchantNameSource: learnedNameSource,
+          learnedMerchantName: learnedNormalizedName || null,
+          merchantNameReason: shouldKeepParserMerchantName ? "parser-merchant-preserved" : learned.categoryReason,
           confidence: effectiveConfidence,
           accountRuleKey: accountMatch?.rule.ruleKey ?? null,
           accountRuleConfidence: accountMatch ? Math.round(accountMatch.score) : null,
