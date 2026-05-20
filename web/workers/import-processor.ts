@@ -1,4 +1,4 @@
-import type { AccountType, Prisma, TransactionType } from "@prisma/client";
+import type { AccountType, Prisma, ReviewStatus, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { capturePostHogServerEvent } from "@/lib/analytics";
@@ -110,6 +110,38 @@ const normalizeTransactionDedupeText = (value: unknown) =>
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+
+const resolveOrCreateWorkspaceCategoryId = async (params: {
+  workspaceId: string;
+  categoryName: string;
+  fallbackType?: TransactionType;
+}) => {
+  const categoryName = params.categoryName.trim();
+  if (!categoryName) {
+    return null;
+  }
+
+  const existingCategories = await prisma.category.findMany({
+    where: { workspaceId: params.workspaceId },
+    select: { id: true, name: true, type: true },
+  });
+  const existingCategory = existingCategories.find((category) => category.name.trim().toLowerCase() === categoryName.toLowerCase()) ?? null;
+  if (existingCategory) {
+    return existingCategory.id;
+  }
+
+  const createdCategory = await prisma.category.create({
+    data: {
+      workspaceId: params.workspaceId,
+      name: categoryName,
+      type: coerceTransactionTypeFromCategoryName(categoryName, params.fallbackType ?? "expense"),
+      isSystem: false,
+    },
+    select: { id: true },
+  });
+
+  return createdCategory.id;
+};
 
 const buildConfirmedTransactionDedupeKey = (params: {
   date: unknown;
@@ -4691,15 +4723,26 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         const contextualGuess = guessCategoryName(receiptContextText, "expense");
         return contextualGuess !== "Other" ? contextualGuess : "Food & Dining";
       })();
+      const receiptCategoryId = await resolveOrCreateWorkspaceCategoryId({
+        workspaceId: String(importFile.workspaceId),
+        categoryName: receiptCategoryName,
+        fallbackType: "expense",
+      });
       let createdTransactionId = receiptDocument?.transactionId ?? null;
+      let existingReceiptTransaction:
+        | {
+            id: string;
+            normalizedPayload: Prisma.JsonValue | null;
+          }
+        | null = null;
 
       if (!createdTransactionId && cashAccountId && receiptAmount !== null && receiptDate) {
-        const existingReceiptTransaction = await prisma.transaction.findFirst({
+        existingReceiptTransaction = await prisma.transaction.findFirst({
           where: {
             importFileId,
             accountId: cashAccountId,
           },
-          select: { id: true },
+          select: { id: true, normalizedPayload: true },
         }).catch(() => null);
 
         if (existingReceiptTransaction?.id) {
@@ -4709,6 +4752,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             workspaceId: String(importFile.workspaceId),
             accountId: cashAccountId,
             importFileId,
+            categoryId: receiptCategoryId,
             categoryName: receiptCategoryName,
             reviewStatus: "confirmed",
             parserConfidence:
@@ -4776,6 +4820,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             } as Prisma.InputJsonValue,
             normalizedPayload: {
               merchantClean: receiptMerchantClean,
+              categoryId: receiptCategoryId,
               categoryName: receiptCategoryName,
               type: "expense",
             } as Prisma.InputJsonValue,
@@ -4787,6 +4832,29 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               ? insertedTransaction.id
               : null;
         }
+      }
+
+      if (createdTransactionId && receiptCategoryId) {
+        const existingNormalizedPayload =
+          existingReceiptTransaction?.normalizedPayload &&
+          typeof existingReceiptTransaction.normalizedPayload === "object" &&
+          !Array.isArray(existingReceiptTransaction.normalizedPayload)
+            ? (existingReceiptTransaction.normalizedPayload as Record<string, unknown>)
+            : null;
+        await prisma.transaction.update({
+          where: { id: createdTransactionId },
+          data: {
+            categoryId: receiptCategoryId,
+            categoryConfidence: 95,
+            normalizedPayload: {
+              ...(existingNormalizedPayload ?? {}),
+              merchantClean: receiptMerchantClean,
+              categoryId: receiptCategoryId,
+              categoryName: receiptCategoryName,
+              type: "expense",
+            } as Prisma.InputJsonValue,
+          },
+        });
       }
 
       const cleanupRowsAfterConfirmation = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
@@ -5441,7 +5509,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
                       : null,
                 categoryConfidence: rowCategoryConfidence,
                 parserConfidence: rowParserConfidence,
-                reviewStatus: insertRow.reviewStatus as Prisma.EnumReviewStatusFieldUpdateOperationsInput | Prisma.ReviewStatus,
+                reviewStatus: insertRow.reviewStatus as Prisma.EnumReviewStatusFieldUpdateOperationsInput | ReviewStatus,
                 isTransfer: canonicalType === "transfer",
                 normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
                 learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
