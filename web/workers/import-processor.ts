@@ -54,7 +54,7 @@ import { guessCategoryName } from "@/lib/import-parser";
 import { parseImportTextWithOpenAIFallback, transcribeImportImagesWithOpenAI } from "@/lib/openai-import-parser";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
-import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
+import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { mergeCheckpointSourceMetadata } from "@/lib/import-workflow";
@@ -90,6 +90,15 @@ type ImportInsightSourceRow = {
   rawPayload?: unknown;
 };
 
+type TransferAccountLookup = {
+  id: string;
+  name: string;
+  institution?: string | null;
+  accountNumber?: string | null;
+  type?: AccountType | string | null;
+  currency?: string | null;
+};
+
 type PreparedImportTransaction = {
   transactionId: string | null;
   insertRow: Record<string, unknown>;
@@ -110,6 +119,102 @@ const normalizeTransactionDedupeText = (value: unknown) =>
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+
+const normalizeTransferMatchText = (value: unknown) =>
+  normalizeTransactionDedupeText(value).replace(/[^a-z0-9]+/g, " ").trim();
+
+const normalizeTransferDigits = (value: unknown) => String(value ?? "").replace(/\D/g, "");
+
+const extractTransferLastFour = (value: unknown) => {
+  const digits = normalizeTransferDigits(value);
+  return digits.length >= 4 ? digits.slice(-4) : null;
+};
+
+const stringifyTransferPayload = (value: unknown): string => {
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "";
+  }
+};
+
+const buildTransferCandidateText = (row: ImportInsightSourceRow) =>
+  [
+    row.merchantRaw,
+    row.merchantClean,
+    row.description,
+    row.categoryName,
+    stringifyTransferPayload(row.rawPayload),
+  ].join(" ");
+
+const rowMentionsAnotherWorkspaceAccount = (
+  row: ImportInsightSourceRow,
+  workspaceAccounts: TransferAccountLookup[],
+  currentAccountId: string
+) => {
+  const haystack = buildTransferCandidateText(row);
+  const normalizedHaystack = normalizeTransferMatchText(haystack);
+  const haystackDigits = normalizeTransferDigits(haystack);
+
+  if (!normalizedHaystack && !haystackDigits) {
+    return false;
+  }
+
+  return workspaceAccounts.some((account) => {
+    if (account.id === currentAccountId || account.type === "cash") {
+      return false;
+    }
+
+    const accountLastFour = extractTransferLastFour(account.accountNumber ?? account.name);
+    if (accountLastFour && haystackDigits.includes(accountLastFour)) {
+      return true;
+    }
+
+    const accountName = normalizeTransferMatchText(account.name);
+    const institution = normalizeTransferMatchText(account.institution);
+    const namedToken = accountName && accountName.length >= 6 ? accountName : null;
+    const institutionToken = institution && institution.length >= 6 ? institution : null;
+
+    if (namedToken && normalizedHaystack.includes(namedToken)) {
+      return true;
+    }
+
+    return Boolean(institutionToken && accountLastFour && normalizedHaystack.includes(institutionToken));
+  });
+};
+
+const inferExternalTransferDirection = (row: ImportInsightSourceRow): TransactionType => {
+  const lower = buildTransferCandidateText(row).toLowerCase();
+
+  if (/\b(received|receive|incoming|credited|credit|cash\s*in|add\s+money|transfer\s+from|from)\b/.test(lower)) {
+    return "income";
+  }
+
+  if (/\b(sent|send|outgoing|debited|debit|cash\s*out|payment\s+to|transfer\s+to|to)\b/.test(lower)) {
+    return "expense";
+  }
+
+  return "expense";
+};
+
+const resolveTransferTypeAgainstWorkspaceAccounts = (params: {
+  row: ImportInsightSourceRow;
+  candidateType: TransactionType;
+  workspaceAccounts: TransferAccountLookup[];
+  currentAccountId: string;
+}) => {
+  if (params.candidateType !== "transfer") {
+    return params.candidateType;
+  }
+
+  return rowMentionsAnotherWorkspaceAccount(params.row, params.workspaceAccounts, params.currentAccountId)
+    ? "transfer"
+    : inferExternalTransferDirection(params.row);
+};
 
 const resolveOrCreateWorkspaceCategoryId = async (params: {
   workspaceId: string;
@@ -5320,10 +5425,21 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     });
   }
 
-    const existingCategories = await tx.category.findMany({
-      where: { workspaceId: importFile.workspaceId },
-    });
+  const existingCategories = await tx.category.findMany({
+    where: { workspaceId: importFile.workspaceId },
+  });
   const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
+  const workspaceAccountsForTransferMatching = await tx.account.findMany({
+    where: { workspaceId: importFile.workspaceId },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+      currency: true,
+    },
+  });
   const existingRowsForAccount = await tx.transaction.findMany({
     where: {
       accountId: resolvedAccountId,
@@ -5347,27 +5463,50 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   }
   const currentDedupeCounts = new Map<string, number>();
 
-    for (const [index, row] of parsedRows.entries()) {
+  for (const [index, row] of parsedRows.entries()) {
     const rowType =
       row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : undefined;
-    const categoryName = (typeof row.categoryName === "string" && row.categoryName) || defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
+    const parsedCategoryName =
+      (typeof row.categoryName === "string" && row.categoryName.trim()) ||
+      defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
     const rowConfidence = inferParserRowConfidence({
       confidence: row.confidence,
       parserConfidence: row.parserConfidence,
       categoryConfidence: row.categoryConfidence,
       statementConfidence,
-      categoryName,
+      categoryName: parsedCategoryName,
     });
     const rowParserConfidence = Math.max(normalizeImportConfidenceScore(row.parserConfidence), normalizeImportConfidenceScore(row.confidence), normalizeImportConfidenceScore(statementConfidence));
     const rowCategoryConfidence = Math.max(normalizeImportConfidenceScore(row.categoryConfidence), rowConfidence);
     const rowAccountMatchConfidence = typeof row.accountMatchConfidence === "number" ? row.accountMatchConfidence : 100;
     const rowDuplicateConfidence = typeof row.duplicateConfidence === "number" ? row.duplicateConfidence : 0;
-    const canonicalType = coerceTransactionTypeFromCategoryName(
-      categoryName,
+    const categoryCoercedType = coerceTransactionTypeFromCategoryName(
+      parsedCategoryName,
       (rowType ?? "expense") as "income" | "expense" | "transfer"
     );
+    const canonicalType = resolveTransferTypeAgainstWorkspaceAccounts({
+      row: {
+        amount: row.amount,
+        type: categoryCoercedType,
+        merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+        merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : null,
+        description:
+          typeof row.description === "string" && row.description.trim()
+            ? row.description
+            : extractHumanReadableDescription(row.rawPayload ?? null),
+        categoryName: parsedCategoryName,
+        rawPayload: row.rawPayload ?? null,
+      },
+      candidateType: categoryCoercedType,
+      workspaceAccounts: workspaceAccountsForTransferMatching,
+      currentAccountId: resolvedAccountId,
+    });
+    const categoryName =
+      canonicalType !== "transfer" && isTransferCategoryName(parsedCategoryName)
+        ? defaultCategoryForType(canonicalType)
+        : parsedCategoryName;
     const rowTransferConfidence =
-      typeof row.transferConfidence === "number" ? row.transferConfidence : canonicalType === "transfer" ? 100 : 0;
+      canonicalType === "transfer" ? (typeof row.transferConfidence === "number" ? row.transferConfidence : 100) : 0;
     const rowIsOpeningBalance = Boolean(
       typeof row.rawPayload === "object" &&
         row.rawPayload !== null &&

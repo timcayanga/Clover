@@ -7080,8 +7080,16 @@ const guessGcashCategoryName = (description: string, type: TransactionType) => {
     return "Bills & Utilities";
   }
 
-  if (/^(?:received gcash from|cash in|add money|received money)\b/i.test(description)) {
+  if (/^(?:received gcash from|received money)\b/i.test(description)) {
     return "Income";
+  }
+
+  if (/^(?:sent gcash to|send money|cash out)\b/i.test(description) && type === "expense") {
+    return "Other";
+  }
+
+  if (/^(?:cash in|add money)\b/i.test(description)) {
+    return type === "transfer" ? "Transfers" : "Income";
   }
 
   if (type === "transfer") {
@@ -7126,15 +7134,16 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
   const merchantClean = normalizeGcashMerchant(description);
   const type: TransactionType =
     /^Received GCash from/i.test(description) ||
-    /^Cash In/i.test(description) ||
-    /^Add Money/i.test(description) ||
     /^Received Money/i.test(description)
       ? "income"
       : /^Sent GCash to/i.test(description) ||
+        /^Send Money/i.test(description)
+        ? "expense"
+      : /^Cash In/i.test(description) ||
+        /^Add Money/i.test(description) ||
         /^Transfer from/i.test(description) ||
         /^Transfer to/i.test(description) ||
         /^Cash Out/i.test(description) ||
-        /^Send Money/i.test(description) ||
         /^(?:Payment to)\s+.*(?:bank|capital|securities|exchange|pdax|bancnet|loan|wallet)/i.test(description)
         ? "transfer"
         : /refund|reversal|cashback|reward|interest/i.test(description)
@@ -11896,12 +11905,16 @@ const classifyGenericWalletHistoryTransaction = (description: string, previousBa
     return { type: "expense" as TransactionType, categoryName: "Bills & Utilities" };
   }
 
-  if (/^received gcash from\b|^received money\b|^cash in\b|^add money\b/.test(lower)) {
+  if (/^received gcash from\b|^received money\b/.test(lower)) {
     return { type: "income" as TransactionType, categoryName: "Income" };
   }
 
-  if (/^deposit to gsave\b|^withdraw from gsave\b|^sent gcash to\b/.test(lower)) {
+  if (/^cash in\b|^add money\b|^deposit to gsave\b|^withdraw from gsave\b/.test(lower)) {
     return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+  }
+
+  if (/^sent gcash to\b|^send money\b/.test(lower)) {
+    return { type: "expense" as TransactionType, categoryName: "Other" };
   }
 
   if (/^payment to\b/.test(lower)) {
@@ -11915,12 +11928,12 @@ const classifyGenericWalletHistoryTransaction = (description: string, previousBa
   if (/^transfer from\b|^transfer to\b|^send money\b|^cash out\b/.test(lower)) {
     if (balanceDelta !== null) {
       return {
-        type: balanceDelta > 0 ? ("income" as TransactionType) : ("transfer" as TransactionType),
-        categoryName: balanceDelta > 0 ? "Income" : "Transfers",
+        type: balanceDelta > 0 ? ("income" as TransactionType) : ("expense" as TransactionType),
+        categoryName: balanceDelta > 0 ? "Income" : "Other",
       };
     }
 
-    return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+    return { type: "expense" as TransactionType, categoryName: "Other" };
   }
 
   if (/refund|reversal|cashback|reward|rebate|interest/.test(lower)) {
