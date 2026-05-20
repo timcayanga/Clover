@@ -674,7 +674,6 @@ export async function GET(request: Request) {
     summaryRows.forEach((transaction, index) => {
       const warningReason = getTransactionWarningReason(transaction, duplicateCounts);
       const amount = Math.abs(Number(transaction.amount));
-      const categoryName = transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? "Other";
       const accountName = transaction.account?.name ?? "";
       const mappedTransaction = mapTransactionRow({
         id: transaction.id,
@@ -708,15 +707,16 @@ export async function GET(request: Request) {
       transactions.push(mappedTransaction);
 
       if (!transaction.isExcluded) {
-        if (transaction.type === "income") {
+        if (mappedTransaction.type === "income") {
           summaryState.income += amount;
-        } else if (transaction.type === "transfer") {
+        } else if (mappedTransaction.type === "transfer") {
           summaryState.transfers += amount;
         } else {
           summaryState.spending += amount;
         }
 
-        summaryState.topCategories.set(categoryName, (summaryState.topCategories.get(categoryName) ?? 0) + amount);
+        const summaryCategoryName = mappedTransaction.categoryName ?? "Other";
+        summaryState.topCategories.set(summaryCategoryName, (summaryState.topCategories.get(summaryCategoryName) ?? 0) + amount);
         summaryState.topAccounts.set(accountName, (summaryState.topAccounts.get(accountName) ?? 0) + amount);
       }
 
