@@ -376,6 +376,7 @@ type TransactionDetailDraft = {
 type ReceiptLineItemDraft = {
   description: string;
   quantity: string;
+  currency: string;
   unitPrice: string;
   amount: string;
 };
@@ -383,6 +384,7 @@ type ReceiptLineItemDraft = {
 type ReceiptLineItem = {
   description: string;
   quantity?: string | null;
+  currency?: string | null;
   unitPrice?: string | null;
   amount?: string | null;
 };
@@ -1310,6 +1312,7 @@ const normalizeTransactionNotes = (value: string | null | undefined) => {
 const createEmptyReceiptLineItem = (): ReceiptLineItemDraft => ({
   description: "",
   quantity: "",
+  currency: "",
   unitPrice: "",
   amount: "",
 });
@@ -1366,6 +1369,7 @@ const parseReceiptLineItemsFromPayload = (rawPayload: unknown): ReceiptLineItem[
         {
           description,
           quantity: normalizeReceiptLineItemText(entry.quantity) || null,
+          currency: normalizeReceiptLineItemText(entry.currency) || null,
           unitPrice: normalizeReceiptLineItemText(entry.unitPrice ?? entry.unit_price) || null,
           amount: normalizeReceiptLineItemText(entry.amount ?? entry.total) || null,
         },
@@ -1412,6 +1416,7 @@ const sanitizeReceiptLineItems = (lineItems: ReceiptLineItemDraft[]) =>
     .map((item) => ({
       description: item.description.trim(),
       quantity: item.quantity.trim(),
+      currency: item.currency.trim(),
       unitPrice: item.unitPrice.trim(),
       amount: item.amount.trim(),
     }))
@@ -1419,6 +1424,7 @@ const sanitizeReceiptLineItems = (lineItems: ReceiptLineItemDraft[]) =>
     .map((item) => ({
       description: item.description,
       quantity: item.quantity || null,
+      currency: item.currency || null,
       unitPrice: item.unitPrice || null,
       amount: item.amount || null,
     }));
@@ -1426,6 +1432,7 @@ const sanitizeReceiptLineItems = (lineItems: ReceiptLineItemDraft[]) =>
 const receiptLineItemToDraft = (lineItem: ReceiptLineItem): ReceiptLineItemDraft => ({
   description: lineItem.description ?? "",
   quantity: lineItem.quantity ?? "",
+  currency: lineItem.currency ?? "",
   unitPrice: lineItem.unitPrice ?? "",
   amount: lineItem.amount ?? "",
 });
@@ -1436,14 +1443,20 @@ const receiptLineItemSignature = (lineItems: ReceiptLineItemDraft[] | ReceiptLin
       lineItems.map((lineItem) => ({
         description: lineItem.description ?? "",
         quantity: lineItem.quantity ?? "",
+        currency: lineItem.currency ?? "",
         unitPrice: lineItem.unitPrice ?? "",
         amount: lineItem.amount ?? "",
       }))
     )
   );
 
-const mergeReceiptLineItemsIntoPayload = (rawPayload: unknown, lineItems: ReceiptLineItemDraft[]) => {
-  const sanitizedLineItems = sanitizeReceiptLineItems(lineItems);
+const mergeReceiptLineItemsIntoPayload = (rawPayload: unknown, lineItems: ReceiptLineItemDraft[], fallbackCurrency: string) => {
+  const sanitizedLineItems = sanitizeReceiptLineItems(
+    lineItems.map((lineItem) => ({
+      ...lineItem,
+      currency: lineItem.currency.trim() || fallbackCurrency,
+    }))
+  );
   const nextPayload: Record<string, unknown> = isRecord(rawPayload) ? { ...rawPayload } : {};
   nextPayload.receiptLineItems = sanitizedLineItems;
 
@@ -5128,7 +5141,11 @@ function TransactionsPageContent() {
         description: detailDraft.description || null,
         isExcluded: detailDraft.isExcluded,
         isTransfer: detailDraft.isTransfer,
-        rawPayload: mergeReceiptLineItemsIntoPayload(selectedTransaction.rawPayload, detailDraft.receiptLineItems),
+        rawPayload: mergeReceiptLineItemsIntoPayload(
+          selectedTransaction.rawPayload,
+          detailDraft.receiptLineItems,
+          detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency
+        ),
       };
 
       await updateTransaction(selectedTransaction.id, payload);
@@ -7472,6 +7489,7 @@ function TransactionsPageContent() {
                   <div className="transaction-drawer-receipt-table__row transaction-drawer-receipt-table__row--head" role="row">
                     <span role="columnheader">Name</span>
                     <span role="columnheader">Quantity</span>
+                    <span role="columnheader">Currency</span>
                     <span role="columnheader">Amount</span>
                     <span role="columnheader" className="sr-only">Actions</span>
                   </div>
@@ -7492,6 +7510,12 @@ function TransactionsPageContent() {
                           onChange={(event) => updateDetailReceiptLineItem(index, "quantity", event.target.value)}
                         />
                         <input
+                          aria-label={`Receipt line item ${index + 1} currency`}
+                          value={lineItem.currency || detailDraft?.currency || selectedTransaction.currency}
+                          placeholder={detailDraft?.currency || selectedTransaction.currency}
+                          onChange={(event) => updateDetailReceiptLineItem(index, "currency", event.target.value.toUpperCase())}
+                        />
+                        <input
                           aria-label={`Receipt line item ${index + 1} amount`}
                           value={lineItem.amount}
                           placeholder="0.00"
@@ -7504,7 +7528,7 @@ function TransactionsPageContent() {
                           onClick={() => deleteDetailReceiptLineItem(index)}
                           aria-label={`Delete receipt line item ${index + 1}`}
                         >
-                          Delete
+                          ×
                         </button>
                       </div>
                     ))
