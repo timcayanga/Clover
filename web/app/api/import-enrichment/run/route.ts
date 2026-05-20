@@ -3,7 +3,7 @@ import { fetchImportFileCompat } from "@/lib/data-engine";
 import { upsertImportEnrichmentJob } from "@/lib/import-enrichment-jobs";
 import { prisma } from "@/lib/prisma";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { processImportEnrichmentJobs } from "@/workers/import-processor";
+import { countImportTransactionsNeedingCleanup, processImportEnrichmentJobs } from "@/workers/import-processor";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -31,26 +31,7 @@ export async function POST(request: Request) {
       }
       const [parsedRowCount, needsCleanupCount] = await Promise.all([
         prisma.parsedTransaction.count({ where: { importFileId: payload.importFileId } }),
-        prisma.transaction.count({
-          where: {
-            deletedAt: null,
-            OR: [
-              { importFileId: payload.importFileId },
-              {
-                rawPayload: {
-                  path: ["sourceImportFileId"],
-                  equals: payload.importFileId,
-                },
-              },
-            ],
-            reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
-            AND: [
-              {
-                OR: [{ merchantClean: null }, { categoryId: null }, { category: { is: { name: "Other" } } }],
-              },
-            ],
-          },
-        }),
+        countImportTransactionsNeedingCleanup(payload.importFileId),
       ]);
       if (parsedRowCount > 0 && needsCleanupCount > 0) {
         await upsertImportEnrichmentJob({

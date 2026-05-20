@@ -2495,6 +2495,56 @@ const getImportSourceStatementFingerprint = (rawPayload: Prisma.JsonValue | null
     : null;
 };
 
+const listImportStatementFingerprints = async (importFileId: string) => {
+  const parsedStatementFingerprints = await prisma.$queryRaw<Array<{ statementFingerprint: string | null }>>`
+    SELECT DISTINCT "statementFingerprint"
+    FROM "ParsedTransaction"
+    WHERE "importFileId" = ${importFileId}
+      AND "statementFingerprint" IS NOT NULL
+  `.catch(() => []);
+
+  return Array.from(
+    new Set(
+      parsedStatementFingerprints
+        .map((row) => row.statementFingerprint)
+        .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+        .map((value) => value.trim())
+    )
+  );
+};
+
+const buildImportTransactionWhere = async (
+  importFileId: string,
+  options: { workspaceId?: string | null; includeDeleted?: boolean } = {}
+): Promise<Prisma.TransactionWhereInput> => {
+  const workspaceId =
+    typeof options.workspaceId === "string" && options.workspaceId.trim()
+      ? options.workspaceId.trim()
+      : String((await fetchImportFileCompat(importFileId).catch(() => null))?.workspaceId ?? "").trim();
+  const statementFingerprints = await listImportStatementFingerprints(importFileId);
+  const identityPredicates: Prisma.TransactionWhereInput[] = [
+    { importFileId },
+    {
+      rawPayload: {
+        path: ["sourceImportFileId"],
+        equals: importFileId,
+      },
+    },
+    ...statementFingerprints.map((fingerprint) => ({
+      rawPayload: {
+        path: ["sourceStatementFingerprint"],
+        equals: fingerprint,
+      },
+    })),
+  ];
+
+  return {
+    ...(workspaceId ? { workspaceId } : {}),
+    ...(options.includeDeleted ? {} : { deletedAt: null }),
+    OR: identityPredicates,
+  };
+};
+
 const buildImportTransactionCollapseKey = (transaction: {
   date: Date;
   amount: unknown;
@@ -2530,34 +2580,13 @@ const buildImportTransactionCollapseKey = (transaction: {
 };
 
 const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
-  const parsedStatementFingerprints = await prisma.$queryRaw<Array<{ statementFingerprint: string | null }>>`
-    SELECT DISTINCT "statementFingerprint"
-    FROM "ParsedTransaction"
-    WHERE "importFileId" = ${importFileId}
-      AND "statementFingerprint" IS NOT NULL
-  `.catch(() => []);
-  const statementFingerprints = parsedStatementFingerprints
-    .map((row) => row.statementFingerprint)
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+  const importFile = await fetchImportFileCompat(importFileId).catch(() => null);
+  const statementFingerprints = await listImportStatementFingerprints(importFileId);
+  const transactionWhere = await buildImportTransactionWhere(importFileId, {
+    workspaceId: importFile?.workspaceId ? String(importFile.workspaceId) : null,
+  });
   const transactions = await prisma.transaction.findMany({
-    where: {
-      deletedAt: null,
-      OR: [
-        { importFileId },
-        {
-          rawPayload: {
-            path: ["sourceImportFileId"],
-            equals: importFileId,
-          },
-        },
-        ...statementFingerprints.map((fingerprint) => ({
-          rawPayload: {
-            path: ["sourceStatementFingerprint"],
-            equals: fingerprint,
-          },
-        })),
-      ],
-    },
+    where: transactionWhere,
     select: {
       id: true,
       importFileId: true,
@@ -2648,19 +2677,10 @@ const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
   return { removed: duplicateIds.length };
 };
 
-const countImportTransactionsNeedingCleanup = async (importFileId: string) =>
+export const countImportTransactionsNeedingCleanup = async (importFileId: string) =>
   prisma.transaction.count({
     where: {
-      deletedAt: null,
-      OR: [
-        { importFileId },
-        {
-          rawPayload: {
-            path: ["sourceImportFileId"],
-            equals: importFileId,
-          },
-        },
-      ],
+      ...(await buildImportTransactionWhere(importFileId)),
       reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
       AND: [
         {
@@ -2677,16 +2697,7 @@ const countImportTransactionsNeedingCleanup = async (importFileId: string) =>
 const markRemainingImportCleanupRowsForReview = async (importFileId: string) =>
   prisma.transaction.updateMany({
     where: {
-      deletedAt: null,
-      OR: [
-        { importFileId },
-        {
-          rawPayload: {
-            path: ["sourceImportFileId"],
-            equals: importFileId,
-          },
-        },
-      ],
+      ...(await buildImportTransactionWhere(importFileId)),
       reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
       AND: [
         {
@@ -2828,18 +2839,9 @@ export const processImportEnrichmentJobs = async (options: {
           ? normalizeImportConfidenceScore((statementCheckpoint.sourceMetadata as Record<string, unknown>).confidence)
           : 100;
       const transactions = await prisma.transaction.findMany({
-        where: {
-          deletedAt: null,
-          OR: [
-            { importFileId: job.importFileId },
-            {
-              rawPayload: {
-                path: ["sourceImportFileId"],
-                equals: job.importFileId,
-              },
-            },
-          ],
-        },
+        where: await buildImportTransactionWhere(job.importFileId, {
+          workspaceId: String(importFile.workspaceId),
+        }),
         select: {
           id: true,
           rawPayload: true,

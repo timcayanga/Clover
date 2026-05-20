@@ -244,10 +244,6 @@ export const getEffectiveTransactionCategoryName = (params: {
       if (isMeaningfulCategoryName(genericOverride) && genericOverride !== directCategory) {
         return genericOverride;
       }
-
-      if (isMeaningfulCategoryName(heuristic) && heuristic !== directCategory) {
-        return heuristic;
-      }
     }
 
     return directCategory;
@@ -257,10 +253,6 @@ export const getEffectiveTransactionCategoryName = (params: {
     if ((isImportedRow || hasImportedRawPayload) && isBroadCategoryName(rawPayloadCategory)) {
       if (isMeaningfulCategoryName(genericOverride) && genericOverride !== rawPayloadCategory) {
         return genericOverride;
-      }
-
-      if (isMeaningfulCategoryName(heuristic) && heuristic !== rawPayloadCategory) {
-        return heuristic;
       }
     }
 
@@ -284,5 +276,10 @@ export const getEffectiveTransactionCategoryName = (params: {
   if (genericOverride) {
     return genericOverride;
   }
+
+  if (isImportedRow || hasImportedRawPayload) {
+    return directCategory || rawPayloadCategory || null;
+  }
+
   return heuristic || directCategory || rawPayloadCategory || null;
 };
