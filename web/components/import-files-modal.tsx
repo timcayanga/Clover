@@ -4299,7 +4299,7 @@ export function ImportFilesModal({
         return { completed: false, summary: null };
       }
 
-      if (importStatus === "done") {
+      if (importMode === "receipt") {
         const receiptAccountId =
           typeof importFile?.accountId === "string" && importFile.accountId.trim()
             ? importFile.accountId.trim()
@@ -4309,7 +4309,7 @@ export function ImportFilesModal({
         const accountOption = findAccountOptionById(accounts, receiptAccountId);
         const localReceiptSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
         const receiptTransactionSummary =
-          importMode === "receipt" && payload.receiptTransaction
+          payload.receiptTransaction
             ? buildReceiptSummaryFromReceiptTransaction({
                 fileName,
                 importFileId,
@@ -4318,20 +4318,66 @@ export function ImportFilesModal({
               })
             : null;
         const receiptSummary =
-          importMode === "receipt"
-            ? (payload.receiptDocument
-                ? buildReceiptSummaryFromReceiptDocument({
-                    fileName,
-                    importFileId,
-                    receiptDocument: payload.receiptDocument,
-                    accountId: receiptAccountId,
-                    accountType: (accountOption?.type as UploadAccountType) ?? null,
-                    previewAccountName: accountOption?.name ?? null,
-                  })
-                : receiptTransactionSummary) ?? localReceiptSummary
-            : null;
+          (payload.receiptDocument
+            ? buildReceiptSummaryFromReceiptDocument({
+                fileName,
+                importFileId,
+                receiptDocument: payload.receiptDocument,
+                accountId: receiptAccountId,
+                accountType: (accountOption?.type as UploadAccountType) ?? null,
+                previewAccountName: accountOption?.name ?? null,
+              })
+            : receiptTransactionSummary) ?? localReceiptSummary;
 
-        if (importMode === "receipt" && !receiptSummary) {
+        if (receiptSummary && (importStatus === "done" || confirmedTransactionsCount > 0)) {
+          updateItem(itemId, {
+            status: "done",
+            confirmationState: "confirmed",
+            progress: 100,
+            progressLabel: doneLabel,
+            targetAccountId: receiptSummary.accountId ?? receiptAccountId ?? null,
+          });
+          if (deliverSummary) {
+            seedImportedWorkspaceCaches(workspaceId, receiptSummary);
+            await Promise.resolve(onImported(receiptSummary));
+          }
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "done",
+            fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount + 1,
+            progress: 100,
+            detail: doneLabel,
+            summary: deliverSummary ? receiptSummary : null,
+            errorMessage: null,
+          });
+          router.refresh();
+          return { completed: true, summary: receiptSummary };
+        }
+
+        if (importStatus === "failed") {
+          if (parsedRowsCount > 0 || confirmedTransactionsCount > 0) {
+            closeImportAsRecoverable(
+              itemId,
+              fileName,
+              "The file is visible in Clover. Clover will keep cleaning up names and categories in the background.",
+              "Visible in Clover"
+            );
+            return { completed: true, summary: null };
+          }
+          closeImportAfterError(
+            itemId,
+            "background",
+            fileName,
+            processingMessage ?? "Clover couldn't finish reading this file."
+          );
+          return { completed: false, summary: null };
+        }
+
+        if (importStatus === "done") {
           updateItem(itemId, {
             status: "importing",
             confirmationState: "pending",
@@ -4357,16 +4403,65 @@ export function ImportFilesModal({
         }
 
         updateItem(itemId, {
+          status: "importing",
+          progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(90, IMPORT_PROGRESS.parsing + attempt * 0.25)),
+          progressLabel: telemetryLabel ?? processingMessage ?? progressLabel,
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "active",
+          fileName,
+          fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount,
+          progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(90, IMPORT_PROGRESS.parsing + attempt * 0.25)),
+          detail: getTelemetryDetail(
+            telemetryPhase === "repair_needed"
+              ? "Clover needs another pass to finish this file"
+              : processingPhase === "auto_rerunning"
+              ? "Clover is rechecking the document"
+              : parsedRowsCount > 0 || confirmedTransactionsCount > 0
+                ? `Clover found ${Math.max(parsedRowsCount, confirmedTransactionsCount)} item(s)`
+                : progressLabel,
+            telemetryMessage ?? processingMessage,
+            telemetryLabel,
+            resumeReason
+          ),
+          summary: null,
+          errorMessage: null,
+        });
+
+        if (Date.now() - startedAt >= MAX_WAIT_MS) {
+          const hasRecoverableProgress =
+            Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0;
+          if (hasRecoverableProgress) {
+            closeImportAsRecoverable(
+              itemId,
+              fileName,
+              "Clover parsed the file and is still finalizing the import.",
+              "Finalizing import"
+            );
+            return { completed: true, summary: null };
+          }
+
+          const timeoutMessage = "Timed out after 2 minutes while Clover was still reading the document.";
+          closeImportAfterError(itemId, "monitor", fileName, timeoutMessage);
+          return { completed: false, summary: null };
+        }
+
+        await sleep(500);
+        continue;
+      }
+
+      if (importStatus === "done") {
+        updateItem(itemId, {
           status: "done",
           confirmationState: "confirmed",
           progress: 100,
           progressLabel: doneLabel,
-          targetAccountId: receiptSummary?.accountId ?? receiptAccountId ?? null,
+          targetAccountId: importFile?.accountId ?? null,
         });
-        if (receiptSummary && deliverSummary) {
-          seedImportedWorkspaceCaches(workspaceId, receiptSummary);
-          await Promise.resolve(onImported(receiptSummary));
-        }
         publishImportActivity({
           workspaceId,
           surface: importActivitySurfaceRef.current,
@@ -4377,11 +4472,11 @@ export function ImportFilesModal({
           completedFiles: completedFileCount + 1,
           progress: 100,
           detail: doneLabel,
-          summary: receiptSummary && deliverSummary ? receiptSummary : null,
+          summary: null,
           errorMessage: null,
         });
         router.refresh();
-        return { completed: true, summary: receiptSummary };
+        return { completed: true, summary: null };
       }
 
       updateItem(itemId, {

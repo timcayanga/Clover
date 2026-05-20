@@ -149,7 +149,7 @@ export const loadImportStatusSnapshot = async (
         }).catch(() => null)
       : null;
   const receiptTransaction =
-    importFile.status === "done"
+    documentImport?.id || confirmedTransactionsCountBefore > 0 || parsedRowsCountBefore === 0
       ? await prisma.transaction.findFirst({
           where: {
             importFileId,
