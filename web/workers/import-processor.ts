@@ -2484,6 +2484,17 @@ const getImportSourceFileId = (rawPayload: Prisma.JsonValue | null | undefined) 
   return typeof sourceImportFileId === "string" && sourceImportFileId.trim() ? sourceImportFileId.trim() : null;
 };
 
+const getImportSourceStatementFingerprint = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const sourceStatementFingerprint = (rawPayload as Record<string, unknown>).sourceStatementFingerprint;
+  return typeof sourceStatementFingerprint === "string" && sourceStatementFingerprint.trim()
+    ? sourceStatementFingerprint.trim()
+    : null;
+};
+
 const buildImportTransactionCollapseKey = (transaction: {
   date: Date;
   amount: unknown;
@@ -2494,6 +2505,11 @@ const buildImportTransactionCollapseKey = (transaction: {
   rawPayload: Prisma.JsonValue | null;
 }) => {
   const sourceRowIndex = getImportSourceRowIndex(transaction.rawPayload);
+  const sourceStatementFingerprint = getImportSourceStatementFingerprint(transaction.rawPayload);
+  if (sourceStatementFingerprint && sourceRowIndex !== null) {
+    return `source-statement:${sourceStatementFingerprint}:${sourceRowIndex}`;
+  }
+
   if (sourceRowIndex !== null) {
     return `source-row:${sourceRowIndex}`;
   }
@@ -2514,6 +2530,15 @@ const buildImportTransactionCollapseKey = (transaction: {
 };
 
 const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
+  const parsedStatementFingerprints = await prisma.$queryRaw<Array<{ statementFingerprint: string | null }>>`
+    SELECT DISTINCT "statementFingerprint"
+    FROM "ParsedTransaction"
+    WHERE "importFileId" = ${importFileId}
+      AND "statementFingerprint" IS NOT NULL
+  `.catch(() => []);
+  const statementFingerprints = parsedStatementFingerprints
+    .map((row) => row.statementFingerprint)
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
   const transactions = await prisma.transaction.findMany({
     where: {
       deletedAt: null,
@@ -2525,6 +2550,12 @@ const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
             equals: importFileId,
           },
         },
+        ...statementFingerprints.map((fingerprint) => ({
+          rawPayload: {
+            path: ["sourceStatementFingerprint"],
+            equals: fingerprint,
+          },
+        })),
       ],
     },
     select: {
@@ -2552,7 +2583,11 @@ const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
     }
 
     const sourceImportFileId = getImportSourceFileId(transaction.rawPayload);
-    const belongsToImport = transaction.importFileId === importFileId || sourceImportFileId === importFileId;
+    const sourceStatementFingerprint = getImportSourceStatementFingerprint(transaction.rawPayload);
+    const belongsToImport =
+      transaction.importFileId === importFileId ||
+      sourceImportFileId === importFileId ||
+      (sourceStatementFingerprint !== null && statementFingerprints.includes(sourceStatementFingerprint));
     if (!belongsToImport) {
       continue;
     }
@@ -4058,6 +4093,7 @@ export const processImportFileText = async (
         importMode,
         documentType: importMode,
         workflowStage: "identifying_transactions",
+        statementFingerprint,
         statementFamilySignature,
       } as Prisma.InputJsonValue;
       await prisma.accountStatementCheckpoint.upsert({
@@ -5117,6 +5153,20 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     !Array.isArray(statementCheckpointRecord.sourceMetadata)
       ? (statementCheckpointRecord.sourceMetadata as Record<string, unknown>)
       : null;
+  const parsedStatementFingerprints = Array.from(
+    new Set(
+      parsedRows
+        .map((row) => (typeof row.statementFingerprint === "string" && row.statementFingerprint.trim() ? row.statementFingerprint.trim() : null))
+        .filter((value): value is string => value !== null)
+    )
+  );
+  const checkpointStatementFingerprint =
+    typeof statementMetadata?.statementFingerprint === "string" && statementMetadata.statementFingerprint.trim()
+      ? statementMetadata.statementFingerprint.trim()
+      : null;
+  const statementFingerprints = Array.from(
+    new Set([...parsedStatementFingerprints, ...(checkpointStatementFingerprint ? [checkpointStatementFingerprint] : [])])
+  );
 
   const account = await resolveConfirmationAccount({
     importFile,
@@ -5207,9 +5257,19 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   };
 
   const confirmationResult = await prisma.$transaction(async (tx) => {
+    const confirmationLockKey = [
+      "import-confirm",
+      String(importFile.workspaceId),
+      resolvedAccountId,
+      statementFingerprints.length > 0 ? statementFingerprints.join(",") : importFileId,
+    ].join(":");
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${confirmationLockKey}, 0))`;
+
     const existingImportTransactions = await tx.transaction.findMany({
       where: {
         deletedAt: null,
+        workspaceId: String(importFile.workspaceId),
+        accountId: resolvedAccountId,
         OR: [
           { importFileId },
           {
@@ -5218,6 +5278,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               equals: importFileId,
             },
           },
+          ...statementFingerprints.map((fingerprint) => ({
+            rawPayload: {
+              path: ["sourceStatementFingerprint"],
+              equals: fingerprint,
+            },
+          })),
         ],
       },
       select: {
@@ -5576,6 +5642,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         ...(row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : {}),
         sourceRowIndex: index + 1,
         sourceImportFileId: importFileId,
+        sourceStatementFingerprint:
+          typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
+            ? row.statementFingerprint.trim()
+            : checkpointStatementFingerprint,
       } as Prisma.InputJsonValue,
       normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
@@ -5667,6 +5737,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           ...(row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : {}),
           sourceRowIndex: index + 1,
           sourceImportFileId: importFileId,
+          sourceStatementFingerprint:
+            typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
+              ? row.statementFingerprint.trim()
+              : checkpointStatementFingerprint,
         } as Prisma.InputJsonValue,
       });
       continue;
@@ -5693,6 +5767,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           ...(row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : {}),
           sourceRowIndex: index + 1,
           sourceImportFileId: importFileId,
+          sourceStatementFingerprint:
+            typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
+              ? row.statementFingerprint.trim()
+              : checkpointStatementFingerprint,
         } as Prisma.InputJsonValue,
       },
       trainingSignal: {
