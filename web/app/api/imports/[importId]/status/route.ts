@@ -43,6 +43,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       (!snapshot.enrichmentJob ||
         snapshot.enrichmentJob.status === "queued" ||
         snapshot.enrichmentJob.status === "retrying" ||
+        snapshot.enrichmentJob.status === "failed" ||
         isImportEnrichmentJobStale(snapshot.enrichmentJob));
     if (shouldSelfHealEnrichment) {
       const [parsedRowCount, needsCleanupCount] = await Promise.all([
@@ -70,12 +71,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       ]);
       if (parsedRowCount > 0 && needsCleanupCount > 0) {
         await upsertImportEnrichmentJob({
-          workspaceId: String(importFile.workspaceId),
-          importFileId: importId,
-          totalRows: parsedRowCount,
-          phase: "queued",
-          forceRequeue: false,
-        });
+            workspaceId: String(importFile.workspaceId),
+            importFileId: importId,
+            totalRows: parsedRowCount,
+            phase: "queued",
+            forceRequeue: snapshot.enrichmentJob?.status === "failed",
+          });
         const result = await processImportEnrichmentJobs({
           importFileId: importId,
           limit: MAX_IMPORT_ENRICHMENT_ATTEMPTS,

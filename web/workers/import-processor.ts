@@ -5755,6 +5755,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     };
   }, { maxWait: 15_000, timeout: 30_000 });
 
+  await collapseDuplicateTransactionsForImport(importFileId).catch((error) => {
+    console.warn("Unable to collapse duplicate transactions after confirmation", {
+      importFileId,
+      error,
+    });
+  });
+
   await Promise.allSettled(
     trainingSignals.map((entry) =>
       recordTrainingSignal({

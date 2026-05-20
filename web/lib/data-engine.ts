@@ -2168,7 +2168,18 @@ export const countTransactionsByImportFileCompat = async (importFileId: string) 
   }
 
   const result = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
-    `SELECT COUNT(*)::bigint AS count FROM "Transaction" WHERE "importFileId" = $1`,
+    `
+      SELECT COUNT(*)::bigint AS count
+      FROM "Transaction"
+      WHERE "deletedAt" IS NULL
+        AND (
+          "importFileId" = $1
+          OR (
+            "rawPayload" IS NOT NULL
+            AND "rawPayload"::jsonb->>'sourceImportFileId' = $1
+          )
+        )
+    `,
     importFileId
   );
   return Number(result[0]?.count ?? 0n);

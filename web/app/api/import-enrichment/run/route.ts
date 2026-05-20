@@ -58,7 +58,7 @@ export async function POST(request: Request) {
           importFileId: payload.importFileId,
           totalRows: parsedRowCount,
           phase: "queued",
-          forceRequeue: false,
+          forceRequeue: true,
         });
       }
     } else if (!localDev) {
