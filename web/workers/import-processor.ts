@@ -5263,7 +5263,43 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       resolvedAccountId,
       statementFingerprints.length > 0 ? statementFingerprints.join(",") : importFileId,
     ].join(":");
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${confirmationLockKey}, 0))`;
+    const lockRows = await tx.$queryRaw<Array<{ locked: boolean }>>`
+      SELECT pg_try_advisory_xact_lock(hashtextextended(${confirmationLockKey}, 0)) AS locked
+    `;
+    if (!lockRows[0]?.locked) {
+      const existingVisibleRows = await tx.transaction.count({
+        where: {
+          deletedAt: null,
+          workspaceId: String(importFile.workspaceId),
+          accountId: resolvedAccountId,
+          OR: [
+            { importFileId },
+            {
+              rawPayload: {
+                path: ["sourceImportFileId"],
+                equals: importFileId,
+              },
+            },
+            ...statementFingerprints.map((fingerprint) => ({
+              rawPayload: {
+                path: ["sourceStatementFingerprint"],
+                equals: fingerprint,
+              },
+            })),
+          ],
+        },
+      });
+
+      return {
+        imported: existingVisibleRows,
+        duplicate: true,
+        accountId: resolvedAccountId,
+        insightSummary: null,
+        accountBalance: null,
+        confirmedTransactionsCount: existingVisibleRows,
+        status: existingVisibleRows > 0 ? "done" : "staged",
+      };
+    }
 
     const existingImportTransactions = await tx.transaction.findMany({
       where: {
