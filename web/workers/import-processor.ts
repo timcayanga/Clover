@@ -4182,30 +4182,32 @@ export const processImportFileText = async (
         usedOpenAiFallback: Boolean(useOpenAiParse),
         actorUserId: options.actorUserId ?? null,
       });
-      const cleanupRowsAfterConfirmation = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
-      if (cleanupRowsAfterConfirmation > 0) {
+      void (async () => {
+        const cleanupRowsAfterConfirmation = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
+        if (cleanupRowsAfterConfirmation <= 0) {
+          return;
+        }
+
         await upsertImportEnrichmentJob({
           workspaceId: String(importFile.workspaceId),
           importFileId,
           totalRows: rows.length,
           phase: "queued",
           forceRequeue: false,
-        });
-        // Receipt imports often need immediate retry passes to move off the fallback category.
-        // We await the enrichment run here so stage users do not have to keep the Transactions page open
-        // just to let the background poller pick the job back up.
-        await processImportEnrichmentJobs({
-          importFileId,
-          limit: MAX_IMPORT_ENRICHMENT_ATTEMPTS,
-          batchSize: 500,
-          workerId: `receipt-import-enrichment-${importFileId}`,
         }).catch((error) => {
-          console.warn("Unable to finalize receipt enrichment immediately after import", {
+          console.warn("Unable to queue background statement enrichment", {
             importFileId,
             error,
           });
         });
-      }
+
+        processImportEnrichmentJobsInBackground(importFileId, Math.max(rows.length, cleanupRowsAfterConfirmation));
+      })().catch((error) => {
+        console.warn("Unable to start background statement enrichment", {
+          importFileId,
+          error,
+        });
+      });
 
       return {
         imported: confirmedImportResult.imported,
