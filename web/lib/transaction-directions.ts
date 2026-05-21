@@ -41,7 +41,7 @@ export const coerceTransactionTypeFromCategoryName = (
   }
 
   if (isTransferCategoryName(categoryName)) {
-    return fallback === "transfer" ? "transfer" : fallback;
+    return "transfer";
   }
 
   if (normalized === "gifts donations" && fallback === "income") {
