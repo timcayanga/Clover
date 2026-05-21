@@ -5966,26 +5966,22 @@ export function ImportFilesModal({
       }
     }
 
-    for (const item of items) {
-      const visibilityDeadline = visibilityDeadlineRef.current;
-      if (visibilityDeadline && Date.now() >= visibilityDeadline) {
-        hardStopVisibleImportModal("deadline");
-      }
+    const itemsToProcess = items.filter(
+      (item) => item.confirmationState !== "confirmed" && item.status !== "needs_password"
+    );
+    const processResults = await Promise.all(
+      itemsToProcess.map(async (item) => ({
+        itemId: item.id,
+        result: await processFile(item.id),
+      }))
+    );
 
-      if (item.confirmationState === "confirmed") {
-        continue;
-      }
+    const postProcessVisibilityDeadline = visibilityDeadlineRef.current;
+    if (postProcessVisibilityDeadline && Date.now() >= postProcessVisibilityDeadline) {
+      hardStopVisibleImportModal("deadline");
+    }
 
-      if (items.some((queued) => queued.status === "needs_password")) {
-        break;
-      }
-
-      const result = await processFile(item.id);
-      const postProcessVisibilityDeadline = visibilityDeadlineRef.current;
-      if (postProcessVisibilityDeadline && Date.now() >= postProcessVisibilityDeadline) {
-        hardStopVisibleImportModal("deadline");
-      }
-
+    for (const { result } of processResults) {
       if (result.status === "done") {
         importedCount += 1;
         if (result.summary) {
@@ -5999,7 +5995,6 @@ export function ImportFilesModal({
 
       if (result.status === "needs_password") {
         blockedCount += 1;
-        break;
       }
 
       if (result.status === "error") {
