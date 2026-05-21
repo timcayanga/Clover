@@ -1705,6 +1705,38 @@ export function ImportFilesModal({
     }
   };
 
+  const hasPrimaryDataForItem = (item: QueuedFile) => {
+    if (item.status === "error" || item.status === "needs_password") {
+      return true;
+    }
+
+    const localSummary = localPreparseSummaryByItemIdRef.current.get(item.id);
+    const localRows = Number(localSummary?.rowsImported ?? 0);
+    return (
+      item.confirmationState === "confirmed" ||
+      (item.importedRows !== null && item.importedRows > 0 && Boolean(item.targetAccountId)) ||
+      (localRows > 0 && Boolean(localSummary?.accountId))
+    );
+  };
+
+  const waitForLocalPrimaryVisibility = async (timeoutMs: number) => {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const currentItems = itemsRef.current.filter((item) => item.confirmationState !== "confirmed");
+      if (currentItems.length === 0 || currentItems.every(hasPrimaryDataForItem)) {
+        closeVisibleImportModalIfPrimaryDataReady();
+        return true;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+    }
+
+    closeVisibleImportModalIfPrimaryDataReady();
+    return itemsRef.current
+      .filter((item) => item.confirmationState !== "confirmed")
+      .every(hasPrimaryDataForItem);
+  };
+
   useEffect(() => {
     const wasOpen = wasOpenRef.current;
     wasOpenRef.current = open;
@@ -5966,9 +5998,24 @@ export function ImportFilesModal({
       }
     }
 
+    const localVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
     const itemsToProcess = items.filter(
       (item) => item.confirmationState !== "confirmed" && item.status !== "needs_password"
     );
+
+    if (localVisibilityReady && itemsToProcess.length > 0) {
+      void Promise.all(itemsToProcess.map((item) => processFile(item.id))).finally(() => {
+        router.refresh();
+      });
+      setBusy(false);
+      visibilityDeadlineRef.current = null;
+      if (visibilityHardStopTimerRef.current) {
+        window.clearTimeout(visibilityHardStopTimerRef.current);
+        visibilityHardStopTimerRef.current = null;
+      }
+      return;
+    }
+
     const processResults = await Promise.all(
       itemsToProcess.map(async (item) => ({
         itemId: item.id,
