@@ -1558,8 +1558,12 @@ const main = async () => {
     ["Interest Earned", "income", "Income"],
     ["Tax Withheld", "expense", "Financial"],
     ["Finance Charges", "expense", "Financial"],
+    ["Finance Charge", "expense", "Financial"],
+    ["Shopee", "expense", "Shopping"],
+    ["Puregold Price Club", "expense", "Shopping"],
     ["Cash Payment", "expense", "Shopping"],
     ["Cash Payment - Thank You - MB ATM", "income", "Transfers"],
+    ["Payment-Thank You", "income", "Transfers"],
     ["Card Payment", "income", "Transfers"],
   ];
   for (const [description, type, expectedCategory] of enrichmentFallbackExpectations) {

@@ -283,6 +283,15 @@ const main = async () => {
       if (/service charge|tax withheld/.test(clean)) {
         return categoryName !== "Financial" || transaction.type !== "expense";
       }
+      if (/finance charge/.test(clean)) {
+        return categoryName !== "Financial" || transaction.type !== "expense";
+      }
+      if (/shopee|puregold/.test(clean)) {
+        return categoryName !== "Shopping" || transaction.type !== "expense";
+      }
+      if (/payment(?:-| )?thank you|^payment$/.test(clean)) {
+        return categoryName !== "Transfers" || transaction.type !== "transfer";
+      }
       return false;
     });
     const overNormalizedPayrollRows = transactions.filter((transaction) => {

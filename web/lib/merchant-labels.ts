@@ -183,6 +183,10 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Bills Payment",
     },
     {
+      patterns: [/payment\s*-\s*thank\s*you/i, /payment\s+thank\s+you/i, /paymentthankyou/i],
+      replacement: "Payment",
+    },
+    {
       patterns: [/puregold/i],
       replacement: "Puregold Price Club",
     },

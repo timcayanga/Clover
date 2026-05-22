@@ -507,6 +507,10 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Business";
   }
 
+  if (/shopee|puregold|price\s+club/.test(lower) || /shopee|puregold|priceclub/.test(compact)) {
+    return "Shopping";
+  }
+
   if (/discord\s+nitro|mlbb\s+top\s+up|mlbbtopup|foodpanda\s+ph|foodpanda/.test(lower) || /discordnitro|mlbbtopup|foodpandaph/.test(compact)) {
     return /foodpanda/.test(lower) || /foodpandaph/.test(compact) ? "Food & Dining" : "Shopping";
   }

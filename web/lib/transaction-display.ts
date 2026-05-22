@@ -120,7 +120,15 @@ const getGenericCategoryOverride = (merchantText: string) => {
     return "Transfers";
   }
 
-  if (/service\s*charge|servicecharge|bank charge|dhl duty collection/.test(lower)) {
+  if (/payment\s*-\s*thank\s*you|payment\s+thank\s+you|paymentthankyou|card\s+payment|credit\s+card\s+payment/.test(lower)) {
+    return "Transfers";
+  }
+
+  if (/shopee|puregold|price\s+club/.test(lower)) {
+    return "Shopping";
+  }
+
+  if (/service\s*charge|servicecharge|finance\s*charge|financecharge|bank charge|dhl duty collection/.test(lower)) {
     return "Financial";
   }
 
@@ -210,24 +218,17 @@ export const getEffectiveTransactionCategoryName = (params: {
   const hasImportedRawPayload =
     Boolean(params.rawPayload) && typeof params.rawPayload === "object" && !Array.isArray(params.rawPayload);
   const isImportedRow = params.source === "upload";
-  const genericOverride = getGenericCategoryOverride(
-    getEffectiveTransactionMerchantName({
-      merchantClean: params.merchantClean,
-      merchantRaw: params.merchantRaw,
-      rawPayload: params.rawPayload,
-      institution: params.institution,
-    }) || params.merchantRaw
-  );
-
   const effectiveMerchantName = getEffectiveTransactionMerchantName({
     merchantClean: params.merchantClean,
     merchantRaw: params.merchantRaw,
     rawPayload: params.rawPayload,
     institution: params.institution,
   });
-
   const descriptionText =
     typeof params.description === "string" && params.description.trim() ? params.description.trim() : null;
+  const genericOverride = getGenericCategoryOverride(
+    [effectiveMerchantName, params.merchantRaw, descriptionText].filter(Boolean).join(" ")
+  );
   const heuristic = guessCategoryName(effectiveMerchantName || descriptionText || params.merchantRaw, params.type);
 
   if (/\bbdo\b/i.test((params.institution ?? "").trim())) {

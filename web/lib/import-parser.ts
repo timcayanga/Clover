@@ -86,6 +86,7 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (isStatementPaymentSettlementDescription(text)) return "Transfers";
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";
   if (/service\s*charge|servicecharge|bank charge|bankcharge/.test(lower) || /servicecharge|bankcharge/.test(compact)) return "Financial";
+  if (/finance\s*charge|financecharge/.test(lower) || /financecharge/.test(compact)) return "Financial";
   if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) return "Transfers";
   if (/expressnet|megalinkw?|\/drw\b|cash\s*(?:withdrawal|out)|atm\b|automated\s+teller|cash\s+advance/.test(lower)) return "Cash & ATM";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
