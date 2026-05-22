@@ -10856,6 +10856,8 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 .transactions-table-wrap {
   display: grid;
   flex: 1;
+  align-content: start;
+  grid-auto-rows: max-content;
   min-height: 0;
   overflow: auto;
   scrollbar-gutter: stable;
