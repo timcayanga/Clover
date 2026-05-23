@@ -268,7 +268,11 @@ type Transaction = {
   categoryId: string | null;
   categoryName: string | null;
   reviewStatus?: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
+  parserConfidence?: number | null;
   categoryConfidence?: number | null;
+  accountMatchConfidence?: number | null;
+  duplicateConfidence?: number | null;
+  transferConfidence?: number | null;
   date: string;
   amount: string;
   currency: string;
@@ -410,6 +414,11 @@ type TransactionConfidenceSignal = {
   label: string;
   value: number;
   note: string;
+};
+
+type TransactionReviewChip = {
+  label: string;
+  tone: "clear" | "warn" | "danger" | "neutral";
 };
 
 type MerchantRenameSuggestion = {
@@ -1492,6 +1501,15 @@ const getConfidenceLabel = (value: number) => {
   return "Needs review";
 };
 
+const normalizeConfidenceScore = (value: number | null | undefined) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  const score = value <= 1 ? value * 100 : value;
+  return Math.max(0, Math.min(100, Math.round(score)));
+};
+
 const inferTransactionConfidenceSignals = (transaction: Transaction, warningReason: string | null): TransactionConfidenceSignal[] => {
   const source = transaction.source ?? "upload";
   const hasWarning = Boolean(warningReason);
@@ -1536,6 +1554,65 @@ const inferTransactionConfidenceSignals = (transaction: Transaction, warningReas
           : "Category has a strong match",
     },
   ];
+};
+
+const getTransactionConfidenceScore = (transaction: Transaction, warningReason: string | null) => {
+  const confidenceSignals = [
+    normalizeConfidenceScore(transaction.parserConfidence),
+    normalizeConfidenceScore(transaction.categoryConfidence),
+    normalizeConfidenceScore(transaction.accountMatchConfidence),
+    transaction.type === "transfer" ? normalizeConfidenceScore(transaction.transferConfidence) : null,
+  ].filter((value): value is number => typeof value === "number");
+
+  if (confidenceSignals.length > 0) {
+    return Math.round(confidenceSignals.reduce((sum, value) => sum + value, 0) / confidenceSignals.length);
+  }
+
+  const inferredSignals = inferTransactionConfidenceSignals(transaction, warningReason);
+  return Math.round(inferredSignals.reduce((sum, signal) => sum + signal.value, 0) / inferredSignals.length);
+};
+
+const isMerchantUnidentified = (transaction: Transaction) => {
+  const merchantText = (transaction.merchantClean ?? transaction.merchantRaw ?? "").trim().toLowerCase();
+  if (!merchantText) {
+    return true;
+  }
+
+  const genericMerchantLabels = new Set(["unknown", "transaction", "imported transaction", "other", "miscellaneous"]);
+  return genericMerchantLabels.has(merchantText) || /^transaction\s*#?\d*$/i.test(merchantText);
+};
+
+const getTransactionReviewChips = (transaction: Transaction, warningReason: string | null): TransactionReviewChip[] => {
+  const confidenceScore = getTransactionConfidenceScore(transaction, warningReason);
+  const duplicateScore = normalizeConfidenceScore(transaction.duplicateConfidence) ?? 0;
+  const hasDuplicateSignal = warningReason === "Review similar transaction" || duplicateScore >= 70;
+  const hasMerchantIssue = isMerchantUnidentified(transaction);
+  const hasReviewSignal =
+    Boolean(warningReason) ||
+    transaction.reviewStatus === "pending_review" ||
+    transaction.reviewStatus === "suggested" ||
+    (normalizeConfidenceScore(transaction.categoryConfidence) ?? confidenceScore) < 75 ||
+    hasMerchantIssue;
+
+  const chips: TransactionReviewChip[] = [];
+
+  if (confidenceScore >= 85 && !hasReviewSignal && !hasDuplicateSignal) {
+    chips.push({ label: "High confidence", tone: "clear" });
+  }
+
+  if (hasReviewSignal) {
+    chips.push({ label: "Needs review", tone: "warn" });
+  }
+
+  if (hasDuplicateSignal) {
+    chips.push({ label: "Duplicate detected", tone: "danger" });
+  }
+
+  if (hasMerchantIssue) {
+    chips.push({ label: "Could not identify merchant", tone: "neutral" });
+  }
+
+  return chips.length > 0 ? chips : [{ label: getConfidenceLabel(confidenceScore), tone: confidenceScore >= 85 ? "clear" : "neutral" }];
 };
 
 const summarizeTransactionChange = (before: Transaction, after: Transaction, accountNames: Map<string, string>, categoryNames: Map<string, string>) => {
@@ -3594,6 +3671,12 @@ function TransactionsPageContent() {
   );
 
   const selectedTransactionWarningReason = selectedTransaction ? detailWarningReasonFor(selectedTransaction) : null;
+  const selectedTransactionConfidenceScore = selectedTransaction
+    ? getTransactionConfidenceScore(selectedTransaction, selectedTransactionWarningReason)
+    : null;
+  const selectedTransactionReviewChips = selectedTransaction
+    ? getTransactionReviewChips(selectedTransaction, selectedTransactionWarningReason)
+    : [];
   const detailTransactionSummary = useMemo(() => {
     if (!selectedTransaction) {
       return "";
@@ -4860,7 +4943,13 @@ function TransactionsPageContent() {
         applyTransactionPatchLocally(transaction.id, rollbackPatch);
         setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
       });
-      setMessage("Transaction updated.");
+      if (field === "categoryId") {
+        const previousCategoryName = transaction.categoryName ?? categoryNameById.get(transaction.categoryId ?? "") ?? "Other";
+        const nextCategoryName = nextPatch.categoryName ?? categoryNameById.get(value) ?? "Other";
+        setMessage(`Category updated: ${previousCategoryName} → ${nextCategoryName}. We'll remember this next time.`);
+      } else {
+        setMessage("Transaction updated.");
+      }
       return;
     }
 
@@ -5129,6 +5218,11 @@ function TransactionsPageContent() {
 
     setIsSaving(true);
     try {
+      const previousCategoryId = selectedTransaction.categoryId ?? "";
+      const nextCategoryId = detailDraft.categoryId || "";
+      const categoryChanged = previousCategoryId !== nextCategoryId;
+      const previousCategoryName = selectedTransaction.categoryName ?? categoryNameById.get(previousCategoryId) ?? "Other";
+      const nextCategoryName = categoryNameById.get(nextCategoryId) ?? (nextCategoryId ? selectedTransaction.categoryName ?? "Other" : "Other");
       const payload = {
         merchantRaw: detailDraft.merchantRaw,
         merchantClean: detailDraft.merchantClean || null,
@@ -5154,8 +5248,14 @@ function TransactionsPageContent() {
         feature_name: "transaction_detail_edit",
       });
       if (closeAfterSave) {
-        setMessage("Transaction details updated.");
+        setMessage(
+          categoryChanged
+            ? `Category updated: ${previousCategoryName} → ${nextCategoryName}. We'll remember this next time.`
+            : "Transaction details updated."
+        );
         closeTransactionDetail();
+      } else if (categoryChanged) {
+        setMessage(`Category updated: ${previousCategoryName} → ${nextCategoryName}. We'll remember this next time.`);
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
@@ -7348,6 +7448,19 @@ function TransactionsPageContent() {
               </button>
             </div>
 
+            {selectedTransactionReviewChips.length > 0 ? (
+              <div className="transaction-drawer-review-status" aria-label="Transaction review context">
+                {selectedTransactionReviewChips.map((chip) => (
+                  <span
+                    key={chip.label}
+                    className={`transaction-drawer-review-status__chip transaction-drawer-review-status__chip--${chip.tone}`}
+                  >
+                    {chip.label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
             <div className="transaction-drawer-form transaction-drawer-form--single">
               <label>
                 Name
@@ -7616,6 +7729,17 @@ function TransactionsPageContent() {
                 </div>
               </div>
             ) : null}
+
+            <details className="transaction-drawer-more">
+              <summary>More</summary>
+              <div className="transaction-drawer-more__body">
+                <div className="transaction-drawer-more__row">
+                  <span>Confidence score</span>
+                  <strong>{selectedTransactionConfidenceScore ?? 0}%</strong>
+                </div>
+                <p>Based on Clover's merchant, account, category, duplicate, and parser checks.</p>
+              </div>
+            </details>
 
             <div className="form-actions detail-actions">
               {!selectedTransactionWarningReason && !transactionDeleteConfirmOpen ? (

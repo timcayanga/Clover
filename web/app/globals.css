@@ -12243,6 +12243,51 @@ input.transaction-inline-edit--amount::placeholder {
   flex: none;
 }
 
+.transaction-drawer-review-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.transaction-drawer-review-status__chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  background: rgba(248, 251, 252, 0.94);
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.transaction-drawer-review-status__chip--clear {
+  border-color: rgba(34, 197, 94, 0.18);
+  background: rgba(34, 197, 94, 0.1);
+  color: #15803d;
+}
+
+.transaction-drawer-review-status__chip--warn {
+  border-color: rgba(245, 158, 11, 0.22);
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.transaction-drawer-review-status__chip--danger {
+  border-color: rgba(239, 68, 68, 0.18);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+}
+
+.transaction-drawer-review-status__chip--neutral {
+  border-color: rgba(100, 116, 139, 0.18);
+  background: rgba(100, 116, 139, 0.08);
+  color: var(--muted);
+}
+
 .transaction-drawer-form {
   margin-top: 14px;
 }
@@ -12489,6 +12534,50 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transaction-drawer-warning {
   margin-top: 2px;
+}
+
+.transaction-drawer-more {
+  margin-top: 12px;
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.transaction-drawer-more summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.transaction-drawer-more__body {
+  display: grid;
+  gap: 8px;
+  padding: 0 14px 14px;
+}
+
+.transaction-drawer-more__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.transaction-drawer-more__row strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.transaction-drawer-more__body p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .detail-warning-box__reason {
@@ -30731,7 +30820,8 @@ html[data-theme="dark"] .settings-category-table__row,
 html[data-theme="dark"] .settings-plan-card__body,
 html[data-theme="dark"] .settings-plan-usage__card,
 html[data-theme="dark"] .settings-plan-usage__card--plan,
-html[data-theme="dark"] .transaction-drawer-receipt-table {
+html[data-theme="dark"] .transaction-drawer-receipt-table,
+html[data-theme="dark"] .transaction-drawer-more {
   background: rgba(14, 23, 37, 0.88);
   border-color: rgba(148, 163, 184, 0.16);
 }
