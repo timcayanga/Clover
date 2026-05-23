@@ -8,6 +8,7 @@ import {
   subscribeImportActivity,
   type ImportActivitySnapshot,
 } from "@/lib/import-activity";
+import { buildImportResultChecklist, formatImportResultHeadline } from "@/lib/import-result-summary";
 
 const formatUpdatedAt = (updatedAt: number) => {
   if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
@@ -42,6 +43,10 @@ const getImportNotificationBody = (activity: ImportActivitySnapshot) => {
     return activity.errorMessage ?? activity.detail ?? "Clover could not finish this import automatically.";
   }
 
+  if (activity.status === "done" && activity.summary) {
+    return formatImportResultHeadline(activity.summary) || activity.detail || "Your import is ready in Clover.";
+  }
+
   const fileProgress =
     activity.fileTotal > 0
       ? `${Math.min(activity.completedFiles, activity.fileTotal)} of ${activity.fileTotal} files ready`
@@ -59,6 +64,7 @@ export function NotificationsClient() {
     clearImportActivity();
     setActivity(null);
   };
+  const importChecklist = activity?.summary ? buildImportResultChecklist(activity.summary) : [];
 
   return (
     <CloverShell
@@ -83,6 +89,13 @@ export function NotificationsClient() {
                 <p className="notification-item__tone">{getImportNotificationTone(activity)}</p>
                 <h4>{getImportNotificationTitle(activity)}</h4>
                 <p>{getImportNotificationBody(activity)}</p>
+                {importChecklist.length > 0 ? (
+                  <ul className="notification-item__checklist" aria-label="Import highlights">
+                    {importChecklist.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : null}
                 {activity.fileName ? <p className="notification-item__tone">{activity.fileName}</p> : null}
               </div>
               <div className="notification-item__time">

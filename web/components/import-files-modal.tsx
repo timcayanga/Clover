@@ -462,6 +462,46 @@ const buildOptimisticUploadSummary = (
   previewTransactions,
 });
 
+const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): UploadInsightsSummary | null => {
+  if (summaries.length === 0) {
+    return null;
+  }
+
+  if (summaries.length === 1) {
+    return summaries[0];
+  }
+
+  const first = summaries[0];
+  const sameInstitution = summaries.every((summary) => summary.institution === first.institution);
+  const sameAccountType = summaries.every((summary) => summary.accountType === first.accountType);
+  const previewTransactions = summaries.flatMap((summary) => summary.previewTransactions ?? []);
+  const rowsImported = summaries.reduce((total, summary) => total + Number(summary.rowsImported ?? 0), 0);
+  const incomeTotal = summaries.reduce((total, summary) => total + Number(summary.incomeTotal ?? 0), 0);
+  const expenseTotal = summaries.reduce((total, summary) => total + Number(summary.expenseTotal ?? 0), 0);
+
+  return {
+    fileName: `${summaries.length} files`,
+    rowsImported,
+    accountId: null,
+    accountName: sameInstitution ? first.accountName : null,
+    institution: sameInstitution ? first.institution : null,
+    accountNumber: null,
+    accountType: sameAccountType ? first.accountType : null,
+    balance: null,
+    optimistic: summaries.some((summary) => summary.optimistic),
+    optimisticAccountId: null,
+    incomeTotal,
+    expenseTotal,
+    netTotal: incomeTotal - expenseTotal,
+    topCategoryName: null,
+    topCategoryAmount: null,
+    topCategoryShare: null,
+    topMerchantName: null,
+    topMerchantCount: null,
+    previewTransactions,
+  };
+};
+
 const toBalanceString = (value: unknown): string | null => {
   if (value === null || value === undefined) {
     return null;
@@ -6126,6 +6166,20 @@ export function ImportFilesModal({
           seedImportedWorkspaceCaches(workspaceId, summary);
         }
 
+        const completedSummary = combineUploadInsightsSummaries(uploadInsightsSummaries);
+        if (completedSummary) {
+          publishImportActivity({
+            status: "done",
+            fileName: completedSummary.fileName,
+            fileIndex: items.length,
+            fileTotal: items.length,
+            completedFiles: items.length,
+            progress: 100,
+            detail: "Accounts and transactions are visible in Clover. Clover will keep cleaning up names and categories in the background.",
+            summary: completedSummary,
+          });
+        }
+
         // Each file publishes its own account-specific summary as soon as it is visible.
         // Replaying a combined multi-file summary here makes single-account pages merge
         // unrelated previews and can cause accounts/transactions from different files to
@@ -6453,6 +6507,7 @@ export function ImportFilesModal({
         fileTotal={items.length}
         completedFiles={completedFileCount}
         progress={overallProgress}
+        summary={lastImportActivityRef.current?.summary ?? null}
         detail={
           !activeProgressItem && hasCompletedBatch && message
             ? message

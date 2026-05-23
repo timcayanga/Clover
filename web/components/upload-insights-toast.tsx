@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import type { AccountType } from "@/lib/domain-types";
+import { buildImportResultChecklist, formatImportResultHeadline } from "@/lib/import-result-summary";
 
 export type UploadInsightsSummary = {
   fileName: string;
@@ -50,6 +51,9 @@ type UploadInsightsToastProps = {
 };
 
 export function UploadInsightsToast({ summary, onClose }: UploadInsightsToastProps) {
+  const headline = formatImportResultHeadline(summary);
+  const checklist = buildImportResultChecklist(summary);
+
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       onClose();
@@ -66,14 +70,20 @@ export function UploadInsightsToast({ summary, onClose }: UploadInsightsToastPro
       <div className="upload-insights-toast__title-row">
         <div>
           <h4>Your statement has been imported</h4>
-          <p>
-            {summary.rowsImported} row{summary.rowsImported === 1 ? "" : "s"} from {summary.fileName} are categorized and ready to review.
-          </p>
+          <p>{headline || `${summary.rowsImported} transaction${summary.rowsImported === 1 ? "" : "s"} imported`}</p>
         </div>
           <button type="button" className="icon-button upload-insights-toast__close" onClick={onClose} aria-label="Close insights popup">
             ×
           </button>
         </div>
+
+      {checklist.length > 0 ? (
+        <ul className="upload-insights-toast__list" aria-label="Import highlights">
+          {checklist.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
 
       <div className="upload-insights-toast__actions">
         <button type="button" className="button button-secondary button-small" onClick={onClose}>

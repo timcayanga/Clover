@@ -229,6 +229,7 @@ export function GlobalImportActivity() {
       completedFiles={activity.completedFiles}
       progress={activity.progress}
       detail={activity.detail}
+      summary={activity.summary}
       onClose={handleClose}
     />
   );

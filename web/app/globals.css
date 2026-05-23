@@ -2294,6 +2294,37 @@ body.transactions-manual-open .shell-quick-add-button {
   color: var(--accent);
 }
 
+.notification-item__checklist {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.notification-item__checklist li {
+  position: relative;
+  padding-left: 20px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.notification-item__checklist li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  top: 0.1em;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 168, 192, 0.12);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 900;
+}
+
 .notification-item__time {
   flex: none;
   padding-top: 2px;
@@ -13125,14 +13156,19 @@ body[data-clover-page-modal] .modal-card {
 }
 
 .upload-insights-toast__list li::before {
-  content: "";
+  content: "✓";
   position: absolute;
   left: 2px;
-  top: 0.6em;
-  width: 7px;
-  height: 7px;
+  top: 0.05em;
+  width: 14px;
+  height: 14px;
   border-radius: 999px;
+  display: grid;
+  place-items: center;
   background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
   box-shadow: 0 0 0 4px rgba(3, 168, 192, 0.08);
 }
 
@@ -13443,6 +13479,39 @@ body[data-clover-page-modal] .modal-card {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.import-upload-dock__checklist {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0 0;
+  border-top: 1px solid rgba(215, 228, 233, 0.72);
+  display: grid;
+  gap: 6px;
+}
+
+.import-upload-dock__checklist li {
+  position: relative;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.import-upload-dock__checklist li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  top: 0.02em;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 168, 192, 0.12);
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 900;
 }
 
 .page-file-drop-zone {

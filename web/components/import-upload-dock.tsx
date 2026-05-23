@@ -1,6 +1,8 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { buildImportResultChecklist, formatImportResultHeadline } from "@/lib/import-result-summary";
+import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
 type ImportUploadDockProps = {
   open: boolean;
@@ -11,6 +13,7 @@ type ImportUploadDockProps = {
   progress: number;
   detail: string;
   phaseLabel?: string | null;
+  summary?: UploadInsightsSummary | null;
   tone?: "default" | "error" | "success";
   onClose?: () => void;
 };
@@ -26,6 +29,7 @@ export function ImportUploadDock({
   progress,
   detail,
   phaseLabel = null,
+  summary = null,
   tone = "default",
   onClose,
 }: ImportUploadDockProps) {
@@ -65,6 +69,8 @@ export function ImportUploadDock({
           ? "current file"
           : "files ready"
       : "import queue";
+  const resultHeadline = isComplete ? formatImportResultHeadline(summary) : "";
+  const resultChecklist = isComplete ? buildImportResultChecklist(summary) : [];
 
   return (
     <div className={`import-upload-dock import-upload-dock--${tone}`} role="status" aria-live="polite">
@@ -74,7 +80,7 @@ export function ImportUploadDock({
             <p className="eyebrow">Import progress</p>
             <strong>{fileLabel}</strong>
             {phaseLabel ? <p className="import-upload-dock__phase">{phaseLabel}</p> : null}
-            <p>{detail}</p>
+            <p>{resultHeadline || detail}</p>
           </div>
           <div className="import-upload-dock__header-actions">
             {onClose ? (
@@ -97,6 +103,13 @@ export function ImportUploadDock({
             <span>{progressCaption}</span>
           </div>
         </div>
+        {resultChecklist.length > 0 ? (
+          <ul className="import-upload-dock__checklist" aria-label="Import highlights">
+            {resultChecklist.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        ) : null}
       </div>
     </div>
   );
