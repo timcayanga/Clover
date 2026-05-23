@@ -464,40 +464,11 @@ const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspace
     return `${importFileId}:${sourceRowIndex}`;
   }
 
-  const accountIdentityKey = getTransactionAccountIdentityKey(entry);
-  const accountId =
-    typeof entry.accountId === "string" && entry.accountId.trim() ? normalizeMerchantText(entry.accountId) : "";
-  const dateValue =
-    typeof entry.date === "string" && entry.date.trim()
-      ? entry.date.slice(0, 10)
-      : "";
-  const amountValue =
-    entry.amount === null || entry.amount === undefined || entry.amount === ""
-      ? ""
-      : String(entry.amount).trim();
-  const merchantRawValue =
-    typeof entry.merchantRaw === "string" && entry.merchantRaw.trim() ? entry.merchantRaw : "";
-  const merchantCleanValue =
-    typeof entry.merchantClean === "string" && entry.merchantClean.trim() ? entry.merchantClean : "";
-  const merchantValue = normalizeMerchantText(merchantRawValue || merchantCleanValue);
-  const currencyValue =
-    typeof entry.currency === "string" && entry.currency.trim() ? normalizeMerchantText(entry.currency) : "";
-  const descriptionValue =
-    typeof entry.description === "string" && entry.description.trim() ? normalizeMerchantText(entry.description) : "";
-
-  if (
-    !accountIdentityKey &&
-    !accountId &&
-    !dateValue &&
-    !amountValue &&
-    !merchantValue &&
-    !currencyValue &&
-    !descriptionValue
-  ) {
-    return "";
-  }
-
-  return [accountIdentityKey || accountId, dateValue, amountValue, merchantValue, currencyValue, descriptionValue].join("|");
+  // Do not fuzzy-dedupe statement rows by date/amount/merchant. Real statements
+  // often contain repeated same-day transactions, and collapsing them makes rows
+  // disappear after later cache refreshes. Without a durable import row identity,
+  // let the explicit transaction id decide whether two records are the same.
+  return "";
 };
 
 const isGenericCategoryName = (value?: string | null) => {
