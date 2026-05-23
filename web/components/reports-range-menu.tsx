@@ -4,11 +4,9 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 type ReportsRange = "30d" | "90d" | "ytd";
-type ReportsSection = "overview" | "spending" | "trends" | "advanced";
 
 type ReportsRangeMenuProps = {
   currentRange: ReportsRange;
-  currentSection: ReportsSection;
   currentRangeLabel: string;
 };
 
@@ -18,11 +16,10 @@ const reportsRangeLabels: Record<ReportsRange, string> = {
   ytd: "Year to date",
 };
 
-const buildReportsHref = (range: ReportsRange, section: ReportsSection) => `?${new URLSearchParams({ range, section }).toString()}`;
+const buildReportsHref = (range: ReportsRange) => `?${new URLSearchParams({ range }).toString()}`;
 
 export function ReportsRangeMenu({
   currentRange,
-  currentSection,
   currentRangeLabel,
 }: ReportsRangeMenuProps) {
   const [open, setOpen] = useState(false);
@@ -87,7 +84,7 @@ export function ReportsRangeMenu({
               <Link
                 key={range}
                 className={`pill pill-interactive ${currentRange === range ? "pill-is-selected" : ""}`}
-                href={buildReportsHref(range, currentSection)}
+                href={buildReportsHref(range)}
                 onClick={() => setOpen(false)}
               >
                 {reportsRangeLabels[range]}

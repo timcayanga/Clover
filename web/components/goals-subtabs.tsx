@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { AnimatedTabs } from "@/components/animated-tabs";
 
 type GoalsSection = "overview" | "progress" | "drivers" | "history";
 
-type GoalsSubtabsProps = {
+type GoalsTabsContextValue = {
   activeSection: GoalsSection;
+  setActiveSection: (section: GoalsSection) => void;
+};
+
+const GoalsTabsContext = createContext<GoalsTabsContextValue | null>(null);
+
+type GoalsSubtabsProps = {
   availableSections: GoalsSection[];
   beginnerMode: boolean;
   children: ReactNode;
@@ -20,7 +25,30 @@ const goalSectionLabels: Record<GoalsSection, string> = {
   history: "History",
 };
 
-export function GoalsSubtabs({ activeSection, beginnerMode, children }: GoalsSubtabsProps) {
+export function GoalsSubtabsProvider({
+  initialSection,
+  children,
+}: {
+  initialSection: GoalsSection;
+  children: ReactNode;
+}) {
+  const [activeSection, setActiveSection] = useState<GoalsSection>(initialSection);
+
+  return <GoalsTabsContext.Provider value={{ activeSection, setActiveSection }}>{children}</GoalsTabsContext.Provider>;
+}
+
+function useGoalsTabs() {
+  const context = useContext(GoalsTabsContext);
+  if (!context) {
+    throw new Error("GoalsSubtabs must be used within a GoalsSubtabsProvider");
+  }
+
+  return context;
+}
+
+export function GoalsSubtabs({ beginnerMode, children }: GoalsSubtabsProps) {
+  const { activeSection } = useGoalsTabs();
+
   return (
     <section className={`goals-story goals-story--section-${activeSection}${beginnerMode ? " goals-story--beginner" : ""} goals-story--panel`}>
       {children}
@@ -29,35 +57,17 @@ export function GoalsSubtabs({ activeSection, beginnerMode, children }: GoalsSub
 }
 
 export function GoalsSubtabsTitleAddon({
-  activeSection,
   availableSections,
 }: {
-  activeSection: GoalsSection;
   availableSections: GoalsSection[];
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  useEffect(() => {
-    for (const section of availableSections) {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("section", section);
-      router.prefetch(`${pathname}?${params.toString()}`);
-    }
-  }, [availableSections, pathname, router, searchParams]);
-
-  const setSection = (section: GoalsSection) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("section", section);
-    router.replace(`${pathname}?${params.toString()}`);
-  };
+  const { activeSection, setActiveSection } = useGoalsTabs();
 
   return (
     <AnimatedTabs
       className="goals-tabs goals-tabs--inline"
       activeKey={activeSection}
-      onChange={(key) => setSection(key as GoalsSection)}
+      onChange={(key) => setActiveSection(key as GoalsSection)}
       tabs={availableSections.map((section) => ({
         key: section,
         label: goalSectionLabels[section],

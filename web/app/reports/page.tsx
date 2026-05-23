@@ -7,6 +7,7 @@ import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import type { ReportsQueueItem } from "@/components/reports-review-queue";
 import { ReportsRangeMenu } from "@/components/reports-range-menu";
+import { ReportsSection as ReportsSectionPanel, ReportsTabsProvider, ReportsTopTabs } from "@/components/reports-tabs";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
@@ -14,7 +15,6 @@ import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-conte
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { RouteSplash } from "@/components/route-splash";
-import { ReportsTabPrefetcher } from "@/components/reports-tab-prefetcher";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { recordAppError } from "@/lib/error-logs";
@@ -118,13 +118,6 @@ const reportsRangeLabels: Record<ReportsRange, string> = {
   ytd: "Year to date",
 };
 
-const reportsSectionLabels: Record<ReportsSection, string> = {
-  overview: "Summary",
-  spending: "Spend",
-  trends: "Patterns",
-  advanced: "More",
-};
-
 const normalizeReportsRange = (value: string | undefined): ReportsRange => {
   if (value === "90d" || value === "ytd") {
     return value;
@@ -139,18 +132,6 @@ const normalizeReportsSection = (value: string | undefined): ReportsSection => {
   }
 
   return "overview";
-};
-
-const buildReportsHref = (
-  overrides: { range?: ReportsRange; section?: ReportsSection } = {},
-  currentRange: ReportsRange = "30d",
-  currentSection: ReportsSection = "overview"
-) => {
-  const query = new URLSearchParams({
-    range: overrides.range ?? currentRange ?? "30d",
-    section: overrides.section ?? currentSection ?? "overview",
-  });
-  return `?${query.toString()}`;
 };
 
 const getReportWindow = (anchor: Date, range: ReportsRange) => {
@@ -270,11 +251,11 @@ async function ReportsStream({
   });
   const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
   const isPro = user.planTier === "pro";
-  const selectedSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
+  const initialSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
   const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
-  const needsSpendingData = selectedSection === "spending" || selectedSection === "advanced";
-  const needsTrendData = selectedSection === "trends" || selectedSection === "advanced";
-  const needsAdvancedData = selectedSection === "advanced";
+  const needsSpendingData = true;
+  const needsTrendData = true;
+  const needsAdvancedData = isPro;
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
@@ -419,7 +400,7 @@ async function ReportsStream({
             },
           })
         : Promise.resolve([] as Array<ReportTransaction>)),
-      (selectedSection === "overview" || needsTrendData || needsAdvancedData
+      (needsTrendData || needsAdvancedData
         ? prisma.transaction.findMany({
             where: {
               workspaceId: selectedWorkspaceId,
@@ -1254,7 +1235,7 @@ async function ReportsStream({
             chart_type: "timeline",
           }}
         />
-        {selectedSection === "overview" ? (
+        <ReportsSectionPanel section="overview">
           <>
             <section className="reports-summary-grid reports-summary-grid--highlights reports-overview-grid">
               <article className="metric compact metric--highlight glass">
@@ -1342,10 +1323,11 @@ async function ReportsStream({
               </article>
             </section>
           </>
-        ) : null}
+        </ReportsSectionPanel>
 
-        {isPro && selectedSection === "advanced" ? (
-          <>
+        {isPro ? (
+          <ReportsSectionPanel section="advanced">
+            <>
             <section className="reports-brief-grid">
               <article className="report-ai-card report-ai-card--compact glass">
                 <div className="report-card__head report-card__head--compact">
@@ -1446,10 +1428,11 @@ async function ReportsStream({
                 {nextStep.label}
               </Link>
             </article>
-          </>
+            </>
+          </ReportsSectionPanel>
         ) : null}
 
-        {selectedSection === "spending" ? (
+        <ReportsSectionPanel section="spending">
         <section className="reports-grid reports-grid--primary">
           <article className="report-card glass report-card--wide">
             <div className="report-card__head">
@@ -1601,9 +1584,9 @@ async function ReportsStream({
 
           </article>
         </section>
-        ) : null}
+        </ReportsSectionPanel>
 
-        {selectedSection === "trends" ? (
+        <ReportsSectionPanel section="trends">
         <section className="reports-grid reports-grid--free">
           <article className="report-card glass">
             <div className="report-card__head">
@@ -1741,7 +1724,7 @@ async function ReportsStream({
             </div>
           </article>
         </section>
-        ) : null}
+        </ReportsSectionPanel>
 
         {!isPro ? (
           <div className="reports-footer-upsell">
@@ -1805,38 +1788,20 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   const selectedRangeLabel = reportsRangeLabels[selectedRange];
   const requestedSection = normalizeReportsSection(resolvedSearchParams?.section);
   const isPro = user.planTier === "pro";
-  const selectedSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
   const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
+  const initialSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
 
   return (
-    <CloverShell
-      active="reports"
-      title="Reports"
-      titleAddon={
-        <div className="reports-top-tabs" role="tablist" aria-label="Report sections">
-          {sectionTabs.map((section) => (
-            <Link
-              key={section}
-              href={buildReportsHref({}, selectedRange, section)}
-              className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
-              aria-current={selectedSection === section ? "page" : undefined}
-            >
-              {reportsSectionLabels[section]}
-            </Link>
-          ))}
-        </div>
-      }
-      actions={
-        <ReportsRangeMenu
-          currentRange={selectedRange}
-          currentSection={selectedSection}
-          currentRangeLabel={selectedRangeLabel}
-        />
-      }
-    >
-      <ReportsTabPrefetcher currentRange={selectedRange} currentSection={selectedSection} isPro={isPro} />
-      <ReportsStream active="reports" searchParams={resolvedSearchParams} />
-    </CloverShell>
+    <ReportsTabsProvider initialSection={initialSection} availableSections={sectionTabs}>
+      <CloverShell
+        active="reports"
+        title="Reports"
+        titleAddon={<ReportsTopTabs />}
+        actions={<ReportsRangeMenu currentRange={selectedRange} currentRangeLabel={selectedRangeLabel} />}
+      >
+        <ReportsStream active="reports" searchParams={resolvedSearchParams} />
+      </CloverShell>
+    </ReportsTabsProvider>
   );
 }
 

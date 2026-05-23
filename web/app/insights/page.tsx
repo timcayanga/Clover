@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { InfoTip as InsightInfoTip } from "@/components/info-tip";
-import { InsightsTabs, InsightsTabsTitleAddon } from "@/components/insights-tabs";
+import { InsightsTabs, InsightsTabsProvider, InsightsTabsTitleAddon } from "@/components/insights-tabs";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
@@ -347,7 +347,7 @@ async function InsightsPageStream({
   const isPro = user.planTier === "pro";
   const requestedTab = normalizeInsightsTab(resolvedSearchParams?.tab);
   const availableTabs: InsightsTab[] = ["summary", "spending", "patterns"];
-  const selectedTab: InsightsTab = availableTabs.includes(requestedTab) ? requestedTab : "summary";
+  const initialTab: InsightsTab = availableTabs.includes(requestedTab) ? requestedTab : "summary";
   const isEmptyWorkspace = workspaceAccounts.length <= 1 && workspaceImportFiles.length === 0 && currentWindowTransactions.length === 0;
   const currencyCandidates = new Set(workspaceAccounts.map((account) => formatCurrencyCode(account.currency)).filter((currency) => currency.length > 0));
   const displayCurrency = currencyCandidates.size === 1 ? Array.from(currencyCandidates)[0] : "MIXED";
@@ -744,11 +744,12 @@ async function InsightsPageStream({
   const trackedCategoryShare = currentSpend > 0 ? trackedCategorySpend / currentSpend : 0;
 
   return (
-    <CloverShell
-      active="insights"
-      title="Insights"
-      titleAddon={<InsightsTabsTitleAddon activeTab={selectedTab} />}
-    >
+    <InsightsTabsProvider initialTab={initialTab}>
+      <CloverShell
+        active="insights"
+        title="Insights"
+        titleAddon={<InsightsTabsTitleAddon />}
+      >
       <PostHogEvent
         event="insight_generated"
         onceKey={analyticsOnceKey("insight_generated", `workspace:${workspaceId}:${reportType}`)}
@@ -806,7 +807,6 @@ async function InsightsPageStream({
       />
       <section className="insights-story">
         <InsightsTabs
-          activeTab={selectedTab}
           summary={
           <article className="insights-snapshot insights-snapshot--hero glass">
           <div className="insights-snapshot__copy">
@@ -1054,7 +1054,8 @@ async function InsightsPageStream({
           </p>
         ) : null}
       </section>
-    </CloverShell>
+      </CloverShell>
+    </InsightsTabsProvider>
   );
 }
 

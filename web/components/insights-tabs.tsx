@@ -1,13 +1,18 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { AnimatedTabs } from "@/components/animated-tabs";
 
 type InsightsTab = "summary" | "spending" | "patterns";
 
-type InsightsTabsProps = {
+type InsightsTabsContextValue = {
   activeTab: InsightsTab;
+  setActiveTab: (tab: InsightsTab) => void;
+};
+
+const InsightsTabsContext = createContext<InsightsTabsContextValue | null>(null);
+
+type InsightsTabsProps = {
   summary: ReactNode;
   spending: ReactNode;
   patterns: ReactNode;
@@ -19,41 +24,47 @@ const insightsTabLabels: Record<InsightsTab, string> = {
   patterns: "Habits",
 };
 
-export function InsightsTabs({ activeTab, summary, spending, patterns }: InsightsTabsProps) {
-  const panels = useMemo(
-    () => ({
-      summary,
-      spending,
-      patterns,
-    }),
-    [summary, spending, patterns]
-  );
+export function InsightsTabsProvider({
+  initialTab,
+  children,
+}: {
+  initialTab: InsightsTab;
+  children: ReactNode;
+}) {
+  const [activeTab, setActiveTab] = useState<InsightsTab>(initialTab);
+
+  return <InsightsTabsContext.Provider value={{ activeTab, setActiveTab }}>{children}</InsightsTabsContext.Provider>;
+}
+
+function useInsightsTabs() {
+  const context = useContext(InsightsTabsContext);
+  if (!context) {
+    throw new Error("InsightsTabs must be used within an InsightsTabsProvider");
+  }
+
+  return context;
+}
+
+export function InsightsTabs({ summary, spending, patterns }: InsightsTabsProps) {
+  const { activeTab } = useInsightsTabs();
 
   return (
     <section className="insights-tabs-shell insights-tabs-shell--panel">
       <div key={activeTab} className="insights-tab-panel animate-tab-panel">
-        {panels[activeTab]}
+        {activeTab === "summary" ? summary : activeTab === "spending" ? spending : patterns}
       </div>
     </section>
   );
 }
 
-export function InsightsTabsTitleAddon({ activeTab }: { activeTab: InsightsTab }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const setTab = (tab: InsightsTab) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", tab);
-    router.push(`${pathname}?${params.toString()}`);
-  };
+export function InsightsTabsTitleAddon() {
+  const { activeTab, setActiveTab } = useInsightsTabs();
 
   return (
     <AnimatedTabs
       className="insights-tabs insights-tabs--inline"
       activeKey={activeTab}
-      onChange={(key) => setTab(key as InsightsTab)}
+      onChange={(key) => setActiveTab(key as InsightsTab)}
       tabs={(Object.keys(insightsTabLabels) as InsightsTab[]).map((tab) => ({
         key: tab,
         label: insightsTabLabels[tab],

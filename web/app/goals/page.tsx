@@ -10,7 +10,7 @@ import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-conte
 import { RouteSplash } from "@/components/route-splash";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { PostHogEvent } from "@/components/posthog-analytics";
-import { GoalsSubtabs, GoalsSubtabsTitleAddon } from "@/components/goals-subtabs";
+import { GoalsSubtabs, GoalsSubtabsProvider, GoalsSubtabsTitleAddon } from "@/components/goals-subtabs";
 import { GoalsEditor } from "@/components/goals-editor-modal";
 import { GoalGlyph } from "@/components/goals-visuals";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
@@ -235,7 +235,7 @@ async function GoalsPageStream({
   const availableSections: GoalsSection[] = isPro ? ["overview", "progress", "drivers", "history"] : ["overview", "progress", "history"];
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const requestedSection = normalizeGoalsSection(resolvedSearchParams?.section);
-  const selectedSection = requestedSection && availableSections.includes(requestedSection) ? requestedSection : "overview";
+  const initialSection = requestedSection && availableSections.includes(requestedSection) ? requestedSection : "overview";
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
   const workspaceSelect = {
@@ -741,12 +741,13 @@ async function GoalsPageStream({
   ];
 
   return (
-    <CloverShell
-      active="goals"
-      title="Goals"
-      titleAddon={<GoalsSubtabsTitleAddon activeSection={selectedSection} availableSections={availableSections} />}
-    >
-      <GoalsSubtabs activeSection={selectedSection} availableSections={availableSections} beginnerMode={isBeginnerMode}>
+    <GoalsSubtabsProvider initialSection={initialSection}>
+      <CloverShell
+        active="goals"
+        title="Goals"
+        titleAddon={<GoalsSubtabsTitleAddon availableSections={availableSections} />}
+      >
+        <GoalsSubtabs availableSections={availableSections} beginnerMode={isBeginnerMode}>
         <section className="goals-section goals-section--overview">
           <article className="goals-hero glass">
             <div className="goals-hero__copy">
@@ -1178,14 +1179,15 @@ async function GoalsPageStream({
             <p className="goals-history__hint">{playbook.historyMarkers[0]}</p>
           </article>
         </section>
-      </GoalsSubtabs>
+        </GoalsSubtabs>
 
-      {user.planTier === "free" ? (
-        <p className="goals-upgrade-note">
-          If you’d like to explore more later, <Link href="/pricing">Pro</Link> adds extra charts, deeper analysis, and more goal coaching to help you see the bigger picture.
-        </p>
-      ) : null}
-    </CloverShell>
+        {user.planTier === "free" ? (
+          <p className="goals-upgrade-note">
+            If you’d like to explore more later, <Link href="/pricing">Pro</Link> adds extra charts, deeper analysis, and more goal coaching to help you see the bigger picture.
+          </p>
+        ) : null}
+      </CloverShell>
+    </GoalsSubtabsProvider>
   );
 }
 
