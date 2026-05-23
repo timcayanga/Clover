@@ -492,8 +492,12 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Transfers";
   }
 
-  if (/to:\s*gcash\s+cash\s+in|gcash\s+cash\s+in|edl\/?mbpay/.test(lower) || /togcashcashin|gcashcashin|edlmbpay/.test(compact)) {
+  if (/edl\/?mbpay/.test(lower) || /edlmbpay/.test(compact)) {
     return "Transfers";
+  }
+
+  if (/to:\s*gcash\s+cash\s+in|gcash\s+cash\s+in/.test(lower) || /togcashcashin|gcashcashin/.test(compact)) {
+    return "Income";
   }
 
   if (

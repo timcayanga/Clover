@@ -113,7 +113,7 @@ const getGenericCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
 
   if (
-    /fund transfer|bank transfer|instapay transfer|transfer to other bank|transfer from other bank|gcash cash in|gcashcashin|wallet transfer|cash in|cash out|send money|received money/.test(
+    /fund transfer|bank transfer|instapay transfer|transfer to other bank|transfer from other bank|wallet transfer|cash out|send money|received money/.test(
       lower
     )
   ) {
@@ -144,7 +144,7 @@ const getGenericCategoryOverride = (merchantText: string) => {
     return "Income";
   }
 
-  if (/cash\s*in\b|cashin\b/.test(lower)) {
+  if (/gcash\s+cash\s+in|gcashcashin|cash\s*in\b|cashin\b/.test(lower)) {
     return "Income";
   }
 

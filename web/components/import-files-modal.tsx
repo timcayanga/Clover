@@ -5608,6 +5608,43 @@ export function ImportFilesModal({
             })
             .catch(() => null)
         : null;
+      const localRecoverableSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
+      if (localRecoverableSummary && Number(localRecoverableSummary.rowsImported ?? 0) > 0) {
+        retiredImportActivityFileNamesRef.current.add(item.file.name);
+        seedImportedWorkspaceCaches(workspaceId, localRecoverableSummary);
+        await Promise.resolve(onImported(localRecoverableSummary));
+        updateItem(itemId, {
+          status: "done",
+          confirmationState: "confirmed",
+          error: null,
+          errorCode: null,
+          errorTitle: null,
+          errorNextSteps: null,
+          importFileId,
+          targetAccountId: localRecoverableSummary.accountId ?? item.targetAccountId,
+          importedRows: localRecoverableSummary.rowsImported,
+          progress: 100,
+          progressLabel: "Visible in Clover",
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "done",
+          fileName: item.file.name,
+          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: Math.min(items.length, completedFileCount + 1),
+          progress: 100,
+          detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
+          summary: localRecoverableSummary,
+          errorMessage: null,
+        });
+        return {
+          status: "done",
+          importedRows: localRecoverableSummary.rowsImported,
+          summary: localRecoverableSummary,
+        };
+      }
       const recoverableImportFileId =
         typeof importFileId === "string" && importFileId.trim() ? importFileId.trim() : null;
       const recoverableIdentity = resolveStatementIdentityFromMetadata(recoverableStatus?.statementCheckpoint?.sourceMetadata);
@@ -5998,13 +6035,17 @@ export function ImportFilesModal({
       }
     }
 
-    const localVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
     const itemsToProcess = items.filter(
       (item) => item.confirmationState !== "confirmed" && item.status !== "needs_password"
     );
+    const processPromises = itemsToProcess.map(async (item) => ({
+      itemId: item.id,
+      result: await processFile(item.id),
+    }));
+    const localVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
 
     if (localVisibilityReady && itemsToProcess.length > 0) {
-      void Promise.all(itemsToProcess.map((item) => processFile(item.id))).finally(() => {
+      void Promise.all(processPromises).finally(() => {
         router.refresh();
       });
       setBusy(false);
@@ -6016,12 +6057,7 @@ export function ImportFilesModal({
       return;
     }
 
-    const processResults = await Promise.all(
-      itemsToProcess.map(async (item) => ({
-        itemId: item.id,
-        result: await processFile(item.id),
-      }))
-    );
+    const processResults = await Promise.all(processPromises);
 
     const postProcessVisibilityDeadline = visibilityDeadlineRef.current;
     if (postProcessVisibilityDeadline && Date.now() >= postProcessVisibilityDeadline) {

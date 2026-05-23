@@ -1562,6 +1562,7 @@ const main = async () => {
     ["Shopee", "expense", "Shopping"],
     ["Puregold Price Club", "expense", "Shopping"],
     ["Cash Payment", "expense", "Shopping"],
+    ["GCash Cash In", "income", "Income"],
     ["Cash Payment - Thank You - MB ATM", "income", "Transfers"],
     ["Payment-Thank You", "income", "Transfers"],
     ["Card Payment", "income", "Transfers"],
