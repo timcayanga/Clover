@@ -192,6 +192,7 @@ const isImportedTransactionPayload = (rawPayload: Prisma.JsonValue | null | unde
   const payload = rawPayload as Record<string, unknown>;
   return Boolean(
     payload.importFileId ||
+      payload.sourceStatementFingerprint ||
       payload.sourceImportFileId ||
       payload.importId ||
       payload.source === "upload" ||
@@ -216,7 +217,7 @@ const getRawPayloadSourceRowIndex = (rawPayload: Prisma.JsonValue | null | undef
 
   const value = (rawPayload as Record<string, unknown>).sourceRowIndex;
   const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : Number.NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : null;
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
 };
 
 const getImportedTransactionStableKey = (transaction: TransactionApiRow) => {

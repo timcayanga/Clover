@@ -1215,6 +1215,7 @@ const hasImportedTransactionIdentity = (transaction: Transaction) => {
 
   const payload = rawPayload as Record<string, unknown>;
   return (
+    (typeof payload.sourceStatementFingerprint === "string" && payload.sourceStatementFingerprint.trim().length > 0) ||
     (typeof payload.sourceImportFileId === "string" && payload.sourceImportFileId.trim().length > 0) ||
     typeof payload.sourceRowIndex === "number" ||
     (typeof payload.sourceRowIndex === "string" && payload.sourceRowIndex.trim().length > 0)

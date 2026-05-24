@@ -130,12 +130,82 @@ const isImportedTransactionPayload = (rawPayload: Prisma.JsonValue | null | unde
   const payload = rawPayload as Record<string, unknown>;
   return Boolean(
     payload.importFileId ||
+      payload.sourceStatementFingerprint ||
       payload.sourceImportFileId ||
       payload.importId ||
       payload.source === "upload" ||
       payload.source === "import" ||
       payload.source === "statement"
   );
+};
+
+const getRawPayloadText = (rawPayload: Prisma.JsonValue | null | undefined, key: string) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return "";
+  }
+
+  const value = (rawPayload as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+};
+
+const getRawPayloadSourceRowIndex = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const value = (rawPayload as Record<string, unknown>).sourceRowIndex;
+  const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
+};
+
+const getImportedTransactionStableKey = (transaction: TransactionApiRow) => {
+  const sourceRowIndex = getRawPayloadSourceRowIndex(transaction.rawPayload);
+  const statementFingerprint = getRawPayloadText(transaction.rawPayload, "sourceStatementFingerprint");
+  if (statementFingerprint && sourceRowIndex !== null) {
+    return `statement:${transaction.accountId}:${statementFingerprint}:${sourceRowIndex}`;
+  }
+
+  const sourceImportFileId = transaction.importFileId ?? getRawPayloadText(transaction.rawPayload, "sourceImportFileId");
+  if (sourceImportFileId && sourceRowIndex !== null) {
+    return `import:${transaction.accountId}:${sourceImportFileId}:${sourceRowIndex}`;
+  }
+
+  return "";
+};
+
+const scoreImportedTransactionForDisplay = (transaction: TransactionApiRow) => {
+  const concreteCategory = transaction.categoryName && transaction.categoryName.trim().toLowerCase() !== "other" ? 1000 : 0;
+  const cleanName =
+    transaction.merchantClean && transaction.merchantClean.trim() && transaction.merchantClean.trim() !== transaction.merchantRaw.trim()
+      ? 100
+      : 0;
+  return concreteCategory + cleanName + Number(transaction.categoryConfidence ?? 0) + (transaction.reviewStatus === "confirmed" ? 25 : 0);
+};
+
+const dedupeImportedTransactionRows = (transactions: TransactionApiRow[]) => {
+  const next: TransactionApiRow[] = [];
+  const indexByStableKey = new Map<string, number>();
+
+  for (const transaction of transactions) {
+    const stableKey = getImportedTransactionStableKey(transaction);
+    if (!stableKey) {
+      next.push(transaction);
+      continue;
+    }
+
+    const existingIndex = indexByStableKey.get(stableKey);
+    if (existingIndex === undefined) {
+      indexByStableKey.set(stableKey, next.length);
+      next.push(transaction);
+      continue;
+    }
+
+    if (scoreImportedTransactionForDisplay(transaction) > scoreImportedTransactionForDisplay(next[existingIndex])) {
+      next[existingIndex] = transaction;
+    }
+  }
+
+  return next;
 };
 
 const normalizeLegacyTransactionVisibility = async (workspaceId: string) => {
@@ -208,18 +278,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
       }),
     ]);
 
-    return NextResponse.json({
-      transactions: rows.map((row) =>
+    const transactions = dedupeImportedTransactionRows(
+      rows.map((row) =>
         mapTransactionRow({
           ...row,
           institution: row.account?.institution ?? account.institution ?? null,
           accountName: account.name,
           accountNumber: account.accountNumber ?? null,
         })
-      ),
+      )
+    );
+    const collapsedDuplicateCount = rows.length - transactions.length;
+
+    return NextResponse.json({
+      transactions,
       page,
       pageSize,
-      totalCount,
+      totalCount: Math.max(transactions.length, totalCount - collapsedDuplicateCount),
       hasMore: skip + rows.length < totalCount,
     });
   } catch {
