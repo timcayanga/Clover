@@ -31,6 +31,40 @@ const formatSignedCurrency = (value: number, currency?: string | null) =>
   `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
 const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
+const buildTransactionSummary = (
+  transactions: Array<{
+    amount: unknown;
+    type: "income" | "expense" | "transfer";
+    category: {
+      name: string;
+    } | null;
+  }>
+) =>
+  transactions.reduce(
+    (accumulator, transaction) => {
+      const amount = Number(transaction.amount);
+      if (transaction.type === "income") {
+        accumulator.income += amount;
+      } else if (transaction.type === "expense") {
+        accumulator.expense += amount;
+        const categoryName = transaction.category?.name ?? "Uncategorized";
+        accumulator.expenseCategories.set(
+          categoryName,
+          (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
+        );
+      } else {
+        accumulator.transfer += amount;
+      }
+
+      return accumulator;
+    },
+    {
+      income: 0,
+      expense: 0,
+      transfer: 0,
+      expenseCategories: new Map<string, number>(),
+    }
+  );
 const extractOutputText = (payload: Record<string, unknown>) => {
   if (typeof payload.output_text === "string" && payload.output_text.trim()) {
     return payload.output_text.trim();
@@ -240,49 +274,9 @@ export async function POST(request: Request) {
         ? previousWindowTransactions
         : allTransactions.filter((transaction) => transaction.date <= currentWindowStart);
 
-    const currentSummary = activeTransactions.reduce(
-      (accumulator, transaction) => {
-        const amount = Number(transaction.amount);
-        if (transaction.type === "income") {
-          accumulator.income += amount;
-        } else if (transaction.type === "expense") {
-          accumulator.expense += amount;
-          const categoryName = transaction.category?.name ?? "Uncategorized";
-          accumulator.expenseCategories.set(
-            categoryName,
-            (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
-          );
-        }
-        return accumulator;
-      },
-      {
-        income: 0,
-        expense: 0,
-        expenseCategories: new Map<string, number>(),
-      }
-    );
-
-    const previousSummary = comparisonWindowTransactions.reduce(
-      (accumulator, transaction) => {
-        const amount = Number(transaction.amount);
-        if (transaction.type === "income") {
-          accumulator.income += amount;
-        } else if (transaction.type === "expense") {
-          accumulator.expense += amount;
-          const categoryName = transaction.category?.name ?? "Uncategorized";
-          accumulator.expenseCategories.set(
-            categoryName,
-            (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
-          );
-        }
-        return accumulator;
-      },
-      {
-        income: 0,
-        expense: 0,
-        expenseCategories: new Map<string, number>(),
-      }
-    );
+    const currentSummary = buildTransactionSummary(activeTransactions);
+    const previousSummary = buildTransactionSummary(comparisonWindowTransactions);
+    const allSummary = buildTransactionSummary(allTransactions);
 
     const currentSpend = currentSummary.expense;
     const previousSpend = previousSummary.expense;
@@ -290,8 +284,17 @@ export async function POST(request: Request) {
     const previousNet = previousSummary.income - previousSummary.expense;
     const currentSavingsRate = currentSummary.income > 0 ? currentNet / currentSummary.income : null;
     const previousSavingsRate = previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : null;
-    const spendDelta = previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null;
-    const incomeDelta = previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
+    const historySpanDays = allTransactions.length > 0 ? Math.max(1, Math.ceil((analysisAnchorDate.getTime() - allTransactions[allTransactions.length - 1].date.getTime()) / (1000 * 60 * 60 * 24))) : 0;
+    const historyWindowCount = Math.max(historySpanDays / 30, 1);
+    const longTermAverageSpend = allSummary.expense / historyWindowCount;
+    const longTermAverageIncome = allSummary.income / historyWindowCount;
+    const longTermAverageNet = longTermAverageIncome - longTermAverageSpend;
+    const longTermAverageSavingsRate = longTermAverageIncome > 0 ? longTermAverageNet / longTermAverageIncome : null;
+    const baselineSpend = previousSpend > 0 ? previousSpend : longTermAverageSpend;
+    const baselineIncome = previousSummary.income > 0 ? previousSummary.income : longTermAverageIncome;
+    const baselineSavingsRate = previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : longTermAverageSavingsRate;
+    const spendDelta = baselineSpend > 0 ? ((currentSpend - baselineSpend) / baselineSpend) * 100 : null;
+    const incomeDelta = baselineIncome > 0 ? ((currentSummary.income - baselineIncome) / baselineIncome) * 100 : null;
     const currencyCandidates = new Set(workspace.accounts.map((account) => formatCurrencyCode(account.currency)).filter((currency) => currency.length > 0));
     const displayCurrency = currencyCandidates.size === 1 ? Array.from(currencyCandidates)[0] : "MIXED";
     const goalValue = user.primaryGoal?.trim() ?? null;
@@ -360,12 +363,14 @@ export async function POST(request: Request) {
 
     const currentWindowLabel = currentWindowTransactions.length > 0 ? "Current 30 days" : "Latest available window";
     const previousWindowLabel = previousWindowTransactions.length > 0 ? "Previous 30 days" : "Earlier available window";
+    const longTermWindowLabel = historySpanDays > 0 ? `All available history (${Math.ceil(historySpanDays / 30)} month${Math.ceil(historySpanDays / 30) === 1 ? "" : "s"})` : "All available history";
 
     const summaryLines = [
       `Workspace: ${workspace.name}`,
       `${currentWindowLabel}: income ${formatCurrency(currentSummary.income)}, spend ${formatCurrency(currentSpend)}, net ${formatSignedCurrency(currentNet)}`,
       `${previousWindowLabel}: income ${formatCurrency(previousSummary.income)}, spend ${formatCurrency(previousSpend)}, net ${formatSignedCurrency(previousNet)}`,
-      `Savings rate: ${currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}`,
+      `${longTermWindowLabel}: avg income ${formatCurrency(longTermAverageIncome)}, avg spend ${formatCurrency(longTermAverageSpend)}, avg net ${formatSignedCurrency(longTermAverageNet)}`,
+      `Savings rate: ${currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}${baselineSavingsRate === null ? "" : `; baseline ${formatPercent(baselineSavingsRate * 100)}`}`,
       `Top category: ${topCategoryName ?? "none"}`,
       `Recurring due soon: ${recurringDueSoon.map((item) => `${item.label}${item.due ? ` (${item.due})` : ""}`).join("; ") || "none"}`,
       `Commitments due soon: ${commitmentsDueSoon.map((item) => `${item.title}${item.due ? ` (${item.due})` : ""}`).join("; ") || "none"}`,
