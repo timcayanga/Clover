@@ -21,6 +21,23 @@ type RequestBody = {
   messages?: ChatMessage[];
 };
 
+type AdviserMemoryStats = {
+  count: number;
+  outcomes: number;
+  lastSeenAt: Date;
+};
+
+type AdviserAuditMetadata = {
+  kind?: "card" | "prompt";
+  group?: string;
+  itemId?: string;
+  label?: string;
+  href?: string;
+  pathname?: string;
+};
+
+type AdviserSignalTheme = "cashflow" | "behavior" | "goals" | "investments" | "cleanup";
+
 const monthFormatter = new Intl.DateTimeFormat("en-PH", {
   month: "short",
   year: "numeric",
@@ -65,6 +82,102 @@ const buildTransactionSummary = (
       expenseCategories: new Map<string, number>(),
     }
   );
+const buildMonthlySeries = (
+  transactions: Array<{
+    amount: unknown;
+    type: "income" | "expense" | "transfer";
+    date: Date;
+  }>
+) => {
+  const monthlyBuckets = new Map<string, { income: number; expense: number; net: number }>();
+
+  for (const transaction of transactions) {
+    const monthKey = `${transaction.date.getFullYear()}-${String(transaction.date.getMonth() + 1).padStart(2, "0")}`;
+    const bucket = monthlyBuckets.get(monthKey) ?? { income: 0, expense: 0, net: 0 };
+    const amount = Number(transaction.amount);
+
+    if (transaction.type === "income") {
+      bucket.income += amount;
+      bucket.net += amount;
+    } else if (transaction.type === "expense") {
+      bucket.expense += amount;
+      bucket.net -= amount;
+    }
+
+    monthlyBuckets.set(monthKey, bucket);
+  }
+
+  return Array.from(monthlyBuckets.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([month, bucket]) => ({ month, ...bucket }));
+};
+
+const calculateTrendSignal = (values: number[]) => {
+  if (values.length < 2) {
+    return { direction: 0, magnitude: 0, score: 0 };
+  }
+
+  const count = values.length;
+  const xMean = (count - 1) / 2;
+  const yMean = values.reduce((sum, value) => sum + value, 0) / count;
+  let numerator = 0;
+  let denominator = 0;
+
+  for (let index = 0; index < count; index += 1) {
+    const centeredX = index - xMean;
+    numerator += centeredX * (values[index] - yMean);
+    denominator += centeredX * centeredX;
+  }
+
+  const slope = denominator > 0 ? numerator / denominator : 0;
+  const normalizedSlope = yMean > 0 ? slope / yMean : slope;
+  const direction = slope === 0 ? 0 : slope > 0 ? 1 : -1;
+  const magnitude = Math.abs(normalizedSlope);
+
+  return {
+    direction,
+    magnitude,
+    score: Math.max(0, Math.min(100, magnitude * 180)),
+  };
+};
+
+const updateMemoryStats = (map: Map<string, AdviserMemoryStats>, key: string, createdAt: Date) => {
+  const current = map.get(key);
+  if (!current) {
+    map.set(key, { count: 1, outcomes: 0, lastSeenAt: createdAt });
+    return;
+  }
+
+  map.set(key, {
+    count: current.count + 1,
+    outcomes: current.outcomes,
+    lastSeenAt: createdAt > current.lastSeenAt ? createdAt : current.lastSeenAt,
+  });
+};
+
+const recordOutcomeStats = (map: Map<string, AdviserMemoryStats>, key: string, createdAt: Date) => {
+  const current = map.get(key);
+  if (!current) {
+    map.set(key, { count: 0, outcomes: 1, lastSeenAt: createdAt });
+    return;
+  }
+
+  map.set(key, {
+    count: current.count,
+    outcomes: current.outcomes + 1,
+    lastSeenAt: createdAt > current.lastSeenAt ? createdAt : current.lastSeenAt,
+  });
+};
+
+const memoryBoostFromStats = (stats: AdviserMemoryStats | undefined, now: Date) => {
+  if (!stats) {
+    return 0;
+  }
+
+  const daysSinceSeen = Math.max(1, Math.ceil((now.getTime() - stats.lastSeenAt.getTime()) / (1000 * 60 * 60 * 24)));
+  const followThroughLift = stats.count > 0 ? (stats.outcomes / stats.count) * 10 : stats.outcomes * 3;
+  return Math.max(0, Math.min(28, 12 + stats.count * 3 + followThroughLift - Math.min(daysSinceSeen, 45) * 0.35));
+};
 const extractOutputText = (payload: Record<string, unknown>) => {
   if (typeof payload.output_text === "string" && payload.output_text.trim()) {
     return payload.output_text.trim();
@@ -242,6 +355,72 @@ export async function POST(request: Request) {
         loadSplitBillWorkspaceData(user.id),
       ]);
 
+    const adviserInteractions = await prisma.auditLog.findMany({
+      where: {
+        workspaceId: workspace.id,
+        action: {
+          startsWith: "adviser.",
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        action: true,
+        entityId: true,
+        metadata: true,
+        createdAt: true,
+      },
+    });
+
+    const followThroughAuditLogs = await prisma.auditLog.findMany({
+      where: {
+        workspaceId: workspace.id,
+        action: {
+          in: ["transaction_updated", "transaction_deleted"],
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        action: true,
+        entityId: true,
+        createdAt: true,
+      },
+    });
+
+    const adviserMemoryByGroup = new Map<string, AdviserMemoryStats>();
+    const adviserMemoryByItem = new Map<string, AdviserMemoryStats>();
+    const adviserOutcomeByGroup = new Map<string, AdviserMemoryStats>();
+    const adviserOutcomeByItem = new Map<string, AdviserMemoryStats>();
+
+    for (const interaction of adviserInteractions) {
+      const metadata = interaction.metadata as AdviserAuditMetadata | null;
+      const group = metadata?.group?.trim() || "";
+      const itemId = metadata?.itemId?.trim() || interaction.entityId?.trim() || "";
+
+      if (group) {
+        updateMemoryStats(adviserMemoryByGroup, group, interaction.createdAt);
+      }
+
+      if (itemId) {
+        updateMemoryStats(adviserMemoryByItem, itemId, interaction.createdAt);
+      }
+
+      const followThroughWindowEnd = new Date(interaction.createdAt);
+      followThroughWindowEnd.setDate(followThroughWindowEnd.getDate() + 7);
+      const followedThrough = followThroughAuditLogs.some((log) => log.createdAt > interaction.createdAt && log.createdAt <= followThroughWindowEnd);
+
+      if (followedThrough) {
+        if (group) {
+          recordOutcomeStats(adviserOutcomeByGroup, group, interaction.createdAt);
+        }
+
+        if (itemId) {
+          recordOutcomeStats(adviserOutcomeByItem, itemId, interaction.createdAt);
+        }
+      }
+    }
+
     const allTransactions = allTransactionsQuery as Array<{
       date: Date;
       amount: unknown;
@@ -277,6 +456,11 @@ export async function POST(request: Request) {
     const currentSummary = buildTransactionSummary(activeTransactions);
     const previousSummary = buildTransactionSummary(comparisonWindowTransactions);
     const allSummary = buildTransactionSummary(allTransactions);
+    const monthlySeries = buildMonthlySeries(allTransactions);
+    const monthlyExpenseTrend = calculateTrendSignal(monthlySeries.map((point) => point.expense));
+    const monthlyIncomeTrend = calculateTrendSignal(monthlySeries.map((point) => point.income));
+    const monthlyNetTrend = calculateTrendSignal(monthlySeries.map((point) => point.net));
+    const trendMomentumScore = Math.max(0, Math.min(100, ((monthlyExpenseTrend.score + monthlyIncomeTrend.score + monthlyNetTrend.score) / 3) * 1));
 
     const currentSpend = currentSummary.expense;
     const previousSpend = previousSummary.expense;
@@ -361,6 +545,61 @@ export async function POST(request: Request) {
       .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
       .reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
 
+    const themeMemoryScore = (groups: string[]) => {
+      const memoryScores = groups
+        .map((group) => adviserMemoryByGroup.get(group))
+        .filter((value): value is AdviserMemoryStats => Boolean(value))
+        .map((stats) => memoryBoostFromStats(stats, now));
+      const outcomeScores = groups
+        .map((group) => adviserOutcomeByGroup.get(group))
+        .filter((value): value is AdviserMemoryStats => Boolean(value))
+        .map((stats) => memoryBoostFromStats(stats, now) * 0.85);
+
+      return Math.max(0, Math.min(100, average([...memoryScores, ...outcomeScores, groups.length > 0 ? 55 : 30])));
+    };
+
+    const themeAffinity: Record<AdviserSignalTheme, number> = {
+      cashflow: Math.max(
+        0,
+        Math.min(
+          100,
+          average([
+            themeMemoryScore(["cashflow", "recurring", "split-bills"]),
+            goalValue && ["save_more", "pay_down_debt", "build_emergency_fund"].includes(goalValue) ? 85 : 45,
+            currentSavingsRate !== null && currentSavingsRate < 0 ? 90 : 45,
+          ])
+        )
+      ),
+      behavior: Math.max(
+        0,
+        Math.min(
+          100,
+          average([
+            themeMemoryScore(["transactions", "behavior-pattern", "category-mix"]),
+            goalValue === "track_spending" ? 80 : 45,
+            trendMomentumScore,
+          ])
+        )
+      ),
+      goals: Math.max(0, Math.min(100, average([themeMemoryScore(["goals"]), goalValue ? 95 : 30, currentSavingsRate === null ? 35 : currentSavingsRate < 0 ? 85 : 55]))),
+      investments: Math.max(
+        0,
+        Math.min(
+          100,
+          average([themeMemoryScore(["investments"]), goalValue === "invest_better" ? 90 : 45, latestInvestmentSnapshot ? 70 : 35])
+        )
+      ),
+      cleanup: Math.max(
+        0,
+        Math.min(100, average([themeMemoryScore(["cleanup"]), uncategorizedTransactions.length > 0 ? 92 : 35, currentTransactionConfidence]))
+      ),
+    };
+
+    const topThemeLine = signalThemes
+      .slice(0, 2)
+      .map((theme) => `${theme.key}:${Math.round(theme.score)}${theme.key === dominantTheme?.key ? " (primary)" : ""}`)
+      .join(" • ");
+
     const currentWindowLabel = currentWindowTransactions.length > 0 ? "Current 30 days" : "Latest available window";
     const previousWindowLabel = previousWindowTransactions.length > 0 ? "Previous 30 days" : "Earlier available window";
     const longTermWindowLabel = historySpanDays > 0 ? `All available history (${Math.ceil(historySpanDays / 30)} month${Math.ceil(historySpanDays / 30) === 1 ? "" : "s"})` : "All available history";
@@ -371,6 +610,9 @@ export async function POST(request: Request) {
       `${previousWindowLabel}: income ${formatCurrency(previousSummary.income)}, spend ${formatCurrency(previousSpend)}, net ${formatSignedCurrency(previousNet)}`,
       `${longTermWindowLabel}: avg income ${formatCurrency(longTermAverageIncome)}, avg spend ${formatCurrency(longTermAverageSpend)}, avg net ${formatSignedCurrency(longTermAverageNet)}`,
       `Savings rate: ${currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}${baselineSavingsRate === null ? "" : `; baseline ${formatPercent(baselineSavingsRate * 100)}`}`,
+      `Trend signals: spend ${monthlyExpenseTrend.direction > 0 ? "rising" : monthlyExpenseTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyExpenseTrend.score)}), income ${monthlyIncomeTrend.direction > 0 ? "rising" : monthlyIncomeTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyIncomeTrend.score)}), net ${monthlyNetTrend.direction > 0 ? "rising" : monthlyNetTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyNetTrend.score)})`,
+      `Adviser themes: ${topThemeLine || "none"}`,
+      `Adviser memory: ${adviserInteractions.length} interactions, ${followThroughAuditLogs.length} possible follow-through actions, cleanup affinity ${Math.round(themeAffinity.cleanup)}, cashflow affinity ${Math.round(themeAffinity.cashflow)}`,
       `Top category: ${topCategoryName ?? "none"}`,
       `Recurring due soon: ${recurringDueSoon.map((item) => `${item.label}${item.due ? ` (${item.due})` : ""}`).join("; ") || "none"}`,
       `Commitments due soon: ${commitmentsDueSoon.map((item) => `${item.title}${item.due ? ` (${item.due})` : ""}`).join("; ") || "none"}`,
