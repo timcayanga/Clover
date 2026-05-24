@@ -2112,6 +2112,18 @@ const resolveConfirmationAccount = async (params: {
   const inferredBalance =
     parsedCheckpointBalance ??
     (parsedTrailingBalance !== null && Number.isFinite(parsedTrailingBalance) ? parsedTrailingBalance : null);
+  const accountIdentityType: AccountType =
+    inferredAccountType ?? (inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank") as AccountType);
+  const candidateKey = normalizeImportedAccountKey(
+    inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
+    inferredInstitution,
+    inferredAccountNumber,
+    accountIdentityType
+  );
+  const workspaceAccounts = await prisma.account.findMany({
+    where: { workspaceId },
+    select: getCompatibleAccountSelect(compatibleAccountColumns),
+  });
 
   const providedAccountId = typeof params.accountId === "string" && params.accountId.trim() ? params.accountId.trim() : null;
   const isOptimisticId = providedAccountId ? providedAccountId.startsWith("optimistic-") : false;
@@ -2122,7 +2134,25 @@ const resolveConfirmationAccount = async (params: {
       })
     : null;
   if (directAccount) {
-    const updatedAccount = await updateAccountIdentity(directAccount, {
+    const canonicalIdentityAccount =
+      workspaceAccounts
+        .filter((account) => account.id !== directAccount.id)
+        .filter(
+          (account) =>
+            normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === candidateKey
+        )
+        .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())[0] ??
+      findBestImportedAccountMatch(
+        workspaceAccounts.filter((account) => account.id !== directAccount.id),
+        {
+          name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
+          institution: inferredInstitution,
+          accountNumber: inferredAccountNumber,
+          type: accountIdentityType,
+        }
+      );
+    const accountToUpdate = canonicalIdentityAccount ?? directAccount;
+    const updatedAccount = await updateAccountIdentity(accountToUpdate, {
       name: inferredAccountName,
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
@@ -2135,19 +2165,6 @@ const resolveConfirmationAccount = async (params: {
     return updatedAccount;
   }
 
-  const accountIdentityType: AccountType =
-    inferredAccountType ?? (inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank") as AccountType);
-  const candidateKey = normalizeImportedAccountKey(
-    inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
-    inferredInstitution,
-    inferredAccountNumber,
-    accountIdentityType
-  );
-
-  const workspaceAccounts = await prisma.account.findMany({
-    where: { workspaceId },
-    select: getCompatibleAccountSelect(compatibleAccountColumns),
-  });
   const existingByKey = workspaceAccounts.find(
     (account) => normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === candidateKey
   );
@@ -5198,6 +5215,35 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     throw new Error("Account not found");
   }
   const resolvedAccountId = account.id;
+  const resolvedAccountIdentityKey = normalizeImportedAccountKey(
+    account.name,
+    account.institution,
+    account.accountNumber,
+    account.type
+  );
+  const matchingAccountIdsForImport = Array.from(
+    new Set([
+      resolvedAccountId,
+      ...(
+        await prisma.account.findMany({
+          where: { workspaceId: String(importFile.workspaceId) },
+          select: {
+            id: true,
+            name: true,
+            institution: true,
+            accountNumber: true,
+            type: true,
+          },
+        })
+      )
+        .filter(
+          (candidate) =>
+            normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, candidate.type) ===
+            resolvedAccountIdentityKey
+        )
+        .map((candidate) => candidate.id),
+    ])
+  );
   const compatibleImportFileColumns = new Set(await getCompatibleImportFileColumns());
 
   let statementRow: Record<string, unknown> | null = null;
@@ -5275,7 +5321,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         where: {
           deletedAt: null,
           workspaceId: String(importFile.workspaceId),
-          accountId: resolvedAccountId,
+          accountId: { in: matchingAccountIdsForImport },
           OR: [
             { importFileId },
             {
@@ -5309,7 +5355,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       where: {
         deletedAt: null,
         workspaceId: String(importFile.workspaceId),
-        accountId: resolvedAccountId,
+        accountId: { in: matchingAccountIdsForImport },
         OR: [
           { importFileId },
           {
@@ -5548,7 +5594,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   });
   const existingRowsForAccount = await tx.transaction.findMany({
     where: {
-      accountId: resolvedAccountId,
+      accountId: { in: matchingAccountIdsForImport },
       deletedAt: null,
       OR: [{ importFileId: null }, { importFileId: { not: importFileId } }],
     },

@@ -7,6 +7,7 @@ import { buildTransactionQueryWhere } from "@/lib/transaction-query";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -158,16 +159,20 @@ const getRawPayloadSourceRowIndex = (rawPayload: Prisma.JsonValue | null | undef
   return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
 };
 
+const getImportedTransactionAccountIdentityKey = (transaction: TransactionApiRow) =>
+  normalizeImportedAccountKey(transaction.accountName, transaction.institution, transaction.accountNumber, null) || transaction.accountId;
+
 const getImportedTransactionStableKey = (transaction: TransactionApiRow) => {
   const sourceRowIndex = getRawPayloadSourceRowIndex(transaction.rawPayload);
   const statementFingerprint = getRawPayloadText(transaction.rawPayload, "sourceStatementFingerprint");
+  const accountIdentityKey = getImportedTransactionAccountIdentityKey(transaction);
   if (statementFingerprint && sourceRowIndex !== null) {
-    return `statement:${transaction.accountId}:${statementFingerprint}:${sourceRowIndex}`;
+    return `statement:${accountIdentityKey}:${statementFingerprint}:${sourceRowIndex}`;
   }
 
   const sourceImportFileId = transaction.importFileId ?? getRawPayloadText(transaction.rawPayload, "sourceImportFileId");
   if (sourceImportFileId && sourceRowIndex !== null) {
-    return `import:${transaction.accountId}:${sourceImportFileId}:${sourceRowIndex}`;
+    return `import:${accountIdentityKey}:${sourceImportFileId}:${sourceRowIndex}`;
   }
 
   return "";
