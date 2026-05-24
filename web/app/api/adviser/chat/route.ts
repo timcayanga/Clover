@@ -54,6 +54,13 @@ type AdviserAnomalySignal = {
   score: number;
 };
 
+type AdviserPersona = {
+  key: AdviserSignalTheme;
+  label: string;
+  summary: string;
+  strength: number;
+};
+
 const monthFormatter = new Intl.DateTimeFormat("en-PH", {
   month: "short",
   year: "numeric",
@@ -392,6 +399,72 @@ const buildAnomalySignal = (
     score: Math.max(0, Math.min(100, average([concentrationScore, currentPatternConfidence, currentTransactionConfidence]))),
   };
 };
+
+const buildFinancialPersona = (
+  dominantTheme: { key: AdviserSignalTheme; score: number } | undefined,
+  secondaryTheme: { key: AdviserSignalTheme; score: number } | undefined,
+  preferenceProfile: AdviserPreferenceProfile,
+  forecastSignal: AdviserForecastSignal | null,
+  anomalySignal: AdviserAnomalySignal | null,
+  goalLabel: string | null,
+  uncategorizedCount: number
+): AdviserPersona => {
+  const candidates: Array<AdviserPersona & { rank: number }> = [
+    {
+      key: "cashflow",
+      label: "Cash Flow Guardian",
+      summary: forecastSignal
+        ? "Keeps an eye on upcoming pressure, recurring obligations, and balance safety."
+        : "Prioritizes balance safety, recurring pressure, and liquidity.",
+      strength: preferenceProfile.cashflow,
+      rank: average([preferenceProfile.cashflow, dominantTheme?.key === "cashflow" ? 90 : 35, forecastSignal ? forecastSignal.score : 35]),
+    },
+    {
+      key: "goals",
+      label: "Goal Builder",
+      summary: goalLabel
+        ? "Focuses on staying on track with a clear target and steady progress."
+        : "Keeps long-term targets visible and encourages steady momentum.",
+      strength: preferenceProfile.goals,
+      rank: average([preferenceProfile.goals, dominantTheme?.key === "goals" ? 90 : 35, goalLabel ? 85 : 30]),
+    },
+    {
+      key: "cleanup",
+      label: "Cleanup Organizer",
+      summary: uncategorizedCount > 0
+        ? "Likes to tidy transaction data so the rest of the app stays trustworthy."
+        : "Keeps the books clean and the signal quality high.",
+      strength: preferenceProfile.cleanup,
+      rank: average([preferenceProfile.cleanup, dominantTheme?.key === "cleanup" ? 90 : 35, uncategorizedCount > 0 ? 78 : 28]),
+    },
+    {
+      key: "investments",
+      label: "Portfolio Watcher",
+      summary: anomalySignal
+        ? "Pays attention to investment movement and account-level shifts."
+        : "Keeps an eye on portfolio movement and longer-term value changes.",
+      strength: preferenceProfile.investments,
+      rank: average([preferenceProfile.investments, dominantTheme?.key === "investments" ? 90 : 35, anomalySignal ? anomalySignal.score : 35]),
+    },
+    {
+      key: "behavior",
+      label: "Habit Coach",
+      summary: secondaryTheme?.key === "behavior"
+        ? "Tracks spending patterns and nudges behavior change."
+        : "Looks for repeated spending patterns and habit loops.",
+      strength: preferenceProfile.behavior,
+      rank: average([preferenceProfile.behavior, dominantTheme?.key === "behavior" ? 90 : 35, secondaryTheme?.key === "behavior" ? 70 : 30]),
+    },
+  ];
+
+  const persona = candidates.sort((left, right) => right.rank - left.rank)[0] ?? candidates[0];
+  return {
+    key: persona.key,
+    label: persona.label,
+    summary: persona.summary,
+    strength: clamp(persona.strength),
+  };
+};
 const extractOutputText = (payload: Record<string, unknown>) => {
   if (typeof payload.output_text === "string" && payload.output_text.trim()) {
     return payload.output_text.trim();
@@ -590,7 +663,7 @@ export async function POST(request: Request) {
       where: {
         workspaceId: workspace.id,
         action: {
-          startsWith: "adviser.",
+          in: ["adviser.card_opened", "adviser.prompt_clicked"],
         },
       },
       orderBy: { createdAt: "desc" },
@@ -603,11 +676,11 @@ export async function POST(request: Request) {
       },
     });
 
-    const followThroughAuditLogs = await prisma.auditLog.findMany({
+    const adviserCompletionLogs = await prisma.auditLog.findMany({
       where: {
         workspaceId: workspace.id,
         action: {
-          in: ["transaction_updated", "transaction_deleted"],
+          in: ["adviser.action_completed"],
         },
       },
       orderBy: { createdAt: "desc" },
@@ -615,6 +688,7 @@ export async function POST(request: Request) {
       select: {
         action: true,
         entityId: true,
+        metadata: true,
         createdAt: true,
       },
     });
@@ -795,25 +869,31 @@ export async function POST(request: Request) {
       currentTransactionConfidence
     );
     const preferenceProfile = buildPreferenceProfile(adviserInteractions, adviserOutcomeByGroup, adviserOutcomeByItem, now);
-    const goalHistoryCompletionDates = goalHistoryRows.map((row) => row.createdAt);
-    const recurringCompletionDates = recurringPatterns.map((pattern) => pattern.updatedAt).filter((value): value is Date => value instanceof Date);
-    const commitmentCompletionDates = financialCommitments.map((commitment) => commitment.updatedAt).filter((value): value is Date => value instanceof Date);
-    const investmentCompletionDates = investmentSnapshots
-      .map((snapshot) => snapshot.updatedAt ?? snapshot.snapshotDate)
-      .filter((value): value is Date => value instanceof Date);
-    const splitBillCompletionDates = splitBillWorkspaceData.bills.flatMap((bill) => [
-      new Date(bill.updatedAt),
-      ...(Array.isArray(bill.transferSettlements)
-        ? bill.transferSettlements.map((settlement) => new Date(settlement.updatedAt))
-        : []),
-    ]);
-    const transactionCompletionDates = followThroughAuditLogs.map((log) => log.createdAt);
+    const completionDatesByTheme = adviserCompletionLogs.reduce<Record<AdviserSignalTheme, Date[]>>(
+      (accumulator, log) => {
+        const metadata = log.metadata as AdviserAuditMetadata | null;
+        const theme = themeFromGroup(metadata?.group?.trim() || "");
+        if (!theme) {
+          return accumulator;
+        }
+
+        accumulator[theme].push(log.createdAt);
+        return accumulator;
+      },
+      {
+        cashflow: [],
+        behavior: [],
+        goals: [],
+        investments: [],
+        cleanup: [],
+      }
+    );
     const interactionCompletionChecks = {
-      cashflow: [transactionCompletionDates, recurringCompletionDates, commitmentCompletionDates, splitBillCompletionDates],
-      behavior: [transactionCompletionDates],
-      goals: [goalHistoryCompletionDates],
-      investments: [investmentCompletionDates],
-      cleanup: [transactionCompletionDates],
+      cashflow: [completionDatesByTheme.cashflow],
+      behavior: [completionDatesByTheme.behavior],
+      goals: [completionDatesByTheme.goals, goalHistoryRows.map((row) => row.createdAt)],
+      investments: [completionDatesByTheme.investments],
+      cleanup: [completionDatesByTheme.cleanup],
     } satisfies Record<AdviserSignalTheme, Date[][]>;
 
     for (const interaction of adviserInteractions) {
@@ -899,6 +979,15 @@ export async function POST(request: Request) {
       investments: Math.max(0, Math.min(100, average([preferenceProfile.investments, themeAffinity.investments]))),
       cleanup: Math.max(0, Math.min(100, average([preferenceProfile.cleanup, themeAffinity.cleanup]))),
     };
+    const financialPersona = buildFinancialPersona(
+      dominantTheme,
+      secondaryTheme,
+      preferenceProfile,
+      forecastSignal,
+      anomalySignal,
+      goalLabel,
+      uncategorizedTransactions.length
+    );
 
     const explainabilityBundle = [
       forecastSignal
@@ -944,6 +1033,11 @@ export async function POST(request: Request) {
         score: cleanupPressureScore,
         reason: `${uncategorizedTransactions.length} uncategorized transactions; history depth ${historySpanDays} days.`,
       },
+      {
+        label: `Persona: ${financialPersona.label}`,
+        score: financialPersona.strength,
+        reason: financialPersona.summary,
+      },
     ]
       .filter((item): item is { label: string; score: number; reason: string } => item !== null)
       .sort((left, right) => right.score - left.score)
@@ -971,8 +1065,9 @@ export async function POST(request: Request) {
       `Savings rate: ${currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}${baselineSavingsRate === null ? "" : `; baseline ${formatPercent(baselineSavingsRate * 100)}`}`,
       `Trend signals: spend ${monthlyExpenseTrend.direction > 0 ? "rising" : monthlyExpenseTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyExpenseTrend.score)}), income ${monthlyIncomeTrend.direction > 0 ? "rising" : monthlyIncomeTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyIncomeTrend.score)}), net ${monthlyNetTrend.direction > 0 ? "rising" : monthlyNetTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyNetTrend.score)})`,
       `Adviser themes: ${topThemeLine || "none"}`,
-      `Adviser memory: ${adviserInteractions.length} interactions, ${followThroughAuditLogs.length} possible follow-through actions, follow-through rate ${formatPercent(adviserFollowThroughRate)}, cleanup affinity ${Math.round(userPreferenceAffinity.cleanup)}, cashflow affinity ${Math.round(userPreferenceAffinity.cashflow)}`,
+      `Adviser memory: ${adviserInteractions.length} interactions, ${adviserCompletionLogs.length} completion actions, follow-through rate ${formatPercent(adviserFollowThroughRate)}, cleanup affinity ${Math.round(userPreferenceAffinity.cleanup)}, cashflow affinity ${Math.round(userPreferenceAffinity.cashflow)}`,
       `Preference profile: cashflow ${Math.round(userPreferenceAffinity.cashflow)}, behavior ${Math.round(userPreferenceAffinity.behavior)}, goals ${Math.round(userPreferenceAffinity.goals)}, investments ${Math.round(userPreferenceAffinity.investments)}, cleanup ${Math.round(userPreferenceAffinity.cleanup)}`,
+      `Financial persona: ${financialPersona.label} - ${financialPersona.summary}`,
       `Forecast: ${forecastSignal ? `${forecastSignal.title} (${Math.round(forecastSignal.score)})` : "none"}; anomaly: ${anomalySignal ? `${anomalySignal.title} (${Math.round(anomalySignal.score)})` : "none"}`,
       `Goal history: ${goalHistoryRows.length > 0 ? `${goalHistoryRows.length} recent setting change${goalHistoryRows.length === 1 ? "" : "s"}` : "none"}`,
       `Ranked evidence: ${explainabilityBundle.join(" | ")}`,

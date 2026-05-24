@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import { appendSplitBillActivity, parseAmountValue, serializeSplitBillRecord, splitBillGroupMemberOrderBy, splitBillItemOrderBy } from "@/lib/split-bill";
 import { createSplitBillTransferSettlement, loadSplitBillTransferSettlementsForBill } from "@/lib/split-bill-transfer-settlements";
+import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,34 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
       data: { rawPayload: rawPayload as Prisma.InputJsonValue },
       include: getBillInclude,
     });
+
+    await prisma.auditLog.create({
+      data: {
+        workspaceId: bill.workspaceId,
+        actorUserId: user.id,
+        action: "split_bill_transfer_settled",
+        entity: "SplitBill",
+        entityId: bill.id,
+        metadata: {
+          fromParticipantId: fromParticipant.id,
+          toParticipantId: toParticipant.id,
+          amount: amount.toFixed(2),
+          note: body.note ?? null,
+        },
+      },
+    });
+
+    await recordAdviserActionCompletion({
+      workspaceId: bill.workspaceId,
+      actorUserId: user.id,
+      group: "cashflow",
+      itemId: `${bill.id}:${fromParticipant.id}:${toParticipant.id}`,
+      label: `Settled split bill transfer for ${bill.title}`,
+      sourceAction: "split_bill_transfer_settled",
+      href: `/split-bill/${bill.id}`,
+      pathname: `/split-bill/${bill.id}`,
+    });
+
     const transferSettlements = await loadSplitBillTransferSettlementsForBill(bill.id);
 
     return NextResponse.json({

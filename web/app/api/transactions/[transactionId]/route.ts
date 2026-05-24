@@ -8,6 +8,7 @@ import { recordTrainingSignal, upsertAccountRule, upsertMerchantRule } from "@/l
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -236,6 +237,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       },
     });
 
+    await recordAdviserActionCompletion({
+      workspaceId: transaction.workspaceId,
+      actorUserId: userId,
+      group: "cleanup",
+      itemId: transaction.id,
+      label: "Updated transaction",
+      sourceAction: "transaction_updated",
+      href: `/transactions?transactionId=${transaction.id}`,
+      pathname: "/transactions",
+    });
+
     const category = updated.categoryId
       ? await prisma.category.findUnique({
           where: { id: updated.categoryId },
@@ -415,6 +427,17 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
           reviewStatus: transaction.reviewStatus,
         },
       },
+    });
+
+    await recordAdviserActionCompletion({
+      workspaceId: transaction.workspaceId,
+      actorUserId: userId,
+      group: "cleanup",
+      itemId: transaction.id,
+      label: "Deleted transaction",
+      sourceAction: "transaction_deleted",
+      href: "/transactions",
+      pathname: "/transactions",
     });
 
     void capturePostHogServerEvent("transaction_deleted", userId, {

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { GOAL_OPTIONS } from "@/lib/goals";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,17 @@ const saveGoal = async (request: Request) => {
   try {
     const { userId } = await requireAuth();
     const user = await getOrCreateCurrentUser(userId);
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        userId: user.id,
+      },
+      select: {
+        id: true,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
     const payload = updateGoalSchema.parse(await request.json());
     const targetAmount = payload.targetAmount === undefined ? undefined : payload.targetAmount === null ? null : new Prisma.Decimal(payload.targetAmount);
     const nextGoal = payload.goal === undefined ? user.primaryGoal : payload.goal;
@@ -98,6 +110,34 @@ const saveGoal = async (request: Request) => {
           source: "goals",
           goalPlan: nextGoalPlan === null ? Prisma.DbNull : (nextGoalPlan as Prisma.InputJsonValue),
         },
+      });
+    }
+
+    if (workspace) {
+      await prisma.auditLog.create({
+        data: {
+          workspaceId: workspace.id,
+          actorUserId: userId,
+          action: "goal_updated",
+          entity: "Goal",
+          entityId: user.id,
+          metadata: {
+            primaryGoal: nextGoal,
+            targetAmount: nextTargetAmount ? Number(nextTargetAmount.toString()) : null,
+            goalPlan: nextGoalPlan,
+          },
+        },
+      });
+
+      await recordAdviserActionCompletion({
+        workspaceId: workspace.id,
+        actorUserId: userId,
+        group: "goals",
+        itemId: `goal:${user.id}`,
+        label: nextGoal ? `Updated goal: ${nextGoal}` : "Updated goal settings",
+        sourceAction: "goal_updated",
+        href: "/goals",
+        pathname: "/goals",
       });
     }
 

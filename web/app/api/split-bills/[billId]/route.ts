@@ -11,6 +11,7 @@ import {
   splitBillItemOrderBy,
 } from "@/lib/split-bill";
 import { loadSplitBillTransferSettlementsForBill } from "@/lib/split-bill-transfer-settlements";
+import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -374,7 +375,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bi
     const updated = await prisma.$transaction(async (tx) => {
       const existing = await tx.splitBill.findFirst({
         where: { id: billId, userId: user.id },
-        select: { id: true },
+        select: { id: true, workspaceId: true },
       });
 
       if (!existing) {
@@ -444,10 +445,35 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bi
         ),
       });
 
+      await tx.auditLog.create({
+        data: {
+          workspaceId: existing.workspaceId,
+          actorUserId: user.id,
+          action: "split_bill_updated",
+          entity: "SplitBill",
+          entityId: billId,
+          metadata: {
+            title: bill.billData.title,
+            sourceType: bill.billData.sourceType,
+          },
+        },
+      });
+
       return tx.splitBill.findUniqueOrThrow({
         where: { id: billId },
         include: getBillInclude,
       });
+    });
+
+    await recordAdviserActionCompletion({
+      workspaceId: updated.workspaceId,
+      actorUserId: user.id,
+      group: "cashflow",
+      itemId: billId,
+      label: `Updated split bill: ${bill.billData.title}`,
+      sourceAction: "split_bill_updated",
+      href: "/split-bill",
+      pathname: "/split-bill",
     });
 
     const transferSettlements = await loadSplitBillTransferSettlementsForBill(updated.id);
@@ -478,7 +504,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
         id: billId,
         userId: user.id,
       },
-      select: { id: true },
+      select: { id: true, workspaceId: true },
     });
 
     if (!existing) {
@@ -487,6 +513,30 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
     await prisma.splitBill.delete({
       where: { id: billId },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        workspaceId: existing.workspaceId,
+        actorUserId: user.id,
+        action: "split_bill_deleted",
+        entity: "SplitBill",
+        entityId: billId,
+        metadata: {
+          deleted: true,
+        },
+      },
+    });
+
+    await recordAdviserActionCompletion({
+      workspaceId: existing.workspaceId,
+      actorUserId: user.id,
+      group: "cashflow",
+      itemId: billId,
+      label: "Deleted split bill",
+      sourceAction: "split_bill_deleted",
+      href: "/split-bill",
+      pathname: "/split-bill",
     });
 
     return NextResponse.json({ ok: true });

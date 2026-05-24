@@ -194,6 +194,13 @@ type AdviserAnomalySignal = {
   score: number;
 };
 
+type AdviserPersona = {
+  key: AdviserSignalTheme;
+  label: string;
+  summary: string;
+  strength: number;
+};
+
 const updateMemoryStats = (map: Map<string, AdviserMemoryStats>, key: string, createdAt: Date) => {
   const current = map.get(key);
   if (!current) {
@@ -404,6 +411,72 @@ const buildAnomalySignal = (
       : `Top category share is ${formatPercent(topCategoryShare * 100)}.`,
     tone: "neutral",
     score: clamp(average([concentrationScore, currentPatternConfidence, currentTransactionConfidence])),
+  };
+};
+
+const buildFinancialPersona = (
+  dominantTheme: AdviserThemeScore | undefined,
+  secondaryTheme: AdviserThemeScore | undefined,
+  userPreferenceAffinity: AdviserPreferenceProfile,
+  forecastSignal: AdviserForecastSignal | null,
+  anomalySignal: AdviserAnomalySignal | null,
+  goalLabel: string | null,
+  uncategorizedCount: number
+): AdviserPersona => {
+  const personaCandidates: Array<AdviserPersona & { rank: number }> = [
+    {
+      key: "cashflow",
+      label: "Cash Flow Guardian",
+      summary: forecastSignal
+        ? "Keeps an eye on upcoming pressure, recurring obligations, and balance safety."
+        : "Prioritizes balance safety, recurring pressure, and liquidity.",
+      strength: userPreferenceAffinity.cashflow,
+      rank: average([userPreferenceAffinity.cashflow, dominantTheme?.key === "cashflow" ? 90 : 35, forecastSignal ? forecastSignal.score : 35]),
+    },
+    {
+      key: "goals",
+      label: "Goal Builder",
+      summary: goalLabel
+        ? "Focuses on staying on track with a clear target and steady progress."
+        : "Keeps long-term targets visible and encourages steady momentum.",
+      strength: userPreferenceAffinity.goals,
+      rank: average([userPreferenceAffinity.goals, dominantTheme?.key === "goals" ? 90 : 35, goalLabel ? 85 : 30]),
+    },
+    {
+      key: "cleanup",
+      label: "Cleanup Organizer",
+      summary: uncategorizedCount > 0
+        ? "Likes to tidy transaction data so the rest of the app stays trustworthy."
+        : "Keeps the books clean and the signal quality high.",
+      strength: userPreferenceAffinity.cleanup,
+      rank: average([userPreferenceAffinity.cleanup, dominantTheme?.key === "cleanup" ? 90 : 35, uncategorizedCount > 0 ? 78 : 28]),
+    },
+    {
+      key: "investments",
+      label: "Portfolio Watcher",
+      summary: anomalySignal
+        ? "Pays attention to investment movement and account-level shifts."
+        : "Keeps an eye on portfolio movement and longer-term value changes.",
+      strength: userPreferenceAffinity.investments,
+      rank: average([userPreferenceAffinity.investments, dominantTheme?.key === "investments" ? 90 : 35, anomalySignal ? anomalySignal.score : 35]),
+    },
+    {
+      key: "behavior",
+      label: "Habit Coach",
+      summary: secondaryTheme?.key === "behavior"
+        ? "Tracks spending patterns and nudges behavior change."
+        : "Looks for repeated spending patterns and habit loops.",
+      strength: userPreferenceAffinity.behavior,
+      rank: average([userPreferenceAffinity.behavior, dominantTheme?.key === "behavior" ? 90 : 35, secondaryTheme?.key === "behavior" ? 70 : 30]),
+    },
+  ];
+
+  const persona = personaCandidates.sort((left, right) => right.rank - left.rank)[0] ?? personaCandidates[0];
+  return {
+    key: persona.key,
+    label: persona.label,
+    summary: persona.summary,
+    strength: clamp(persona.strength),
   };
 };
 
@@ -701,7 +774,7 @@ async function AdviserPageContent() {
     where: {
       workspaceId: resolvedWorkspace.id,
       action: {
-        startsWith: "adviser.",
+        in: ["adviser.card_opened", "adviser.prompt_clicked"],
       },
     },
     orderBy: { createdAt: "desc" },
@@ -714,11 +787,11 @@ async function AdviserPageContent() {
     },
   });
 
-  const followThroughAuditLogs = await prisma.auditLog.findMany({
+  const adviserCompletionLogs = await prisma.auditLog.findMany({
     where: {
       workspaceId: resolvedWorkspace.id,
       action: {
-        in: ["transaction_updated", "transaction_deleted"],
+        in: ["adviser.action_completed"],
       },
     },
     orderBy: { createdAt: "desc" },
@@ -726,6 +799,7 @@ async function AdviserPageContent() {
     select: {
       action: true,
       entityId: true,
+      metadata: true,
       createdAt: true,
     },
   });
@@ -956,25 +1030,31 @@ async function AdviserPageContent() {
     currentTransactionConfidence
   );
   const preferenceProfile = buildPreferenceProfile(adviserInteractions, adviserOutcomeByGroup, adviserOutcomeByItem, now);
-  const goalHistoryCompletionDates = goalHistoryRows.map((row) => row.createdAt);
-  const recurringCompletionDates = recurringPatterns.map((pattern) => pattern.updatedAt).filter((value): value is Date => value instanceof Date);
-  const commitmentCompletionDates = financialCommitments.map((commitment) => commitment.updatedAt).filter((value): value is Date => value instanceof Date);
-  const investmentCompletionDates = investmentSnapshots
-    .map((snapshot) => snapshot.updatedAt ?? snapshot.snapshotDate)
-    .filter((value): value is Date => value instanceof Date);
-  const splitBillCompletionDates = splitBillWorkspaceData.bills.flatMap((bill) => [
-    new Date(bill.updatedAt),
-    ...(Array.isArray(bill.transferSettlements)
-      ? bill.transferSettlements.map((settlement) => new Date(settlement.updatedAt))
-      : []),
-  ]);
-  const transactionCompletionDates = followThroughAuditLogs.map((log) => log.createdAt);
+  const completionDatesByTheme = adviserCompletionLogs.reduce<Record<AdviserSignalTheme, Date[]>>(
+    (accumulator, log) => {
+      const metadata = log.metadata as AdviserAuditMetadata | null;
+      const theme = themeFromGroup(metadata?.group?.trim() || "");
+      if (!theme) {
+        return accumulator;
+      }
+
+      accumulator[theme].push(log.createdAt);
+      return accumulator;
+    },
+    {
+      cashflow: [],
+      behavior: [],
+      goals: [],
+      investments: [],
+      cleanup: [],
+    }
+  );
   const interactionCompletionChecks = {
-    cashflow: [transactionCompletionDates, recurringCompletionDates, commitmentCompletionDates, splitBillCompletionDates],
-    behavior: [transactionCompletionDates],
-    goals: [goalHistoryCompletionDates],
-    investments: [investmentCompletionDates],
-    cleanup: [transactionCompletionDates],
+    cashflow: [completionDatesByTheme.cashflow],
+    behavior: [completionDatesByTheme.behavior],
+    goals: [completionDatesByTheme.goals, goalHistoryRows.map((row) => row.createdAt)],
+    investments: [completionDatesByTheme.investments],
+    cleanup: [completionDatesByTheme.cleanup],
   } satisfies Record<AdviserSignalTheme, Date[][]>;
 
   for (const interaction of adviserInteractions) {
@@ -1114,6 +1194,15 @@ async function AdviserPageContent() {
     investments: clamp(average([preferenceProfile.investments, themeAffinity.investments])),
     cleanup: clamp(average([preferenceProfile.cleanup, themeAffinity.cleanup])),
   };
+  const financialPersona = buildFinancialPersona(
+    dominantTheme,
+    secondaryTheme,
+    userPreferenceAffinity,
+    forecastSignal,
+    anomalySignal,
+    goalLabel,
+    uncategorizedTransactions.length
+  );
   const adviserExplainability = {
     baseline: {
       spend: baselineSpend,
@@ -1127,6 +1216,7 @@ async function AdviserPageContent() {
       affinity: themeAffinity[theme.key],
       preference: userPreferenceAffinity[theme.key],
     })),
+    persona: financialPersona,
     forecast: forecastSignal
       ? {
           title: forecastSignal.title,
@@ -1139,9 +1229,9 @@ async function AdviserPageContent() {
           score: anomalySignal.score,
         }
       : null,
-    memory: {
-      interactions: adviserInteractions.length,
-      followThroughCandidates: followThroughAuditLogs.length,
+      memory: {
+        interactions: adviserInteractions.length,
+      completionCandidates: adviserCompletionLogs.length,
       cardMemoryGroups: adviserMemoryByGroup.size,
       cardOutcomeGroups: adviserOutcomeByGroup.size,
     },
@@ -1184,8 +1274,9 @@ async function AdviserPageContent() {
 
     const confidenceMultiplier = clamp(0.72 + average([card.breakdown.confidence, historyDepthScore, currentTransactionConfidence]) / 160, 0.72, 1.16);
     const priorityBoost = themeKey ? userPreferenceAffinity[themeKey] * 0.08 : 0;
+    const personaBoost = themeKey && financialPersona.key === themeKey ? financialPersona.strength * 0.05 : 0;
 
-    return clamp(Math.round(baseScore * confidenceMultiplier + memoryBoost + contextBoost + themeBoost + priorityBoost));
+    return clamp(Math.round(baseScore * confidenceMultiplier + memoryBoost + contextBoost + themeBoost + priorityBoost + personaBoost));
   };
 
   const scorePromptRelevance = (prompt: Pick<RankedAdviserPrompt, "group" | "id">, baseScore: number) => {
@@ -1214,8 +1305,9 @@ async function AdviserPageContent() {
 
     const confidenceMultiplier = clamp(0.72 + average([prompt.breakdown.confidence, historyDepthScore, currentTransactionConfidence]) / 160, 0.72, 1.16);
     const priorityBoost = themeKey ? userPreferenceAffinity[themeKey] * 0.06 : 0;
+    const personaBoost = themeKey && financialPersona.key === themeKey ? financialPersona.strength * 0.04 : 0;
 
-    return clamp(Math.round(baseScore * confidenceMultiplier + memoryBoost + contextBoost + themeBoost + priorityBoost));
+    return clamp(Math.round(baseScore * confidenceMultiplier + memoryBoost + contextBoost + themeBoost + priorityBoost + personaBoost));
   };
 
   const summaryCards = [
