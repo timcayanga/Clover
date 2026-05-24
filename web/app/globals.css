@@ -7331,7 +7331,7 @@ html[data-theme="dark"] .adviser-stat {
 
 .adviser-section__head {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 18px;
 }
@@ -7567,7 +7567,7 @@ html[data-theme="dark"] .adviser-chat__composer textarea {
 
 .adviser-footnote {
   display: flex;
-  align-items: start;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
 }
@@ -19215,7 +19215,7 @@ button.accounts-detail__transaction-head-cell {
 
 .accounts-add-fields__name-row {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   gap: 12px;
   width: 100%;
   min-width: 0;
@@ -19245,7 +19245,7 @@ button.accounts-detail__transaction-head-cell {
 
 .accounts-add-fields__row--amount {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .accounts-add-fields__amount-grow {
@@ -19394,7 +19394,7 @@ button.accounts-detail__transaction-head-cell {
 
 .accounts-add-fields__row--meta {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .accounts-add-fields__type-field {
@@ -32598,7 +32598,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .split-bill-mobile-home__section-link {

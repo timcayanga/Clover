@@ -241,7 +241,7 @@ type InvestmentEditDraft = {
   currency: string;
 };
 
-type InvestmentTab = "overview" | "portfolio" | "market" | "insights";
+type InvestmentTab = "overview" | "portfolio" | "market" | "analysis";
 
 const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; icon: ReactNode; proOnly?: boolean }> = [
   {
@@ -278,8 +278,8 @@ const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; icon: ReactNod
     proOnly: true,
   },
   {
-    key: "insights",
-    label: "Insights",
+    key: "analysis",
+    label: "Analysis",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 3.5l1.87 4.63L18.5 10l-4.63 1.87L12 16.5l-1.87-4.63L5.5 10l4.63-1.87L12 3.5Z" />
@@ -296,7 +296,7 @@ const normalizeInvestmentTab = (value: string | null | undefined): InvestmentTab
     return "portfolio";
   }
 
-  if (value === "portfolio" || value === "market" || value === "insights") {
+  if (value === "portfolio" || value === "market" || value === "analysis") {
     return value;
   }
 
@@ -784,7 +784,7 @@ export default function InvestmentsPage() {
       portfolioCurrencyFilter !== "all"
   );
   const canUseProTabs = planTier !== "free";
-  const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "insights") && !canUseProTabs);
+  const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "analysis") && !canUseProTabs);
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
   const visibleSnapshots = useMemo(
     () => investmentSnapshots.filter((snapshot) => snapshot.documentImport?.documentFamily === "portfolio" || snapshot.documentImport?.documentFamily === "account_detail"),
@@ -1069,7 +1069,7 @@ export default function InvestmentsPage() {
         {!canAccessSelectedTab ? (
           <section className="investments-pro-gate glass">
             <div className="investments-pro-gate__badge">Pro</div>
-            <h5>{selectedTab === "market" ? "Markets" : "Insights"}</h5>
+            <h5>{selectedTab === "market" ? "Markets" : "Analysis"}</h5>
             <Link className="button button-primary button-small" href="/pricing">
               Upgrade to Pro
             </Link>
@@ -1607,7 +1607,7 @@ export default function InvestmentsPage() {
             <article className="investments-allocation glass">
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
-                  <p className="eyebrow">Insights</p>
+                  <p className="eyebrow">Analysis</p>
                   <div className="investments-allocation__title-row">
                     <h5>Allocation by subtype</h5>
                     <InfoTip label="A broader view of concentration across the portfolio." />
@@ -1642,7 +1642,7 @@ export default function InvestmentsPage() {
               ) : (
                 <EmptyDataCta
                   className="empty-state--illustrated investments-empty-state--compact"
-                  eyebrow="Insights"
+                  eyebrow="Analysis"
                   title="No allocation to show yet."
                   copy="Add an investment to see how your portfolio mix is split."
                   illustration={investmentsEmptyStateIllustration}
@@ -1666,7 +1666,7 @@ export default function InvestmentsPage() {
             <article className="investments-insights-panel glass">
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
-                  <p className="eyebrow">Insights</p>
+                  <p className="eyebrow">Analysis</p>
                   <div className="investments-allocation__title-row">
                     <h5>Largest positions</h5>
                     <InfoTip label="The biggest holdings by current value." />

@@ -145,13 +145,13 @@ What did not survive:
   - `web/components/reports-tab-prefetcher.tsx`
   - `web/components/reports-review-queue.tsx`
 
-### Insights Page
-- Recovered thread name in metadata: `Insights Page`
-- Approximate area: insights tabs, analytics summaries, and page-level presentation
+### Adviser Page
+- Recovered thread name in metadata: `Adviser Page`
+- Approximate area: adviser tabs, analytics summaries, and page-level presentation
 - Current code paths:
-  - `web/app/insights/page.tsx`
-  - `web/app/insights/loading.tsx`
-  - `web/components/insights-tabs.tsx`
+  - `web/app/adviser/page.tsx`
+  - `web/app/adviser/loading.tsx`
+  - `web/components/adviser-chat.tsx`
 
 ### Dashboard Page
 - Recovered thread name in metadata: `Dashboard Page`
@@ -215,4 +215,3 @@ What did not survive:
 - Use `~/.codex/session_index.jsonl` to map thread names back to ids when the session archive is still present.
 - Avoid deleting `~/.codex/sessions` unless you are comfortable losing the transcript bodies.
 - If the archive has already been pruned, the best fallback is a reconstructed note like this one plus any filesystem or Time Machine backup.
-
