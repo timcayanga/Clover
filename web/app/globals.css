@@ -7255,7 +7255,6 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 
 .adviser-summary,
 .adviser-hero,
-.adviser-chat,
 .adviser-footnote {
   padding: 24px;
 }
@@ -7263,78 +7262,28 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 .adviser-summary {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
 }
 
 .adviser-summary__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 8px;
 }
 
 .adviser-summary-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 18px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(11, 27, 43, 0.08);
+  text-align: center;
 }
 
-html[data-theme="dark"] .adviser-summary-card {
-  background: rgba(12, 18, 29, 0.72);
-  border-color: rgba(148, 163, 184, 0.16);
+.adviser-summary-card .eyebrow {
+  margin: 0;
 }
 
-.adviser-summary-card__label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.adviser-summary-card__label-row span:first-child {
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.adviser-summary-card strong {
-  font-size: clamp(1.55rem, 3vw, 2.2rem);
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-
-.adviser-summary-card p {
+.adviser-summary-card p:last-child {
   margin: 0;
   color: var(--muted);
-  line-height: 1.5;
-  font-size: 0.92rem;
-}
-
-.adviser-summary-card__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  flex: 0 0 auto;
-}
-
-.adviser-summary-card__dot--positive {
-  background: var(--accent-2, #1db954);
-  box-shadow: 0 0 0 5px rgba(29, 185, 84, 0.12);
-}
-
-.adviser-summary-card__dot--warning {
-  background: var(--accent, #03a8c0);
-  box-shadow: 0 0 0 5px rgba(3, 168, 192, 0.12);
-}
-
-.adviser-summary-card__dot--neutral {
-  background: rgba(15, 23, 42, 0.45);
-  box-shadow: 0 0 0 5px rgba(15, 23, 42, 0.08);
+  line-height: 1.45;
+  font-size: 0.88rem;
 }
 
 .adviser-hero {
@@ -7496,7 +7445,7 @@ html[data-theme="dark"] .adviser-stat {
 .adviser-chat {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .adviser-chat--locked {
@@ -7707,7 +7656,6 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 @media (max-width: 720px) {
   .adviser-summary,
   .adviser-hero,
-  .adviser-chat,
   .adviser-footnote {
     padding: 18px;
   }

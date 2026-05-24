@@ -155,21 +155,13 @@ async function AdviserPageContent() {
     redirect("/dashboard");
   }
 
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const sixtyDaysAgo = new Date(now);
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-  const ninetyDaysAgo = new Date(now);
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
   const nextSevenDays = new Date(now);
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
   const nextFourteenDays = new Date(now);
   nextFourteenDays.setDate(nextFourteenDays.getDate() + 14);
 
   const [
-    currentWindowTransactionsQuery,
-    previousWindowTransactionsQuery,
-    ninetyDayTransactionsQuery,
+    allTransactionsQuery,
     recurringPatterns,
     financialCommitments,
     investmentSnapshots,
@@ -179,7 +171,6 @@ async function AdviserPageContent() {
       where: {
         workspaceId: resolvedWorkspace.id,
         isExcluded: false,
-        date: { gte: thirtyDaysAgo },
       },
       select: {
         id: true,
@@ -200,53 +191,7 @@ async function AdviserPageContent() {
         },
       },
       orderBy: { date: "desc" },
-      take: 500,
-    }),
-    prisma.transaction.findMany({
-      where: {
-        workspaceId: resolvedWorkspace.id,
-        isExcluded: false,
-        date: {
-          gte: sixtyDaysAgo,
-          lt: thirtyDaysAgo,
-        },
-      },
-      select: {
-        amount: true,
-        type: true,
-        category: {
-          select: {
-            name: true,
-          },
-        },
-      },
-    }),
-    prisma.transaction.findMany({
-      where: {
-        workspaceId: resolvedWorkspace.id,
-        isExcluded: false,
-        date: { gte: ninetyDaysAgo },
-      },
-      select: {
-        id: true,
-        date: true,
-        amount: true,
-        type: true,
-        merchantRaw: true,
-        merchantClean: true,
-        account: {
-          select: {
-            name: true,
-          },
-        },
-        category: {
-          select: {
-            name: true,
-          },
-        },
-      },
-      orderBy: { date: "desc" },
-      take: 500,
+      take: 1000,
     }),
     prisma.recurringPattern.findMany({
       where: {
@@ -287,9 +232,7 @@ async function AdviserPageContent() {
     loadSplitBillWorkspaceData(user.id),
   ]);
 
-  const currentWindowTransactions = currentWindowTransactionsQuery as AdviserTransaction[];
-  const previousWindowTransactions = previousWindowTransactionsQuery as Array<Pick<AdviserTransaction, "amount" | "type" | "category">>;
-  const ninetyDayTransactions = ninetyDayTransactionsQuery as AdviserTransaction[];
+  const allTransactions = allTransactionsQuery as AdviserTransaction[];
   const workspaceAccounts = resolvedWorkspace.accounts.map((account) => ({
     name: account.name,
     type: account.type,
@@ -305,7 +248,22 @@ async function AdviserPageContent() {
     investmentMaturityValue: account.investmentMaturityValue === null ? null : Number(account.investmentMaturityValue),
   })) satisfies WorkspaceAccount[];
 
-  const currentSummary = currentWindowTransactions.reduce(
+  const analysisAnchorDate = allTransactions[0]?.date ?? now;
+  const currentWindowStart = new Date(analysisAnchorDate);
+  currentWindowStart.setDate(currentWindowStart.getDate() - 30);
+  const previousWindowStart = new Date(analysisAnchorDate);
+  previousWindowStart.setDate(previousWindowStart.getDate() - 60);
+
+  const currentWindowTransactions = allTransactions.filter(
+    (transaction) => transaction.date > currentWindowStart && transaction.date <= analysisAnchorDate
+  );
+  const previousWindowTransactions = allTransactions.filter(
+    (transaction) => transaction.date > previousWindowStart && transaction.date <= currentWindowStart
+  );
+  const activeTransactions = currentWindowTransactions.length > 0 ? currentWindowTransactions : allTransactions;
+  const activeTransactionWindowLabel = currentWindowTransactions.length > 0 ? "latest 30-day" : "available";
+
+  const currentSummary = activeTransactions.reduce(
     (accumulator, transaction) => {
       const amount = Number(transaction.amount);
       if (transaction.type === "income") {
@@ -398,13 +356,13 @@ async function AdviserPageContent() {
   const topCategoryAmount = topCategories[0]?.[1] ?? 0;
   const topCategoryShare = currentSpend > 0 ? topCategoryAmount / currentSpend : 0;
 
-  const weekendExpenses = currentWindowTransactions.filter((transaction) => {
+  const weekendExpenses = activeTransactions.filter((transaction) => {
     const day = transaction.date.getDay();
     return transaction.type === "expense" && (day === 0 || day === 6);
   });
   const weekendExpenseShare = currentSpend > 0 ? weekendExpenses.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0) / currentSpend : 0;
 
-  const uncategorizedTransactions = currentWindowTransactions.filter((transaction) => !transaction.category?.name || !transaction.merchantClean);
+  const uncategorizedTransactions = activeTransactions.filter((transaction) => !transaction.category?.name || !transaction.merchantClean);
 
   const recurringDueSoon = recurringPatterns
     .filter((pattern) => pattern.nextExpectedDate && pattern.nextExpectedDate <= nextFourteenDays)
@@ -451,7 +409,10 @@ async function AdviserPageContent() {
       title: "Money left",
       value: formatSignedCurrency(currentNet),
       tone: currentNet >= 0 ? "positive" : "warning",
-      detail: currentSummary.income > 0 ? `${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending` : "Based on your current transaction history",
+      detail:
+        currentSummary.income > 0
+          ? `${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending`
+          : "Based on your current transaction history",
     },
     {
       id: "savings_rate",
@@ -461,7 +422,7 @@ async function AdviserPageContent() {
       detail:
         currentSavingsRate === null
           ? "Add more income and spending data to calculate this"
-          : `Based on your current 30-day income and expense mix`,
+          : `Based on your ${activeTransactionWindowLabel} income and expense mix`,
     },
   ];
 
@@ -776,12 +737,9 @@ async function AdviserPageContent() {
         <header className="adviser-summary glass">
           <div className="adviser-summary__grid" aria-label="Adviser summary">
             {summaryCards.map((card) => (
-              <article key={card.id} className="adviser-summary-card">
-                <div className="adviser-summary-card__label-row">
-                  <span>{card.title}</span>
-                  <span className={`adviser-summary-card__dot adviser-summary-card__dot--${card.tone}`} aria-hidden="true" />
-                </div>
-                <strong className={card.tone === "warning" ? "negative" : "positive"}>{card.value}</strong>
+              <article key={card.id} className="accounts-overview-card glass adviser-summary-card">
+                <p className="eyebrow">{card.title}</p>
+                <strong className={`accounts-overview-card__amount ${card.tone === "warning" ? "is-danger" : "is-good"}`}>{card.value}</strong>
                 <p>{card.detail}</p>
               </article>
             ))}

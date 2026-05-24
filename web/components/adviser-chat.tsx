@@ -80,7 +80,7 @@ export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
 
   if (!isPro) {
     return (
-      <div className="adviser-chat adviser-chat--locked glass">
+      <div className="adviser-chat adviser-chat--locked">
         <div className="adviser-chat__locked-copy">
           <p className="eyebrow">Pro only</p>
           <p>
@@ -95,23 +95,23 @@ export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
   }
 
   return (
-    <div className="adviser-chat glass">
+    <div className="adviser-chat">
       <form className="adviser-chat__composer" onSubmit={handleSubmit}>
         <label className="sr-only" htmlFor="adviser-chat-input">
           Ask Clover anything
         </label>
         <div className="adviser-chat__composer-bar">
           <input
-          id="adviser-chat-input"
-          type="text"
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Ask Clover a question about your money..."
+            id="adviser-chat-input"
+            type="text"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Ask Clover a question about your money..."
           />
-          <span className="adviser-chat__status">{isSending ? "Thinking..." : error ?? "Grounded in your Clover data."}</span>
           <button type="submit" className="button button-primary button-small" disabled={isSending || input.trim().length === 0}>
             {isSending ? "Sending" : "Send"}
           </button>
+          {isSending || error ? <span className="adviser-chat__status">{isSending ? "Thinking..." : error}</span> : null}
         </div>
       </form>
 
@@ -130,18 +130,20 @@ export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
         ))}
       </div>
 
-      <div className="adviser-chat__thread" role="log" aria-live="polite" aria-relevant="additions text">
-        {messages.map((message, index) => (
-          <article
-            key={`${message.role}-${index}`}
-            className={`adviser-chat__message adviser-chat__message--${message.role}`}
-          >
-            <span>{message.role === "user" ? "You" : "Clover"}</span>
-            <p>{message.content}</p>
-          </article>
-        ))}
-        <div ref={bottomRef} />
-      </div>
+      {messages.length > 0 ? (
+        <div className="adviser-chat__thread" role="log" aria-live="polite" aria-relevant="additions text">
+          {messages.map((message, index) => (
+            <article
+              key={`${message.role}-${index}`}
+              className={`adviser-chat__message adviser-chat__message--${message.role}`}
+            >
+              <span>{message.role === "user" ? "You" : "Clover"}</span>
+              <p>{message.content}</p>
+            </article>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+      ) : null}
     </div>
   );
 }
