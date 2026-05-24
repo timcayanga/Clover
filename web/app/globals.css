@@ -14027,6 +14027,30 @@ body[data-clover-page-modal] .modal-card {
   text-transform: uppercase;
 }
 
+.import-upload-dock__read-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px 0 0;
+}
+
+.import-upload-dock__read-summary span {
+  border: 1px solid rgba(215, 228, 233, 0.82);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+  padding: 8px 9px;
+}
+
+.import-upload-dock__read-summary strong {
+  color: var(--text);
+  display: block;
+  font-size: 1rem;
+  line-height: 1;
+}
+
 .import-upload-dock__checklist {
   list-style: none;
   margin: 0;
