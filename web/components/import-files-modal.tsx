@@ -6114,6 +6114,37 @@ export function ImportFilesModal({
     const itemsToProcess = items.filter(
       (item) => item.confirmationState !== "confirmed" && item.status !== "needs_password"
     );
+    const hasBrowserParsableStatements = itemsToProcess.some((item) => {
+      const mode = item.importMode ?? "statement";
+      const lowerName = item.file.name.toLowerCase();
+      return mode === "statement" && (lowerName.endsWith(".pdf") || lowerName.endsWith(".csv"));
+    });
+
+    if (hasBrowserParsableStatements) {
+      for (const item of itemsToProcess) {
+        void preparsePendingItemLocally(item.id);
+      }
+
+      const preUploadVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(3_000, 1_200 + items.length * 450));
+      if (preUploadVisibilityReady) {
+        const backgroundProcessPromises = itemsToProcess.map(async (item) => ({
+          itemId: item.id,
+          result: await processFile(item.id),
+        }));
+
+        void Promise.all(backgroundProcessPromises).finally(() => {
+          router.refresh();
+        });
+        setBusy(false);
+        visibilityDeadlineRef.current = null;
+        if (visibilityHardStopTimerRef.current) {
+          window.clearTimeout(visibilityHardStopTimerRef.current);
+          visibilityHardStopTimerRef.current = null;
+        }
+        return;
+      }
+    }
+
     const processPromises = itemsToProcess.map(async (item) => ({
       itemId: item.id,
       result: await processFile(item.id),
