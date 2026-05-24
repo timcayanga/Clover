@@ -141,13 +141,13 @@ export default async function HomePage() {
         }
         copy={
           <p>
-            Clover turns the data you upload into reports and insights that help you understand your spending, spot patterns, and make better
+            Clover turns the data you upload into reports and Adviser guidance that help you understand your spending, spot patterns, and make better
             progress toward your goals.
           </p>
         }
         visual={
           <SectionVisual
-            eyebrow="Insights"
+            eyebrow="Adviser"
             title="Clear visibility"
             body="Turn uploaded records into reports that show patterns, trends, and progress over time."
             tone="dark"
@@ -184,18 +184,18 @@ export default async function HomePage() {
         id="reporting"
         title={
           <>
-            Build <span className="landing-highlight">awareness</span> with reporting and insights.
+            Build <span className="landing-highlight">awareness</span> with reporting and Adviser guidance.
           </>
         }
         copy={
           <p>
-            Clover turns your statements and transactions into reports that make trends easier to spot, so you can understand what changed, what is
-            growing, and where you may want to pay closer attention.
+            Clover turns your statements and transactions into reports that make trends easier to spot, while Adviser highlights what changed,
+            what is growing, and where you may want to pay closer attention.
           </p>
         }
         visual={
           <SectionVisual
-            eyebrow="Insights"
+            eyebrow="Adviser"
             title="Clear visibility"
             body="See the shape of your spending over time with simple reporting that helps you make more informed decisions."
             tone="dark"

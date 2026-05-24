@@ -57,7 +57,7 @@ export default async function TermsOfServicePage() {
         <section className="legal-page__section">
           <h2>Service and content</h2>
           <p>
-            Clover may change, update, or discontinue features at any time. Reports and AI insights are provided for informational purposes only and
+            Clover may change, update, or discontinue features at any time. Reports and AI guidance are provided for informational purposes only and
             should not be treated as financial, legal, or tax advice.
           </p>
         </section>

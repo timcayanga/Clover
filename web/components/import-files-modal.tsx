@@ -71,6 +71,7 @@ type ImportFilesModalProps = {
   accountRules?: AccountRule[];
   defaultAccountId?: string | null;
   showQaTools?: boolean;
+  showManualTransactionLink?: boolean;
   initialFiles?: File[] | null;
   onInitialFilesConsumed?: () => void;
   backgroundOnly?: boolean;
@@ -1419,6 +1420,7 @@ export function ImportFilesModal({
   accountRules = [],
   defaultAccountId,
   showQaTools = false,
+  showManualTransactionLink = true,
   initialFiles = null,
   onInitialFilesConsumed,
   backgroundOnly = false,
@@ -2132,6 +2134,8 @@ export function ImportFilesModal({
 
         additionsCount += 1;
         shouldAutoClose = !shouldLaunchInBackground;
+        const queuedFileId = crypto.randomUUID();
+        const stableImportFileId = crypto.randomUUID();
         const guessedIdentity = guessStatementIdentity(file.name);
         const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName && guessedIdentity.accountNumber);
         const optimisticAccountId = guessedIdentity && canUseOptimisticGuess ? `optimistic-${crypto.randomUUID()}` : null;
@@ -2143,7 +2147,7 @@ export function ImportFilesModal({
         });
         return [
           {
-            id: crypto.randomUUID(),
+            id: queuedFileId,
             file,
             status: "pending" as ImportStatus,
             confirmationState: "none" as ConfirmationState,
@@ -2151,7 +2155,7 @@ export function ImportFilesModal({
             password: "",
             passwordVisible: false,
             importMode,
-            importFileId: null,
+            importFileId: stableImportFileId,
             targetAccountId: null,
             optimisticAccountId,
             importedRows: null,
@@ -4171,12 +4175,9 @@ export function ImportFilesModal({
         return;
       }
 
-      const persistedAccountId =
-        accountName || institution || accountNumber
-          ? await ensureTargetAccountId(accountName, institution, accountType, accountNumber, endingBalance, parsedRows[0]?.currency ?? null)
-          : null;
-      const resolvedAccountId = persistedAccountId ?? resolveLocalAccountId(accountName, institution, accountNumber);
+      const resolvedAccountId = resolveLocalAccountId(accountName, institution, accountNumber);
       const optimisticAccountId = resolvedAccountId.startsWith("optimistic-") ? resolvedAccountId : null;
+      const localImportFileId = item.importFileId ?? item.id;
 
       const summary = buildOptimisticUploadSummary(
         item.file.name,
@@ -4188,11 +4189,11 @@ export function ImportFilesModal({
         optimisticAccountId,
         endingBalance,
         buildOptimisticPreviewTransactions(parsedRows, {
-          importFileId: item.importFileId ?? item.id,
+          importFileId: localImportFileId,
           accountId: resolvedAccountId,
-        accountName,
-        institution,
-      }),
+          accountName,
+          institution,
+        }),
         accountNumber,
         true
       );
@@ -4201,11 +4202,46 @@ export function ImportFilesModal({
       localPreparseSummaryByItemIdRef.current.set(itemId, summary);
       await Promise.resolve(onImported(summary));
       updateItem(itemId, {
+        importFileId: localImportFileId,
         targetAccountId: resolvedAccountId,
         importedRows: parsedRows.length,
         progressLabel: parsedRows.length > 0 ? "Preview ready" : "Reading locally",
       });
       window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
+
+      if (accountName || institution || accountNumber) {
+        void ensureTargetAccountId(
+          accountName,
+          institution,
+          accountType,
+          accountNumber,
+          endingBalance,
+          parsedRows[0]?.currency ?? null
+        )
+          .then(async (persistedAccountId) => {
+            if (!persistedAccountId || persistedAccountId === resolvedAccountId) {
+              return;
+            }
+
+            const persistedSummary = {
+              ...summary,
+              accountId: persistedAccountId,
+              optimisticAccountId: optimisticAccountId ?? summary.optimisticAccountId ?? null,
+              previewTransactions: summary.previewTransactions?.map((transaction) => ({
+                ...transaction,
+                accountId: persistedAccountId,
+              })),
+            } satisfies UploadInsightsSummary;
+
+            seedImportedWorkspaceCaches(workspaceId, persistedSummary);
+            localPreparseSummaryByItemIdRef.current.set(itemId, persistedSummary);
+            await Promise.resolve(onImported(persistedSummary));
+            updateItem(itemId, {
+              targetAccountId: persistedAccountId,
+            });
+          })
+          .catch(() => null);
+      }
     } catch (error) {
       if (isPasswordError(error)) {
         localPreparseStartedRef.current.delete(itemId);
@@ -4644,7 +4680,7 @@ export function ImportFilesModal({
     }
 
     try {
-      importFileId = crypto.randomUUID();
+      importFileId = item.importFileId ?? crypto.randomUUID();
 
       capturePostHogClientEvent("import_started", {
         file_type: fileTypeLabel(item.file),
@@ -6602,9 +6638,11 @@ export function ImportFilesModal({
               ))}
             </ul>
             <div className="accounts-import-help__actions">
-              <Link className="button button-secondary button-small" href="/transactions?manual=1">
-                Add transactions manually
-              </Link>
+              {showManualTransactionLink ? (
+                <Link className="button button-secondary button-small" href="/transactions?manual=1">
+                  Add transactions manually
+                </Link>
+              ) : null}
               <Link className="button button-secondary button-small" href="/review">
                 Open review
               </Link>

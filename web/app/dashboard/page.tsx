@@ -754,8 +754,8 @@ async function DashboardStream({
         </section>
 
         {insightItems.length > 0 ? (
-          <article className="dashboard-home__insight-strip glass" aria-label="Home insights">
-            <p className="eyebrow">Insights</p>
+          <article className="dashboard-home__insight-strip glass" aria-label="Home Adviser">
+            <p className="eyebrow">Adviser</p>
             <div className="dashboard-home__insight-strip-list">
               {insightItems.map((item) => (
                 <div key={item.label} className="dashboard-home__insight-strip-item">

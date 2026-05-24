@@ -18,7 +18,7 @@ type PlanUpgradeCalloutProps = {
 
 const upgradeFeatureLabels = [
   "Full investment portfolio tools",
-  "Advanced reports and insights",
+  "Advanced reports and Adviser guidance",
   "Enhanced goal tracking and recommendations",
 ] as const;
 

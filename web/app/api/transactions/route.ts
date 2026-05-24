@@ -200,6 +200,81 @@ const isImportedTransactionPayload = (rawPayload: Prisma.JsonValue | null | unde
   );
 };
 
+const getRawPayloadText = (rawPayload: Prisma.JsonValue | null | undefined, key: string) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return "";
+  }
+
+  const value = (rawPayload as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+};
+
+const getRawPayloadSourceRowIndex = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const value = (rawPayload as Record<string, unknown>).sourceRowIndex;
+  const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : null;
+};
+
+const getImportedTransactionStableKey = (transaction: TransactionApiRow) => {
+  const sourceRowIndex = getRawPayloadSourceRowIndex(transaction.rawPayload);
+  const statementFingerprint = getRawPayloadText(transaction.rawPayload, "sourceStatementFingerprint");
+  if (statementFingerprint && sourceRowIndex !== null) {
+    return `statement:${transaction.accountId}:${statementFingerprint}:${sourceRowIndex}`;
+  }
+
+  const sourceImportFileId = transaction.importFileId ?? getRawPayloadText(transaction.rawPayload, "sourceImportFileId");
+  if (sourceImportFileId && sourceRowIndex !== null) {
+    return `import:${transaction.accountId}:${sourceImportFileId}:${sourceRowIndex}`;
+  }
+
+  return "";
+};
+
+const scoreImportedTransactionForDisplay = (transaction: TransactionApiRow) => {
+  const concreteCategory = transaction.categoryName && transaction.categoryName.trim().toLowerCase() !== "other" ? 1000 : 0;
+  const cleanName =
+    transaction.merchantClean && transaction.merchantClean.trim() && transaction.merchantClean.trim() !== transaction.merchantRaw.trim()
+      ? 100
+      : 0;
+  return (
+    concreteCategory +
+    cleanName +
+    Number(transaction.categoryConfidence ?? 0) +
+    Number(transaction.parserConfidence ?? 0) +
+    (transaction.reviewStatus === "confirmed" ? 25 : 0)
+  );
+};
+
+const dedupeImportedTransactionRows = (transactions: TransactionApiRow[]) => {
+  const next: TransactionApiRow[] = [];
+  const indexByStableKey = new Map<string, number>();
+
+  for (const transaction of transactions) {
+    const stableKey = getImportedTransactionStableKey(transaction);
+    if (!stableKey) {
+      next.push(transaction);
+      continue;
+    }
+
+    const existingIndex = indexByStableKey.get(stableKey);
+    if (existingIndex === undefined) {
+      indexByStableKey.set(stableKey, next.length);
+      next.push(transaction);
+      continue;
+    }
+
+    if (scoreImportedTransactionForDisplay(transaction) > scoreImportedTransactionForDisplay(next[existingIndex])) {
+      next[existingIndex] = transaction;
+    }
+  }
+
+  return next;
+};
+
 const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplicateCounts: Map<string, number>) => {
   if (isResolvedReviewStatus(transaction.reviewStatus)) {
     return null;
@@ -656,57 +731,67 @@ export async function GET(request: Request) {
       duplicateCounts.set(signature, (duplicateCounts.get(signature) ?? 0) + 1);
     }
 
+    const mappedSummaryRows = summaryRows.map((transaction) => {
+      const warningReason = getTransactionWarningReason(transaction, duplicateCounts);
+      return {
+        transaction,
+        warningReason,
+        mappedTransaction: mapTransactionRow({
+          id: transaction.id,
+          workspaceId,
+          accountId: transaction.accountId,
+          account: transaction.account,
+          accountNumber: transaction.account?.accountNumber ?? null,
+          categoryId: transaction.categoryId,
+          rawPayload: transaction.rawPayload,
+          normalizedPayload: transaction.normalizedPayload,
+          category: transaction.category,
+          reviewStatus: transaction.reviewStatus,
+          parserConfidence: transaction.parserConfidence,
+          categoryConfidence: transaction.categoryConfidence,
+          accountMatchConfidence: transaction.accountMatchConfidence,
+          duplicateConfidence: transaction.duplicateConfidence,
+          transferConfidence: transaction.transferConfidence,
+          date: transaction.date,
+          amount: transaction.amount,
+          currency: transaction.currency,
+          type: transaction.type,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          description: transaction.description,
+          isTransfer: transaction.isTransfer,
+          isExcluded: transaction.isExcluded,
+          createdAt: transaction.createdAt,
+          warningReason,
+          splitBill: transaction.splitBill,
+        }),
+      };
+    });
+    const transactions = dedupeImportedTransactionRows(mappedSummaryRows.map((entry) => entry.mappedTransaction));
+    const transactionById = new Map(mappedSummaryRows.map((entry) => [entry.mappedTransaction.id, entry] as const));
+
     const summaryState = {
-      totalCount: summaryRows.length,
+      totalCount: transactions.length,
       income: 0,
       spending: 0,
       transfers: 0,
       review: 0,
       topCategories: new Map<string, number>(),
       topAccounts: new Map<string, number>(),
-      firstTransactionDate: summaryRows[summaryRows.length - 1]?.date.toISOString() ?? null,
-      lastTransactionDate: summaryRows[0]?.date.toISOString() ?? null,
+      firstTransactionDate: transactions[transactions.length - 1]?.date ?? null,
+      lastTransactionDate: transactions[0]?.date ?? null,
       firstReviewTransaction: null as TransactionApiRow | null,
       firstReviewTransactionIndex: null as number | null,
     };
 
-    const transactions: TransactionApiRow[] = [];
-    summaryRows.forEach((transaction, index) => {
-      const warningReason = getTransactionWarningReason(transaction, duplicateCounts);
-      const amount = Math.abs(Number(transaction.amount));
-      const accountName = transaction.account?.name ?? "";
-      const mappedTransaction = mapTransactionRow({
-        id: transaction.id,
-        workspaceId,
-        accountId: transaction.accountId,
-        account: transaction.account,
-        accountNumber: transaction.account?.accountNumber ?? null,
-        categoryId: transaction.categoryId,
-        rawPayload: transaction.rawPayload,
-        normalizedPayload: transaction.normalizedPayload,
-        category: transaction.category,
-        reviewStatus: transaction.reviewStatus,
-        parserConfidence: transaction.parserConfidence,
-        categoryConfidence: transaction.categoryConfidence,
-        accountMatchConfidence: transaction.accountMatchConfidence,
-        duplicateConfidence: transaction.duplicateConfidence,
-        transferConfidence: transaction.transferConfidence,
-        date: transaction.date,
-        amount: transaction.amount,
-        currency: transaction.currency,
-        type: transaction.type,
-        merchantRaw: transaction.merchantRaw,
-        merchantClean: transaction.merchantClean,
-        description: transaction.description,
-        isTransfer: transaction.isTransfer,
-        isExcluded: transaction.isExcluded,
-        createdAt: transaction.createdAt,
-        warningReason,
-        splitBill: transaction.splitBill,
-      });
-      transactions.push(mappedTransaction);
+    transactions.forEach((mappedTransaction, index) => {
+      const source = transactionById.get(mappedTransaction.id);
+      const transaction = source?.transaction;
+      const warningReason = source?.warningReason ?? mappedTransaction.warningReason;
+      const amount = Math.abs(Number(mappedTransaction.amount));
+      const accountName = mappedTransaction.accountName ?? transaction?.account?.name ?? "";
 
-      if (!transaction.isExcluded) {
+      if (!mappedTransaction.isExcluded) {
         if (mappedTransaction.type === "income") {
           summaryState.income += amount;
         } else if (mappedTransaction.type === "transfer") {
@@ -738,10 +823,10 @@ export async function GET(request: Request) {
       transactions: pageTransactions,
       page: includeAll ? 1 : requestedPage,
       pageSize: includeAll ? summaryState.totalCount : requestedPageSize ?? 25,
-      totalCount,
+      totalCount: summaryState.totalCount,
       currencyCodes,
       summary: {
-        totalCount,
+        totalCount: summaryState.totalCount,
         income: summaryState.income,
         spending: summaryState.spending,
         transfers: summaryState.transfers,

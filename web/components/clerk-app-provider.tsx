@@ -19,6 +19,8 @@ export function ClerkAppProvider({ publishableKey, localization, children }: Cle
       localization={localization}
       touchSession
       experimental={{ persistClient: true }}
+      afterSignOutUrl="/"
+      afterMultiSessionSingleSignOutUrl="/"
       selectInitialSession={(client) => {
         if (!readStaySignedInPreference()) {
           return null;
@@ -26,12 +28,22 @@ export function ClerkAppProvider({ publishableKey, localization, children }: Cle
 
         const rememberedSessionId = readRememberedSessionId();
         if (rememberedSessionId) {
-          return (client.sessions.find((session) => session.id === rememberedSessionId) as SignedInSessionResource | undefined) ?? null;
+          const rememberedSession = client.sessions.find((session) => session.id === rememberedSessionId) as
+            | SignedInSessionResource
+            | undefined;
+
+          if (rememberedSession) {
+            return rememberedSession;
+          }
         }
 
-        return (client.sessions.find((session) => session.id === client.lastActiveSessionId) as
-          | SignedInSessionResource
-          | undefined) ?? null;
+        return (
+          (client.sessions.find((session) => session.id === client.lastActiveSessionId) as
+            | SignedInSessionResource
+            | undefined) ??
+          (client.sessions[0] as SignedInSessionResource | undefined) ??
+          null
+        );
       }}
     >
       {children}

@@ -1,31 +1,18 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { ReactNode } from "react";
-import { useState, useTransition } from "react";
+import type { ChangeEvent } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
-import {
-  getFinancialExperienceDefinition,
-  getFinancialExperienceProfile,
-  getGoalMoneyLabel,
-  getGoalMoneyPrompt,
-  type FinancialExperienceLevel,
-  type GoalKey,
-} from "@/lib/goals";
+import { getFinancialExperienceDefinition, getFinancialExperienceProfile, type FinancialExperienceLevel } from "@/lib/goals";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
   { ssr: false }
 );
-
-type GoalOption = {
-  value: GoalKey;
-  title: string;
-  icon: string;
-};
 
 type ExperienceOption = {
   value: FinancialExperienceLevel;
@@ -34,42 +21,7 @@ type ExperienceOption = {
   icon: string;
 };
 
-type StartOption = {
-  value: "accounts" | "statement" | "manual" | "skip";
-  title: string;
-  description: string;
-  icon: ReactNode;
-  href: string;
-  featured?: boolean;
-};
-
-const GOALS: GoalOption[] = [
-  {
-    value: "save_more",
-    title: "Save more",
-    icon: "/onboarding-icons/save.png",
-  },
-  {
-    value: "pay_down_debt",
-    title: "Pay down debt",
-    icon: "/onboarding-icons/debt.png",
-  },
-  {
-    value: "track_spending",
-    title: "Track spending",
-    icon: "/onboarding-icons/track spending.png",
-  },
-  {
-    value: "build_emergency_fund",
-    title: "Build an emergency fund",
-    icon: "/onboarding-icons/emergency fund.png",
-  },
-  {
-    value: "invest_better",
-    title: "Invest better",
-    icon: "/onboarding-icons/invest.png",
-  },
-];
+type OnboardingStep = "experience" | "upload";
 
 const EXPERIENCE_OPTIONS: ExperienceOption[] = [
   {
@@ -81,7 +33,7 @@ const EXPERIENCE_OPTIONS: ExperienceOption[] = [
   {
     value: "comfortable",
     title: "Comfortable",
-    description: "I understand budgets, statements, and goal tracking.",
+    description: "I understand budgets, statements, and general money tracking.",
     icon: "/onboarding-icons/intermediate.png",
   },
   {
@@ -89,43 +41,6 @@ const EXPERIENCE_OPTIONS: ExperienceOption[] = [
     title: "Very comfortable",
     description: "Give me the numbers, trends, and short explanations.",
     icon: "/onboarding-icons/advanced.png",
-  },
-];
-
-const START_OPTIONS: StartOption[] = [
-  {
-    value: "statement",
-    title: "Import files",
-    description: "Upload a statement to unlock your dashboard, transactions, and review queue in one step.",
-    href: "/dashboard?import=1",
-    featured: true,
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3v10" />
-        <path d="m8 7 4-4 4 4" />
-        <path d="M5 13v6h14v-6" />
-      </svg>
-    ),
-  },
-  {
-    value: "accounts",
-    title: "Add an account",
-    description: "Connect an account if you want ongoing tracking right away.",
-    href: "/accounts",
-    icon: <img src="/onboarding-icons/account.png" alt="" />,
-  },
-  {
-    value: "manual",
-    title: "Enter transactions manually",
-    description: "Add a few transactions yourself if you want to start small.",
-    href: "/transactions",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M5 5h10l4 4v10H5z" />
-        <path d="M9 11h6" />
-        <path d="M9 15h6" />
-      </svg>
-    ),
   },
 ];
 
@@ -138,299 +53,233 @@ type OnboardingFormProps = {
     type: string;
   }>;
   currentExperience?: string | null;
-  currentGoal?: string | null;
-  currentTargetAmount?: string | null;
 };
+
+const acceptedImportFiles = ".csv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif";
+
+const jsonHeaders = { "Content-Type": "application/json" };
 
 export function OnboardingForm({
   workspaceId,
   workspaceAccounts,
   currentExperience = null,
-  currentGoal = null,
-  currentTargetAmount = null,
 }: OnboardingFormProps) {
   const router = useRouter();
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [experience, setExperience] = useState<FinancialExperienceLevel | null>(
     (currentExperience as FinancialExperienceLevel | null) ?? null,
   );
-  const [goals, setGoals] = useState<GoalKey[]>(currentGoal ? [currentGoal as GoalKey] : []);
-  const [step, setStep] = useState<"experience" | "goals" | "start">("experience");
+  const [step, setStep] = useState<OnboardingStep>("experience");
   const [message, setMessage] = useState("How comfortable are you with financial management?");
-  const [targetAmount, setTargetAmount] = useState(currentTargetAmount ?? "");
   const [isPending, startTransition] = useTransition();
   const [importOpen, setImportOpen] = useState(false);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
-  const selectedGoalKey: GoalKey | null = goals[0] ?? null;
+
   const selectedExperienceProfile = getFinancialExperienceProfile(experience);
   const selectedExperienceDefinition = getFinancialExperienceDefinition(experience);
 
-  const completeStep = (option: StartOption) => {
+  const persistOnboarding = (startAction: "import" | "skip") => {
     const payload = JSON.stringify({
       experience,
-      goal: selectedGoalKey,
-      goals,
-      targetAmount: targetAmount.trim() || null,
-      skipped: option.value === "skip",
-      startAction: option.value,
+      startAction,
+      skipped: startAction === "skip",
     });
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+    void fetch("/api/onboarding", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: payload,
+      keepalive: true,
+    }).catch(() => {
+      // Best effort only. The visible flow should continue either way.
+    });
+  };
+
+  const openImportFiles = (files: File[]) => {
+    if (files.length === 0) {
+      return;
+    }
 
     startTransition(() => {
-      setMessage(`Opening ${option.title.toLowerCase()}...`);
-      void fetch("/api/onboarding", {
-        method: "POST",
-        headers,
-        body: payload,
-        keepalive: true,
-      }).catch(() => {
-        // The redirect happens immediately; this is best-effort persistence.
-      });
-      router.replace(option.href);
+      persistOnboarding("import");
+      setMessage(`Opening ${files.length === 1 ? files[0].name : `${files.length} files`}...`);
+      setImportSeedFiles(files);
+      setImportOpen(true);
     });
   };
 
-  const skipForNow = () =>
-    completeStep({
-      value: "skip",
-      title: "Skip for now",
-      description: "Jump into the dashboard and explore first.",
-      href: "/dashboard",
-      icon: (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 12h14" />
-          <path d="M13 6l6 6-6 6" />
-        </svg>
-      ),
-    });
-
-  const openImportFiles = (files: File[] | null = null) => {
-    setImportSeedFiles(files && files.length > 0 ? files : null);
-    setImportOpen(true);
+  const handleFilePickerChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    openImportFiles(files);
   };
+
+  const handleSkip = () => {
+    startTransition(() => {
+      persistOnboarding("skip");
+      setMessage("Opening your dashboard...");
+      router.replace("/dashboard");
+    });
+  };
+
+  const experienceStep = (
+    <>
+      <h3>How comfortable are you with financial management?</h3>
+      <p className="onboarding-card__copy">{selectedExperienceProfile.onboardingLead}</p>
+
+      <div className="onboarding-grid onboarding-grid--experience" role="list" aria-label="Financial experience">
+        {EXPERIENCE_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={`onboarding-option onboarding-option--experience onboarding-option--experience-${option.value} ${experience === option.value ? "is-selected" : ""}`}
+            onClick={() => {
+              setExperience(option.value);
+              setMessage(option.description);
+            }}
+            role="listitem"
+            aria-pressed={experience === option.value}
+          >
+            <span className="onboarding-option__icon" aria-hidden="true">
+              <img src={encodeURI(option.icon)} alt="" />
+            </span>
+            <span className="onboarding-option__content">
+              <span className="onboarding-option__title-row">
+                <span className="onboarding-option__title">{option.title}</span>
+                {experience === option.value ? <span className="onboarding-option__badge">Selected</span> : null}
+              </span>
+              <span className="onboarding-option__copy">{option.description}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="onboarding-actions onboarding-actions--single">
+        <div className="onboarding-actions__group onboarding-actions__group--primary">
+          <button
+            className="button button-primary"
+            type="button"
+            disabled={isPending || experience === null}
+            onClick={() => {
+              setStep("upload");
+              setMessage("Upload a statement, screenshot, or receipt to see Clover read it with OCR.");
+            }}
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    </>
+  );
+
+  const uploadStep = (
+    <>
+      <h3>Upload your first file</h3>
+      <p className="onboarding-card__copy">
+        Drop a statement, screenshot, or receipt here. Clover will read it with OCR and show you the magic behind the import.
+      </p>
+      <p className="onboarding-card__copy onboarding-card__copy--subtle">
+        On mobile, you can choose a photo or pick files from your device. On desktop, you can drag files straight onto this page.
+      </p>
+
+      <div
+        className="onboarding-upload"
+        role="presentation"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            fileInputRef.current?.click();
+          }
+        }}
+      >
+        <PageFileDropZone
+          enabled={!importOpen}
+          title="Drop statements, screenshots, or receipts anywhere"
+          subtitle="Clover will start the import flow as soon as you release the files."
+          onFilesDropped={(files) => openImportFiles(files)}
+        />
+
+        <div className="onboarding-upload__visual" aria-hidden="true">
+          <span className="onboarding-upload__icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 3v10" />
+              <path d="m8 7 4-4 4 4" />
+              <path d="M5 13v6h14v-6" />
+            </svg>
+          </span>
+        </div>
+
+        <div className="onboarding-upload__copy">
+          <strong>Files only, nothing manual.</strong>
+          <span>Use Clover to turn the file into transactions with OCR and parsing.</span>
+        </div>
+
+        <div className="onboarding-upload__actions">
+          <button className="button button-primary" type="button" disabled={isPending} onClick={() => photoInputRef.current?.click()}>
+            Upload photos
+          </button>
+          <button className="button button-secondary" type="button" disabled={isPending} onClick={() => fileInputRef.current?.click()}>
+            Upload files
+          </button>
+        </div>
+      </div>
+
+      <input
+        ref={photoInputRef}
+        className="sr-only"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        onChange={handleFilePickerChange}
+      />
+      <input
+        ref={fileInputRef}
+        className="sr-only"
+        type="file"
+        accept={acceptedImportFiles}
+        multiple
+        onChange={handleFilePickerChange}
+      />
+
+      <div className="onboarding-actions">
+        <div className="onboarding-actions__group onboarding-actions__group--secondary">
+          <button
+            className="button button-secondary"
+            type="button"
+            disabled={isPending}
+            onClick={() => {
+              setStep("experience");
+              setMessage(selectedExperienceDefinition.description);
+            }}
+          >
+            Back
+          </button>
+          <button className="button button-secondary" type="button" disabled={isPending} onClick={handleSkip}>
+            Skip for now
+          </button>
+        </div>
+        <div className="onboarding-actions__group onboarding-actions__group--primary" aria-hidden="true" />
+      </div>
+    </>
+  );
 
   return (
     <>
-      <PageFileDropZone
-        enabled={!importOpen}
-        title="Drop statement files anywhere"
-        subtitle="Clover will catch them and open import for you."
-        onFilesDropped={(files) => openImportFiles(files)}
-      />
-
-      <section className="glass onboarding-card">
       <PostHogEvent
         event="onboarding_started"
         onceKey={analyticsOnceKey("onboarding_started", "session")}
         properties={{
-          current_goal: currentGoal ?? null,
           current_experience: currentExperience ?? null,
         }}
       />
-      <div className="onboarding-card__brand" aria-label="Clover">
-        <img className="onboarding-card__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
-      </div>
+      <section className="glass onboarding-card">
+        <div className="onboarding-card__brand" aria-label="Clover">
+          <img className="onboarding-card__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
+        </div>
 
-      {step === "experience" ? (
-        <>
-          <h3>How comfortable are you with financial management?</h3>
-          <p className="onboarding-card__copy">
-            {getFinancialExperienceProfile(experience).onboardingLead}
-          </p>
-
-          <div className="onboarding-grid onboarding-grid--experience" role="list" aria-label="Financial experience">
-            {EXPERIENCE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`onboarding-option onboarding-option--experience onboarding-option--experience-${option.value} ${experience === option.value ? "is-selected" : ""}`}
-                onClick={() => {
-                  setExperience(option.value);
-                  setMessage(option.description);
-                }}
-                role="listitem"
-                aria-pressed={experience === option.value}
-              >
-                <span className="onboarding-option__icon" aria-hidden="true">
-                  <img src={encodeURI(option.icon)} alt="" />
-                </span>
-                <span className="onboarding-option__content">
-                  <span className="onboarding-option__title-row">
-                    <span className="onboarding-option__title">{option.title}</span>
-                    {experience === option.value ? <span className="onboarding-option__badge">Selected</span> : null}
-                  </span>
-                  <span className="onboarding-option__copy">{option.description}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <div className="onboarding-actions onboarding-actions--single">
-            <div className="onboarding-actions__group onboarding-actions__group--primary">
-              <button
-                className="button button-primary"
-                type="button"
-                disabled={isPending || experience === null}
-                onClick={() => {
-                  setStep("goals");
-                  setMessage(selectedExperienceProfile.goalsSupport);
-                }}
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        </>
-      ) : step === "goals" ? (
-        <>
-          <h3>Start here</h3>
-          <p className="onboarding-card__copy">
-            {selectedExperienceProfile.goalsLead ?? "One goal at a time. Pick the one thing you want Clover to coach first."}
-          </p>
-          <p className="onboarding-card__copy onboarding-card__copy--subtle">
-            Start with one main goal. You can add the others later from the Goals page.
-          </p>
-
-          <div className="onboarding-grid" role="list" aria-label="Financial goals">
-            {GOALS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`onboarding-option onboarding-option--goal ${goals.includes(option.value) ? "is-selected" : ""}`}
-                onClick={() => {
-                  setGoals((current) =>
-                    current.includes(option.value)
-                      ? current.filter((item) => item !== option.value)
-                      : [...current, option.value],
-                  );
-                }}
-                role="listitem"
-                aria-pressed={goals.includes(option.value)}
-              >
-                <span className="onboarding-option__icon" aria-hidden="true">
-                  <img src={encodeURI(option.icon)} alt="" />
-                </span>
-                <span className="onboarding-option__title">{option.title}</span>
-              </button>
-            ))}
-          </div>
-
-          {selectedGoalKey ? (
-            <label className="onboarding-goal-target">
-              <div className="onboarding-goal-target__header">
-                <span className="onboarding-goal-target__label">{getGoalMoneyLabel(selectedGoalKey)}</span>
-                <span className="onboarding-goal-target__pill">Primary target</span>
-              </div>
-              <span className="onboarding-goal-target__prompt">{getGoalMoneyPrompt(selectedGoalKey)}</span>
-              <div className="onboarding-goal-target__input-row">
-                <span className="onboarding-goal-target__currency" aria-hidden="true">
-                  PHP
-                </span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="100"
-                  value={targetAmount}
-                  onChange={(event) => setTargetAmount(event.target.value)}
-                  placeholder="0"
-                  aria-label={getGoalMoneyLabel(selectedGoalKey)}
-                />
-                <span className="onboarding-goal-target__suffix">/ month</span>
-              </div>
-              <small>
-                {goals.length > 1
-                  ? "We’ll use your first selected goal as the main target for now. You can add the others on the Goals page."
-                  : "You can leave this blank and set it later on the Goals page."}
-              </small>
-          </label>
-          ) : null}
-
-          <div className="onboarding-actions">
-            <div className="onboarding-actions__group onboarding-actions__group--secondary">
-              <button
-                className="button button-secondary"
-                type="button"
-                disabled={isPending}
-                onClick={() => {
-                  setStep("experience");
-                  setMessage(selectedExperienceDefinition.description);
-                }}
-              >
-                Back
-              </button>
-              <button className="button button-secondary" type="button" disabled={isPending} onClick={skipForNow}>
-                Skip for now
-              </button>
-            </div>
-            <div className="onboarding-actions__group onboarding-actions__group--primary">
-              <button
-                className="button button-primary"
-                type="button"
-                disabled={isPending || goals.length === 0}
-                onClick={() => {
-                  setStep("start");
-                  setMessage(selectedExperienceProfile.actionStripCopy);
-                }}
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          <h3>Choose your first move</h3>
-          <p className="onboarding-card__copy">
-            {selectedExperienceProfile.actionStripCopy ?? "One goal at a time. Start with the simplest move that feels useful."}
-          </p>
-
-          <div className="onboarding-grid onboarding-grid--start" role="list" aria-label="Getting started options">
-            {START_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`onboarding-option onboarding-option--start ${option.value === "accounts" ? "onboarding-option--start-account" : ""} ${option.featured ? "onboarding-option--featured" : ""}`}
-                onClick={() => completeStep(option)}
-                role="listitem"
-                aria-label={option.title}
-              >
-                <span className="onboarding-option__icon" aria-hidden="true">
-                  {option.icon}
-                </span>
-                <span className="onboarding-option__content">
-                  <span className="onboarding-option__title-row">
-                    <span className="onboarding-option__title">{option.title}</span>
-                    {option.featured ? <span className="onboarding-option__badge">Recommended</span> : null}
-                  </span>
-                  <span className="onboarding-option__copy">{option.description}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <div className="onboarding-actions">
-            <div className="onboarding-actions__group onboarding-actions__group--secondary">
-              <button
-                className="button button-secondary"
-                type="button"
-                disabled={isPending}
-                onClick={() => {
-                  setStep("goals");
-                  setMessage(selectedExperienceProfile.goalsSupport);
-                }}
-              >
-                Back
-              </button>
-              <button className="button button-secondary" type="button" disabled={isPending} onClick={skipForNow}>
-                Skip for now
-              </button>
-            </div>
-            <div className="onboarding-actions__group onboarding-actions__group--primary" aria-hidden="true" />
-          </div>
-        </>
-      )}
-
-      {message ? <p className="onboarding-card__message">{message}</p> : null}
+        {step === "experience" ? experienceStep : uploadStep}
+        {message ? <p className="onboarding-card__message">{message}</p> : null}
       </section>
 
       <ImportFilesModal
@@ -438,6 +287,7 @@ export function OnboardingForm({
         workspaceId={workspaceId}
         accounts={workspaceAccounts}
         defaultAccountId={workspaceAccounts.find((account) => account.type !== "cash")?.id ?? workspaceAccounts[0]?.id ?? null}
+        showManualTransactionLink={false}
         initialFiles={importSeedFiles}
         onInitialFilesConsumed={() => setImportSeedFiles(null)}
         onClose={() => {

@@ -1,5 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
+import { cookies } from "next/headers";
+import { rememberedSessionIdKey } from "@/lib/clerk-session-persistence";
 
 const stagingHosts = new Set(["staging.clover.ph", "clover-stage.vercel.app"]);
 const localDevHosts = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -10,6 +13,31 @@ const getHostname = async () => {
     const headerList = await headers();
     const rawHost = headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "";
     return rawHost.split(",")[0].split(":")[0].toLowerCase();
+  } catch {
+    return "";
+  }
+};
+
+const getRememberedSessionId = async () => {
+  try {
+    const cookieStore = await cookies();
+    return cookieStore.get(rememberedSessionIdKey)?.value ?? "";
+  } catch {
+    return "";
+  }
+};
+
+const resolveStagingUserIdFromRememberedSession = async () => {
+  const sessionId = await getRememberedSessionId();
+
+  if (!sessionId) {
+    return "";
+  }
+
+  try {
+    const client = await clerkClient();
+    const session = await client.sessions.getSession(sessionId);
+    return session.userId ?? "";
   } catch {
     return "";
   }
@@ -31,19 +59,15 @@ export const getSessionContext = async () => {
     return { userId: stagingGuestUserId, isGuest: true };
   }
 
-  let session;
+  const session = await auth().catch(() => null);
 
-  try {
-    session = await auth();
-  } catch {
+  if (!session?.userId) {
     if (stagingHost) {
-      return { userId: stagingGuestUserId, isGuest: true };
-    }
-    throw new Error("UNAUTHORIZED");
-  }
+      const rememberedUserId = await resolveStagingUserIdFromRememberedSession();
+      if (rememberedUserId) {
+        return { userId: rememberedUserId, isGuest: false };
+      }
 
-  if (!session.userId) {
-    if (stagingHost) {
       return { userId: stagingGuestUserId, isGuest: true };
     }
     throw new Error("UNAUTHORIZED");

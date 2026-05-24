@@ -43,7 +43,7 @@ export default async function PrivacyPolicyPage() {
           <h2>How we use information</h2>
           <ul>
             <li>To create and manage your account.</li>
-            <li>To process uploaded statements, generate reports, and surface AI insights.</li>
+            <li>To process uploaded statements, generate reports, and surface AI guidance.</li>
             <li>To improve the app, troubleshoot issues, and secure our systems.</li>
             <li>To respond to support requests and send important service updates.</li>
           </ul>
@@ -77,7 +77,7 @@ export default async function PrivacyPolicyPage() {
         </section>
 
         <section className="legal-page__note">
-          Clover is a financial insights tool, not a bank or a financial advisor. Please review this policy with counsel before launch.
+          Clover is a financial guidance tool, not a bank or a financial advisor. Please review this policy with counsel before launch.
         </section>
       </div>
     </main>

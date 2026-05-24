@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-labelledby="title desc">
+  <title id="title">Warnings Preview</title>
+  <desc id="desc">Minimal warnings and review preview</desc>
+  <rect width="320" height="200" rx="24" fill="#ffffff"/>
+  <g font-family="Inter, Arial, sans-serif">
+    <text x="24" y="30" fill="#5d6b75" font-size="12" letter-spacing=".16em">WARNINGS</text>
+    <path d="M84 60l38 66H46z" fill="#d08b00" opacity=".16" stroke="#d08b00" stroke-width="4"/>
+    <text x="84" y="112" text-anchor="middle" fill="#d08b00" font-size="28" font-weight="800">!</text>
+    <rect x="140" y="58" width="140" height="22" rx="11" fill="#f8fbfc" stroke="#d9e7eb"/>
+    <rect x="140" y="92" width="124" height="22" rx="11" fill="#f8fbfc" stroke="#d9e7eb"/>
+    <rect x="140" y="126" width="112" height="22" rx="11" fill="#f8fbfc" stroke="#d9e7eb"/>
+    <text x="154" y="73" fill="#0b1116" font-size="13" font-weight="700">Potential duplicate</text>
+    <text x="154" y="107" fill="#0b1116" font-size="13" font-weight="700">Needs review</text>
+    <text x="154" y="141" fill="#0b1116" font-size="13" font-weight="700">Imported item</text>
+  </g>
+</svg>

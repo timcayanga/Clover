@@ -705,6 +705,9 @@ const getDisplayTransactionCategoryName = (
   );
 };
 
+const getCategoryIdByName = (categories: Category[], categoryName: string) =>
+  categories.find((category) => category.name.trim().toLowerCase() === categoryName.trim().toLowerCase())?.id ?? "";
+
 const getTransactionSortFieldValue = (transaction: Transaction, field: AccountTransactionSortField) => {
   switch (field) {
     case "name":
@@ -3317,6 +3320,7 @@ function AccountDetailPageContent() {
                     const amount = Number(transaction.amount);
                     const categoryValue = transaction.categoryId ?? "";
                     const categoryLabel = getDisplayTransactionCategoryName(transaction, categories, account?.institution);
+                    const effectiveCategoryValue = getCategoryIdByName(categories, categoryLabel) || categoryValue;
                     const effectiveType = coerceTransactionTypeFromCategoryName(categoryLabel, transaction.type);
                     const amountToneClass = effectiveType === "transfer" ? "neutral" : effectiveType === "income" ? "positive" : "negative";
                     const normalizedName =
@@ -3368,7 +3372,7 @@ function AccountDetailPageContent() {
                         </div>
                         <div className="transaction-category-cell">
                           <InlineEditableCell
-                            value={categoryValue}
+                            value={effectiveCategoryValue}
                             displayValue={categoryLabel}
                             ariaLabel={`Edit category for ${normalizedName}`}
                             kind="select"

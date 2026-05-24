@@ -2566,7 +2566,10 @@ function TransactionsPageContent() {
       const visibleSummaryFallback =
         mergedTransactionsWithImports.length > 0
           ? buildVisibleTransactionSummary(mergedTransactionsWithImports, {
-              totalCount: Math.max(Number(payload?.totalCount ?? 0), mergedTransactionsWithImports.length),
+              totalCount:
+                fetchedTransactions.length > 0 && mergedTransactionsWithImports.length < fetchedTransactions.length
+                  ? mergedTransactionsWithImports.length
+                  : Math.max(Number(payload?.totalCount ?? 0), mergedTransactionsWithImports.length),
               currencyCodes: nextCurrencyCodes,
             })
           : null;
@@ -2574,11 +2577,13 @@ function TransactionsPageContent() {
         summaryPayload
           ? {
               totalCount:
-                  typeof payload?.totalCount === "number"
-                    ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
-                  : typeof summaryPayload.totalCount === "number"
-                    ? Math.max(summaryPayload.totalCount, mergedTransactionsWithImports.length)
-                    : fetchedTransactions.length,
+                  fetchedTransactions.length > 0 && mergedTransactionsWithImports.length < fetchedTransactions.length
+                    ? mergedTransactionsWithImports.length
+                    : typeof payload?.totalCount === "number"
+                      ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
+                      : typeof summaryPayload.totalCount === "number"
+                        ? Math.max(summaryPayload.totalCount, mergedTransactionsWithImports.length)
+                        : fetchedTransactions.length,
               income: typeof summaryPayload.income === "number" && summaryPayload.income !== 0 ? summaryPayload.income : visibleSummaryFallback?.income ?? 0,
               spending: typeof summaryPayload.spending === "number" && summaryPayload.spending !== 0 ? summaryPayload.spending : visibleSummaryFallback?.spending ?? 0,
               transfers: typeof summaryPayload.transfers === "number" && summaryPayload.transfers !== 0 ? summaryPayload.transfers : visibleSummaryFallback?.transfers ?? 0,
@@ -2601,9 +2606,11 @@ function TransactionsPageContent() {
             }
           : {
               totalCount:
-                typeof payload?.totalCount === "number"
-                  ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
-                  : mergedTransactionsWithImports.length,
+                fetchedTransactions.length > 0 && mergedTransactionsWithImports.length < fetchedTransactions.length
+                  ? mergedTransactionsWithImports.length
+                  : typeof payload?.totalCount === "number"
+                    ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
+                    : mergedTransactionsWithImports.length,
               income: visibleSummaryFallback?.income ?? 0,
               spending: visibleSummaryFallback?.spending ?? 0,
               transfers: visibleSummaryFallback?.transfers ?? 0,
@@ -6442,6 +6449,7 @@ function TransactionsPageContent() {
                   }) ??
                   guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
                   "Other";
+                const effectiveCategoryValue = getCategoryIdByName(categories, categoryLabel) || categoryValue;
                 const effectiveType = coerceTransactionTypeFromCategoryName(categoryLabel, transaction.type);
                 const isTransferTransaction = effectiveType === "transfer";
                 const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
@@ -6527,7 +6535,7 @@ function TransactionsPageContent() {
                     </div>
                     <div className="transaction-category-cell">
                       <InlineEditableCell
-                        value={categoryValue}
+                        value={effectiveCategoryValue}
                         displayValue={categoryLabel}
                         ariaLabel={`Edit category for ${transaction.merchantRaw}`}
                         kind="select"

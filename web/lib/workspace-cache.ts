@@ -440,6 +440,18 @@ const getImportedTransactionSourceRowIndex = (entry: CachedRecord | ImportedWork
   return null;
 };
 
+const getImportedTransactionStatementFingerprint = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
+  const rawPayload = entry.rawPayload;
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return "";
+  }
+
+  const sourceStatementFingerprint = (rawPayload as Record<string, unknown>).sourceStatementFingerprint;
+  return typeof sourceStatementFingerprint === "string" && sourceStatementFingerprint.trim()
+    ? sourceStatementFingerprint.trim()
+    : "";
+};
+
 const getTransactionAccountIdentityKey = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
   const accountName =
     typeof entry.accountName === "string" && entry.accountName.trim() ? entry.accountName : null;
@@ -460,8 +472,13 @@ const getTransactionAccountIdentityKey = (entry: CachedRecord | ImportedWorkspac
 const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
   const importFileId = getImportedTransactionImportFileId(entry);
   const sourceRowIndex = getImportedTransactionSourceRowIndex(entry);
+  const statementFingerprint = getImportedTransactionStatementFingerprint(entry);
+  if (statementFingerprint && sourceRowIndex !== null) {
+    return `statement:${statementFingerprint}:${sourceRowIndex}`;
+  }
+
   if (importFileId && sourceRowIndex !== null) {
-    return `${importFileId}:${sourceRowIndex}`;
+    return `import:${importFileId}:${sourceRowIndex}`;
   }
 
   // Do not fuzzy-dedupe statement rows by date/amount/merchant. Real statements

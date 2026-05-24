@@ -4,13 +4,14 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useClerk, useUser } from "@clerk/nextjs";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { persistSelectedWorkspaceId, readSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
 import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 import { DashboardManualTransactionModal } from "@/components/dashboard-top-actions";
 import { ImportFilesModal } from "@/components/import-files-modal";
+import { signOutToLanding } from "@/lib/sign-out";
 
 type CloverChromeActions = {
   closeChrome: () => void;
@@ -39,7 +40,7 @@ type CloverShellProps = {
   | "transactions"
   | "recurring"
   | "reports"
-  | "insights"
+  | "adviser"
   | "goals"
   | "more"
   | "settings"
@@ -149,15 +150,15 @@ const sidebarSearchPages: Array<{
     href: "/reports",
     icon: "reports",
     detail: "Cash flow, mix, and summary views.",
-    terms: ["reports", "report", "cash flow", "cashflow", "insights", "trend", "summary"],
+    terms: ["reports", "report", "cash flow", "cashflow", "adviser", "advice", "trend", "summary"],
   },
   {
-    key: "insights",
-    title: "Insights",
-    href: "/insights",
-    icon: "insights",
-    detail: "Goal-aware spending guidance.",
-    terms: ["insights", "insight", "analysis", "trend", "goal"],
+    key: "adviser",
+    title: "Adviser",
+    href: "/adviser",
+    icon: "adviser",
+    detail: "Proactive guidance and coaching.",
+    terms: ["adviser", "advice", "analysis", "trend", "goal", "coach"],
   },
   {
     key: "goals",
@@ -255,6 +256,7 @@ const navItems = [
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/recurring", label: "Recurring", key: "recurring" as const },
   { href: "/split-bill", label: "Split Bills", key: "split-bill" as const },
+  { href: "/adviser", label: "Adviser", key: "adviser" as const },
   { href: "/more", label: "More", key: "more" as const },
 ];
 
@@ -268,7 +270,8 @@ type IconName =
   | "transactions"
   | "recurring"
   | "reports"
-  | "insights"
+  | "adviser"
+  | "adviser"
   | "goals"
   | "menu"
   | "chevron-left"
@@ -433,11 +436,11 @@ function MenuIcon({ name }: { name: IconName }) {
           <path d="M12 12l-6.9 4" />
         </svg>
       );
-    case "insights":
+    case "adviser":
       return (
         <svg {...common}>
           <path d="M12 3.5l1.87 4.63L18.5 10l-4.63 1.87L12 16.5l-1.87-4.63L5.5 10l4.63-1.87L12 3.5Z" />
-          <path d="M19.5 14l.95 2.35L22.5 17l-2.05.65L19.5 20l-.95-2.35L16.5 17l2.05-.65L19.5 14Z" />
+          <path d="M6 18.5l.86 2.12L9 21.5l-2.14.88L6 24.5l-.86-2.12L3 21.5l2.14-.88L6 18.5Z" />
         </svg>
       );
     case "goals":
@@ -477,6 +480,7 @@ export function CloverShell({
   children,
 }: CloverShellProps) {
   const { user } = useUser();
+  const { signOut } = useClerk();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -665,7 +669,7 @@ export function CloverShell({
   }, [pathname]);
 
   useEffect(() => {
-    const prefetchTargets = ["/home", "/accounts", "/transactions", "/split-bill", "/reports", "/insights", "/goals", "/more", "/settings", "/help"];
+    const prefetchTargets = ["/home", "/accounts", "/transactions", "/split-bill", "/reports", "/adviser", "/goals", "/more", "/settings", "/help"];
 
     for (const href of prefetchTargets) {
       if (pathname === href) {
@@ -990,7 +994,7 @@ export function CloverShell({
   const handleSignOut = () => {
     persistSelectedWorkspaceId("");
     clearAllWorkspaceCaches();
-    window.location.assign("/sign-out");
+    void signOutToLanding(signOut);
   };
 
   return (
@@ -1188,15 +1192,15 @@ export function CloverShell({
                         Reports
                       </button>
                       <button
-                        className={`sidebar-nav__submenu-link${active === "insights" || pathname?.startsWith("/insights") ? " is-active" : ""}`}
+                        className={`sidebar-nav__submenu-link${active === "adviser" || pathname?.startsWith("/adviser") ? " is-active" : ""}`}
                         type="button"
                         role="menuitem"
-                        onClick={() => navigateTo("/insights")}
+                        onClick={() => navigateTo("/adviser")}
                       >
                         <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="insights" />
+                          <MenuIcon name="adviser" />
                         </span>
-                        Insights
+                        Adviser
                       </button>
                       <button
                         className={`sidebar-nav__submenu-link${active === "goals" || pathname?.startsWith("/goals") ? " is-active" : ""}`}

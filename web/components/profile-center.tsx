@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useClerk, useUser } from "@clerk/nextjs";
 import { persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches } from "@/lib/workspace-cache";
 import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 import { UserAvatarEditor } from "@/components/user-avatar-editor";
+import { signOutToLanding } from "@/lib/sign-out";
 
 type ProfileCenterProps = {
   canSignOut?: boolean;
 };
 
 export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
+  const { signOut } = useClerk();
   const { isLoaded, isSignedIn, user } = useUser();
   const pathname = usePathname();
   const currentDisplayName =
@@ -60,7 +62,7 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
 
     persistSelectedWorkspaceId("");
     clearAllWorkspaceCaches();
-    window.location.assign("/sign-out");
+    void signOutToLanding(signOut);
   };
 
   return (

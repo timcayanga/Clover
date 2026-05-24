@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
@@ -542,6 +543,17 @@ export function SettingsHub({
     window.localStorage.setItem(HELPER_TEXT_STORAGE_KEY, helperTextVisible ? "visible" : "hidden");
     applyHelperTextPreference(helperTextVisible);
   }, [helperTextVisible]);
+
+  useEffect(() => {
+    if (!dataDeleteModal) {
+      return;
+    }
+
+    document.body.setAttribute("data-clover-page-modal", "true");
+    return () => {
+      document.body.removeAttribute("data-clover-page-modal");
+    };
+  }, [dataDeleteModal]);
 
   const runDownload = async (path: string, fileName: string) => {
     const resolvedWorkspaceId = await resolveWorkspaceId();
@@ -1371,75 +1383,78 @@ export function SettingsHub({
           />
         ) : null}
 
-        {dataDeleteModal ? (
-          <div
-            className="account-actions-modal settings-delete-modal"
-            role="presentation"
-            onClick={(event) => {
-              if (event.target === event.currentTarget && !dataDeleteInFlight) {
-                closeDeleteModal();
-              }
-            }}
-          >
-            <section
-              className="account-actions-modal__card panel settings-delete-modal__card"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="settings-delete-modal-title"
-              aria-describedby="settings-delete-modal-copy"
-            >
-              {dataDeleteModal.phase === "confirm" ? (
-                <>
-                  <div className="account-actions-modal__head">
-                    <div>
-                      <p className="eyebrow">Confirm deletion</p>
-                      <h4 id="settings-delete-modal-title">{dataDeleteCopy[dataDeleteModal.scope].confirmTitle}</h4>
-                    </div>
-                  </div>
+        {dataDeleteModal && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="account-actions-modal settings-delete-modal"
+                role="presentation"
+                onClick={(event) => {
+                  if (event.target === event.currentTarget && !dataDeleteInFlight) {
+                    closeDeleteModal();
+                  }
+                }}
+              >
+                <section
+                  className="account-actions-modal__card panel settings-delete-modal__card"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="settings-delete-modal-title"
+                  aria-describedby="settings-delete-modal-copy"
+                >
+                  {dataDeleteModal.phase === "confirm" ? (
+                    <>
+                      <div className="account-actions-modal__head">
+                        <div>
+                          <p className="eyebrow">Confirm deletion</p>
+                          <h4 id="settings-delete-modal-title">{dataDeleteCopy[dataDeleteModal.scope].confirmTitle}</h4>
+                        </div>
+                      </div>
 
-                  <p id="settings-delete-modal-copy" className="account-actions-modal__copy">
-                    {dataDeleteCopy[dataDeleteModal.scope].body}
-                  </p>
+                      <p id="settings-delete-modal-copy" className="account-actions-modal__copy">
+                        {dataDeleteCopy[dataDeleteModal.scope].body}
+                      </p>
 
-                  {dataDeleteModal.scope === "transactions" ? (
-                    <label className="account-actions-modal__field">
-                      <span>Before date</span>
-                      <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} disabled={dataDeleteInFlight} />
-                    </label>
-                  ) : null}
+                      {dataDeleteModal.scope === "transactions" ? (
+                        <label className="account-actions-modal__field">
+                          <span>Before date</span>
+                          <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} disabled={dataDeleteInFlight} />
+                        </label>
+                      ) : null}
 
-                  <div className="account-actions-modal__actions">
-                    <button className="button button-secondary button-small" type="button" onClick={closeDeleteModal} disabled={dataDeleteInFlight}>
-                      Cancel
-                    </button>
-                    <button className="button button-danger button-small" type="button" onClick={() => void handleDeleteConfirm()} disabled={dataDeleteInFlight}>
-                      {dataDeleteInFlight ? "Deleting..." : dataDeleteCopy[dataDeleteModal.scope].confirmLabel}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="account-actions-modal__head">
-                    <div>
-                      <p className="eyebrow">Deletion complete</p>
-                      <h4 id="settings-delete-modal-title">{dataDeleteCopy[dataDeleteModal.scope].successTitle}</h4>
-                    </div>
-                  </div>
+                      <div className="account-actions-modal__actions">
+                        <button className="button button-secondary button-small" type="button" onClick={closeDeleteModal} disabled={dataDeleteInFlight}>
+                          Cancel
+                        </button>
+                        <button className="button button-danger button-small" type="button" onClick={() => void handleDeleteConfirm()} disabled={dataDeleteInFlight}>
+                          {dataDeleteInFlight ? "Deleting..." : dataDeleteCopy[dataDeleteModal.scope].confirmLabel}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="account-actions-modal__head">
+                        <div>
+                          <p className="eyebrow">Deletion complete</p>
+                          <h4 id="settings-delete-modal-title">{dataDeleteCopy[dataDeleteModal.scope].successTitle}</h4>
+                        </div>
+                      </div>
 
-                  <p id="settings-delete-modal-copy" className="account-actions-modal__copy">
-                    {dataDeleteCopy[dataDeleteModal.scope].successBody(dataDeleteModal.deletedCount)}
-                  </p>
+                      <p id="settings-delete-modal-copy" className="account-actions-modal__copy">
+                        {dataDeleteCopy[dataDeleteModal.scope].successBody(dataDeleteModal.deletedCount)}
+                      </p>
 
-                  <div className="account-actions-modal__actions">
-                    <button className="button button-primary button-small" type="button" onClick={closeDeleteModal}>
-                      Done
-                    </button>
-                  </div>
-                </>
-              )}
-            </section>
-          </div>
-        ) : null}
+                      <div className="account-actions-modal__actions">
+                        <button className="button button-primary button-small" type="button" onClick={closeDeleteModal}>
+                          Done
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </section>
+              </div>,
+              document.body
+            )
+          : null}
 
         {(activeSection === "account" || activeSection === "profiles") && (profileMessage || profileListMessage) ? (
           <p className="settings-status">{profileMessage ?? profileListMessage}</p>

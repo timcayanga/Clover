@@ -94,7 +94,7 @@ export const PLAN_FEATURE_DETAILS: Record<PlanFeatureKey, PlanFeatureDetail> = {
   }),
   reports: createDetail({
     key: "reports",
-    title: "Reports and insights",
+    title: "Reports and Adviser guidance",
     summary: "Free covers the everyday summary views. Pro adds the decision layer that explains movement and next steps.",
     freeLabel: "Free",
     proLabel: "Pro",
@@ -126,11 +126,11 @@ export const PLAN_FEATURE_DETAILS: Record<PlanFeatureKey, PlanFeatureDetail> = {
       "Use the onboarding goal as the default",
       "See a basic checklist of next steps",
       "See a limited history of goal changes",
-      "Let the goal show up in Insights and Reports in a basic way",
+      "Let the goal show up in Adviser and Reports in a basic way",
       "One strong snapshot",
       "One cashflow view",
       "One spending view",
-      "Basic insights",
+      "Basic Adviser guidance",
       "Light investment summary",
     ],
     proItems: [
@@ -170,8 +170,8 @@ const PLAN_FEATURE_LABEL_MAP: Record<string, PlanFeatureKey> = {
   "1000 transaction rows total": "rows",
   "basic investment tracking": "investments",
   "full investment portfolio tools": "investments",
-  "basic reports and insights": "reports",
-  "advanced reports and insights": "reports",
+  "basic reports and Adviser guidance": "reports",
+  "advanced reports and Adviser guidance": "reports",
   "basic goal tracking": "goals",
   "enhanced goal tracking and recommendations": "goals",
 };

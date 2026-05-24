@@ -27,7 +27,7 @@ const IMPORT_ACTIVITY_APP_PATH_PREFIXES = [
   "/goals",
   "/home",
   "/imports",
-  "/insights",
+  "/adviser",
   "/investments",
   "/more",
   "/notifications",

@@ -235,7 +235,7 @@ async function ReportsStream({
   active = "reports",
   searchParams,
 }: {
-  active?: "reports" | "insights";
+  active?: "reports" | "adviser";
   searchParams?: { range?: string; section?: string };
 }) {
   const cookieStore = await cookies();
@@ -1134,12 +1134,12 @@ async function ReportsStream({
           title: `Keep ${goalLabel.toLowerCase()} in view`,
           body: goalTargetAmount !== null
             ? `${goalProgress.bandLabel} right now. ${goalProgress.nextAction}`
-            : "Use goal-aware insights to see whether spending and cash flow are helping or slowing you down.",
+            : "Use goal-aware Adviser guidance to see whether spending and cash flow are helping or slowing you down.",
           href: "/goals",
           label: "Open goals",
         }
       : {
-          title: "Choose a goal to sharpen the insights",
+          title: "Choose a goal to sharpen the guidance",
           body: "A goal gives the page a destination, so every trend can be evaluated against progress instead of noise.",
           href: "/goals",
           label: "Set a goal",

@@ -47,8 +47,6 @@ export default async function OnboardingPage() {
           workspaceId={onboardingWorkspace?.id ?? starterWorkspace.id}
           workspaceAccounts={onboardingWorkspace?.accounts ?? []}
           currentExperience={user.financialExperience}
-          currentGoal={user.primaryGoal}
-          currentTargetAmount={user.goalTargetAmount?.toString() ?? null}
         />
       </section>
     </main>

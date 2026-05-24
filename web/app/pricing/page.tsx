@@ -85,7 +85,7 @@ export default async function PricingPage() {
           <span className="legal-page__eyebrow">Clover</span>
           <h1>Pricing</h1>
           <p>Choose a plan that fits the way you want to understand your money.</p>
-          <p>Start free if you want to explore Clover first. Upgrade to Pro when you need higher limits, fuller investing tools, and richer reports, insights, and goals.</p>
+          <p>Start free if you want to explore Clover first. Upgrade to Pro when you need higher limits, fuller investing tools, and richer reports, Adviser guidance, and goals.</p>
         </header>
 
         <PostHogEvent
@@ -119,7 +119,7 @@ export default async function PricingPage() {
               <PlanFeatureItem label="10 monthly uploads total, including statements and receipts" />
               <PlanFeatureItem label="1,000 transaction rows total" />
               <PlanFeatureItem label="Basic investment tracking" />
-              <PlanFeatureItem label="Basic reports and insights" />
+              <PlanFeatureItem label="Basic reports and Adviser guidance" />
               <PlanFeatureItem label="Basic goal tracking" />
             </ul>
           </article>
@@ -135,7 +135,7 @@ export default async function PricingPage() {
               </div>
             </div>
             <p className="pricing-card__summary">
-              Built for people who want to track more, upload more, and get deeper insights without running into monthly limits.
+              Built for people who want to track more, upload more, and get deeper Adviser guidance without running into monthly limits.
             </p>
             <p className="pricing-card__summary pricing-card__summary--strong">
               PHP 149 monthly or PHP 1,299 annually.
@@ -146,7 +146,7 @@ export default async function PricingPage() {
               <PlanFeatureItem label="100 monthly uploads total" />
               <PlanFeatureItem label="Unlimited transaction rows" />
               <PlanFeatureItem label="Full investment portfolio tools" />
-              <PlanFeatureItem label="Advanced reports and insights" />
+              <PlanFeatureItem label="Advanced reports and Adviser guidance" />
               <PlanFeatureItem label="Enhanced goal tracking and recommendations" />
             </ul>
           </article>

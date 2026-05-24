@@ -74,7 +74,6 @@ export function StagingBrowserStateReset() {
       pathname.startsWith("/terms-of-service") ||
       pathname.startsWith("/sign-in") ||
       pathname.startsWith("/sign-up") ||
-      pathname.startsWith("/sign-out") ||
       pathname.startsWith("/sso-callback") ||
       pathname.startsWith("/onboarding");
 

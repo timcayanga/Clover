@@ -75,7 +75,7 @@ export default async function FeaturesPage() {
             <span>Everything Clover helps you do.</span>
           </h1>
           <p className="landing-hero__lede">
-            Import statements, receipts, screenshots, or manual transactions. Turn them into insights, split bills, Pro tools, and a clearer
+            Import statements, receipts, screenshots, or manual transactions. Turn them into Adviser guidance, split bills, Pro tools, and a clearer
             view of your money.
           </p>
 
@@ -135,13 +135,13 @@ export default async function FeaturesPage() {
         }
         copy={
           <p>
-            Clover turns the data you upload into reports and insights that help you understand your spending, spot patterns, and make better
+            Clover turns the data you upload into reports and Adviser guidance that help you understand your spending, spot patterns, and make better
             progress toward your goals.
           </p>
         }
         visual={
           <SectionVisual
-            eyebrow="Insights"
+            eyebrow="Adviser"
             title="Clear visibility"
             body="Turn uploaded records into reports that show patterns, trends, and progress over time."
             tone="dark"
@@ -178,18 +178,18 @@ export default async function FeaturesPage() {
         id="reporting"
         title={
           <>
-            Build <span className="landing-highlight">awareness</span> with reporting and insights.
+            Build <span className="landing-highlight">awareness</span> with reporting and Adviser guidance.
           </>
         }
         copy={
           <p>
-            Clover turns your uploaded data into reports and insights that help you understand what changed, what is growing, and where you may
+            Clover turns your uploaded data into reports and Adviser guidance that help you understand what changed, what is growing, and where you may
             want to pay closer attention.
           </p>
         }
         visual={
           <SectionVisual
-            eyebrow="Insights"
+            eyebrow="Adviser"
             title="Clear visibility"
             body="See the shape of your spending over time with simple reporting that helps you make more informed decisions."
             tone="dark"
@@ -250,7 +250,7 @@ export default async function FeaturesPage() {
           <div className="landing-cta__copy">
             <p className="eyebrow">Ready when you are</p>
             <h2>See what Clover can do for your money.</h2>
-            <p>Start with the free plan, then upgrade when you need more room for uploads, accounts, reports, and insights.</p>
+            <p>Start with the free plan, then upgrade when you need more room for uploads, accounts, reports, and Adviser guidance.</p>
           </div>
           <div className="landing-cta__actions">
             <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>

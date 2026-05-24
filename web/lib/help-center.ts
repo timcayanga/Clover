@@ -1001,22 +1001,22 @@ export const helpSections: HelpSection[] = [
     ],
   },
   {
-    slug: "reports-insights-goals",
+    slug: "reports-adviser-goals",
     eyebrow: "Analysis",
-    title: "Reports, insights, and goals",
-    summary: "Use reports, insights, goals, and investment views to understand what your numbers mean.",
+    title: "Reports, Adviser guidance, and goals",
+    summary: "Use reports, Adviser guidance, goals, and investment views to understand what your numbers mean.",
     icon: "play",
     accent: "gold",
-    keywords: ["reports", "insights", "goals", "dashboard", "analysis", "trend", "summary", "investments", "awareness", "visibility"],
+    keywords: ["reports", "adviser", "goals", "dashboard", "analysis", "trend", "summary", "investments", "awareness", "visibility"],
     searchPhrases: [
       "how to read Clover reports",
-      "how to use insights in Clover",
+      "how to use Adviser in Clover",
       "how to set a goal in Clover",
       "where to find investment tracking",
     ],
     highlights: [
       "Reports show structured summaries and trends.",
-      "Insights point out patterns and changes.",
+      "Adviser points out patterns and changes.",
       "Goals and investments turn the data into action.",
     ],
     articles: [
@@ -1052,11 +1052,11 @@ export const helpSections: HelpSection[] = [
         ]
       ),
       createArticle(
-        "what-insights-mean-in-clover",
-        "What insights mean in Clover",
+        "what-adviser-means-in-clover",
+        "What Adviser means in Clover",
         "Understand the guidance layer that points out important changes and patterns.",
-        "Learn what insights mean in Clover and how to use them to spot patterns faster.",
-        ["insights", "patterns", "spending trends"],
+        "Learn what Adviser means in Clover and how to use it to spot patterns faster.",
+        ["adviser", "patterns", "spending trends"],
         [
           "Look for the pattern or change being called out.",
           "Compare that signal against your recent activity.",
@@ -1064,20 +1064,20 @@ export const helpSections: HelpSection[] = [
         ],
         [
           {
-            question: "How do Insights differ from Reports?",
+            question: "How do Adviser and Reports differ?",
             answer:
-              "Reports are the formatted snapshots; Insights are the guidance layer that highlights patterns or changes that deserve attention.",
+              "Reports are the formatted snapshots; Adviser is the guidance layer that highlights patterns or changes that deserve attention.",
           },
           {
-            question: "What should I do when an insight looks important?",
+            question: "What should I do when Adviser flags something important?",
             answer:
               "Open the related transactions or report view and confirm whether the change is real before you act on it.",
           },
         ],
         [
           {
-            label: "Open insights",
-            href: "/insights",
+            label: "Open Adviser",
+            href: "/adviser",
             description: "See the patterns Clover noticed.",
           },
         ]
@@ -1132,9 +1132,9 @@ export const helpSections: HelpSection[] = [
               "Open the goal detail and compare the current value with the target, then review recent transactions or reports to understand the movement behind it.",
           },
           {
-            question: "Can I use insights to support a goal?",
+            question: "Can I use Adviser to support a goal?",
             answer:
-              "Yes. Insights can show the patterns that explain why a goal is moving faster or slower than expected.",
+              "Yes. Adviser can show the patterns that explain why a goal is moving faster or slower than expected.",
           },
         ],
         [
@@ -1153,9 +1153,9 @@ export const helpSections: HelpSection[] = [
           "The dashboard is the quickest overview, and Reports give you a deeper structured look once you want to analyze the numbers.",
       },
       {
-        question: "How do Insights differ from Reports?",
+        question: "How do Adviser and Reports differ?",
         answer:
-          "Reports are the formatted snapshots; Insights are the guidance layer that highlights patterns or changes that deserve attention.",
+          "Reports are the formatted snapshots; Adviser is the guidance layer that highlights patterns or changes that deserve attention.",
       },
       {
         question: "Where do I track goals and investments?",
@@ -1168,9 +1168,9 @@ export const helpSections: HelpSection[] = [
           "Start with the headline numbers, then move into the category or cash flow detail that explains where the money is coming from and where it is going.",
       },
       {
-        question: "What do Insights mean in Clover?",
+        question: "What does Adviser mean in Clover?",
         answer:
-          "Insights highlight changes, spikes, or patterns so you can act on the most important movement without scanning every transaction manually.",
+          "Adviser highlights changes, spikes, or patterns so you can act on the most important movement without scanning every transaction manually.",
       },
       {
         question: "How do I set up a financial goal in Clover?",
@@ -1185,8 +1185,8 @@ export const helpSections: HelpSection[] = [
         description: "Review summaries and trends.",
       },
       {
-        label: "Open insights",
-        href: "/insights",
+        label: "Open Adviser",
+        href: "/adviser",
         description: "Check the patterns Clover noticed.",
       },
     ],
@@ -1854,7 +1854,7 @@ export const getHelpSectionImageSrc = (sectionSlug: HelpSection["slug"]) => {
       return "/help-icons/accounts-and-workspaces.png";
     case "split-bills":
       return "/help-icons/accounts-and-workspaces.png";
-    case "reports-insights-goals":
+    case "reports-adviser-goals":
       return "/help-icons/reports-insights-goals.png";
     case "billing-plan":
       return "/help-icons/billing-and-plan.png";
