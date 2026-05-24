@@ -7253,10 +7253,88 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   padding-bottom: 32px;
 }
 
+.adviser-summary,
 .adviser-hero,
 .adviser-chat,
 .adviser-footnote {
   padding: 24px;
+}
+
+.adviser-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.adviser-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.adviser-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(11, 27, 43, 0.08);
+}
+
+html[data-theme="dark"] .adviser-summary-card {
+  background: rgba(12, 18, 29, 0.72);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+.adviser-summary-card__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.adviser-summary-card__label-row span:first-child {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.adviser-summary-card strong {
+  font-size: clamp(1.55rem, 3vw, 2.2rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.adviser-summary-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 0.92rem;
+}
+
+.adviser-summary-card__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.adviser-summary-card__dot--positive {
+  background: var(--accent-2, #1db954);
+  box-shadow: 0 0 0 5px rgba(29, 185, 84, 0.12);
+}
+
+.adviser-summary-card__dot--warning {
+  background: var(--accent, #03a8c0);
+  box-shadow: 0 0 0 5px rgba(3, 168, 192, 0.12);
+}
+
+.adviser-summary-card__dot--neutral {
+  background: rgba(15, 23, 42, 0.45);
+  box-shadow: 0 0 0 5px rgba(15, 23, 42, 0.08);
 }
 
 .adviser-hero {
@@ -7536,33 +7614,40 @@ html[data-theme="dark"] .adviser-chat__message--assistant {
   gap: 10px;
 }
 
-.adviser-chat__composer textarea {
+.adviser-chat__composer-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.adviser-chat__composer-bar input {
   width: 100%;
-  resize: vertical;
-  min-height: 94px;
-  border-radius: 18px;
+  min-width: 0;
+  min-height: 46px;
+  border-radius: 16px;
   border: 1px solid rgba(11, 27, 43, 0.12);
   background: rgba(255, 255, 255, 0.72);
-  padding: 14px 16px;
+  padding: 0 16px;
   font: inherit;
   color: inherit;
 }
 
-html[data-theme="dark"] .adviser-chat__composer textarea {
+html[data-theme="dark"] .adviser-chat__composer-bar input {
   background: rgba(12, 18, 29, 0.78);
   border-color: rgba(148, 163, 184, 0.16);
 }
 
-.adviser-chat__composer-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.adviser-chat__status {
+  grid-column: 1 / 2;
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
-.adviser-chat__status {
-  color: var(--muted);
-  font-size: 0.9rem;
+.adviser-chat__composer-bar .button {
+  grid-column: 2 / 3;
+  grid-row: 1 / span 2;
+  align-self: start;
 }
 
 .adviser-footnote {
@@ -7613,28 +7698,21 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 }
 
 @media (max-width: 1100px) {
+  .adviser-summary__grid,
   .adviser-card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .adviser-footnote {
-    flex-direction: column;
-  }
-
-  .adviser-footnote__metrics {
-    width: 100%;
-    min-width: 0;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 720px) {
+  .adviser-summary,
   .adviser-hero,
   .adviser-chat,
   .adviser-footnote {
     padding: 18px;
   }
 
+  .adviser-summary__grid,
   .adviser-hero__stats,
   .adviser-card-grid,
   .adviser-footnote__metrics {
@@ -7651,9 +7729,19 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
     flex-direction: column;
   }
 
-  .adviser-chat__composer-row {
-    flex-direction: column;
-    align-items: stretch;
+  .adviser-chat__composer-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adviser-chat__composer-bar .button,
+  .adviser-chat__status {
+    grid-column: 1 / -1;
+  }
+
+  .adviser-chat__composer-bar .button {
+    width: 100%;
+    justify-content: center;
+    grid-row: auto;
   }
 
   .adviser-chat__message {

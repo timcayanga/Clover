@@ -445,14 +445,25 @@ async function AdviserPageContent() {
     recurringPatterns.map((pattern) => normalizeMerchant(pattern.merchantClean ?? pattern.merchantRaw))
   ).size;
 
-  const adviserHeadline =
-    currentNet >= 0
-      ? "Your money is holding together this month."
-      : "Clover sees some pressure points worth attention.";
-  const adviserSubheadline =
-    topCategoryName !== null
-      ? `${topCategoryName} is the biggest spending driver right now, and Clover can help you act on it.`
-      : "Clover is looking across your accounts, activity, investments, recurring items, and split bills to surface the most useful next step.";
+  const summaryCards = [
+    {
+      id: "money_left",
+      title: "Money left",
+      value: formatSignedCurrency(currentNet),
+      tone: currentNet >= 0 ? "positive" : "warning",
+      detail: currentSummary.income > 0 ? `${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending` : "Based on your current transaction history",
+    },
+    {
+      id: "savings_rate",
+      title: "Savings Rate",
+      value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
+      tone: currentSavingsRate === null || currentSavingsRate >= 0 ? "positive" : "warning",
+      detail:
+        currentSavingsRate === null
+          ? "Add more income and spending data to calculate this"
+          : `Based on your current 30-day income and expense mix`,
+    },
+  ];
 
   const passiveCards: AdviserCard[] = sortByScore(
     [
@@ -694,191 +705,91 @@ async function AdviserPageContent() {
     ].filter((card): card is AdviserCard & { score: number } => card !== null)
   ).slice(0, 3);
 
-  const passiveCardsToRender =
-    passiveCards.length > 0
-      ? passiveCards
-      : [
-          {
-            id: "import_more_activity",
-            title: "Import more activity",
-            summary: "Adviser gets sharper when Clover can see recent transactions, recurring costs, and account balances.",
-            evidence: "Bring in statements or connect accounts to unlock the first set of signals.",
-            ctaLabel: "Import data",
-            href: "/imports",
-            tone: "neutral" as const,
-          },
-          {
-            id: "connect_investments",
-            title: "Connect investments",
-            summary: "Holdings and snapshots help Adviser show portfolio movement instead of spending only.",
-            evidence: "A recent investment snapshot unlocks the investment movement card.",
-            ctaLabel: "Open investments",
-            href: "/investments",
-            tone: "neutral" as const,
-          },
-          {
-            id: "add_split_bills",
-            title: "Track shared bills",
-            summary: "Split bills give Adviser another useful signal for what still needs settlement.",
-            evidence: "Add a shared bill to turn social spending into a clear next step.",
-            ctaLabel: "Open split bills",
-            href: "/split-bill",
-            tone: "neutral" as const,
-          },
-        ];
-
-  const recommendationCardsToRender =
-    recommendationCards.length > 0
-      ? recommendationCards
-      : [
-          {
-            id: "review_data",
-            title: "Review the latest data",
-            summary: "Once Clover has more activity, Adviser can turn it into concrete actions.",
-            evidence: "Start with imported transactions and connected accounts.",
-            ctaLabel: "Open transactions",
-            href: "/transactions",
-            tone: "neutral" as const,
-          },
-          {
-            id: "connect_recurring",
-            title: "Check recurring items",
-            summary: "Recurring bills and commitments become a stronger action lane once they are in the system.",
-            evidence: "Add or import upcoming bills to create a clearer action queue.",
-            ctaLabel: "Open recurring",
-            href: "/recurring",
-            tone: "neutral" as const,
-          },
-          {
-            id: "start_goal",
-            title: "Set a financial goal",
-            summary: "Goals help Adviser decide what matters most when giving you next steps.",
-            evidence: "A goal turns vague advice into a specific direction.",
-            ctaLabel: "Open goals",
-            href: "/goals",
-            tone: "neutral" as const,
-          },
-        ];
-
-  const coachingCardsToRender =
-    coachingCards.length > 0
-      ? coachingCards
-      : [
-          {
-            id: "build_history",
-            title: "Build more history",
-            summary: "Coaching gets more useful as Clover learns your habits across a longer period.",
-            evidence: "More statements mean better pattern spotting.",
-            ctaLabel: "Import data",
-            href: "/imports",
-            tone: "neutral" as const,
-          },
-          {
-            id: "add_goal",
-            title: "Add a goal",
-            summary: "Goals give Adviser a clear direction for encouragement and pacing.",
-            evidence: "Even a simple target helps shape the guidance.",
-            ctaLabel: "Open goals",
-            href: "/goals",
-            tone: "neutral" as const,
-          },
-          {
-            id: "review_pattern",
-            title: "Review a pattern",
-            summary: "Once you have more transactions, Adviser can call out the habits worth adjusting.",
-            evidence: "Watch for weekends, categories, and recurring costs.",
-            ctaLabel: "Open reports",
-            href: "/reports",
-            tone: "neutral" as const,
-          },
-        ];
+  const passiveCardsToRender = passiveCards;
+  const recommendationCardsToRender = recommendationCards;
+  const coachingCardsToRender = coachingCards;
 
   const promptSuggestions: AdviserPrompt[] = sortByScore(
     [
-      { id: "prompt-1", label: "What changed since last month?", prompt: "What changed since last month, and what should I pay attention to first?", score: 100 },
+      topCategoryName
+        ? {
+            id: "prompt-top-category",
+            label: `Why is ${topCategoryName} up?`,
+            prompt: `Why is ${topCategoryName} driving my spending, and what should I look at first?`,
+            score: 100,
+          }
+        : null,
+      weekendExpenseShare > 0.2
+        ? {
+            id: "prompt-weekend-spend",
+            label: "What’s driving weekend spending?",
+            prompt: "What is driving my weekend spending, and what should I watch next?",
+            score: 98,
+          }
+        : null,
       recurringDueSoon.length > 0
         ? {
-            id: "prompt-2",
-            label: "Which recurring bills are coming up?",
-            prompt: "Which recurring bills are coming up, and which ones should I review first?",
-            score: 98,
+            id: "prompt-recurring",
+            label: "Which bills are due soon?",
+            prompt: "Which recurring bills or commitments are due soon, and which ones matter most?",
+            score: 96,
           }
         : null,
       openSplitBillCount > 0
         ? {
-            id: "prompt-3",
-            label: "What do I still owe?",
-            prompt: "How much do I still owe or am I owed from split bills?",
-            score: 96,
+            id: "prompt-split-bills",
+            label: "What’s still open in split bills?",
+            prompt: "How much do I still owe or am I owed from split bills, and who should I settle with first?",
+            score: 94,
           }
         : null,
       goalLabel
         ? {
-            id: "prompt-4",
-            label: "Am I on track for my goal?",
+            id: "prompt-goal",
+            label: `Am I on track for ${goalLabel}?`,
             prompt: `Am I on track for my goal of ${goalLabel.toLowerCase()}?`,
-            score: 94,
+            score: 92,
           }
         : null,
       latestInvestmentSnapshot
         ? {
-            id: "prompt-5",
-            label: "What happened with investments?",
-            prompt: "What happened with my investments, and what changed since the latest snapshot?",
-            score: 92,
+            id: "prompt-investments",
+            label: "What changed in investments?",
+            prompt: "What changed in my latest investment snapshot, and what should I pay attention to?",
+            score: 90,
           }
         : null,
-      {
-        id: "prompt-6",
-        label: "What should I review first?",
-        prompt: "What should I review first if I want the biggest impact today?",
-        score: 90,
-      },
+      uncategorizedTransactions.length > 0
+        ? {
+            id: "prompt-cleanup",
+            label: "What needs cleanup?",
+            prompt: "Which transactions still need cleanup, and which ones should I fix first?",
+            score: 88,
+          }
+        : null,
     ].filter((prompt): prompt is AdviserPrompt & { score: number } => prompt !== null)
   ).slice(0, 4);
 
   return (
     <CloverShell active="adviser" title="Adviser">
       <section className="adviser-page">
-        <header className="adviser-hero glass">
-          <div className="adviser-hero__copy">
-            <p className="eyebrow">Adviser</p>
-            <h1>{adviserHeadline}</h1>
-            <p>{adviserSubheadline}</p>
-          </div>
-
-          <div className="adviser-hero__stats" aria-label="Adviser summary">
-            <div className="adviser-stat">
-              <span>Money left</span>
-              <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
-            </div>
-            <div className="adviser-stat">
-              <span>Savings rate</span>
-              <strong>{currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}</strong>
-            </div>
-            <div className="adviser-stat">
-              <span>Reviewed</span>
-              <strong>{currentWindowTransactions.length} txns</strong>
-            </div>
-          </div>
-
-          <div className="adviser-hero__chips">
-            <span className="pill">{topCategoryName ?? "No clear driver yet"}</span>
-            <span className="pill">{goalLabel ?? "No goal selected"}</span>
-            <span className="pill">{workspaceAccounts.length} accounts</span>
+        <header className="adviser-summary glass">
+          <div className="adviser-summary__grid" aria-label="Adviser summary">
+            {summaryCards.map((card) => (
+              <article key={card.id} className="adviser-summary-card">
+                <div className="adviser-summary-card__label-row">
+                  <span>{card.title}</span>
+                  <span className={`adviser-summary-card__dot adviser-summary-card__dot--${card.tone}`} aria-hidden="true" />
+                </div>
+                <strong className={card.tone === "warning" ? "negative" : "positive"}>{card.value}</strong>
+                <p>{card.detail}</p>
+              </article>
+            ))}
           </div>
         </header>
 
         <section className="adviser-section">
-          <div className="adviser-section__head">
-            <div>
-              <p className="eyebrow">What Clover noticed</p>
-              <h2>Three signals worth your attention</h2>
-            </div>
-            <p className="adviser-section__lead">
-              Clover ranks the strongest signals first so this page stays useful without feeling crowded.
-            </p>
-          </div>
+          <p className="eyebrow">What Clover noticed</p>
           <div className="adviser-card-grid">
             {passiveCardsToRender.map((card) => (
               <Link key={card.id} href={card.href} className="adviser-card adviser-card--link glass">
@@ -893,15 +804,7 @@ async function AdviserPageContent() {
         </section>
 
         <section className="adviser-section">
-          <div className="adviser-section__head">
-            <div>
-              <p className="eyebrow">What you should do</p>
-              <h2>Three actions with real next steps</h2>
-            </div>
-            <p className="adviser-section__lead">
-              Every recommendation lands on the exact area of the app where the user can finish the task.
-            </p>
-          </div>
+          <p className="eyebrow">What you should do</p>
           <div className="adviser-card-grid">
             {recommendationCardsToRender.map((card) => (
               <Link key={card.id} href={card.href} className="adviser-card adviser-card--link glass">
@@ -916,15 +819,7 @@ async function AdviserPageContent() {
         </section>
 
         <section className="adviser-section">
-          <div className="adviser-section__head">
-            <div>
-              <p className="eyebrow">How you can improve</p>
-              <h2>Three coaching signals to build on</h2>
-            </div>
-            <p className="adviser-section__lead">
-              This section is meant to feel supportive and habit-oriented, not preachy.
-            </p>
-          </div>
+          <p className="eyebrow">How you can improve</p>
           <div className="adviser-card-grid">
             {coachingCardsToRender.map((card) => (
               <Link key={card.id} href={card.href} className="adviser-card adviser-card--link glass">
@@ -939,43 +834,8 @@ async function AdviserPageContent() {
         </section>
 
         <section className="adviser-section adviser-section--chat">
-          <div className="adviser-section__head">
-            <div>
-              <p className="eyebrow">Ask Clover anything</p>
-              <h2>Chat with Clover about the money story</h2>
-            </div>
-            <p className="adviser-section__lead">
-              Pro users can ask natural-language questions and get grounded answers from the same data that powers Adviser.
-            </p>
-          </div>
+          <p className="eyebrow">Ask Clover anything</p>
           <AdviserChat isPro={user.planTier === "pro"} prompts={promptSuggestions} />
-        </section>
-
-        <section className="adviser-footnote">
-          <div>
-            <p className="eyebrow">Context</p>
-            <p>
-              Clover is looking at transactions, accounts, investments, recurring items, split bills, and goals together to decide what matters most.
-            </p>
-          </div>
-          <div className="adviser-footnote__metrics">
-            <div>
-              <span>Top driver</span>
-              <strong>{topCategoryName ?? "N/A"}</strong>
-            </div>
-            <div>
-              <span>Recurring due soon</span>
-              <strong>{recurringDueSoon.length}</strong>
-            </div>
-            <div>
-              <span>Split bills open</span>
-              <strong>{openSplitBillCount}</strong>
-            </div>
-            <div>
-              <span>Investments</span>
-              <strong>{investmentSnapshots.length > 0 ? "Tracked" : "None"}</strong>
-            </div>
-          </div>
         </section>
       </section>
     </CloverShell>

@@ -15,7 +15,7 @@ type MoreSection = {
   items: MoreLink[];
 };
 
-type PageIconName = "accounts" | "recurring" | "investments" | "reports" | "goals" | "notifications" | "settings" | "help";
+type PageIconName = "accounts" | "recurring" | "split-bill" | "investments" | "reports" | "goals" | "notifications" | "settings" | "help";
 
 function PageIcon({ name }: { name: PageIconName }) {
   const common = {
@@ -56,6 +56,15 @@ function PageIcon({ name }: { name: PageIconName }) {
           <path d="M4 18h16" />
           <path d="M6.5 14.5l3-3 2.8 2.8L18 8" />
           <path d="M14.2 8H18v3.8" />
+        </svg>
+      );
+    case "split-bill":
+      return (
+        <svg {...common}>
+          <rect x="5" y="4.5" width="14" height="7.5" rx="2" />
+          <rect x="7" y="12" width="12" height="7.5" rx="2" />
+          <path d="M8.5 8h7" />
+          <path d="M10 15.5h7" />
         </svg>
       );
     case "reports":
@@ -112,6 +121,11 @@ const moreSections: MoreSection[] = [
         href: "/recurring",
         title: "Recurring",
         icon: "recurring",
+      },
+      {
+        href: "/split-bill",
+        title: "Split Bills",
+        icon: "split-bill",
       },
       {
         href: "/investments",

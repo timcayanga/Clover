@@ -271,7 +271,6 @@ type IconName =
   | "recurring"
   | "reports"
   | "adviser"
-  | "adviser"
   | "goals"
   | "menu"
   | "chevron-left"
@@ -1190,17 +1189,6 @@ export function CloverShell({
                           <MenuIcon name="reports" />
                         </span>
                         Reports
-                      </button>
-                      <button
-                        className={`sidebar-nav__submenu-link${active === "adviser" || pathname?.startsWith("/adviser") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/adviser")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="adviser" />
-                        </span>
-                        Adviser
                       </button>
                       <button
                         className={`sidebar-nav__submenu-link${active === "goals" || pathname?.startsWith("/goals") ? " is-active" : ""}`}

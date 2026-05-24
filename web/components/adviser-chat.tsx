@@ -83,7 +83,6 @@ export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
       <div className="adviser-chat adviser-chat--locked glass">
         <div className="adviser-chat__locked-copy">
           <p className="eyebrow">Pro only</p>
-          <h3>Ask Clover anything with chat</h3>
           <p>
             Upgrade to Pro to unlock conversational help, guided follow-ups, and contextual answers from the same Adviser data model.
           </p>
@@ -97,6 +96,25 @@ export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
 
   return (
     <div className="adviser-chat glass">
+      <form className="adviser-chat__composer" onSubmit={handleSubmit}>
+        <label className="sr-only" htmlFor="adviser-chat-input">
+          Ask Clover anything
+        </label>
+        <div className="adviser-chat__composer-bar">
+          <input
+          id="adviser-chat-input"
+          type="text"
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="Ask Clover a question about your money..."
+          />
+          <span className="adviser-chat__status">{isSending ? "Thinking..." : error ?? "Grounded in your Clover data."}</span>
+          <button type="submit" className="button button-primary button-small" disabled={isSending || input.trim().length === 0}>
+            {isSending ? "Sending" : "Send"}
+          </button>
+        </div>
+      </form>
+
       <div className="adviser-chat__prompt-row" aria-label="Suggested questions">
         {visiblePrompts.map((prompt) => (
           <button
@@ -113,13 +131,6 @@ export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
       </div>
 
       <div className="adviser-chat__thread" role="log" aria-live="polite" aria-relevant="additions text">
-        {messages.length === 0 ? (
-          <div className="adviser-chat__empty">
-            <strong>Start a conversation</strong>
-            <p>Ask about spending, recurring items, split bills, investments, or goals.</p>
-          </div>
-        ) : null}
-
         {messages.map((message, index) => (
           <article
             key={`${message.role}-${index}`}
@@ -131,25 +142,6 @@ export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
         ))}
         <div ref={bottomRef} />
       </div>
-
-      <form className="adviser-chat__composer" onSubmit={handleSubmit}>
-        <label className="sr-only" htmlFor="adviser-chat-input">
-          Ask Clover anything
-        </label>
-        <textarea
-          id="adviser-chat-input"
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Ask Clover a question about your money..."
-          rows={3}
-        />
-        <div className="adviser-chat__composer-row">
-          <span className="adviser-chat__status">{isSending ? "Thinking..." : error ?? "Grounded in your Clover data."}</span>
-          <button type="submit" className="button button-primary button-small" disabled={isSending || input.trim().length === 0}>
-            {isSending ? "Sending" : "Send"}
-          </button>
-        </div>
-      </form>
     </div>
   );
 }
