@@ -176,6 +176,24 @@ type AdviserThemeScore = {
   score: number;
 };
 
+type AdviserPreferenceProfile = Record<AdviserSignalTheme, number>;
+
+type AdviserForecastSignal = {
+  title: string;
+  summary: string;
+  evidence: string;
+  tone: AdviserCard["tone"];
+  score: number;
+};
+
+type AdviserAnomalySignal = {
+  title: string;
+  summary: string;
+  evidence: string;
+  tone: AdviserCard["tone"];
+  score: number;
+};
+
 const updateMemoryStats = (map: Map<string, AdviserMemoryStats>, key: string, createdAt: Date) => {
   const current = map.get(key);
   if (!current) {
@@ -224,6 +242,169 @@ const completionBoostFromStats = (stats: AdviserMemoryStats | undefined) => {
   }
 
   return clamp((stats.outcomes / stats.count) * 14 + stats.outcomes * 2, 0, 18);
+};
+
+const themeFromGroup = (group: string): AdviserSignalTheme | null => {
+  if (group === "cashflow" || group === "recurring" || group === "split-bills" || group === "spend-change" || group === "anomaly") {
+    return "cashflow";
+  }
+
+  if (group === "transactions" || group === "behavior-pattern" || group === "category-mix" || group === "patterns") {
+    return "behavior";
+  }
+
+  if (group === "goals") {
+    return "goals";
+  }
+
+  if (group === "investments") {
+    return "investments";
+  }
+
+  if (group === "cleanup" || group === "spend-control" || group === "category-pattern") {
+    return "cleanup";
+  }
+
+  return null;
+};
+
+const buildPreferenceProfile = (
+  interactions: Array<{
+    createdAt: Date;
+    metadata: AdviserAuditMetadata | null;
+  }>,
+  adviserOutcomeByGroup: Map<string, AdviserMemoryStats>,
+  adviserOutcomeByItem: Map<string, AdviserMemoryStats>,
+  now: Date
+): AdviserPreferenceProfile => {
+  const scores: AdviserPreferenceProfile = {
+    cashflow: 22,
+    behavior: 22,
+    goals: 22,
+    investments: 22,
+    cleanup: 22,
+  };
+
+  for (const interaction of interactions) {
+    const group = interaction.metadata?.group?.trim() || "";
+    const theme = themeFromGroup(group);
+    if (!theme) {
+      continue;
+    }
+
+    const itemId = interaction.metadata?.itemId?.trim() || "";
+    const ageDays = daysBetween(now, interaction.createdAt);
+    const recencyWeight = clamp(1 - ageDays / 180, 0.25, 1);
+    const groupOutcome = adviserOutcomeByGroup.get(group);
+    const itemOutcome = itemId ? adviserOutcomeByItem.get(itemId) : undefined;
+    const completionLift = completionBoostFromStats(groupOutcome) + completionBoostFromStats(itemOutcome);
+    const memoryLift = memoryBoostFromStats(groupOutcome, now) + memoryBoostFromStats(itemOutcome, now);
+
+    scores[theme] += recencyWeight * (1 + (completionLift + memoryLift) / 40);
+  }
+
+  const maxScore = Math.max(...Object.values(scores), 1);
+  return Object.fromEntries(
+    Object.entries(scores).map(([theme, score]) => [theme, clamp((score / maxScore) * 100)])
+  ) as AdviserPreferenceProfile;
+};
+
+const buildForecastSignal = (
+  currentNet: number,
+  currentSavingsRate: number | null,
+  liquidBalance: number,
+  recurringAmountPressure: number,
+  commitmentAmountPressure: number,
+  splitBillAmount: number,
+  baselineSpend: number,
+  monthlyExpenseTrend: { direction: number; score: number },
+  spendDelta: number | null
+): AdviserForecastSignal | null => {
+  const knownPressure = recurringAmountPressure + commitmentAmountPressure + splitBillAmount;
+  const projectedNet = currentNet - knownPressure;
+  const projectedRisk = clamp(
+    average([
+      currentSavingsRate !== null && currentSavingsRate < 0 ? 92 : 36,
+      knownPressure > 0 ? clamp((knownPressure / Math.max(liquidBalance + knownPressure, 1)) * 100 + 20) : 18,
+      liquidBalance < baselineSpend * 0.4 ? 88 : liquidBalance < baselineSpend * 0.8 ? 62 : 25,
+      monthlyExpenseTrend.direction > 0 ? 60 + monthlyExpenseTrend.score * 0.3 : 28,
+      spendDelta !== null && spendDelta > 0 ? clamp(50 + spendDelta * 1.1) : 28,
+    ])
+  );
+
+  if (projectedRisk < 40 && knownPressure <= 0 && (spendDelta === null || spendDelta <= 0)) {
+    return null;
+  }
+
+  const summary =
+    knownPressure > 0
+      ? `Known obligations add ${formatCurrency(knownPressure)} of pressure against your current balance and spending pattern.`
+      : `Your current spend trend suggests ${formatCurrency(Math.abs(projectedNet))} of net pressure if the pattern continues.`;
+
+  const evidence =
+    `Projected net after known obligations: ${formatSignedCurrency(projectedNet)}`
+    + ` · liquid balance ${formatCurrency(liquidBalance)}`
+    + ` · risk score ${Math.round(projectedRisk)}/100`;
+
+  return {
+    title: projectedRisk >= 70 ? "Cash flow forecast" : "Upcoming pressure",
+    summary,
+    evidence,
+    tone: projectedRisk >= 70 ? "warning" : "neutral",
+    score: projectedRisk,
+  };
+};
+
+const buildAnomalySignal = (
+  currentSpend: number,
+  currentIncome: number,
+  baselineSpend: number,
+  baselineIncome: number,
+  spendDelta: number | null,
+  incomeDelta: number | null,
+  topCategoryName: string | null,
+  topCategoryShare: number,
+  currentPatternConfidence: number,
+  currentTransactionConfidence: number
+): AdviserAnomalySignal | null => {
+  const spendSpikeScore = spendDelta !== null && spendDelta > 12 ? clamp(55 + spendDelta * 1.7) : 0;
+  const incomeDropScore = incomeDelta !== null && incomeDelta < -10 ? clamp(55 + Math.abs(incomeDelta) * 1.5) : 0;
+  const concentrationScore = topCategoryShare > 0.42 ? clamp(50 + topCategoryShare * 90) : 0;
+  const anomalyScore = Math.max(spendSpikeScore, incomeDropScore, concentrationScore);
+
+  if (anomalyScore < 45) {
+    return null;
+  }
+
+  if (spendSpikeScore >= incomeDropScore && spendSpikeScore >= concentrationScore) {
+    return {
+      title: "Unusual spend spike",
+      summary: "This month’s spending is moving faster than your own baseline.",
+      evidence: `${formatCurrency(currentSpend)} this period vs ${formatCurrency(baselineSpend)} baseline`,
+      tone: "warning",
+      score: clamp(average([spendSpikeScore, currentPatternConfidence, currentTransactionConfidence])),
+    };
+  }
+
+  if (incomeDropScore >= concentrationScore) {
+    return {
+      title: "Income dip detected",
+      summary: "Your current income is running below the baseline we can see in your history.",
+      evidence: `${formatCurrency(currentIncome)} this period vs ${formatCurrency(baselineIncome)} baseline`,
+      tone: "warning",
+      score: clamp(average([incomeDropScore, currentTransactionConfidence, currentPatternConfidence])),
+    };
+  }
+
+  return {
+    title: "Category concentration",
+    summary: "A small number of categories are dominating the expense mix right now.",
+    evidence: topCategoryName
+      ? `${topCategoryName} makes up ${formatPercent(topCategoryShare * 100)} of current expenses.`
+      : `Top category share is ${formatPercent(topCategoryShare * 100)}.`,
+    tone: "neutral",
+    score: clamp(average([concentrationScore, currentPatternConfidence, currentTransactionConfidence])),
+  };
 };
 
 const buildTransactionSummary = (transactions: AdviserTransaction[]) =>
@@ -414,6 +595,7 @@ async function AdviserPageContent() {
     allTransactionsQuery,
     recurringPatterns,
     financialCommitments,
+    goalHistoryRows,
     investmentSnapshots,
     splitBillWorkspaceData,
   ] = await Promise.all([
@@ -458,6 +640,22 @@ async function AdviserPageContent() {
       orderBy: [{ nextDueDate: "asc" }, { dueDate: "asc" }, { updatedAt: "desc" }],
       take: 20,
     }),
+    prisma.goalSetting.findMany({
+      where: {
+        userId: user.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 8,
+      select: {
+        primaryGoal: true,
+        targetAmount: true,
+        source: true,
+        goalPlan: true,
+        createdAt: true,
+      },
+    }),
     prisma.investmentSnapshot.findMany({
       where: {
         workspaceId: resolvedWorkspace.id,
@@ -467,6 +665,7 @@ async function AdviserPageContent() {
       select: {
         id: true,
         snapshotDate: true,
+        updatedAt: true,
         totalValue: true,
         costBasis: true,
         gainLossValue: true,
@@ -548,20 +747,6 @@ async function AdviserPageContent() {
     if (itemId) {
       updateMemoryStats(adviserMemoryByItem, itemId, interaction.createdAt);
     }
-
-    const followThroughWindowEnd = new Date(interaction.createdAt);
-    followThroughWindowEnd.setDate(followThroughWindowEnd.getDate() + 7);
-    const followedThrough = followThroughAuditLogs.some((log) => log.createdAt > interaction.createdAt && log.createdAt <= followThroughWindowEnd);
-
-    if (followedThrough) {
-      if (group) {
-        recordOutcomeStats(adviserOutcomeByGroup, group, interaction.createdAt);
-      }
-
-      if (itemId) {
-        recordOutcomeStats(adviserOutcomeByItem, itemId, interaction.createdAt);
-      }
-    }
   }
 
   const cardMemoryBoost = (group: string, itemId: string) =>
@@ -617,6 +802,10 @@ async function AdviserPageContent() {
   const longTermAverageIncome = allSummary.income / historyWindowCount;
   const longTermAverageNet = longTermAverageIncome - longTermAverageSpend;
   const longTermAverageSavingsRate = longTermAverageIncome > 0 ? longTermAverageNet / longTermAverageIncome : null;
+  const monthlySeries = buildMonthlySeries(allTransactions);
+  const monthlyExpenseTrend = calculateTrendSignal(monthlySeries.map((point) => point.expense));
+  const monthlyIncomeTrend = calculateTrendSignal(monthlySeries.map((point) => point.income));
+  const monthlyNetTrend = calculateTrendSignal(monthlySeries.map((point) => point.net));
   const weightedHistoricalBaseline = getWeightedHistoricalBaseline(monthlySeries);
   const baselineSpend = previousSpend > 0 ? average([previousSpend, weightedHistoricalBaseline.spend || previousSpend]) : weightedHistoricalBaseline.spend || longTermAverageSpend;
   const baselineIncome = previousSummary.income > 0 ? average([previousSummary.income, weightedHistoricalBaseline.income || previousSummary.income]) : weightedHistoricalBaseline.income || longTermAverageIncome;
@@ -740,10 +929,81 @@ async function AdviserPageContent() {
     ? clamp(average([toCountScore(openSplitBillCount, 3), openSplitBillAmount > 0 ? 100 : 0, historyDepthScore]))
     : 0;
   const currentGoalConfidence = goalLabel ? clamp(average([toCountScore(transactionCount, 20), goalProgress.bandLabel === "On track" ? 85 : 70, historyDepthScore])) : 0;
-  const monthlySeries = buildMonthlySeries(allTransactions);
-  const monthlyExpenseTrend = calculateTrendSignal(monthlySeries.map((point) => point.expense));
-  const monthlyIncomeTrend = calculateTrendSignal(monthlySeries.map((point) => point.income));
-  const monthlyNetTrend = calculateTrendSignal(monthlySeries.map((point) => point.net));
+  const recurringAmountPressure = recurringDueSoon.reduce((sum, pattern) => sum + Number(pattern.amount ?? 0), 0);
+  const commitmentAmountPressure = commitmentsDueSoon.reduce((sum, commitment) => sum + Number(commitment.amount ?? 0), 0);
+  const splitBillSettlementPressure = openSplitBillAmount;
+  const forecastSignal = buildForecastSignal(
+    currentNet,
+    currentSavingsRate,
+    liquidBalance,
+    recurringAmountPressure,
+    commitmentAmountPressure,
+    splitBillSettlementPressure,
+    baselineSpend,
+    monthlyExpenseTrend,
+    spendDelta
+  );
+  const anomalySignal = buildAnomalySignal(
+    currentSpend,
+    currentSummary.income,
+    baselineSpend,
+    baselineIncome,
+    spendDelta,
+    incomeDelta,
+    topCategoryName,
+    topCategoryShare,
+    currentPatternConfidence,
+    currentTransactionConfidence
+  );
+  const preferenceProfile = buildPreferenceProfile(adviserInteractions, adviserOutcomeByGroup, adviserOutcomeByItem, now);
+  const goalHistoryCompletionDates = goalHistoryRows.map((row) => row.createdAt);
+  const recurringCompletionDates = recurringPatterns.map((pattern) => pattern.updatedAt).filter((value): value is Date => value instanceof Date);
+  const commitmentCompletionDates = financialCommitments.map((commitment) => commitment.updatedAt).filter((value): value is Date => value instanceof Date);
+  const investmentCompletionDates = investmentSnapshots
+    .map((snapshot) => snapshot.updatedAt ?? snapshot.snapshotDate)
+    .filter((value): value is Date => value instanceof Date);
+  const splitBillCompletionDates = splitBillWorkspaceData.bills.flatMap((bill) => [
+    new Date(bill.updatedAt),
+    ...(Array.isArray(bill.transferSettlements)
+      ? bill.transferSettlements.map((settlement) => new Date(settlement.updatedAt))
+      : []),
+  ]);
+  const transactionCompletionDates = followThroughAuditLogs.map((log) => log.createdAt);
+  const interactionCompletionChecks = {
+    cashflow: [transactionCompletionDates, recurringCompletionDates, commitmentCompletionDates, splitBillCompletionDates],
+    behavior: [transactionCompletionDates],
+    goals: [goalHistoryCompletionDates],
+    investments: [investmentCompletionDates],
+    cleanup: [transactionCompletionDates],
+  } satisfies Record<AdviserSignalTheme, Date[][]>;
+
+  for (const interaction of adviserInteractions) {
+    const metadata = interaction.metadata as AdviserAuditMetadata | null;
+    const group = metadata?.group?.trim() || "";
+    const itemId = metadata?.itemId?.trim() || interaction.entityId?.trim() || "";
+    const theme = themeFromGroup(group);
+    if (!theme) {
+      continue;
+    }
+
+    const followThroughWindowEnd = new Date(interaction.createdAt);
+    followThroughWindowEnd.setDate(followThroughWindowEnd.getDate() + 7);
+    const matchedBuckets = interactionCompletionChecks[theme];
+    const followedThrough = matchedBuckets.some((bucket) =>
+      bucket.some((date) => date > interaction.createdAt && date <= followThroughWindowEnd)
+    );
+
+    if (followedThrough) {
+      if (group) {
+        recordOutcomeStats(adviserOutcomeByGroup, group, interaction.createdAt);
+      }
+
+      if (itemId) {
+        recordOutcomeStats(adviserOutcomeByItem, itemId, interaction.createdAt);
+      }
+    }
+  }
+
   const trendMomentumScore = clamp(average([monthlyExpenseTrend.score, monthlyIncomeTrend.score, monthlyNetTrend.score]));
   const trendDirectionScore = clamp(
     average([
@@ -845,8 +1105,15 @@ async function AdviserPageContent() {
         uncategorizedTransactions.length > 0 ? 92 : 35,
         currentTransactionConfidence,
       ])
-      ),
-    };
+    ),
+  };
+  const userPreferenceAffinity: Record<AdviserSignalTheme, number> = {
+    cashflow: clamp(average([preferenceProfile.cashflow, themeAffinity.cashflow])),
+    behavior: clamp(average([preferenceProfile.behavior, themeAffinity.behavior])),
+    goals: clamp(average([preferenceProfile.goals, themeAffinity.goals])),
+    investments: clamp(average([preferenceProfile.investments, themeAffinity.investments])),
+    cleanup: clamp(average([preferenceProfile.cleanup, themeAffinity.cleanup])),
+  };
   const adviserExplainability = {
     baseline: {
       spend: baselineSpend,
@@ -858,7 +1125,20 @@ async function AdviserPageContent() {
       key: theme.key,
       score: theme.score,
       affinity: themeAffinity[theme.key],
+      preference: userPreferenceAffinity[theme.key],
     })),
+    forecast: forecastSignal
+      ? {
+          title: forecastSignal.title,
+          score: forecastSignal.score,
+        }
+      : null,
+    anomaly: anomalySignal
+      ? {
+          title: anomalySignal.title,
+          score: anomalySignal.score,
+        }
+      : null,
     memory: {
       interactions: adviserInteractions.length,
       followThroughCandidates: followThroughAuditLogs.length,
@@ -903,7 +1183,7 @@ async function AdviserPageContent() {
     }
 
     const confidenceMultiplier = clamp(0.72 + average([card.breakdown.confidence, historyDepthScore, currentTransactionConfidence]) / 160, 0.72, 1.16);
-    const priorityBoost = themeKey ? themeAffinity[themeKey] * 0.1 : 0;
+    const priorityBoost = themeKey ? userPreferenceAffinity[themeKey] * 0.08 : 0;
 
     return clamp(Math.round(baseScore * confidenceMultiplier + memoryBoost + contextBoost + themeBoost + priorityBoost));
   };
@@ -933,7 +1213,7 @@ async function AdviserPageContent() {
     }
 
     const confidenceMultiplier = clamp(0.72 + average([prompt.breakdown.confidence, historyDepthScore, currentTransactionConfidence]) / 160, 0.72, 1.16);
-    const priorityBoost = themeKey ? themeAffinity[themeKey] * 0.08 : 0;
+    const priorityBoost = themeKey ? userPreferenceAffinity[themeKey] * 0.06 : 0;
 
     return clamp(Math.round(baseScore * confidenceMultiplier + memoryBoost + contextBoost + themeBoost + priorityBoost));
   };
@@ -963,6 +1243,27 @@ async function AdviserPageContent() {
 
   const passiveCards: RankedAdviserCard[] = selectTopRanked(
     [
+      anomalySignal
+        ? {
+            id: "anomaly_signal",
+            title: anomalySignal.title,
+            summary: anomalySignal.summary,
+            evidence: anomalySignal.evidence,
+            ctaLabel: "Review details",
+            href: "/reports",
+            tone: anomalySignal.tone,
+            group: "cashflow",
+            breakdown: {
+              impact: clamp(anomalySignal.score + 18),
+              urgency: clamp(anomalySignal.score + 22),
+              confidence: currentPatternConfidence,
+              personalization: clamp(70 + topCategoryShare * 20),
+              recency: 100,
+              actionability: 72,
+            },
+            score: 0,
+          }
+        : null,
       spendDelta !== null
         ? {
             id: "spending_moved",
@@ -1124,6 +1425,27 @@ async function AdviserPageContent() {
 
   const recommendationCards: RankedAdviserCard[] = selectTopRanked(
     [
+      forecastSignal
+        ? {
+            id: "forecast_pressure",
+            title: forecastSignal.title,
+            summary: forecastSignal.summary,
+            evidence: forecastSignal.evidence,
+            ctaLabel: "Review cash flow",
+            href: "/accounts",
+            tone: forecastSignal.tone,
+            group: "cashflow",
+            breakdown: {
+              impact: clamp(forecastSignal.score),
+              urgency: clamp(forecastSignal.score + 8),
+              confidence: clamp(average([currentTransactionConfidence, currentRecurringConfidence, currentSplitConfidence])),
+              personalization: clamp(70 + recurringDueSoon.length * 4 + commitmentsDueSoon.length * 4),
+              recency: 100,
+              actionability: 92,
+            },
+            score: 0,
+          }
+        : null,
       uncategorizedTransactions.length > 0
         ? {
             id: "review_uncategorized",

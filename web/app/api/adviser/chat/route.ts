@@ -38,6 +38,22 @@ type AdviserAuditMetadata = {
 
 type AdviserSignalTheme = "cashflow" | "behavior" | "goals" | "investments" | "cleanup";
 
+type AdviserPreferenceProfile = Record<AdviserSignalTheme, number>;
+
+type AdviserForecastSignal = {
+  title: string;
+  summary: string;
+  evidence: string;
+  score: number;
+};
+
+type AdviserAnomalySignal = {
+  title: string;
+  summary: string;
+  evidence: string;
+  score: number;
+};
+
 const monthFormatter = new Intl.DateTimeFormat("en-PH", {
   month: "short",
   year: "numeric",
@@ -218,6 +234,164 @@ const completionBoostFromStats = (stats: AdviserMemoryStats | undefined) => {
 
   return Math.max(0, Math.min(18, (stats.outcomes / stats.count) * 14 + stats.outcomes * 2));
 };
+const themeFromGroup = (group: string): AdviserSignalTheme | null => {
+  if (group === "cashflow" || group === "recurring" || group === "split-bills" || group === "spend-change" || group === "anomaly") {
+    return "cashflow";
+  }
+
+  if (group === "transactions" || group === "behavior-pattern" || group === "category-mix" || group === "patterns") {
+    return "behavior";
+  }
+
+  if (group === "goals") {
+    return "goals";
+  }
+
+  if (group === "investments") {
+    return "investments";
+  }
+
+  if (group === "cleanup" || group === "spend-control" || group === "category-pattern") {
+    return "cleanup";
+  }
+
+  return null;
+};
+
+const buildPreferenceProfile = (
+  interactions: Array<{
+    createdAt: Date;
+    metadata: AdviserAuditMetadata | null;
+  }>,
+  adviserOutcomeByGroup: Map<string, AdviserMemoryStats>,
+  adviserOutcomeByItem: Map<string, AdviserMemoryStats>,
+  now: Date
+): AdviserPreferenceProfile => {
+  const scores: AdviserPreferenceProfile = {
+    cashflow: 22,
+    behavior: 22,
+    goals: 22,
+    investments: 22,
+    cleanup: 22,
+  };
+
+  for (const interaction of interactions) {
+    const group = interaction.metadata?.group?.trim() || "";
+    const theme = themeFromGroup(group);
+    if (!theme) {
+      continue;
+    }
+
+    const itemId = interaction.metadata?.itemId?.trim() || "";
+    const daysSince = Math.max(1, Math.ceil((now.getTime() - interaction.createdAt.getTime()) / (1000 * 60 * 60 * 24)));
+    const recencyWeight = Math.max(0.25, Math.min(1, 1 - daysSince / 180));
+    const groupOutcome = adviserOutcomeByGroup.get(group);
+    const itemOutcome = itemId ? adviserOutcomeByItem.get(itemId) : undefined;
+    const completionLift = completionBoostFromStats(groupOutcome) + completionBoostFromStats(itemOutcome);
+    const memoryLift = memoryBoostFromStats(groupOutcome, now) + memoryBoostFromStats(itemOutcome, now);
+
+    scores[theme] += recencyWeight * (1 + (completionLift + memoryLift) / 40);
+  }
+
+  const maxScore = Math.max(...Object.values(scores), 1);
+  return Object.fromEntries(
+    Object.entries(scores).map(([theme, score]) => [theme, Math.max(0, Math.min(100, (score / maxScore) * 100))])
+  ) as AdviserPreferenceProfile;
+};
+
+const buildForecastSignal = (
+  currentNet: number,
+  currentSavingsRate: number | null,
+  liquidBalance: number,
+  recurringAmountPressure: number,
+  commitmentAmountPressure: number,
+  splitBillAmount: number,
+  baselineSpend: number,
+  monthlyExpenseTrend: { direction: number; score: number },
+  spendDelta: number | null
+): AdviserForecastSignal | null => {
+  const knownPressure = recurringAmountPressure + commitmentAmountPressure + splitBillAmount;
+  const projectedNet = currentNet - knownPressure;
+  const projectedRisk = Math.max(
+    0,
+    Math.min(
+      100,
+      average([
+        currentSavingsRate !== null && currentSavingsRate < 0 ? 92 : 36,
+        knownPressure > 0 ? Math.max(18, Math.min(100, (knownPressure / Math.max(liquidBalance + knownPressure, 1)) * 100 + 20)) : 18,
+        liquidBalance < baselineSpend * 0.4 ? 88 : liquidBalance < baselineSpend * 0.8 ? 62 : 25,
+        monthlyExpenseTrend.direction > 0 ? 60 + monthlyExpenseTrend.score * 0.3 : 28,
+        spendDelta !== null && spendDelta > 0 ? Math.max(28, Math.min(100, 50 + spendDelta * 1.1)) : 28,
+      ])
+    )
+  );
+
+  if (projectedRisk < 40 && knownPressure <= 0 && (spendDelta === null || spendDelta <= 0)) {
+    return null;
+  }
+
+  const summary =
+    knownPressure > 0
+      ? `Known obligations add ${formatCurrency(knownPressure)} of pressure against your current balance and spending pattern.`
+      : `Your current spend trend suggests ${formatCurrency(Math.abs(projectedNet))} of net pressure if the pattern continues.`;
+  const evidence = `Projected net after known obligations: ${formatSignedCurrency(projectedNet)} · liquid balance ${formatCurrency(liquidBalance)} · risk score ${Math.round(projectedRisk)}/100`;
+
+  return {
+    title: projectedRisk >= 70 ? "Cash flow forecast" : "Upcoming pressure",
+    summary,
+    evidence,
+    score: projectedRisk,
+  };
+};
+
+const buildAnomalySignal = (
+  currentSpend: number,
+  currentIncome: number,
+  baselineSpend: number,
+  baselineIncome: number,
+  spendDelta: number | null,
+  incomeDelta: number | null,
+  topCategoryName: string | null,
+  topCategoryShare: number,
+  currentPatternConfidence: number,
+  currentTransactionConfidence: number
+): AdviserAnomalySignal | null => {
+  const spendSpikeScore = spendDelta !== null && spendDelta > 12 ? Math.max(0, Math.min(100, 55 + spendDelta * 1.7)) : 0;
+  const incomeDropScore = incomeDelta !== null && incomeDelta < -10 ? Math.max(0, Math.min(100, 55 + Math.abs(incomeDelta) * 1.5)) : 0;
+  const concentrationScore = topCategoryShare > 0.42 ? Math.max(0, Math.min(100, 50 + topCategoryShare * 90)) : 0;
+  const anomalyScore = Math.max(spendSpikeScore, incomeDropScore, concentrationScore);
+
+  if (anomalyScore < 45) {
+    return null;
+  }
+
+  if (spendSpikeScore >= incomeDropScore && spendSpikeScore >= concentrationScore) {
+    return {
+      title: "Unusual spend spike",
+      summary: "This month’s spending is moving faster than your own baseline.",
+      evidence: `${formatCurrency(currentSpend)} this period vs ${formatCurrency(baselineSpend)} baseline`,
+      score: Math.max(0, Math.min(100, average([spendSpikeScore, currentPatternConfidence, currentTransactionConfidence]))),
+    };
+  }
+
+  if (incomeDropScore >= concentrationScore) {
+    return {
+      title: "Income dip detected",
+      summary: "Your current income is running below the baseline we can see in your history.",
+      evidence: `${formatCurrency(currentIncome)} this period vs ${formatCurrency(baselineIncome)} baseline`,
+      score: Math.max(0, Math.min(100, average([incomeDropScore, currentTransactionConfidence, currentPatternConfidence]))),
+    };
+  }
+
+  return {
+    title: "Category concentration",
+    summary: "A small number of categories are dominating the expense mix right now.",
+    evidence: topCategoryName
+      ? `${topCategoryName} makes up ${formatPercent(topCategoryShare * 100)} of current expenses.`
+      : `Top category share is ${formatPercent(topCategoryShare * 100)}.`,
+    score: Math.max(0, Math.min(100, average([concentrationScore, currentPatternConfidence, currentTransactionConfidence]))),
+  };
+};
 const extractOutputText = (payload: Record<string, unknown>) => {
   if (typeof payload.output_text === "string" && payload.output_text.trim()) {
     return payload.output_text.trim();
@@ -335,7 +509,7 @@ export async function POST(request: Request) {
     const nextFourteenDays = new Date(now);
     nextFourteenDays.setDate(nextFourteenDays.getDate() + 14);
 
-    const [allTransactionsQuery, recurringPatterns, financialCommitments, investmentSnapshots, splitBillWorkspaceData] =
+    const [allTransactionsQuery, recurringPatterns, financialCommitments, goalHistoryRows, investmentSnapshots, splitBillWorkspaceData] =
       await Promise.all([
         prisma.transaction.findMany({
           where: {
@@ -375,6 +549,22 @@ export async function POST(request: Request) {
           orderBy: [{ nextDueDate: "asc" }, { dueDate: "asc" }, { updatedAt: "desc" }],
           take: 20,
         }),
+        prisma.goalSetting.findMany({
+          where: {
+            userId: user.id,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 8,
+          select: {
+            primaryGoal: true,
+            targetAmount: true,
+            source: true,
+            goalPlan: true,
+            createdAt: true,
+          },
+        }),
         prisma.investmentSnapshot.findMany({
           where: {
             workspaceId: workspace.id,
@@ -383,6 +573,7 @@ export async function POST(request: Request) {
           take: 2,
           select: {
             snapshotDate: true,
+            updatedAt: true,
             totalValue: true,
             currency: true,
             account: {
@@ -442,23 +633,9 @@ export async function POST(request: Request) {
         updateMemoryStats(adviserMemoryByGroup, group, interaction.createdAt);
       }
 
-      if (itemId) {
-        updateMemoryStats(adviserMemoryByItem, itemId, interaction.createdAt);
-      }
-
-      const followThroughWindowEnd = new Date(interaction.createdAt);
-      followThroughWindowEnd.setDate(followThroughWindowEnd.getDate() + 7);
-      const followedThrough = followThroughAuditLogs.some((log) => log.createdAt > interaction.createdAt && log.createdAt <= followThroughWindowEnd);
-
-      if (followedThrough) {
-        if (group) {
-          recordOutcomeStats(adviserOutcomeByGroup, group, interaction.createdAt);
-        }
-
-        if (itemId) {
-          recordOutcomeStats(adviserOutcomeByItem, itemId, interaction.createdAt);
-        }
-      }
+    if (itemId) {
+      updateMemoryStats(adviserMemoryByItem, itemId, interaction.createdAt);
+    }
     }
 
     const allTransactions = allTransactionsQuery as Array<{
@@ -591,6 +768,81 @@ export async function POST(request: Request) {
       .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
       .reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
 
+    const recurringAmountPressure = recurringDueSoon.reduce((sum, pattern) => sum + Number(pattern.amount ?? 0), 0);
+    const commitmentAmountPressure = commitmentsDueSoon.reduce((sum, commitment) => sum + Number(commitment.amount ?? 0), 0);
+    const splitBillSettlementPressure = openSplitBillAmount;
+    const forecastSignal = buildForecastSignal(
+      currentNet,
+      currentSavingsRate,
+      liquidBalance,
+      recurringAmountPressure,
+      commitmentAmountPressure,
+      splitBillSettlementPressure,
+      baselineSpend,
+      monthlyExpenseTrend,
+      spendDelta
+    );
+    const anomalySignal = buildAnomalySignal(
+      currentSpend,
+      currentSummary.income,
+      baselineSpend,
+      baselineIncome,
+      spendDelta,
+      incomeDelta,
+      topCategoryName,
+      topCategoryShare,
+      currentPatternConfidence,
+      currentTransactionConfidence
+    );
+    const preferenceProfile = buildPreferenceProfile(adviserInteractions, adviserOutcomeByGroup, adviserOutcomeByItem, now);
+    const goalHistoryCompletionDates = goalHistoryRows.map((row) => row.createdAt);
+    const recurringCompletionDates = recurringPatterns.map((pattern) => pattern.updatedAt).filter((value): value is Date => value instanceof Date);
+    const commitmentCompletionDates = financialCommitments.map((commitment) => commitment.updatedAt).filter((value): value is Date => value instanceof Date);
+    const investmentCompletionDates = investmentSnapshots
+      .map((snapshot) => snapshot.updatedAt ?? snapshot.snapshotDate)
+      .filter((value): value is Date => value instanceof Date);
+    const splitBillCompletionDates = splitBillWorkspaceData.bills.flatMap((bill) => [
+      new Date(bill.updatedAt),
+      ...(Array.isArray(bill.transferSettlements)
+        ? bill.transferSettlements.map((settlement) => new Date(settlement.updatedAt))
+        : []),
+    ]);
+    const transactionCompletionDates = followThroughAuditLogs.map((log) => log.createdAt);
+    const interactionCompletionChecks = {
+      cashflow: [transactionCompletionDates, recurringCompletionDates, commitmentCompletionDates, splitBillCompletionDates],
+      behavior: [transactionCompletionDates],
+      goals: [goalHistoryCompletionDates],
+      investments: [investmentCompletionDates],
+      cleanup: [transactionCompletionDates],
+    } satisfies Record<AdviserSignalTheme, Date[][]>;
+
+    for (const interaction of adviserInteractions) {
+      const metadata = interaction.metadata as AdviserAuditMetadata | null;
+      const group = metadata?.group?.trim() || "";
+      const itemId = metadata?.itemId?.trim() || interaction.entityId?.trim() || "";
+      const theme = themeFromGroup(group);
+      if (!theme) {
+        continue;
+      }
+
+      const followThroughWindowEnd = new Date(interaction.createdAt);
+      followThroughWindowEnd.setDate(followThroughWindowEnd.getDate() + 7);
+      const matchedBuckets = interactionCompletionChecks[theme];
+      const followedThrough = matchedBuckets.some((bucket) =>
+        bucket.some((date) => date > interaction.createdAt && date <= followThroughWindowEnd)
+      );
+
+      if (followedThrough) {
+        if (group) {
+          recordOutcomeStats(adviserOutcomeByGroup, group, interaction.createdAt);
+        }
+
+        if (itemId) {
+          recordOutcomeStats(adviserOutcomeByItem, itemId, interaction.createdAt);
+        }
+      }
+    }
+
     const themeMemoryScore = (groups: string[]) => {
       const memoryScores = groups
         .map((group) => adviserMemoryByGroup.get(group))
@@ -640,8 +892,29 @@ export async function POST(request: Request) {
         Math.min(100, average([themeMemoryScore(["cleanup"]), uncategorizedTransactions.length > 0 ? 92 : 35, currentTransactionConfidence]))
       ),
     };
+    const userPreferenceAffinity: Record<AdviserSignalTheme, number> = {
+      cashflow: Math.max(0, Math.min(100, average([preferenceProfile.cashflow, themeAffinity.cashflow]))),
+      behavior: Math.max(0, Math.min(100, average([preferenceProfile.behavior, themeAffinity.behavior]))),
+      goals: Math.max(0, Math.min(100, average([preferenceProfile.goals, themeAffinity.goals]))),
+      investments: Math.max(0, Math.min(100, average([preferenceProfile.investments, themeAffinity.investments]))),
+      cleanup: Math.max(0, Math.min(100, average([preferenceProfile.cleanup, themeAffinity.cleanup]))),
+    };
 
     const explainabilityBundle = [
+      forecastSignal
+        ? {
+            label: forecastSignal.title,
+            score: forecastSignal.score,
+            reason: forecastSignal.evidence,
+          }
+        : null,
+      anomalySignal
+        ? {
+            label: anomalySignal.title,
+            score: anomalySignal.score,
+            reason: anomalySignal.evidence,
+          }
+        : null,
       {
         label: "Cash flow pressure",
         score: cashflowPressureScore,
@@ -672,6 +945,7 @@ export async function POST(request: Request) {
         reason: `${uncategorizedTransactions.length} uncategorized transactions; history depth ${historySpanDays} days.`,
       },
     ]
+      .filter((item): item is { label: string; score: number; reason: string } => item !== null)
       .sort((left, right) => right.score - left.score)
       .slice(0, 5)
       .map((item, index) => `${index + 1}. ${item.label} (${Math.round(item.score)}): ${item.reason}`);
@@ -697,7 +971,10 @@ export async function POST(request: Request) {
       `Savings rate: ${currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}${baselineSavingsRate === null ? "" : `; baseline ${formatPercent(baselineSavingsRate * 100)}`}`,
       `Trend signals: spend ${monthlyExpenseTrend.direction > 0 ? "rising" : monthlyExpenseTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyExpenseTrend.score)}), income ${monthlyIncomeTrend.direction > 0 ? "rising" : monthlyIncomeTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyIncomeTrend.score)}), net ${monthlyNetTrend.direction > 0 ? "rising" : monthlyNetTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyNetTrend.score)})`,
       `Adviser themes: ${topThemeLine || "none"}`,
-      `Adviser memory: ${adviserInteractions.length} interactions, ${followThroughAuditLogs.length} possible follow-through actions, follow-through rate ${formatPercent(adviserFollowThroughRate)}, cleanup affinity ${Math.round(themeAffinity.cleanup)}, cashflow affinity ${Math.round(themeAffinity.cashflow)}`,
+      `Adviser memory: ${adviserInteractions.length} interactions, ${followThroughAuditLogs.length} possible follow-through actions, follow-through rate ${formatPercent(adviserFollowThroughRate)}, cleanup affinity ${Math.round(userPreferenceAffinity.cleanup)}, cashflow affinity ${Math.round(userPreferenceAffinity.cashflow)}`,
+      `Preference profile: cashflow ${Math.round(userPreferenceAffinity.cashflow)}, behavior ${Math.round(userPreferenceAffinity.behavior)}, goals ${Math.round(userPreferenceAffinity.goals)}, investments ${Math.round(userPreferenceAffinity.investments)}, cleanup ${Math.round(userPreferenceAffinity.cleanup)}`,
+      `Forecast: ${forecastSignal ? `${forecastSignal.title} (${Math.round(forecastSignal.score)})` : "none"}; anomaly: ${anomalySignal ? `${anomalySignal.title} (${Math.round(anomalySignal.score)})` : "none"}`,
+      `Goal history: ${goalHistoryRows.length > 0 ? `${goalHistoryRows.length} recent setting change${goalHistoryRows.length === 1 ? "" : "s"}` : "none"}`,
       `Ranked evidence: ${explainabilityBundle.join(" | ")}`,
       `Top category: ${topCategoryName ?? "none"}`,
       `Recurring due soon: ${recurringDueSoon.map((item) => `${item.label}${item.due ? ` (${item.due})` : ""}`).join("; ") || "none"}`,
