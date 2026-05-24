@@ -1446,6 +1446,7 @@ export function ImportFilesModal({
   const [qaRunsByItemId, setQaRunsByItemId] = useState<Record<string, QaRunSummary | null>>({});
   const [qaLoadingByItemId, setQaLoadingByItemId] = useState<Record<string, boolean>>({});
   const [qaErrorByItemId, setQaErrorByItemId] = useState<Record<string, string | null>>({});
+  const [displayedOverallProgress, setDisplayedOverallProgress] = useState(0);
   const autoLoadedQaIdsRef = useRef(new Set<string>());
   const localPreparseStartedRef = useRef(new Set<string>());
   const localPreparseSummaryByItemIdRef = useRef(new Map<string, UploadInsightsSummary>());
@@ -1651,6 +1652,11 @@ export function ImportFilesModal({
     }
 
     const outcome = summarizeVisibilityOutcome(currentItems);
+    const completedSummary = combineUploadInsightsSummaries(
+      currentItems
+        .map((item) => localPreparseSummaryByItemIdRef.current.get(item.id) ?? null)
+        .filter((summary): summary is UploadInsightsSummary => Boolean(summary))
+    );
     const outcomeMessage =
       reason === "visible"
         ? `Accounts and transactions are visible. ${outcome.message}`
@@ -1698,7 +1704,7 @@ export function ImportFilesModal({
       completedFiles: outcome.successful.length,
       progress: 100,
       detail: outcomeMessage,
-      summary: null,
+      summary: completedSummary,
       errorMessage: outcome.failed.length > 0 ? outcomeMessage : null,
       errorTitle: outcome.failed.length > 0 ? "Import review needed" : null,
       errorNextSteps:
@@ -5918,6 +5924,7 @@ export function ImportFilesModal({
     : 0;
   const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
   const showCompactProgress = busy || Boolean(activeItem) || hasCompletedBatch;
+  const targetDisplayProgress = showCompactProgress ? overallProgress : 0;
   const shouldLockPageInteraction =
     open && !backgroundOnly && !launchInBackground && (Boolean(activePasswordItem) || !showCompactProgress);
   const hasImportIssue = items.some((item) => item.status === "error" || item.status === "needs_password") || Boolean(validationNotice);
@@ -5950,6 +5957,45 @@ export function ImportFilesModal({
         ];
   const canResumeImport = (item: QueuedFile) =>
     Boolean(item.importFileId && (item.confirmationState === "staged" || isResumableImportErrorCode(item.errorCode)));
+
+  useEffect(() => {
+    if (!showCompactProgress) {
+      setDisplayedOverallProgress(0);
+      return;
+    }
+
+    let cancelled = false;
+
+    const tick = () => {
+      if (cancelled) {
+        return;
+      }
+
+      setDisplayedOverallProgress((current) => {
+        const target = Math.max(0, Math.min(100, targetDisplayProgress));
+
+        if (target < current) {
+          return target;
+        }
+
+        if (Math.abs(target - current) < 0.5) {
+          return target;
+        }
+
+        const remaining = target - current;
+        const step = target >= 100 ? Math.min(remaining, Math.max(2, remaining * 0.22)) : Math.min(remaining, Math.max(1, remaining * 0.35));
+        return Math.min(target, current + step);
+      });
+
+      window.setTimeout(tick, targetDisplayProgress >= 100 ? 120 : 90);
+    };
+
+    tick();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showCompactProgress, targetDisplayProgress]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !shouldLockPageInteraction) {
@@ -6003,7 +6049,7 @@ export function ImportFilesModal({
       fileIndex: activeProgressItem ? items.findIndex((item) => item.id === activeProgressItem.id) + 1 : completedFileCount,
       fileTotal: items.length,
       completedFiles: completedFileCount,
-      progress: overallProgress,
+      progress: displayedOverallProgress,
       detail: nextDetail,
       summary: nextStatus === "done" ? previousSummary : null,
       errorCode: activeErrorItem?.errorCode ?? (validationNotice ? lastImportActivityRef.current?.errorCode ?? null : null),
@@ -6025,7 +6071,7 @@ export function ImportFilesModal({
 
     lastImportActivityRef.current = nextSnapshot;
     setImportActivity(nextSnapshot);
-  }, [activeProgressItem, busy, completedFileCount, items, message, open, overallProgress, validationNotice, workspaceId]);
+  }, [activeProgressItem, busy, completedFileCount, displayedOverallProgress, items, message, open, validationNotice, workspaceId]);
   useEffect(() => {
     if (autoCloseCompletedBatchTimerRef.current) {
       window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
@@ -6573,7 +6619,7 @@ export function ImportFilesModal({
         fileIndex={activeProgressItem ? items.findIndex((item) => item.id === activeProgressItem.id) + 1 : completedFileCount}
         fileTotal={items.length}
         completedFiles={completedFileCount}
-        progress={overallProgress}
+        progress={displayedOverallProgress}
         summary={lastImportActivityRef.current?.summary ?? null}
         detail={
           !activeProgressItem && hasCompletedBatch && message
