@@ -65,6 +65,29 @@ type AdviserPrompt = {
   prompt: string;
 };
 
+type ScoreFactors = {
+  impact: number;
+  urgency: number;
+  confidence: number;
+  personalization: number;
+  recency: number;
+  actionability: number;
+};
+
+type ScoreWeights = ScoreFactors;
+
+type RankedAdviserCard = AdviserCard & {
+  group: string;
+  breakdown: ScoreFactors;
+  score: number;
+};
+
+type RankedAdviserPrompt = AdviserPrompt & {
+  group: string;
+  breakdown: ScoreFactors;
+  score: number;
+};
+
 const selectedWorkspaceCookieKey = selectedWorkspaceKey;
 
 const monthFormatter = new Intl.DateTimeFormat("en-PH", {
@@ -80,8 +103,52 @@ const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
 const normalizeMerchant = (value: string) => value.trim().toLowerCase();
 const buildTransactionsHref = (params: Record<string, string>) => `/transactions?${new URLSearchParams(params).toString()}`;
+const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
+const average = (values: number[]) => (values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0);
+const toCountScore = (count: number, maxCount = 5) => clamp((count / maxCount) * 100);
 
-const sortByScore = <T extends { score: number }>(items: T[]) => items.sort((left, right) => right.score - left.score);
+const scoreCandidate = (factors: ScoreFactors, weights: ScoreWeights) =>
+  Math.round(
+    factors.impact * weights.impact +
+      factors.urgency * weights.urgency +
+      factors.confidence * weights.confidence +
+      factors.personalization * weights.personalization +
+      factors.recency * weights.recency +
+      factors.actionability * weights.actionability
+  );
+
+const scorePromptCandidate = (factors: ScoreFactors, weights: ScoreWeights) => scoreCandidate(factors, weights);
+
+const selectTopRanked = <T extends { score: number; group: string }>(items: T[], limit: number) => {
+  const sorted = [...items].sort((left, right) => right.score - left.score);
+  const selected: T[] = [];
+  const usedGroups = new Set<string>();
+
+  for (const item of sorted) {
+    if (selected.length >= limit) {
+      break;
+    }
+
+    if (!usedGroups.has(item.group)) {
+      selected.push(item);
+      usedGroups.add(item.group);
+    }
+  }
+
+  if (selected.length < limit) {
+    for (const item of sorted) {
+      if (selected.length >= limit) {
+        break;
+      }
+
+      if (!selected.includes(item)) {
+        selected.push(item);
+      }
+    }
+  }
+
+  return selected.slice(0, limit);
+};
 
 async function AdviserPageContent() {
   const now = new Date();
@@ -402,6 +469,32 @@ async function AdviserPageContent() {
   const recurringMerchantCount = new Set(
     recurringPatterns.map((pattern) => normalizeMerchant(pattern.merchantClean ?? pattern.merchantRaw))
   ).size;
+  const transactionCount = activeTransactions.length;
+  const expenseTransactionCount = activeTransactions.filter((transaction) => transaction.type === "expense").length;
+  const incomeTransactionCount = activeTransactions.filter((transaction) => transaction.type === "income").length;
+  const currentTransactionConfidence = clamp(
+    average([toCountScore(transactionCount, 20), toCountScore(expenseTransactionCount, 15), toCountScore(workspaceAccounts.length, 6)])
+  );
+  const currentPatternConfidence = clamp(
+    average([toCountScore(expenseTransactionCount, 15), toCountScore(currentSummary.expenseCategories.size, 3), toCountScore(weekendExpenses.length, 8)])
+  );
+  const currentRecurringConfidence = clamp(
+    average([toCountScore(recurringDueSoon.length, 3), toCountScore(recurringMerchantCount, 5), toCountScore(commitmentsDueSoon.length, 3)])
+  );
+  const currentInvestmentConfidence = latestInvestmentSnapshot
+    ? clamp(average([toCountScore(investmentSnapshots.length, 2), latestInvestmentSnapshot.gainLossValue === null ? 35 : 85]))
+    : 0;
+  const currentSplitConfidence = openSplitBillCount > 0
+    ? clamp(average([toCountScore(openSplitBillCount, 3), openSplitBillAmount > 0 ? 100 : 0]))
+    : 0;
+  const currentGoalConfidence = goalLabel ? clamp(average([toCountScore(transactionCount, 20), goalProgress.bandLabel === "On track" ? 85 : 70])) : 0;
+
+  const adviserCardWeights = {
+    passive: { impact: 0.3, urgency: 0.18, confidence: 0.18, personalization: 0.16, recency: 0.1, actionability: 0.08 },
+    recommendation: { impact: 0.22, urgency: 0.24, confidence: 0.16, personalization: 0.16, recency: 0.1, actionability: 0.12 },
+    coaching: { impact: 0.16, urgency: 0.1, confidence: 0.18, personalization: 0.3, recency: 0.1, actionability: 0.16 },
+    prompt: { impact: 0.18, urgency: 0.2, confidence: 0.18, personalization: 0.28, recency: 0.08, actionability: 0.08 },
+  } satisfies Record<string, ScoreWeights>;
 
   const summaryCards = [
     {
@@ -426,7 +519,7 @@ async function AdviserPageContent() {
     },
   ];
 
-  const passiveCards: AdviserCard[] = sortByScore(
+  const passiveCards: RankedAdviserCard[] = selectTopRanked(
     [
       spendDelta !== null
         ? {
@@ -437,7 +530,16 @@ async function AdviserPageContent() {
             ctaLabel: "Open transactions",
             href: buildTransactionsHref({ month: toIsoMonth(now) }),
             tone: spendDelta > 0 ? "warning" : "positive",
-            score: 100,
+            group: "spend-change",
+            breakdown: {
+              impact: clamp(Math.abs(spendDelta) * 1.2 + 20),
+              urgency: clamp(spendDelta > 0 ? 60 + Math.abs(spendDelta) * 0.4 : 35 + Math.abs(spendDelta) * 0.2),
+              confidence: currentTransactionConfidence,
+              personalization: clamp(55 + topCategoryShare * 40),
+              recency: 100,
+              actionability: 82,
+            },
+            score: 0,
           }
         : null,
       topCategoryName
@@ -449,7 +551,16 @@ async function AdviserPageContent() {
             ctaLabel: "Review category",
             href: buildTransactionsHref({ category: topCategoryName }),
             tone: "neutral",
-            score: 95,
+            group: "category-mix",
+            breakdown: {
+              impact: clamp(topCategoryShare * 100),
+              urgency: clamp(topCategoryShare * 80),
+              confidence: currentTransactionConfidence,
+              personalization: clamp(70 + topCategoryShare * 20),
+              recency: 100,
+              actionability: 88,
+            },
+            score: 0,
           }
         : null,
       weekendExpenseShare > 0
@@ -461,7 +572,16 @@ async function AdviserPageContent() {
             ctaLabel: "See weekends",
             href: buildTransactionsHref({ month: toIsoMonth(now) }),
             tone: weekendExpenseShare > 0.3 ? "warning" : "neutral",
-            score: weekendExpenseShare > 0.2 ? 90 : 60,
+            group: "behavior-pattern",
+            breakdown: {
+              impact: clamp(weekendExpenseShare * 100),
+              urgency: clamp(weekendExpenseShare * 95),
+              confidence: currentPatternConfidence,
+              personalization: clamp(60 + weekendExpenseShare * 35),
+              recency: 100,
+              actionability: 72,
+            },
+            score: 0,
           }
         : null,
       recurringDueSoon.length > 0
@@ -476,7 +596,36 @@ async function AdviserPageContent() {
             ctaLabel: "Open recurring",
             href: "/recurring",
             tone: "warning",
-            score: 92,
+            group: "recurring",
+            breakdown: {
+              impact: clamp(recurringDueSoon.length * 28 + commitmentsDueSoon.length * 18),
+              urgency: clamp(
+                average(
+                  recurringDueSoon
+                    .map((pattern) => {
+                      if (!pattern.nextExpectedDate) {
+                        return 60;
+                      }
+                      const daysUntil = Math.ceil((pattern.nextExpectedDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                      return clamp(100 - Math.max(daysUntil, 0) * 12);
+                    })
+                    .concat(
+                      commitmentsDueSoon.map((commitment) => {
+                        if (!commitment.nextDueDate) {
+                          return 60;
+                        }
+                        const daysUntil = Math.ceil((commitment.nextDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                        return clamp(100 - Math.max(daysUntil, 0) * 12);
+                      })
+                    )
+                )
+              ),
+              confidence: currentRecurringConfidence,
+              personalization: clamp(70 + recurringMerchantCount * 5),
+              recency: 100,
+              actionability: 95,
+            },
+            score: 0,
           }
         : null,
       openSplitBillCount > 0
@@ -488,7 +637,16 @@ async function AdviserPageContent() {
             ctaLabel: "Open split bills",
             href: "/split-bill",
             tone: "warning",
-            score: 88,
+            group: "split-bills",
+            breakdown: {
+              impact: clamp(openSplitBillCount * 22 + (currentSpend > 0 ? (openSplitBillAmount / currentSpend) * 100 : 40)),
+              urgency: clamp(70 + openSplitBillCount * 8),
+              confidence: currentSplitConfidence,
+              personalization: 80,
+              recency: 100,
+              actionability: 92,
+            },
+            score: 0,
           }
         : null,
       latestInvestmentSnapshot
@@ -503,13 +661,26 @@ async function AdviserPageContent() {
             ctaLabel: "Open investments",
             href: "/investments",
             tone: investmentDelta !== null && investmentDelta >= 0 ? "positive" : "neutral",
-            score: 85,
+            group: "investments",
+            breakdown: {
+              impact: clamp(investmentDelta === null ? 55 : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot.totalValue ?? 1), 1) * 100),
+              urgency: clamp(latestInvestmentSnapshot.gainLossPercent === null ? 35 : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent))),
+              confidence: currentInvestmentConfidence,
+              personalization: clamp(65 + (latestInvestmentSnapshot.account?.name ? 10 : 0)),
+              recency: 100,
+              actionability: 78,
+            },
+            score: 0,
           }
         : null,
-    ].filter((card): card is AdviserCard & { score: number } => card !== null)
-  ).slice(0, 3);
+    ].filter((card): card is RankedAdviserCard => card !== null).map((card) => ({
+      ...card,
+      score: scoreCandidate(card.breakdown, adviserCardWeights.passive),
+    })),
+    3
+  );
 
-  const recommendationCards: AdviserCard[] = sortByScore(
+  const recommendationCards: RankedAdviserCard[] = selectTopRanked(
     [
       uncategorizedTransactions.length > 0
         ? {
@@ -520,7 +691,16 @@ async function AdviserPageContent() {
             ctaLabel: "Fix transactions",
             href: "/transactions",
             tone: "warning",
-            score: 100,
+            group: "cleanup",
+            breakdown: {
+              impact: clamp(uncategorizedTransactions.length * 18 + 20),
+              urgency: clamp(70 + uncategorizedTransactions.length * 6),
+              confidence: currentTransactionConfidence,
+              personalization: 70,
+              recency: 100,
+              actionability: 95,
+            },
+            score: 0,
           }
         : null,
       recurringDueSoon.length > 0
@@ -532,7 +712,36 @@ async function AdviserPageContent() {
             ctaLabel: "Open recurring",
             href: "/recurring",
             tone: "warning",
-            score: 95,
+            group: "recurring",
+            breakdown: {
+              impact: clamp(recurringDueSoon.length * 28 + commitmentsDueSoon.length * 18),
+              urgency: clamp(
+                average(
+                  recurringDueSoon
+                    .map((pattern) => {
+                      if (!pattern.nextExpectedDate) {
+                        return 60;
+                      }
+                      const daysUntil = Math.ceil((pattern.nextExpectedDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                      return clamp(100 - Math.max(daysUntil, 0) * 12);
+                    })
+                    .concat(
+                      commitmentsDueSoon.map((commitment) => {
+                        if (!commitment.nextDueDate) {
+                          return 60;
+                        }
+                        const daysUntil = Math.ceil((commitment.nextDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                        return clamp(100 - Math.max(daysUntil, 0) * 12);
+                      })
+                    )
+                )
+              ),
+              confidence: currentRecurringConfidence,
+              personalization: clamp(65 + recurringMerchantCount * 5),
+              recency: 100,
+              actionability: 95,
+            },
+            score: 0,
           }
         : null,
       openSplitBillCount > 0
@@ -544,7 +753,16 @@ async function AdviserPageContent() {
             ctaLabel: "Open split bills",
             href: "/split-bill",
             tone: "warning",
-            score: 90,
+            group: "split-bills",
+            breakdown: {
+              impact: clamp(openSplitBillCount * 22 + (currentSpend > 0 ? (openSplitBillAmount / currentSpend) * 100 : 40)),
+              urgency: clamp(70 + openSplitBillCount * 8),
+              confidence: currentSplitConfidence,
+              personalization: 80,
+              recency: 100,
+              actionability: 92,
+            },
+            score: 0,
           }
         : null,
       topCategoryName
@@ -556,7 +774,16 @@ async function AdviserPageContent() {
             ctaLabel: "Open transactions",
             href: buildTransactionsHref({ category: topCategoryName }),
             tone: "neutral",
-            score: 85,
+            group: "spend-control",
+            breakdown: {
+              impact: clamp(topCategoryShare * 100),
+              urgency: clamp(topCategoryShare * 75),
+              confidence: currentTransactionConfidence,
+              personalization: clamp(75 + topCategoryShare * 15),
+              recency: 100,
+              actionability: 82,
+            },
+            score: 0,
           }
         : null,
       liquidBalance < currentSpend * 0.3
@@ -568,7 +795,16 @@ async function AdviserPageContent() {
             ctaLabel: "Review accounts",
             href: "/accounts",
             tone: "warning",
-            score: 80,
+            group: "cashflow",
+            breakdown: {
+              impact: clamp(currentSpend > 0 ? ((currentSpend - liquidBalance) / currentSpend) * 100 : 70),
+              urgency: clamp(85 - Math.min((liquidBalance / Math.max(currentSpend, 1)) * 100, 80)),
+              confidence: currentTransactionConfidence,
+              personalization: 75,
+              recency: 100,
+              actionability: 88,
+            },
+            score: 0,
           }
         : null,
       latestInvestmentSnapshot
@@ -580,13 +816,26 @@ async function AdviserPageContent() {
             ctaLabel: "Open investments",
             href: "/investments",
             tone: "neutral",
-            score: 60,
+            group: "investments",
+            breakdown: {
+              impact: clamp(investmentDelta === null ? 55 : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot.totalValue ?? 1), 1) * 100),
+              urgency: clamp(latestInvestmentSnapshot.gainLossPercent === null ? 35 : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent))),
+              confidence: currentInvestmentConfidence,
+              personalization: clamp(65 + (latestInvestmentSnapshot.account?.name ? 10 : 0)),
+              recency: 100,
+              actionability: 78,
+            },
+            score: 0,
           }
         : null,
-    ].filter((card): card is AdviserCard & { score: number } => card !== null)
-  ).slice(0, 3);
+    ].filter((card): card is RankedAdviserCard => card !== null).map((card) => ({
+      ...card,
+      score: scoreCandidate(card.breakdown, adviserCardWeights.recommendation),
+    })),
+    3
+  );
 
-  const coachingCards: AdviserCard[] = sortByScore(
+  const coachingCards: RankedAdviserCard[] = selectTopRanked(
     [
       weekendExpenseShare > 0.2
         ? {
@@ -597,7 +846,16 @@ async function AdviserPageContent() {
             ctaLabel: "View pattern",
             href: buildTransactionsHref({ month: toIsoMonth(now) }),
             tone: weekendExpenseShare > 0.3 ? "warning" : "neutral",
-            score: 95,
+            group: "behavior-pattern",
+            breakdown: {
+              impact: clamp(weekendExpenseShare * 100),
+              urgency: clamp(weekendExpenseShare * 70),
+              confidence: currentPatternConfidence,
+              personalization: clamp(85 + weekendExpenseShare * 10),
+              recency: 100,
+              actionability: 65,
+            },
+            score: 0,
           }
         : null,
       topCategoryShare > 0.35
@@ -609,7 +867,16 @@ async function AdviserPageContent() {
             ctaLabel: "Review mix",
             href: "/reports",
             tone: "neutral",
-            score: 92,
+            group: "category-pattern",
+            breakdown: {
+              impact: clamp(topCategoryShare * 100),
+              urgency: clamp(topCategoryShare * 55),
+              confidence: currentPatternConfidence,
+              personalization: clamp(80 + topCategoryShare * 15),
+              recency: 100,
+              actionability: 55,
+            },
+            score: 0,
           }
         : null,
       goalLabel
@@ -624,7 +891,16 @@ async function AdviserPageContent() {
             ctaLabel: "Open goals",
             href: "/goals",
             tone: goalProgress.bandLabel === "On track" ? "positive" : "warning",
-            score: 98,
+            group: "goals",
+            breakdown: {
+              impact: clamp(goalProgress.bandLabel === "On track" ? 80 : 100),
+              urgency: clamp(goalProgress.bandLabel === "On track" ? 30 : 85),
+              confidence: currentGoalConfidence,
+              personalization: 100,
+              recency: 100,
+              actionability: 82,
+            },
+            score: 0,
           }
         : null,
       recurringMerchantCount > 0
@@ -636,7 +912,16 @@ async function AdviserPageContent() {
             ctaLabel: "Open recurring",
             href: "/recurring",
             tone: "neutral",
-            score: 84,
+            group: "recurring",
+            breakdown: {
+              impact: clamp(recurringMerchantCount * 18 + recurringDueSoon.length * 12),
+              urgency: clamp(recurringDueSoon.length > 0 ? 75 : 45),
+              confidence: currentRecurringConfidence,
+              personalization: clamp(80 + recurringMerchantCount * 3),
+              recency: 100,
+              actionability: 70,
+            },
+            score: 0,
           }
         : null,
       uncategorizedTransactions.length > 0
@@ -648,10 +933,19 @@ async function AdviserPageContent() {
             ctaLabel: "Fix rows",
             href: "/transactions",
             tone: "warning",
-            score: 88,
+            group: "cleanup",
+            breakdown: {
+              impact: clamp(uncategorizedTransactions.length * 18 + 15),
+              urgency: clamp(70 + uncategorizedTransactions.length * 5),
+              confidence: currentTransactionConfidence,
+              personalization: 75,
+              recency: 100,
+              actionability: 92,
+            },
+            score: 0,
           }
         : null,
-      previousSummary.income > 0
+      incomeTransactionCount > 0
         ? {
             id: "cashflow_consistency",
             title: "Cash flow consistency",
@@ -660,24 +954,46 @@ async function AdviserPageContent() {
             ctaLabel: "View reports",
             href: "/reports",
             tone: "neutral",
-            score: 72,
+            group: "cashflow",
+            breakdown: {
+              impact: clamp(Math.abs(incomeDelta ?? 0) * 1.2 + 20),
+              urgency: clamp(incomeDelta !== null && Math.abs(incomeDelta) > 15 ? 75 : 40),
+              confidence: currentTransactionConfidence,
+              personalization: 60,
+              recency: 100,
+              actionability: 55,
+            },
+            score: 0,
           }
         : null,
-    ].filter((card): card is AdviserCard & { score: number } => card !== null)
-  ).slice(0, 3);
+    ].filter((card): card is RankedAdviserCard => card !== null).map((card) => ({
+      ...card,
+      score: scoreCandidate(card.breakdown, adviserCardWeights.coaching),
+    })),
+    3
+  );
 
   const passiveCardsToRender = passiveCards;
   const recommendationCardsToRender = recommendationCards;
   const coachingCardsToRender = coachingCards;
 
-  const promptSuggestions: AdviserPrompt[] = sortByScore(
+  const promptSuggestions: RankedAdviserPrompt[] = selectTopRanked(
     [
       topCategoryName
         ? {
             id: "prompt-top-category",
             label: `Why is ${topCategoryName} up?`,
             prompt: `Why is ${topCategoryName} driving my spending, and what should I look at first?`,
-            score: 100,
+            group: "transactions",
+            breakdown: {
+              impact: clamp(topCategoryShare * 100),
+              urgency: clamp(spendDelta === null ? 45 : Math.max(spendDelta, 0) * 1.2 + 35),
+              confidence: currentTransactionConfidence,
+              personalization: 95,
+              recency: 100,
+              actionability: 82,
+            },
+            score: 0,
           }
         : null,
       weekendExpenseShare > 0.2
@@ -685,15 +1001,33 @@ async function AdviserPageContent() {
             id: "prompt-weekend-spend",
             label: "What’s driving weekend spending?",
             prompt: "What is driving my weekend spending, and what should I watch next?",
-            score: 98,
+            group: "transactions",
+            breakdown: {
+              impact: clamp(weekendExpenseShare * 100),
+              urgency: clamp(weekendExpenseShare * 70),
+              confidence: currentPatternConfidence,
+              personalization: 90,
+              recency: 100,
+              actionability: 75,
+            },
+            score: 0,
           }
         : null,
-      recurringDueSoon.length > 0
+      recurringDueSoon.length > 0 || commitmentsDueSoon.length > 0
         ? {
-            id: "prompt-recurring",
-            label: "Which bills are due soon?",
+            id: "prompt-upcoming",
+            label: "What’s due soon?",
             prompt: "Which recurring bills or commitments are due soon, and which ones matter most?",
-            score: 96,
+            group: "recurring",
+            breakdown: {
+              impact: clamp(recurringDueSoon.length * 28 + commitmentsDueSoon.length * 18),
+              urgency: clamp(90),
+              confidence: currentRecurringConfidence,
+              personalization: 90,
+              recency: 100,
+              actionability: 95,
+            },
+            score: 0,
           }
         : null,
       openSplitBillCount > 0
@@ -701,7 +1035,16 @@ async function AdviserPageContent() {
             id: "prompt-split-bills",
             label: "What’s still open in split bills?",
             prompt: "How much do I still owe or am I owed from split bills, and who should I settle with first?",
-            score: 94,
+            group: "split-bills",
+            breakdown: {
+              impact: clamp(openSplitBillCount * 24 + (currentSpend > 0 ? (openSplitBillAmount / currentSpend) * 100 : 40)),
+              urgency: 90,
+              confidence: currentSplitConfidence,
+              personalization: 88,
+              recency: 100,
+              actionability: 95,
+            },
+            score: 0,
           }
         : null,
       goalLabel
@@ -709,7 +1052,16 @@ async function AdviserPageContent() {
             id: "prompt-goal",
             label: `Am I on track for ${goalLabel}?`,
             prompt: `Am I on track for my goal of ${goalLabel.toLowerCase()}?`,
-            score: 92,
+            group: "goals",
+            breakdown: {
+              impact: clamp(goalProgress.bandLabel === "On track" ? 80 : 100),
+              urgency: clamp(goalProgress.bandLabel === "On track" ? 35 : 80),
+              confidence: currentGoalConfidence,
+              personalization: 100,
+              recency: 100,
+              actionability: 80,
+            },
+            score: 0,
           }
         : null,
       latestInvestmentSnapshot
@@ -717,7 +1069,67 @@ async function AdviserPageContent() {
             id: "prompt-investments",
             label: "What changed in investments?",
             prompt: "What changed in my latest investment snapshot, and what should I pay attention to?",
-            score: 90,
+            group: "investments",
+            breakdown: {
+              impact: clamp(investmentDelta === null ? 55 : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot.totalValue ?? 1), 1) * 100),
+              urgency: clamp(latestInvestmentSnapshot.gainLossPercent === null ? 35 : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent))),
+              confidence: currentInvestmentConfidence,
+              personalization: 82,
+              recency: 100,
+              actionability: 78,
+            },
+            score: 0,
+          }
+        : null,
+      currentSummary.income > 0 || currentSummary.expense > 0
+        ? {
+            id: "prompt-cashflow",
+            label: "How is my cash flow?",
+            prompt: "How is my current cash flow looking, and what stands out most right now?",
+            group: "cashflow",
+            breakdown: {
+              impact: clamp(currentNet === 0 ? 55 : Math.abs(currentNet) / Math.max(currentSummary.income || currentSpend || 1, 1) * 100),
+              urgency: clamp(currentSavingsRate === null ? 45 : currentSavingsRate < 0 ? 90 : 55),
+              confidence: currentTransactionConfidence,
+              personalization: 88,
+              recency: 100,
+              actionability: 80,
+            },
+            score: 0,
+          }
+        : null,
+      workspaceAccounts.length > 0
+        ? {
+            id: "prompt-accounts",
+            label: "Where is my balance?",
+            prompt: "Which account or account type is holding the most balance right now?",
+            group: "accounts",
+            breakdown: {
+              impact: clamp(liquidBalance > 0 ? 70 : 40),
+              urgency: clamp(liquidBalance < currentSpend * 0.3 ? 80 : 40),
+              confidence: clamp(average([toCountScore(workspaceAccounts.length, 5), liquidBalance > 0 ? 80 : 50])),
+              personalization: 82,
+              recency: 100,
+              actionability: 70,
+            },
+            score: 0,
+          }
+        : null,
+      currentTransactionConfidence > 0
+        ? {
+            id: "prompt-patterns",
+            label: "What pattern stands out?",
+            prompt: "What spending pattern stands out most from my current transactions?",
+            group: "patterns",
+            breakdown: {
+              impact: clamp(topCategoryShare * 100),
+              urgency: clamp(weekendExpenseShare * 60),
+              confidence: currentPatternConfidence,
+              personalization: 84,
+              recency: 100,
+              actionability: 68,
+            },
+            score: 0,
           }
         : null,
       uncategorizedTransactions.length > 0
@@ -725,11 +1137,24 @@ async function AdviserPageContent() {
             id: "prompt-cleanup",
             label: "What needs cleanup?",
             prompt: "Which transactions still need cleanup, and which ones should I fix first?",
-            score: 88,
+            group: "cleanup",
+            breakdown: {
+              impact: clamp(uncategorizedTransactions.length * 18 + 15),
+              urgency: clamp(70 + uncategorizedTransactions.length * 5),
+              confidence: currentTransactionConfidence,
+              personalization: 88,
+              recency: 100,
+              actionability: 95,
+            },
+            score: 0,
           }
         : null,
-    ].filter((prompt): prompt is AdviserPrompt & { score: number } => prompt !== null)
-  ).slice(0, 4);
+    ].filter((prompt): prompt is RankedAdviserPrompt => prompt !== null).map((prompt) => ({
+      ...prompt,
+      score: scorePromptCandidate(prompt.breakdown, adviserCardWeights.prompt),
+    })),
+    4
+  );
 
   return (
     <CloverShell active="adviser" title="Adviser">
