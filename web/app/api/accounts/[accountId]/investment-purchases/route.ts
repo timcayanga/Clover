@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { isFixedIncomeInvestmentSubtype } from "@/lib/investments";
+import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -154,6 +155,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
       });
 
       return created;
+    });
+
+    await recordAdviserActionCompletion({
+      workspaceId: account.workspaceId,
+      actorUserId: userId,
+      group: "investments",
+      itemId: `${accountId}:${purchase.id}`,
+      label: "Added investment purchase",
+      sourceAction: "investment_purchase_created",
+      href: `/accounts/${accountId}`,
+      pathname: `/accounts/${accountId}`,
     });
 
     return NextResponse.json({ purchase: serializePurchase(purchase) });

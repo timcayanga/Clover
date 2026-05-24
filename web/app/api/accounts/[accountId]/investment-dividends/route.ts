@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -123,6 +124,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
         currency,
         note,
       },
+    });
+
+    await recordAdviserActionCompletion({
+      workspaceId: account.workspaceId,
+      actorUserId: userId,
+      group: "investments",
+      itemId: `${accountId}:${dividend.id}`,
+      label: "Added investment dividend",
+      sourceAction: "investment_dividend_created",
+      href: `/accounts/${accountId}`,
+      pathname: `/accounts/${accountId}`,
     });
 
     return NextResponse.json({ dividend: serializeDividend(dividend) });

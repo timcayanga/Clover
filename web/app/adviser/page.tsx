@@ -201,6 +201,17 @@ type AdviserPersona = {
   strength: number;
 };
 
+type AdviserThresholdProfile = {
+  cashBuffer: number;
+  spendSpikePercent: number;
+  incomeDropPercent: number;
+  concentrationShare: number;
+  recurringPressure: number;
+  splitPressure: number;
+  investmentSwingPercent: number;
+  goalDriftPercent: number;
+};
+
 const updateMemoryStats = (map: Map<string, AdviserMemoryStats>, key: string, createdAt: Date) => {
   const current = map.get(key);
   if (!current) {
@@ -372,11 +383,12 @@ const buildAnomalySignal = (
   topCategoryName: string | null,
   topCategoryShare: number,
   currentPatternConfidence: number,
-  currentTransactionConfidence: number
+  currentTransactionConfidence: number,
+  thresholdProfile: AdviserThresholdProfile
 ): AdviserAnomalySignal | null => {
-  const spendSpikeScore = spendDelta !== null && spendDelta > 12 ? clamp(55 + spendDelta * 1.7) : 0;
-  const incomeDropScore = incomeDelta !== null && incomeDelta < -10 ? clamp(55 + Math.abs(incomeDelta) * 1.5) : 0;
-  const concentrationScore = topCategoryShare > 0.42 ? clamp(50 + topCategoryShare * 90) : 0;
+  const spendSpikeScore = spendDelta !== null && spendDelta > thresholdProfile.spendSpikePercent ? clamp(55 + spendDelta * 1.7) : 0;
+  const incomeDropScore = incomeDelta !== null && incomeDelta < -thresholdProfile.incomeDropPercent ? clamp(55 + Math.abs(incomeDelta) * 1.5) : 0;
+  const concentrationScore = topCategoryShare > thresholdProfile.concentrationShare ? clamp(50 + topCategoryShare * 90) : 0;
   const anomalyScore = Math.max(spendSpikeScore, incomeDropScore, concentrationScore);
 
   if (anomalyScore < 45) {
@@ -412,6 +424,159 @@ const buildAnomalySignal = (
     tone: "neutral",
     score: clamp(average([concentrationScore, currentPatternConfidence, currentTransactionConfidence])),
   };
+};
+
+const buildThresholdProfile = (params: {
+  baselineSpend: number;
+  baselineIncome: number;
+  currentSpend: number;
+  currentIncome: number;
+  currentSavingsRate: number | null;
+  recurringAmountPressure: number;
+  commitmentAmountPressure: number;
+  splitBillSettlementPressure: number;
+  topCategoryShare: number;
+  weekendExpenseShare: number;
+  historyDepthScore: number;
+  latestInvestmentSnapshot: { totalValue?: unknown } | null;
+  investmentDelta: number | null;
+}) => {
+  const recurringBase = params.recurringAmountPressure + params.commitmentAmountPressure;
+  const cashBuffer = average([
+    params.baselineSpend * 0.75,
+    params.currentSpend * 0.5,
+    recurringBase + params.splitBillSettlementPressure * 0.75,
+    params.currentIncome > 0 ? params.currentIncome * 0.3 : params.baselineIncome * 0.3,
+  ]);
+  const spendSpikePercent = clamp(9 + (params.historyDepthScore < 50 ? 4 : 1) + (params.weekendExpenseShare > 0.3 ? 3 : 0), 8, 24);
+  const incomeDropPercent = clamp(8 + (params.historyDepthScore < 40 ? 3 : 0), 6, 20);
+  const concentrationShare = clamp(params.topCategoryShare > 0.4 ? 0.42 : 0.35, 0.28, 0.55);
+  const investmentSwingPercent = clamp(params.latestInvestmentSnapshot ? 8 + (params.investmentDelta !== null && Math.abs(params.investmentDelta) > 0 ? 2 : 0) : 18, 6, 20);
+  const goalDriftPercent = clamp(params.currentSavingsRate !== null && params.currentSavingsRate < 0 ? 6 : 12, 6, 18);
+
+  return {
+    cashBuffer,
+    spendSpikePercent,
+    incomeDropPercent,
+    concentrationShare,
+    recurringPressure: recurringBase,
+    splitPressure: params.splitBillSettlementPressure,
+    investmentSwingPercent,
+    goalDriftPercent,
+  } satisfies AdviserThresholdProfile;
+};
+
+const buildCategoryForecastSignals = (params: {
+  currentNet: number;
+  currentSavingsRate: number | null;
+  liquidBalance: number;
+  recurringAmountPressure: number;
+  commitmentAmountPressure: number;
+  splitBillSettlementPressure: number;
+  baselineSpend: number;
+  baselineIncome: number;
+  monthlyExpenseTrend: { direction: number; score: number };
+  monthlyIncomeTrend: { direction: number; score: number };
+  monthlyNetTrend: { direction: number; score: number };
+  spendDelta: number | null;
+  incomeDelta: number | null;
+  latestInvestmentSnapshot: { currency?: string | null; totalValue?: unknown; gainLossPercent?: unknown } | null;
+  investmentDelta: number | null;
+  goalProgressBand: string;
+  thresholdProfile: AdviserThresholdProfile;
+}) => {
+  const knownPressure = params.recurringAmountPressure + params.commitmentAmountPressure + params.splitBillSettlementPressure;
+  const cashflowForecast = buildForecastSignal(
+    params.currentNet,
+    params.currentSavingsRate,
+    params.liquidBalance,
+    params.recurringAmountPressure,
+    params.commitmentAmountPressure,
+    params.splitBillSettlementPressure,
+    params.baselineSpend,
+    params.monthlyExpenseTrend,
+    params.spendDelta
+  );
+  const recurringRisk = knownPressure > params.thresholdProfile.recurringPressure * 0.9 || params.monthlyExpenseTrend.direction > 0;
+  const splitRisk = params.splitBillSettlementPressure > params.thresholdProfile.splitPressure * 0.8;
+  const goalRisk = params.goalProgressBand !== "On track" || (params.currentSavingsRate !== null && params.currentSavingsRate < 0);
+  const investmentRisk =
+    params.latestInvestmentSnapshot !== null &&
+    (params.investmentDelta !== null ? Math.abs(params.investmentDelta) : 0) > 0 &&
+    params.thresholdProfile.investmentSwingPercent <= 20;
+
+  const signals: Array<AdviserForecastSignal | null> = [
+    cashflowForecast
+      ? {
+          ...cashflowForecast,
+          evidence: `${cashflowForecast.evidence} · buffer threshold ${formatCurrency(params.thresholdProfile.cashBuffer)}`,
+        }
+      : null,
+    recurringRisk
+      ? {
+          title: "Recurring pressure",
+          summary: "Known recurring obligations are starting to crowd the available room in the month.",
+          evidence: `Recurring + commitment pressure ${formatCurrency(knownPressure)} vs threshold ${formatCurrency(params.thresholdProfile.recurringPressure)}`,
+          tone: "warning",
+          score: clamp(
+            average([
+              55 + Math.max(0, (knownPressure / Math.max(params.thresholdProfile.recurringPressure || 1, 1)) * 30),
+              params.monthlyExpenseTrend.direction > 0 ? 65 + params.monthlyExpenseTrend.score * 0.2 : 35,
+            ])
+          ),
+        }
+      : null,
+    splitRisk
+      ? {
+          title: "Split bill runway",
+          summary: "Open split bill balances are high enough to deserve a closer look.",
+          evidence: `Open split bill pressure ${formatCurrency(params.splitBillSettlementPressure)} vs threshold ${formatCurrency(params.thresholdProfile.splitPressure)}`,
+          tone: "neutral",
+          score: clamp(
+            average([
+              50 + Math.max(0, (params.splitBillSettlementPressure / Math.max(params.thresholdProfile.splitPressure || 1, 1)) * 40),
+              params.monthlyNetTrend.score * 0.2,
+            ])
+          ),
+        }
+      : null,
+    goalRisk
+      ? {
+          title: "Goal drift",
+          summary: "Current momentum suggests the target may need a check-in soon.",
+          evidence: `Goal band ${params.goalProgressBand}; drift threshold ${params.thresholdProfile.goalDriftPercent}%`,
+          tone: "warning",
+          score: clamp(
+            average([
+              params.goalProgressBand === "On track" ? 45 : 82,
+              params.currentSavingsRate !== null && params.currentSavingsRate < 0 ? 90 : 50,
+              params.spendDelta !== null && params.spendDelta > params.thresholdProfile.goalDriftPercent ? 75 : 40,
+            ])
+          ),
+        }
+      : null,
+    investmentRisk
+      ? {
+          title: "Investment movement",
+          summary: "The latest snapshot suggests a change worth watching.",
+          evidence:
+            params.latestInvestmentSnapshot && params.latestInvestmentSnapshot.totalValue !== undefined
+              ? `Latest snapshot available with threshold ${params.thresholdProfile.investmentSwingPercent}%`
+              : "Investment data exists, but the threshold is still conservative.",
+          tone: "neutral",
+          score: clamp(
+            average([
+              params.investmentDelta === null ? 45 : 55 + Math.min(35, Math.abs(params.investmentDelta) / Math.max(1, params.baselineSpend) * 10),
+              params.monthlyIncomeTrend.score * 0.1,
+            ])
+          ),
+      }
+      : null,
+  ];
+
+  return signals
+    .filter((signal): signal is AdviserForecastSignal => signal !== null)
+    .sort((left, right) => right.score - left.score);
 };
 
 const buildFinancialPersona = (
@@ -1006,7 +1171,41 @@ async function AdviserPageContent() {
   const recurringAmountPressure = recurringDueSoon.reduce((sum, pattern) => sum + Number(pattern.amount ?? 0), 0);
   const commitmentAmountPressure = commitmentsDueSoon.reduce((sum, commitment) => sum + Number(commitment.amount ?? 0), 0);
   const splitBillSettlementPressure = openSplitBillAmount;
-  const forecastSignal = buildForecastSignal(
+  const thresholdProfile = buildThresholdProfile({
+    baselineSpend,
+    baselineIncome,
+    currentSpend,
+    currentIncome: currentSummary.income,
+    currentSavingsRate,
+    recurringAmountPressure,
+    commitmentAmountPressure,
+    splitBillSettlementPressure,
+    topCategoryShare,
+    weekendExpenseShare,
+    historyDepthScore,
+    latestInvestmentSnapshot,
+    investmentDelta,
+  });
+  const categoryForecastSignals = buildCategoryForecastSignals({
+    currentNet,
+    currentSavingsRate,
+    liquidBalance,
+    recurringAmountPressure,
+    commitmentAmountPressure,
+    splitBillSettlementPressure,
+    baselineSpend,
+    baselineIncome,
+    monthlyExpenseTrend,
+    monthlyIncomeTrend,
+    monthlyNetTrend,
+    spendDelta,
+    incomeDelta,
+    latestInvestmentSnapshot,
+    investmentDelta,
+    goalProgressBand: goalProgress.bandLabel,
+    thresholdProfile,
+  });
+  const forecastSignal = categoryForecastSignals[0] ?? buildForecastSignal(
     currentNet,
     currentSavingsRate,
     liquidBalance,
@@ -1027,7 +1226,8 @@ async function AdviserPageContent() {
     topCategoryName,
     topCategoryShare,
     currentPatternConfidence,
-    currentTransactionConfidence
+    currentTransactionConfidence,
+    thresholdProfile
   );
   const preferenceProfile = buildPreferenceProfile(adviserInteractions, adviserOutcomeByGroup, adviserOutcomeByItem, now);
   const completionDatesByTheme = adviserCompletionLogs.reduce<Record<AdviserSignalTheme, Date[]>>(
@@ -1210,6 +1410,7 @@ async function AdviserPageContent() {
       savingsRate: baselineSavingsRate,
       historySpanDays,
     },
+    thresholds: thresholdProfile,
     themes: signalThemes.map((theme) => ({
       key: theme.key,
       score: theme.score,
@@ -1223,14 +1424,18 @@ async function AdviserPageContent() {
           score: forecastSignal.score,
         }
       : null,
+    forecastCategories: categoryForecastSignals.map((signal) => ({
+      title: signal.title,
+      score: signal.score,
+    })),
     anomaly: anomalySignal
       ? {
           title: anomalySignal.title,
           score: anomalySignal.score,
         }
       : null,
-      memory: {
-        interactions: adviserInteractions.length,
+    memory: {
+      interactions: adviserInteractions.length,
       completionCandidates: adviserCompletionLogs.length,
       cardMemoryGroups: adviserMemoryByGroup.size,
       cardOutcomeGroups: adviserOutcomeByGroup.size,

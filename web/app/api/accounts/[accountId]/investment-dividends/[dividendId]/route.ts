@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,17 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
     await prisma.investmentDividend.delete({
       where: { id: dividendId },
+    });
+
+    await recordAdviserActionCompletion({
+      workspaceId: account.workspaceId,
+      actorUserId: userId,
+      group: "investments",
+      itemId: `${accountId}:${dividendId}`,
+      label: "Deleted investment dividend",
+      sourceAction: "investment_dividend_deleted",
+      href: `/accounts/${accountId}`,
+      pathname: `/accounts/${accountId}`,
     });
 
     return NextResponse.json({ deleted: true });
