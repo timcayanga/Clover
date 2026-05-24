@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +11,7 @@ import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format"
 import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { loadSplitBillWorkspaceData } from "@/lib/split-bill-loaders";
 import { AdviserChat } from "@/components/adviser-chat";
+import { AdviserTrackedLink } from "@/components/adviser-tracked-link";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +88,15 @@ type RankedAdviserPrompt = AdviserPrompt & {
   score: number;
 };
 
+type AdviserAuditMetadata = {
+  kind?: "card" | "prompt";
+  group?: string;
+  itemId?: string;
+  label?: string;
+  href?: string;
+  pathname?: string;
+};
+
 const selectedWorkspaceCookieKey = selectedWorkspaceKey;
 
 const monthFormatter = new Intl.DateTimeFormat("en-PH", {
@@ -106,6 +115,7 @@ const buildTransactionsHref = (params: Record<string, string>) => `/transactions
 const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
 const average = (values: number[]) => (values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0);
 const toCountScore = (count: number, maxCount = 5) => clamp((count / maxCount) * 100);
+const daysBetween = (left: Date, right: Date) => Math.max(1, Math.ceil((left.getTime() - right.getTime()) / (1000 * 60 * 60 * 24)));
 
 const scoreCandidate = (factors: ScoreFactors, weights: ScoreWeights) =>
   Math.round(
@@ -148,6 +158,33 @@ const selectTopRanked = <T extends { score: number; group: string }>(items: T[],
   }
 
   return selected.slice(0, limit);
+};
+
+type AdviserMemoryStats = {
+  count: number;
+  lastSeenAt: Date;
+};
+
+const updateMemoryStats = (map: Map<string, AdviserMemoryStats>, key: string, createdAt: Date) => {
+  const current = map.get(key);
+  if (!current) {
+    map.set(key, { count: 1, lastSeenAt: createdAt });
+    return;
+  }
+
+  map.set(key, {
+    count: current.count + 1,
+    lastSeenAt: createdAt > current.lastSeenAt ? createdAt : current.lastSeenAt,
+  });
+};
+
+const memoryBoostFromStats = (stats: AdviserMemoryStats | undefined, now: Date) => {
+  if (!stats) {
+    return 0;
+  }
+
+  const daysSinceSeen = daysBetween(now, stats.lastSeenAt);
+  return clamp(14 + stats.count * 4 - Math.min(daysSinceSeen, 45) * 0.4, 0, 26);
 };
 
 async function AdviserPageContent() {
@@ -315,6 +352,46 @@ async function AdviserPageContent() {
     investmentMaturityValue: account.investmentMaturityValue === null ? null : Number(account.investmentMaturityValue),
   })) satisfies WorkspaceAccount[];
 
+  const adviserInteractions = await prisma.auditLog.findMany({
+    where: {
+      workspaceId: resolvedWorkspace.id,
+      action: {
+        startsWith: "adviser.",
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    select: {
+      action: true,
+      entityId: true,
+      metadata: true,
+      createdAt: true,
+    },
+  });
+
+  const adviserMemoryByGroup = new Map<string, AdviserMemoryStats>();
+  const adviserMemoryByItem = new Map<string, AdviserMemoryStats>();
+
+  for (const interaction of adviserInteractions) {
+    const metadata = interaction.metadata as AdviserAuditMetadata | null;
+    const group = metadata?.group?.trim() || "";
+    const itemId = metadata?.itemId?.trim() || interaction.entityId?.trim() || "";
+
+    if (group) {
+      updateMemoryStats(adviserMemoryByGroup, group, interaction.createdAt);
+    }
+
+    if (itemId) {
+      updateMemoryStats(adviserMemoryByItem, itemId, interaction.createdAt);
+    }
+  }
+
+  const cardMemoryBoost = (group: string, itemId: string) =>
+    clamp(memoryBoostFromStats(adviserMemoryByGroup.get(group), now) * 0.5 + memoryBoostFromStats(adviserMemoryByItem.get(itemId), now));
+
+  const promptMemoryBoost = (group: string, itemId: string) =>
+    clamp(memoryBoostFromStats(adviserMemoryByGroup.get(group), now) * 0.35 + memoryBoostFromStats(adviserMemoryByItem.get(itemId), now));
+
   const analysisAnchorDate = allTransactions[0]?.date ?? now;
   const currentWindowStart = new Date(analysisAnchorDate);
   currentWindowStart.setDate(currentWindowStart.getDate() - 30);
@@ -329,6 +406,8 @@ async function AdviserPageContent() {
   );
   const activeTransactions = currentWindowTransactions.length > 0 ? currentWindowTransactions : allTransactions;
   const activeTransactionWindowLabel = currentWindowTransactions.length > 0 ? "latest 30-day" : "available";
+  const comparisonWindowTransactions =
+    previousWindowTransactions.length > 0 ? previousWindowTransactions : allTransactions.filter((transaction) => transaction.date <= currentWindowStart);
 
   const currentSummary = activeTransactions.reduce(
     (accumulator, transaction) => {
@@ -359,7 +438,7 @@ async function AdviserPageContent() {
     }
   );
 
-  const previousSummary = previousWindowTransactions.reduce(
+  const previousSummary = comparisonWindowTransactions.reduce(
     (accumulator, transaction) => {
       const amount = Number(transaction.amount);
       if (transaction.type === "income") {
@@ -488,6 +567,37 @@ async function AdviserPageContent() {
     ? clamp(average([toCountScore(openSplitBillCount, 3), openSplitBillAmount > 0 ? 100 : 0]))
     : 0;
   const currentGoalConfidence = goalLabel ? clamp(average([toCountScore(transactionCount, 20), goalProgress.bandLabel === "On track" ? 85 : 70])) : 0;
+  const cashflowPressureScore = clamp(
+    average([
+      liquidBalance < currentSpend * 0.3 ? 92 : 28,
+      recurringDueSoon.length > 0 ? 72 + recurringDueSoon.length * 4 : 20,
+      commitmentsDueSoon.length > 0 ? 72 + commitmentsDueSoon.length * 4 : 18,
+      openSplitBillCount > 0 ? 68 + openSplitBillCount * 5 : 18,
+      currentSavingsRate !== null && currentSavingsRate < 0 ? 90 : 35,
+    ])
+  );
+  const behaviorPatternScore = clamp(
+    average([
+      topCategoryShare * 100,
+      weekendExpenseShare * 100,
+      uncategorizedTransactions.length > 0 ? 65 + uncategorizedTransactions.length * 4 : 20,
+    ])
+  );
+  const goalPressureScore = clamp(
+    average([
+      goalLabel ? 100 : 0,
+      goalProgress.bandLabel === "On track" ? 35 : 85,
+      spendDelta !== null && spendDelta > 0 ? Math.min(spendDelta * 1.2 + 40, 100) : 35,
+    ])
+  );
+  const investmentSignalScore = latestInvestmentSnapshot
+    ? clamp(
+        average([
+          investmentDelta === null ? 55 : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot.totalValue ?? 1), 1) * 100,
+          latestInvestmentSnapshot.gainLossPercent === null ? 40 : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent)),
+        ])
+      )
+    : 0;
 
   const adviserCardWeights = {
     passive: { impact: 0.3, urgency: 0.18, confidence: 0.18, personalization: 0.16, recency: 0.1, actionability: 0.08 },
@@ -495,6 +605,40 @@ async function AdviserPageContent() {
     coaching: { impact: 0.16, urgency: 0.1, confidence: 0.18, personalization: 0.3, recency: 0.1, actionability: 0.16 },
     prompt: { impact: 0.18, urgency: 0.2, confidence: 0.18, personalization: 0.28, recency: 0.08, actionability: 0.08 },
   } satisfies Record<string, ScoreWeights>;
+
+  const scoreCardRelevance = (card: Pick<RankedAdviserCard, "group" | "id" | "breakdown">, baseScore: number) => {
+    const memoryBoost = cardMemoryBoost(card.group, card.id);
+    let contextBoost = 0;
+
+    if (card.group === "cashflow" || card.group === "recurring" || card.group === "split-bills") {
+      contextBoost = cashflowPressureScore * 0.2;
+    } else if (card.group === "goals") {
+      contextBoost = goalPressureScore * 0.18;
+    } else if (card.group === "investments") {
+      contextBoost = investmentSignalScore * 0.16;
+    } else if (card.group === "transactions" || card.group === "behavior-pattern" || card.group === "category-mix") {
+      contextBoost = behaviorPatternScore * 0.16;
+    }
+
+    return clamp(Math.round(baseScore + memoryBoost + contextBoost));
+  };
+
+  const scorePromptRelevance = (prompt: Pick<RankedAdviserPrompt, "group" | "id">, baseScore: number) => {
+    const memoryBoost = promptMemoryBoost(prompt.group, prompt.id);
+    let contextBoost = 0;
+
+    if (prompt.group === "cashflow" || prompt.group === "recurring" || prompt.group === "split-bills") {
+      contextBoost = cashflowPressureScore * 0.15;
+    } else if (prompt.group === "goals") {
+      contextBoost = goalPressureScore * 0.15;
+    } else if (prompt.group === "investments") {
+      contextBoost = investmentSignalScore * 0.15;
+    } else if (prompt.group === "transactions" || prompt.group === "patterns" || prompt.group === "cleanup") {
+      contextBoost = behaviorPatternScore * 0.15;
+    }
+
+    return clamp(Math.round(baseScore + memoryBoost + contextBoost));
+  };
 
   const summaryCards = [
     {
@@ -675,7 +819,7 @@ async function AdviserPageContent() {
         : null,
     ].filter((card): card is RankedAdviserCard => card !== null).map((card) => ({
       ...card,
-      score: scoreCandidate(card.breakdown, adviserCardWeights.passive),
+      score: scoreCardRelevance(card, scoreCandidate(card.breakdown, adviserCardWeights.passive)),
     })),
     3
   );
@@ -830,7 +974,7 @@ async function AdviserPageContent() {
         : null,
     ].filter((card): card is RankedAdviserCard => card !== null).map((card) => ({
       ...card,
-      score: scoreCandidate(card.breakdown, adviserCardWeights.recommendation),
+      score: scoreCardRelevance(card, scoreCandidate(card.breakdown, adviserCardWeights.recommendation)),
     })),
     3
   );
@@ -968,7 +1112,7 @@ async function AdviserPageContent() {
         : null,
     ].filter((card): card is RankedAdviserCard => card !== null).map((card) => ({
       ...card,
-      score: scoreCandidate(card.breakdown, adviserCardWeights.coaching),
+      score: scoreCardRelevance(card, scoreCandidate(card.breakdown, adviserCardWeights.coaching)),
     })),
     3
   );
@@ -1151,7 +1295,7 @@ async function AdviserPageContent() {
         : null,
     ].filter((prompt): prompt is RankedAdviserPrompt => prompt !== null).map((prompt) => ({
       ...prompt,
-      score: scorePromptCandidate(prompt.breakdown, adviserCardWeights.prompt),
+      score: scorePromptRelevance(prompt, scorePromptCandidate(prompt.breakdown, adviserCardWeights.prompt)),
     })),
     4
   );
@@ -1175,13 +1319,21 @@ async function AdviserPageContent() {
           <p className="eyebrow">What Clover noticed</p>
           <div className="adviser-card-grid">
             {passiveCardsToRender.map((card) => (
-              <Link key={card.id} href={card.href} className="adviser-card adviser-card--link glass">
+              <AdviserTrackedLink
+                key={card.id}
+                href={card.href}
+                kind="card"
+                group={card.group}
+                itemId={card.id}
+                label={card.title}
+                className="adviser-card adviser-card--link glass"
+              >
                 <span className={`adviser-card__tone adviser-card__tone--${card.tone}`} aria-hidden="true" />
                 <strong>{card.title}</strong>
                 <p>{card.summary}</p>
                 <small>{card.evidence}</small>
                 <span className="pill-link pill-link--inline">{card.ctaLabel}</span>
-              </Link>
+              </AdviserTrackedLink>
             ))}
           </div>
         </section>
@@ -1190,13 +1342,21 @@ async function AdviserPageContent() {
           <p className="eyebrow">What you should do</p>
           <div className="adviser-card-grid">
             {recommendationCardsToRender.map((card) => (
-              <Link key={card.id} href={card.href} className="adviser-card adviser-card--link glass">
+              <AdviserTrackedLink
+                key={card.id}
+                href={card.href}
+                kind="card"
+                group={card.group}
+                itemId={card.id}
+                label={card.title}
+                className="adviser-card adviser-card--link glass"
+              >
                 <span className={`adviser-card__tone adviser-card__tone--${card.tone}`} aria-hidden="true" />
                 <strong>{card.title}</strong>
                 <p>{card.summary}</p>
                 <small>{card.evidence}</small>
                 <span className="button button-primary button-small adviser-card__button">{card.ctaLabel}</span>
-              </Link>
+              </AdviserTrackedLink>
             ))}
           </div>
         </section>
@@ -1205,13 +1365,21 @@ async function AdviserPageContent() {
           <p className="eyebrow">How you can improve</p>
           <div className="adviser-card-grid">
             {coachingCardsToRender.map((card) => (
-              <Link key={card.id} href={card.href} className="adviser-card adviser-card--link glass">
+              <AdviserTrackedLink
+                key={card.id}
+                href={card.href}
+                kind="card"
+                group={card.group}
+                itemId={card.id}
+                label={card.title}
+                className="adviser-card adviser-card--link glass"
+              >
                 <span className={`adviser-card__tone adviser-card__tone--${card.tone}`} aria-hidden="true" />
                 <strong>{card.title}</strong>
                 <p>{card.summary}</p>
                 <small>{card.evidence}</small>
                 <span className="pill-link pill-link--inline">{card.ctaLabel}</span>
-              </Link>
+              </AdviserTrackedLink>
             ))}
           </div>
         </section>

@@ -143,100 +143,104 @@ export async function POST(request: Request) {
     await assertWorkspaceAccess(user.clerkUserId, workspace.id);
 
     const now = new Date();
-    const thirtyDaysAgo = new Date(now);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const sixtyDaysAgo = new Date(now);
-    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
     const nextSevenDays = new Date(now);
     nextSevenDays.setDate(nextSevenDays.getDate() + 7);
     const nextFourteenDays = new Date(now);
     nextFourteenDays.setDate(nextFourteenDays.getDate() + 14);
 
-    const [
-      currentWindowTransactions,
-      previousWindowTransactions,
-      recurringPatterns,
-      financialCommitments,
-      investmentSnapshots,
-      splitBillWorkspaceData,
-    ] = await Promise.all([
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: workspace.id,
-          isExcluded: false,
-          date: { gte: thirtyDaysAgo },
-        },
-        select: {
-          date: true,
-          amount: true,
-          type: true,
-          merchantRaw: true,
-          merchantClean: true,
-          account: {
-            select: {
-              name: true,
+    const [allTransactionsQuery, recurringPatterns, financialCommitments, investmentSnapshots, splitBillWorkspaceData] =
+      await Promise.all([
+        prisma.transaction.findMany({
+          where: {
+            workspaceId: workspace.id,
+            isExcluded: false,
+          },
+          select: {
+            date: true,
+            amount: true,
+            type: true,
+            merchantRaw: true,
+            merchantClean: true,
+            account: {
+              select: {
+                name: true,
+              },
+            },
+            category: {
+              select: {
+                name: true,
+              },
             },
           },
-          category: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: workspace.id,
-          isExcluded: false,
-          date: {
-            gte: sixtyDaysAgo,
-            lt: thirtyDaysAgo,
-          },
-        },
-        select: {
-          amount: true,
-          type: true,
-          category: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      }),
-      prisma.recurringPattern.findMany({
+          orderBy: { date: "desc" },
+          take: 1000,
+        }),
+        prisma.recurringPattern.findMany({
         where: { workspaceId: workspace.id },
         orderBy: [{ nextExpectedDate: "asc" }, { lastSeenDate: "desc" }],
         take: 12,
       }),
-      prisma.financialCommitment.findMany({
-        where: {
-          workspaceId: workspace.id,
-          status: "active",
-        },
-        orderBy: [{ nextDueDate: "asc" }, { dueDate: "asc" }, { updatedAt: "desc" }],
-        take: 20,
-      }),
-      prisma.investmentSnapshot.findMany({
-        where: {
-          workspaceId: workspace.id,
-        },
-        orderBy: [{ snapshotDate: "desc" }, { updatedAt: "desc" }],
-        take: 2,
-        select: {
-          snapshotDate: true,
-          totalValue: true,
-          currency: true,
-          account: {
-            select: {
-              name: true,
+        prisma.financialCommitment.findMany({
+          where: {
+            workspaceId: workspace.id,
+            status: "active",
+          },
+          orderBy: [{ nextDueDate: "asc" }, { dueDate: "asc" }, { updatedAt: "desc" }],
+          take: 20,
+        }),
+        prisma.investmentSnapshot.findMany({
+          where: {
+            workspaceId: workspace.id,
+          },
+          orderBy: [{ snapshotDate: "desc" }, { updatedAt: "desc" }],
+          take: 2,
+          select: {
+            snapshotDate: true,
+            totalValue: true,
+            currency: true,
+            account: {
+              select: {
+                name: true,
+              },
             },
           },
-        },
-      }),
-      loadSplitBillWorkspaceData(user.id),
-    ]);
+        }),
+        loadSplitBillWorkspaceData(user.id),
+      ]);
 
-    const currentSummary = currentWindowTransactions.reduce(
+    const allTransactions = allTransactionsQuery as Array<{
+      date: Date;
+      amount: unknown;
+      type: "income" | "expense" | "transfer";
+      merchantRaw: string;
+      merchantClean: string | null;
+      account: {
+        name: string;
+      };
+      category: {
+        name: string;
+      } | null;
+    }>;
+
+    const analysisAnchorDate = allTransactions[0]?.date ?? now;
+    const currentWindowStart = new Date(analysisAnchorDate);
+    currentWindowStart.setDate(currentWindowStart.getDate() - 30);
+    const previousWindowStart = new Date(analysisAnchorDate);
+    previousWindowStart.setDate(previousWindowStart.getDate() - 60);
+
+    const currentWindowTransactions = allTransactions.filter(
+      (transaction) => transaction.date > currentWindowStart && transaction.date <= analysisAnchorDate
+    );
+    const previousWindowTransactions = allTransactions.filter(
+      (transaction) => transaction.date > previousWindowStart && transaction.date <= currentWindowStart
+    );
+    const activeTransactions = currentWindowTransactions.length > 0 ? currentWindowTransactions : allTransactions;
+    const comparisonWindowTransactions =
+      previousWindowTransactions.length > 0
+        ? previousWindowTransactions
+        : allTransactions.filter((transaction) => transaction.date <= currentWindowStart);
+
+    const currentSummary = activeTransactions.reduce(
       (accumulator, transaction) => {
         const amount = Number(transaction.amount);
         if (transaction.type === "income") {
@@ -258,7 +262,7 @@ export async function POST(request: Request) {
       }
     );
 
-    const previousSummary = previousWindowTransactions.reduce(
+    const previousSummary = comparisonWindowTransactions.reduce(
       (accumulator, transaction) => {
         const amount = Number(transaction.amount);
         if (transaction.type === "income") {
@@ -354,10 +358,13 @@ export async function POST(request: Request) {
       .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
       .reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
 
+    const currentWindowLabel = currentWindowTransactions.length > 0 ? "Current 30 days" : "Latest available window";
+    const previousWindowLabel = previousWindowTransactions.length > 0 ? "Previous 30 days" : "Earlier available window";
+
     const summaryLines = [
       `Workspace: ${workspace.name}`,
-      `Current 30 days: income ${formatCurrency(currentSummary.income)}, spend ${formatCurrency(currentSpend)}, net ${formatSignedCurrency(currentNet)}`,
-      `Previous 30 days: income ${formatCurrency(previousSummary.income)}, spend ${formatCurrency(previousSpend)}, net ${formatSignedCurrency(previousNet)}`,
+      `${currentWindowLabel}: income ${formatCurrency(currentSummary.income)}, spend ${formatCurrency(currentSpend)}, net ${formatSignedCurrency(currentNet)}`,
+      `${previousWindowLabel}: income ${formatCurrency(previousSummary.income)}, spend ${formatCurrency(previousSpend)}, net ${formatSignedCurrency(previousNet)}`,
       `Savings rate: ${currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}`,
       `Top category: ${topCategoryName ?? "none"}`,
       `Recurring due soon: ${recurringDueSoon.map((item) => `${item.label}${item.due ? ` (${item.due})` : ""}`).join("; ") || "none"}`,

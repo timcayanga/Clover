@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { trackAdviserInteraction } from "@/lib/adviser-interactions";
 
 type AdviserPrompt = {
   id: string;
+  group: string;
   label: string;
   prompt: string;
 };
@@ -41,7 +43,7 @@ export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
 
     setError(null);
     setIsSending(true);
-    const nextMessages = [...messages, { role: "user", content: trimmed }];
+    const nextMessages: ChatMessage[] = [...messages, { role: "user", content: trimmed }];
     setMessages(nextMessages);
     setInput("");
 
@@ -122,6 +124,13 @@ export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
             type="button"
             className="adviser-chat__prompt"
             onClick={() => {
+              trackAdviserInteraction({
+                kind: "prompt",
+                group: prompt.group,
+                itemId: prompt.id,
+                label: prompt.label,
+                pathname: window.location.pathname,
+              });
               void sendMessage(prompt.prompt);
             }}
           >
