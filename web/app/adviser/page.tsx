@@ -214,6 +214,18 @@ const memoryBoostFromStats = (stats: AdviserMemoryStats | undefined, now: Date) 
   return clamp(12 + stats.count * 3 + followThroughLift - Math.min(daysSinceSeen, 45) * 0.35, 0, 28);
 };
 
+const completionBoostFromStats = (stats: AdviserMemoryStats | undefined) => {
+  if (!stats) {
+    return 0;
+  }
+
+  if (stats.count <= 0) {
+    return clamp(stats.outcomes * 3, 0, 14);
+  }
+
+  return clamp((stats.outcomes / stats.count) * 14 + stats.outcomes * 2, 0, 18);
+};
+
 const buildTransactionSummary = (transactions: AdviserTransaction[]) =>
   transactions.reduce(
     (accumulator, transaction) => {
@@ -294,6 +306,30 @@ const calculateTrendSignal = (values: number[]) => {
     direction,
     magnitude,
     score: clamp(magnitude * 180),
+  };
+};
+
+const getTrailingAverage = (series: number[], months: number) => {
+  const slice = series.slice(-months);
+  return slice.length > 0 ? average(slice) : 0;
+};
+
+const getWeightedHistoricalBaseline = (series: Array<{ income: number; expense: number; net: number }>) => {
+  const windows = [
+    { months: 3, weight: 0.5 },
+    { months: 6, weight: 0.3 },
+    { months: 12, weight: 0.2 },
+  ];
+
+  const spendWeighted = windows.reduce((sum, window) => sum + getTrailingAverage(series.map((item) => item.expense), window.months) * window.weight, 0);
+  const incomeWeighted = windows.reduce((sum, window) => sum + getTrailingAverage(series.map((item) => item.income), window.months) * window.weight, 0);
+  const netWeighted = windows.reduce((sum, window) => sum + getTrailingAverage(series.map((item) => item.net), window.months) * window.weight, 0);
+  const totalWeight = windows.reduce((sum, window) => sum + window.weight, 0);
+
+  return {
+    spend: totalWeight > 0 ? spendWeighted / totalWeight : 0,
+    income: totalWeight > 0 ? incomeWeighted / totalWeight : 0,
+    net: totalWeight > 0 ? netWeighted / totalWeight : 0,
   };
 };
 
@@ -533,7 +569,9 @@ async function AdviserPageContent() {
       memoryBoostFromStats(adviserMemoryByGroup.get(group), now) * 0.45 +
         memoryBoostFromStats(adviserMemoryByItem.get(itemId), now) +
         memoryBoostFromStats(adviserOutcomeByGroup.get(group), now) * 0.5 +
-        memoryBoostFromStats(adviserOutcomeByItem.get(itemId), now) * 0.75
+        memoryBoostFromStats(adviserOutcomeByItem.get(itemId), now) * 0.75 +
+        completionBoostFromStats(adviserOutcomeByGroup.get(group)) * 0.6 +
+        completionBoostFromStats(adviserOutcomeByItem.get(itemId)) * 0.9
     );
 
   const promptMemoryBoost = (group: string, itemId: string) =>
@@ -541,7 +579,9 @@ async function AdviserPageContent() {
       memoryBoostFromStats(adviserMemoryByGroup.get(group), now) * 0.3 +
         memoryBoostFromStats(adviserMemoryByItem.get(itemId), now) * 0.85 +
         memoryBoostFromStats(adviserOutcomeByGroup.get(group), now) * 0.4 +
-        memoryBoostFromStats(adviserOutcomeByItem.get(itemId), now) * 0.6
+        memoryBoostFromStats(adviserOutcomeByItem.get(itemId), now) * 0.6 +
+        completionBoostFromStats(adviserOutcomeByGroup.get(group)) * 0.45 +
+        completionBoostFromStats(adviserOutcomeByItem.get(itemId)) * 0.7
     );
 
   const analysisAnchorDate = allTransactions[0]?.date ?? now;
@@ -577,9 +617,15 @@ async function AdviserPageContent() {
   const longTermAverageIncome = allSummary.income / historyWindowCount;
   const longTermAverageNet = longTermAverageIncome - longTermAverageSpend;
   const longTermAverageSavingsRate = longTermAverageIncome > 0 ? longTermAverageNet / longTermAverageIncome : null;
-  const baselineSpend = previousSpend > 0 ? previousSpend : longTermAverageSpend;
-  const baselineIncome = previousSummary.income > 0 ? previousSummary.income : longTermAverageIncome;
-  const baselineSavingsRate = previousSavingsRate ?? longTermAverageSavingsRate;
+  const weightedHistoricalBaseline = getWeightedHistoricalBaseline(monthlySeries);
+  const baselineSpend = previousSpend > 0 ? average([previousSpend, weightedHistoricalBaseline.spend || previousSpend]) : weightedHistoricalBaseline.spend || longTermAverageSpend;
+  const baselineIncome = previousSummary.income > 0 ? average([previousSummary.income, weightedHistoricalBaseline.income || previousSummary.income]) : weightedHistoricalBaseline.income || longTermAverageIncome;
+  const baselineSavingsRate =
+    previousSummary.income > 0
+      ? (previousSummary.income - previousSummary.expense) / previousSummary.income
+      : weightedHistoricalBaseline.income > 0
+        ? weightedHistoricalBaseline.net / weightedHistoricalBaseline.income
+        : longTermAverageSavingsRate;
   const spendDelta = baselineSpend > 0 ? ((currentSpend - baselineSpend) / baselineSpend) * 100 : null;
   const incomeDelta = baselineIncome > 0 ? ((currentSummary.income - baselineIncome) / baselineIncome) * 100 : null;
   const currencyCandidates = new Set(
@@ -799,7 +845,26 @@ async function AdviserPageContent() {
         uncategorizedTransactions.length > 0 ? 92 : 35,
         currentTransactionConfidence,
       ])
-    ),
+      ),
+    };
+  const adviserExplainability = {
+    baseline: {
+      spend: baselineSpend,
+      income: baselineIncome,
+      savingsRate: baselineSavingsRate,
+      historySpanDays,
+    },
+    themes: signalThemes.map((theme) => ({
+      key: theme.key,
+      score: theme.score,
+      affinity: themeAffinity[theme.key],
+    })),
+    memory: {
+      interactions: adviserInteractions.length,
+      followThroughCandidates: followThroughAuditLogs.length,
+      cardMemoryGroups: adviserMemoryByGroup.size,
+      cardOutcomeGroups: adviserOutcomeByGroup.size,
+    },
   };
 
   const adviserCardWeights = {
@@ -881,7 +946,7 @@ async function AdviserPageContent() {
       tone: currentNet >= 0 ? "positive" : "warning",
       detail:
         currentSummary.income > 0
-          ? `${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending`
+          ? `${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending; baseline spend ${formatCurrency(baselineSpend)}`
           : "Based on your current transaction history",
     },
     {
@@ -892,7 +957,7 @@ async function AdviserPageContent() {
       detail:
         currentSavingsRate === null
           ? "Add more income and spending data to calculate this"
-          : `Based on your ${activeTransactionWindowLabel} income and expense mix`,
+          : `Based on your ${activeTransactionWindowLabel} income and expense mix against your historical baseline`,
     },
   ];
 

@@ -141,6 +141,34 @@ const calculateTrendSignal = (values: number[]) => {
   };
 };
 
+const getTrailingAverage = (series: number[], months: number) => {
+  const slice = series.slice(-months);
+  return slice.length > 0 ? slice.reduce((sum, value) => sum + value, 0) / slice.length : 0;
+};
+
+const getWeightedHistoricalBaseline = (series: Array<{ income: number; expense: number; net: number }>) => {
+  const expenseSeries = series.map((item) => item.expense);
+  const incomeSeries = series.map((item) => item.income);
+  const netSeries = series.map((item) => item.net);
+  const windows = [
+    { months: 3, weight: 0.5 },
+    { months: 6, weight: 0.3 },
+    { months: 12, weight: 0.2 },
+  ];
+
+  const weightedAverage = (values: number[]) => {
+    const weighted = windows.reduce((sum, window) => sum + getTrailingAverage(values, window.months) * window.weight, 0);
+    const totalWeight = windows.reduce((sum, window) => sum + window.weight, 0);
+    return totalWeight > 0 ? weighted / totalWeight : 0;
+  };
+
+  return {
+    spend: weightedAverage(expenseSeries),
+    income: weightedAverage(incomeSeries),
+    net: weightedAverage(netSeries),
+  };
+};
+
 const updateMemoryStats = (map: Map<string, AdviserMemoryStats>, key: string, createdAt: Date) => {
   const current = map.get(key);
   if (!current) {
@@ -177,6 +205,18 @@ const memoryBoostFromStats = (stats: AdviserMemoryStats | undefined, now: Date) 
   const daysSinceSeen = Math.max(1, Math.ceil((now.getTime() - stats.lastSeenAt.getTime()) / (1000 * 60 * 60 * 24)));
   const followThroughLift = stats.count > 0 ? (stats.outcomes / stats.count) * 10 : stats.outcomes * 3;
   return Math.max(0, Math.min(28, 12 + stats.count * 3 + followThroughLift - Math.min(daysSinceSeen, 45) * 0.35));
+};
+
+const completionBoostFromStats = (stats: AdviserMemoryStats | undefined) => {
+  if (!stats) {
+    return 0;
+  }
+
+  if (stats.count <= 0) {
+    return Math.max(0, Math.min(14, stats.outcomes * 3));
+  }
+
+  return Math.max(0, Math.min(18, (stats.outcomes / stats.count) * 14 + stats.outcomes * 2));
 };
 const extractOutputText = (payload: Record<string, unknown>) => {
   if (typeof payload.output_text === "string" && payload.output_text.trim()) {
@@ -461,6 +501,7 @@ export async function POST(request: Request) {
     const monthlyIncomeTrend = calculateTrendSignal(monthlySeries.map((point) => point.income));
     const monthlyNetTrend = calculateTrendSignal(monthlySeries.map((point) => point.net));
     const trendMomentumScore = Math.max(0, Math.min(100, ((monthlyExpenseTrend.score + monthlyIncomeTrend.score + monthlyNetTrend.score) / 3) * 1));
+    const weightedHistoricalBaseline = getWeightedHistoricalBaseline(monthlySeries);
 
     const currentSpend = currentSummary.expense;
     const previousSpend = previousSummary.expense;
@@ -474,9 +515,14 @@ export async function POST(request: Request) {
     const longTermAverageIncome = allSummary.income / historyWindowCount;
     const longTermAverageNet = longTermAverageIncome - longTermAverageSpend;
     const longTermAverageSavingsRate = longTermAverageIncome > 0 ? longTermAverageNet / longTermAverageIncome : null;
-    const baselineSpend = previousSpend > 0 ? previousSpend : longTermAverageSpend;
-    const baselineIncome = previousSummary.income > 0 ? previousSummary.income : longTermAverageIncome;
-    const baselineSavingsRate = previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : longTermAverageSavingsRate;
+    const baselineSpend = previousSpend > 0 ? average([previousSpend, weightedHistoricalBaseline.spend || previousSpend]) : weightedHistoricalBaseline.spend || longTermAverageSpend;
+    const baselineIncome = previousSummary.income > 0 ? average([previousSummary.income, weightedHistoricalBaseline.income || previousSummary.income]) : weightedHistoricalBaseline.income || longTermAverageIncome;
+    const baselineSavingsRate =
+      previousSummary.income > 0
+        ? (previousSummary.income - previousSummary.expense) / previousSummary.income
+        : weightedHistoricalBaseline.income > 0
+          ? weightedHistoricalBaseline.net / weightedHistoricalBaseline.income
+          : longTermAverageSavingsRate;
     const spendDelta = baselineSpend > 0 ? ((currentSpend - baselineSpend) / baselineSpend) * 100 : null;
     const incomeDelta = baselineIncome > 0 ? ((currentSummary.income - baselineIncome) / baselineIncome) * 100 : null;
     const currencyCandidates = new Set(workspace.accounts.map((account) => formatCurrencyCode(account.currency)).filter((currency) => currency.length > 0));
@@ -553,7 +599,7 @@ export async function POST(request: Request) {
       const outcomeScores = groups
         .map((group) => adviserOutcomeByGroup.get(group))
         .filter((value): value is AdviserMemoryStats => Boolean(value))
-        .map((stats) => memoryBoostFromStats(stats, now) * 0.85);
+        .map((stats) => memoryBoostFromStats(stats, now) * 0.85 + completionBoostFromStats(stats));
 
       return Math.max(0, Math.min(100, average([...memoryScores, ...outcomeScores, groups.length > 0 ? 55 : 30])));
     };
@@ -595,10 +641,48 @@ export async function POST(request: Request) {
       ),
     };
 
+    const explainabilityBundle = [
+      {
+        label: "Cash flow pressure",
+        score: cashflowPressureScore,
+        reason: `Liquid balance ${formatCurrency(liquidBalance, displayCurrency)} vs spend ${formatCurrency(currentSpend, displayCurrency)}; recurring due soon ${recurringDueSoon.length}; split bills open ${openSplitBillCount}.`,
+      },
+      {
+        label: "Behavior pattern",
+        score: behaviorPatternScore,
+        reason: `Top category ${topCategoryName ?? "none"}; weekend share ${formatPercent(weekendExpenseShare * 100)}; uncategorized rows ${uncategorizedTransactions.length}.`,
+      },
+      {
+        label: "Goal pressure",
+        score: goalPressureScore,
+        reason: goalLabel
+          ? `${goalLabel} status ${goalProgress.bandLabel}; current savings rate ${currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}.`
+          : "No active goal or goal signal is weak.",
+      },
+      {
+        label: "Investment signal",
+        score: investmentSignalScore,
+        reason: latestInvestmentSnapshot
+          ? `Latest snapshot ${formatCurrency(Number(latestInvestmentSnapshot.totalValue ?? 0), latestInvestmentSnapshot.currency)}${investmentDelta === null ? "" : `, change ${formatSignedCurrency(investmentDelta, latestInvestmentSnapshot.currency)}`}.`
+          : "No investment snapshot available.",
+      },
+      {
+        label: "Cleanup pressure",
+        score: cleanupPressureScore,
+        reason: `${uncategorizedTransactions.length} uncategorized transactions; history depth ${historySpanDays} days.`,
+      },
+    ]
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 5)
+      .map((item, index) => `${index + 1}. ${item.label} (${Math.round(item.score)}): ${item.reason}`);
+
     const topThemeLine = signalThemes
       .slice(0, 2)
       .map((theme) => `${theme.key}:${Math.round(theme.score)}${theme.key === dominantTheme?.key ? " (primary)" : ""}`)
       .join(" • ");
+    const totalAdviserClicks = Array.from(adviserMemoryByGroup.values()).reduce((sum, stats) => sum + stats.count, 0);
+    const totalAdviserOutcomes = Array.from(adviserOutcomeByGroup.values()).reduce((sum, stats) => sum + stats.outcomes, 0);
+    const adviserFollowThroughRate = totalAdviserClicks > 0 ? (totalAdviserOutcomes / totalAdviserClicks) * 100 : 0;
 
     const currentWindowLabel = currentWindowTransactions.length > 0 ? "Current 30 days" : "Latest available window";
     const previousWindowLabel = previousWindowTransactions.length > 0 ? "Previous 30 days" : "Earlier available window";
@@ -609,10 +693,12 @@ export async function POST(request: Request) {
       `${currentWindowLabel}: income ${formatCurrency(currentSummary.income)}, spend ${formatCurrency(currentSpend)}, net ${formatSignedCurrency(currentNet)}`,
       `${previousWindowLabel}: income ${formatCurrency(previousSummary.income)}, spend ${formatCurrency(previousSpend)}, net ${formatSignedCurrency(previousNet)}`,
       `${longTermWindowLabel}: avg income ${formatCurrency(longTermAverageIncome)}, avg spend ${formatCurrency(longTermAverageSpend)}, avg net ${formatSignedCurrency(longTermAverageNet)}`,
+      `Baseline model: spend ${formatCurrency(weightedHistoricalBaseline.spend)}, income ${formatCurrency(weightedHistoricalBaseline.income)}, net ${formatSignedCurrency(weightedHistoricalBaseline.net)}`,
       `Savings rate: ${currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}${baselineSavingsRate === null ? "" : `; baseline ${formatPercent(baselineSavingsRate * 100)}`}`,
       `Trend signals: spend ${monthlyExpenseTrend.direction > 0 ? "rising" : monthlyExpenseTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyExpenseTrend.score)}), income ${monthlyIncomeTrend.direction > 0 ? "rising" : monthlyIncomeTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyIncomeTrend.score)}), net ${monthlyNetTrend.direction > 0 ? "rising" : monthlyNetTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyNetTrend.score)})`,
       `Adviser themes: ${topThemeLine || "none"}`,
-      `Adviser memory: ${adviserInteractions.length} interactions, ${followThroughAuditLogs.length} possible follow-through actions, cleanup affinity ${Math.round(themeAffinity.cleanup)}, cashflow affinity ${Math.round(themeAffinity.cashflow)}`,
+      `Adviser memory: ${adviserInteractions.length} interactions, ${followThroughAuditLogs.length} possible follow-through actions, follow-through rate ${formatPercent(adviserFollowThroughRate)}, cleanup affinity ${Math.round(themeAffinity.cleanup)}, cashflow affinity ${Math.round(themeAffinity.cashflow)}`,
+      `Ranked evidence: ${explainabilityBundle.join(" | ")}`,
       `Top category: ${topCategoryName ?? "none"}`,
       `Recurring due soon: ${recurringDueSoon.map((item) => `${item.label}${item.due ? ` (${item.due})` : ""}`).join("; ") || "none"}`,
       `Commitments due soon: ${commitmentsDueSoon.map((item) => `${item.title}${item.due ? ` (${item.due})` : ""}`).join("; ") || "none"}`,
