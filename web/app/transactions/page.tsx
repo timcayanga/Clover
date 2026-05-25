@@ -3319,7 +3319,29 @@ function TransactionsPageContent() {
     sortField,
     transactions,
   ]);
-  const totalTransactionCountForDisplay = searchText ? visibleTransactions.length : transactionsSummary.totalCount;
+  const hasActiveServerSideFilters = Boolean(
+    query.trim() ||
+      currencyFilter.trim() ||
+      categoryFilters.length > 0 ||
+      expandedAccountFilters.length > 0 ||
+      typeFilters.length > 0 ||
+      dateFilterMode !== "ltd" ||
+      customStart.trim() ||
+      customEnd.trim() ||
+      amountMin.trim() ||
+      amountMax.trim()
+  );
+  const visibleFilteredSummary = useMemo(
+    () =>
+      buildVisibleTransactionSummary(visibleTransactions, {
+        totalCount: visibleTransactions.length,
+        currencyCodes: transactionsSummary.currencyCodes,
+      }),
+    [transactionsSummary.currencyCodes, visibleTransactions]
+  );
+  const shouldUseVisibleFilteredSummary = hasActiveServerSideFilters && visibleTransactions.length === 0;
+  const displayedTransactionsSummary = shouldUseVisibleFilteredSummary ? visibleFilteredSummary : transactionsSummary;
+  const totalTransactionCountForDisplay = searchText || shouldUseVisibleFilteredSummary ? visibleTransactions.length : transactionsSummary.totalCount;
   const activeFinalizingImportIds = useMemo(
     () => new Set(imports.filter(isActiveEnrichmentJob).map((importFile) => importFile.id)),
     [imports]
@@ -5435,10 +5457,10 @@ function TransactionsPageContent() {
       const exportedCount = exportRows.length;
       const exportTitle = workspace?.name ? `${workspace.name} Transactions` : "Transactions";
       const summaryCards = [
-        { label: "Rows", value: String(transactionsSummary.totalCount) },
-        { label: "Income", value: formatTransactionAggregate(transactionsSummary.income, exportRows) },
-        { label: "Spending", value: formatTransactionAggregate(transactionsSummary.spending, exportRows) },
-        { label: "Transfers", value: formatTransactionAggregate(transactionsSummary.transfers, exportRows) },
+        { label: "Rows", value: String(totalTransactionCountForDisplay) },
+        { label: "Income", value: formatTransactionAggregate(displayedTransactionsSummary.income, exportRows) },
+        { label: "Spending", value: formatTransactionAggregate(displayedTransactionsSummary.spending, exportRows) },
+        { label: "Transfers", value: formatTransactionAggregate(displayedTransactionsSummary.transfers, exportRows) },
       ];
 
       report.document.open();
@@ -5720,8 +5742,8 @@ function TransactionsPageContent() {
     }
   };
 
-  const netCashFlow = transactionsSummary.income - transactionsSummary.spending;
-  const warningTransactionCount = transactionsSummary.review;
+  const netCashFlow = displayedTransactionsSummary.income - displayedTransactionsSummary.spending;
+  const warningTransactionCount = displayedTransactionsSummary.review;
   const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
   const headerMenuTitle =
@@ -6479,7 +6501,7 @@ function TransactionsPageContent() {
                   </div>
                 ))}
               </div>
-            ) : transactionsSummary.totalCount > 0 ? (
+            ) : hasVisibleTransactions ? (
               desktopPageTransactions.map((transaction, index) => {
                 const warningReason = warningReasonFor(transaction);
                 const amount = Number(transaction.amount);
@@ -6678,7 +6700,7 @@ function TransactionsPageContent() {
                   </div>
                 );
               })
-            ) : transactionsSummary.totalCount === 0 ? (
+            ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
               <EmptyDataCta
                 className="transactions-empty-state--table"
                 eyebrow=""
@@ -6729,7 +6751,7 @@ function TransactionsPageContent() {
                   </div>
                 ))}
               </div>
-            ) : transactionsSummary.totalCount > 0 ? (
+            ) : hasVisibleTransactions ? (
               <div className="transactions-mobile-list">
                 {mobileTransactionGroups.map((group) => (
                   <section key={group.date} className="transactions-mobile-date-group">
@@ -6835,7 +6857,7 @@ function TransactionsPageContent() {
                   </div>
                 ) : null}
               </div>
-            ) : transactionsSummary.totalCount === 0 ? (
+            ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
               <EmptyDataCta
                 className="transactions-empty-state--table"
                 eyebrow=""
@@ -6866,7 +6888,7 @@ function TransactionsPageContent() {
           {!isCompactViewport ? (
             <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
               <div className="table-footer__summary">
-                {transactionsSummary.totalCount > 0 ? (
+                {totalTransactionCountForDisplay > 0 ? (
                   <span className="pill pill-subtle">Showing filtered {currentPageLabel}</span>
                 ) : null}
                 {warningTransactionCount > 0 ? (
@@ -6950,13 +6972,13 @@ function TransactionsPageContent() {
                   <div className="transactions-footer-snapshot__metric">
                     <span className="transactions-footer-snapshot__metric-label">Spending</span>
                     <span className="transactions-footer-snapshot__metric-value negative">
-                      {formatTransactionAggregate(transactionsSummary.spending, visibleTransactions)}
+                      {formatTransactionAggregate(displayedTransactionsSummary.spending, visibleTransactions)}
                     </span>
                   </div>
                   <div className="transactions-footer-snapshot__metric">
                     <span className="transactions-footer-snapshot__metric-label">Transfers</span>
                     <span className="transactions-footer-snapshot__metric-value">
-                      {formatTransactionAggregate(transactionsSummary.transfers, visibleTransactions)}
+                      {formatTransactionAggregate(displayedTransactionsSummary.transfers, visibleTransactions)}
                     </span>
                   </div>
                   <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net" style={transactionsFooterNetMetricStyle}>
@@ -6984,19 +7006,19 @@ function TransactionsPageContent() {
           <dl className="transactions-summary-list">
             <div>
               <dt>Total transactions</dt>
-              <dd>{transactionsSummary.totalCount}</dd>
+              <dd>{totalTransactionCountForDisplay}</dd>
             </div>
             <div>
               <dt>Income</dt>
-              <dd className="positive">{formatTransactionAggregate(transactionsSummary.income, visibleTransactions)}</dd>
+              <dd className="positive">{formatTransactionAggregate(displayedTransactionsSummary.income, visibleTransactions)}</dd>
             </div>
             <div>
               <dt>Spending</dt>
-              <dd className="negative">{formatTransactionAggregate(transactionsSummary.spending, visibleTransactions)}</dd>
+              <dd className="negative">{formatTransactionAggregate(displayedTransactionsSummary.spending, visibleTransactions)}</dd>
             </div>
             <div>
               <dt>Transfers</dt>
-              <dd>{formatTransactionAggregate(transactionsSummary.transfers, visibleTransactions)}</dd>
+              <dd>{formatTransactionAggregate(displayedTransactionsSummary.transfers, visibleTransactions)}</dd>
             </div>
             <div>
               <dt>Net cash flow</dt>
@@ -7004,11 +7026,11 @@ function TransactionsPageContent() {
             </div>
             <div>
               <dt>Review items</dt>
-              <dd>{transactionsSummary.review}</dd>
+              <dd>{displayedTransactionsSummary.review}</dd>
             </div>
             <div>
               <dt>Top category</dt>
-              <dd>{transactionsSummary.topCategory ? `${transactionsSummary.topCategory[0]} · ${formatTransactionAggregate(transactionsSummary.topCategory[1], visibleTransactions)}` : "—"}</dd>
+              <dd>{displayedTransactionsSummary.topCategory ? `${displayedTransactionsSummary.topCategory[0]} · ${formatTransactionAggregate(displayedTransactionsSummary.topCategory[1], visibleTransactions)}` : "—"}</dd>
             </div>
             <div>
               <dt>Top source</dt>
