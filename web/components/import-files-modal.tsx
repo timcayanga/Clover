@@ -1652,11 +1652,7 @@ export function ImportFilesModal({
     }
 
     const outcome = summarizeVisibilityOutcome(currentItems);
-    const completedSummary = combineUploadInsightsSummaries(
-      currentItems
-        .map((item) => localPreparseSummaryByItemIdRef.current.get(item.id) ?? null)
-        .filter((summary): summary is UploadInsightsSummary => Boolean(summary))
-    );
+    const completedSummary = buildVisibleImportSummary(currentItems);
     const outcomeMessage =
       reason === "visible"
         ? `Accounts and transactions are visible. ${outcome.message}`
@@ -1783,6 +1779,51 @@ export function ImportFilesModal({
     return itemsRef.current
       .filter((item) => item.confirmationState !== "confirmed")
       .every(hasPrimaryDataForItem);
+  };
+
+  const buildVisibleImportSummary = (currentItems: QueuedFile[] = itemsRef.current) => {
+    const summaries = currentItems
+      .map((item): UploadInsightsSummary | null => {
+        const localSummary = localPreparseSummaryByItemIdRef.current.get(item.id) ?? null;
+        const localPreviewCount = Array.isArray(localSummary?.previewTransactions)
+          ? localSummary.previewTransactions.length
+          : 0;
+        const localRowCount = Number(localSummary?.rowsImported ?? 0);
+        const itemRowCount = Number(item.importedRows ?? 0);
+        const rowsImported = Math.max(
+          Number.isFinite(localRowCount) ? localRowCount : 0,
+          Number.isFinite(itemRowCount) ? itemRowCount : 0,
+          localPreviewCount
+        );
+
+        if (localSummary) {
+          return {
+            ...localSummary,
+            rowsImported,
+          };
+        }
+
+        if (rowsImported <= 0) {
+          return null;
+        }
+
+        return buildOptimisticUploadSummary(
+          item.file.name,
+          rowsImported,
+          item.targetAccountId,
+          null,
+          null,
+          null,
+          item.optimisticAccountId,
+          null,
+          [],
+          null,
+          false
+        );
+      })
+      .filter((summary): summary is UploadInsightsSummary => Boolean(summary));
+
+    return combineUploadInsightsSummaries(summaries);
   };
 
   useEffect(() => {
@@ -6040,7 +6081,9 @@ export function ImportFilesModal({
       ? friendlyImportProgressLabel(activeProgressItem.progressLabel, activeProgressItem.file.name, activeProgressItem.importMode)
       : validationNotice ?? message;
     const activeErrorItem = items.find((item) => item.status === "error") ?? null;
-    const previousSummary = lastImportActivityRef.current?.summary ?? null;
+    const previousSummary =
+      lastImportActivityRef.current?.summary ??
+      (hasCompletedBatchNow ? buildVisibleImportSummary(items) : null);
     const nextSnapshot: ImportActivitySnapshot = {
       workspaceId,
       surface: importActivitySurfaceRef.current,
@@ -6593,6 +6636,9 @@ export function ImportFilesModal({
     return null;
   }
 
+  const completedBatchSummary =
+    hasCompletedBatch ? lastImportActivityRef.current?.summary ?? buildVisibleImportSummary(items) : null;
+
   const modalContent = activePasswordItem ? (
       <ImportPasswordModal
         open
@@ -6620,7 +6666,7 @@ export function ImportFilesModal({
         fileTotal={items.length}
         completedFiles={completedFileCount}
         progress={displayedOverallProgress}
-        summary={lastImportActivityRef.current?.summary ?? null}
+        summary={completedBatchSummary}
         detail={
           !activeProgressItem && hasCompletedBatch && message
             ? message
