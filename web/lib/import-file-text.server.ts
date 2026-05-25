@@ -1289,7 +1289,8 @@ const ensurePdfJsPolyfills = async () => {
 
 const loadPdfJsText = async () => {
   await ensurePdfJsPolyfills();
-  return import("pdfjs-serverless");
+  const pdfjsModule = await import("./pdfjs.server");
+  return (pdfjsModule as { pdfjs: typeof import("./pdfjs.server").pdfjs }).pdfjs;
 };
 
 const loadPdfJsRender = async () => {

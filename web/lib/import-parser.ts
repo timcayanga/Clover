@@ -1952,6 +1952,71 @@ const parseRcbcSavingsImportText = (text: string) => {
 
 const aubAccountNameFromText = (accountNumber: string | null) => formatSimpleBankAccountName("AUB", accountNumber);
 
+const normalizeAubSavingsTransactionCode = (value: string) => {
+  const compact = compactWhitespace(value).replace(/[^A-Za-z0-9]+/g, "").toUpperCase();
+  if (!compact) {
+    return "";
+  }
+
+  if (compact === "CC" || compact === "ICC" || compact === "IC" || compact === "IICC") {
+    return "ICC";
+  }
+
+  if (compact === "ATMWD" || compact === "ATMWDL" || compact === "ATMWITHDRAWAL") {
+    return "ATMWD";
+  }
+
+  if (compact === "WIC" || compact === "WFTC") {
+    return "WFTC";
+  }
+
+  if (compact === "NFTC") {
+    return "NFTC";
+  }
+
+  if (compact === "AFCINQ") {
+    return "AFCINQ";
+  }
+
+  if (compact === "ILNSDM1") {
+    return "ILNSDM1";
+  }
+
+  if (compact === "PDCK3") {
+    return "PDCK3";
+  }
+
+  if (compact === "DM1") {
+    return "DM1";
+  }
+
+  if (compact === "CK1") {
+    return "CK1";
+  }
+
+  if (compact === "CD") {
+    return "CD";
+  }
+
+  if (compact === "ENC") {
+    return "ENC";
+  }
+
+  if (compact === "INT") {
+    return "INT";
+  }
+
+  if (compact === "TAX") {
+    return "TAX";
+  }
+
+  if (compact === "ONUS") {
+    return "ONUS";
+  }
+
+  return normalizeWhitespace(value).toUpperCase();
+};
+
 const isAubCardStatementText = (text: string) => {
   const compact = normalizeWhitespace(text).replace(/\s+/g, " ");
   return (
@@ -1964,7 +2029,14 @@ const isAubSavingsStatementText = (text: string) => {
   const compact = normalizeWhitespace(text).replace(/\s+/g, " ");
   const hasStatementShell =
     /(STATEMENT\s+OF\s+ACCOUNT|PERIOD\s+COVERED|RUNDATE|ACCOUNT\s+NUMBER)/i.test(compact) &&
-    /(DATE\s+CHECK\s+NO\.?\s+TRANSACTION\s+CODE\s+DEBIT\s+CREDIT\s+ENDING\s+BALANCE|CURRENT\s+BALANCE|AVAILABLE\s+BALANCE)/i.test(compact);
+    (
+      /DATE\s+CHECK\s+NO\.?/i.test(compact) &&
+      /TRANSACTION/i.test(compact) &&
+      /DEBIT/i.test(compact) &&
+      /CREDIT/i.test(compact) &&
+      /ENDING\s+BALANCE/i.test(compact) &&
+      /CODE/i.test(compact)
+    );
   const hasAubBrand = /\b(ASIA\s+UNITED\s+BANK|AUB)\b/i.test(compact);
   return (
     (hasAubBrand && hasStatementShell) ||
@@ -2008,8 +2080,12 @@ const guessAubSavingsCategoryName = (description: string, type: TransactionType)
   return guessCategoryName(description, type);
 };
 
-const isAubSavingsCreditCode = (transactionCode: string) => /^(NFTC|WFTC|CD|CREDIT\s+MOVEMENT|INTEREST)$/i.test(transactionCode);
-const isAubSavingsDebitCode = (transactionCode: string) => /^(ATMWD|AFCINQ|ICC|ILNSDM1|DM1|ENC|CK1|DEBIT\s+MOVEMENT|CHECK\s+ISSUED|TAX|SERVICE\s+FEE)/i.test(transactionCode);
+const isAubSavingsCreditCode = (transactionCode: string) =>
+  /^(NFTC|WFTC|CD|CREDIT\s+MOVEMENT|INTEREST)$/i.test(normalizeAubSavingsTransactionCode(transactionCode));
+const isAubSavingsDebitCode = (transactionCode: string) =>
+  /^(ATMWD|AFCINQ|ICC|ILNSDM1|DM1|ENC|CK1|DEBIT\s+MOVEMENT|CHECK\s+ISSUED|TAX|SERVICE\s+FEE)/i.test(
+    normalizeAubSavingsTransactionCode(transactionCode)
+  );
 
 const parseAubSavingsTransactionLine = (
   line: string,
@@ -2033,7 +2109,7 @@ const parseAubSavingsTransactionLine = (
 
     const date = parseAubDate(parts[0]);
     const checkNo = parts[1] ? normalizeWhitespace(parts[1]) : null;
-    const transactionCode = parts[2] ? normalizeWhitespace(parts[2]) : null;
+    const transactionCode = parts[2] ? normalizeAubSavingsTransactionCode(parts[2]) : null;
     if (!date || !checkNo || !transactionCode) {
       return null;
     }
@@ -2210,7 +2286,7 @@ const parseAubSavingsTransactionLine = (
   if (match) {
     const date = parseAubDate(match[1]);
     const checkNo = normalizeWhitespace(match[2]);
-    const transactionCode = normalizeWhitespace(match[3]);
+    const transactionCode = normalizeAubSavingsTransactionCode(match[3]);
     const debit = parseMoney(match[4]);
     const credit = parseMoney(match[5]);
     const balance = parseMoney(match[6]);
@@ -2375,6 +2451,7 @@ const parseAubCardImportText = (text: string) => {
     return null;
   }
 
+  const statementEndDate = rows.at(-1)?.date ? parseAubDate(rows.at(-1)?.date ?? null) : null;
   const endingBalance = totalAmountDue ?? getTrailingBalanceFromParsedRows(rows);
 
   return {
@@ -2388,7 +2465,7 @@ const parseAubCardImportText = (text: string) => {
       paymentDueDate: paymentDueMatch?.[1] ? parseAubDate(paymentDueMatch[1])?.toISOString() ?? null : null,
       totalAmountDue: totalAmountDue,
       startDate: statementDateMatch?.[1] ? parseAubDate(statementDateMatch[1])?.toISOString() ?? null : null,
-      endDate: paymentDueMatch?.[1] ? parseAubDate(paymentDueMatch[1])?.toISOString() ?? null : null,
+      endDate: statementEndDate ? statementEndDate.toISOString() : statementDateMatch?.[1] ? parseAubDate(statementDateMatch[1])?.toISOString() ?? null : null,
       confidence: accountNumber ? 94 : 84,
     } satisfies DetectedStatementMetadata,
     rows,
@@ -2434,7 +2511,7 @@ const parseAubSavingsImportText = (text: string) => {
 
   const rows: ParsedImportRow[] = [];
   let previousBalance: number | null = null;
-  const rowStartPattern = /^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})\s+[A-Z0-9-]+(?:\s+[A-Z0-9-]+)?(?:\s+[0-9][0-9,]*\.\d{2})?/i;
+  const rowStartPattern = /^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})\b/i;
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
@@ -2461,16 +2538,20 @@ const parseAubSavingsImportText = (text: string) => {
     let parsed: ParsedImportRow | null = null;
     let consumedLines = 0;
     for (const window of candidateWindows) {
-      const candidate = window.join(" | ");
-      const attempt = parseAubSavingsTransactionLine(candidate, {
-        accountName,
-        accountNumber,
-        institution: "AUB",
-        previousBalance,
-      });
-      if (attempt) {
-        parsed = attempt;
-        consumedLines = window.length - 1;
+      for (const candidate of [normalizeWhitespace(window.join(" ")), window.join(" | ")]) {
+        const attempt = parseAubSavingsTransactionLine(candidate, {
+          accountName,
+          accountNumber,
+          institution: "AUB",
+          previousBalance,
+        });
+        if (attempt) {
+          parsed = attempt;
+          consumedLines = window.length - 1;
+          break;
+        }
+      }
+      if (parsed) {
         break;
       }
     }
@@ -12554,8 +12635,9 @@ const reconstructAubCorporateLedgerSubset = (
   metadata: DetectedStatementMetadata,
   institutionAwareNormalization: boolean
 ) => {
+  const institution = normalizeWhitespace(metadata.institution ?? "");
   if (
-    metadata.institution !== "Asia United Bank" ||
+    !/^(?:AUB|ASIA UNITED BANK)$/i.test(institution) ||
     !/AUB\s+Teller\s+360/i.test(text)
   ) {
     return null;
@@ -12566,11 +12648,11 @@ const reconstructAubCorporateLedgerSubset = (
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
   const codePattern =
-    /^(?<date>\d{4}-\d{2}-\d{2})\s+(?<reference>[A-Z0-9]+)\s+(?<code>ICCONUS|ILNSDM1|PDCK3|CK1|DM1|DRT|ENC|ICC|ONUS|CD|INT|TAX)\b/i;
+    /^(?<date>\d{4}-\d{2}-\d{2})\s+(?<reference>[A-Z0-9]+)\s+(?<code>ICCONUS|ILNSDM1|PDCK3|CK1|DM1|DRT|ENC|ICC|CC|ONUS|CD|INT|TAX)\b/i;
   const shortCodePattern =
     /^(?<date>\d{4}-\d{2}-\d{2})\s+(?<code>INT|TAX)\b/i;
   const accountName = metadata.accountName ?? metadata.institution ?? "Account";
-  const institution = metadata.institution ?? undefined;
+  const resolvedInstitution = metadata.institution ?? undefined;
   const endDate = metadata.endDate ? new Date(metadata.endDate) : null;
   const startDate = metadata.startDate ? new Date(metadata.startDate) : null;
   const finalDateText = endDate ? endDate.toISOString().slice(0, 10) : null;
@@ -12580,7 +12662,7 @@ const reconstructAubCorporateLedgerSubset = (
       const longMatch = line.match(codePattern);
       const shortMatch = !longMatch ? line.match(shortCodePattern) : null;
       const dateText = longMatch?.groups?.date ?? shortMatch?.groups?.date ?? null;
-      const code = (longMatch?.groups?.code ?? shortMatch?.groups?.code ?? "").toUpperCase();
+      const code = normalizeAubSavingsTransactionCode(longMatch?.groups?.code ?? shortMatch?.groups?.code ?? "");
       const reference = longMatch?.groups?.reference ?? code;
       if (!dateText || !code || !reference) {
         return null;
@@ -12637,7 +12719,7 @@ const reconstructAubCorporateLedgerSubset = (
           description,
           categoryName,
           accountName,
-          institution,
+          institution: resolvedInstitution,
           type,
           confidence: 76,
           rawPayload: {
@@ -12722,6 +12804,9 @@ const reconstructAubCorporateLedgerSubset = (
   const rows = entries
     .filter((entry) => keep.has(entry.index))
     .map((entry) => entry.row);
+  if (entries.length <= 60) {
+    return sortGenericStatementRowsChronologically(entries.map((entry) => entry.row));
+  }
   return rows.length > 0 ? sortGenericStatementRowsChronologically(rows) : null;
 };
 
@@ -12729,7 +12814,7 @@ const applyGenericCorporateLedgerSubset = (
   rows: ParsedImportRow[],
   metadata: DetectedStatementMetadata | null
 ) => {
-  if (metadata?.institution !== "Asia United Bank" || rows.length < 100) {
+  if (metadata?.institution !== "Asia United Bank" || rows.length < 250) {
     return rows;
   }
 
@@ -12746,6 +12831,11 @@ const applyGenericCorporateLedgerSubset = (
     code: extractCode(row),
     amount: parseRowAmount(row),
   }));
+  const codedRowRatio =
+    codedRows.length > 0 ? codedRows.filter((entry) => entry.code || (entry.amount ?? 0) >= 100_000).length / codedRows.length : 0;
+  if (codedRowRatio < 0.7) {
+    return rows;
+  }
   const firstStrongIndex = codedRows.findIndex((entry) => strongCodes.has(entry.code));
   const preStrongRows = firstStrongIndex > 0 ? codedRows.slice(0, firstStrongIndex) : [];
 
