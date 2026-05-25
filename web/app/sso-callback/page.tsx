@@ -29,7 +29,7 @@ export default function SsoCallbackPage() {
     <main className="auth-page">
       <section className="clover-auth-card glass">
         <div className="clover-auth-card__brand">
-          <img className="clover-auth-card__logo" src="/clover-logo-full.svg" alt="Clover" />
+          <img className="clover-auth-card__logo" src="/clover-logo-full.svg" alt="Clover" loading="eager" fetchPriority="high" />
         </div>
         <p className="clover-auth-card__loading">Completing your sign-in...</p>
         <AuthenticateWithRedirectCallback

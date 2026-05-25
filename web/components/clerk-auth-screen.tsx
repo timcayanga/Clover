@@ -265,13 +265,13 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
   }, [mode]);
 
   if (!isReady) {
-      return (
-        <section className="clover-auth-card glass">
-          <div className="clover-auth-card__brand">
-            <img className="clover-auth-card__logo" src="/clover-mark.svg" alt="Clover" />
-          </div>
+    return (
+      <section className="clover-auth-card glass">
+        <div className="clover-auth-card__brand">
+          <img className="clover-auth-card__logo" src="/clover-mark.svg" alt="Clover" loading="eager" fetchPriority="high" />
+        </div>
           <p className="clover-auth-card__loading">Loading secure sign-in...</p>
-        </section>
+      </section>
     );
   }
 
@@ -672,7 +672,7 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
   return (
     <section className="clover-auth-card glass">
       <div className="clover-auth-card__brand">
-        <img className="clover-auth-card__logo" src="/clover-mark.svg" alt="Clover" />
+        <img className="clover-auth-card__logo" src="/clover-mark.svg" alt="Clover" loading="eager" fetchPriority="high" />
       </div>
 
       <header className="clover-auth-card__header">

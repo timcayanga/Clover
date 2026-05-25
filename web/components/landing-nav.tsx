@@ -56,8 +56,8 @@ export function LandingNav({ accountState }: LandingNavProps) {
     <header className={navClassName}>
       <div className="landing-nav__desktop" aria-label="Primary">
         <Link className="landing-brand landing-brand--desktop" href="/" aria-label="Clover home" prefetch={false}>
-          <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
-          <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
+          <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
+          <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" loading="eager" fetchPriority="high" />
         </Link>
 
         <PublicAccountActions accountState={accountState} />
@@ -76,8 +76,8 @@ export function LandingNav({ accountState }: LandingNavProps) {
         </button>
 
         <Link className="landing-brand landing-brand--mobile" href="/" aria-label="Clover home" prefetch={false}>
-          <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
-          <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
+          <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
+          <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" loading="eager" fetchPriority="high" />
         </Link>
 
         <PublicAccountActions variant="mobile" accountState={accountState} />

@@ -943,7 +943,7 @@ export function SettingsHub({
       {mode !== "panel" ? (
         <aside className="settings-hub__menu glass">
           <Link className="settings-hub__brand" href="/dashboard" aria-label="Go to dashboard">
-            <img className="settings-hub__brand-mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
+            <img className="settings-hub__brand-mark" src="/clover-mark.svg" alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
             <div className="settings-hub__brand-copy">
               <strong>Clover</strong>
               <span>{activeProfile?.name ?? workspaceName}</span>
@@ -1214,15 +1214,6 @@ export function SettingsHub({
               </div>
             </div>
 
-            {!workspaceReady ? (
-              <article className="settings-action-card">
-                <div>
-                  <h5>Loading workspace</h5>
-                  <p>Pulling your profile data into Settings.</p>
-                </div>
-              </article>
-            ) : null}
-
             <div className="settings-data-grid settings-data-grid--split">
               <article className="settings-action-card settings-data-download">
                 <div>
@@ -1357,14 +1348,7 @@ export function SettingsHub({
         {activeSection === "categories" ? (
           workspaceReady ? (
             <SettingsCategoriesPanel workspaceId={workspaceId} />
-          ) : (
-            <article className="settings-action-card">
-              <div>
-                <h5>Loading workspace</h5>
-                <p>Pulling your profile data into Settings.</p>
-              </div>
-            </article>
-          )
+          ) : null
         ) : null}
 
         {activeSection === "plan" ? (

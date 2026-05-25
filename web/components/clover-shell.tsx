@@ -1018,8 +1018,21 @@ export function CloverShell({
               }
             }}
           >
-            <img src="/clover-mark.svg" alt="" aria-hidden="true" className="sidebar-brand-link__mark" />
-            <img src="/clover-name-teal.svg" alt="Clover" className="sidebar-brand-link__wordmark" />
+            <img
+              src="/clover-mark.svg"
+              alt=""
+              aria-hidden="true"
+              className="sidebar-brand-link__mark"
+              loading="eager"
+              fetchPriority="high"
+            />
+            <img
+              src="/clover-name-teal.svg"
+              alt="Clover"
+              className="sidebar-brand-link__wordmark"
+              loading="eager"
+              fetchPriority="high"
+            />
           </button>
         </div>
 

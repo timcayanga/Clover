@@ -26,6 +26,12 @@ export function PageFileDropZone({
   const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
+    const image = new Image();
+    image.decoding = "async";
+    image.src = illustration;
+  }, [illustration]);
+
+  useEffect(() => {
     if (typeof document === "undefined") {
       return;
     }
@@ -136,7 +142,7 @@ export function PageFileDropZone({
       <div className="page-file-drop-zone__corner page-file-drop-zone__corner--bl" />
       <div className="page-file-drop-zone__corner page-file-drop-zone__corner--br" />
       <div className="page-file-drop-zone__art" aria-hidden="true">
-        <img src={illustration} alt="" loading="lazy" decoding="async" />
+        <img src={illustration} alt="" loading="eager" fetchPriority="high" decoding="async" />
       </div>
       <div className="page-file-drop-zone__content">
         <p className="page-file-drop-zone__eyebrow">Import files</p>

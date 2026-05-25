@@ -62,8 +62,8 @@ export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
             </svg>
           </Link>
           <Link className="landing-brand" href={heroBackHref} aria-label="Clover home" prefetch={false}>
-            <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
-            <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
+            <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
+            <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" loading="eager" fetchPriority="high" />
           </Link>
           <PublicAccountActions accountState={accountState} />
         </nav>

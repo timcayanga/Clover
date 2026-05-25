@@ -275,7 +275,7 @@ export function OnboardingForm({
       />
       <section className="glass onboarding-card">
         <div className="onboarding-card__brand" aria-label="Clover">
-          <img className="onboarding-card__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
+          <img className="onboarding-card__mark" src="/clover-mark.svg" alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
         </div>
 
         {step === "experience" ? experienceStep : uploadStep}

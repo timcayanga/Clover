@@ -10,7 +10,7 @@ export default async function PrivacyPolicyPage() {
       <div className="legal-page__inner">
         <nav className="legal-page__nav" aria-label="Legal page navigation">
           <Link className="landing-brand" href="/" aria-label="Clover home">
-            <img className="landing-brand__logo" src="/clover-logo-full.svg" alt="Clover" />
+            <img className="landing-brand__logo" src="/clover-logo-full.svg" alt="Clover" loading="eager" fetchPriority="high" />
           </Link>
           <PublicAccountActions accountState={accountState} />
         </nav>
