@@ -26948,7 +26948,7 @@ button.accounts-detail__transaction-head-cell {
   transform-box: fill-box;
   transform-origin: center;
   opacity: 0.2;
-  animation: clover-loading-screen-pulse 6.4s ease-in-out infinite;
+  animation: clover-loading-screen-pulse 4.8s ease-in-out infinite;
   will-change: transform, opacity, filter;
 }
 
