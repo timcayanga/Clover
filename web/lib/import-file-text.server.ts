@@ -460,7 +460,15 @@ const extractTextFromImageBufferWithOcrBestEffort = async (imageSource: Buffer |
   ]);
 };
 
-const renderPdfPagesToOcrText = async (data: Uint8Array, password?: string, baseUrl?: string | null, maxPages = 6, scale = 3.2) => {
+type PdfOcrProfile = "standard" | "aggressive";
+
+const renderPdfPagesToOcrText = async (
+  data: Uint8Array,
+  password?: string,
+  baseUrl?: string | null,
+  maxPages = 6,
+  scale = 3.2
+) => {
   const pageImages = await renderPdfPageImagesFromBytes(data, password, maxPages, scale, true);
   const ocrPages: string[] = [];
 
@@ -499,6 +507,21 @@ const shouldPreferPdfOcrFirst = (fileName?: string | null) => {
     lower.includes("bank-cert") ||
     lower.includes("bankstatementandbankcert") ||
     (lower.includes("aub") && lower.includes("template"))
+  );
+};
+
+const shouldUseAggressivePdfOcrProfile = (fileName?: string | null) => {
+  const lower = String(fileName ?? "").toLowerCase();
+  return (
+    lower.includes("bank cert") ||
+    lower.includes("bank-cert") ||
+    lower.includes("statement of account") ||
+    lower.includes("statementofaccount") ||
+    lower.includes("soa") ||
+    lower.includes("receipt") ||
+    lower.includes("voucher") ||
+    lower.includes("bankstatementandbankcert") ||
+    (lower.includes("statement") && lower.includes("account") && lower.includes("pdf"))
   );
 };
 
@@ -1223,9 +1246,16 @@ export const mergeCompatibleStatementTextCandidates = (
   return merged.length >= Math.max(left.text.length, right.text.length) ? merged : null;
 };
 
-const extractTextFromPdfBytesWithRenderFirstFallback = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
+const extractTextFromPdfBytesWithRenderFirstFallback = async (
+  data: Uint8Array,
+  password?: string,
+  baseUrl?: string | null,
+  profile: PdfOcrProfile = "standard"
+) => {
+  const maxPages = profile === "aggressive" ? 8 : 6;
+  const renderScale = profile === "aggressive" ? 3.8 : 3.2;
   try {
-    const ocrText = await renderPdfPagesToOcrText(data, password, baseUrl);
+    const ocrText = await renderPdfPagesToOcrText(data, password, baseUrl, maxPages, renderScale);
     if (ocrText.trim().length > 0) {
       return ocrText;
     }
@@ -1234,10 +1264,10 @@ const extractTextFromPdfBytesWithRenderFirstFallback = async (data: Uint8Array, 
   }
 
   try {
-    return await extractTextFromPdfBytesWithOcrFallback(data, password, baseUrl);
-  } catch (error) {
-    console.warn("PDF OCR-first fallback after render-first extraction failed", error);
-    return "";
+      return await extractTextFromPdfBytesWithOcrFallback(data, password, baseUrl, profile);
+    } catch (error) {
+      console.warn("PDF OCR-first fallback after render-first extraction failed", error);
+      return "";
   }
 };
 
@@ -1553,7 +1583,12 @@ const pickBetterPdfTextLayerCandidate = (simpleText: string, layoutAwareText: st
   return simple;
 };
 
-const extractTextFromPdfBytesWithOcrFallback = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
+const extractTextFromPdfBytesWithOcrFallback = async (
+  data: Uint8Array,
+  password?: string,
+  baseUrl?: string | null,
+  profile: PdfOcrProfile = "standard"
+) => {
   let extractedText = "";
   try {
     extractedText = await extractTextFromPdfBytes(data, password, baseUrl);
@@ -1562,7 +1597,9 @@ const extractTextFromPdfBytesWithOcrFallback = async (data: Uint8Array, password
   }
 
   try {
-    const pageImages = await renderPdfPageImagesFromBytes(data, password, 2, 3.5, true);
+    const maxPages = profile === "aggressive" ? 4 : 2;
+    const renderScale = profile === "aggressive" ? 3.9 : 3.5;
+    const pageImages = await renderPdfPageImagesFromBytes(data, password, maxPages, renderScale, true);
     const ocrPages: string[] = [];
 
     for (const page of pageImages) {
@@ -1585,7 +1622,7 @@ const extractTextFromPdfBytesWithOcrFallback = async (data: Uint8Array, password
     }
 
     const compactOcrText = ocrPages.join("\n").trim();
-    const lighterOcrText = await renderPdfPagesToOcrText(data, password, baseUrl, 6, 2.2);
+    const lighterOcrText = await renderPdfPagesToOcrText(data, password, baseUrl, profile === "aggressive" ? 8 : 6, profile === "aggressive" ? 2.8 : 2.2);
     const bestText = pickBestStatementTextCandidate([
       { text: extractedText, label: "text-layer" },
       { text: compactOcrText, label: "ocr-render-3.5" },
@@ -1761,10 +1798,11 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
     }
 
     const data = new Uint8Array(await file.arrayBuffer());
+    const aggressiveProfile = shouldUseAggressivePdfOcrProfile(file.name) ? "aggressive" : "standard";
     if (shouldPreferPdfOcrFirst(file.name)) {
-      return extractTextFromPdfBytesWithRenderFirstFallback(data, password);
+      return extractTextFromPdfBytesWithRenderFirstFallback(data, password, null, aggressiveProfile);
     }
-    return extractTextFromPdfBytesWithOcrFallback(data, password);
+    return extractTextFromPdfBytesWithOcrFallback(data, password, null, aggressiveProfile);
   }
 
   if (isImageImportFileName(lowerType, lowerName)) {
@@ -1785,6 +1823,7 @@ export const readImportedFileTextWithCacheInfo = async (
   pdfJsBaseUrl?: string | null
 ): Promise<ImportedFileTextWithCacheInfo> => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
+  const aggressiveProfile = shouldUseAggressivePdfOcrProfile(params.fileName) ? "aggressive" : "standard";
   const bytes = await downloadImportObject(params.storageKey);
   const fileFingerprint = makeImportFileBytesFingerprint(bytes);
   const cacheKey = [
@@ -1796,6 +1835,7 @@ export const readImportedFileTextWithCacheInfo = async (
     String(password ?? ""),
     String(pdfJsBaseUrl ?? ""),
     shouldPreferPdfOcrFirst(params.fileName) ? "ocr-first" : "text-first",
+    aggressiveProfile === "aggressive" ? "aggressive-ocr" : "standard-ocr",
   ].join(":");
   const recordKey = makeImportFileTextCacheRecordKey({
     workspaceId: params.workspaceId ?? null,
@@ -1873,9 +1913,9 @@ export const readImportedFileTextWithCacheInfo = async (
 
     try {
       if (shouldPreferPdfOcrFirst(params.fileName)) {
-        return await extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, pdfJsBaseUrl);
+        return await extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, pdfJsBaseUrl, aggressiveProfile);
       }
-      return await extractTextFromPdfBytesWithOcrFallback(bytes, password, pdfJsBaseUrl);
+      return await extractTextFromPdfBytesWithOcrFallback(bytes, password, pdfJsBaseUrl, aggressiveProfile);
     } catch (error) {
       if (!pdfJsBaseUrl) {
         throw error;
@@ -1886,9 +1926,9 @@ export const readImportedFileTextWithCacheInfo = async (
         error,
       });
       if (shouldPreferPdfOcrFirst(params.fileName)) {
-        return extractTextFromPdfBytesWithRenderFirstFallback(bytes, password);
+        return extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, null, aggressiveProfile);
       }
-      return extractTextFromPdfBytesWithOcrFallback(bytes, password);
+      return extractTextFromPdfBytesWithOcrFallback(bytes, password, null, aggressiveProfile);
     }
   })();
 
