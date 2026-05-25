@@ -2545,6 +2545,18 @@ function TransactionsPageContent() {
           ? getImportedTransactionsToPreserve(transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId)))
           : getImportedTransactionsToPreserve(visibleCachedWorkspaceTransactions);
       const hasFreshTransactions = fetchedTransactions.length > 0;
+      const hasServerSideFilters = Boolean(
+        query.trim() ||
+          currencyFilter.trim() ||
+          categoryFilters.length > 0 ||
+          expandedAccountFilters.length > 0 ||
+          typeFilters.length > 0 ||
+          dateFilterMode !== "ltd" ||
+          customStart.trim() ||
+          customEnd.trim() ||
+          amountMin.trim() ||
+          amountMax.trim()
+      );
       const stableBaseTransactions =
         transactionsRef.current.length > 0
           ? transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
@@ -2554,7 +2566,7 @@ function TransactionsPageContent() {
       const mergedTransactions = options?.append
         ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
         : mergeImportedWorkspaceTransactions(baseTransactions, fetchedTransactions);
-      const shouldPreserveImportedTransactions = !hasFreshTransactions;
+      const shouldPreserveImportedTransactions = !hasFreshTransactions && !hasServerSideFilters;
       const mergedTransactionsWithImports =
         shouldPreserveImportedTransactions && importedTransactionsToPreserve.length > 0
           ? mergeImportedWorkspaceTransactions(mergedTransactions, importedTransactionsToPreserve as unknown as ImportedWorkspaceTransaction[])
@@ -2567,6 +2579,22 @@ function TransactionsPageContent() {
         mergedTransactionsWithImports.length > 0 ? mergedTransactionsWithImports : fetchedTransactions
       );
       const nextCurrencyCodes = responseCurrencyCodes.length > 0 ? responseCurrencyCodes : workspaceCurrencyCodesFromData;
+      const exactServerTotalCount =
+        typeof payload?.totalCount === "number"
+          ? payload.totalCount
+          : typeof summaryPayload?.totalCount === "number"
+            ? summaryPayload.totalCount
+            : fetchedTransactions.length;
+      const displayedTotalCount =
+        hasServerSideFilters
+          ? exactServerTotalCount
+          : fetchedTransactions.length > 0 && mergedTransactionsWithImports.length < fetchedTransactions.length
+            ? mergedTransactionsWithImports.length
+            : typeof payload?.totalCount === "number"
+              ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
+              : typeof summaryPayload?.totalCount === "number"
+                ? Math.max(summaryPayload.totalCount, mergedTransactionsWithImports.length)
+                : mergedTransactionsWithImports.length;
       setWorkspaceCurrencyCodes(nextCurrencyCodes);
       setTransactions(mergedTransactionsWithImports);
       if (options?.append) {
@@ -2580,23 +2608,13 @@ function TransactionsPageContent() {
       const visibleSummaryFallback =
         mergedTransactionsWithImports.length > 0
           ? buildVisibleTransactionSummary(mergedTransactionsWithImports, {
-              totalCount:
-                fetchedTransactions.length > 0 && mergedTransactionsWithImports.length < fetchedTransactions.length
-                  ? mergedTransactionsWithImports.length
-                  : Math.max(Number(payload?.totalCount ?? 0), mergedTransactionsWithImports.length),
+              totalCount: displayedTotalCount,
               currencyCodes: nextCurrencyCodes,
             })
           : null;
       const nextTransactionsSummary: TransactionPageMeta = summaryPayload
         ? {
-            totalCount:
-                fetchedTransactions.length > 0 && mergedTransactionsWithImports.length < fetchedTransactions.length
-                  ? mergedTransactionsWithImports.length
-                  : typeof payload?.totalCount === "number"
-                    ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
-                    : typeof summaryPayload.totalCount === "number"
-                      ? Math.max(summaryPayload.totalCount, mergedTransactionsWithImports.length)
-                      : fetchedTransactions.length,
+            totalCount: displayedTotalCount,
             income: typeof summaryPayload.income === "number" && summaryPayload.income !== 0 ? summaryPayload.income : visibleSummaryFallback?.income ?? 0,
             spending: typeof summaryPayload.spending === "number" && summaryPayload.spending !== 0 ? summaryPayload.spending : visibleSummaryFallback?.spending ?? 0,
             transfers: typeof summaryPayload.transfers === "number" && summaryPayload.transfers !== 0 ? summaryPayload.transfers : visibleSummaryFallback?.transfers ?? 0,
@@ -2618,12 +2636,7 @@ function TransactionsPageContent() {
                 : null,
           }
         : {
-            totalCount:
-              fetchedTransactions.length > 0 && mergedTransactionsWithImports.length < fetchedTransactions.length
-                ? mergedTransactionsWithImports.length
-                : typeof payload?.totalCount === "number"
-                  ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
-                  : mergedTransactionsWithImports.length,
+            totalCount: displayedTotalCount,
             income: visibleSummaryFallback?.income ?? 0,
             spending: visibleSummaryFallback?.spending ?? 0,
             transfers: visibleSummaryFallback?.transfers ?? 0,
