@@ -1251,27 +1251,17 @@ const persistTransactionsWorkspaceCache = (
     return existingSnapshot.updatedAt;
   }
 
-  const shouldMergeExistingTransactions =
-    existingSnapshot !== null &&
-    existingSnapshot.transactions.length > snapshot.transactions.length &&
-    snapshot.transactions.length > 0 &&
-    snapshot.transactions.some(hasImportedTransactionIdentity) &&
-    existingSnapshot.transactions.some(hasImportedTransactionIdentity);
-  const mergedTransactions = shouldMergeExistingTransactions
-    ? mergeImportedWorkspaceTransactions(
-        existingSnapshot.transactions,
-        snapshot.transactions as unknown as ImportedWorkspaceTransaction[]
-      )
-    : snapshot.transactions;
+  // Persist exactly what the UI currently trusts. Older cache snapshots may
+  // contain optimistic import rows from a previous refresh, and merging them
+  // back after the server has returned a settled list can resurrect duplicates.
+  const mergedTransactions = snapshot.transactions;
 
   const nextSnapshot: TransactionsWorkspaceCacheSnapshot = {
     workspaceId,
     updatedAt: Date.now(),
     ...snapshot,
     transactions: mergedTransactions,
-    totalCount: shouldMergeExistingTransactions
-      ? Math.max(existingSnapshot?.totalCount ?? 0, snapshot.totalCount ?? 0, mergedTransactions.length)
-      : snapshot.totalCount,
+    totalCount: snapshot.totalCount,
   };
 
   const nextState: TransactionsWorkspaceCacheState = {
@@ -2537,13 +2527,14 @@ function TransactionsPageContent() {
         transactionsRef.current.length > 0
           ? transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
           : visibleCachedWorkspaceTransactions;
-      const shouldPatchExistingTransactions = Boolean(options?.background || options?.append || !hasFreshTransactions);
+      const shouldPatchExistingTransactions = Boolean(options?.append || !hasFreshTransactions);
       const baseTransactions = shouldPatchExistingTransactions ? stableBaseTransactions : [];
       const mergedTransactions = options?.append
         ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
         : mergeImportedWorkspaceTransactions(baseTransactions, fetchedTransactions);
+      const shouldPreserveImportedTransactions = !hasFreshTransactions;
       const mergedTransactionsWithImports =
-        importedTransactionsToPreserve.length > 0
+        shouldPreserveImportedTransactions && importedTransactionsToPreserve.length > 0
           ? mergeImportedWorkspaceTransactions(mergedTransactions, importedTransactionsToPreserve as unknown as ImportedWorkspaceTransaction[])
           : mergedTransactions;
       const summaryPayload = payload?.summary && typeof payload.summary === "object" ? payload.summary : null;
@@ -2574,57 +2565,76 @@ function TransactionsPageContent() {
               currencyCodes: nextCurrencyCodes,
             })
           : null;
-      setTransactionsSummary(
-        summaryPayload
-          ? {
-              totalCount:
-                  fetchedTransactions.length > 0 && mergedTransactionsWithImports.length < fetchedTransactions.length
-                    ? mergedTransactionsWithImports.length
-                    : typeof payload?.totalCount === "number"
-                      ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
-                      : typeof summaryPayload.totalCount === "number"
-                        ? Math.max(summaryPayload.totalCount, mergedTransactionsWithImports.length)
-                        : fetchedTransactions.length,
-              income: typeof summaryPayload.income === "number" && summaryPayload.income !== 0 ? summaryPayload.income : visibleSummaryFallback?.income ?? 0,
-              spending: typeof summaryPayload.spending === "number" && summaryPayload.spending !== 0 ? summaryPayload.spending : visibleSummaryFallback?.spending ?? 0,
-              transfers: typeof summaryPayload.transfers === "number" && summaryPayload.transfers !== 0 ? summaryPayload.transfers : visibleSummaryFallback?.transfers ?? 0,
-              review: typeof summaryPayload.review === "number" ? summaryPayload.review : 0,
-              currencyCodes: nextCurrencyCodes,
-              topCategory: Array.isArray(summaryPayload.topCategory) ? summaryPayload.topCategory : null,
-              topAccount: Array.isArray(summaryPayload.topAccount) ? summaryPayload.topAccount : null,
-              firstTransactionDate:
-                typeof summaryPayload.firstTransactionDate === "string" ? summaryPayload.firstTransactionDate : null,
-              lastTransactionDate:
-                typeof summaryPayload.lastTransactionDate === "string" ? summaryPayload.lastTransactionDate : null,
-              firstReviewTransaction:
-                summaryPayload.firstReviewTransaction && typeof summaryPayload.firstReviewTransaction === "object"
-                  ? (summaryPayload.firstReviewTransaction as Transaction)
-                  : null,
-              firstReviewTransactionIndex:
-                typeof summaryPayload.firstReviewTransactionIndex === "number"
-                  ? summaryPayload.firstReviewTransactionIndex
-                  : null,
-            }
-          : {
-              totalCount:
+      const nextTransactionsSummary: TransactionPageMeta = summaryPayload
+        ? {
+            totalCount:
                 fetchedTransactions.length > 0 && mergedTransactionsWithImports.length < fetchedTransactions.length
                   ? mergedTransactionsWithImports.length
                   : typeof payload?.totalCount === "number"
                     ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
-                    : mergedTransactionsWithImports.length,
-              income: visibleSummaryFallback?.income ?? 0,
-              spending: visibleSummaryFallback?.spending ?? 0,
-              transfers: visibleSummaryFallback?.transfers ?? 0,
-              review: 0,
-              currencyCodes: nextCurrencyCodes,
-              topCategory: null,
-              topAccount: null,
-              firstTransactionDate: null,
-              lastTransactionDate: null,
-              firstReviewTransaction: null,
-              firstReviewTransactionIndex: null,
-            }
-      );
+                    : typeof summaryPayload.totalCount === "number"
+                      ? Math.max(summaryPayload.totalCount, mergedTransactionsWithImports.length)
+                      : fetchedTransactions.length,
+            income: typeof summaryPayload.income === "number" && summaryPayload.income !== 0 ? summaryPayload.income : visibleSummaryFallback?.income ?? 0,
+            spending: typeof summaryPayload.spending === "number" && summaryPayload.spending !== 0 ? summaryPayload.spending : visibleSummaryFallback?.spending ?? 0,
+            transfers: typeof summaryPayload.transfers === "number" && summaryPayload.transfers !== 0 ? summaryPayload.transfers : visibleSummaryFallback?.transfers ?? 0,
+            review: typeof summaryPayload.review === "number" ? summaryPayload.review : 0,
+            currencyCodes: nextCurrencyCodes,
+            topCategory: Array.isArray(summaryPayload.topCategory) ? summaryPayload.topCategory : null,
+            topAccount: Array.isArray(summaryPayload.topAccount) ? summaryPayload.topAccount : null,
+            firstTransactionDate:
+              typeof summaryPayload.firstTransactionDate === "string" ? summaryPayload.firstTransactionDate : null,
+            lastTransactionDate:
+              typeof summaryPayload.lastTransactionDate === "string" ? summaryPayload.lastTransactionDate : null,
+            firstReviewTransaction:
+              summaryPayload.firstReviewTransaction && typeof summaryPayload.firstReviewTransaction === "object"
+                ? (summaryPayload.firstReviewTransaction as Transaction)
+                : null,
+            firstReviewTransactionIndex:
+              typeof summaryPayload.firstReviewTransactionIndex === "number"
+                ? summaryPayload.firstReviewTransactionIndex
+                : null,
+          }
+        : {
+            totalCount:
+              fetchedTransactions.length > 0 && mergedTransactionsWithImports.length < fetchedTransactions.length
+                ? mergedTransactionsWithImports.length
+                : typeof payload?.totalCount === "number"
+                  ? Math.max(payload.totalCount, mergedTransactionsWithImports.length)
+                  : mergedTransactionsWithImports.length,
+            income: visibleSummaryFallback?.income ?? 0,
+            spending: visibleSummaryFallback?.spending ?? 0,
+            transfers: visibleSummaryFallback?.transfers ?? 0,
+            review: 0,
+            currencyCodes: nextCurrencyCodes,
+            topCategory: null,
+            topAccount: null,
+            firstTransactionDate: null,
+            lastTransactionDate: null,
+            firstReviewTransaction: null,
+            firstReviewTransactionIndex: null,
+          };
+      setTransactionsSummary((currentSummary) => {
+        const nextIsEmpty =
+          nextTransactionsSummary.totalCount === 0 &&
+          nextTransactionsSummary.income === 0 &&
+          nextTransactionsSummary.spending === 0 &&
+          nextTransactionsSummary.transfers === 0;
+        const currentHasValue =
+          currentSummary.totalCount > 0 ||
+          currentSummary.income !== 0 ||
+          currentSummary.spending !== 0 ||
+          currentSummary.transfers !== 0;
+        if (options?.background && nextIsEmpty && currentHasValue && mergedTransactionsWithImports.length > 0) {
+          return {
+            ...currentSummary,
+            totalCount: Math.max(currentSummary.totalCount, mergedTransactionsWithImports.length),
+            currencyCodes: nextCurrencyCodes,
+          };
+        }
+
+        return nextTransactionsSummary;
+      });
 
       if (!options?.background) {
         setIsWorkspaceDataReady(true);
