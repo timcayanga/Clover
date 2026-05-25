@@ -1224,7 +1224,6 @@ export function SettingsHub({
                   <div className="settings-data-download__item">
                     <div className="settings-data-download__item-copy">
                       <strong>Transactions as PDF</strong>
-                      <span>Download the selected profile’s transactions as a PDF.</span>
                     </div>
                     <button
                       type="button"
@@ -1245,14 +1244,13 @@ export function SettingsHub({
                         })();
                       }}
                     >
-                      Download Transactions
+                      Download
                     </button>
                   </div>
 
                   <div className="settings-data-download__item">
                     <div className="settings-data-download__item-copy">
                       <strong>Accounts as PDF</strong>
-                      <span>Download the latest balances for each account as a PDF.</span>
                     </div>
                     <button
                       type="button"
@@ -1273,7 +1271,7 @@ export function SettingsHub({
                         })();
                       }}
                     >
-                      Download Accounts
+                      Download
                     </button>
                   </div>
                 </div>
