@@ -9,6 +9,8 @@ import { loadSplitBillWorkspaceData } from "@/lib/split-bill-loaders";
 import { getEnv } from "@/lib/env";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
+import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +94,14 @@ const buildTransactionSummary = (
   transactions: Array<{
     amount: unknown;
     type: "income" | "expense" | "transfer";
+    merchantRaw: string;
+    merchantClean: string | null;
+    description?: string | null;
+    rawPayload?: unknown;
+    importFileId?: string | null;
+    account?: {
+      institution?: string | null;
+    } | null;
     category: {
       name: string;
     } | null;
@@ -100,11 +110,22 @@ const buildTransactionSummary = (
   transactions.reduce(
     (accumulator, transaction) => {
       const amount = Number(transaction.amount);
-      if (transaction.type === "income") {
+      const categoryName =
+        getEffectiveTransactionCategoryName({
+          categoryName: transaction.category?.name ?? null,
+          rawPayload: transaction.rawPayload as never,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          description: transaction.description ?? null,
+          institution: transaction.account?.institution ?? null,
+          source: transaction.importFileId ? "upload" : "manual",
+          type: transaction.type,
+        }) ?? "Uncategorized";
+      const transactionType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type);
+      if (transactionType === "income") {
         accumulator.income += amount;
-      } else if (transaction.type === "expense") {
+      } else if (transactionType === "expense") {
         accumulator.expense += amount;
-        const categoryName = transaction.category?.name ?? "Uncategorized";
         accumulator.expenseCategories.set(
           categoryName,
           (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
@@ -759,9 +780,13 @@ export async function POST(request: Request) {
             type: true,
             merchantRaw: true,
             merchantClean: true,
+            description: true,
+            rawPayload: true,
+            importFileId: true,
             account: {
               select: {
                 name: true,
+                institution: true,
               },
             },
             category: {
@@ -882,8 +907,12 @@ export async function POST(request: Request) {
       type: "income" | "expense" | "transfer";
       merchantRaw: string;
       merchantClean: string | null;
+      description: string | null;
+      rawPayload: unknown;
+      importFileId: string | null;
       account: {
         name: string;
+        institution: string | null;
       };
       category: {
         name: string;

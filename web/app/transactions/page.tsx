@@ -1047,14 +1047,36 @@ const matchesTransactionFilters = (
     amountMin: string;
     amountMax: string;
     otherCategoryId: string;
+    categoryNameById: Map<string, string>;
   }
 ) => {
   if (filters.currencyFilter && formatCurrencyCode(transaction.currency) !== formatCurrencyCode(filters.currencyFilter)) {
     return false;
   }
 
-  if (filters.categoryFilters.length > 0 && !filters.categoryFilters.includes(transaction.categoryId ?? filters.otherCategoryId)) {
-    return false;
+  if (filters.categoryFilters.length > 0) {
+    const effectiveCategoryName =
+      getEffectiveTransactionCategoryName({
+        categoryName: transaction.categoryName ?? null,
+        rawPayload: transaction.rawPayload as never,
+        merchantRaw: transaction.merchantRaw,
+        merchantClean: transaction.merchantClean,
+        description: transaction.description,
+        institution: transaction.institution ?? null,
+        source: transaction.source ?? null,
+        type: transaction.type,
+      }) ?? "";
+    const normalizedEffectiveCategoryName = effectiveCategoryName.trim().toLowerCase();
+    const selectedCategoryNames = new Set(
+      filters.categoryFilters
+        .map((categoryId) => filters.categoryNameById.get(categoryId) ?? categoryId)
+        .map((categoryName) => categoryName.trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    if (!normalizedEffectiveCategoryName || !selectedCategoryNames.has(normalizedEffectiveCategoryName)) {
+      return false;
+    }
   }
 
   if (filters.accountFilters.length > 0 && !filters.accountFilters.includes(transaction.accountId)) {
@@ -3210,6 +3232,7 @@ function TransactionsPageContent() {
           amountMin,
           amountMax,
           otherCategoryId,
+          categoryNameById,
         })
     );
     const directionMultiplier = sortDirection === "asc" ? 1 : -1;
@@ -3266,6 +3289,7 @@ function TransactionsPageContent() {
     accountInstitutionById,
     accountNameById,
     categories,
+    categoryNameById,
     currencyFilter,
     categoryFilters,
     expandedAccountFilters,

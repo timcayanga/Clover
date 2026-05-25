@@ -174,6 +174,34 @@ const expandImportedAccountFilters = async (workspaceId: string, accountIds: str
   return Array.from(expandedAccountIds);
 };
 
+const normalizeCategoryFilterKey = (value: string | null | undefined) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const resolveCategoryFilterNames = async (workspaceId: string, categoryFilters: string[] | undefined) => {
+  const values = (categoryFilters ?? []).map((value) => value.trim()).filter(Boolean);
+  if (values.length === 0) {
+    return new Set<string>();
+  }
+
+  const allCategories = await prisma.category.findMany({
+    where: { workspaceId },
+    select: { id: true, name: true },
+  });
+  const categoryNameById = new Map(allCategories.map((category) => [category.id, category.name] as const));
+  const categoryNameKeys = new Set(allCategories.map((category) => normalizeCategoryFilterKey(category.name)));
+
+  return new Set(
+    values
+      .map((value) => categoryNameById.get(value) ?? value)
+      .map(normalizeCategoryFilterKey)
+      .filter((value) => value && (categoryNameKeys.has(value) || values.some((rawValue) => normalizeCategoryFilterKey(rawValue) === value)))
+  );
+};
+
 const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefined) => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return null;
@@ -420,6 +448,15 @@ const mapTransactionRow = (transaction: {
   };
 };
 
+const transactionMatchesEffectiveCategoryFilters = (transaction: TransactionApiRow, categoryFilterNames: Set<string>) => {
+  if (categoryFilterNames.size === 0) {
+    return true;
+  }
+
+  const effectiveCategoryName = normalizeCategoryFilterKey(transaction.categoryName ?? "");
+  return Boolean(effectiveCategoryName && categoryFilterNames.has(effectiveCategoryName));
+};
+
 const receiptLineItemSchema = z.object({
   description: z.string().min(1),
   quantity: z.union([z.string(), z.number()]).nullable().optional(),
@@ -497,7 +534,12 @@ export async function GET(request: Request) {
       ...parsedFilters,
       accountIds: expandedAccountIds,
     };
-    const where = buildTransactionQueryWhere(workspaceId, filters);
+    const categoryFilterNames = await resolveCategoryFilterNames(workspaceId, filters.categoryIds);
+    const hasEffectiveCategoryFilters = categoryFilterNames.size > 0;
+    const where = buildTransactionQueryWhere(
+      workspaceId,
+      hasEffectiveCategoryFilters ? { ...filters, categoryIds: [] } : filters
+    );
     const visibleWhere = { ...where, isExcluded: false };
     const orderBy = buildTransactionQueryOrderBy(filters);
     const pageSizeParam = searchParams.get("pageSize");
@@ -532,7 +574,7 @@ export async function GET(request: Request) {
       });
     }
 
-    if (summaryMode === "light") {
+    if (summaryMode === "light" && !hasEffectiveCategoryFilters) {
       const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
       const [pageRows, duplicateRows, typeTotals] = await Promise.all([
         prisma.transaction.findMany({
@@ -786,7 +828,11 @@ export async function GET(request: Request) {
         }),
       };
     });
-    const transactions = dedupeImportedTransactionRows(mappedSummaryRows.map((entry) => entry.mappedTransaction));
+    const transactions = dedupeImportedTransactionRows(
+      mappedSummaryRows
+        .map((entry) => entry.mappedTransaction)
+        .filter((transaction) => transactionMatchesEffectiveCategoryFilters(transaction, categoryFilterNames))
+    );
     const transactionById = new Map(mappedSummaryRows.map((entry) => [entry.mappedTransaction.id, entry] as const));
 
     const summaryState = {

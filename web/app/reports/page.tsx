@@ -19,6 +19,8 @@ import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { recordAppError } from "@/lib/error-logs";
 import { InfoTip as ReportInfoTip } from "@/components/info-tip";
+import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
   loading: () => (
@@ -75,14 +77,31 @@ type ReportTransaction = {
   merchantRaw: string;
   merchantClean: string | null;
   description: string | null;
+  rawPayload: unknown;
   account: {
     name: string;
+    institution: string | null;
   };
   category: {
     name: string;
   } | null;
   importFileId: string | null;
 };
+
+const getReportTransactionCategoryName = (transaction: ReportTransaction) =>
+  getEffectiveTransactionCategoryName({
+    categoryName: transaction.category?.name ?? null,
+    rawPayload: transaction.rawPayload as never,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    description: transaction.description,
+    institution: transaction.account.institution,
+    source: transaction.importFileId ? "upload" : "manual",
+    type: transaction.type,
+  }) ?? "Uncategorized";
+
+const getReportTransactionType = (transaction: ReportTransaction) =>
+  coerceTransactionTypeFromCategoryName(getReportTransactionCategoryName(transaction), transaction.type);
 
 type MonthBucket = {
   key: string;
@@ -354,10 +373,13 @@ async function ReportsStream({
           type: true,
           merchantRaw: true,
           merchantClean: true,
+          description: true,
+          rawPayload: true,
           importFileId: true,
           account: {
             select: {
               name: true,
+              institution: true,
             },
           },
           category: {
@@ -386,10 +408,13 @@ async function ReportsStream({
               type: true,
               merchantRaw: true,
               merchantClean: true,
+              description: true,
+              rawPayload: true,
               importFileId: true,
               account: {
                 select: {
                   name: true,
+                  institution: true,
                 },
               },
               category: {
@@ -428,7 +453,16 @@ async function ReportsStream({
               type: true,
               merchantRaw: true,
               merchantClean: true,
+              description: true,
+              rawPayload: true,
+              importFileId: true,
               account: {
+                select: {
+                  name: true,
+                  institution: true,
+                },
+              },
+              category: {
                 select: {
                   name: true,
                 },
@@ -530,16 +564,17 @@ async function ReportsStream({
     const currentSummary: WindowSummary = reportCurrentWindowTransactions.reduce(
       (accumulator, transaction) => {
         const amount = Number(transaction.amount);
-        if (transaction.type === "income") {
+        const transactionType = getReportTransactionType(transaction);
+        if (transactionType === "income") {
           accumulator.income += amount;
-        } else if (transaction.type === "expense") {
+        } else if (transactionType === "expense") {
           accumulator.expense += amount;
         } else {
           accumulator.transfer += amount;
         }
 
-        const categoryName = transaction.category?.name ?? "Uncategorized";
-        if (transaction.type === "expense") {
+        if (transactionType === "expense") {
+          const categoryName = getReportTransactionCategoryName(transaction);
           accumulator.expenseCategories.set(
             categoryName,
             (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
@@ -559,16 +594,17 @@ async function ReportsStream({
     const previousSummary: WindowSummary = reportPreviousWindowTransactions.reduce(
       (accumulator, row) => {
         const amount = Number(row.amount ?? 0);
-        if (row.type === "income") {
+        const transactionType = getReportTransactionType(row);
+        if (transactionType === "income") {
           accumulator.income += amount;
-        } else if (row.type === "expense") {
+        } else if (transactionType === "expense") {
           accumulator.expense += amount;
         } else {
           accumulator.transfer += amount;
         }
 
-        if (row.type === "expense") {
-          const categoryName = row.category?.name ?? "Uncategorized";
+        if (transactionType === "expense") {
+          const categoryName = getReportTransactionCategoryName(row);
           accumulator.expenseCategories.set(
             categoryName,
             (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)

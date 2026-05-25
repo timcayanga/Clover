@@ -12,6 +12,8 @@ import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/
 import { loadSplitBillWorkspaceData } from "@/lib/split-bill-loaders";
 import { AdviserChat } from "@/components/adviser-chat";
 import { AdviserTrackedLink } from "@/components/adviser-tracked-link";
+import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +28,12 @@ type AdviserTransaction = {
   type: "income" | "expense" | "transfer";
   merchantRaw: string;
   merchantClean: string | null;
+  description: string | null;
+  rawPayload: unknown;
+  importFileId: string | null;
   account: {
     name: string;
+    institution: string | null;
   };
   category: {
     name: string;
@@ -722,11 +728,22 @@ const buildTransactionSummary = (transactions: AdviserTransaction[]) =>
   transactions.reduce(
     (accumulator, transaction) => {
       const amount = Number(transaction.amount);
-      if (transaction.type === "income") {
+      const categoryName =
+        getEffectiveTransactionCategoryName({
+          categoryName: transaction.category?.name ?? null,
+          rawPayload: transaction.rawPayload as never,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          description: transaction.description,
+          institution: transaction.account.institution,
+          source: transaction.importFileId ? "upload" : "manual",
+          type: transaction.type,
+        }) ?? "Uncategorized";
+      const transactionType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type);
+      if (transactionType === "income") {
         accumulator.income += amount;
-      } else if (transaction.type === "expense") {
+      } else if (transactionType === "expense") {
         accumulator.expense += amount;
-        const categoryName = transaction.category?.name ?? "Uncategorized";
         accumulator.expenseCategories.set(
           categoryName,
           (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
@@ -922,9 +939,13 @@ async function AdviserPageContent() {
         type: true,
         merchantRaw: true,
         merchantClean: true,
+        description: true,
+        rawPayload: true,
+        importFileId: true,
         account: {
           select: {
             name: true,
+            institution: true,
           },
         },
         category: {
