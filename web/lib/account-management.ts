@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 
@@ -41,10 +40,6 @@ export const wipeLocalUserData = async (
     await tx.user.update({
       where: { id: user.id },
       data: {
-        primaryGoal: null,
-        goalTargetAmount: null,
-        goalTargetSource: null,
-        goalPlan: Prisma.DbNull,
         dataWipedAt: options?.reseedStarterWorkspace !== false ? null : new Date(),
       },
     });
