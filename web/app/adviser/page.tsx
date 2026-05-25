@@ -212,6 +212,13 @@ type AdviserThresholdProfile = {
   goalDriftPercent: number;
 };
 
+const InfoIcon = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+    <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M8 4.3a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8Zm-1 3.2h1a.6.6 0 0 1 .6.6v3.2H9a.6.6 0 0 1 0 1.2H7a.6.6 0 0 1 0-1.2h.4V8.7h-.4a.6.6 0 0 1 0-1.2Z" fill="currentColor" />
+  </svg>
+);
+
 const updateMemoryStats = (map: Map<string, AdviserMemoryStats>, key: string, createdAt: Date) => {
   const current = map.get(key);
   if (!current) {
@@ -2235,14 +2242,23 @@ async function AdviserPageContent() {
             {summaryCards.map((card) => (
               <article key={card.id} className="accounts-overview-card glass adviser-summary-card">
                 <p className="eyebrow">{card.title}</p>
+                <button
+                  type="button"
+                  className="accounts-overview-card__info adviser-summary-card__info"
+                  aria-label={`More information about ${card.title}`}
+                >
+                  <InfoIcon />
+                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                    {card.detail}
+                  </span>
+                </button>
                 <strong className={`accounts-overview-card__amount ${card.tone === "warning" ? "is-danger" : "is-good"}`}>{card.value}</strong>
-                <p>{card.detail}</p>
               </article>
             ))}
           </div>
         </header>
 
-        <section className="adviser-section">
+        <section className="adviser-section glass">
           <p className="eyebrow">What Clover noticed</p>
           <div className="adviser-card-grid">
             {passiveCardsToRender.map((card) => (
@@ -2265,7 +2281,7 @@ async function AdviserPageContent() {
           </div>
         </section>
 
-        <section className="adviser-section">
+        <section className="adviser-section glass">
           <p className="eyebrow">What you should do</p>
           <div className="adviser-card-grid">
             {recommendationCardsToRender.map((card) => (
@@ -2288,7 +2304,7 @@ async function AdviserPageContent() {
           </div>
         </section>
 
-        <section className="adviser-section">
+        <section className="adviser-section glass">
           <p className="eyebrow">How you can improve</p>
           <div className="adviser-card-grid">
             {coachingCardsToRender.map((card) => (
@@ -2311,7 +2327,7 @@ async function AdviserPageContent() {
           </div>
         </section>
 
-        <section className="adviser-section adviser-section--chat">
+        <section className="adviser-section adviser-section--chat glass">
           <p className="eyebrow">Ask Clover anything</p>
           <AdviserChat isPro={user.planTier === "pro"} prompts={promptSuggestions} />
         </section>

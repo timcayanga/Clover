@@ -7275,6 +7275,11 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   text-align: center;
 }
 
+.adviser-summary-card__info {
+  top: 10px;
+  right: 10px;
+}
+
 .adviser-summary-card .eyebrow {
   margin: 0;
 }
@@ -7354,6 +7359,21 @@ html[data-theme="dark"] .adviser-stat {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  padding: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.58));
+  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.05);
+}
+
+html[data-theme="dark"] .adviser-section {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: linear-gradient(180deg, rgba(12, 18, 29, 0.8), rgba(12, 18, 29, 0.62));
+  box-shadow: 0 20px 44px rgba(2, 6, 23, 0.24);
+}
+
+.adviser-section--chat {
+  padding-bottom: 20px;
 }
 
 .adviser-section__head {
@@ -7482,7 +7502,8 @@ html[data-theme="dark"] .adviser-stat {
   color: inherit;
   border-radius: 999px;
   padding: 10px 14px;
-  font-weight: 600;
+  font-weight: 400;
+  letter-spacing: 0;
   cursor: pointer;
 }
 
@@ -26860,8 +26881,8 @@ button.accounts-detail__transaction-head-cell {
 
 .clover-loading-screen__logo {
   position: relative;
-  width: 124px;
-  height: 148px;
+  width: min(100%, 220px);
+  aspect-ratio: 209 / 174;
 }
 
 .clover-loading-screen__mark {
@@ -26870,44 +26891,8 @@ button.accounts-detail__transaction-head-cell {
   display: block;
   width: 100%;
   height: 100%;
-  overflow: visible;
-  filter: drop-shadow(0 12px 18px rgba(3, 168, 192, 0.1));
-}
-
-.clover-loading-screen__leaf,
-.clover-loading-screen__stem {
-  transform-box: fill-box;
-  transform-origin: center;
-  transition:
-    opacity 320ms ease,
-    transform 320ms ease,
-    filter 320ms ease;
-}
-
-.clover-loading-screen__leaf {
-  opacity: 0.14;
-  transform: scale(0.78) translateY(5px);
-}
-
-.clover-loading-screen__leaf--pulse {
-  animation: clover-loading-screen-pulse 1.6s ease-in-out infinite;
-}
-
-.clover-loading-screen__leaf--accent {
-  fill: var(--accent-mint);
-}
-
-.clover-loading-screen__leaf:not(.clover-loading-screen__leaf--accent) {
-  fill: var(--accent);
-}
-
-.clover-loading-screen__stem {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.84;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 18px rgba(3, 168, 192, 0.14));
 }
 
 .clover-loading-screen__copy {
@@ -26931,21 +26916,6 @@ button.accounts-detail__transaction-head-cell {
   max-width: 32ch;
   color: var(--muted);
   line-height: 1.6;
-}
-
-@keyframes clover-loading-screen-pulse {
-  0%,
-  100% {
-    opacity: 0.28;
-    transform: scale(0.82) translateY(4px);
-    filter: saturate(0.92);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-    filter: saturate(1.08);
-  }
 }
 
 .pricing-page .legal-page__inner {
@@ -28511,8 +28481,7 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .clover-loading-screen__logo {
-    width: 112px;
-    height: 134px;
+    width: min(100%, 186px);
   }
 
   .clover-loading-screen__copy h2 {
