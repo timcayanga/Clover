@@ -7931,6 +7931,9 @@ const parseBpiTransactionLine = (
   }
 
   const moneyMatches = body.match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
+  if (moneyMatches.length === 0) {
+    return null;
+  }
   const currentBalance = parseMoney(moneyMatches.at(-1) ?? null);
   const previousBalance = state.previousBalance;
   const amountDelta =

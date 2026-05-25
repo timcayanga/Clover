@@ -495,6 +495,9 @@ const shouldPreferPdfOcrFirst = (fileName?: string | null) => {
     lower.includes("china bank") ||
     lower.includes("china-bank") ||
     lower.includes("chinabank") ||
+    lower.includes("bank cert") ||
+    lower.includes("bank-cert") ||
+    lower.includes("bankstatementandbankcert") ||
     (lower.includes("aub") && lower.includes("template"))
   );
 };
