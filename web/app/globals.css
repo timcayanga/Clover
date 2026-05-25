@@ -26886,17 +26886,51 @@ button.accounts-detail__transaction-head-cell {
   position: relative;
   width: min(100%, 132px);
   aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  animation: clover-splash-logo-float 3.6s ease-in-out infinite;
+}
+
+.clover-loading-screen__logo::before,
+.clover-loading-screen__logo::after {
+  content: "";
+  position: absolute;
+  inset: -14%;
+  border-radius: 32%;
+  pointer-events: none;
+}
+
+.clover-loading-screen__logo::before {
+  z-index: -2;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(0, 223, 255, 0.22), transparent 34%),
+    radial-gradient(circle at 72% 18%, rgba(110, 231, 183, 0.3), transparent 30%),
+    radial-gradient(circle at 52% 72%, rgba(3, 168, 192, 0.18), transparent 42%);
+  filter: blur(12px);
+  opacity: 0.72;
+  animation: clover-splash-logo-glow 2.8s ease-in-out infinite;
+}
+
+.clover-loading-screen__logo::after {
+  z-index: -1;
+  border: 1px solid rgba(3, 168, 192, 0.14);
+  background: conic-gradient(from 0deg, transparent 0 24%, rgba(110, 231, 183, 0.32) 34%, transparent 48% 100%);
+  -webkit-mask: radial-gradient(circle, transparent 58%, #000 60%, #000 70%, transparent 72%);
+  mask: radial-gradient(circle, transparent 58%, #000 60%, #000 70%, transparent 72%);
+  animation: clover-splash-logo-orbit 4.8s linear infinite;
 }
 
 .clover-loading-screen__mark {
   position: relative;
   z-index: 1;
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 88%;
+  height: 88%;
   object-fit: contain;
-  filter: drop-shadow(0 12px 18px rgba(3, 168, 192, 0.14));
+  filter: drop-shadow(0 12px 18px rgba(3, 168, 192, 0.18));
   overflow: visible;
+  animation: clover-splash-logo-breathe 2.8s cubic-bezier(0.42, 0, 0.18, 1) infinite;
 }
 
 .clover-loading-screen__copy {
@@ -26940,6 +26974,47 @@ button.accounts-detail__transaction-head-cell {
     opacity: var(--leaf-rest-opacity, 0.2);
     transform: scale(var(--leaf-rest-scale, 0.85)) rotate(0deg);
     filter: drop-shadow(0 10px 14px var(--leaf-glow)) saturate(0.92);
+  }
+}
+
+@keyframes clover-splash-logo-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes clover-splash-logo-breathe {
+  0%,
+  100% {
+    transform: scale(0.96);
+  }
+
+  48% {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes clover-splash-logo-glow {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: scale(0.94);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes clover-splash-logo-orbit {
+  to {
+    transform: rotate(1turn);
   }
 }
 
