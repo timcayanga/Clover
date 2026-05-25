@@ -20,6 +20,8 @@ const resolveAccountTransactionsRouteUserId = async () => {
   return userId;
 };
 
+const normalizeTransactionKey = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+
 type TransactionApiRow = {
   id: string;
   accountId: string;
@@ -173,6 +175,20 @@ const getImportedTransactionStableKey = (transaction: TransactionApiRow) => {
   const sourceImportFileId = transaction.importFileId ?? getRawPayloadText(transaction.rawPayload, "sourceImportFileId");
   if (sourceImportFileId && sourceRowIndex !== null) {
     return `import:${accountIdentityKey}:${sourceImportFileId}:${sourceRowIndex}`;
+  }
+
+  if (isImportedTransactionPayload(transaction.rawPayload) || transaction.importFileId) {
+    const normalizedMerchant = normalizeTransactionKey(transaction.merchantClean ?? transaction.merchantRaw);
+    const normalizedDescription = normalizeTransactionKey(transaction.description);
+    return [
+      "legacy-import",
+      accountIdentityKey,
+      transaction.date,
+      Number(transaction.amount).toFixed(2),
+      transaction.currency,
+      normalizedMerchant,
+      normalizedDescription,
+    ].join(":");
   }
 
   return "";

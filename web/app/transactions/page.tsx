@@ -2497,7 +2497,7 @@ function TransactionsPageContent() {
             : options?.pageSizeOverride ?? (compactViewport ? MOBILE_TRANSACTIONS_BATCH_SIZE : transactionsPageSize),
       }
     );
-    searchParams.set("summaryMode", options?.summaryMode ?? (options?.background ? "full" : "light"));
+    searchParams.set("summaryMode", options?.summaryMode ?? "full");
 
     try {
       const response = await fetchJsonOnce<{ transactions?: Transaction[]; totalCount?: number; summary?: TransactionPageMeta; currencyCodes?: string[] }>({

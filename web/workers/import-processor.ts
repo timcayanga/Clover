@@ -2120,10 +2120,19 @@ const resolveConfirmationAccount = async (params: {
     inferredAccountNumber,
     accountIdentityType
   );
+  const looseCandidateKey = normalizeImportedAccountKey(
+    inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
+    inferredInstitution,
+    inferredAccountNumber,
+    null
+  );
   const workspaceAccounts = await prisma.account.findMany({
     where: { workspaceId },
     select: getCompatibleAccountSelect(compatibleAccountColumns),
   });
+  const accountMatchesImportIdentity = (account: (typeof workspaceAccounts)[number]) =>
+    normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === candidateKey ||
+    normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, null) === looseCandidateKey;
 
   const providedAccountId = typeof params.accountId === "string" && params.accountId.trim() ? params.accountId.trim() : null;
   const isOptimisticId = providedAccountId ? providedAccountId.startsWith("optimistic-") : false;
@@ -2137,10 +2146,7 @@ const resolveConfirmationAccount = async (params: {
     const canonicalIdentityAccount =
       workspaceAccounts
         .filter((account) => account.id !== directAccount.id)
-        .filter(
-          (account) =>
-            normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === candidateKey
-        )
+        .filter(accountMatchesImportIdentity)
         .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())[0] ??
       findBestImportedAccountMatch(
         workspaceAccounts.filter((account) => account.id !== directAccount.id),
@@ -2166,7 +2172,7 @@ const resolveConfirmationAccount = async (params: {
   }
 
   const existingByKey = workspaceAccounts.find(
-    (account) => normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === candidateKey
+    accountMatchesImportIdentity
   );
   if (existingByKey) {
     const updatedAccount = await updateAccountIdentity(existingByKey, {
@@ -5221,6 +5227,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     account.accountNumber,
     account.type
   );
+  const looseResolvedAccountIdentityKey = normalizeImportedAccountKey(
+    account.name,
+    account.institution,
+    account.accountNumber,
+    null
+  );
   const matchingAccountIdsForImport = Array.from(
     new Set([
       resolvedAccountId,
@@ -5239,7 +5251,9 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         .filter(
           (candidate) =>
             normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, candidate.type) ===
-            resolvedAccountIdentityKey
+              resolvedAccountIdentityKey ||
+            normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, null) ===
+              looseResolvedAccountIdentityKey
         )
         .map((candidate) => candidate.id),
     ])
@@ -5310,7 +5324,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const confirmationLockKey = [
       "import-confirm",
       String(importFile.workspaceId),
-      resolvedAccountId,
+      looseResolvedAccountIdentityKey || resolvedAccountIdentityKey || resolvedAccountId,
       statementFingerprints.length > 0 ? statementFingerprints.join(",") : importFileId,
     ].join(":");
     const lockRows = await tx.$queryRaw<Array<{ locked: boolean }>>`
