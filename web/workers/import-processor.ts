@@ -5667,10 +5667,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       workspaceAccounts: workspaceAccountsForTransferMatching,
       currentAccountId: resolvedAccountId,
     });
-    const categoryName =
-      canonicalType !== "transfer" && isTransferCategoryName(parsedCategoryName)
-        ? defaultCategoryForType(canonicalType)
-        : parsedCategoryName;
+    const categoryName = parsedCategoryName;
     const rowTransferConfidence =
       canonicalType === "transfer" ? (typeof row.transferConfidence === "number" ? row.transferConfidence : 100) : 0;
     const rowIsOpeningBalance = Boolean(
