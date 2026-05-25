@@ -3478,9 +3478,12 @@ function TransactionsPageContent() {
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);
   const pageStartIndex = (currentTransactionPage - 1) * transactionsPageSize;
   const pageEndIndex = pageStartIndex + transactionsPageSize;
+  const isServerPagedTransactionResult =
+    totalTransactionCountForDisplay > transactionsPageSize &&
+    visibleTransactions.length <= transactionsPageSize;
   const desktopPageTransactions = useMemo(
-    () => visibleTransactions.slice(pageStartIndex, pageEndIndex),
-    [pageEndIndex, pageStartIndex, visibleTransactions]
+    () => (isServerPagedTransactionResult ? visibleTransactions : visibleTransactions.slice(pageStartIndex, pageEndIndex)),
+    [isServerPagedTransactionResult, pageEndIndex, pageStartIndex, visibleTransactions]
   );
   const mobileVisibleTransactions = useMemo(
     () => visibleTransactions.slice(0, Math.max(mobileVisibleCount, MOBILE_TRANSACTIONS_BATCH_SIZE)),
@@ -3522,8 +3525,11 @@ function TransactionsPageContent() {
       return "0 of 0";
     }
 
-    return `${pageStartIndex + 1}-${Math.min(pageEndIndex, totalTransactionCountForDisplay)} of ${totalTransactionCountForDisplay}`;
-  }, [pageEndIndex, pageStartIndex, totalTransactionCountForDisplay]);
+    const displayedPageEnd = isServerPagedTransactionResult
+      ? pageStartIndex + desktopPageTransactions.length
+      : Math.min(pageEndIndex, totalTransactionCountForDisplay);
+    return `${pageStartIndex + 1}-${Math.min(displayedPageEnd, totalTransactionCountForDisplay)} of ${totalTransactionCountForDisplay}`;
+  }, [desktopPageTransactions.length, isServerPagedTransactionResult, pageEndIndex, pageStartIndex, totalTransactionCountForDisplay]);
 
   const paginationPages = useMemo(() => {
     if (totalTransactionPages <= 1) {
