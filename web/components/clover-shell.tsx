@@ -255,7 +255,6 @@ const navItems = [
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/recurring", label: "Recurring", key: "recurring" as const },
-  { href: "/split-bill", label: "Split Bills", key: "split-bill" as const },
   { href: "/adviser", label: "Adviser", key: "adviser" as const },
   { href: "/more", label: "More", key: "more" as const },
 ];
@@ -668,7 +667,7 @@ export function CloverShell({
   }, [pathname]);
 
   useEffect(() => {
-    const prefetchTargets = ["/home", "/accounts", "/transactions", "/split-bill", "/reports", "/adviser", "/goals", "/more", "/settings", "/help"];
+    const prefetchTargets = ["/home", "/accounts", "/transactions", "/reports", "/adviser", "/goals", "/more", "/settings", "/help"];
 
     for (const href of prefetchTargets) {
       if (pathname === href) {
@@ -1182,6 +1181,17 @@ export function CloverShell({
                   {isMoreMenuOpen ? (
                     <div className="sidebar-nav__submenu" role="menu" aria-label="More products">
                       <button
+                        className={`sidebar-nav__submenu-link${active === "split-bill" || pathname?.startsWith("/split-bill") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/split-bill")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="split-bill" />
+                        </span>
+                        Split Bills
+                      </button>
+                      <button
                         className={`sidebar-nav__submenu-link${active === "investments" || pathname?.startsWith("/investments") ? " is-active" : ""}`}
                         type="button"
                         role="menuitem"
@@ -1464,17 +1474,17 @@ export function CloverShell({
           <MenuIcon name="plus" />
         </button>
         <Link
-          className={`shell-bottom-nav__item${active === "split-bill" || pathname?.startsWith("/split-bill") ? " is-active" : ""}`}
-          aria-current={active === "split-bill" || pathname?.startsWith("/split-bill") ? "page" : undefined}
-          href="/split-bill"
-          prefetch={false}
-          onMouseEnter={() => prefetchNavTarget("/split-bill")}
-          onTouchStart={() => prefetchNavTarget("/split-bill")}
+          className={`shell-bottom-nav__item${active === "adviser" || pathname?.startsWith("/adviser") ? " is-active" : ""}`}
+          aria-current={active === "adviser" || pathname?.startsWith("/adviser") ? "page" : undefined}
+          href="/adviser"
+          prefetch={shouldPrefetchNavHref("/adviser")}
+          onMouseEnter={() => prefetchNavTarget("/adviser")}
+          onTouchStart={() => prefetchNavTarget("/adviser")}
         >
           <span className="shell-bottom-nav__icon" aria-hidden="true">
-            <MenuIcon name="split-bill" />
+            <MenuIcon name="adviser" />
           </span>
-          <span className="shell-bottom-nav__label">Split Bills</span>
+          <span className="shell-bottom-nav__label">Adviser</span>
         </Link>
         <Link
           className={`shell-bottom-nav__item${isMoreActive ? " is-active" : ""}`}
