@@ -32,11 +32,14 @@ Use these rules for BPI savings and related statement imports.
 - Use the PHP equivalent as the primary amount when a foreign-currency line shows both the source currency and the PHP conversion.
 - Keep the original source-currency amount in notes or raw payload metadata instead of making it a second transaction row.
 - Treat `Payment - Thank You` as a card payment / transfer-style credit, not an expense.
+- For BPI credit-card statement-payment rows that OCR as `Payment`, normalize them as `Statement Payment Credit` and keep them in the `Financial` category so the ledger reflects the statement settlement rather than a transfer.
+- Robustly normalize OCR variants of `eL/ESPay`, including spaced forms like `EL/ES PAY`, to the canonical `eL/ESPay` merchant label.
 - Treat `Beginning balance` as statement metadata, not a regular transaction row. Clover should surface at most one opening-balance row per statement.
 - Do not emit the synthetic `Beginning balance` row as a transaction row for BPI savings imports; keep the balance only in statement metadata.
 - The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable BPI simplifications such as `Inter-bank Fund Transfer`, `eL/ESPay`, `GCash Cash In`, `ATM Withdrawal`, `Service Charge`, `Merchant Payment`, and `Bank Transfer`.
 - Treat `EPSATEN` and `eL/ESPay` as payroll-credit style income categories only when the statement direction proves they are credits. Keep their visible merchant labels distinct so enrichment does not collapse unrelated rows into `Payroll Credit`.
 - Direction matters for compact BPI rows: positive `ELINK`/`eL/ESPay` rows should classify as income, negative GCash cash-in / MBPay rows should classify as transfers, and debit-side `EPSATEN`/non-BPI-terminal rows should classify as `Cash & ATM`.
+- Ignore BPI OCR fragments that only expose the merchant stem without a transaction amount; do not materialize them as zero-value rows when the real amount appears on the next line or in the next OCR fragment.
 - BPI card merchant rows for `Puregold` and `Shopee` should normalize to durable merchant labels and classify as `Shopping`.
 
 ## Notes Handling

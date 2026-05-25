@@ -3681,6 +3681,18 @@ const guessBpiCreditCategoryName = (description: string, type: TransactionType) 
   return guessCategoryName(description, type);
 };
 
+const isBpiStatementPaymentCredit = (description: string) => {
+  const lower = normalizeWhitespace(description).toLowerCase();
+  const compact = lower.replace(/[^a-z0-9]+/g, "");
+  return (
+    compact === "payment" ||
+    compact.includes("paymentthankyou") ||
+    compact.includes("cardpayment") ||
+    compact.includes("statementpaymentcredit") ||
+    /statement\s+payment\s+credit/.test(lower)
+  );
+};
+
 const parseBpiCreditCardTransactionLine = (
   line: string,
   state: {
@@ -3950,6 +3962,9 @@ const parseBpiCreditCardSegment = (
 
   const body = match[3];
   const moneyMatches = body.match(/-?[0-9][0-9,]*\.\d{2}/g) ?? [];
+  if (moneyMatches.length === 0) {
+    return null;
+  }
   const amountText = moneyMatches.at(-1) ?? null;
   const amount = parseMoney(amountText);
   if (amount === null) {
@@ -3988,16 +4003,16 @@ const parseBpiCreditCardSegment = (
 
   const descriptionLower = descriptionSource.toLowerCase();
   let type: TransactionType = "expense";
-  const descriptionCompact = descriptionLower.replace(/[^a-z0-9]+/g, "");
-  if (descriptionCompact.includes("paymentthankyou") || descriptionCompact.includes("cardpayment")) {
-    type = "transfer";
+  const isStatementPaymentCredit = isBpiStatementPaymentCredit(descriptionSource);
+  if (isStatementPaymentCredit) {
+    type = "expense";
   } else if (/refund|reversal|credit memo|cashback|cash back/.test(descriptionLower)) {
     type = "income";
   }
 
-  const merchantRaw = humanizeMerchantText(descriptionSource);
-  const merchantClean = summarizeMerchantText(descriptionSource, state.institution);
-  const categoryName = guessBpiCreditCategoryName(descriptionSource, type);
+  const merchantRaw = isStatementPaymentCredit ? "Statement Payment Credit" : humanizeMerchantText(descriptionSource);
+  const merchantClean = isStatementPaymentCredit ? "Statement Payment Credit" : summarizeMerchantText(descriptionSource, state.institution);
+  const categoryName = isStatementPaymentCredit ? "Financial" : guessBpiCreditCategoryName(descriptionSource, type);
 
   return {
     date: postDate.toISOString().slice(0, 10),
@@ -4021,7 +4036,7 @@ const parseBpiCreditCardSegment = (
       foreignAmountText,
       fxNote,
       line: segmentText,
-      notes: fxNote || (descriptionCompact.includes("paymentthankyou") || descriptionCompact.includes("cardpayment") ? "Statement payment credit" : null),
+      notes: fxNote || (isStatementPaymentCredit ? "Statement payment credit" : null),
     },
   } satisfies ParsedImportRow;
 };

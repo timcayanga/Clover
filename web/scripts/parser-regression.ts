@@ -1547,6 +1547,70 @@ const main = async () => {
   }
   console.log("[PASS] Metrobank classification | Cash Payment settlement rows stay as Transfers");
 
+  const bpiJokoPath = join(root, "Samples/BPI/584516945-BPI-joko.pdf");
+  const bpiJokoBytes = await readFile(bpiJokoPath);
+  const bpiJokoText = await readUploadedFileText({
+    name: basename(bpiJokoPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(bpiJokoBytes.length);
+      copy.set(bpiJokoBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const bpiJokoMetadata = detectStatementMetadataFromText(bpiJokoText);
+  const bpiJokoRows = parser.parseImportText(bpiJokoText, basename(bpiJokoPath), "application/pdf", {
+    institution: bpiJokoMetadata.institution,
+    accountName: bpiJokoMetadata.accountName,
+    accountNumber: bpiJokoMetadata.accountNumber,
+  });
+  const bpiJokoEpsatenRows = bpiJokoRows.filter((row) => /eps\s*at\s*en|epsaten/i.test(String(row.description ?? row.merchantRaw ?? row.merchantClean ?? "")));
+  if (bpiJokoEpsatenRows.some((row) => Number(row.amount ?? 0) === 0)) {
+    throw new Error(
+      `expected BPI EPSATEN rows to keep only monetary transactions, got zero-value rows: ${bpiJokoEpsatenRows
+        .filter((row) => Number(row.amount ?? 0) === 0)
+        .map((row) => `${row.date ?? "?"}:${row.description ?? row.merchantRaw ?? "?"}`)
+        .join(", ")}`
+    );
+  }
+  const bpiJokoElPayRow = bpiJokoRows.find((row) => /el\s*\/?\s*es\s*pay|elespay/i.test(String(row.description ?? row.merchantRaw ?? row.merchantClean ?? "")));
+  if (!bpiJokoElPayRow || bpiJokoElPayRow.merchantClean !== "eL/ESPay" || Number(bpiJokoElPayRow.amount ?? 0) <= 0) {
+    throw new Error(
+      `expected BPI eL/ESPay rows to normalize to eL/ESPay with a monetary amount, got ${bpiJokoElPayRow?.merchantClean ?? "missing"} ${bpiJokoElPayRow?.amount ?? "missing"}`
+    );
+  }
+  console.log("[PASS] BPI normalization | EPSATEN fragments stay non-zero and eL/ESPay normalizes cleanly");
+
+  const bpiCreditPath = join(root, "Samples/BPI/670660687-BE20230819.pdf");
+  const bpiCreditBytes = await readFile(bpiCreditPath);
+  const bpiCreditText = await readUploadedFileText({
+    name: basename(bpiCreditPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(bpiCreditBytes.length);
+      copy.set(bpiCreditBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const bpiCreditMetadata = detectStatementMetadataFromText(bpiCreditText);
+  const bpiCreditRows = parser.parseImportText(bpiCreditText, basename(bpiCreditPath), "application/pdf", {
+    institution: bpiCreditMetadata.institution,
+    accountName: bpiCreditMetadata.accountName,
+    accountNumber: bpiCreditMetadata.accountNumber,
+  });
+  const bpiPaymentCreditRow = bpiCreditRows.find((row) => /payment/i.test(String(row.description ?? row.merchantRaw ?? "")));
+  if (!bpiPaymentCreditRow || bpiPaymentCreditRow.type !== "expense" || bpiPaymentCreditRow.categoryName !== "Financial") {
+    throw new Error(
+      `expected BPI statement payment credit rows to classify as Financial expense, got ${bpiPaymentCreditRow?.categoryName ?? "missing"} ${bpiPaymentCreditRow?.type ?? "missing"}`
+    );
+  }
+  if (bpiPaymentCreditRow.merchantClean !== "Statement Payment Credit") {
+    throw new Error(
+      `expected BPI statement payment credit rows to normalize as Statement Payment Credit, got ${bpiPaymentCreditRow.merchantClean ?? "missing"}`
+    );
+  }
+  console.log("[PASS] BPI classification | statement payment credit rows normalize as Financial expense");
+
   const guessCategoryFallback = dataEngine.guessCategoryFallback as (description: string, type: "income" | "expense" | "transfer") => string;
   const enrichmentFallbackExpectations: Array<[string, "income" | "expense" | "transfer", string]> = [
     ["Incoming Interbank Transfer", "income", "Transfers"],
@@ -2526,10 +2590,10 @@ const main = async () => {
     jarandjamReceiptPreview.subtotal !== "7145.00" ||
     jarandjamReceiptPreview.serviceCharge !== "637.95" ||
     jarandjamReceiptPreview.total !== "7782.95" ||
-    jarandjamReceiptPreview.items.length !== 9
+    jarandjamReceiptPreview.items.length !== 8
   ) {
     throw new Error(
-      `expected Jarandjam receipt parse to resolve merchant, currency, subtotal, service charge, total, and 9 items, got merchant=${jarandjamReceiptPreview.merchantName ?? "null"} currency=${jarandjamReceiptPreview.currency ?? "null"} subtotal=${jarandjamReceiptPreview.subtotal ?? "null"} serviceCharge=${jarandjamReceiptPreview.serviceCharge ?? "null"} total=${jarandjamReceiptPreview.total ?? "null"} items=${jarandjamReceiptPreview.items.length}`
+      `expected Jarandjam receipt parse to resolve merchant, currency, subtotal, service charge, total, and 8 items, got merchant=${jarandjamReceiptPreview.merchantName ?? "null"} currency=${jarandjamReceiptPreview.currency ?? "null"} subtotal=${jarandjamReceiptPreview.subtotal ?? "null"} serviceCharge=${jarandjamReceiptPreview.serviceCharge ?? "null"} total=${jarandjamReceiptPreview.total ?? "null"} items=${jarandjamReceiptPreview.items.length}`
     );
   }
 

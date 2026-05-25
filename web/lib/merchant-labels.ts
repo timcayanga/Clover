@@ -1482,12 +1482,13 @@ export const summarizeMerchantText = (value: string, institution?: string | null
   const simplified = simplifyMerchantText(value, institution);
   const compact = simplified.replace(/[^a-z0-9]+/gi, "").toLowerCase();
   const rawLower = normalizeWhitespace(value).toLowerCase();
+  const rawCompact = compactText(value);
 
   if (!simplified) {
     return simplified;
   }
 
-  if (institution === "BPI" && /\bel\/?espay\b|\bespay\b/i.test(value)) {
+  if (institution === "BPI" && (/\bel\s*\/?\s*es\s*p\s*a\s*y\b/i.test(rawLower) || rawCompact.includes("elespay"))) {
     return "eL/ESPay";
   }
 
