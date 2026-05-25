@@ -219,6 +219,72 @@ const InfoIcon = () => (
   </svg>
 );
 
+const getAdviserCardEmoji = (card: { title: string; group: string; tone: AdviserCard["tone"] }) => {
+  const title = card.title.toLowerCase();
+
+  if (title.includes("spending moved up") || title.includes("spend spike") || title.includes("cash flow consistency")) {
+    return "💸";
+  }
+
+  if (title.includes("top spending driver") || title.includes("category concentration") || title.includes("category mix") || title.includes("set a cap")) {
+    return "📊";
+  }
+
+  if (title.includes("weekend")) {
+    return "🌤️";
+  }
+
+  if (title.includes("recurring") || title.includes("subscriptions") || title.includes("charges")) {
+    return "🧾";
+  }
+
+  if (title.includes("split bill")) {
+    return "🧮";
+  }
+
+  if (title.includes("investment")) {
+    return "📈";
+  }
+
+  if (title.includes("goal")) {
+    return "🎯";
+  }
+
+  if (title.includes("uncategorized") || title.includes("cleanup")) {
+    return "🧹";
+  }
+
+  if (title.includes("protect next week") || title.includes("cash flow")) {
+    return "🛟";
+  }
+
+  if (title.includes("review") || title.includes("check")) {
+    return "🔎";
+  }
+
+  if (card.group === "cashflow") {
+    return "💼";
+  }
+
+  if (card.group === "cleanup") {
+    return "🧹";
+  }
+
+  if (card.group === "goals") {
+    return "🎯";
+  }
+
+  if (card.group === "investments") {
+    return "📈";
+  }
+
+  if (card.tone === "warning") {
+    return "⚠️";
+  }
+
+  return "✨";
+};
+
 const updateMemoryStats = (map: Map<string, AdviserMemoryStats>, key: string, createdAt: Date) => {
   const current = map.get(key);
   if (!current) {
@@ -2271,7 +2337,9 @@ async function AdviserPageContent() {
                 label={card.title}
                 className="adviser-card adviser-card--link glass"
               >
-                <span className={`adviser-card__tone adviser-card__tone--${card.tone}`} aria-hidden="true" />
+                <span className="adviser-card__emoji" aria-hidden="true">
+                  {getAdviserCardEmoji(card)}
+                </span>
                 <strong>{card.title}</strong>
                 <p>{card.summary}</p>
                 <small>{card.evidence}</small>
@@ -2294,7 +2362,9 @@ async function AdviserPageContent() {
                 label={card.title}
                 className="adviser-card adviser-card--link glass"
               >
-                <span className={`adviser-card__tone adviser-card__tone--${card.tone}`} aria-hidden="true" />
+                <span className="adviser-card__emoji" aria-hidden="true">
+                  {getAdviserCardEmoji(card)}
+                </span>
                 <strong>{card.title}</strong>
                 <p>{card.summary}</p>
                 <small>{card.evidence}</small>
@@ -2317,7 +2387,9 @@ async function AdviserPageContent() {
                 label={card.title}
                 className="adviser-card adviser-card--link glass"
               >
-                <span className={`adviser-card__tone adviser-card__tone--${card.tone}`} aria-hidden="true" />
+                <span className="adviser-card__emoji" aria-hidden="true">
+                  {getAdviserCardEmoji(card)}
+                </span>
                 <strong>{card.title}</strong>
                 <p>{card.summary}</p>
                 <small>{card.evidence}</small>

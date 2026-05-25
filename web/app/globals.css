@@ -7454,23 +7454,15 @@ html[data-theme="dark"] .adviser-section {
   margin-top: auto;
 }
 
-.adviser-card__tone {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  box-shadow: 0 0 0 5px rgba(3, 168, 192, 0.12);
-}
-
-.adviser-card__tone--positive {
-  background: var(--accent-2, #1db954);
-}
-
-.adviser-card__tone--warning {
-  background: var(--accent, #03a8c0);
-}
-
-.adviser-card__tone--neutral {
-  background: rgba(15, 23, 42, 0.45);
+.adviser-card__emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  font-size: 1.15rem;
+  line-height: 1;
+  transform: translateY(1px);
 }
 
 .adviser-chat {
