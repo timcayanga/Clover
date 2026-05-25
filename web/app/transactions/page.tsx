@@ -7589,113 +7589,6 @@ function TransactionsPageContent() {
                 </div>
               </label>
 
-              <label className="transaction-drawer-form__notes">
-                Notes
-                <textarea
-                  value={detailDraft?.description ?? ""}
-                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, description: event.target.value } : current))}
-                  placeholder="Optional note or review context"
-                />
-              </label>
-
-              <div className="transaction-drawer-receipt-lines">
-                <div className="transaction-drawer-receipt-lines__head">
-                  <span className="transaction-drawer-field-label">
-                    <span>Receipt line items</span>
-                  </span>
-                  <span className="field-help">
-                    {formatTransactionAmount(detailReceiptLineItemTotal, detailDraft?.currency ?? selectedTransaction.currency)}
-                  </span>
-                </div>
-                <div className="transaction-drawer-receipt-table" role="table" aria-label="Receipt line items">
-                  <div className="transaction-drawer-receipt-table__row transaction-drawer-receipt-table__row--head" role="row">
-                    <span role="columnheader">Name</span>
-                    <span role="columnheader">Quantity</span>
-                    <span role="columnheader">Currency</span>
-                    <span role="columnheader">Amount</span>
-                    <span role="columnheader" className="sr-only">Actions</span>
-                  </div>
-                  {detailReceiptLineItems.length > 0 ? (
-                    detailReceiptLineItems.map((lineItem, index) => (
-                      <div key={`${lineItem.description || "line"}-${index}`} className="transaction-drawer-receipt-table__row" role="row">
-                        <input
-                          aria-label={`Receipt line item ${index + 1} name`}
-                          value={lineItem.description}
-                          placeholder="Item name"
-                          onChange={(event) => updateDetailReceiptLineItem(index, "description", event.target.value)}
-                        />
-                        <input
-                          aria-label={`Receipt line item ${index + 1} quantity`}
-                          value={lineItem.quantity}
-                          placeholder="1"
-                          inputMode="decimal"
-                          onChange={(event) => updateDetailReceiptLineItem(index, "quantity", event.target.value)}
-                        />
-                        <input
-                          aria-label={`Receipt line item ${index + 1} currency`}
-                          value={lineItem.currency || detailDraft?.currency || selectedTransaction.currency}
-                          placeholder={detailDraft?.currency || selectedTransaction.currency}
-                          onChange={(event) => updateDetailReceiptLineItem(index, "currency", event.target.value.toUpperCase())}
-                        />
-                        <input
-                          aria-label={`Receipt line item ${index + 1} amount`}
-                          value={lineItem.amount}
-                          placeholder="0.00"
-                          inputMode="decimal"
-                          onChange={(event) => updateDetailReceiptLineItem(index, "amount", event.target.value)}
-                        />
-                        <button
-                          className="button button-ghost button-small transaction-drawer-receipt-table__delete"
-                          type="button"
-                          onClick={() => deleteDetailReceiptLineItem(index)}
-                          aria-label={`Delete receipt line item ${index + 1}`}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="transaction-drawer-receipt-table__empty">No line items yet.</div>
-                  )}
-                </div>
-                <button className="button button-secondary button-small transaction-drawer-receipt-lines__add" type="button" onClick={addDetailReceiptLineItem}>
-                  Add line item
-                </button>
-              </div>
-            </div>
-
-            <div className="transaction-drawer-split-bill">
-              {selectedTransaction.splitBill ? (
-                <Link className="button button-secondary button-small" href={`/split-bill?bill=${selectedTransaction.splitBill.id}`} prefetch={false}>
-                  Open In Split Bills
-                </Link>
-              ) : (
-                <button
-                  className="button button-secondary button-small"
-                  type="button"
-                  onClick={() => {
-                    setTransactionSplitBillError(null);
-                    setTransactionSplitBillOpen((current) => !current);
-                  }}
-                >
-                  {transactionSplitBillOpen ? "Hide Split Bills" : "Add To Split Bills"}
-                </button>
-              )}
-              {transactionSplitBillError ? <p className="field-help field-help--compact transaction-drawer-split-bill__error">{transactionSplitBillError}</p> : null}
-              {transactionSplitBillOpen && !selectedTransaction.splitBill ? (
-                <SplitBillTransactionLinkFields
-                  workspaceId={selectedTransaction.workspaceId}
-                  draft={transactionSplitBillDraft}
-                  onChange={setTransactionSplitBillDraft}
-                  open={transactionSplitBillOpen}
-                  title="Add transaction to Split Bills"
-                  helperText="Choose a group or add names. The split bill will be created from this transaction."
-                  actionLabel="Create split bill"
-                  onAction={createTransactionSplitBill}
-                  actionBusy={transactionSplitBillSaving}
-                  actionDisabled={!transactionSplitBillDraft.groupId.trim() && transactionSplitBillDraft.participantNames.length === 0}
-                />
-              ) : null}
             </div>
 
             {selectedTransactionWarningReason ? (
@@ -7727,7 +7620,7 @@ function TransactionsPageContent() {
                     Keep
                   </button>
                   <button
-                    className="button button-secondary button-small detail-warning-delete"
+                    className="button button-danger button-small detail-warning-delete"
                     type="button"
                     onClick={() => {
                       setTransactionDeleteConfirmOpen(true);
@@ -7742,6 +7635,80 @@ function TransactionsPageContent() {
             <details className="transaction-drawer-more">
               <summary>More</summary>
               <div className="transaction-drawer-more__body">
+                <label className="transaction-drawer-form__notes">
+                  Notes
+                  <textarea
+                    value={detailDraft?.description ?? ""}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, description: event.target.value } : current))}
+                    placeholder="Optional note or review context"
+                  />
+                </label>
+
+                <div className="transaction-drawer-receipt-lines">
+                  <div className="transaction-drawer-receipt-lines__head">
+                    <span className="transaction-drawer-field-label">
+                      <span>Receipt line items</span>
+                    </span>
+                    <span className="field-help">
+                      {formatTransactionAmount(detailReceiptLineItemTotal, detailDraft?.currency ?? selectedTransaction.currency)}
+                    </span>
+                  </div>
+                  <div className="transaction-drawer-receipt-table" role="table" aria-label="Receipt line items">
+                    <div className="transaction-drawer-receipt-table__row transaction-drawer-receipt-table__row--head" role="row">
+                      <span role="columnheader">Name</span>
+                      <span role="columnheader">Quantity</span>
+                      <span role="columnheader">Currency</span>
+                      <span role="columnheader">Amount</span>
+                      <span role="columnheader" className="sr-only">Actions</span>
+                    </div>
+                    {detailReceiptLineItems.length > 0 ? (
+                      detailReceiptLineItems.map((lineItem, index) => (
+                        <div key={`${lineItem.description || "line"}-${index}`} className="transaction-drawer-receipt-table__row" role="row">
+                          <input
+                            aria-label={`Receipt line item ${index + 1} name`}
+                            value={lineItem.description}
+                            placeholder="Item name"
+                            onChange={(event) => updateDetailReceiptLineItem(index, "description", event.target.value)}
+                          />
+                          <input
+                            aria-label={`Receipt line item ${index + 1} quantity`}
+                            value={lineItem.quantity}
+                            placeholder="1"
+                            inputMode="decimal"
+                            onChange={(event) => updateDetailReceiptLineItem(index, "quantity", event.target.value)}
+                          />
+                          <input
+                            aria-label={`Receipt line item ${index + 1} currency`}
+                            value={lineItem.currency || detailDraft?.currency || selectedTransaction.currency}
+                            placeholder={detailDraft?.currency || selectedTransaction.currency}
+                            onChange={(event) => updateDetailReceiptLineItem(index, "currency", event.target.value.toUpperCase())}
+                          />
+                          <input
+                            aria-label={`Receipt line item ${index + 1} amount`}
+                            value={lineItem.amount}
+                            placeholder="0.00"
+                            inputMode="decimal"
+                            onChange={(event) => updateDetailReceiptLineItem(index, "amount", event.target.value)}
+                          />
+                          <button
+                            className="button button-ghost button-small transaction-drawer-receipt-table__delete"
+                            type="button"
+                            onClick={() => deleteDetailReceiptLineItem(index)}
+                            aria-label={`Delete receipt line item ${index + 1}`}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="transaction-drawer-receipt-table__empty">No line items yet.</div>
+                    )}
+                  </div>
+                  <button className="button button-secondary button-small transaction-drawer-receipt-lines__add" type="button" onClick={addDetailReceiptLineItem}>
+                    Add line item
+                  </button>
+                </div>
+
                 <div className="transaction-drawer-more__row">
                   <span>Confidence score</span>
                   <strong>{selectedTransactionConfidenceScore ?? 0}%</strong>
@@ -7751,13 +7718,31 @@ function TransactionsPageContent() {
             </details>
 
             <div className="form-actions detail-actions">
+              <div className="detail-actions__left">
+                {selectedTransaction.splitBill ? (
+                  <Link className="button button-secondary" href={`/split-bill?bill=${selectedTransaction.splitBill.id}`} prefetch={false}>
+                    Open In Split Bills
+                  </Link>
+                ) : (
+                  <button
+                    className="button button-secondary"
+                    type="button"
+                    onClick={() => {
+                      setTransactionSplitBillError(null);
+                      setTransactionSplitBillOpen((current) => !current);
+                    }}
+                  >
+                    {transactionSplitBillOpen ? "Hide Split Bills" : "Add To Split Bills"}
+                  </button>
+                )}
+              </div>
               {!selectedTransactionWarningReason && !transactionDeleteConfirmOpen ? (
                 <button
-                  className="button button-secondary"
+                  className="button button-danger"
                   type="button"
                   onClick={() => setTransactionDeleteConfirmOpen(true)}
                 >
-                  Delete transaction
+                  Delete Transaction
                 </button>
               ) : null}
               {transactionDeleteConfirmOpen ? (
@@ -7781,6 +7766,26 @@ function TransactionsPageContent() {
                 </div>
               ) : null}
             </div>
+
+            {(transactionSplitBillError || (transactionSplitBillOpen && !selectedTransaction.splitBill)) ? (
+              <div className="transaction-drawer-split-bill">
+                {transactionSplitBillError ? <p className="field-help field-help--compact transaction-drawer-split-bill__error">{transactionSplitBillError}</p> : null}
+                {transactionSplitBillOpen && !selectedTransaction.splitBill ? (
+                  <SplitBillTransactionLinkFields
+                    workspaceId={selectedTransaction.workspaceId}
+                    draft={transactionSplitBillDraft}
+                    onChange={setTransactionSplitBillDraft}
+                    open={transactionSplitBillOpen}
+                    title="Add transaction to Split Bills"
+                    helperText="Choose a group or add names. The split bill will be created from this transaction."
+                    actionLabel="Create split bill"
+                    onAction={createTransactionSplitBill}
+                    actionBusy={transactionSplitBillSaving}
+                    actionDisabled={!transactionSplitBillDraft.groupId.trim() && transactionSplitBillDraft.participantNames.length === 0}
+                  />
+                ) : null}
+              </div>
+            ) : null}
           </section>
         </div>
       ) : null}

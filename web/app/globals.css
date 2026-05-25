@@ -13097,6 +13097,17 @@ input.transaction-inline-edit--amount::placeholder {
 
 .detail-actions {
   align-items: stretch;
+  justify-content: space-between;
+}
+
+.detail-actions__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-actions > .button-danger {
+  margin-left: auto;
 }
 
 .detail-actions .transaction-delete-confirm {
@@ -13132,8 +13143,13 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transaction-drawer-more__body {
   display: grid;
-  gap: 8px;
+  gap: 14px;
   padding: 0 14px 14px;
+}
+
+.transaction-drawer-more .transaction-drawer-form__notes {
+  display: grid;
+  gap: 6px;
 }
 
 .transaction-drawer-more__row {
