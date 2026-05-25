@@ -26881,8 +26881,8 @@ button.accounts-detail__transaction-head-cell {
 
 .clover-loading-screen__logo {
   position: relative;
-  width: min(100%, 220px);
-  aspect-ratio: 209 / 174;
+  width: min(100%, 132px);
+  aspect-ratio: 1;
 }
 
 .clover-loading-screen__mark {
@@ -26893,6 +26893,9 @@ button.accounts-detail__transaction-head-cell {
   height: 100%;
   object-fit: contain;
   filter: drop-shadow(0 12px 18px rgba(3, 168, 192, 0.14));
+  animation: clover-loading-screen-pulse 1.6s ease-in-out infinite;
+  transform-origin: center;
+  will-change: transform, opacity, filter;
 }
 
 .clover-loading-screen__copy {
@@ -26916,6 +26919,21 @@ button.accounts-detail__transaction-head-cell {
   max-width: 32ch;
   color: var(--muted);
   line-height: 1.6;
+}
+
+@keyframes clover-loading-screen-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.94);
+    filter: drop-shadow(0 10px 14px rgba(3, 168, 192, 0.12)) saturate(0.94);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+    filter: drop-shadow(0 16px 22px rgba(3, 168, 192, 0.18)) saturate(1.06);
+  }
 }
 
 .pricing-page .legal-page__inner {
@@ -28481,7 +28499,7 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .clover-loading-screen__logo {
-    width: min(100%, 186px);
+    width: min(100%, 116px);
   }
 
   .clover-loading-screen__copy h2 {

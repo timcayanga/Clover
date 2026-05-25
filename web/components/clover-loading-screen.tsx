@@ -12,7 +12,7 @@ export function CloverLoadingScreen({ label = "page" }: CloverLoadingScreenProps
     <div className="clover-loading-screen" role="status" aria-live="polite" aria-label={`Loading ${label}`}>
       <div className="clover-loading-screen__card glass">
         <div className="clover-loading-screen__logo" aria-hidden="true">
-          <img className="clover-loading-screen__mark" src="/clover-logo-full.svg" alt="" loading="eager" fetchPriority="high" />
+          <img className="clover-loading-screen__mark" src="/clover-mark.svg" alt="" loading="eager" fetchPriority="high" />
         </div>
 
         <div className="clover-loading-screen__copy">
