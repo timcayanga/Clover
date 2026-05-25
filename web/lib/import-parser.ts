@@ -8020,6 +8020,28 @@ const isBpiBoilerplateLine = (value: string) => {
   );
 };
 
+const isBpiHybridStatementFallbackCandidate = (text: string, fileName: string, context: ImportParseContext = {}) => {
+  const lowerFileName = String(fileName ?? "").toLowerCase();
+  const normalizedText = normalizeWhitespace(text);
+  const compactText = compactWhitespace(normalizedText).toLowerCase();
+  const institutionHint = normalizeWhitespace(context.institution ?? "").toLowerCase();
+
+  return (
+    lowerFileName.includes("bankstatementandbankcert") ||
+    lowerFileName.includes("bank cert") ||
+    lowerFileName.includes("bank-cert") ||
+    lowerFileName.includes("statement of account") ||
+    lowerFileName.includes("statementofaccount") ||
+    lowerFileName.includes("soa") ||
+    lowerFileName.includes("statementandbankcert") ||
+    /bank\s+certification\s+for\s+visa\s+purposes/i.test(normalizedText) ||
+    /\bbank\s+statement\b.*\bbank\s+cert\b/i.test(normalizedText) ||
+    /\bbpi\b/i.test(compactText) ||
+    /\bbank\s+of\s+the\s+philippine\s+islands\b/i.test(normalizedText) ||
+    institutionHint.includes("bpi")
+  );
+};
+
 const parseBpiImportText = (text: string) => {
   const normalizedText = normalizeBpiText(text);
   const metadata = bpiStatementMetadata(normalizedText);
@@ -14124,7 +14146,7 @@ export const parseImportText = (
 ): ParsedImportRow[] => {
   const institution = context.institution ?? null;
   const chinaBankParsed = parseChinaBankImportText(text, context);
-  if (chinaBankParsed) {
+  if (chinaBankParsed && chinaBankParsed.rows.length > 0) {
     return chinaBankParsed.rows;
   }
 
@@ -14155,67 +14177,67 @@ export const parseImportText = (
   }
 
   const aubCardParsed = parseAubCardImportText(text);
-  if (aubCardParsed) {
+  if (aubCardParsed && aubCardParsed.rows.length > 0) {
     return aubCardParsed.rows;
   }
 
   const aubSavingsParsed = parseAubSavingsImportText(text);
-  if (aubSavingsParsed) {
+  if (aubSavingsParsed && aubSavingsParsed.rows.length > 0) {
     return aubSavingsParsed.rows;
   }
 
   const mariBankParsed = parseMariBankImportText(text, context);
-  if (mariBankParsed) {
+  if (mariBankParsed && mariBankParsed.rows.length > 0) {
     return mariBankParsed.rows;
   }
 
   const psBankParsed = parsePsBankImportText(text);
-  if (psBankParsed) {
+  if (psBankParsed && psBankParsed.rows.length > 0) {
     return psBankParsed.rows;
   }
 
   const metrobankSavingsParsed = parseMetrobankSavingsImportText(text);
-  if (metrobankSavingsParsed) {
+  if (metrobankSavingsParsed && metrobankSavingsParsed.rows.length > 0) {
     return metrobankSavingsParsed.rows;
   }
 
   const metrobankParsed = parseMetrobankCreditCardImportText(text);
-  if (metrobankParsed) {
+  if (metrobankParsed && metrobankParsed.rows.length > 0) {
     return metrobankParsed.rows;
   }
 
   const securityBankParsed = parseSecurityBankSavingsImportText(text);
-  if (securityBankParsed) {
+  if (securityBankParsed && securityBankParsed.rows.length > 0) {
     return securityBankParsed.rows;
   }
 
   const rcbcSavingsParsed = parseRcbcSavingsImportText(text);
-  if (rcbcSavingsParsed) {
+  if (rcbcSavingsParsed && rcbcSavingsParsed.rows.length > 0) {
     return rcbcSavingsParsed.rows;
   }
 
   const rcbcParsed = parseRcbcImportText(text);
-  if (rcbcParsed) {
+  if (rcbcParsed && rcbcParsed.rows.length > 0) {
     return rcbcParsed.rows;
   }
 
   const unionbankParsed = parseUnionBankImportText(text);
-  if (unionbankParsed) {
+  if (unionbankParsed && unionbankParsed.rows.length > 0) {
     return unionbankParsed.rows;
   }
 
   const mayaCreditParsed = parseMayaCreditImportText(text, context);
-  if (mayaCreditParsed) {
+  if (mayaCreditParsed && mayaCreditParsed.rows.length > 0) {
     return mayaCreditParsed.rows;
   }
 
   const mayaSavingsParsed = parseMayaSavingsImportText(text, context);
-  if (mayaSavingsParsed) {
+  if (mayaSavingsParsed && mayaSavingsParsed.rows.length > 0) {
     return mayaSavingsParsed.rows;
   }
 
   const cimbParsed = parseCimbImportText(text);
-  if (cimbParsed) {
+  if (cimbParsed && cimbParsed.rows.length > 0) {
     return cimbParsed.rows;
   }
 
@@ -14225,23 +14247,33 @@ export const parseImportText = (
   }
 
   const bdoParsed = parseBdoSavingsImportText(text);
-  if (bdoParsed) {
+  if (bdoParsed && bdoParsed.rows.length > 0) {
     return bdoParsed.rows;
   }
 
   const bpiCreditParsed = parseBpiCreditCardImportText(text);
-  if (bpiCreditParsed) {
+  if (bpiCreditParsed && bpiCreditParsed.rows.length > 0) {
     return bpiCreditParsed.rows;
   }
 
   const pnbParsed = parsePnbImportText(text);
-  if (pnbParsed) {
+  if (pnbParsed && pnbParsed.rows.length > 0) {
     return pnbParsed.rows;
   }
 
   const bpiParsed = parseBpiImportText(text);
-  if (bpiParsed) {
+  if (bpiParsed && bpiParsed.rows.length > 0) {
     return bpiParsed.rows;
+  }
+
+  if (isBpiHybridStatementFallbackCandidate(text, fileName, context)) {
+    const bpiHybridFallback = parseImportTextGenericOnly(text, fileName, fileType, {
+      ...context,
+      institution: context.institution ?? "BPI",
+    });
+    if (bpiHybridFallback.length > 0) {
+      return bpiHybridFallback;
+    }
   }
 
   const genericCardParsed = parseGenericCreditCardText(text, context);
@@ -14250,7 +14282,7 @@ export const parseImportText = (
   }
 
   const genericParsed = parseGenericBankStatementText(text, context);
-  if (genericParsed) {
+  if (genericParsed && genericParsed.rows.length > 0) {
     return genericParsed.rows;
   }
 

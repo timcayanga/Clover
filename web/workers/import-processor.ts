@@ -7,7 +7,14 @@ import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { countNonCashAccounts, getWorkspaceOwnerLimits } from "@/lib/plan-access";
-import { normalizeInstitutionCurrency, parseAmountValue, parseDateValue, parseImportText, type ParsedImportRow } from "@/lib/import-parser";
+import {
+  normalizeInstitutionCurrency,
+  parseAmountValue,
+  parseDateValue,
+  parseImportText,
+  parseImportTextGenericOnly,
+  type ParsedImportRow,
+} from "@/lib/import-parser";
 import {
   readImportedFileImageDataUrls,
   readImportedFileTextWithCacheInfo,
@@ -256,6 +263,8 @@ const buildConfirmedTransactionDedupeKey = (params: {
   merchantRaw: unknown;
   merchantClean: unknown;
   description: unknown;
+  sourceRowIndex?: unknown;
+  sourceStatementFingerprint?: unknown;
 }) => {
   const date =
     params.date instanceof Date && !Number.isNaN(params.date.getTime())
@@ -272,12 +281,24 @@ const buildConfirmedTransactionDedupeKey = (params: {
     normalizeTransactionDedupeText(params.merchantRaw) ||
     normalizeTransactionDedupeText(params.merchantClean) ||
     normalizeTransactionDedupeText(params.description);
+  const sourceRowIndex =
+    typeof params.sourceRowIndex === "number" && Number.isFinite(params.sourceRowIndex) && params.sourceRowIndex > 0
+      ? String(Math.trunc(params.sourceRowIndex))
+      : typeof params.sourceRowIndex === "string" && params.sourceRowIndex.trim()
+        ? params.sourceRowIndex.trim()
+        : "";
+  const sourceStatementFingerprint =
+    typeof params.sourceStatementFingerprint === "string" && params.sourceStatementFingerprint.trim()
+      ? params.sourceStatementFingerprint.trim()
+      : "";
 
   return [
     date,
     amount === null ? "" : amount.toFixed(2),
     normalizeTransactionDedupeText(params.currency || "PHP").toUpperCase(),
     merchant,
+    sourceStatementFingerprint,
+    sourceRowIndex,
   ].join("|");
 };
 
@@ -3422,13 +3443,43 @@ export const processImportFileText = async (
     ...Object.fromEntries(Object.entries(metadataOverride).filter(([, value]) => value !== undefined)),
   } as typeof mergedMetadata;
 
-  const parsedRows = canReuseCachedStatementParse
+  const parsedRowsInitial = canReuseCachedStatementParse
     ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
     : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
         institution: metadataForParse.institution,
         accountName: metadataForParse.accountName,
         accountNumber: metadataForParse.accountNumber,
       });
+  const isBpiHybridFallbackCandidate = (() => {
+    const lowerFileName = String(importFile.fileName ?? "").toLowerCase();
+    const normalizedText = String(textForParse ?? "");
+    const compactText = normalizedText.replace(/\s+/g, " ").toLowerCase();
+    return (
+      lowerFileName.includes("bankstatementandbankcert") ||
+      lowerFileName.includes("bank cert") ||
+      lowerFileName.includes("bank-cert") ||
+      lowerFileName.includes("statement of account") ||
+      lowerFileName.includes("statementofaccount") ||
+      lowerFileName.includes("soa") ||
+      lowerFileName.includes("statementandbankcert") ||
+      /bank\s+certification\s+for\s+visa\s+purposes/i.test(normalizedText) ||
+      /\bbank\s+statement\b.*\bbank\s+cert\b/i.test(normalizedText) ||
+      /\bbpi\b/i.test(compactText) ||
+      /\bbank\s+of\s+the\s+philippine\s+islands\b/i.test(normalizedText) ||
+      /\bbpi\b/i.test(String(metadataForParse.institution ?? "")) ||
+      /\bbpi\b/i.test(String(metadataForParse.accountName ?? "")) ||
+      /\bbpi\b/i.test(String(metadataForParse.accountNumber ?? ""))
+    );
+  })();
+  const parsedRowsAfterFallback =
+    parsedRowsInitial.length > 0 || !isBpiHybridFallbackCandidate
+      ? parsedRowsInitial
+      : parseImportTextGenericOnly(textForParse, importFile.fileName, importFile.fileType, {
+          institution: metadataForParse.institution ?? "BPI",
+          accountName: metadataForParse.accountName,
+          accountNumber: metadataForParse.accountNumber,
+        });
+  const parsedRows = parsedRowsAfterFallback.length > 0 ? parsedRowsAfterFallback : parsedRowsInitial;
   await updateImportFileCompat(importFileId, {
     status: "processing",
     processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "identifying_transactions",
@@ -5407,7 +5458,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         existingImportTransactionBySourceIndex.set(sourceRowIndex, transaction);
       }
 
-      const dedupeKey = buildConfirmedTransactionDedupeKey(transaction);
+      const dedupeKey = buildConfirmedTransactionDedupeKey({
+        ...transaction,
+        sourceRowIndex,
+        sourceStatementFingerprint: getImportSourceStatementFingerprint(transaction.rawPayload),
+      });
       const bucket = existingImportTransactionsByDedupeKey.get(dedupeKey) ?? [];
       bucket.push(transaction);
       existingImportTransactionsByDedupeKey.set(dedupeKey, bucket);
@@ -5620,11 +5675,16 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       merchantRaw: true,
       merchantClean: true,
       description: true,
+      rawPayload: true,
     },
   });
   const existingDedupeCounts = new Map<string, number>();
   for (const existingRow of existingRowsForAccount) {
-    const key = buildConfirmedTransactionDedupeKey(existingRow);
+    const key = buildConfirmedTransactionDedupeKey({
+      ...existingRow,
+      sourceRowIndex: getImportSourceRowIndex(existingRow.rawPayload),
+      sourceStatementFingerprint: getImportSourceStatementFingerprint(existingRow.rawPayload),
+    });
     existingDedupeCounts.set(key, (existingDedupeCounts.get(key) ?? 0) + 1);
   }
   const currentDedupeCounts = new Map<string, number>();
@@ -5767,14 +5827,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         (typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance"),
     });
     const transactionId = String(insertRow.id ?? crypto.randomUUID());
-    const dedupeKey = buildConfirmedTransactionDedupeKey(insertRow as {
-      date: unknown;
-      amount: unknown;
-      currency: unknown;
-      type: unknown;
-      merchantRaw: unknown;
-      merchantClean: unknown;
-      description: unknown;
+    const dedupeKey = buildConfirmedTransactionDedupeKey({
+      ...insertRow,
+      sourceRowIndex: index + 1,
+      sourceStatementFingerprint:
+        typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
+          ? row.statementFingerprint.trim()
+          : checkpointStatementFingerprint,
     });
     const existingImportTransaction =
       existingImportTransactionBySourceIndex.get(index + 1) ??

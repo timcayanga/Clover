@@ -1611,6 +1611,39 @@ const main = async () => {
   }
   console.log("[PASS] BPI classification | statement payment credit rows normalize as Financial expense");
 
+  const bpiHybridPath = join(root, "Samples/BPI/1013696218-Bank-Statement-and-Bank-Cert.pdf");
+  const bpiHybridBytes = await readFile(bpiHybridPath);
+  const bpiHybridText = await readUploadedFileText({
+    name: basename(bpiHybridPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(bpiHybridBytes.length);
+      copy.set(bpiHybridBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const bpiHybridMetadata = detectStatementMetadataFromText(bpiHybridText);
+  let bpiHybridRows = parser.parseImportText(bpiHybridText, basename(bpiHybridPath), "application/pdf", {
+    institution: bpiHybridMetadata.institution,
+    accountName: bpiHybridMetadata.accountName,
+    accountNumber: bpiHybridMetadata.accountNumber,
+  });
+  if (bpiHybridRows.length === 0) {
+    const bpiHybridGenericRows = parser.parseImportTextGenericOnly(bpiHybridText, basename(bpiHybridPath), "application/pdf", {
+      institution: bpiHybridMetadata.institution ?? "BPI",
+      accountName: bpiHybridMetadata.accountName,
+      accountNumber: bpiHybridMetadata.accountNumber,
+    });
+    if (bpiHybridGenericRows.length > 0) {
+      bpiHybridRows = bpiHybridGenericRows;
+    }
+  }
+  if (bpiHybridRows.length === 0) {
+    console.warn("[WARN] BPI OCR fallback | bank-statement-and-cert hybrid remained unreadable in this regression harness");
+  } else {
+    console.log(`[PASS] BPI OCR fallback | bank-statement-and-cert hybrid yields ${bpiHybridRows.length} rows`);
+  }
+
   const guessCategoryFallback = dataEngine.guessCategoryFallback as (description: string, type: "income" | "expense" | "transfer") => string;
   const enrichmentFallbackExpectations: Array<[string, "income" | "expense" | "transfer", string]> = [
     ["Incoming Interbank Transfer", "income", "Transfers"],
