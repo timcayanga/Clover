@@ -20,16 +20,6 @@ type ImportUploadDockProps = {
 
 const clampProgress = (value: number) => Math.max(0, Math.min(100, value));
 
-const getSummaryTransactionCount = (summary: UploadInsightsSummary | null | undefined) => {
-  const rowsImported = Number(summary?.rowsImported ?? 0);
-  if (Number.isFinite(rowsImported) && rowsImported > 0) {
-    return rowsImported;
-  }
-
-  const previewRows = Array.isArray(summary?.previewTransactions) ? summary.previewTransactions.length : 0;
-  return previewRows > 0 ? previewRows : 0;
-};
-
 export function ImportUploadDock({
   open,
   fileName = null,
@@ -81,7 +71,6 @@ export function ImportUploadDock({
       : "import queue";
   const resultHeadline = isComplete ? formatImportResultHeadline(summary) : "";
   const resultChecklist = isComplete ? buildImportResultChecklist(summary) : [];
-  const completedTransactionCount = isComplete ? getSummaryTransactionCount(summary) : 0;
 
   return (
     <div className={`import-upload-dock import-upload-dock--${tone}`} role="status" aria-live="polite">
@@ -114,18 +103,6 @@ export function ImportUploadDock({
             <span>{progressCaption}</span>
           </div>
         </div>
-        {isComplete ? (
-          <div className="import-upload-dock__read-summary" aria-label="Import read summary">
-            <span>
-              <strong>{safeCompletedFiles.toLocaleString("en-US")}</strong>{" "}
-              file{safeCompletedFiles === 1 ? "" : "s"} read
-            </span>
-            <span>
-              <strong>{completedTransactionCount.toLocaleString("en-US")}</strong>{" "}
-              transaction{completedTransactionCount === 1 ? "" : "s"} read
-            </span>
-          </div>
-        ) : null}
         {resultChecklist.length > 0 ? (
           <ul className="import-upload-dock__checklist" aria-label="Import highlights">
             {resultChecklist.map((item) => (
