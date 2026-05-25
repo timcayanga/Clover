@@ -11,7 +11,7 @@ import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format"
 import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { loadSplitBillWorkspaceData } from "@/lib/split-bill-loaders";
 import { AdviserChat } from "@/components/adviser-chat";
-import { AdviserTrackedLink } from "@/components/adviser-tracked-link";
+import { AdviserSectionCarousel, type AdviserSectionCard } from "@/components/adviser-section-carousel";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 
@@ -63,6 +63,8 @@ type AdviserCard = {
   ctaLabel: string;
   href: string;
   tone: "positive" | "warning" | "neutral";
+  group: string;
+  emoji?: string;
 };
 
 type AdviserPrompt = {
@@ -290,6 +292,11 @@ const getAdviserCardEmoji = (card: { title: string; group: string; tone: Adviser
 
   return "✨";
 };
+
+const withAdviserEmoji = (card: AdviserCard): AdviserSectionCard => ({
+  ...card,
+  emoji: getAdviserCardEmoji(card),
+});
 
 const updateMemoryStats = (map: Map<string, AdviserMemoryStats>, key: string, createdAt: Date) => {
   const current = map.get(key);
@@ -2345,80 +2352,23 @@ async function AdviserPageContent() {
           </div>
         </header>
 
-        <section className="adviser-section glass">
-          <p className="eyebrow">What Clover noticed</p>
-          <div className="adviser-card-grid">
-            {passiveCardsToRender.map((card) => (
-              <AdviserTrackedLink
-                key={card.id}
-                href={card.href}
-                kind="card"
-                group={card.group}
-                itemId={card.id}
-                label={card.title}
-                className="adviser-card adviser-card--link glass"
-              >
-                <span className="adviser-card__emoji" aria-hidden="true">
-                  {getAdviserCardEmoji(card)}
-                </span>
-                <strong>{card.title}</strong>
-                <p>{card.summary}</p>
-                <small>{card.evidence}</small>
-                <span className="button button-primary button-small adviser-card__cta">{card.ctaLabel}</span>
-              </AdviserTrackedLink>
-            ))}
-          </div>
-        </section>
+        <AdviserSectionCarousel
+          title="What Clover noticed"
+          ariaLabel="What Clover noticed cards"
+          cards={passiveCardsToRender.map(withAdviserEmoji)}
+        />
 
-        <section className="adviser-section glass">
-          <p className="eyebrow">What you should do</p>
-          <div className="adviser-card-grid">
-            {recommendationCardsToRender.map((card) => (
-              <AdviserTrackedLink
-                key={card.id}
-                href={card.href}
-                kind="card"
-                group={card.group}
-                itemId={card.id}
-                label={card.title}
-                className="adviser-card adviser-card--link glass"
-              >
-                <span className="adviser-card__emoji" aria-hidden="true">
-                  {getAdviserCardEmoji(card)}
-                </span>
-                <strong>{card.title}</strong>
-                <p>{card.summary}</p>
-                <small>{card.evidence}</small>
-                <span className="button button-primary button-small adviser-card__cta">{card.ctaLabel}</span>
-              </AdviserTrackedLink>
-            ))}
-          </div>
-        </section>
+        <AdviserSectionCarousel
+          title="What you should do"
+          ariaLabel="What you should do cards"
+          cards={recommendationCardsToRender.map(withAdviserEmoji)}
+        />
 
-        <section className="adviser-section glass">
-          <p className="eyebrow">How you can improve</p>
-          <div className="adviser-card-grid">
-            {coachingCardsToRender.map((card) => (
-              <AdviserTrackedLink
-                key={card.id}
-                href={card.href}
-                kind="card"
-                group={card.group}
-                itemId={card.id}
-                label={card.title}
-                className="adviser-card adviser-card--link glass"
-              >
-                <span className="adviser-card__emoji" aria-hidden="true">
-                  {getAdviserCardEmoji(card)}
-                </span>
-                <strong>{card.title}</strong>
-                <p>{card.summary}</p>
-                <small>{card.evidence}</small>
-                <span className="button button-primary button-small adviser-card__cta">{card.ctaLabel}</span>
-              </AdviserTrackedLink>
-            ))}
-          </div>
-        </section>
+        <AdviserSectionCarousel
+          title="How you can improve"
+          ariaLabel="How you can improve cards"
+          cards={coachingCardsToRender.map(withAdviserEmoji)}
+        />
 
         <section className="adviser-section adviser-section--chat glass">
           <p className="eyebrow">Ask Clover anything</p>
