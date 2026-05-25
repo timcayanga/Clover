@@ -26924,32 +26924,44 @@ button.accounts-detail__transaction-head-cell {
 
 @keyframes clover-loading-screen-pulse {
   0%,
-  18%,
   100% {
-    opacity: 0.2;
-    transform: scale(0.88);
-    filter: saturate(0.92);
+    opacity: var(--leaf-rest-opacity, 0.2);
+    transform: scale(var(--leaf-rest-scale, 0.84)) rotate(0deg);
+    filter: drop-shadow(0 10px 14px var(--leaf-glow)) saturate(0.92);
   }
 
-  7% {
-    opacity: 1;
-    transform: scale(1);
-    filter: saturate(1.08);
+  6% {
+    opacity: var(--leaf-peak-opacity, 1);
+    transform: scale(var(--leaf-peak-scale, 1.1)) rotate(var(--leaf-peak-rotate, 6deg));
+    filter: drop-shadow(0 14px 18px var(--leaf-glow)) saturate(1.14);
   }
 
   12% {
-    opacity: 0.2;
-    transform: scale(0.88);
-    filter: saturate(0.92);
+    opacity: var(--leaf-rest-opacity, 0.2);
+    transform: scale(var(--leaf-rest-scale, 0.85)) rotate(0deg);
+    filter: drop-shadow(0 10px 14px var(--leaf-glow)) saturate(0.92);
   }
 }
 
 .clover-loading-screen__leaf {
   transform-box: fill-box;
   transform-origin: center;
-  opacity: 0.2;
-  animation: clover-loading-screen-pulse 4.8s ease-in-out infinite;
+  animation: clover-loading-screen-pulse 2.8s cubic-bezier(0.42, 0, 0.18, 1) infinite;
   will-change: transform, opacity, filter;
+  --leaf-glow: rgba(3, 168, 192, 0.24);
+  --leaf-rest-opacity: 0.2;
+  --leaf-rest-scale: 0.84;
+  --leaf-peak-opacity: 1;
+  --leaf-peak-scale: 1.1;
+  --leaf-peak-rotate: 6deg;
+}
+
+.clover-loading-screen__leaf--2 {
+  --leaf-glow: rgba(52, 211, 153, 0.62);
+  --leaf-rest-opacity: 0.34;
+  --leaf-rest-scale: 0.88;
+  --leaf-peak-scale: 1.16;
+  --leaf-peak-rotate: -8deg;
 }
 
 .clover-loading-screen__leaf--1 {

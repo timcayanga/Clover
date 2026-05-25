@@ -23,17 +23,17 @@ export function CloverLoadingMark({ className }: CloverLoadingMarkProps) {
       aria-hidden="true"
     >
       <path className="clover-loading-screen__leaf clover-loading-screen__leaf--1" style={{ animationDelay: "0ms" }} d={markPaths.topLeft} fill="url(#clover-loading-screen-top-left)" />
-      <path className="clover-loading-screen__leaf clover-loading-screen__leaf--2" style={{ animationDelay: "1200ms" }} d={markPaths.topRight} fill="url(#clover-loading-screen-top-right)" />
-      <path className="clover-loading-screen__leaf clover-loading-screen__leaf--3" style={{ animationDelay: "2400ms" }} d={markPaths.bottomRight} fill="url(#clover-loading-screen-bottom-right)" />
-      <path className="clover-loading-screen__leaf clover-loading-screen__leaf--4" style={{ animationDelay: "3600ms" }} d={markPaths.bottomLeft} fill="url(#clover-loading-screen-bottom-left)" />
+      <path className="clover-loading-screen__leaf clover-loading-screen__leaf--2" style={{ animationDelay: "700ms" }} d={markPaths.topRight} fill="url(#clover-loading-screen-top-right)" />
+      <path className="clover-loading-screen__leaf clover-loading-screen__leaf--3" style={{ animationDelay: "1400ms" }} d={markPaths.bottomRight} fill="url(#clover-loading-screen-bottom-right)" />
+      <path className="clover-loading-screen__leaf clover-loading-screen__leaf--4" style={{ animationDelay: "2100ms" }} d={markPaths.bottomLeft} fill="url(#clover-loading-screen-bottom-left)" />
       <defs>
         <linearGradient id="clover-loading-screen-top-left" x1="0" y1="0" x2="60" y2="60" gradientUnits="userSpaceOnUse">
           <stop offset="0.5" stopColor="#03A8C0" />
           <stop offset="1" stopColor="#00DFFF" />
         </linearGradient>
         <linearGradient id="clover-loading-screen-top-right" x1="124" y1="0" x2="64" y2="60" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#A7F3D0" />
-          <stop offset="1" stopColor="#6EE7B7" />
+          <stop stopColor="#ECFDF5" />
+          <stop offset="1" stopColor="#34D399" />
         </linearGradient>
         <linearGradient id="clover-loading-screen-bottom-right" x1="64" y1="64" x2="124" y2="124" gradientUnits="userSpaceOnUse">
           <stop stopColor="#00DFFF" />
