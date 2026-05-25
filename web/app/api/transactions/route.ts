@@ -22,19 +22,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const normalizeCategoryName = (value?: string | null) => value?.trim().toLowerCase() ?? "";
-
 const getSummaryTransactionType = (transaction: {
   type: "income" | "expense" | "transfer";
   isTransfer: boolean;
-  categoryName?: string | null;
 }) => {
-  const normalizedCategoryName = normalizeCategoryName(transaction.categoryName);
-  if (normalizedCategoryName === "income") {
-    return "income" as const;
-  }
-
-  if (normalizedCategoryName === "transfers" || transaction.isTransfer) {
+  if (transaction.type === "transfer" || transaction.isTransfer) {
     return "transfer" as const;
   }
 
@@ -877,7 +869,6 @@ export async function GET(request: Request) {
         const effectiveType = getSummaryTransactionType({
           type: mappedTransaction.type,
           isTransfer: mappedTransaction.isTransfer,
-          categoryName: mappedTransaction.categoryName,
         });
 
         if (effectiveType === "income") {

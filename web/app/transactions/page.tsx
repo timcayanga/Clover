@@ -513,12 +513,7 @@ const buildVisibleTransactionSummary = (
       continue;
     }
 
-    const effectiveType =
-      normalizeCategoryName(transaction.categoryName) === "income"
-        ? "income"
-        : normalizeCategoryName(transaction.categoryName) === "transfers" || transaction.isTransfer
-          ? "transfer"
-          : transaction.type;
+    const effectiveType = transaction.type === "transfer" || transaction.isTransfer ? "transfer" : transaction.type;
 
     if (effectiveType === "income") {
       summary.income += amount;
