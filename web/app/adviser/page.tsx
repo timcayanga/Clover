@@ -2237,7 +2237,7 @@ async function AdviserPageContent() {
   return (
     <CloverShell active="adviser" title="Adviser">
       <section className="adviser-page">
-        <header className="adviser-summary glass">
+        <header className="adviser-summary">
           <div className="adviser-summary__grid" aria-label="Adviser summary">
             {summaryCards.map((card) => (
               <article key={card.id} className="accounts-overview-card glass adviser-summary-card">
@@ -2275,7 +2275,7 @@ async function AdviserPageContent() {
                 <strong>{card.title}</strong>
                 <p>{card.summary}</p>
                 <small>{card.evidence}</small>
-                <span className="pill-link pill-link--inline">{card.ctaLabel}</span>
+                <span className="button button-primary button-small adviser-card__cta">{card.ctaLabel}</span>
               </AdviserTrackedLink>
             ))}
           </div>
@@ -2298,7 +2298,7 @@ async function AdviserPageContent() {
                 <strong>{card.title}</strong>
                 <p>{card.summary}</p>
                 <small>{card.evidence}</small>
-                <span className="button button-primary button-small adviser-card__button">{card.ctaLabel}</span>
+                <span className="button button-primary button-small adviser-card__cta">{card.ctaLabel}</span>
               </AdviserTrackedLink>
             ))}
           </div>
@@ -2321,7 +2321,7 @@ async function AdviserPageContent() {
                 <strong>{card.title}</strong>
                 <p>{card.summary}</p>
                 <small>{card.evidence}</small>
-                <span className="pill-link pill-link--inline">{card.ctaLabel}</span>
+                <span className="button button-primary button-small adviser-card__cta">{card.ctaLabel}</span>
               </AdviserTrackedLink>
             ))}
           </div>

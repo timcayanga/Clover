@@ -7263,6 +7263,10 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .adviser-summary__grid {
@@ -7436,6 +7440,13 @@ html[data-theme="dark"] .adviser-section {
   color: var(--muted);
   font-size: 0.86rem;
   line-height: 1.45;
+}
+
+.adviser-card__cta {
+  align-self: flex-start;
+  margin-top: auto;
+  width: min(100%, 180px);
+  justify-content: center;
 }
 
 .adviser-card__button {

@@ -37,6 +37,10 @@ type AdviserAuditMetadata = {
 };
 
 type AdviserSignalTheme = "cashflow" | "behavior" | "goals" | "investments" | "cleanup";
+type AdviserThemeScore = {
+  key: AdviserSignalTheme;
+  score: number;
+};
 
 type AdviserPreferenceProfile = Record<AdviserSignalTheme, number>;
 
@@ -82,6 +86,8 @@ const formatSignedCurrency = (value: number, currency?: string | null) =>
   `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
 const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
+const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
+const average = (values: number[]) => (values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0);
 const buildTransactionSummary = (
   transactions: Array<{
     amount: unknown;
@@ -954,6 +960,7 @@ export async function POST(request: Request) {
       },
       displayCurrency
     );
+    const goalLabel = goalValue ? goalValue.replace(/_/g, " ") : null;
 
     const topCategories = Array.from(currentSummary.expenseCategories.entries())
       .sort((left, right) => right[1] - left[1])
@@ -961,6 +968,38 @@ export async function POST(request: Request) {
     const topCategoryName = topCategories[0]?.[0] ?? null;
     const topCategoryAmount = topCategories[0]?.[1] ?? 0;
     const topCategoryShare = currentSpend > 0 ? topCategoryAmount / currentSpend : 0;
+    const uncategorizedTransactions = activeTransactions.filter(
+      (transaction) => transaction.type !== "transfer" && !transaction.category?.name
+    );
+    const weekendExpenseTotal = activeTransactions.reduce((sum, transaction) => {
+      if (transaction.type !== "expense") {
+        return sum;
+      }
+
+      const day = transaction.date.getDay();
+      return day === 0 || day === 6 ? sum + Math.abs(Number(transaction.amount)) : sum;
+    }, 0);
+    const weekendExpenseShare = currentSpend > 0 ? weekendExpenseTotal / currentSpend : 0;
+    const historyDepthScore = Math.max(
+      20,
+      Math.min(
+        100,
+        Math.round(
+          average([
+            allTransactions.length >= 120 ? 100 : (allTransactions.length / 120) * 100,
+            historySpanDays >= 365 ? 100 : (historySpanDays / 365) * 100,
+          ])
+        )
+      )
+    );
+    const currentTransactionConfidence = Math.max(
+      25,
+      Math.min(100, Math.round(average([currentWindowTransactions.length >= 12 ? 85 : 45, historyDepthScore, activeTransactions.length >= 8 ? 80 : 40])))
+    );
+    const currentPatternConfidence = Math.max(
+      25,
+      Math.min(100, Math.round(average([monthlySeries.length >= 3 ? 88 : 42, trendMomentumScore, historyDepthScore])))
+    );
 
     const recurringDueSoon = recurringPatterns
       .filter((pattern) => pattern.nextExpectedDate && pattern.nextExpectedDate <= nextFourteenDays)
@@ -986,6 +1025,7 @@ export async function POST(request: Request) {
       .filter((bill) => bill.outstanding > 0)
       .sort((left, right) => right.outstanding - left.outstanding)
       .slice(0, 3);
+    const openSplitBillAmount = openSplitBills.reduce((sum, bill) => sum + Number(bill.outstanding), 0);
 
     const latestInvestmentSnapshot = investmentSnapshots[0] ?? null;
     const previousInvestmentSnapshot = investmentSnapshots[1] ?? null;
@@ -1128,6 +1168,50 @@ export async function POST(request: Request) {
 
       return Math.max(0, Math.min(100, average([...memoryScores, ...outcomeScores, groups.length > 0 ? 55 : 30])));
     };
+    const themeScores: AdviserThemeScore[] = [
+      {
+        key: "cashflow",
+        score: average([
+          themeMemoryScore(["cashflow", "recurring", "split-bills"]),
+          recurringAmountPressure > 0 || commitmentAmountPressure > 0 || splitBillSettlementPressure > 0 ? 88 : 34,
+          currentSavingsRate !== null && currentSavingsRate < 0 ? 92 : 45,
+        ]),
+      },
+      {
+        key: "behavior",
+        score: average([
+          themeMemoryScore(["transactions", "behavior-pattern", "category-mix"]),
+          trendMomentumScore,
+          weekendExpenseShare > 0.25 ? 72 : 38,
+        ]),
+      },
+      {
+        key: "goals",
+        score: average([
+          themeMemoryScore(["goals"]),
+          goalValue ? 90 : 30,
+          currentSavingsRate === null ? 35 : currentSavingsRate < 0 ? 85 : 55,
+        ]),
+      },
+      {
+        key: "investments",
+        score: average([
+          themeMemoryScore(["investments"]),
+          latestInvestmentSnapshot ? 72 : 35,
+          anomalySignal ? anomalySignal.score : 40,
+        ]),
+      },
+      {
+        key: "cleanup",
+        score: average([
+          themeMemoryScore(["cleanup"]),
+          uncategorizedTransactions.length > 0 ? 92 : 35,
+          currentTransactionConfidence,
+        ]),
+      },
+    ].sort((left, right) => right.score - left.score);
+    const dominantTheme = themeScores[0] ?? null;
+    const secondaryTheme = themeScores[1] ?? null;
 
     const themeAffinity: Record<AdviserSignalTheme, number> = {
       cashflow: Math.max(
@@ -1181,6 +1265,26 @@ export async function POST(request: Request) {
       goalLabel,
       uncategorizedTransactions.length
     );
+    const signalThemes = themeScores;
+    const openSplitBillCount = openSplitBills.length;
+    const cashflowPressureScore = forecastSignal?.score ?? average([
+      currentSavingsRate !== null && currentSavingsRate < 0 ? 90 : 45,
+      recurringAmountPressure > 0 ? 72 : 35,
+      splitBillSettlementPressure > 0 ? 72 : 35,
+      liquidBalance < baselineSpend ? 70 : 35,
+    ]);
+    const behaviorPatternScore = average([
+      dominantTheme?.key === "behavior" ? 85 : 45,
+      monthlyExpenseTrend.score,
+      weekendExpenseShare * 100,
+    ]);
+    const goalPressureScore = average([
+      goalProgress.bandLabel === "On track" ? 45 : 80,
+      currentSavingsRate !== null && currentSavingsRate < 0 ? 90 : 50,
+      spendDelta !== null && spendDelta > 0 ? 65 : 40,
+    ]);
+    const investmentSignalScore = anomalySignal?.score ?? (latestInvestmentSnapshot ? 60 : 25);
+    const cleanupPressureScore = average([uncategorizedTransactions.length > 0 ? 92 : 35, currentTransactionConfidence]);
 
     const explainabilityBundle = [
       forecastSignal
@@ -1293,9 +1397,26 @@ export async function POST(request: Request) {
       summaryLines,
     ].join("\n");
 
+    const latestQuestion = incomingMessages[incomingMessages.length - 1]?.content?.trim() || "your question";
+    const fallbackReply = [
+      `Based on your current data, ${topCategoryName ? `${topCategoryName} is the main spending driver` : "spending is fairly spread out"}${spendDelta !== null ? ` and spending is ${formatPercent(spendDelta)} vs baseline` : ""}.`,
+      recurringDueSoon.length > 0
+        ? `You also have ${recurringDueSoon.length} recurring item${recurringDueSoon.length === 1 ? "" : "s"} coming up, so check those first if you want more room in cash flow.`
+        : null,
+      openSplitBills.length > 0
+        ? `There are ${openSplitBills.length} open split bill${openSplitBills.length === 1 ? "" : "s"} still waiting on settlement.`
+        : null,
+      latestInvestmentSnapshot
+        ? `Your latest investment snapshot is available, so if your question is about investments, start there next.`
+        : null,
+      `For "${latestQuestion}", the clearest first step is to open the relevant transactions or obligations and review the biggest driver shown above.`,
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join(" ");
+
     const env = getEnv();
     if (!env.OPENAI_API_KEY) {
-      return NextResponse.json({ error: "OpenAI is not configured for Adviser chat." }, { status: 503 });
+      return NextResponse.json({ reply: fallbackReply });
     }
 
     const model = env.OPENAI_ADVISER_MODEL?.trim() || "gpt-4.1";
