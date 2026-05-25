@@ -70,7 +70,18 @@ export function ImportUploadDock({
           : "files ready"
       : "import queue";
   const resultHeadline = isComplete ? formatImportResultHeadline(summary) : "";
-  const resultChecklist = isComplete ? buildImportResultChecklist(summary) : [];
+  const importMilestones = buildImportResultChecklist(summary);
+  const activeMilestone =
+    !isComplete && importMilestones.length > 0
+      ? importMilestones[
+          Math.min(
+            importMilestones.length - 1,
+            value >= 75 ? 2 : value >= 50 ? 1 : value >= 25 ? 0 : 0
+          )
+        ]
+      : "";
+  const resultChecklist = isComplete ? importMilestones : [];
+  const statusDetail = resultHeadline || (activeMilestone ? `✓ ${activeMilestone}` : detail);
 
   return (
     <div className={`import-upload-dock import-upload-dock--${tone}`} role="status" aria-live="polite">
@@ -80,7 +91,7 @@ export function ImportUploadDock({
             <p className="eyebrow">Import progress</p>
             <strong>{fileLabel}</strong>
             {phaseLabel ? <p className="import-upload-dock__phase">{phaseLabel}</p> : null}
-            <p>{resultHeadline || detail}</p>
+            <p>{statusDetail}</p>
           </div>
           <div className="import-upload-dock__header-actions">
             {onClose ? (

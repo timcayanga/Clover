@@ -1314,11 +1314,11 @@ const friendlyImportProgressLabel = (label: string, fileName?: string | null, im
 
   switch (label) {
     case "Starting upload":
-      return "Clover is preparing the file for upload";
+      return "Clover is checking the file format";
     case "Clover is getting your file ready":
-      return "Clover is preparing the file for upload";
+      return "Clover is checking the file format";
     case "Uploading the file":
-      return "Clover is sending the file to the server";
+      return "Clover is securely reading the statement";
     case "Password needed":
       return "This file needs a password before Clover can continue";
     case "Waiting for account details":
@@ -6662,6 +6662,8 @@ export function ImportFilesModal({
 
   const completedBatchSummary =
     hasCompletedBatch ? lastImportActivityRef.current?.summary ?? buildVisibleImportSummary(items) : null;
+  const compactProgressSummary =
+    showCompactProgress ? completedBatchSummary ?? buildVisibleImportSummary(items) : null;
 
   const modalContent = activePasswordItem ? (
       <ImportPasswordModal
@@ -6690,7 +6692,7 @@ export function ImportFilesModal({
         fileTotal={items.length}
         completedFiles={completedFileCount}
         progress={displayedOverallProgress}
-        summary={completedBatchSummary}
+        summary={compactProgressSummary}
         detail={
           !activeProgressItem && hasCompletedBatch && message
             ? message

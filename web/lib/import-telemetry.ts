@@ -78,7 +78,7 @@ const phaseLabelMap: Record<ImportTelemetryPhase, string> = {
 
 const phaseMessageMap: Record<ImportTelemetryPhase, string> = {
   queued: "Clover is waiting to start",
-  uploading: "Clover is sending the file to the server",
+  uploading: "Clover is securely reading the statement",
   reading_account_details: "Clover is extracting key details from the file",
   identifying_transactions: "Clover is finding transactions and categories",
   reconciling: "Clover is matching transactions, categories, and duplicates",
@@ -95,7 +95,7 @@ const GENERIC_PROGRESS_MESSAGES = new Set([
   "reading file details",
   "identifying transactions...",
   "identifying transactions",
-  "clover is sending the file to the server",
+  "clover is securely reading the statement",
   "uploading file...",
   "uploading file",
 ]);
