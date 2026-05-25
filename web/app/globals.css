@@ -11907,9 +11907,25 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   justify-self: end;
 }
 
+.transactions-mobile-simple-row__detail--plain {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #4b5563;
+  box-shadow: none;
+}
+
+.transactions-mobile-simple-row__detail--plain:hover,
+.transactions-mobile-simple-row__detail--plain:focus-visible {
+  border: 0;
+  background: transparent;
+  color: #374151;
+  box-shadow: none;
+}
+
 .transactions-mobile-simple-row__detail svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
 .transactions-mobile-simple-row--loading {
