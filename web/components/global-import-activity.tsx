@@ -104,6 +104,9 @@ export function GlobalImportActivity() {
   const [pageModalActive, setPageModalActive] = useState(() =>
     typeof document === "undefined" ? false : document.body.hasAttribute("data-clover-page-modal")
   );
+  const [importModalVisible, setImportModalVisible] = useState(() =>
+    typeof document === "undefined" ? false : document.body.hasAttribute("data-clover-import-modal-visible")
+  );
   const [accountsSplashActive, setAccountsSplashActive] = useState(() =>
     typeof document === "undefined" ? false : document.body.hasAttribute("data-clover-accounts-loading")
   );
@@ -152,6 +155,24 @@ export function GlobalImportActivity() {
       return;
     }
 
+    const updateImportModalVisibleState = () => {
+      setImportModalVisible(document.body.hasAttribute("data-clover-import-modal-visible"));
+    };
+
+    updateImportModalVisibleState();
+    const observer = new MutationObserver(updateImportModalVisibleState);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["data-clover-import-modal-visible"] });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
     const updateAccountsSplashState = () => {
       setAccountsSplashActive(document.body.hasAttribute("data-clover-accounts-loading"));
     };
@@ -180,7 +201,7 @@ export function GlobalImportActivity() {
     };
   }, [activity]);
 
-  if (!activity || !shouldShowOnCurrentPath || (activity.surface === "modal" && pageModalActive)) {
+  if (!activity || !shouldShowOnCurrentPath || (activity.surface === "modal" && (pageModalActive || importModalVisible))) {
     return null;
   }
 

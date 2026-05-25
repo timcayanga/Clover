@@ -6063,6 +6063,30 @@ export function ImportFilesModal({
   }, [shouldLockPageInteraction]);
 
   useEffect(() => {
+    if (typeof document === "undefined" || !open || backgroundOnly || launchInBackground) {
+      return;
+    }
+
+    const body = document.body;
+    const nextVisibleCount = Number(body.dataset.cloverImportModalVisibleCount ?? "0") + 1;
+    body.dataset.cloverImportModalVisibleCount = String(nextVisibleCount);
+    body.dataset.cloverImportModalVisible = "true";
+
+    return () => {
+      const currentVisibleCount = Number(body.dataset.cloverImportModalVisibleCount ?? "1");
+      const nextCount = Math.max(0, currentVisibleCount - 1);
+
+      if (nextCount > 0) {
+        body.dataset.cloverImportModalVisibleCount = String(nextCount);
+        return;
+      }
+
+      delete body.dataset.cloverImportModalVisibleCount;
+      delete body.dataset.cloverImportModalVisible;
+    };
+  }, [backgroundOnly, launchInBackground, open]);
+
+  useEffect(() => {
     if (!open || !workspaceId) {
       return;
     }
