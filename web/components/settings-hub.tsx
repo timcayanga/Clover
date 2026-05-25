@@ -591,6 +591,26 @@ export function SettingsHub({
           lastName: nextLastName || undefined,
         });
         await user.reload();
+        const response = await fetch("/api/settings/account", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            firstName: nextFirstName || null,
+            lastName: nextLastName || null,
+          }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          firstName?: string | null;
+          lastName?: string | null;
+          error?: string;
+        };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Unable to update account details.");
+        }
+        setFirstName(payload.firstName ?? null);
+        setLastName(payload.lastName ?? null);
         setAccountMessage("Account details updated.");
       } catch (error) {
         setAccountMessage(error instanceof Error ? error.message : "Unable to update account details.");

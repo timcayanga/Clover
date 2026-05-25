@@ -12,14 +12,16 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
   const existing = await prisma.user.findUnique({
     where: { clerkUserId: clerkUser.clerkUserId },
   });
+  const syncedFirstName = clerkUser.firstName ?? existing?.firstName ?? null;
+  const syncedLastName = clerkUser.lastName ?? existing?.lastName ?? null;
 
   try {
     const user = await prisma.user.upsert({
       where: { clerkUserId: clerkUser.clerkUserId },
       update: {
         email: clerkUser.email,
-        firstName: clerkUser.firstName,
-        lastName: clerkUser.lastName,
+        firstName: syncedFirstName,
+        lastName: syncedLastName,
         verified: clerkUser.verified,
         environment: resolvePersistedUserEnvironment(
           currentEnvironment,
@@ -72,8 +74,8 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       where: { id: existingByEmail.id },
       data: {
         clerkUserId: clerkUser.clerkUserId,
-        firstName: clerkUser.firstName,
-        lastName: clerkUser.lastName,
+        firstName: clerkUser.firstName ?? existingByEmail.firstName,
+        lastName: clerkUser.lastName ?? existingByEmail.lastName,
         verified: clerkUser.verified,
         environment: resolvePersistedUserEnvironment(
           currentEnvironment,
