@@ -1986,6 +1986,10 @@ const normalizeAubSavingsTransactionCode = (value: string) => {
     return "PDCK3";
   }
 
+  if (compact === "CM1") {
+    return "CM1";
+  }
+
   if (compact === "DM1") {
     return "DM1";
   }
@@ -2073,15 +2077,20 @@ const guessAubSavingsCategoryName = (description: string, type: TransactionType)
   if (/^beginning balance$/i.test(description)) return "Opening Balance";
   if (/atmwd|atmwithdrawal/.test(compact)) return "Cash & ATM";
   if (/afcinq|atm fee inquiry/.test(lower)) return "Financial";
-  if (/instapay credit|instapay debit/.test(lower)) return "Transfers";
-  if (/credit movement|cash deposit|check deposit|interest earned|\bint\b/.test(lower)) return "Income";
-  if (/debit movement|check issued|cash withdrawal|encashment|internal clearing|internal clearing on-us|on-us transaction/.test(lower)) return "Financial";
+  if (
+    /instapay credit|instapay debit|credit movement|cash deposit|check deposit|check issued|cash withdrawal|encashment|internal clearing|internal clearing on-us|on-us transaction|debit movement|\bcd\b|\bck1\b|\bpdck3\b|\bcm1\b|\bdm1\b|\bilnsdm1\b|\bicc\b|\bonus\b|\bdrt\b/.test(
+      lower
+    )
+  ) {
+    return "Transfers";
+  }
+  if (/interest earned|\bint\b/.test(lower)) return "Income";
   if (/tax|service fee - below minimum|finance charge/.test(lower)) return "Financial";
   return guessCategoryName(description, type);
 };
 
 const isAubSavingsCreditCode = (transactionCode: string) =>
-  /^(NFTC|WFTC|CD|CREDIT\s+MOVEMENT|INTEREST)$/i.test(normalizeAubSavingsTransactionCode(transactionCode));
+  /^(NFTC|WFTC|CD|CM1|CREDIT\s+MOVEMENT|INTEREST)$/i.test(normalizeAubSavingsTransactionCode(transactionCode));
 const isAubSavingsDebitCode = (transactionCode: string) =>
   /^(ATMWD|AFCINQ|ICC|ILNSDM1|DM1|ENC|CK1|DEBIT\s+MOVEMENT|CHECK\s+ISSUED|TAX|SERVICE\s+FEE)/i.test(
     normalizeAubSavingsTransactionCode(transactionCode)
@@ -2246,9 +2255,13 @@ const parseAubSavingsTransactionLine = (
 
     const amountDelta = credit - debit;
     let type: TransactionType = amountDelta >= 0 ? "income" : "expense";
-    if (/atmwd|a f c i n q|afcinq|check issued|instapay debit|debit movement|encashment|internal clearing|internal clearing on-us|on-us transaction/.test(codeLower)) {
+    if (
+      /atmwd|a f c i n q|afcinq|check issued|instapay debit|instapay credit|debit movement|credit movement|encashment|internal clearing|internal clearing on-us|on-us transaction|cash deposit|check deposit|nftc|wftc|cd|ck1|pdck3|cm1|dm1|ilnsdm1|icc|onus|drt/.test(
+        codeLower
+      )
+    ) {
       type = "transfer";
-    } else if (/cash deposit|instapay credit|credit movement|interest|^int$/.test(codeLower)) {
+    } else if (/interest|^int$/.test(codeLower)) {
       type = "income";
     } else if (/tax|service fee - below minimum|finance charge/.test(codeLower)) {
       type = "expense";
@@ -2297,9 +2310,13 @@ const parseAubSavingsTransactionLine = (
     const amountDelta = credit - debit;
     let type: TransactionType = amountDelta >= 0 ? "income" : "expense";
     const codeLower = transactionCode.toLowerCase();
-    if (/atmwd|a f c i n q|afcinq|check issued|instapay debit|debit movement|encashment|internal clearing|internal clearing on-us|on-us transaction/.test(codeLower)) {
+    if (
+      /atmwd|a f c i n q|afcinq|check issued|instapay debit|instapay credit|debit movement|credit movement|encashment|internal clearing|internal clearing on-us|on-us transaction|cash deposit|check deposit|nftc|wftc|cd|ck1|pdck3|cm1|dm1|ilnsdm1|icc|onus|drt/.test(
+        codeLower
+      )
+    ) {
       type = "transfer";
-    } else if (/cash deposit|instapay credit|credit movement|interest|^int$/.test(codeLower)) {
+    } else if (/interest|^int$/.test(codeLower)) {
       type = "income";
     } else if (/tax|service fee - below minimum|finance charge/.test(codeLower)) {
       type = "expense";
@@ -12648,7 +12665,7 @@ const reconstructAubCorporateLedgerSubset = (
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
   const codePattern =
-    /^(?<date>\d{4}-\d{2}-\d{2})\s+(?<reference>[A-Z0-9]+)\s+(?<code>ICCONUS|ILNSDM1|PDCK3|CK1|DM1|DRT|ENC|ICC|CC|ONUS|CD|INT|TAX)\b/i;
+    /^(?<date>\d{4}-\d{2}-\d{2})\s+(?<reference>[A-Z0-9]+)\s+(?<code>ICCONUS|ILNSDM1|PDCK3|CM1|CK1|DM1|DRT|ENC|ICC|CC|ONUS|CD|INT|TAX)\b/i;
   const shortCodePattern =
     /^(?<date>\d{4}-\d{2}-\d{2})\s+(?<code>INT|TAX)\b/i;
   const accountName = metadata.accountName ?? metadata.institution ?? "Account";
@@ -12656,6 +12673,7 @@ const reconstructAubCorporateLedgerSubset = (
   const endDate = metadata.endDate ? new Date(metadata.endDate) : null;
   const startDate = metadata.startDate ? new Date(metadata.startDate) : null;
   const finalDateText = endDate ? endDate.toISOString().slice(0, 10) : null;
+  const transferCodes = new Set(["CD", "CK1", "PDCK3", "CM1", "DRT", "DM1", "ILNSDM1", "ICC", "CC", "ONUS", "ENC"]);
 
   const entries = lines
     .map((line, index) => {
@@ -12682,25 +12700,23 @@ const reconstructAubCorporateLedgerSubset = (
       }
       const amount = credit > 0 ? credit : debit;
       const categoryName =
-        code === "ENC"
-          ? "Cash & ATM"
-          : code === "INT"
-            ? "Income"
-            : code === "TAX"
-              ? "Financial"
-              : ["CD", "CK1", "PDCK3"].includes(code)
-                ? "Transfers"
-                : "Business";
+        code === "INT"
+          ? "Income"
+          : code === "TAX"
+            ? "Financial"
+            : transferCodes.has(code)
+              ? "Transfers"
+              : "Business";
       const type: TransactionType =
         code === "INT"
           ? "income"
           : code === "TAX"
             ? "expense"
-            : ["CD", "CK1", "PDCK3"].includes(code)
+            : transferCodes.has(code)
               ? "transfer"
-                : credit > 0
-                  ? "income"
-                  : "expense";
+              : credit > 0
+                ? "income"
+                : "expense";
       const description = `${reference} ${code}`;
       return {
         index,

@@ -1770,6 +1770,30 @@ const main = async () => {
   if (aubDisplayedCategory !== "Cash & ATM") {
     throw new Error(`expected AUB ATM Withdrawal to display as Cash & ATM, got ${aubDisplayedCategory ?? "missing"}`);
   }
+  const aubCashDepositCategory = getEffectiveTransactionCategoryName({
+    categoryName: "Income",
+    rawPayload: { categoryName: "Income", merchantRaw: "Cash Deposit" },
+    merchantRaw: "Cash Deposit",
+    merchantClean: null,
+    institution: "AUB",
+    source: "upload",
+    type: "income",
+  });
+  if (aubCashDepositCategory !== "Transfers") {
+    throw new Error(`expected AUB Cash Deposit to display as Transfers, got ${aubCashDepositCategory ?? "missing"}`);
+  }
+  const aubDm1Category = getEffectiveTransactionCategoryName({
+    categoryName: "Business",
+    rawPayload: { categoryName: "Business", merchantRaw: "DM1" },
+    merchantRaw: "DM1",
+    merchantClean: null,
+    institution: "AUB",
+    source: "upload",
+    type: "expense",
+  });
+  if (aubDm1Category !== "Transfers") {
+    throw new Error(`expected AUB DM1 to display as Transfers, got ${aubDm1Category ?? "missing"}`);
+  }
   const gcashDisplayedCategory = getEffectiveTransactionCategoryName({
     categoryName: "Income",
     rawPayload: { categoryName: "Income", merchantRaw: "GCash Cash In" },
@@ -1782,7 +1806,7 @@ const main = async () => {
   if (gcashDisplayedCategory !== "Transfers") {
     throw new Error(`expected GCash Cash In to display as Transfers, got ${gcashDisplayedCategory ?? "missing"}`);
   }
-  console.log("[PASS] category overrides | AUB ATM withdrawal and GCash Cash In classify correctly");
+  console.log("[PASS] category overrides | AUB movement codes and GCash Cash In classify correctly");
 
   const chinaBankPath = join(root, "Samples/China Bank/860976948-CHINA-BANK-STATEMENT.pdf");
   try {

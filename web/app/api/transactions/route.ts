@@ -22,6 +22,25 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const normalizeCategoryName = (value?: string | null) => value?.trim().toLowerCase() ?? "";
+
+const getSummaryTransactionType = (transaction: {
+  type: "income" | "expense" | "transfer";
+  isTransfer: boolean;
+  categoryName?: string | null;
+}) => {
+  const normalizedCategoryName = normalizeCategoryName(transaction.categoryName);
+  if (normalizedCategoryName === "income") {
+    return "income" as const;
+  }
+
+  if (normalizedCategoryName === "transfers" || transaction.isTransfer) {
+    return "transfer" as const;
+  }
+
+  return transaction.type;
+};
+
 const resolveTransactionsRouteUserId = async () => {
   if (await isLocalDevHost()) {
     return "local-admin";
@@ -576,7 +595,7 @@ export async function GET(request: Request) {
 
     if (summaryMode === "light" && !hasEffectiveCategoryFilters) {
       const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
-      const [pageRows, duplicateRows, typeTotals] = await Promise.all([
+      const [pageRows, duplicateRows] = await Promise.all([
         prisma.transaction.findMany({
           where: visibleWhere,
           select: {
@@ -641,13 +660,6 @@ export async function GET(request: Request) {
           orderBy,
           take: 250,
         }),
-        prisma.transaction.groupBy({
-          by: ["type"],
-          where: visibleWhere,
-          _sum: {
-            amount: true,
-          },
-        }),
       ]);
 
       const duplicateCounts = new Map<string, number>();
@@ -696,15 +708,20 @@ export async function GET(request: Request) {
         spending: 0,
         transfers: 0,
       };
-      for (const row of typeTotals) {
-        const amount = Math.abs(Number(row._sum.amount ?? 0));
+      for (const transaction of transactions) {
+        if (transaction.isExcluded) {
+          continue;
+        }
+
+        const amount = Math.abs(Number(transaction.amount));
         if (!Number.isFinite(amount)) {
           continue;
         }
 
-        if (row.type === "income") {
+        const effectiveType = getSummaryTransactionType(transaction);
+        if (effectiveType === "income") {
           lightSummary.income += amount;
-        } else if (row.type === "transfer") {
+        } else if (effectiveType === "transfer") {
           lightSummary.transfers += amount;
         } else {
           lightSummary.spending += amount;
@@ -857,9 +874,15 @@ export async function GET(request: Request) {
       const accountName = mappedTransaction.accountName ?? transaction?.account?.name ?? "";
 
       if (!mappedTransaction.isExcluded) {
-        if (mappedTransaction.type === "income") {
+        const effectiveType = getSummaryTransactionType({
+          type: mappedTransaction.type,
+          isTransfer: mappedTransaction.isTransfer,
+          categoryName: mappedTransaction.categoryName,
+        });
+
+        if (effectiveType === "income") {
           summaryState.income += amount;
-        } else if (mappedTransaction.type === "transfer") {
+        } else if (effectiveType === "transfer") {
           summaryState.transfers += amount;
         } else {
           summaryState.spending += amount;

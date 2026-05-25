@@ -23,6 +23,7 @@ This document captures the AUB parsing rules learned from the synthetic training
 - Keep `AFCINQ` and `Finance Charge` as `Financial`.
 - Keep `INT` and `Interest Earned` as `Income`.
 - Keep `TAX` and `Service Fee - Below Minimum` as `Financial`.
+- Treat `Cash Deposit`, `Credit Movement`, `Check Deposit`, `Debit Movement`, `Internal Clearing`, `Internal Clearing On-Us`, `On-Us Transaction`, `Encashment`, `Check Issued`, `DM1`, `ILNSDM1`, `ICC`, `ONUS`, and `PDCK3` as transfer-style ledger rows in AUB treasury-style statements.
 - Keep check and cash movement codes as transfer-like ledger rows.
 
 ## Credit Card Rules

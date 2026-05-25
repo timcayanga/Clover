@@ -67,20 +67,28 @@ const getRawPayloadMerchantText = (rawPayload: Prisma.JsonValue | null | undefin
 const getAubCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
 
-  if (
-    /internal clearing|encashment|check issued|atm withdrawal|atm fee inquiry|finance charge|tax withheld|service fee|debit movement|\bicc\b|\bilnsdm1?\b|\bdm1\b|\benc\b|\bck1\b/.test(
-      lower
-    )
-  ) {
+  if (/atm withdrawal/.test(lower)) {
+    return "Cash & ATM";
+  }
+
+  if (/atm fee inquiry/.test(lower)) {
     return "Financial";
   }
 
-  if (/cash deposit|check deposit|interest earned|credit movement|\bnftc\b|\bwftc\b|\bcd\b|\bpdck3\b|\bint\b/.test(lower)) {
+  if (
+    /cash deposit|check deposit|credit movement|debit movement|internal clearing|internal clearing on-us|on-us transaction|encashment|check issued|instapay credit|instapay debit|fund transfer|\bicc\b|\bilnsdm1?\b|\bdm1\b|\benc\b|\bck1\b|\bpdck3\b|\bdrt\b|\bcd\b|\bonus\b|\bnftc\b|\bwftc\b/.test(
+      lower
+    )
+  ) {
+    return "Transfers";
+  }
+
+  if (/interest earned|\bint\b/.test(lower)) {
     return "Income";
   }
 
-  if (/instapay credit|instapay debit|fund transfer/.test(lower)) {
-    return "Transfers";
+  if (/finance charge|tax withheld|service fee/.test(lower)) {
+    return "Financial";
   }
 
   return null;
