@@ -19,6 +19,7 @@ This document captures the AUB parsing rules learned from the synthetic training
 - Row shape: `Date / Check No. / Transaction Code / Debit / Credit / Ending Balance`.
 - Keep `Instapay Credit` and `Instapay Debit` as transfer-style rows.
 - Keep `ATMWD` as `ATM Withdrawal`.
+- Keep `ATM Withdrawal` rows as `Cash & ATM`, not `Financial`.
 - Keep `AFCINQ` and `Finance Charge` as `Financial`.
 - Keep `INT` and `Interest Earned` as `Income`.
 - Keep `TAX` and `Service Fee - Below Minimum` as `Financial`.

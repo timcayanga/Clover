@@ -11,7 +11,14 @@ const isMeaningfulCategoryName = (value?: string | null) => {
 
 const isBroadCategoryName = (value?: string | null) => {
   const normalized = (value ?? "").trim().toLowerCase();
-  return normalized === "income" || normalized === "other" || normalized === "transfer" || normalized === "transfers";
+  return (
+    normalized === "income" ||
+    normalized === "other" ||
+    normalized === "transfer" ||
+    normalized === "transfers" ||
+    normalized === "financial" ||
+    normalized === "cash & atm"
+  );
 };
 
 const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefined) => {
@@ -144,8 +151,8 @@ const getGenericCategoryOverride = (merchantText: string) => {
     return "Income";
   }
 
-  if (/gcash\s+cash\s+in|gcashcashin|cash\s*in\b|cashin\b/.test(lower)) {
-    return "Income";
+  if (/gcash\s+cash\s+in|gcashcashin/.test(lower)) {
+    return "Transfers";
   }
 
   if (/mercury\s*drug|pharmacy|drug\s*store|health\s*center|hospital|clinic/.test(lower)) {
@@ -158,6 +165,24 @@ const getGenericCategoryOverride = (merchantText: string) => {
 
   if (/buy load|load transaction|bills payment/.test(lower)) {
     return "Bills & Utilities";
+  }
+
+  return null;
+};
+
+const getInstitutionSpecificCategoryOverride = (institution: string | null | undefined, merchantText: string) => {
+  const normalizedInstitution = (institution ?? "").trim();
+
+  if (/\b(?:aub|asia united bank)\b/i.test(normalizedInstitution)) {
+    return getAubCategoryOverride(merchantText);
+  }
+
+  if (/\bgcash\b/i.test(normalizedInstitution)) {
+    return getGcashCategoryOverride(merchantText);
+  }
+
+  if (/\bbdo\b/i.test(normalizedInstitution)) {
+    return getBdoCategoryOverride(merchantText);
   }
 
   return null;
@@ -226,22 +251,20 @@ export const getEffectiveTransactionCategoryName = (params: {
   });
   const descriptionText =
     typeof params.description === "string" && params.description.trim() ? params.description.trim() : null;
+  const institutionOverride = getInstitutionSpecificCategoryOverride(
+    params.institution,
+    [effectiveMerchantName, params.merchantRaw, descriptionText].filter(Boolean).join(" ")
+  );
   const genericOverride = getGenericCategoryOverride(
     [effectiveMerchantName, params.merchantRaw, descriptionText].filter(Boolean).join(" ")
   );
   const heuristic = guessCategoryName(effectiveMerchantName || descriptionText || params.merchantRaw, params.type);
 
-  if (/\bbdo\b/i.test((params.institution ?? "").trim())) {
-    const bdoOverride = getBdoCategoryOverride(effectiveMerchantName || descriptionText || params.merchantRaw);
-    if (bdoOverride) {
-      if (!isImportedRow || isBroadCategoryName(directCategory) || isBroadCategoryName(rawPayloadCategory)) {
-        return bdoOverride;
-      }
-    }
-  }
-
   if (isMeaningfulCategoryName(directCategory)) {
-    if (isImportedRow && isBroadCategoryName(directCategory)) {
+    if ((isImportedRow || hasImportedRawPayload) && isBroadCategoryName(directCategory)) {
+      if (isMeaningfulCategoryName(institutionOverride) && institutionOverride !== directCategory) {
+        return institutionOverride;
+      }
       if (isMeaningfulCategoryName(genericOverride) && genericOverride !== directCategory) {
         return genericOverride;
       }
@@ -252,6 +275,9 @@ export const getEffectiveTransactionCategoryName = (params: {
 
   if (isMeaningfulCategoryName(rawPayloadCategory)) {
     if ((isImportedRow || hasImportedRawPayload) && isBroadCategoryName(rawPayloadCategory)) {
+      if (isMeaningfulCategoryName(institutionOverride) && institutionOverride !== rawPayloadCategory) {
+        return institutionOverride;
+      }
       if (isMeaningfulCategoryName(genericOverride) && genericOverride !== rawPayloadCategory) {
         return genericOverride;
       }
@@ -260,18 +286,8 @@ export const getEffectiveTransactionCategoryName = (params: {
     return rawPayloadCategory;
   }
 
-  if (/\b(?:aub|asia united bank)\b/i.test((params.institution ?? "").trim())) {
-    const aubOverride = getAubCategoryOverride(effectiveMerchantName);
-    if (aubOverride) {
-      return aubOverride;
-    }
-  }
-
-  if (/\bgcash\b/i.test((params.institution ?? "").trim())) {
-    const gcashOverride = getGcashCategoryOverride(effectiveMerchantName || params.merchantRaw);
-    if (gcashOverride) {
-      return gcashOverride;
-    }
+  if (isMeaningfulCategoryName(institutionOverride)) {
+    return institutionOverride;
   }
 
   if (genericOverride) {

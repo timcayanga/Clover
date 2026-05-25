@@ -497,7 +497,7 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
   }
 
   if (/to:\s*gcash\s+cash\s+in|gcash\s+cash\s+in/.test(lower) || /togcashcashin|gcashcashin/.test(compact)) {
-    return "Income";
+    return "Transfers";
   }
 
   if (
@@ -910,6 +910,7 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/expressnet|megalink|withdrawal|atm\b|cash withdrawal|cash out|atmwdl|atm withdrawal|et\s+wdl/.test(lower)) return "Cash & ATM";
   if (/service\s*charge|servicecharge|service\s*fee|bank\s*charge|bankcharge|svchg|finance\s+charges?|late\s+payment\s+fee|annual\s+fee/.test(lower)) return "Financial";
   if (/tax withheld|withheld tax|taxwithheld|withheldtax/.test(lower)) return "Financial";
+  if (/gcash\s+cash\s+in|gcashcashin/.test(lower)) return "Transfers";
   if (/interest\s+earned|interestearned|salary|payroll|income|deposit|cash\s*in\b|cashin\b|cash\/?check\s+deposit|received|credit memo/.test(lower)) return "Income";
   if (/interbankservicecharge|atmwithdrawalacquirerfee|financecharge|financecharges|latepaymentfee|annualfee/.test(compact)) return "Financial";
   if (/incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|systemdebit|systemcredit|miscellaneousdebit|investmentsweep/.test(compact)) return "Transfers";

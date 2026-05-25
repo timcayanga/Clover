@@ -90,6 +90,7 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) return "Transfers";
   if (/expressnet|megalinkw?|\/drw\b|cash\s*(?:withdrawal|out)|atm\b|automated\s+teller|cash\s+advance/.test(lower)) return "Cash & ATM";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
+  if (/gcash\s+cash\s+in|gcashcashin/.test(lower)) return "Transfers";
   if (/salary|payroll|income|deposit|cash\s*(?:in|deposit)|credit memo/.test(lower)) return "Income";
   if (/epsaten/.test(lower)) return type === "expense" ? "Cash & ATM" : "Income";
   if (/el\/?espay/.test(lower)) return type === "expense" || type === "transfer" ? "Transfers" : "Income";
@@ -1998,7 +1999,7 @@ const guessAubSavingsCategoryName = (description: string, type: TransactionType)
   const lower = description.toLowerCase();
   const compact = compactWhitespace(description).toLowerCase();
   if (/^beginning balance$/i.test(description)) return "Opening Balance";
-  if (/atmwd|atmwithdrawal/.test(compact)) return "Financial";
+  if (/atmwd|atmwithdrawal/.test(compact)) return "Cash & ATM";
   if (/afcinq|atm fee inquiry/.test(lower)) return "Financial";
   if (/instapay credit|instapay debit/.test(lower)) return "Transfers";
   if (/credit movement|cash deposit|check deposit|interest earned|\bint\b/.test(lower)) return "Income";

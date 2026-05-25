@@ -23,6 +23,7 @@ This document captures the GCash parsing rules learned from the training bundles
 - Treat outgoing wallet movement to another person or external account, such as `Send Money` or `Sent via GCash`, as an expense unless Clover matches the recipient account to an existing Clover account.
 - Treat incoming wallet movement from another person or external account, such as `Received GCash from`, as income unless Clover matches the source account to an existing Clover account.
 - Keep `Cash In from BPI`, `Cash In from UnionBank`, `Transfer to Maya`, `Transfer to PDAX`, and similar wallet-to-wallet movement as internal transfers only when the matching BPI, UnionBank, Maya, PDAX, or other account is currently present in Clover.
+- Keep `GCash Cash In` as a `Transfers` category even when the transaction type remains `income`.
 - Keep merchant payments like `Meralco`, `Globe Telecom`, `Smart Postpaid`, `Foodpanda`, `GrabPay Top Up`, `MRT Transport`, `Alipay`, and `BancNet P2M` as category candidates based on the merchant.
 - Keep `Transfer Fee` as `Financial`.
 - Keep `Interest Boost Reward` as `Income`.

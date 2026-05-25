@@ -540,6 +540,7 @@ const main = async () => {
   const dataEngine = await import("../lib/data-engine");
   const dataQaBanksModule = await import("../lib/data-qa-banks");
   const accountDisplayModule = await import("../lib/account-display");
+  const transactionDisplayModule = await import("../lib/transaction-display");
   const parser = await import("../lib/import-parser");
   const receiptAccountResolutionModule = await import("../lib/receipt-account-resolution");
   const splitBillModule = await import("../lib/split-bill");
@@ -1645,6 +1646,17 @@ const main = async () => {
   }
 
   const guessCategoryFallback = dataEngine.guessCategoryFallback as (description: string, type: "income" | "expense" | "transfer") => string;
+  const guessCategoryName = parser.guessCategoryName as (text: string, type: "income" | "expense" | "transfer") => string;
+  const getEffectiveTransactionCategoryName = transactionDisplayModule.getEffectiveTransactionCategoryName as (params: {
+    categoryName?: string | null;
+    rawPayload?: Record<string, unknown> | null;
+    merchantRaw: string;
+    merchantClean?: string | null;
+    description?: string | null;
+    institution?: string | null;
+    source?: string | null;
+    type: "income" | "expense" | "transfer";
+  }) => string | null;
   const enrichmentFallbackExpectations: Array<[string, "income" | "expense" | "transfer", string]> = [
     ["Incoming Interbank Transfer", "income", "Transfers"],
     ["Outgoing Interbank Transfer", "expense", "Transfers"],
@@ -1659,7 +1671,7 @@ const main = async () => {
     ["Shopee", "expense", "Shopping"],
     ["Puregold Price Club", "expense", "Shopping"],
     ["Cash Payment", "expense", "Shopping"],
-    ["GCash Cash In", "income", "Income"],
+    ["GCash Cash In", "income", "Transfers"],
     ["Cash Payment - Thank You - MB ATM", "income", "Transfers"],
     ["Payment-Thank You", "income", "Transfers"],
     ["Card Payment", "income", "Transfers"],
@@ -1671,6 +1683,38 @@ const main = async () => {
     }
   }
   console.log("[PASS] enrichment fallback | normalized bank labels classify without falling back to Other");
+
+  if (guessCategoryName("GCash Cash In", "income") !== "Transfers") {
+    throw new Error(`expected guessCategoryName to classify GCash Cash In as Transfers`);
+  }
+  if (guessCategoryName("ATM Withdrawal", "expense") !== "Cash & ATM") {
+    throw new Error(`expected guessCategoryName to classify ATM Withdrawal as Cash & ATM`);
+  }
+  const aubDisplayedCategory = getEffectiveTransactionCategoryName({
+    categoryName: "Financial",
+    rawPayload: { categoryName: "Financial", merchantRaw: "ATM Withdrawal" },
+    merchantRaw: "ATM Withdrawal",
+    merchantClean: null,
+    institution: "AUB",
+    source: "upload",
+    type: "expense",
+  });
+  if (aubDisplayedCategory !== "Cash & ATM") {
+    throw new Error(`expected AUB ATM Withdrawal to display as Cash & ATM, got ${aubDisplayedCategory ?? "missing"}`);
+  }
+  const gcashDisplayedCategory = getEffectiveTransactionCategoryName({
+    categoryName: "Income",
+    rawPayload: { categoryName: "Income", merchantRaw: "GCash Cash In" },
+    merchantRaw: "GCash Cash In",
+    merchantClean: null,
+    institution: "BPI",
+    source: "upload",
+    type: "income",
+  });
+  if (gcashDisplayedCategory !== "Transfers") {
+    throw new Error(`expected GCash Cash In to display as Transfers, got ${gcashDisplayedCategory ?? "missing"}`);
+  }
+  console.log("[PASS] category overrides | AUB ATM withdrawal and GCash Cash In classify correctly");
 
   const chinaBankPath = join(root, "Samples/China Bank/860976948-CHINA-BANK-STATEMENT.pdf");
   try {
