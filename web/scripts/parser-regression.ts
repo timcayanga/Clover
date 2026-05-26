@@ -1836,13 +1836,32 @@ const main = async () => {
       accountName: chinaBankMetadata.accountName,
       accountNumber: chinaBankMetadata.accountNumber,
     });
-    if (chinaBankRows.length !== 0) {
-      throw new Error(`expected fail-closed fallback but got ${chinaBankRows.length} local rows`);
+    if (chinaBankMetadata.accountNumber !== "1407-00-00679-0") {
+      throw new Error(`expected account number 1407-00-00679-0, got ${chinaBankMetadata.accountNumber ?? "missing"}`);
     }
-    console.log(`[PASS] China Bank fallback | 0 local rows | routed to OCR fallback`);
+    if (chinaBankMetadata.openingBalance !== 1983467.16 || chinaBankMetadata.endingBalance !== 2914645.28) {
+      throw new Error(
+        `expected combined balances 1983467.16 -> 2914645.28, got ${chinaBankMetadata.openingBalance ?? "missing"} -> ${chinaBankMetadata.endingBalance ?? "missing"}`
+      );
+    }
+    if (chinaBankRows.length !== 104) {
+      throw new Error(`expected 104 deterministic local rows across July and August, got ${chinaBankRows.length}`);
+    }
+    const julyRows = chinaBankRows.filter((row) => row.date?.startsWith("2024-07-"));
+    const augustRows = chinaBankRows.filter((row) => row.date?.startsWith("2024-08-"));
+    if (julyRows.length !== 49 || augustRows.length !== 55) {
+      throw new Error(`expected 49 July rows and 55 August rows, got ${julyRows.length} and ${augustRows.length}`);
+    }
+    const firstCreditMemo = chinaBankRows.find((row) => row.merchantRaw === "Credit Memo");
+    if (!firstCreditMemo || firstCreditMemo.amount !== "68820.00" || firstCreditMemo.type !== "income") {
+      throw new Error(
+        `expected first Credit Memo to parse as 68820.00 income, got ${firstCreditMemo?.amount ?? "missing"} ${firstCreditMemo?.type ?? "missing"}`
+      );
+    }
+    console.log(`[PASS] China Bank deterministic parser | ${chinaBankRows.length} rows | ${julyRows.length} July / ${augustRows.length} August`);
   } catch (error) {
     failures.push(
-      `[China Bank fallback] ${error instanceof Error ? error.message : String(error)}`
+      `[China Bank deterministic parser] ${error instanceof Error ? error.message : String(error)}`
     );
   }
 

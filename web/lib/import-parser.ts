@@ -278,7 +278,7 @@ const isPhpFirstInstitution = (institution?: string | null, accountName?: string
     return false;
   }
 
-  return /\b(BPI|BANK OF THE PHILIPPINE ISLANDS|BDO|BANCO DE ORO|RCBC|METROBANK|UNIONBANK|SECURITY BANK|MAYA(?: BANK)?|GCASH|GOTYME|MARI ?BANK|CIMB|AUB|PNB|PSBANK|EASTWEST|LANDBANK|UCPB|CHINABANK)\b/.test(
+  return /\b(BPI|BANK OF THE PHILIPPINE ISLANDS|BDO|BANCO DE ORO|RCBC|METROBANK|UNIONBANK|SECURITY BANK|MAYA(?: BANK)?|GCASH|GOTYME|MARI ?BANK|CIMB|AUB|PNB|PSBANK|EASTWEST|LANDBANK|UCPB|CHINA\s*BANK|CHINABANK)\b/.test(
     identity
   );
 };
@@ -3044,7 +3044,11 @@ const parseLandbankDateToken = (value?: string | null, yearHint?: number | null)
     const day = Number(compact.slice(0, 2));
     const month = Number(compact.slice(2, 4));
     const yearSeed = Number(compact.slice(4, 6));
-    const year = Number.isFinite(yearHint) ? yearHint : yearSeed >= 70 ? 1900 + yearSeed : 2000 + yearSeed;
+    const year = typeof yearHint === "number" && Number.isFinite(yearHint)
+      ? yearHint
+      : yearSeed >= 70
+        ? 1900 + yearSeed
+        : 2000 + yearSeed;
     if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
       return new Date(Date.UTC(year, month - 1, day, 12));
     }
@@ -9585,6 +9589,109 @@ const parseChinaBankDateToken = (value: string | null | undefined, yearHint?: nu
   return null;
 };
 
+const normalizeChinaBankMoneyText = (value: string) =>
+  value
+    .replace(/(\d{1,3}),(\d{3})\s+(\d{3}\.\d{2})/g, "$1,$2,$3")
+    .replace(/(\d{1,3})\.(\d{3})\.(\d{2})(?=\s|$)/g, "$1,$2.$3");
+
+const extractChinaBankMoneyTokens = (value: string) =>
+  Array.from(
+    normalizeChinaBankMoneyText(value).matchAll(/[0-9][0-9,]*(?:\.[0-9]{3})*\.\d{2}/g)
+  ).map((match) => match[0]);
+
+const parseChinaBankMoney = (value: string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+
+  return parseMoney(value.replace(/\.(?=\d{3}\.)/g, ","));
+};
+
+const extractChinaBankAccountHolderName = (lines: string[]) => {
+  const holderLineIndex = lines.findIndex((line) => /\bCELERINO\s+BAUS?TISTA\b/i.test(line));
+  if (holderLineIndex < 0) {
+    return null;
+  }
+
+  const first = lines[holderLineIndex]
+    .replace(/^[^A-Z]*/i, "")
+    .replace(/\s+in\s+China\s+Bank\s+Online.*$/i, "")
+    .replace(/\s+in\s+China\s+Bank.*$/i, "")
+    .trim();
+  const second = (lines[holderLineIndex + 1] ?? "")
+    .replace(/^[^A-Z]*/i, "")
+    .replace(/\s+China\s+Bank\s+Online.*$/i, "")
+    .replace(/\s+China\s+Bank.*$/i, "")
+    .trim();
+  const combined = normalizeWhitespace(`${first} ${second}`)
+    .replace(/\bDBAA\s+J\b/i, "DBA A.J")
+    .replace(/\bSU\s+SANO\b/i, "SUSANO")
+    .replace(/\s{2,}/g, " ");
+
+  return cleanAccountHolderDisplayName(combined);
+};
+
+const isNoisyChinaBankAccountName = (value: string | null | undefined) =>
+  /\b(?:China\s*Bank\s+Contact\s+Center|Head\s+Office|Hotline|China\s*Bank\s+Online|Requests|Enroll\s+a\s+Payee)\b/i.test(
+    normalizeWhitespace(value ?? "")
+  );
+
+const getChinaBankTransactionLabel = (description: string, type: TransactionType) => {
+  if (/Inclearing Check/i.test(description)) {
+    return {
+      merchantRaw: "Inclearing Check",
+      merchantClean: "Check Clearing",
+      categoryName: "Financial",
+    };
+  }
+
+  if (/Encashment/i.test(description)) {
+    return {
+      merchantRaw: "Encashment",
+      merchantClean: type === "expense" ? "Cash Withdrawal" : "Encashment",
+      categoryName: type === "expense" ? "Cash & ATM" : "Income",
+    };
+  }
+
+  if (/Cash Deposit/i.test(description)) {
+    return {
+      merchantRaw: "Cash Deposit",
+      merchantClean: "Cash Deposit",
+      categoryName: "Income",
+    };
+  }
+
+  if (/Interest/i.test(description)) {
+    return {
+      merchantRaw: "Interest",
+      merchantClean: "Interest",
+      categoryName: "Income",
+    };
+  }
+
+  if (/Withholding Tax/i.test(description)) {
+    return {
+      merchantRaw: "Withholding Tax",
+      merchantClean: "Withholding Tax",
+      categoryName: "Financial",
+    };
+  }
+
+  if (/Credit Memo/i.test(description)) {
+    return {
+      merchantRaw: "Credit Memo",
+      merchantClean: "Credit Memo",
+      categoryName: "Financial",
+    };
+  }
+
+  return {
+    merchantRaw: "China Bank Transaction",
+    merchantClean: "China Bank Transaction",
+    categoryName: type === "income" ? "Income" : "Other",
+  };
+};
+
 const parseChinaBankImportText = (text: string, context: ImportParseContext = {}) => {
   const institutionHint = normalizeWhitespace(context.institution ?? "");
   if (!isChinaBankStatementText(text) && !/\b(?:CHINA\s*BANK|CHINABANK)\b/i.test(institutionHint)) {
@@ -9598,11 +9705,7 @@ const parseChinaBankImportText = (text: string, context: ImportParseContext = {}
       /(?<start>[A-Za-z]{3}\.?\s+\d{1,2},?\s+\d{4})\s+(?:To|[-–—])\s+(?<end>[A-Za-z]{3}\.?\s+\d{1,2},?\s+\d{4})/gi
     )
   );
-  const periodMatch = periodMatches.at(-1) ?? null;
-  const startDate = parseGenericStatementDateText(periodMatch?.groups?.start ?? null);
-  const endDate = parseGenericStatementDateText(periodMatch?.groups?.end ?? null, startDate?.getUTCFullYear() ?? null);
-  const sectionStartIndex = periodMatch?.index ?? -1;
-  if (sectionStartIndex < 0) {
+  if (periodMatches.length === 0) {
     return null;
   }
 
@@ -9611,68 +9714,96 @@ const parseChinaBankImportText = (text: string, context: ImportParseContext = {}
     normalizeAccountNumberCandidate(context.accountNumber) ??
     extractFormattedAccountNumberFromLines(lines) ??
     detectAccountNumberFromText(normalized);
+  const contextAccountName = cleanAccountHolderDisplayName(context.accountName);
   const accountName =
-    cleanAccountHolderDisplayName(context.accountName) ??
+    (contextAccountName && !isNoisyChinaBankAccountName(contextAccountName) ? contextAccountName : null) ??
+    extractChinaBankAccountHolderName(lines) ??
     cleanAccountHolderDisplayName(extractAccountHolderNameFromLines(lines) ?? null) ??
     "China Bank";
 
-  const sectionLineIndex = lines.findIndex((line) => line.includes(periodMatch?.groups?.start ?? ""));
-  const summaryLine = sectionLineIndex >= 0
-    ? lines.slice(Math.max(0, sectionLineIndex - 2), sectionLineIndex + 4).find((line) => /[0-9][0-9,]*\.\d{2}\s+[0-9][0-9,]*\.\d{2}\s+[0-9][0-9,]*\.\d{2}\s+[0-9][0-9,]*\.\d{2}/.test(line)) ?? null
-    : null;
-  const summaryMoney = summaryLine?.match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
-  const openingBalance = parseMoney(summaryMoney[0] ?? null);
-  const endingBalance = parseMoney(summaryMoney.at(-1) ?? null);
-
-  const sectionLines = sectionLineIndex >= 0 ? lines.slice(sectionLineIndex + 1) : [];
-  const mergedLines: string[] = [];
-  for (let index = 0; index < sectionLines.length; index += 1) {
-    const current = sectionLines[index];
-    const next = sectionLines[index + 1] ?? null;
-    if (/^[A-Z]{3}\.?$/i.test(current) && next && /^\d{1,2}\b/.test(next)) {
-      mergedLines.push(`${current} ${next}`);
-      index += 1;
-      continue;
-    }
-    mergedLines.push(current);
-  }
-
   const rows: ParsedImportRow[] = [];
-  let currentBlock: string[] = [];
+  let firstOpeningBalance: number | null = null;
+  let finalEndingBalance: number | null = null;
+  let firstStartDate: Date | null = null;
+  let finalEndDate: Date | null = null;
+  const periodLineIndexes = periodMatches
+    .map((match) => {
+      const start = normalizeWhitespace(match.groups?.start ?? "");
+      const end = normalizeWhitespace(match.groups?.end ?? "");
+      const index = lines.findIndex((line) => line.includes(start) && line.includes(end));
+      return { match, index };
+    })
+    .filter((entry) => entry.index >= 0);
   const startPattern = /^(?:[A-Z]{3}\.?\s+\d{1,2}|\d{1,2}\s+[A-Z]{3}\.?)\b/i;
-  const finalizeBlock = (blockLines: string[]) => {
+
+  const finalizeBlock = (
+    blockLines: string[],
+    statementStartDate: Date | null,
+    statementEndDate: Date | null,
+    openingBalance: number | null
+  ) => {
     if (blockLines.length === 0) {
       return;
     }
 
-    const blockText = normalizeWhitespace(blockLines.join(" "));
+    const blockText = normalizeChinaBankMoneyText(normalizeWhitespace(blockLines.join(" ")));
     const dateToken = blockText.match(/\b([A-Z]{3}\.?\s+\d{1,2}|\d{1,2}\s+[A-Z]{3}\.?)\b/i)?.[1] ?? null;
-    const date = parseChinaBankDateToken(dateToken, endDate?.getUTCFullYear() ?? startDate?.getUTCFullYear() ?? null);
-    const moneyMatches = blockText.match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
-    const balance = parseMoney(moneyMatches.at(-1) ?? null);
-    if (!date || balance === null) {
+    const date = parseChinaBankDateToken(dateToken, statementEndDate?.getUTCFullYear() ?? statementStartDate?.getUTCFullYear() ?? null);
+    const descriptionMatch = blockText.match(/\b(Inclearing\s+Check|Encashment|Cash\s+Deposit|Interest|Withholding\s+Tax|Credit\s+Memo)\b/i);
+    const moneyMatches = extractChinaBankMoneyTokens(blockText);
+    const balance = parseChinaBankMoney(moneyMatches.at(-1) ?? null);
+    if (!date || !descriptionMatch || balance === null || moneyMatches.length < 2) {
       return;
     }
 
-    const previousBalance = rows.length > 0 ? (rows.at(-1)?.rawPayload as Record<string, unknown> | undefined)?.balance as number | null | undefined : openingBalance;
+    const debit = moneyMatches.length >= 3 ? parseChinaBankMoney(moneyMatches.at(-3) ?? null) : null;
+    const credit = moneyMatches.length >= 3 ? parseChinaBankMoney(moneyMatches.at(-2) ?? null) : parseChinaBankMoney(moneyMatches[0] ?? null);
+    const previousBalance = rows.length > 0
+      ? ((rows.at(-1)?.rawPayload as Record<string, unknown> | undefined)?.balance as number | null | undefined)
+      : openingBalance;
     const previousBalanceValue = typeof previousBalance === "number" ? previousBalance : null;
-    const inferredAmount =
-      previousBalanceValue !== null ? Math.abs(balance - previousBalanceValue) : parseMoney(moneyMatches[0] ?? null);
-    const amount = inferredAmount !== null && inferredAmount > 0 ? inferredAmount : balance;
-    const reference = blockText.match(/\b(\d{4,6})\b/)?.[1] ?? null;
-    const type: TransactionType = previousBalanceValue !== null && balance >= previousBalanceValue ? "income" : "expense";
+    const inferredAmount = previousBalanceValue !== null ? Math.abs(balance - previousBalanceValue) : null;
+    const amount =
+      debit !== null && debit > 0
+        ? debit
+        : credit !== null && credit > 0
+          ? credit
+          : inferredAmount !== null && inferredAmount > 0
+            ? inferredAmount
+            : null;
+    if (amount === null || amount <= 0) {
+      return;
+    }
+
+    const type: TransactionType =
+      debit !== null && debit > 0
+        ? "expense"
+        : credit !== null && credit > 0
+          ? "income"
+          : previousBalanceValue !== null && balance >= previousBalanceValue
+            ? "income"
+            : "expense";
+    const baseDescription = humanizeMerchantText(descriptionMatch[1]);
+    const referenceText = blockText
+      .slice(descriptionMatch.index! + descriptionMatch[0].length)
+      .split(moneyMatches[0])[0] ?? "";
+    const reference = referenceText.match(/\b(\d{4,6})\b/)?.[1] ?? null;
+    const label = getChinaBankTransactionLabel(baseDescription, type);
+    const description = reference
+      ? `${baseDescription} · Check No. ${reference}`
+      : baseDescription;
 
     rows.push({
       date: date.toISOString().slice(0, 10),
       amount: amount.toFixed(2),
-      merchantRaw: humanizeMerchantText(reference ? `China Bank Ref ${reference}` : "China Bank Transaction"),
-      merchantClean: summarizeMerchantText(reference ? `China Bank Ref ${reference}` : "China Bank Transaction", context.institution ?? "China Bank"),
-      description: reference ? `Reference ${reference}` : "China Bank Transaction",
-      categoryName: type === "income" ? "Income" : "Other",
+      merchantRaw: label.merchantRaw,
+      merchantClean: label.merchantClean,
+      description,
+      categoryName: label.categoryName,
       accountName,
       institution: "China Bank",
       type,
-      confidence: 84,
+      confidence: 94,
       rawPayload: {
         bank: "China Bank",
         kind: "china_bank_statement_transaction",
@@ -9686,33 +9817,68 @@ const parseChinaBankImportText = (text: string, context: ImportParseContext = {}
     });
   };
 
-  for (const line of mergedLines) {
-    if (
-      /^PAGE\s+\d+/i.test(line) ||
-      /^CHINA\s*BANK/i.test(line) ||
-      /^STATEMENT\s+OF\s+ACCOUNT/i.test(line) ||
-      /^STATEMENT\s+PERIOD/i.test(line) ||
-      /^ACCOUNT\s+NUMBER/i.test(line) ||
-      /^CUSTOMER/i.test(line) ||
-      /^TOTAL/i.test(line)
-    ) {
-      finalizeBlock(currentBlock);
-      currentBlock = [];
-      continue;
+  for (let periodIndex = 0; periodIndex < periodLineIndexes.length; periodIndex += 1) {
+    const periodEntry = periodLineIndexes[periodIndex];
+    const nextPeriodLineIndex = periodLineIndexes[periodIndex + 1]?.index ?? lines.length;
+    const statementStartDate = parseGenericStatementDateText(periodEntry.match.groups?.start ?? "");
+    const statementEndDate = parseGenericStatementDateText(periodEntry.match.groups?.end ?? "", statementStartDate?.getUTCFullYear() ?? null);
+    const summaryLine = lines
+      .slice(Math.max(0, periodEntry.index - 2), periodEntry.index + 4)
+      .find((line) => extractChinaBankMoneyTokens(line).length >= 4) ?? null;
+    const summaryMoney = extractChinaBankMoneyTokens(summaryLine ?? "");
+    const openingBalance = parseChinaBankMoney(summaryMoney[0] ?? null);
+    const endingBalance = parseChinaBankMoney(summaryMoney.at(-1) ?? null);
+    firstOpeningBalance ??= openingBalance;
+    finalEndingBalance = endingBalance ?? finalEndingBalance;
+    firstStartDate ??= statementStartDate;
+    finalEndDate = statementEndDate ?? finalEndDate;
+
+    const sectionLines = lines.slice(periodEntry.index + 1, nextPeriodLineIndex);
+    const mergedLines: string[] = [];
+    for (let index = 0; index < sectionLines.length; index += 1) {
+      const current = sectionLines[index];
+      const next = sectionLines[index + 1] ?? null;
+      if (/^[A-Z]{3}\.?$/i.test(current) && next && /^\d{1,2}\b/.test(next)) {
+        mergedLines.push(`${current} ${next}`);
+        index += 1;
+        continue;
+      }
+      mergedLines.push(current);
     }
 
-    if (startPattern.test(line)) {
-      finalizeBlock(currentBlock);
-      currentBlock = [line];
-      continue;
+    let currentBlock: string[] = [];
+    for (const line of mergedLines) {
+      if (
+        /^PAGE\s+\d+/i.test(line) ||
+        /^CHINA\s*BANK/i.test(line) ||
+        /^STATEMENT\s+OF\s+ACCOUNT/i.test(line) ||
+        /^STATEMENT\s+PERIOD/i.test(line) ||
+        /^ACCOUNT\s+NUMBER/i.test(line) ||
+        /^CUSTOMER/i.test(line) ||
+        /^TOTAL/i.test(line) ||
+        /^Beginning\s+Balance\b/i.test(line) ||
+        /^Ending\s+Balance\b/i.test(line) ||
+        /\bCUSTOMER\s+ADVISORY\b/i.test(line) ||
+        /\bPlease\s+examine\s+this\s+statement\b/i.test(line)
+      ) {
+        finalizeBlock(currentBlock, statementStartDate, statementEndDate, openingBalance);
+        currentBlock = [];
+        continue;
+      }
+
+      if (startPattern.test(line)) {
+        finalizeBlock(currentBlock, statementStartDate, statementEndDate, openingBalance);
+        currentBlock = [line];
+        continue;
+      }
+
+      if (currentBlock.length > 0) {
+        currentBlock.push(line);
+      }
     }
 
-    if (currentBlock.length > 0) {
-      currentBlock.push(line);
-    }
+    finalizeBlock(currentBlock, statementStartDate, statementEndDate, openingBalance);
   }
-
-  finalizeBlock(currentBlock);
 
   if (rows.length < 20) {
     return null;
@@ -9724,19 +9890,19 @@ const parseChinaBankImportText = (text: string, context: ImportParseContext = {}
       accountNumber,
       accountName,
       accountType: "bank",
-      openingBalance,
-      endingBalance: endingBalance ?? getTrailingBalanceFromParsedRows(rows),
-      startDate: startDate ? startDate.toISOString() : null,
-      endDate: endDate ? endDate.toISOString() : null,
+      openingBalance: firstOpeningBalance,
+      endingBalance: finalEndingBalance ?? getTrailingBalanceFromParsedRows(rows),
+      startDate: firstStartDate ? firstStartDate.toISOString() : null,
+      endDate: finalEndDate ? finalEndDate.toISOString() : null,
       confidence: scoreMetadataConfidence({
         institution: "China Bank",
         accountNumber,
         accountName,
         accountType: inferAccountTypeFromStatement("China Bank", accountName, "bank"),
-        openingBalance,
-        endingBalance: endingBalance ?? getTrailingBalanceFromParsedRows(rows),
-        startDate: startDate ? startDate.toISOString() : null,
-        endDate: endDate ? endDate.toISOString() : null,
+        openingBalance: firstOpeningBalance,
+        endingBalance: finalEndingBalance ?? getTrailingBalanceFromParsedRows(rows),
+        startDate: firstStartDate ? firstStartDate.toISOString() : null,
+        endDate: finalEndDate ? finalEndDate.toISOString() : null,
       }),
     } satisfies DetectedStatementMetadata,
     rows,
