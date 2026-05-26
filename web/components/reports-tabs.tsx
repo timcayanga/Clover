@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { AnimatedTabs } from "@/components/animated-tabs";
 
 type ReportsSection = "overview" | "spending" | "trends" | "advanced";
@@ -19,6 +19,15 @@ const reportsSectionLabels: Record<ReportsSection, string> = {
 };
 
 const ReportsTabsContext = createContext<ReportsTabsContextValue | null>(null);
+const reportsSectionStorageKey = "clover.reports.active-section.v1";
+
+const normalizeReportsSection = (value: string | null | undefined, availableSections: ReportsSection[], fallback: ReportsSection) => {
+  if (value === "overview" || value === "spending" || value === "trends" || value === "advanced") {
+    return availableSections.includes(value) ? value : fallback;
+  }
+
+  return fallback;
+};
 
 export function ReportsTabsProvider({
   initialSection,
@@ -29,7 +38,25 @@ export function ReportsTabsProvider({
   availableSections: ReportsSection[];
   children: ReactNode;
 }) {
-  const [activeSection, setActiveSection] = useState<ReportsSection>(initialSection);
+  const [activeSection, setActiveSection] = useState<ReportsSection>(() => {
+    if (typeof window === "undefined") {
+      return initialSection;
+    }
+
+    return normalizeReportsSection(window.sessionStorage.getItem(reportsSectionStorageKey), availableSections, initialSection);
+  });
+
+  useEffect(() => {
+    setActiveSection((current) => normalizeReportsSection(current, availableSections, initialSection));
+  }, [availableSections, initialSection]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.sessionStorage.setItem(reportsSectionStorageKey, activeSection);
+  }, [activeSection]);
 
   return (
     <ReportsTabsContext.Provider value={{ activeSection, setActiveSection, availableSections }}>

@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type ReportsRange = "30d" | "90d" | "ytd";
 
@@ -16,14 +16,19 @@ const reportsRangeLabels: Record<ReportsRange, string> = {
   ytd: "Year to date",
 };
 
-const buildReportsHref = (range: ReportsRange) => `?${new URLSearchParams({ range }).toString()}`;
-
 export function ReportsRangeMenu({
   currentRange,
   currentRangeLabel,
 }: ReportsRangeMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const pathname = usePathname();
+
+  const setRange = (range: ReportsRange) => {
+    setOpen(false);
+    const nextUrl = `${pathname}?${new URLSearchParams({ range }).toString()}`;
+    window.location.assign(nextUrl);
+  };
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -81,14 +86,14 @@ export function ReportsRangeMenu({
           </div>
           <div className="reports-range-menu__choices">
             {(["30d", "90d", "ytd"] as const).map((range) => (
-              <Link
+              <button
                 key={range}
                 className={`pill pill-interactive ${currentRange === range ? "pill-is-selected" : ""}`}
-                href={buildReportsHref(range)}
-                onClick={() => setOpen(false)}
+                type="button"
+                onClick={() => setRange(range)}
               >
                 {reportsRangeLabels[range]}
-              </Link>
+              </button>
             ))}
           </div>
         </div>
