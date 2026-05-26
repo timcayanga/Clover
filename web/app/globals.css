@@ -13126,13 +13126,19 @@ input.transaction-inline-edit--amount::placeholder {
   width: 24px;
   height: 24px;
   border-radius: 999px;
+  overflow: hidden;
 }
 
-.transaction-drawer-select__icon .accounts-brand-mark__logo,
 .transaction-drawer-select__icon .accounts-brand-mark__fallback,
 .transaction-drawer-select__icon .accounts-brand-mark__logo-fallback {
   width: 13px;
   height: 13px;
+}
+
+.transaction-drawer-select__icon .accounts-brand-mark__logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .transaction-drawer-category-icon {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
@@ -639,7 +639,10 @@ const getTransactionSortLabel = (transaction: Transaction) =>
     rawPayload: transaction.rawPayload as never,
   }) ?? "Transaction";
 
-const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => {
+const createDetailDraft = (
+  transaction: Transaction,
+  options: { categoryId?: string | null } = {}
+): TransactionDetailDraft => {
   const categoryName =
     getEffectiveTransactionCategoryName({
       categoryName: transaction.categoryName ?? null,
@@ -659,7 +662,7 @@ const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => 
         rawPayload: transaction.rawPayload as never,
       }) ?? transaction.merchantRaw,
     date: transaction.date.slice(0, 10),
-    categoryId: transaction.categoryId ?? "",
+    categoryId: options.categoryId ?? transaction.categoryId ?? "",
     amount: transaction.amount,
     currency: transaction.currency ?? "PHP",
     type: effectiveType === "income" ? "credit" : effectiveType === "transfer" ? "transfer" : "debit",
@@ -1935,6 +1938,13 @@ function AccountDetailPageContent() {
     () => [{ value: "", label: "Other" }, ...categories.map((category) => ({ value: category.id, label: category.name }))],
     [categories]
   );
+  const getDisplayCategoryIdForTransaction = useCallback(
+    (transaction: Transaction) => {
+      const displayCategoryName = getDisplayTransactionCategoryName(transaction, categories, account?.institution ?? null);
+      return getCategoryIdByName(categories, displayCategoryName) || transaction.categoryId || "";
+    },
+    [account?.institution, categories]
+  );
   const detailSelectedCategory = useMemo(
     () => categories.find((category) => category.id === (detailDraft?.categoryId ?? "")) ?? null,
     [categories, detailDraft?.categoryId]
@@ -2062,7 +2072,11 @@ function AccountDetailPageContent() {
     const updated = payload.transaction as Transaction;
     setTransactions((current) => current.map((entry) => (entry.id === updated.id ? { ...entry, ...updated } : entry)));
     setSelectedTransaction((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
-    setDetailDraft((current) => (current && selectedTransaction?.id === updated.id ? createDetailDraft({ ...updated }) : current));
+    setDetailDraft((current) =>
+      current && selectedTransaction?.id === updated.id
+        ? createDetailDraft({ ...updated }, { categoryId: getDisplayCategoryIdForTransaction(updated) })
+        : current
+    );
     return updated;
   };
 
@@ -2099,7 +2113,7 @@ function AccountDetailPageContent() {
 
   const openTransactionDetail = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
-    setDetailDraft(createDetailDraft(transaction));
+    setDetailDraft(createDetailDraft(transaction, { categoryId: getDisplayCategoryIdForTransaction(transaction) }));
   };
 
   const closeTransactionDetail = () => {
