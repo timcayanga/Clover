@@ -2476,12 +2476,6 @@ function AccountsPageContent() {
     const latestCheckpoint = loadingContext.latestCheckpoint;
     const fallbackAccountNumber =
       row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
-    const accountBrand = getAccountBrand({
-      institution: row.institution,
-      name: accountCardName,
-      type: getEffectiveAccountType(row),
-    });
-    const balanceValue = Math.abs(parseAmount(loadingContext.displayedBalance));
     const accountCardName =
       row.source === "upload" && !fallbackAccountNumber
         ? formatUploadAccountDisplayName(row.name, row.institution, null, row.type)
@@ -2492,6 +2486,12 @@ function AccountsPageContent() {
             type: row.type,
             source: row.source,
           });
+    const accountBrand = getAccountBrand({
+      institution: row.institution,
+      name: accountCardName,
+      type: getEffectiveAccountType(row),
+    });
+    const balanceValue = Math.abs(parseAmount(loadingContext.displayedBalance));
     const accountCardNumber = formatCardAccountNumber(fallbackAccountNumber);
 
     return (
