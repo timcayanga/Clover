@@ -1381,12 +1381,43 @@ body.transactions-manual-open .shell-quick-add-button {
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
-.sidebar-popover__notification-link {
+.sidebar-popover__notification-link,
+.sidebar-popover__notification {
   color: var(--text);
   align-items: start;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr auto;
+  column-gap: 8px;
   text-decoration: none;
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.sidebar-popover__notification-main,
+.sidebar-popover__notification-dismiss {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+}
+
+.sidebar-popover__notification-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-popover__notification-dismiss {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
 .sidebar-popover__link--bare,
@@ -1406,10 +1437,18 @@ body.transactions-manual-open .shell-quick-add-button {
   transform: translateX(1px);
 }
 
-.sidebar-popover__notification-link:hover {
+.sidebar-popover__notification-link:hover,
+.sidebar-popover__notification:hover {
   background: var(--accent-soft);
   border-color: rgba(3, 168, 192, 0.1);
   transform: translateX(1px);
+}
+
+.sidebar-popover__notification-dismiss:hover,
+.sidebar-popover__notification-dismiss:focus-visible {
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--text);
+  transform: scale(1.04);
 }
 
 .sidebar-popover__button {
@@ -1441,6 +1480,19 @@ body.transactions-manual-open .shell-quick-add-button {
   font-size: 14px;
   line-height: 1.45;
   font-weight: 400;
+}
+
+.sidebar-popover__notification-tone,
+.sidebar-popover__notification-detail {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sidebar-popover__notification-tone {
+  color: var(--accent-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
 }
 
 .sidebar-popover__link > span:last-child {

@@ -12,6 +12,13 @@ import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils"
 import { DashboardManualTransactionModal } from "@/components/dashboard-top-actions";
 import { ImportFilesModal } from "@/components/import-files-modal";
 import { signOutToLanding } from "@/lib/sign-out";
+import {
+  clearImportActivity,
+  readImportActivity,
+  subscribeImportActivity,
+  type ImportActivitySnapshot,
+} from "@/lib/import-activity";
+import { formatImportResultHeadline } from "@/lib/import-result-summary";
 
 type CloverChromeActions = {
   closeChrome: () => void;
@@ -452,20 +459,92 @@ function MenuIcon({ name }: { name: IconName }) {
   }
 }
 
-const notifications = [
-  {
-    title: "Import progress",
-    href: "/notifications",
-  },
-  {
-    title: "Transactions need attention",
-    href: "/transactions?review=1",
-  },
-  {
-    title: "Weekly summary",
-    href: "/reports",
-  },
-];
+type ShellNotification = {
+  id: string;
+  title: string;
+  detail: string;
+  href: string;
+  tone: string;
+  dismissLabel: string;
+  onDismiss: () => void;
+};
+
+const dismissedNotificationStorageKey = "clover.dismissed-notifications.v1";
+
+const readDismissedNotifications = () => {
+  if (typeof window === "undefined") {
+    return new Set<string>();
+  }
+
+  try {
+    const raw = window.localStorage.getItem(dismissedNotificationStorageKey);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : []);
+  } catch {
+    return new Set<string>();
+  }
+};
+
+const writeDismissedNotifications = (dismissed: Set<string>) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(dismissedNotificationStorageKey, JSON.stringify(Array.from(dismissed)));
+  } catch {
+    // Dismissal is convenience-only; ignore storage failures.
+  }
+};
+
+const formatRelativeNotificationTime = (updatedAt: number) => {
+  if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
+    return "Just now";
+  }
+
+  const secondsAgo = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
+  if (secondsAgo < 10) return "Just now";
+  if (secondsAgo < 60) return `${secondsAgo}s ago`;
+
+  const minutesAgo = Math.floor(secondsAgo / 60);
+  if (minutesAgo < 60) return `${minutesAgo}m ago`;
+
+  const hoursAgo = Math.floor(minutesAgo / 60);
+  return `${hoursAgo}h ago`;
+};
+
+const getImportNotificationCopy = (activity: ImportActivitySnapshot) => {
+  if (activity.status === "error") {
+    return {
+      tone: "Needs attention",
+      title: activity.errorTitle ?? "Import needs attention",
+      detail: activity.errorMessage ?? activity.detail ?? "Clover could not finish this import automatically.",
+    };
+  }
+
+  if (activity.status === "done") {
+    return {
+      tone: "Complete",
+      title: "Import complete",
+      detail:
+        (activity.summary ? formatImportResultHeadline(activity.summary) : "") ||
+        activity.detail ||
+        "Your import is ready in Clover.",
+    };
+  }
+
+  const fileProgress =
+    activity.fileTotal > 0
+      ? `${Math.min(activity.completedFiles, activity.fileTotal)} of ${activity.fileTotal} files ready`
+      : "Import queued";
+  const percent = `${Math.round(Math.max(0, Math.min(100, activity.progress)))}%`;
+
+  return {
+    tone: "In progress",
+    title: "Import in progress",
+    detail: [activity.detail, `${fileProgress} · ${percent}`].filter(Boolean).join(" · "),
+  };
+};
 
 export function CloverShell({
   active,
@@ -505,6 +584,9 @@ export function CloverShell({
   const [searchPlanTier, setSearchPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
   const [searchTickerLoading, setSearchTickerLoading] = useState(false);
+  const [importActivity, setImportActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
+  const [reviewQueueCount, setReviewQueueCount] = useState(0);
+  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => readDismissedNotifications());
   const [previousPathname, setPreviousPathname] = useState<string | null>(null);
   const quickAddAccounts = useMemo(
     () =>
@@ -762,6 +844,42 @@ export function CloverShell({
     };
   }, [searchWorkspaceId]);
 
+  useEffect(() => subscribeImportActivity(() => setImportActivity(readImportActivity())), []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadReviewQueueCount = async () => {
+      if (!searchWorkspaceId) {
+        setReviewQueueCount(0);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/review?workspaceId=${encodeURIComponent(searchWorkspaceId)}`);
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const payload = await response.json();
+        const count = Array.isArray(payload.transactions) ? payload.transactions.length : 0;
+        if (!cancelled) {
+          setReviewQueueCount(count);
+        }
+      } catch {
+        if (!cancelled) {
+          setReviewQueueCount(0);
+        }
+      }
+    };
+
+    void loadReviewQueueCount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchWorkspaceId]);
+
   useEffect(() => {
     const shouldReload = (message: string) =>
       /Loading chunk|ChunkLoadError|Failed to fetch dynamically imported module|Importing a module script failed/i.test(message);
@@ -969,6 +1087,52 @@ export function CloverShell({
     pageSearchResults[0]?.href ??
     "/home";
 
+  const dismissNotification = (notificationId: string) => {
+    setDismissedNotifications((current) => {
+      const next = new Set(current);
+      next.add(notificationId);
+      writeDismissedNotifications(next);
+      return next;
+    });
+  };
+
+  const notifications = useMemo<ShellNotification[]>(() => {
+    const items: ShellNotification[] = [];
+
+    if (importActivity) {
+      const copy = getImportNotificationCopy(importActivity);
+      const title = importActivity.fileName ? `${copy.title}: ${importActivity.fileName}` : copy.title;
+      items.push({
+        id: `import:${importActivity.workspaceId}:${importActivity.updatedAt}`,
+        title,
+        detail: `${copy.detail}${importActivity.updatedAt ? ` · ${formatRelativeNotificationTime(importActivity.updatedAt)}` : ""}`,
+        href: "/notifications",
+        tone: copy.tone,
+        dismissLabel: "Dismiss import notification",
+        onDismiss: () => {
+          clearImportActivity();
+          setImportActivity(null);
+        },
+      });
+    }
+
+    if (searchWorkspaceId && reviewQueueCount > 0) {
+      const notificationId = `review:${searchWorkspaceId}:${reviewQueueCount}`;
+      if (!dismissedNotifications.has(notificationId)) {
+        items.push({
+          id: notificationId,
+          title: `${reviewQueueCount} transaction${reviewQueueCount === 1 ? "" : "s"} need attention`,
+          detail: "Review low-confidence categories, duplicates, or rows Clover wants you to confirm.",
+          href: "/review",
+          tone: "Review",
+          dismissLabel: "Dismiss review notification",
+          onDismiss: () => dismissNotification(notificationId),
+        });
+      }
+    }
+
+    return items;
+  }, [dismissedNotifications, importActivity, reviewQueueCount, searchWorkspaceId]);
   const notificationCount = notifications.length;
   const navigateTo = (href: string) => {
     closeChrome();
@@ -1360,21 +1524,38 @@ export function CloverShell({
             <div className="sidebar-popover__items">
               {notifications.length ? (
                 notifications.map((notification) => (
-                  <Link
-                    key={notification.title}
-                    href={notification.href}
-                    className="sidebar-popover__item sidebar-popover__notification-link"
-                    role="menuitem"
-                    prefetch
-                    onClick={closeChrome}
-                    onMouseEnter={() => prefetchNavTarget(notification.href)}
-                    onTouchStart={() => prefetchNavTarget(notification.href)}
+                  <div
+                    key={notification.id}
+                    className="sidebar-popover__item sidebar-popover__notification"
+                    role="none"
                   >
-                    <span className="sidebar-popover__notification-title">{notification.title}</span>
-                  </Link>
+                    <button
+                      type="button"
+                      className="sidebar-popover__notification-main"
+                      role="menuitem"
+                      onClick={() => navigateTo(notification.href)}
+                      onMouseEnter={() => prefetchNavTarget(notification.href)}
+                      onTouchStart={() => prefetchNavTarget(notification.href)}
+                    >
+                      <span className="sidebar-popover__notification-tone">{notification.tone}</span>
+                      <span className="sidebar-popover__notification-title">{notification.title}</span>
+                      <span className="sidebar-popover__notification-detail">{notification.detail}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="sidebar-popover__notification-dismiss"
+                      aria-label={notification.dismissLabel}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        notification.onDismiss();
+                      }}
+                    >
+                      x
+                    </button>
+                  </div>
                 ))
               ) : (
-                <div className="sidebar-popover__empty">You’re all caught up.</div>
+                <div className="sidebar-popover__empty">You’re all caught up. New import and review updates will show here.</div>
               )}
             </div>
           </div>,
