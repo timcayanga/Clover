@@ -326,7 +326,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
-    match: /\b(CHINABANK|CHINA BANKING CORPORATION)\b/i,
+    match: /\b(CHINABANK|CHINA\s*BANK|CHINA BANKING CORPORATION)\b/i,
     brand: makeBrand({
       label: "Chinabank",
       logoSrcs: philippinesLogoWithVariants("china bank", "chinabank"),
@@ -943,8 +943,11 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
     });
   }
 
+  const brandInput = [params.institution, params.name, inferredInstitution]
+    .filter(Boolean)
+    .join(" ");
   for (const entry of BANK_BRANDS) {
-    if (entry.match.test(`${params.institution ?? ""} ${params.name ?? ""}`)) {
+    if (entry.match.test(brandInput)) {
       return entry.brand;
     }
   }

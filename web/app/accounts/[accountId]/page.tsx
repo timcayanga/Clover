@@ -6,7 +6,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { FinancialAccountCard } from "@/components/financial-account-card";
-import { getAccountCardName } from "@/lib/account-display";
+import { formatUploadAccountDisplayName, getAccountCardName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
@@ -84,6 +84,7 @@ type Account = {
 type Transaction = {
   id: string;
   accountId: string;
+  accountName?: string | null;
   categoryId: string | null;
   amount: string;
   currency?: string | null;
@@ -97,6 +98,7 @@ type Transaction = {
   description: string | null;
   isExcluded: boolean;
   institution?: string | null;
+  accountNumber?: string | null;
   source?: string | null;
   importFileId?: string | null;
   rawPayload?: unknown;
@@ -1571,18 +1573,36 @@ function AccountDetailPageContent() {
   const checkpointBalance = latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
     ? String(latestCheckpoint.endingBalance)
     : null;
-  const hasLoadedTransactions = account ? transactions.some((transaction) => transaction.accountId === account.id) : false;
+  const hasLoadedTransactions = account
+    ? transactions.some((transaction) => {
+        if (transaction.accountId === account.id) {
+          return true;
+        }
+
+        return (
+          normalizeImportedAccountKey(transaction.accountName, transaction.institution, transaction.accountNumber, account.type) ===
+          normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
+        );
+      })
+    : false;
   const accountCardNumber = account
     ? formatCardAccountNumber(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null)
     : "";
   const accountCardName = account
-    ? getAccountCardName({
-        name: account.type === "investment" ? accountEditDraft.name || account.name : accountEditDraft.name || account.name,
-        institution: account.institution,
-        accountNumber: account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null,
-        type: account.type,
-        source: account.source,
-      })
+    ? account.source === "upload" && !(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber)
+      ? formatUploadAccountDisplayName(
+          accountEditDraft.name || account.name,
+          account.institution,
+          null,
+          account.type
+        )
+      : getAccountCardName({
+          name: account.type === "investment" ? accountEditDraft.name || account.name : accountEditDraft.name || account.name,
+          institution: account.institution,
+          accountNumber: account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null,
+          type: account.type,
+          source: account.source,
+        })
     : "Account";
   const liveCardNumber = formatCardAccountNumber(accountEditDraft.accountNumber || accountCardNumber);
   const hasMeaningfulBalance = (value: string | null | undefined) => {

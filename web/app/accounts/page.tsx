@@ -214,8 +214,16 @@ const mergeImportedPreviewTransactions = (
   return mergeImportedWorkspaceTransactions(currentTransactions, previewTransactions);
 };
 
-const transactionMatchesAccount = (transaction: Transaction, account: Account) =>
-  transaction.accountId === account.id;
+const transactionMatchesAccount = (transaction: Transaction, account: Account) => {
+  if (transaction.accountId === account.id) {
+    return true;
+  }
+
+  return (
+    normalizeImportedAccountKey(transaction.accountName, transaction.institution, transaction.accountNumber, account.type) ===
+    normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
+  );
+};
 
 const mergeAccountsWithOptimisticImports = (
   fetchedAccounts: Account[],
@@ -374,6 +382,8 @@ type Transaction = {
   id: string;
   accountId: string;
   accountName?: string;
+  institution?: string | null;
+  accountNumber?: string | null;
   amount: string;
   type: "income" | "expense" | "transfer";
   date: string;
@@ -2465,13 +2475,16 @@ function AccountsPageContent() {
       type: getEffectiveAccountType(row),
     });
     const balanceValue = Math.abs(parseAmount(loadingContext.displayedBalance));
-    const accountCardName = getAccountCardName({
-      name: row.name,
-      institution: row.institution,
-      accountNumber: fallbackAccountNumber,
-      type: row.type,
-      source: row.source,
-    });
+    const accountCardName =
+      row.source === "upload" && !fallbackAccountNumber
+        ? formatUploadAccountDisplayName(row.name, row.institution, null, row.type)
+        : getAccountCardName({
+            name: row.name,
+            institution: row.institution,
+            accountNumber: fallbackAccountNumber,
+            type: row.type,
+            source: row.source,
+          });
     const accountCardNumber = formatCardAccountNumber(fallbackAccountNumber);
 
     return (

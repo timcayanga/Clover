@@ -2919,6 +2919,16 @@ const main = async () => {
     throw new Error(`expected Chinabank brand match from statement filename, got ${chinaBankBrand.label}`);
   }
 
+  const chinaBankDisplayName = formatUploadAccountDisplayName(
+    "860976948-CHINA-BANK-STATEMENT 6948",
+    "China Bank",
+    null,
+    "bank"
+  );
+  if (chinaBankDisplayName !== "Chinabank 6948") {
+    throw new Error(`expected Chinabank display name from statement filename, got ${chinaBankDisplayName}`);
+  }
+
   const genericNeedsReviewReasons = getTransactionReviewReasons({
     warningReason: "Needs review",
     reviewStatus: "suggested",

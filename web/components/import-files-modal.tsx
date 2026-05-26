@@ -2579,7 +2579,7 @@ export function ImportFilesModal({
           findKnownImportedBalance(accounts, {
             workspaceId,
             accountId: resolvedAccountId,
-            accountName: summaryContext.accountName,
+            accountName: resolvedSummaryAccountName,
             institution: summaryContext.institution ?? null,
             accountNumber: summaryContext.accountNumber ?? null,
             accountType: resolvedAccountType,
@@ -2589,7 +2589,7 @@ export function ImportFilesModal({
           fileName: summaryContext.fileName,
           rowsImported: importedRows,
           accountId: resolvedAccountId,
-          accountName: summaryContext.accountName,
+          accountName: resolvedSummaryAccountName,
           institution: summaryContext.institution ?? null,
           accountNumber: summaryContext.accountNumber ?? null,
           accountType: resolvedAccountType,
@@ -2599,7 +2599,7 @@ export function ImportFilesModal({
             workspaceId,
             accountId: resolvedAccountId,
             optimisticAccountId: summaryContext.optimisticAccountId ?? null,
-            accountName: summaryContext.accountName,
+            accountName: resolvedSummaryAccountName,
             institution: summaryContext.institution ?? null,
             accountNumber: summaryContext.accountNumber ?? null,
             accountType: resolvedAccountType,
@@ -2685,7 +2685,7 @@ export function ImportFilesModal({
           summaryContext.fileName,
           rowsImported,
           resolvedAccountId,
-          summaryContext.accountName,
+          resolvedSummaryAccountName,
           summaryContext.institution ?? null,
           resolvedAccountType,
           resolvedAccountId.startsWith("optimistic-") ? summaryContext.optimisticAccountId ?? resolvedAccountId : null,
@@ -2694,7 +2694,7 @@ export function ImportFilesModal({
             findKnownImportedBalance(accounts, {
               workspaceId,
               accountId: resolvedAccountId,
-              accountName: summaryContext.accountName,
+              accountName: resolvedSummaryAccountName,
               institution: summaryContext.institution ?? null,
               accountNumber: summaryContext.accountNumber ?? null,
               accountType: resolvedAccountType,
@@ -2704,7 +2704,7 @@ export function ImportFilesModal({
             workspaceId,
             accountId: resolvedAccountId,
             optimisticAccountId: summaryContext.optimisticAccountId ?? null,
-            accountName: summaryContext.accountName,
+            accountName: resolvedSummaryAccountName,
             institution: summaryContext.institution ?? null,
             accountNumber: summaryContext.accountNumber ?? null,
             accountType: resolvedAccountType,
@@ -2913,6 +2913,7 @@ export function ImportFilesModal({
           processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
           processingIdentity?.accountType ?? summaryContext.accountType ?? null
         );
+        const resolvedSummaryAccountName = resolvedAccountDisplayName;
         const checkpointBalance = toBalanceString(statementCheckpoint?.endingBalance);
         const stableOptimisticBalance = pickStableBalance(checkpointBalance, summaryContext.initialBalance);
         const checkpointAccountId =
@@ -3327,7 +3328,7 @@ export function ImportFilesModal({
                 ? await loadOptimisticPreviewTransactions(
                     importFileId,
                     completedAccountId,
-                    processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName ?? "",
+                    resolvedAccountDisplayName,
                     processingIdentity?.institution ?? summaryContext.institution ?? null
                   )
                     .catch(() => [])
@@ -3339,10 +3340,7 @@ export function ImportFilesModal({
                             accountId: completedAccountId,
                             optimisticAccountId: summaryContext.optimisticAccountId,
                             accountName:
-                              processingIdentity?.accountName ??
-                              summaryContext.accountName ??
-                              summaryContext.fallbackAccountName ??
-                              "",
+                              resolvedAccountDisplayName,
                             institution: processingIdentity?.institution ?? summaryContext.institution ?? null,
                             accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
                             accountType: processingIdentity?.accountType ?? summaryContext.accountType,
@@ -3354,7 +3352,7 @@ export function ImportFilesModal({
             summaryContext.fileName,
             confirmedTransactionsCount > 0 ? confirmedTransactionsCount : parsedRowsCount,
             completedAccountId,
-            processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName ?? "",
+            resolvedAccountDisplayName,
             processingIdentity?.institution ?? summaryContext.institution ?? null,
             processingIdentity?.accountType ?? summaryContext.accountType ?? null,
             summaryContext.optimisticAccountId,
@@ -3562,14 +3560,14 @@ export function ImportFilesModal({
                 : await loadOptimisticPreviewTransactions(
                     importFileId,
                     fallbackAccountId ?? "",
-                    summaryContext.fallbackAccountName ?? "",
+                    resolvedAccountDisplayName,
                     null
                   ).catch(() => []);
               const fallbackSummary = buildOptimisticUploadSummary(
                 summaryContext.fileName,
                 0,
                 fallbackAccountId,
-                summaryContext.fallbackAccountName,
+                resolvedAccountDisplayName,
                 null,
                 null,
                 summaryContext.optimisticAccountId,
@@ -3656,7 +3654,7 @@ export function ImportFilesModal({
             const syncInstitution = resolvedIdentity.institution ?? summaryContext.institution;
             void syncStatementAccountIdentity(
               currentAccountId,
-              syncAccountName,
+              resolvedAccountDisplayName || syncAccountName,
               syncInstitution,
               resolvedAccountType,
               resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
@@ -3728,7 +3726,7 @@ export function ImportFilesModal({
             summaryContext.fileName,
             Math.max(parsedRowsCount, summaryContext.previewTransactions?.length ?? 0),
             resolvedAccountId,
-            resolvedIdentity.accountName ?? null,
+            resolvedAccountDisplayName,
             resolvedIdentity.institution ?? null,
             resolvedAccountType ??
               inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
@@ -3812,7 +3810,7 @@ export function ImportFilesModal({
                   summaryContext.fileName,
                   Number(result.importedRows ?? 0),
                   resolvedAccountId,
-                  resolvedIdentity.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName,
+                  resolvedAccountDisplayName,
                   resolvedIdentity.institution ?? summaryContext.institution ?? null,
                   resolvedAccountType,
                   null,
