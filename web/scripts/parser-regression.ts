@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { getAccountBrand } from "@/lib/account-brand";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 
@@ -2907,6 +2908,15 @@ const main = async () => {
     throw new Error(
       `Parser regression checks failed:\n- [China Bank detection] expected Chinabank but got ${chinaBankProbe.institution ?? "null"}`
     );
+  }
+
+  const chinaBankBrand = getAccountBrand({
+    institution: null,
+    name: "860976948-CHINA-BANK-STATEMENT 6948",
+    type: "bank",
+  });
+  if (chinaBankBrand.label !== "Chinabank") {
+    throw new Error(`expected Chinabank brand match from statement filename, got ${chinaBankBrand.label}`);
   }
 
   const genericNeedsReviewReasons = getTransactionReviewReasons({

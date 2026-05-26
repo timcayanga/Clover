@@ -8081,15 +8081,12 @@ function TransactionsPageContent() {
             return;
           }
 
-          const shouldRefreshAfterImport = Boolean(settledAccountId);
-          if (shouldRefreshAfterImport) {
-            setImportRefreshInFlight(true);
-            try {
-              await loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
-              await loadTransactionsPage(selectedWorkspaceId, { background: true });
-            } finally {
-              setImportRefreshInFlight(false);
-            }
+          setImportRefreshInFlight(true);
+          try {
+            await loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+            await loadTransactionsPage(selectedWorkspaceId, { background: true });
+          } finally {
+            setImportRefreshInFlight(false);
           }
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}

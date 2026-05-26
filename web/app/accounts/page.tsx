@@ -3968,14 +3968,11 @@ function AccountsPageContent() {
             });
           }
 
-          const shouldRefreshAfterImport = Boolean(settledAccountId);
-          if (shouldRefreshAfterImport) {
-            setImportRefreshInFlight(true);
-            try {
-              await refreshAll();
-            } finally {
-              setImportRefreshInFlight(false);
-            }
+          setImportRefreshInFlight(true);
+          try {
+            await refreshAll();
+          } finally {
+            setImportRefreshInFlight(false);
           }
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}

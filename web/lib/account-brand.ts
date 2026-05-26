@@ -1,5 +1,5 @@
 import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
-import { normalizeBankName } from "@/lib/data-qa-banks";
+import { inferBankNameFromText, normalizeBankName } from "@/lib/data-qa-banks";
 
 type AccountBrandInput = {
   institution?: string | null;
@@ -922,11 +922,12 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
 ];
 
 export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
+  const inferredInstitution = inferBankNameFromText([params.institution, params.name].filter(Boolean).join(" "));
   const normalizedInstitution = normalizeBankName(params.institution);
   const institution =
     normalizedInstitution !== "Unknown"
       ? normalize(normalizedInstitution)
-      : normalize(sanitizeBankNameLabel(params.institution) ?? params.institution);
+      : normalize(inferredInstitution !== "Unknown" ? inferredInstitution : sanitizeBankNameLabel(params.institution) ?? params.institution);
   const name = normalize(sanitizeBankNameLabel(params.name) ?? params.name);
   const type = normalize(params.type);
 
