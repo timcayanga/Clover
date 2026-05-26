@@ -19,6 +19,7 @@ import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { recordAppError } from "@/lib/error-logs";
 import { InfoTip as ReportInfoTip } from "@/components/info-tip";
+import { InfoTooltip } from "@/components/info-tooltip";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 
@@ -261,7 +262,7 @@ async function ReportsStream({
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
   const selectedRange = normalizeReportsRange(searchParams?.range);
   const selectedRangeLabel = reportsRangeLabels[selectedRange];
-  const rangeWindowText = selectedRangeLabel.toLowerCase();
+  const rangeWindowText = selectedRange === "ytd" ? "year-to-date" : selectedRangeLabel.toLowerCase();
   const requestedSection = normalizeReportsSection(searchParams?.section);
 
   const session = await getSessionContext();
@@ -1277,7 +1278,7 @@ async function ReportsStream({
               <article className="metric compact metric--highlight glass">
                 <div className="metric__label">
                   <span>Income</span>
-                  <ReportInfoTip label="All money coming in during the selected range." />
+                  <InfoTooltip align="left" label="All money coming in during the selected range." />
                 </div>
                 <strong>{formatCurrency(currentSummary.income)}</strong>
               </article>
@@ -1309,7 +1310,7 @@ async function ReportsStream({
                 <div className="report-card__head">
                   <div className="report-card__head-title">
                     <h4>Money over time</h4>
-                    <ReportInfoTip label="A six-month view of how the balance moved." />
+                    <ReportInfoTip label={`A ${rangeWindowText} view of how the balance moved.`} />
                   </div>
                   <div className="report-card__stat">
                     <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
