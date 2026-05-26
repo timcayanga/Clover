@@ -87,6 +87,14 @@ type DailyActivityPoint = {
   net: number;
 };
 
+type HomeAdviserItem = {
+  label: string;
+  copy: string;
+  href?: string;
+  actionLabel?: string;
+  tone?: "neutral" | "positive" | "warning";
+};
+
 type WorkspaceSummary = {
   id: string;
   name: string;
@@ -633,34 +641,77 @@ async function DashboardStream({
       Boolean(entry.checkpoint)
     )
     .sort((left, right) => right.checkpoint.createdAt.getTime() - left.checkpoint.createdAt.getTime())[0];
-  const insightItems = [
-    currentSummary.current.expense > 0 || currentSummary.previous.expense > 0
+  const categorySpikeThreshold = Math.max(500, currentSummary.current.expense * 0.08);
+  const categorySpike =
+    currentSummary.biggestMover &&
+    currentSummary.biggestMover.delta >= categorySpikeThreshold &&
+    (currentSummary.biggestMover.previousAmount === 0 || currentSummary.biggestMover.percentage >= 25)
+      ? currentSummary.biggestMover
+      : null;
+  const encodedSpikeCategory = categorySpike ? encodeURIComponent(categorySpike.name) : "";
+  const encodedTopCategory = currentSummary.topCategory ? encodeURIComponent(currentSummary.topCategory[0]) : "";
+  const uploadReminderCopy = latestImport
+    ? `Last import was ${daysSinceLastImport === 0 ? "today" : `${daysSinceLastImport ?? 0} day${daysSinceLastImport === 1 ? "" : "s"} ago`}. Add recent statements so advice stays current.`
+    : "Upload a recent statement so Clover can start finding spending patterns.";
+  const insightCandidates: Array<HomeAdviserItem | null> = [
+    categorySpike
       ? {
-          label: "Spending",
-          copy:
-            Math.abs(currentSummary.expenseDelta) < 0.01
-              ? "Spending is flat vs the previous 30 days."
-              : `Spending is ${currentSummary.expenseDelta > 0 ? "up" : "down"} ${formatCurrency(Math.abs(currentSummary.expenseDelta))} vs the previous 30 days.`,
+          label: "Watch spending",
+          copy: `${categorySpike.name} is up ${formatCurrency(categorySpike.delta)} vs the previous 30 days.`,
+          href: `/transactions?category=${encodedSpikeCategory}`,
+          actionLabel: "Open category",
+          tone: "warning",
         }
       : null,
-    latestBalanceCheckpointAccount
+    daysSinceLastImport === null || daysSinceLastImport >= 7
       ? {
-          label: "Latest import",
-          copy: `${latestBalanceCheckpointAccount.account.institution ?? latestBalanceCheckpointAccount.account.name} balance changed after the latest import.`,
+          label: "Keep it fresh",
+          copy: uploadReminderCopy,
+          href: "/transactions",
+          actionLabel: "Import transactions",
+          tone: "neutral",
         }
-      : latestImport
+      : latestBalanceCheckpointAccount
         ? {
-            label: "Latest import",
-            copy: `${latestImport.fileName} was added ${daysSinceLastImport === 0 ? "today" : `${daysSinceLastImport ?? 0} day${daysSinceLastImport === 1 ? "" : "s"} ago`}.`,
+            label: "Synced recently",
+            copy: `${latestBalanceCheckpointAccount.account.institution ?? latestBalanceCheckpointAccount.account.name} balance updated from the latest import.`,
+            href: "/accounts",
+            actionLabel: "View accounts",
+            tone: "positive",
           }
         : null,
-    currentSummary.topCategory
+    currentThirtyDayTransactions.length > 0
+      ? {
+          label: currentSummary.net >= 0 ? "Cash flow" : "Cash flow alert",
+          copy:
+            currentSummary.net >= 0
+              ? `You kept ${formatCurrency(currentSummary.net)} after spending over the last 30 days.`
+              : `Spending exceeded income by ${formatCurrency(Math.abs(currentSummary.net))} over the last 30 days.`,
+          href: "/adviser",
+          actionLabel: "Open Adviser",
+          tone: currentSummary.net >= 0 ? "positive" : "warning",
+        }
+      : null,
+    !categorySpike && currentSummary.topCategory
       ? {
           label: "Top category",
           copy: `${currentSummary.topCategory[0]} leads spending at ${formatCurrency(currentSummary.topCategory[1])} this period.`,
+          href: `/transactions?category=${encodedTopCategory}`,
+          actionLabel: "Review spend",
+          tone: "neutral",
         }
       : null,
-  ].filter((item): item is { label: string; copy: string } => Boolean(item));
+    currentThirtyDayTransactions.length > 0 && currentSummary.topMerchant
+      ? {
+          label: "Frequent merchant",
+          copy: `${currentSummary.topMerchant[0]} appeared ${currentSummary.topMerchant[1].count} time${currentSummary.topMerchant[1].count === 1 ? "" : "s"} recently.`,
+          href: `/transactions?q=${encodeURIComponent(currentSummary.topMerchant[0])}`,
+          actionLabel: "Search merchant",
+          tone: "neutral",
+        }
+      : null,
+  ];
+  const insightItems = insightCandidates.filter((item): item is HomeAdviserItem => Boolean(item)).slice(0, 3);
   const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
   const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
   const totalBalanceLabel = formatCurrency(savingsTotal, displayCurrency);
@@ -758,9 +809,14 @@ async function DashboardStream({
             <p className="eyebrow">Adviser</p>
             <div className="dashboard-home__insight-strip-list">
               {insightItems.map((item) => (
-                <div key={item.label} className="dashboard-home__insight-strip-item">
+                <div key={item.label} className={`dashboard-home__insight-strip-item${item.tone ? ` dashboard-home__insight-strip-item--${item.tone}` : ""}`}>
                   <span>{item.label}</span>
                   <strong>{item.copy}</strong>
+                  {item.href && item.actionLabel ? (
+                    <Link className="dashboard-home__insight-strip-action" href={item.href}>
+                      {item.actionLabel}
+                    </Link>
+                  ) : null}
                 </div>
               ))}
             </div>
