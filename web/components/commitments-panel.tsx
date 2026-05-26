@@ -107,6 +107,15 @@ const formatDate = (value: string | null) => {
   return Number.isNaN(parsed.getTime()) ? value : dateFormatter.format(parsed);
 };
 
+const toDateInputValue = (value: string | null) => {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+};
+
 const formatTransactionLabel = (transaction: CommitmentTransactionOption) => {
   const merchant = transaction.merchantClean ?? transaction.merchantRaw;
   const amount = Number(transaction.amount);
@@ -238,6 +247,18 @@ export function CommitmentsPanel({
   const hasMountedRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [confirmingPatternId, setConfirmingPatternId] = useState<string | null>(null);
+  const [dismissingPatternId, setDismissingPatternId] = useState<string | null>(null);
+  const [reviewingPattern, setReviewingPattern] = useState<RecurringPatternSummary | null>(null);
+  const [patternDraft, setPatternDraft] = useState({
+    title: "",
+    counterparty: "",
+    amount: "",
+    currency: "PHP",
+    dueDate: "",
+    recurrence: "monthly" as (typeof commitmentRecurrenceOptions)[number]["value"],
+    accountId: "",
+    notes: "",
+  });
   const [kind, setKind] = useState<CommitmentKind>("planned_payment");
   const [title, setTitle] = useState("");
   const [counterparty, setCounterparty] = useState("");
@@ -443,11 +464,36 @@ export function CommitmentsPanel({
       });
   };
 
-  const handleConfirmPattern = (patternId: string) => {
-    setConfirmingPatternId(patternId);
-    void fetch(`/api/recurring-patterns/${patternId}/confirm`, {
+  const openPatternReview = (pattern: RecurringPatternSummary) => {
+    const title = pattern.merchantClean ?? pattern.merchantRaw;
+    const recurrenceValue = commitmentRecurrenceOptions.some((option) => option.value === pattern.frequency)
+      ? (pattern.frequency as (typeof commitmentRecurrenceOptions)[number]["value"])
+      : "monthly";
+
+    setReviewingPattern(pattern);
+    setPatternDraft({
+      title,
+      counterparty: title,
+      amount: pattern.amount ?? "",
+      currency: pattern.currency ?? "PHP",
+      dueDate: toDateInputValue(pattern.nextExpectedDate),
+      recurrence: recurrenceValue,
+      accountId: pattern.account?.id ?? "",
+      notes: `Detected from ${pattern.transactionCount} matching transaction${pattern.transactionCount === 1 ? "" : "s"}.`,
+    });
+  };
+
+  const handleConfirmPattern = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!reviewingPattern) {
+      return;
+    }
+
+    setConfirmingPatternId(reviewingPattern.id);
+    void fetch(`/api/recurring-patterns/${reviewingPattern.id}/confirm`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patternDraft),
     })
       .then(async (response) => {
         if (!response.ok) {
@@ -455,6 +501,7 @@ export function CommitmentsPanel({
           throw new Error(payload?.error ?? "Unable to add recurring item");
         }
 
+        setReviewingPattern(null);
         router.refresh();
       })
       .catch((error: unknown) => {
@@ -463,6 +510,28 @@ export function CommitmentsPanel({
       })
       .finally(() => {
         setConfirmingPatternId(null);
+      });
+  };
+
+  const handleDismissPattern = (patternId: string) => {
+    setDismissingPatternId(patternId);
+    void fetch(`/api/recurring-patterns/${patternId}/dismiss`, {
+      method: "POST",
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error ?? "Unable to hide recurring suggestion");
+        }
+
+        router.refresh();
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Unable to hide recurring suggestion";
+        window.alert(message);
+      })
+      .finally(() => {
+        setDismissingPatternId(null);
       });
   };
 
@@ -492,20 +561,183 @@ export function CommitmentsPanel({
                     {pattern.nextExpectedDate ? ` · next ${formatDate(pattern.nextExpectedDate)}` : ""}
                   </p>
                 </div>
-                <div className="notification-item__time" style={{ minWidth: 130 }}>
+                <div className="notification-item__time" style={{ minWidth: 170, display: "grid", gap: 8 }}>
                   <button
                     type="button"
                     className="button button-primary button-small"
-                    onClick={() => handleConfirmPattern(pattern.id)}
+                    onClick={() => openPatternReview(pattern)}
                     disabled={confirmingPatternId === pattern.id}
                   >
-                    {confirmingPatternId === pattern.id ? "Adding..." : "Add to recurring"}
+                    {confirmingPatternId === pattern.id ? "Adding..." : "Review and add"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-secondary button-small"
+                    onClick={() => handleDismissPattern(pattern.id)}
+                    disabled={dismissingPatternId === pattern.id}
+                  >
+                    {dismissingPatternId === pattern.id ? "Hiding..." : "Not recurring"}
                   </button>
                 </div>
               </article>
             ))}
           </div>
         </article>
+      ) : null}
+
+      {reviewingPattern ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 85,
+            background: "rgba(15, 23, 42, 0.45)",
+            backdropFilter: "blur(12px)",
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+          }}
+        >
+          <section className="panel glass" style={{ width: "min(720px, 100%)", display: "grid", gap: 16, maxHeight: "min(92vh, 880px)", overflow: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
+              <div>
+                <p className="eyebrow">Review suggestion</p>
+                <h3 style={{ margin: 0 }}>Add this to Recurring?</h3>
+                <p className="panel-muted" style={{ margin: "6px 0 0" }}>
+                  Clover detected this from {reviewingPattern.transactionCount} matching transaction{reviewingPattern.transactionCount === 1 ? "" : "s"}. You can adjust the details first.
+                </p>
+              </div>
+              <button
+                className="button button-secondary button-small recurring-modal-close"
+                type="button"
+                onClick={() => setReviewingPattern(null)}
+                aria-label="Close"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M6 6l12 12" />
+                  <path d="M18 6 6 18" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmPattern} style={{ display: "grid", gap: 16 }}>
+              <label className="settings-field">
+                <span>Title</span>
+                <input
+                  className="settings-input"
+                  value={patternDraft.title}
+                  onChange={(event) => setPatternDraft((draft) => ({ ...draft, title: event.target.value }))}
+                  required
+                />
+              </label>
+
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                <label className="settings-field">
+                  <span>Counterparty</span>
+                  <input
+                    className="settings-input"
+                    value={patternDraft.counterparty}
+                    onChange={(event) => setPatternDraft((draft) => ({ ...draft, counterparty: event.target.value }))}
+                    placeholder="Merchant, biller, lender, or person"
+                  />
+                </label>
+                <label className="settings-field">
+                  <span>Amount</span>
+                  <input
+                    className="settings-input"
+                    inputMode="decimal"
+                    value={patternDraft.amount}
+                    onChange={(event) => setPatternDraft((draft) => ({ ...draft, amount: event.target.value }))}
+                    placeholder="2500.00"
+                  />
+                </label>
+              </div>
+
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                <label className="settings-field">
+                  <span className="sr-only">Currency</span>
+                  <CurrencySelector
+                    value={patternDraft.currency}
+                    onChange={(value) => setPatternDraft((draft) => ({ ...draft, currency: value }))}
+                    options={currencyCatalogCodes}
+                    ariaLabel="Select recurring suggestion currency"
+                    className="settings-currency-field__selector"
+                    buttonClassName="settings-currency-field__button"
+                    menuClassName="settings-currency-field__menu"
+                    optionClassName="settings-currency-field__option"
+                    menuAlignment="end"
+                  />
+                </label>
+                <label className="settings-field">
+                  <span>Next due date</span>
+                  <input
+                    className="settings-input"
+                    type="date"
+                    value={patternDraft.dueDate}
+                    onChange={(event) => setPatternDraft((draft) => ({ ...draft, dueDate: event.target.value }))}
+                  />
+                </label>
+              </div>
+
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                <label className="settings-field">
+                  <span>Repeat cadence</span>
+                  <select
+                    value={patternDraft.recurrence}
+                    onChange={(event) =>
+                      setPatternDraft((draft) => ({
+                        ...draft,
+                        recurrence: event.target.value as (typeof commitmentRecurrenceOptions)[number]["value"],
+                      }))
+                    }
+                    className="settings-select"
+                  >
+                    {commitmentRecurrenceOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="settings-field">
+                  <span>Linked account</span>
+                  <select
+                    value={patternDraft.accountId}
+                    onChange={(event) => setPatternDraft((draft) => ({ ...draft, accountId: event.target.value }))}
+                    className="settings-select"
+                  >
+                    <option value="">None</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                        {account.institution ? ` · ${account.institution}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <label className="settings-field">
+                <span>Notes</span>
+                <textarea
+                  className="settings-textarea"
+                  value={patternDraft.notes}
+                  onChange={(event) => setPatternDraft((draft) => ({ ...draft, notes: event.target.value }))}
+                  rows={3}
+                />
+              </label>
+
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <button className="button button-secondary" type="button" onClick={() => setReviewingPattern(null)}>
+                  Cancel
+                </button>
+                <button className="button button-primary" type="submit" disabled={confirmingPatternId === reviewingPattern.id}>
+                  {confirmingPatternId === reviewingPattern.id ? "Saving..." : "Save recurring"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
       ) : null}
 
       <div className="commitments-summary-grid">

@@ -4,6 +4,7 @@ import { getUpcomingStatementReminders } from "@/lib/statement-reminders";
 import { buildRecurringTransactionSummaries, type RecurringTransactionLike } from "@/lib/recurring";
 import { serializeFinancialCommitment, type FinancialCommitmentSummary } from "@/lib/commitments";
 import { hasCompatibleTable } from "@/lib/data-engine";
+import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 
 export type RecurringPageAccount = {
   id: string;
@@ -105,6 +106,13 @@ export async function getRecurringWorkspaceId(
 
 export async function getRecurringPageData(workspaceId: string): Promise<RecurringPageData> {
   const hasRecurringPatternTable = await hasCompatibleTable("RecurringPattern");
+
+  if (hasRecurringPatternTable) {
+    await syncWorkspaceRecurringPatterns(workspaceId).catch((error) => {
+      console.warn("Unable to backfill recurring suggestions", error);
+    });
+  }
+
   const [reminders, accounts, transactions, commitments, recurringPatterns] = await Promise.all([
     getUpcomingStatementReminders(workspaceId),
     prisma.account.findMany({
@@ -183,7 +191,15 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     }),
     hasRecurringPatternTable
       ? prisma.recurringPattern.findMany({
-          where: { workspaceId },
+          where: {
+            workspaceId,
+            NOT: {
+              rawPayload: {
+                path: ["dismissed"],
+                equals: true,
+              },
+            },
+          },
           orderBy: [{ nextExpectedDate: "asc" }, { lastSeenDate: "desc" }, { createdAt: "desc" }],
           take: 50,
           select: {

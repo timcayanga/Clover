@@ -45,6 +45,14 @@ const normalizeMerchantKey = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const isDismissedRecurringPattern = (value: Prisma.JsonValue | null | undefined) =>
+  Boolean(
+    value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      (value as Record<string, unknown>).dismissed === true
+  );
+
 const toAmount = (value: RecurringSourceTransaction["amount"]) => {
   const parsed = Number(value?.toString?.() ?? value ?? 0);
   return Number.isFinite(parsed) ? Math.abs(parsed) : 0;
@@ -290,6 +298,10 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
       });
 
       if (existingPattern) {
+        if (isDismissedRecurringPattern(existingPattern.rawPayload)) {
+          continue;
+        }
+
         await tx.recurringPattern.update({
           where: { id: existingPattern.id },
           data: {
