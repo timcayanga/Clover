@@ -20,13 +20,34 @@ const resolveWorkspaceRouteUserId = async () => {
   return userId;
 };
 
+const isDefaultPersonalWorkspace = async (workspace: { id: string; userId: string; type: string }) => {
+  if (workspace.type !== "personal") {
+    return false;
+  }
+
+  const defaultWorkspace = await prisma.workspace.findFirst({
+    where: {
+      userId: workspace.userId,
+      type: "personal",
+    },
+    orderBy: [{ createdAt: "asc" }],
+    select: { id: true },
+  });
+
+  return defaultWorkspace?.id === workspace.id;
+};
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
   try {
     const userId = await resolveWorkspaceRouteUserId();
     const { workspaceId } = await params;
     const body = updateWorkspaceSchema.parse(await request.json());
 
-    await assertWorkspaceAccess(userId, workspaceId);
+    const accessibleWorkspace = await assertWorkspaceAccess(userId, workspaceId);
+
+    if (await isDefaultPersonalWorkspace(accessibleWorkspace)) {
+      return NextResponse.json({ error: "The Personal profile is required and cannot be renamed." }, { status: 400 });
+    }
 
     const workspace = await prisma.workspace.update({
       where: { id: workspaceId },
@@ -62,7 +83,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const userId = await resolveWorkspaceRouteUserId();
     const { workspaceId } = await params;
 
-    await assertWorkspaceAccess(userId, workspaceId);
+    const accessibleWorkspace = await assertWorkspaceAccess(userId, workspaceId);
+
+    if (await isDefaultPersonalWorkspace(accessibleWorkspace)) {
+      return NextResponse.json({ error: "The Personal profile is required and cannot be removed." }, { status: 400 });
+    }
 
     const [workspace, nonCashAccountCount, transactionCount, importFileCount, documentImportCount, statementCheckpointCount, nonSystemCategoryCount] = await Promise.all([
       prisma.workspace.findUnique({

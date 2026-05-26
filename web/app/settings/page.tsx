@@ -29,7 +29,7 @@ export default async function SettingsPage() {
     const cookieStore = await cookies();
     const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
     await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
-    const userWorkspaces = await prisma.workspace.findMany({
+    const userWorkspacesRaw = await prisma.workspace.findMany({
       where: { userId: user.id },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "asc" }],
       select: {
@@ -39,6 +39,21 @@ export default async function SettingsPage() {
         createdAt: true,
         updatedAt: true,
       },
+    });
+    const userWorkspaces = [...userWorkspacesRaw].sort((left, right) => {
+      if (left.type === "personal" && right.type === "personal") {
+        return left.createdAt.getTime() - right.createdAt.getTime();
+      }
+      if (left.type === "personal") {
+        return -1;
+      }
+      if (right.type === "personal") {
+        return 1;
+      }
+
+      return right.updatedAt.getTime() === left.updatedAt.getTime()
+        ? left.createdAt.getTime() - right.createdAt.getTime()
+        : right.updatedAt.getTime() - left.updatedAt.getTime();
     });
     const personalWorkspace =
       (await prisma.workspace.findFirst({

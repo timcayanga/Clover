@@ -35,7 +35,7 @@ export function SettingsProfilesPanel({
   userImageUrl,
   activeProfileId,
   profileList,
-  profilesLoading,
+  profilesLoading: _profilesLoading,
   newProfileName,
   profileRenameDrafts,
   isPending,
@@ -49,6 +49,10 @@ export function SettingsProfilesPanel({
   onRemoveProfile,
 }: SettingsProfilesPanelProps) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const defaultProfileId =
+    profileList
+      .filter((profile) => profile.type === "personal")
+      .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())[0]?.id ?? null;
 
   return (
     <section className="settings-section settings-section--swap" role="tabpanel">
@@ -59,17 +63,9 @@ export function SettingsProfilesPanel({
       </div>
 
       <div className="settings-profile-cards">
-        {profilesLoading && profileList.length === 0 ? (
-          <article className="settings-action-card">
-            <div>
-              <h5>Loading profiles</h5>
-              <p>Fetching your workspace list now.</p>
-            </div>
-          </article>
-        ) : null}
-
         {profileList.map((profile) => {
           const isActive = profile.id === activeProfileId;
+          const isDefault = profile.id === defaultProfileId;
           const renameDraft = profileRenameDrafts[profile.id] ?? profile.name;
           const profileAvatar = profile.type === "personal" ? userImageUrl : null;
           const avatarFallback = profile.name || workspaceName;
@@ -82,23 +78,23 @@ export function SettingsProfilesPanel({
                 </span>
                 <div className="settings-profile-summary__copy">
                   <strong>{profile.name}</strong>
-                  <p>{profile.type === "shared" ? "Shared" : "Personal"}</p>
+                  <p>{isDefault ? "Personal · Default profile" : profile.type === "shared" ? "Shared" : "Personal"}</p>
                 </div>
               </div>
               <div className="settings-profile-card__actions">
                 <label className="settings-inline-field">
                   <span>Rename</span>
-                  <input value={renameDraft} onChange={(event) => onRenameDraftChange(profile.id, event.target.value)} />
+                  <input value={renameDraft} disabled={isDefault} onChange={(event) => onRenameDraftChange(profile.id, event.target.value)} />
                 </label>
                 <div className="settings-profile-card__buttons">
-                  <button type="button" className="button button-secondary button-small" disabled={isPending} onClick={() => onRenameProfile(profile.id)}>
-                    Save name
+                  <button type="button" className="button button-secondary button-small" disabled={isPending || isDefault} onClick={() => onRenameProfile(profile.id)}>
+                    {isDefault ? "Default" : "Save name"}
                   </button>
                   <button type="button" className="button button-secondary button-small" disabled={isPending || isActive} onClick={() => onSwitchProfile(profile.id)}>
                     {isActive ? "Active" : "Switch"}
                   </button>
-                  <button type="button" className="button button-danger button-small" disabled={isPending} onClick={() => onRemoveProfile(profile.id, profile.name)}>
-                    Remove
+                  <button type="button" className="button button-danger button-small" disabled={isPending || isDefault} onClick={() => onRemoveProfile(profile.id, profile.name)}>
+                    {isDefault ? "Required" : "Remove"}
                   </button>
                 </div>
               </div>

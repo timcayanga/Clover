@@ -9,6 +9,22 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+const orderWorkspaces = <T extends { type: string; createdAt: Date; updatedAt: Date }>(workspaces: T[]) =>
+  [...workspaces].sort((left, right) => {
+    if (left.type === "personal" && right.type !== "personal") {
+      return -1;
+    }
+    if (right.type === "personal" && left.type !== "personal") {
+      return 1;
+    }
+
+    return left.type === "personal" && right.type === "personal"
+      ? new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+      : new Date(left.updatedAt).getTime() === new Date(right.updatedAt).getTime()
+        ? new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+        : new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
+
 export async function GET() {
   try {
     if (await isLocalDevHost()) {
@@ -46,25 +62,8 @@ export async function GET() {
         })
       : user;
 
-    if (refreshedUser?.dataWipedAt) {
-      return NextResponse.json({
-        workspaces: refreshedUser.workspaces ?? [],
-      });
-    }
-
     if (refreshedUser?.workspaces?.length) {
-      const orderedWorkspaces = [...refreshedUser.workspaces].sort((left, right) => {
-        if (left.type === "personal" && right.type !== "personal") {
-          return -1;
-        }
-        if (right.type === "personal" && left.type !== "personal") {
-          return 1;
-        }
-
-        return new Date(left.updatedAt).getTime() === new Date(right.updatedAt).getTime()
-          ? new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
-          : new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-      });
+      const orderedWorkspaces = orderWorkspaces(refreshedUser.workspaces);
 
       void Promise.all(orderedWorkspaces.map((workspace) => seedWorkspaceDefaults(workspace.id)));
 
@@ -76,7 +75,7 @@ export async function GET() {
     const starterWorkspace = await ensureStarterWorkspace(user ?? clerkUser.clerkUserId, clerkUser.email, clerkUser.verified);
 
     return NextResponse.json({
-      workspaces: user?.workspaces ?? [starterWorkspace],
+      workspaces: orderWorkspaces(user?.workspaces?.length ? user.workspaces : [starterWorkspace]),
     });
   } catch (error) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -100,24 +99,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Workspace name is required" }, { status: 400 });
     }
 
-    const user = await prisma.user.upsert({
-      where: { clerkUserId: clerkUser.clerkUserId },
-      update: {
-        email: clerkUser.email,
-        firstName: clerkUser.firstName,
-        lastName: clerkUser.lastName,
-        verified: clerkUser.verified,
-        environment: resolvePersistedUserEnvironment(currentEnvironment, existingUser?.environment),
-      },
-      create: {
-        clerkUserId: clerkUser.clerkUserId,
-        email: clerkUser.email,
-        firstName: clerkUser.firstName,
-        lastName: clerkUser.lastName,
-        verified: clerkUser.verified,
-        environment: currentEnvironment,
-      },
-    });
+    const user = await getOrCreateCurrentUser(userId);
+    if (existingUser?.environment) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          environment: resolvePersistedUserEnvironment(currentEnvironment, existingUser.environment),
+        },
+      });
+    }
 
     const workspace = await prisma.workspace.create({
       data: {

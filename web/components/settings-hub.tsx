@@ -29,16 +29,7 @@ const SettingsCategoriesPanel = dynamic(
 
 const SettingsProfilesPanel = dynamic(
   () => import("@/components/settings-profiles-panel").then((module) => module.SettingsProfilesPanel),
-  {
-    loading: () => (
-      <article className="settings-action-card">
-        <div>
-          <h5>Loading profiles</h5>
-          <p>Fetching your workspace list now.</p>
-        </div>
-      </article>
-    ),
-  }
+  { loading: () => null }
 );
 
 const SettingsPlanPanel = dynamic(
@@ -923,6 +914,16 @@ export function SettingsHub({
   };
 
   const handleProfileRemove = (profileId: string, profileName: string) => {
+    const defaultProfileId =
+      profileList
+        .filter((profile) => profile.type === "personal")
+        .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())[0]?.id ?? null;
+
+    if (profileId === defaultProfileId) {
+      setProfileMessage("The Personal profile is required and cannot be removed.");
+      return;
+    }
+
     if (
       !window.confirm(
         `Remove ${profileName}? Clover will only allow this if the profile does not contain imported or confirmed data yet.`

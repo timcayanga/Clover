@@ -29712,6 +29712,7 @@ button.accounts-detail__transaction-head-cell {
 
 .settings-profile-cards {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -29734,7 +29735,7 @@ button.accounts-detail__transaction-head-cell {
 .settings-profile-create {
   display: grid;
   gap: 12px;
-  margin-top: 18px;
+  margin-top: 22px;
 }
 
 .settings-profile-create__form {
@@ -31151,7 +31152,8 @@ html[data-helper-text="hidden"] .settings-helper {
   }
 
   .help-search-results__list,
-  .help-article-grid {
+  .help-article-grid,
+  .settings-profile-cards {
     grid-template-columns: 1fr;
   }
 
