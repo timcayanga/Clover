@@ -13,6 +13,7 @@ import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantNam
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import {
   buildTransactionQueryWhere,
   buildTransactionQueryOrderBy,
@@ -374,38 +375,26 @@ const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplica
     return null;
   }
 
-  const importedFromStatement =
-    Boolean(transaction.importFileId) ||
-    isImportedTransactionPayload(transaction.rawPayload);
-
-  if (importedFromStatement) {
-    return null;
-  }
-
   const signature = [
     transaction.date.toISOString().slice(0, 10),
     Number(transaction.amount).toFixed(2),
     normalizeTransactionKey(transaction.merchantClean ?? transaction.merchantRaw),
   ].join("|");
 
-  if (transaction.isExcluded) {
-    return "Ignored from totals";
-  }
+  const warningReasons = getTransactionReviewReasons({
+    reviewStatus: transaction.reviewStatus,
+    isExcluded: transaction.isExcluded,
+    categoryId: transaction.categoryId,
+    categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+    parserConfidence: transaction.parserConfidence,
+    categoryConfidence: transaction.categoryConfidence,
+    accountMatchConfidence: transaction.accountMatchConfidence,
+    duplicateConfidence: (duplicateCounts.get(signature) ?? 0) > 1 ? 70 : transaction.duplicateConfidence,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+  });
 
-  const categoryName = transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null;
-  if ((categoryName ?? "").trim().toLowerCase() === "other") {
-    return null;
-  }
-
-  if (!transaction.categoryId && !(categoryName ?? "").trim()) {
-    return null;
-  }
-
-  if ((duplicateCounts.get(signature) ?? 0) > 1) {
-    return "Possible duplicate";
-  }
-
-  return null;
+  return warningReasons[0] ?? null;
 };
 
 const mapTransactionRow = (transaction: {

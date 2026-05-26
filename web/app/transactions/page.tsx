@@ -35,6 +35,7 @@ import { getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/acc
 import { getAccountBrand } from "@/lib/account-brand";
 import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
+import { getTransactionReviewReason, getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
@@ -550,9 +551,6 @@ const getCategoryNameById = (categoryList: Category[], categoryId: string | null
 
 const normalizeCategoryName = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
 const ENRICHMENT_JOB_ACTIVE_STALE_MS = 10 * 60 * 1000;
-
-const isResolvedReviewStatus = (status: Transaction["reviewStatus"]) =>
-  status === "confirmed" || status === "rejected" || status === "duplicate_skipped";
 
 const isImportFinalizingTransaction = (transaction: Transaction) => {
   if (!transaction.importFileId) {
@@ -1521,7 +1519,7 @@ const getConfidenceLabel = (value: number) => {
     return "Medium";
   }
 
-  return "Needs review";
+  return "Low confidence";
 };
 
 const normalizeConfidenceScore = (value: number | null | undefined) => {
@@ -1595,47 +1593,36 @@ const getTransactionConfidenceScore = (transaction: Transaction, warningReason: 
   return Math.round(inferredSignals.reduce((sum, signal) => sum + signal.value, 0) / inferredSignals.length);
 };
 
-const isMerchantUnidentified = (transaction: Transaction) => {
-  const merchantText = (transaction.merchantClean ?? transaction.merchantRaw ?? "").trim().toLowerCase();
-  if (!merchantText) {
-    return true;
-  }
-
-  const genericMerchantLabels = new Set(["unknown", "transaction", "imported transaction", "other", "miscellaneous"]);
-  return genericMerchantLabels.has(merchantText) || /^transaction\s*#?\d*$/i.test(merchantText);
-};
+const getTransactionReviewReasonsForDisplay = (transaction: Transaction) => getTransactionReviewReasons(transaction);
 
 const getTransactionReviewChips = (transaction: Transaction, warningReason: string | null): TransactionReviewChip[] => {
   const confidenceScore = getTransactionConfidenceScore(transaction, warningReason);
-  const duplicateScore = normalizeConfidenceScore(transaction.duplicateConfidence) ?? 0;
-  const hasDuplicateSignal = warningReason === "Review similar transaction" || duplicateScore >= 70;
-  const hasMerchantIssue = isMerchantUnidentified(transaction);
-  const hasReviewSignal =
-    Boolean(warningReason) ||
-    transaction.reviewStatus === "pending_review" ||
-    transaction.reviewStatus === "suggested" ||
-    (normalizeConfidenceScore(transaction.categoryConfidence) ?? confidenceScore) < 75 ||
-    hasMerchantIssue;
+  const reviewReasons = getTransactionReviewReasonsForDisplay(transaction);
+  const hasReviewSignal = reviewReasons.length > 0;
 
   const chips: TransactionReviewChip[] = [];
 
-  if (confidenceScore >= 85 && !hasReviewSignal && !hasDuplicateSignal) {
+  if (confidenceScore >= 85 && !hasReviewSignal) {
     chips.push({ label: "High confidence", tone: "clear" });
   }
 
-  if (hasReviewSignal) {
-    chips.push({ label: "Needs review", tone: "warn" });
+  for (const reason of reviewReasons) {
+    const tone =
+      reason === "Review similar transaction"
+        ? "danger"
+        : reason === "Ignored from totals"
+          ? "neutral"
+          : reason === "Could not identify merchant"
+            ? "neutral"
+            : "warn";
+    chips.push({ label: reason, tone });
   }
 
-  if (hasDuplicateSignal) {
-    chips.push({ label: "Duplicate detected", tone: "danger" });
+  if (chips.length === 0) {
+    chips.push({ label: getConfidenceLabel(confidenceScore), tone: confidenceScore >= 85 ? "clear" : "neutral" });
   }
 
-  if (hasMerchantIssue) {
-    chips.push({ label: "Could not identify merchant", tone: "neutral" });
-  }
-
-  return chips.length > 0 ? chips : [{ label: getConfidenceLabel(confidenceScore), tone: confidenceScore >= 85 ? "clear" : "neutral" }];
+  return chips;
 };
 
 const summarizeTransactionChange = (before: Transaction, after: Transaction, accountNames: Map<string, string>, categoryNames: Map<string, string>) => {
@@ -3722,43 +3709,17 @@ function TransactionsPageContent() {
     );
   }, [imports]);
 
-  const warningReasonFor = (transaction: Transaction) => {
-    const normalizedCategoryName = (transaction.categoryName ?? "").trim().toLowerCase();
-    if (normalizedCategoryName === "other" || normalizedCategoryName === "needs category review") {
-      return null;
-    }
+  const warningReasonFor = (transaction: Transaction) => getTransactionReviewReason(transaction);
+  const reviewReasonsFor = (transaction: Transaction) => getTransactionReviewReasonsForDisplay(transaction);
 
-    if (transaction.isExcluded) {
-      return null;
-    }
-
-    if (transaction.warningReason) {
-      if (transaction.warningReason === "Possible duplicate") {
-        return "Review similar transaction";
-      }
-
-      if (transaction.warningReason === "Needs category review") {
-        return null;
-      }
-
-      return transaction.warningReason;
-    }
-
-    if (isResolvedReviewStatus(transaction.reviewStatus)) {
-      return null;
-    }
-
-  return null;
-  };
-
-  const isDuplicateWarningTransaction = (transaction: Transaction) => transaction.warningReason === "Possible duplicate";
+  const isDuplicateWarningTransaction = (transaction: Transaction) => reviewReasonsFor(transaction).includes("Review similar transaction");
 
   const detailWarningReasonFor = (transaction: Transaction) => {
     return warningReasonFor(transaction);
   };
 
   const isReviewableTransaction = (transaction: Transaction) => {
-    return Boolean(warningReasonFor(transaction));
+    return reviewReasonsFor(transaction).length > 0;
   };
 
   const firstReviewTransaction = useMemo(
@@ -3767,6 +3728,9 @@ function TransactionsPageContent() {
   );
 
   const selectedTransactionWarningReason = selectedTransaction ? detailWarningReasonFor(selectedTransaction) : null;
+  const selectedTransactionReviewReasons = selectedTransaction ? reviewReasonsFor(selectedTransaction) : [];
+  const selectedTransactionWarningReasonSummary =
+    selectedTransactionReviewReasons.length > 0 ? selectedTransactionReviewReasons.join(" · ") : selectedTransactionWarningReason;
   const selectedTransactionConfidenceScore = selectedTransaction
     ? getTransactionConfidenceScore(selectedTransaction, selectedTransactionWarningReason)
     : null;
@@ -3990,7 +3954,7 @@ function TransactionsPageContent() {
       setActiveWarningTransactionId(transaction.id);
       setTransactionDeleteConfirmOpen(false);
 
-      const warningReason = warningReasonFor(transaction);
+      const warningReason = reviewReasonsFor(transaction).join(" · ");
       if (warningReason) {
         capturePostHogClientEventOnce(
           "review_item_opened",
@@ -4031,7 +3995,7 @@ function TransactionsPageContent() {
         transaction_category: transaction.categoryName ?? "Uncategorized",
         merchant_raw: transaction.merchantRaw,
         merchant_clean: transaction.merchantClean ?? transaction.merchantRaw,
-        review_reason: warningReasonFor(transaction),
+        review_reason: reviewReasonsFor(transaction).join(" · ") || null,
         review_status: patch.reviewStatus,
         is_excluded: patch.isExcluded,
         is_transfer: patch.isTransfer,
@@ -7716,14 +7680,14 @@ function TransactionsPageContent() {
 
             </div>
 
-            {selectedTransactionWarningReason ? (
+            {selectedTransactionWarningReasonSummary ? (
               <div className="detail-warning-box detail-warning-box--compact transaction-drawer-warning">
                 <div className="detail-warning-box__header">
                   <span className="detail-warning-box__icon" aria-hidden="true">
                     <span className="warning-mark warning-mark--small" aria-hidden="true" />
                   </span>
                   <strong>Review warning</strong>
-                  <span className="detail-warning-box__reason">{selectedTransactionWarningReason}</span>
+                  <span className="detail-warning-box__reason">{selectedTransactionWarningReasonSummary}</span>
                 </div>
                 <div className="detail-warning-actions detail-warning-actions--compact">
                   <button

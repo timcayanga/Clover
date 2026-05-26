@@ -1,6 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
+import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 
 type ImportedAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
 
@@ -2906,6 +2907,43 @@ const main = async () => {
     throw new Error(
       `Parser regression checks failed:\n- [China Bank detection] expected Chinabank but got ${chinaBankProbe.institution ?? "null"}`
     );
+  }
+
+  const genericNeedsReviewReasons = getTransactionReviewReasons({
+    warningReason: "Needs review",
+    reviewStatus: "suggested",
+    categoryName: "Other",
+    merchantRaw: "Bank Transfer",
+    merchantClean: "Bank Transfer",
+  });
+  if (genericNeedsReviewReasons.length > 0) {
+    throw new Error(
+      `expected generic "Needs review" to stay hidden when no concrete reason exists, got ${genericNeedsReviewReasons.join(", ")}`
+    );
+  }
+
+  const concreteReviewReasons = getTransactionReviewReasons({
+    reviewStatus: "suggested",
+    categoryId: null,
+    categoryName: "Shopping",
+    categoryConfidence: 42,
+    accountMatchConfidence: 61,
+    duplicateConfidence: 82,
+    parserConfidence: 54,
+    merchantRaw: "Unknown",
+    merchantClean: "Unknown",
+  });
+  const concreteReasonSet = new Set(concreteReviewReasons);
+  for (const expectedReason of [
+    "Review similar transaction",
+    "Needs category review",
+    "Needs account review",
+    "Import needs review",
+    "Could not identify merchant",
+  ]) {
+    if (!concreteReasonSet.has(expectedReason)) {
+      throw new Error(`expected review reason ${expectedReason} to be present, got ${concreteReviewReasons.join(", ")}`);
+    }
   }
 
   const fixtureCoverage = new Set(fixtures.map((fixture) => normalizeCoverageKey(fixture.institution)));
