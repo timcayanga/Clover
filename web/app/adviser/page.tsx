@@ -12,6 +12,7 @@ import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/
 import { loadSplitBillWorkspaceData } from "@/lib/split-bill-loaders";
 import { AdviserChat } from "@/components/adviser-chat";
 import { AdviserSectionCarousel, type AdviserSectionCard } from "@/components/adviser-section-carousel";
+import { isLiabilityAccountType, isSpendableAccountType, isTrackedAssetAccountType } from "@/lib/account-types";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 
@@ -1227,9 +1228,49 @@ async function AdviserPageContent() {
       ? Number(latestInvestmentSnapshot.totalValue ?? 0) - Number(previousInvestmentSnapshot.totalValue ?? 0)
       : null;
 
+  const accountBalances = workspaceAccounts.filter((account) => account.balance !== null);
+  const spendableAccounts = workspaceAccounts.filter((account) => isSpendableAccountType(account.type));
+  const liabilityAccounts = workspaceAccounts.filter((account) => isLiabilityAccountType(account.type));
+  const trackedAssetAccounts = workspaceAccounts.filter((account) => isTrackedAssetAccountType(account.type));
+  const totalAccountBalance = accountBalances.reduce((sum, account) => sum + (account.balance ?? 0), 0);
+  const spendableAccountBalance = spendableAccounts.reduce((sum, account) => sum + (account.balance ?? 0), 0);
+  const liabilityAccountBalance = liabilityAccounts.reduce((sum, account) => sum + Math.abs(account.balance ?? 0), 0);
+  const trackedAssetBalance = trackedAssetAccounts.reduce((sum, account) => sum + (account.balance ?? 0), 0);
+  const largestAccountBalance = [...accountBalances].sort((left, right) => (right.balance ?? 0) - (left.balance ?? 0))[0] ?? null;
+  const largestAccountShare = totalAccountBalance > 0 && largestAccountBalance ? Math.abs(largestAccountBalance.balance ?? 0) / totalAccountBalance : 0;
+  const accountPressureEstimate = clamp(
+    average([
+      liabilityAccountBalance > 0 ? clamp(liabilityAccountBalance / Math.max(totalAccountBalance || 1, 1) * 100) : 18,
+      spendableAccountBalance < totalAccountBalance * 0.3 ? 82 : 28,
+      largestAccountShare > 0.55 ? clamp(45 + largestAccountShare * 55) : 30,
+    ])
+  );
   const liquidBalance = workspaceAccounts
     .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
     .reduce((sum, account) => sum + (account.balance ?? 0), 0);
+  const hasTransactionFlow = currentSummary.income > 0 || currentSummary.expense > 0;
+  const moneyLeftAmount = hasTransactionFlow ? currentNet : spendableAccountBalance - liabilityAccountBalance;
+  const upcomingPressureScore = clamp(
+    average([
+      accountPressureEstimate,
+      recurringDueSoon.length > 0 ? clamp(68 + recurringDueSoon.length * 8) : 20,
+      commitmentsDueSoon.length > 0 ? clamp(70 + commitmentsDueSoon.length * 8) : 18,
+      openSplitBillCount > 0 ? clamp(72 + openSplitBillCount * 6) : 18,
+      currentSavingsRate !== null && currentSavingsRate < 0 ? 90 : 35,
+      liquidBalance < currentSpend * 0.3 ? 88 : 30,
+    ])
+  );
+  const upcomingPressureLabel =
+    upcomingPressureScore >= 70 ? "High" : upcomingPressureScore >= 45 ? "Moderate" : "Low";
+  const upcomingPressureSignals = [
+    recurringDueSoon.length > 0 ? `${recurringDueSoon.length} recurring due soon` : null,
+    commitmentsDueSoon.length > 0 ? `${commitmentsDueSoon.length} commitments due soon` : null,
+    openSplitBillCount > 0 ? `${formatCurrency(openSplitBillAmount)} in split bills` : null,
+    hasTransactionFlow ? `baseline spend ${formatCurrency(baselineSpend)}` : null,
+    workspaceAccounts.length > 0
+      ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"}`
+      : null,
+  ].filter((signal): signal is string => Boolean(signal));
 
   const recurringMerchantCount = new Set(
     recurringPatterns.map((pattern) => normalizeMerchant(pattern.merchantClean ?? pattern.merchantRaw))
@@ -1560,6 +1601,10 @@ async function AdviserPageContent() {
       contextBoost = cashflowPressureScore * 0.2;
       themeBoost = [dominantTheme?.key, secondaryTheme?.key].includes("cashflow") ? crossSignalSynergy * 0.06 : 0;
       themeKey = "cashflow";
+    } else if (card.group === "accounts") {
+      contextBoost = accountPressureEstimate * 0.18;
+      themeBoost = [dominantTheme?.key, secondaryTheme?.key].includes("cashflow") ? crossSignalSynergy * 0.04 : 0;
+      themeKey = "cashflow";
     } else if (card.group === "goals") {
       contextBoost = goalPressureScore * 0.18;
       themeBoost = [dominantTheme?.key, secondaryTheme?.key].includes("goals") ? crossSignalSynergy * 0.06 : 0;
@@ -1595,6 +1640,10 @@ async function AdviserPageContent() {
       contextBoost = cashflowPressureScore * 0.15;
       themeBoost = [dominantTheme?.key, secondaryTheme?.key].includes("cashflow") ? crossSignalSynergy * 0.05 : 0;
       themeKey = "cashflow";
+    } else if (prompt.group === "accounts") {
+      contextBoost = accountPressureEstimate * 0.14;
+      themeBoost = [dominantTheme?.key, secondaryTheme?.key].includes("cashflow") ? crossSignalSynergy * 0.04 : 0;
+      themeKey = "cashflow";
     } else if (prompt.group === "goals") {
       contextBoost = goalPressureScore * 0.15;
       themeBoost = [dominantTheme?.key, secondaryTheme?.key].includes("goals") ? crossSignalSynergy * 0.05 : 0;
@@ -1620,11 +1669,12 @@ async function AdviserPageContent() {
     {
       id: "money_left",
       title: "Money left",
-      value: formatSignedCurrency(currentNet),
-      tone: currentNet >= 0 ? "positive" : "warning",
-      detail:
-        currentSummary.income > 0
-          ? `${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending; baseline spend ${formatCurrency(baselineSpend)}`
+      value: formatSignedCurrency(moneyLeftAmount),
+      tone: moneyLeftAmount >= 0 ? "positive" : "warning",
+      detail: hasTransactionFlow
+        ? `${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending; baseline spend ${formatCurrency(baselineSpend)}`
+        : workspaceAccounts.length > 0
+          ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"}; ${formatCurrency(spendableAccountBalance)} spendable balance and ${formatCurrency(liabilityAccountBalance)} liability exposure`
           : "Based on your current transaction history",
     },
     {
@@ -1637,10 +1687,46 @@ async function AdviserPageContent() {
           ? "Add more income and spending data to calculate this"
           : `Based on your ${activeTransactionWindowLabel} income and expense mix against your historical baseline`,
     },
+    {
+      id: "upcoming_pressure",
+      title: "Upcoming Pressure",
+      value: upcomingPressureLabel,
+      tone: upcomingPressureLabel === "High" ? "warning" : upcomingPressureLabel === "Moderate" ? "neutral" : "positive",
+      detail:
+        upcomingPressureSignals.length > 0
+          ? upcomingPressureSignals.join(" · ")
+          : workspaceAccounts.length > 0
+            ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"} tracked`
+            : "Based on your current transaction history",
+    },
   ];
 
   const passiveCards: RankedAdviserCard[] = selectTopRanked(
     [
+      workspaceAccounts.length > 0
+        ? {
+            id: "account_snapshot",
+            title: "Connected accounts",
+            summary: `${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? "" : "s"} are connected in this workspace.`,
+            evidence:
+              totalAccountBalance > 0
+                ? `${formatCurrency(totalAccountBalance)} tracked across ${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? "" : "s"}`
+                : `${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? "" : "s"} ready for analysis`,
+            ctaLabel: "Open accounts",
+            href: "/accounts",
+            tone: totalAccountBalance > 0 ? "positive" : "neutral",
+            group: "accounts",
+            breakdown: {
+              impact: clamp(55 + workspaceAccounts.length * 8 + (totalAccountBalance > 0 ? 10 : 0)),
+              urgency: clamp(accountPressureEstimate),
+              confidence: clamp(average([toCountScore(workspaceAccounts.length, 5), currentTransactionConfidence, liquidBalance > 0 ? 80 : 45])),
+              personalization: clamp(65 + largestAccountShare * 25),
+              recency: 100,
+              actionability: 78,
+            },
+            score: 0,
+          }
+        : null,
       anomalySignal
         ? {
             id: "anomaly_signal",
@@ -1790,6 +1876,32 @@ async function AdviserPageContent() {
             score: 0,
           }
         : null,
+      workspaceAccounts.length > 1 && totalAccountBalance > 0
+        ? {
+            id: "account_concentration",
+            title: "Balance concentration",
+            summary:
+              largestAccountBalance && largestAccountBalance.name
+                ? `${largestAccountBalance.name} holds most of the tracked balance.`
+                : "One account holds most of the tracked balance.",
+            evidence:
+              `Largest account share: ${formatPercent(largestAccountShare * 100)} · Spendable balance ${formatCurrency(spendableAccountBalance)}` +
+              (liabilityAccountBalance > 0 ? ` · Liability exposure ${formatCurrency(liabilityAccountBalance)}` : ""),
+            ctaLabel: "Open accounts",
+            href: "/accounts",
+            tone: largestAccountShare > 0.6 ? "warning" : "neutral",
+            group: "accounts",
+            breakdown: {
+              impact: clamp(55 + largestAccountShare * 45),
+              urgency: clamp(accountPressureEstimate + largestAccountShare * 20),
+              confidence: clamp(average([currentTransactionConfidence, workspaceAccounts.length > 1 ? 80 : 45, largestAccountShare > 0 ? 85 : 35])),
+              personalization: clamp(70 + largestAccountShare * 20),
+              recency: 100,
+              actionability: 70,
+            },
+            score: 0,
+          }
+        : null,
       latestInvestmentSnapshot
         ? {
             id: "investment_move",
@@ -1823,6 +1935,32 @@ async function AdviserPageContent() {
 
   const recommendationCards: RankedAdviserCard[] = selectTopRanked(
     [
+      workspaceAccounts.length > 0
+        ? {
+            id: "review_account_buffer",
+            title: "Review account buffer",
+            summary:
+              liquidBalance > 0
+                ? "Check whether your spendable accounts have enough cushion for the next wave of bills."
+                : "Check whether your connected accounts are giving you enough cushion for the next wave of bills.",
+            evidence:
+              `${formatCurrency(spendableAccountBalance)} spendable balance` +
+              (liabilityAccountBalance > 0 ? ` · ${formatCurrency(liabilityAccountBalance)} liability exposure` : ""),
+            ctaLabel: "Open accounts",
+            href: "/accounts",
+            tone: accountPressureEstimate >= 70 ? "warning" : "neutral",
+            group: "accounts",
+            breakdown: {
+              impact: clamp(65 + accountPressureEstimate * 0.3),
+              urgency: clamp(accountPressureEstimate + (liquidBalance < currentSpend * 0.3 ? 20 : 0)),
+              confidence: clamp(average([toCountScore(workspaceAccounts.length, 5), currentTransactionConfidence, liquidBalance > 0 ? 80 : 45])),
+              personalization: clamp(70 + largestAccountShare * 20),
+              recency: 100,
+              actionability: 92,
+            },
+            score: 0,
+          }
+        : null,
       forecastSignal
         ? {
             id: "forecast_pressure",
@@ -1999,6 +2137,29 @@ async function AdviserPageContent() {
 
   const coachingCards: RankedAdviserCard[] = selectTopRanked(
     [
+      workspaceAccounts.length > 1 && totalAccountBalance > 0
+        ? {
+            id: "account_buffer_habit",
+            title: "Balance buffer habit",
+            summary: "Keeping a healthy spread across accounts makes it easier to absorb recurring charges and surprise spend.",
+            evidence:
+              `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"} · ` +
+              `largest account share ${formatPercent(largestAccountShare * 100)}`,
+            ctaLabel: "View account mix",
+            href: "/accounts",
+            tone: "neutral",
+            group: "accounts",
+            breakdown: {
+              impact: clamp(45 + largestAccountShare * 35),
+              urgency: clamp(accountPressureEstimate),
+              confidence: clamp(average([toCountScore(workspaceAccounts.length, 5), currentTransactionConfidence, largestAccountShare > 0 ? 80 : 40])),
+              personalization: clamp(75 + largestAccountShare * 10),
+              recency: 100,
+              actionability: 62,
+            },
+            score: 0,
+          }
+        : null,
       weekendExpenseShare > 0.2
         ? {
             id: "weekend_pattern",
