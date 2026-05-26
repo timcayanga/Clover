@@ -7,6 +7,7 @@ import { CommitmentsPanel } from "@/components/commitments-panel";
 type RecurringPageClientProps = {
   workspaceId: string;
   commitments: Parameters<typeof CommitmentsPanel>[0]["commitments"];
+  recurringPatterns: Parameters<typeof CommitmentsPanel>[0]["recurringPatterns"];
   accounts: Parameters<typeof CommitmentsPanel>[0]["accounts"];
   transactions: Parameters<typeof CommitmentsPanel>[0]["transactions"];
   initialAddOpen?: boolean;
@@ -27,6 +28,7 @@ const addButtonSvgStyle = {
 export function RecurringPageClient({
   workspaceId,
   commitments,
+  recurringPatterns,
   accounts,
   transactions,
   initialAddOpen = false,
@@ -100,6 +102,7 @@ export function RecurringPageClient({
         <CommitmentsPanel
           workspaceId={workspaceId}
           commitments={commitments}
+          recurringPatterns={recurringPatterns}
           accounts={accounts}
           transactions={transactions}
           showAddModal={addOpen}

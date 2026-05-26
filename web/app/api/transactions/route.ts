@@ -14,6 +14,7 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
+import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import {
   buildTransactionQueryWhere,
   buildTransactionQueryOrderBy,
@@ -1138,6 +1139,10 @@ export async function POST(request: Request) {
         });
       }
     }
+
+    void syncWorkspaceRecurringPatterns(payload.workspaceId).catch(() => {
+      // Recurring detection should never block a manual transaction save.
+    });
 
     void capturePostHogServerEvent("manual_transaction_created", userId, {
       workspace_id: payload.workspaceId,

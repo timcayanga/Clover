@@ -22,6 +22,7 @@ import {
   storeImportedFileTextCacheRecord,
 } from "@/lib/import-file-text.server";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
+import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import { parseReceiptText } from "@/lib/split-bill";
 import {
   DATA_ENGINE_VERSION,
@@ -5839,7 +5840,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
           ? row.statementFingerprint.trim()
           : checkpointStatementFingerprint,
-    });
+    } as Parameters<typeof buildConfirmedTransactionDedupeKey>[0]);
     const existingImportTransaction =
       existingImportTransactionBySourceIndex.get(index + 1) ??
       (existingImportTransactionsByDedupeKey.get(dedupeKey) ?? []).find(
@@ -6135,6 +6136,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
 
   await collapseDuplicateTransactionsForImport(importFileId).catch((error) => {
     console.warn("Unable to collapse duplicate transactions after confirmation", {
+      importFileId,
+      error,
+    });
+  });
+
+  await syncWorkspaceRecurringPatterns(String(importFile.workspaceId)).catch((error) => {
+    console.warn("Unable to sync recurring patterns after import confirmation", {
       importFileId,
       error,
     });

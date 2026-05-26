@@ -141,7 +141,16 @@ export const serializeFinancialCommitment = <T extends {
   createdAt: Date;
   updatedAt: Date;
   account?: FinancialCommitmentAccount | null;
-  transaction?: FinancialCommitmentTransaction | null;
+  transaction?: {
+    id: string;
+    date: Date;
+    amount: { toString: () => string } | null;
+    merchantRaw: string;
+    merchantClean: string | null;
+    account: {
+      name: string;
+    };
+  } | null;
 }>(commitment: T): FinancialCommitmentSummary => ({
   id: commitment.id,
   workspaceId: commitment.workspaceId,

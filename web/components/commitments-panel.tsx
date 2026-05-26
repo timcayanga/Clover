@@ -12,6 +12,7 @@ import {
   commitmentStatusLabels,
   type FinancialCommitmentSummary,
 } from "@/lib/commitments";
+import type { RecurringPatternSummary } from "@/lib/recurring-page";
 import { getAccountPath } from "@/lib/account-path";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatAccountTypeLabel, getRecurringKindSuggestionForAccountType, isLiabilityAccountType } from "@/lib/account-types";
@@ -38,6 +39,7 @@ type CommitmentTransactionOption = {
 type CommitmentsPanelProps = {
   workspaceId: string;
   commitments: FinancialCommitmentSummary[];
+  recurringPatterns: RecurringPatternSummary[];
   accounts: CommitmentAccountOption[];
   transactions: CommitmentTransactionOption[];
   showAddModal?: boolean;
@@ -225,6 +227,7 @@ const commitmentFormCopy: Record<CommitmentFormKind, CommitmentFormCopy> = {
 export function CommitmentsPanel({
   workspaceId,
   commitments,
+  recurringPatterns,
   accounts,
   transactions,
   showAddModal = false,
@@ -234,6 +237,7 @@ export function CommitmentsPanel({
   const detailPanelRef = useRef<HTMLDivElement | null>(null);
   const hasMountedRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [confirmingPatternId, setConfirmingPatternId] = useState<string | null>(null);
   const [kind, setKind] = useState<CommitmentKind>("planned_payment");
   const [title, setTitle] = useState("");
   const [counterparty, setCounterparty] = useState("");
@@ -309,6 +313,14 @@ export function CommitmentsPanel({
   }, [groupedCommitments]);
 
   const recentTransactions = transactions.slice(0, 24);
+  const suggestedRecurringPatterns = recurringPatterns.filter(
+    (pattern) =>
+      !commitments.some((commitment) => {
+        const commitmentTitle = `${commitment.title} ${commitment.counterparty ?? ""}`.trim().toLowerCase();
+        const patternName = (pattern.merchantClean ?? pattern.merchantRaw).trim().toLowerCase();
+        return commitmentTitle.includes(patternName) || patternName.includes(commitment.title.trim().toLowerCase());
+      })
+  );
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === accountId) ?? null,
@@ -431,8 +443,71 @@ export function CommitmentsPanel({
       });
   };
 
+  const handleConfirmPattern = (patternId: string) => {
+    setConfirmingPatternId(patternId);
+    void fetch(`/api/recurring-patterns/${patternId}/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error ?? "Unable to add recurring item");
+        }
+
+        router.refresh();
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Unable to add recurring item";
+        window.alert(message);
+      })
+      .finally(() => {
+        setConfirmingPatternId(null);
+      });
+  };
+
   return (
     <section style={{ display: "grid", gap: 24 }}>
+      {suggestedRecurringPatterns.length > 0 ? (
+        <article className="panel commitments-suggestions-panel">
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <p className="eyebrow">Suggested recurring</p>
+              <h3 style={{ margin: 0 }}>Clover found possible subscriptions and bills</h3>
+            </div>
+            <span className="button button-secondary button-small">{suggestedRecurringPatterns.length} suggestion{suggestedRecurringPatterns.length === 1 ? "" : "s"}</span>
+          </div>
+          <div style={{ display: "grid", gap: 10 }}>
+            {suggestedRecurringPatterns.slice(0, 6).map((pattern) => (
+              <article key={pattern.id} className="notification-item" style={{ alignItems: "flex-start" }}>
+                <div className="notification-item__main" style={{ gap: 4 }}>
+                  <p className="notification-item__tone">
+                    {pattern.frequency ? commitmentRecurrenceLabels[pattern.frequency as keyof typeof commitmentRecurrenceLabels] ?? pattern.frequency : "Recurring"} · {pattern.confidence}% confidence
+                  </p>
+                  <h4>{pattern.merchantClean ?? pattern.merchantRaw}</h4>
+                  <p>
+                    {formatCurrency(pattern.amount)}
+                    {pattern.account ? ` · ${pattern.account.name}` : ""}
+                    {pattern.transactionCount > 1 ? ` · seen ${pattern.transactionCount} times` : ""}
+                    {pattern.nextExpectedDate ? ` · next ${formatDate(pattern.nextExpectedDate)}` : ""}
+                  </p>
+                </div>
+                <div className="notification-item__time" style={{ minWidth: 130 }}>
+                  <button
+                    type="button"
+                    className="button button-primary button-small"
+                    onClick={() => handleConfirmPattern(pattern.id)}
+                    disabled={confirmingPatternId === pattern.id}
+                  >
+                    {confirmingPatternId === pattern.id ? "Adding..." : "Add to recurring"}
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </article>
+      ) : null}
+
       <div className="commitments-summary-grid">
         {groupedCommitments.map((group) => {
           const isSelected = selectedKind === group.kind;
