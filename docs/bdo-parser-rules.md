@@ -13,7 +13,7 @@ This document captures the BDO parsing rules learned from the synthetic training
 - Use running balance as a first-class field.
 - Keep salary credits as `Income`.
 - Keep `InstaPay Transfer Fee` as `Financial`.
-- Keep `Bills Payment` and other bank-to-bank payments as `Transfers`.
+- Treat explicit internal sweep rows as `Transfers`, but treat generic `Bank Transfer` / `Fund Transfer` / `Incoming Transfer` rows by direction unless the statement clearly shows an internal Clover-owned account movement.
 - Keep `Mobile Check Deposit`, `ATM Cash Deposit`, `Over the Counter Deposit`, and `PESONet Credit` as transfer-like credits unless the statement clearly says otherwise.
 - Preserve `Interest Earned` and `Withholding Tax` as separate rows.
 - Treat `Month-End Adjustment` as a special adjustment entry and review it instead of forcing a normal category.
@@ -55,7 +55,7 @@ This document captures the BDO parsing rules learned from the synthetic training
   - `SERVICE CHARGE DEBIT` -> `Service Charge`
   - `INTEREST PAY SYS-GEN`, `INTEREST EARNED`, `INTEREST CREDITED` -> `Interest Earned`
   - `INTEREST WITHHELD` -> `Tax Withheld`
-  - `POB IBFT`, `IBFT BN`, `BANK TRANSFER`, `Fund Transfer` -> `Bank Transfer`
+  - `POB IBFT`, `IBFT BN`, `BANK TRANSFER`, `Fund Transfer` -> keep the raw wording, but normalize the direction in type/category by credit vs debit
   - `INTERBANK DEPOSIT`, `Funds Deposited`, `Received A/C` -> `Incoming Transfer`
   - `PAYROLL` -> `Salary Credit`
   - `CASH DEPOSIT` -> `Cash Deposit`

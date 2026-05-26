@@ -1326,6 +1326,21 @@ const normalizeTransactionNotes = (value: string | null | undefined) => {
   return trimmed;
 };
 
+const getRawPayloadTextCandidate = (rawPayload: unknown, keys: string[]) => {
+  if (!isRecord(rawPayload)) {
+    return "";
+  }
+
+  for (const key of keys) {
+    const candidate = rawPayload[key];
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return "";
+};
+
 const createEmptyReceiptLineItem = (): ReceiptLineItemDraft => ({
   description: "",
   quantity: "",
@@ -1670,7 +1685,10 @@ const summarizeTransactionChange = (before: Transaction, after: Transaction, acc
   return changes;
 };
 
-const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => {
+const createDetailDraft = (
+  transaction: Transaction,
+  options: { categoryId?: string | null } = {}
+): TransactionDetailDraft => {
   const effectiveCategoryName =
     getEffectiveTransactionCategoryName({
       categoryName: transaction.categoryName ?? null,
@@ -1688,7 +1706,7 @@ const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => 
     merchantClean: transaction.merchantClean ?? transaction.merchantRaw,
     date: transaction.date.slice(0, 10),
     accountId: transaction.accountId,
-    categoryId: transaction.categoryId ?? "",
+    categoryId: options.categoryId ?? transaction.categoryId ?? "",
     amount: transaction.amount,
     currency: transaction.currency,
     type: effectiveType === "income" ? "credit" : "debit",
@@ -3755,6 +3773,34 @@ function TransactionsPageContent() {
   const selectedTransactionReviewChips = selectedTransaction
     ? getTransactionReviewChips(selectedTransaction, selectedTransactionWarningReason)
     : [];
+  const getDisplayCategoryNameForTransaction = useCallback(
+    (transaction: Transaction) => {
+      const categoryValue = transaction.categoryId ?? otherCategoryId;
+      const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
+
+      return (
+        getEffectiveTransactionCategoryName({
+          categoryName: transaction.categoryName ?? getCategoryNameById(categories, categoryValue) ?? null,
+          rawPayload: transaction.rawPayload as never,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          institution: accountInstitution,
+          source: transaction.source ?? null,
+          type: transaction.type,
+        }) ??
+        guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
+        "Other"
+      );
+    },
+    [accountInstitutionById, categories, otherCategoryId]
+  );
+  const getDisplayCategoryIdForTransaction = useCallback(
+    (transaction: Transaction) => {
+      const displayCategoryName = getDisplayCategoryNameForTransaction(transaction);
+      return getCategoryIdByName(categories, displayCategoryName) || transaction.categoryId || otherCategoryId;
+    },
+    [categories, getDisplayCategoryNameForTransaction, otherCategoryId]
+  );
   const detailTransactionSummary = useMemo(() => {
     if (!selectedTransaction) {
       return "";
@@ -3776,11 +3822,13 @@ function TransactionsPageContent() {
       return false;
     }
 
+    const baselineCategoryId = getDisplayCategoryIdForTransaction(selectedTransaction);
+
     return (
       (detailDraft.merchantClean.trim() || "") !== (selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw).trim() ||
       detailDraft.date !== selectedTransaction.date.slice(0, 10) ||
       detailDraft.accountId !== selectedTransaction.accountId ||
-      (detailDraft.categoryId || otherCategoryId) !== (selectedTransaction.categoryId ?? otherCategoryId) ||
+      (detailDraft.categoryId || otherCategoryId) !== baselineCategoryId ||
       detailDraft.amount !== selectedTransaction.amount ||
       detailDraft.currency !== selectedTransaction.currency ||
       detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
@@ -3790,7 +3838,7 @@ function TransactionsPageContent() {
       receiptLineItemSignature(detailDraft.receiptLineItems) !==
         receiptLineItemSignature(parseReceiptLineItemsFromPayload(selectedTransaction.rawPayload))
     );
-  }, [detailDraft, otherCategoryId, selectedTransaction]);
+  }, [detailDraft, getDisplayCategoryIdForTransaction, otherCategoryId, selectedTransaction]);
 
   useEffect(() => {
     if (detailAutosaveTimerRef.current) {
@@ -3849,6 +3897,14 @@ function TransactionsPageContent() {
   );
   const selectedTransactionReceiptLineItems = useMemo(
     () => parseReceiptLineItemsFromPayload(selectedTransaction?.rawPayload),
+    [selectedTransaction?.rawPayload]
+  );
+  const selectedTransactionRawSourceLine = useMemo(
+    () => getRawPayloadTextCandidate(selectedTransaction?.rawPayload, ["line", "rawLine", "sourceLine", "rawText", "text"]),
+    [selectedTransaction?.rawPayload]
+  );
+  const selectedTransactionRawNote = useMemo(
+    () => getRawPayloadTextCandidate(selectedTransaction?.rawPayload, ["notes", "note", "detail", "details"]),
     [selectedTransaction?.rawPayload]
   );
   const detailReceiptLineItems = detailDraft?.receiptLineItems ?? selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
@@ -3925,8 +3981,7 @@ function TransactionsPageContent() {
     });
     setTransactionSplitBillSaving(false);
     setDetailDraft({
-      ...createDetailDraft(transaction),
-      categoryId: transaction.categoryId ?? otherCategoryId,
+      ...createDetailDraft(transaction, { categoryId: getDisplayCategoryIdForTransaction(transaction) }),
     });
   };
 
@@ -4707,7 +4762,7 @@ function TransactionsPageContent() {
         return current;
       }
 
-      return createDetailDraft(updated);
+      return createDetailDraft(updated, { categoryId: getDisplayCategoryIdForTransaction(updated) });
     });
 
     if (before) {
@@ -7713,6 +7768,18 @@ function TransactionsPageContent() {
                     placeholder="Optional note or review context"
                   />
                 </label>
+                {selectedTransactionRawSourceLine ? (
+                  <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
+                    <span>Raw source line</span>
+                    <strong>{selectedTransactionRawSourceLine}</strong>
+                  </div>
+                ) : null}
+                {selectedTransactionRawNote ? (
+                  <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
+                    <span>Parsed note</span>
+                    <strong>{selectedTransactionRawNote}</strong>
+                  </div>
+                ) : null}
 
                 <div className="transaction-drawer-receipt-lines">
                   <div className="transaction-drawer-receipt-lines__head">

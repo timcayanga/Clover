@@ -105,6 +105,10 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Interest Earned",
     },
     {
+      patterns: [/intrest\s+credited/i],
+      replacement: "Interest Credited",
+    },
+    {
       patterns: [/interest\s+withheld/i],
       replacement: "Tax Withheld",
     },

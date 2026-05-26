@@ -199,16 +199,20 @@ const getInstitutionSpecificCategoryOverride = (institution: string | null | und
 const getBdoCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
 
-  if (/bank\s+transfer|pob\s+ibft|ibft\s+bn|fund\s+transfer|interbank\s+deposit|received\s+a\/c|reciv(?:ed)?\s+a\/c/.test(lower)) {
+  if (/incoming\s+transfer|interbank\s+deposit|funds?\s+deposited|received\s+a\/c|reciv(?:ed)?\s+a\/c|cash\s+deposit|salary|payroll|interest|intrest|credit\s+movement/.test(lower)) {
+    return "Income";
+  }
+
+  if (/bank\s+transfer|pob\s+ibft|ibft\s+bn|fund\s+transfer|transfer\s+to|payment\s+to|debit\s+movement/.test(lower)) {
+    return "Other";
+  }
+
+  if (/internal\s+clearing|internal\s+clearing\s+on-us|on-us\s+transaction|encashment|check\s+issued|check\s+deposit|dm1|icc|ilnsdm1|pdck3|cm1|drt|cd|ck1/.test(lower)) {
     return "Transfers";
   }
 
   if (/atm\s+withdrawal|cash\s+withdrawal|w\/d\s+fr\s+sav|wdrawal|cw\b|\/drw\b/.test(lower)) {
     return "Cash & ATM";
-  }
-
-  if (/salary|payroll|interest|cash\s+deposit|funds?\s+deposited/.test(lower)) {
-    return "Income";
   }
 
   return null;

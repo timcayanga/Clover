@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { summarizeMerchantText } from "@/lib/merchant-labels";
 
 type ImportedAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
 
@@ -983,13 +984,20 @@ const main = async () => {
     accountName: bdoMetadata.accountName,
     accountNumber: bdoMetadata.accountNumber,
   });
-  if (!bdoRows.some((row) => /bank\s+transfer|pob\s+ibft|fund\s+transfer/i.test(row.description ?? "") && row.type === "transfer" && row.categoryName === "Transfers")) {
-    throw new Error("expected BDO bank transfer rows to classify as transfer");
+  const bdoBankTransferRows = bdoRows.filter((row) => /bank\s+transfer|pob\s+ibft|fund\s+transfer|incoming\s+transfer/i.test(row.description ?? ""));
+  if (bdoBankTransferRows.length === 0) {
+    throw new Error("expected BDO sample to contain transfer-like rows");
+  }
+  if (bdoBankTransferRows.some((row) => row.type === "transfer")) {
+    throw new Error("expected BDO transfer-like rows to classify as income or expense, not transfer");
   }
   if (!bdoRows.some((row) => /atm\s+withdrawal|w\/d\s+fr\s+sav|cash\s+withdrawal|wdrawal/i.test(row.description ?? "") && row.type === "expense" && row.categoryName === "Cash & ATM")) {
     throw new Error("expected BDO withdrawal rows to classify as expense");
   }
-  console.log("[PASS] BDO classification | bank transfer and withdrawal rows classified correctly");
+  if (summarizeMerchantText("Intrest Credited", "BDO") !== "Interest Credited") {
+    throw new Error("expected BDO interest spelling normalization to correct Intrest Credited");
+  }
+  console.log("[PASS] BDO classification | transfer-like rows, withdrawals, and interest spelling classified correctly");
 
   const mayaSamplesDir = join(root, "Samples/Maya");
   const mayaSampleFiles = (await readdir(mayaSamplesDir)).filter((entry) => /\.pdf$/i.test(entry)).sort();

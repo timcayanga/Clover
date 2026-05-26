@@ -22,11 +22,47 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const normalizeCategoryName = (value?: string | null) => value?.trim().toLowerCase() ?? "";
+
 const getSummaryTransactionType = (transaction: {
   type: "income" | "expense" | "transfer";
   isTransfer: boolean;
+  categoryName?: string | null;
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  description?: string | null;
+  institution?: string | null;
 }) => {
-  if (transaction.type === "transfer" || transaction.isTransfer) {
+  const merchantText = [
+    transaction.merchantClean?.trim() || "",
+    transaction.merchantRaw?.trim() || "",
+    transaction.description?.trim() || "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const lowerMerchantText = merchantText.toLowerCase();
+  const institutionText = transaction.institution?.trim().toLowerCase() ?? "";
+
+  if (/\bbdo\b|\bbanco de oro\b/.test(institutionText)) {
+    if (/incoming\s+transfer|interbank\s+deposit|funds?\s+deposited|received\s+a\/c|reciv(?:ed)?\s+a\/c|cash\s+deposit|salary|payroll|interest|intrest|credit\s+movement/.test(lowerMerchantText)) {
+      return "income" as const;
+    }
+
+    if (/bank\s+transfer|pob\s+ibft|ibft\s+bn|fund\s+transfer|transfer\s+to|payment\s+to|debit\s+movement/.test(lowerMerchantText)) {
+      return "expense" as const;
+    }
+
+    if (/internal\s+clearing|internal\s+clearing\s+on-us|on-us\s+transaction|encashment|check\s+issued|check\s+deposit|dm1|icc|ilnsdm1|pdck3|cm1|drt|cd|ck1/.test(lowerMerchantText)) {
+      return "transfer" as const;
+    }
+  }
+
+  const normalizedCategoryName = normalizeCategoryName(transaction.categoryName);
+  if (normalizedCategoryName === "income") {
+    return "income" as const;
+  }
+
+  if (normalizedCategoryName === "transfers" || transaction.isTransfer) {
     return "transfer" as const;
   }
 
@@ -869,6 +905,11 @@ export async function GET(request: Request) {
         const effectiveType = getSummaryTransactionType({
           type: mappedTransaction.type,
           isTransfer: mappedTransaction.isTransfer,
+          categoryName: mappedTransaction.categoryName,
+          merchantRaw: mappedTransaction.merchantRaw,
+          merchantClean: mappedTransaction.merchantClean,
+          description: mappedTransaction.description,
+          institution: mappedTransaction.institution,
         });
 
         if (effectiveType === "income") {

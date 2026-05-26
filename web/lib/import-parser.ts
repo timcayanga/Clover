@@ -5462,18 +5462,53 @@ const cleanupBdoDescription = (value: string) =>
 
 const guessBdoCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
-  if (/interest/.test(lower)) return "Income";
+  if (/interest|intrest/.test(lower)) return "Income";
   if (/salary|payroll/.test(lower)) return "Income";
   if (/service\s+charge|tax|withheld|fee|charge/.test(lower)) return "Financial";
-  if (/cash\s*deposit|payroll|salary|interest/i.test(lower)) {
+  if (/cash\s*deposit|payroll|salary|interest|intrest/i.test(lower)) {
     return "Income";
   }
-  if (/bank\s+transfer|pob\s+ibft|fund\s+transfer|funds\s+deposited|received\s+a\/c|reciv(?:ed)?\s+a\/c|interbank\s+deposit/i.test(lower)) {
+  if (/bank\s+transfer|pob\s+ibft|fund\s+transfer|transfer\s+to|payment\s+to|debit\s+movement/i.test(lower)) {
+    return "Other";
+  }
+  if (/funds?\s+deposited|incoming\s+transfer|interbank\s+deposit|received\s+a\/c|reciv(?:ed)?\s+a\/c|credit\s+movement/i.test(lower)) {
+    return "Income";
+  }
+  if (/internal\s+clearing|internal\s+clearing\s+on-us|on-us\s+transaction|encashment|check\s+issued|check\s+deposit|dm1|icc|ilnsdm1|pdck3|cm1|drt|cd|ck1/i.test(lower)) {
     return "Transfers";
   }
   if (/withdrawal|atm|cash\s+withdrawal|cw\b|w\/d|wdrawal/i.test(lower)) return "Cash & ATM";
   if (/merchant\s+payment|ma[_\s-]?pc/i.test(lower)) return "Shopping";
   return guessCategoryName(description, type);
+};
+
+const isBdoExternalIncomeDescription = (description: string) =>
+  /funds?\s+deposited|incoming\s+transfer|interbank\s+deposit|received\s+a\/c|reciv(?:ed)?\s+a\/c|cash\s+deposit|salary|payroll|interest|intrest|credit\s+movement/.test(
+    description.toLowerCase()
+  );
+
+const isBdoExternalExpenseDescription = (description: string) =>
+  /bank\s+transfer|pob\s+ibft|fund\s+transfer|transfer\s+to|payment\s+to|debit\s+movement|cash\s+withdrawal|withdrawal|atm|cw\b|w\/d|wdrawal/.test(
+    description.toLowerCase()
+  );
+
+const isBdoInternalMovementDescription = (description: string) =>
+  /internal\s+clearing|internal\s+clearing\s+on-us|on-us\s+transaction|encashment|check\s+issued|check\s+deposit|dm1|icc|ilnsdm1|pdck3|cm1|drt|cd|ck1/.test(
+    description.toLowerCase()
+  );
+
+const isLikelyBdoOcrFragment = (description: string) => {
+  const compact = normalizeWhitespace(description).replace(/[^a-z0-9]+/gi, "");
+  if (!compact) {
+    return true;
+  }
+
+  const letterCount = (compact.match(/[a-z]/gi) ?? []).length;
+  if (letterCount === 0) {
+    return true;
+  }
+
+  return letterCount < 2 && compact.length <= 8;
 };
 
 const parseBdoSavingsTransactionBlock = (
@@ -5529,7 +5564,7 @@ const parseBdoSavingsTransactionBlock = (
   if ((!description || !/[A-Za-z]/.test(description)) && numericReferenceCandidate) {
     description = normalizeWhitespace(numericReferenceCandidate).replace(/\s+/g, " ").trim();
   }
-  if (!description || (!/[A-Za-z]/.test(description) && !/\d/.test(description))) {
+  if (!description || isLikelyBdoOcrFragment(description)) {
     return null;
   }
 
@@ -5546,18 +5581,15 @@ const parseBdoSavingsTransactionBlock = (
   const amountValue = Math.abs(signedAmount ?? moneyValues[0]);
 
   const lower = description.toLowerCase();
-  const type: TransactionType =
-    /salary|payroll|interest|cash\s*deposit/.test(lower)
-      ? "income"
-      : /bank\s+transfer|pob\s+ibft|fund\s+transfer|funds\s+deposited|received\s+a\/c|reciv(?:ed)?\s+a\/c|interbank\s+deposit/i.test(
-          lower
-        )
-        ? "transfer"
+  const type: TransactionType = isBdoExternalIncomeDescription(description)
+    ? "income"
+    : isBdoInternalMovementDescription(description)
+      ? "transfer"
+      : isBdoExternalExpenseDescription(description)
+        ? "expense"
         : /service\s+charge|tax|withheld|fee|charge/.test(lower)
           ? "expense"
-          : /withdrawal|atm|cash\s+withdrawal|cw\b|w\/d|wdrawal/i.test(lower)
-            ? "expense"
-            : "expense";
+          : "expense";
 
   const categoryName =
     !/[A-Za-z]/.test(description)
