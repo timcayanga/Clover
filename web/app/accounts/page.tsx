@@ -1872,6 +1872,10 @@ function AccountsPageContent() {
         normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
       ) ??
       null;
+    const cachedTransactionsWorkspace = selectedWorkspaceId ? getCachedTransactionsWorkspace(selectedWorkspaceId) : null;
+    const cachedTransactionsForAccount = Array.isArray(cachedTransactionsWorkspace?.transactions)
+      ? (cachedTransactionsWorkspace.transactions as Transaction[]).some((transaction) => transactionMatchesAccount(transaction, account))
+      : false;
     const checkpointBalance =
       latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
         ? String(latestCheckpoint.endingBalance)
@@ -1880,6 +1884,7 @@ function AccountsPageContent() {
     const hasVisibleBalance = hasMeaningfulBalance(account.balance);
     const hasLoadedTransactions =
       transactions.some((transaction) => transactionMatchesAccount(transaction, account)) ||
+      cachedTransactionsForAccount ||
       (typeof latestCheckpoint?.rowCount === "number" && latestCheckpoint.rowCount > 0);
     const displayedBalance = hasMeaningfulBalance(account.balance)
       ? account.balance
@@ -2473,7 +2478,7 @@ function AccountsPageContent() {
       row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
     const accountBrand = getAccountBrand({
       institution: row.institution,
-      name: row.name,
+      name: accountCardName,
       type: getEffectiveAccountType(row),
     });
     const balanceValue = Math.abs(parseAmount(loadingContext.displayedBalance));

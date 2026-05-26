@@ -1519,10 +1519,20 @@ function AccountDetailPageContent() {
 
   const accountBrand = useMemo(
     () => {
+      const displayAccountName =
+        account?.source === "upload"
+          ? formatUploadAccountDisplayName(
+              account?.name ?? "",
+              account?.institution ?? null,
+              account?.accountNumber ?? null,
+              account?.type ?? null
+            )
+          : account?.name ?? null;
+
       if (account?.type === "investment") {
         return getInvestmentAssetBrand({
           symbol: account.investmentSymbol,
-          name: account.name,
+          name: displayAccountName ?? account.name,
           subtype: account.investmentSubtype,
           currency: account.currency,
           institution: account.institution,
@@ -1531,7 +1541,7 @@ function AccountDetailPageContent() {
 
       return getAccountBrand({
         institution: account?.institution ?? null,
-        name: account?.name ?? null,
+        name: displayAccountName,
         type: account?.type ?? null,
       });
     },
