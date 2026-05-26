@@ -1265,6 +1265,14 @@ function AccountDetailPageContent() {
             pageSize: TRANSACTION_PAGE_SIZE,
           }
         );
+        transactionsSearchParams.set("accountName", mergedAccount.name);
+        if (mergedAccount.institution) {
+          transactionsSearchParams.set("accountInstitution", mergedAccount.institution);
+        }
+        if (mergedAccount.accountNumber) {
+          transactionsSearchParams.set("accountNumber", mergedAccount.accountNumber);
+        }
+        transactionsSearchParams.set("accountType", mergedAccount.type);
         transactionsSearchParams.set("summaryMode", "light");
         const transactionsPromise = fetch(`/api/transactions?${transactionsSearchParams.toString()}`);
 
@@ -1583,7 +1591,7 @@ function AccountDetailPageContent() {
           normalizeImportedAccountKey(transaction.accountName, transaction.institution, transaction.accountNumber, account.type) ===
           normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
         );
-      })
+      }) || transactionTotalCount > 0 || (typeof latestCheckpoint?.rowCount === "number" && latestCheckpoint.rowCount > 0)
     : false;
   const accountCardNumber = account
     ? formatCardAccountNumber(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null)

@@ -13,8 +13,8 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
   const currentLogoSrc = logoCandidates[logoIndex] ?? null;
   const hasBrandLogo = Boolean(accountBrand.logoSrcs.length || accountBrand.logoSrc);
   const logoResetKey = useMemo(
-    () => `${accountBrand.logoSrc ?? ""}::${accountBrand.logoSrcs.join("|")}::${accountBrand.fallbackIconSrc}::${label}`,
-    [accountBrand.fallbackIconSrc, accountBrand.logoSrc, accountBrand.logoSrcs, label]
+    () => `${accountBrand.logoSrc ?? ""}::${accountBrand.logoSrcs.join("|")}::${accountBrand.fallbackIconSrc}`,
+    [accountBrand.fallbackIconSrc, accountBrand.logoSrc, accountBrand.logoSrcs]
   );
   const parseHexColor = (value: string) => {
     const normalized = value.trim().replace("#", "");

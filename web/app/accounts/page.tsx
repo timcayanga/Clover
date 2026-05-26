@@ -1878,7 +1878,9 @@ function AccountsPageContent() {
         : null;
     const stableBalance = stableAccountBalancesRef.current.get(account.id) ?? null;
     const hasVisibleBalance = hasMeaningfulBalance(account.balance);
-    const hasLoadedTransactions = transactions.some((transaction) => transactionMatchesAccount(transaction, account));
+    const hasLoadedTransactions =
+      transactions.some((transaction) => transactionMatchesAccount(transaction, account)) ||
+      (typeof latestCheckpoint?.rowCount === "number" && latestCheckpoint.rowCount > 0);
     const displayedBalance = hasMeaningfulBalance(account.balance)
       ? account.balance
       : stableBalance ?? checkpointBalance;

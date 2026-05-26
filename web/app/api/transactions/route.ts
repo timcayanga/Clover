@@ -222,6 +222,55 @@ const expandImportedAccountFilters = async (workspaceId: string, accountIds: str
   return Array.from(expandedAccountIds);
 };
 
+const expandImportedAccountIdentityFilters = async (
+  workspaceId: string,
+  identity: {
+    accountName?: string | null;
+    accountInstitution?: string | null;
+    accountNumber?: string | null;
+    accountType?: string | null;
+  }
+) => {
+  if (
+    !identity.accountName?.trim() &&
+    !identity.accountInstitution?.trim() &&
+    !identity.accountNumber?.trim() &&
+    !identity.accountType?.trim()
+  ) {
+    return [];
+  }
+
+  const identityKey = normalizeImportedAccountKey(
+    identity.accountName ?? null,
+    identity.accountInstitution ?? null,
+    identity.accountNumber ?? null,
+    identity.accountType ?? null
+  );
+  if (!identityKey) {
+    return [];
+  }
+
+  const matchingAccounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+    },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      type: true,
+      accountNumber: true,
+    },
+  });
+
+  return matchingAccounts
+    .filter(
+      (account) =>
+        normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === identityKey
+    )
+    .map((account) => account.id);
+};
+
 const normalizeCategoryFilterKey = (value: string | null | undefined) =>
   String(value ?? "")
     .trim()
@@ -566,9 +615,15 @@ export async function GET(request: Request) {
 
     const parsedFilters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
     const expandedAccountIds = await expandImportedAccountFilters(workspaceId, parsedFilters.accountIds);
+    const expandedIdentityAccountIds = await expandImportedAccountIdentityFilters(workspaceId, {
+      accountName: searchParams.get("accountName"),
+      accountInstitution: searchParams.get("accountInstitution"),
+      accountNumber: searchParams.get("accountNumber"),
+      accountType: searchParams.get("accountType"),
+    });
     const filters: TransactionQueryFilters = {
       ...parsedFilters,
-      accountIds: expandedAccountIds,
+      accountIds: Array.from(new Set([...expandedAccountIds, ...expandedIdentityAccountIds])),
     };
     const categoryFilterNames = await resolveCategoryFilterNames(workspaceId, filters.categoryIds);
     const hasEffectiveCategoryFilters = categoryFilterNames.size > 0;
