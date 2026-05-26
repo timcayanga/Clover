@@ -86,10 +86,12 @@ export function AdviserSectionCarousel({ title, cards, ariaLabel }: AdviserSecti
             label={card.title}
             className="adviser-card adviser-card--link glass"
           >
-            <span className="adviser-card__emoji" aria-hidden="true">
-              {card.emoji}
-            </span>
-            <strong>{card.title}</strong>
+            <div className="adviser-card__title-row">
+              <span className="adviser-card__emoji" aria-hidden="true">
+                {card.emoji}
+              </span>
+              <strong>{card.title}</strong>
+            </div>
             <p>{card.summary}</p>
             <small>{card.evidence}</small>
             <span className="button button-primary button-small adviser-card__cta">{card.ctaLabel}</span>
@@ -110,10 +112,12 @@ export function AdviserSectionCarousel({ title, cards, ariaLabel }: AdviserSecti
                   label={card.title}
                   className="adviser-card adviser-card--link glass adviser-carousel__card"
                 >
-                  <span className="adviser-card__emoji" aria-hidden="true">
-                    {card.emoji}
-                  </span>
-                  <strong>{card.title}</strong>
+                  <div className="adviser-card__title-row">
+                    <span className="adviser-card__emoji" aria-hidden="true">
+                      {card.emoji}
+                    </span>
+                    <strong>{card.title}</strong>
+                  </div>
                   <p>{card.summary}</p>
                   <small>{card.evidence}</small>
                   <span className="button button-primary button-small adviser-card__cta">{card.ctaLabel}</span>
@@ -135,7 +139,6 @@ export function AdviserSectionCarousel({ title, cards, ariaLabel }: AdviserSecti
           </button>
 
           <div className="adviser-carousel__status">
-            <span className="adviser-carousel__hint">Swipe to see more</span>
             <div className="adviser-carousel__dots">
               {dots.map((dotId, index) => (
                 <button
