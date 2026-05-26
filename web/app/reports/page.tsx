@@ -104,6 +104,53 @@ const getReportTransactionCategoryName = (transaction: ReportTransaction) =>
 const getReportTransactionType = (transaction: ReportTransaction) =>
   coerceTransactionTypeFromCategoryName(getReportTransactionCategoryName(transaction), transaction.type);
 
+type SankeyFlow = {
+  key: string;
+  label: string;
+  amount: number;
+  color: string;
+  detail: string;
+};
+
+const reportSankeyEssentialMatchers = [
+  "grocer",
+  "food",
+  "grocery",
+  "rent",
+  "mortgage",
+  "utility",
+  "electric",
+  "water",
+  "internet",
+  "phone",
+  "transport",
+  "fuel",
+  "gas",
+  "insurance",
+  "medical",
+  "health",
+  "tax",
+  "bill",
+  "school",
+  "education",
+];
+
+const reportSankeyDebtMatchers = ["loan", "debt", "credit", "amort", "installment", "repay", "card payment"];
+
+const classifyReportSankeyBucket = (categoryName: string) => {
+  const normalized = categoryName.toLowerCase();
+
+  if (reportSankeyDebtMatchers.some((matcher) => normalized.includes(matcher))) {
+    return "debt" as const;
+  }
+
+  if (reportSankeyEssentialMatchers.some((matcher) => normalized.includes(matcher))) {
+    return "essentials" as const;
+  }
+
+  return "lifestyle" as const;
+};
+
 type MonthBucket = {
   key: string;
   label: string;
@@ -937,6 +984,84 @@ async function ReportsStream({
     }));
     const currentTrackedCategorySpend = topCategories.reduce((sum, [, amount]) => sum + amount, 0);
     const currentOtherSpend = Math.max(currentSpend - currentTrackedCategorySpend, 0);
+    const sankeyBucketTotals = Array.from(currentSummary.expenseCategories.entries()).reduce(
+      (totals, [categoryName, amount]) => {
+        const bucket = classifyReportSankeyBucket(categoryName);
+
+        if (bucket === "debt") {
+          totals.debt += amount;
+        } else if (bucket === "essentials") {
+          totals.essentials += amount;
+        } else {
+          totals.lifestyle += amount;
+        }
+
+        return totals;
+      },
+      {
+        essentials: 0,
+        lifestyle: 0,
+        debt: 0,
+      }
+    );
+    const sankeyFlows: SankeyFlow[] = [
+      {
+        key: "essentials",
+        label: "Essentials",
+        amount: sankeyBucketTotals.essentials,
+        color: "#0ea5c8",
+        detail: "Needs and bills",
+      },
+      {
+        key: "lifestyle",
+        label: "Lifestyle",
+        amount: sankeyBucketTotals.lifestyle,
+        color: "#36b6e0",
+        detail: "Flex spending",
+      },
+      {
+        key: "debt",
+        label: "Debt",
+        amount: sankeyBucketTotals.debt,
+        color: "#f59e0b",
+        detail: "Repayments",
+      },
+      {
+        key: "saved",
+        label: currentNet >= 0 ? "Saved / investing" : "Over budget",
+        amount: Math.abs(currentNet),
+        color: currentNet >= 0 ? "#22c55e" : "#f97316",
+        detail: currentNet >= 0 ? "Future money" : "Spending outpaced income",
+      },
+    ].filter((flow) => flow.amount > 0);
+    const sankeyTotal = sankeyFlows.reduce((sum, flow) => sum + flow.amount, 0);
+    const sankeyChartWidth = 760;
+    const sankeyChartHeight = 300;
+    const sankeyNodeWidth = 24;
+    const sankeyNodeGap = 12;
+    const sankeySourceX = 70;
+    const sankeyTargetX = sankeyChartWidth - 70 - sankeyNodeWidth;
+    const sankeyStreamHeight = Math.max(sankeyChartHeight - 40, 140);
+    const sankeyScale = sankeyTotal > 0 ? (sankeyStreamHeight - sankeyNodeGap * Math.max(sankeyFlows.length - 1, 0)) / sankeyTotal : 0;
+    let sankeySourceOffset = 0;
+    let sankeyTargetOffset = 0;
+    const sankeyLayouts = sankeyFlows.map((flow) => {
+      const height = Math.max(flow.amount * sankeyScale, 10);
+      const sourceY = 20 + sankeySourceOffset;
+      const targetY = 20 + sankeyTargetOffset;
+      sankeySourceOffset += height + sankeyNodeGap;
+      sankeyTargetOffset += height + sankeyNodeGap;
+
+      return {
+        ...flow,
+        height,
+        sourceY,
+        targetY,
+        sourceMidY: sourceY + height / 2,
+        targetMidY: targetY + height / 2,
+        share: sankeyTotal > 0 ? flow.amount / sankeyTotal : 0,
+      };
+    });
     const recurringSavingsPotential = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) * 0.2;
     const topRecurringMerchant = recurringMerchants[0] ?? null;
     const averageRecurringSpend = recurringMerchants.length > 0
@@ -1365,21 +1490,104 @@ async function ReportsStream({
         {isPro ? (
           <ReportsSectionPanel section="advanced">
             <>
-            <section className="reports-brief-grid">
-              <article className="report-ai-card report-ai-card--compact glass">
+            <section className="reports-brief-grid reports-brief-grid--more">
+              <article className="report-ai-card report-ai-card--featured report-sankey-card glass">
                 <div className="report-card__head report-card__head--compact">
                   <div>
-                    <h4>Summary</h4>
+                    <h4>Cash flow map</h4>
                   </div>
-                  <ReportInfoTip label="A simple summary of the biggest shift this period." />
+                  <ReportInfoTip label="A Sankey view of how income moves through essentials, lifestyle spending, debt, and what you keep." />
                 </div>
-                <h3>{aiHeadline}</h3>
-                <p>{aiSummary}</p>
-                <div className="report-ai-card__actions">
-                  <Link className="button button-primary button-pill" href={buildTransactionsHref({ month: currentMonthBucket.key })}>
-                    Open cash flow
-                  </Link>
-                </div>
+
+                {sankeyLayouts.length > 0 ? (
+                  <>
+                    <div className="report-sankey__chart-wrap">
+                      <svg
+                        className="report-sankey__svg"
+                        viewBox={`0 0 ${sankeyChartWidth} ${sankeyChartHeight}`}
+                        role="img"
+                        aria-label="Cash flow Sankey diagram"
+                      >
+                        <defs>
+                          <linearGradient id="reportSankeySource" x1="0" x2="1" y1="0" y2="0">
+                            <stop offset="0%" stopColor="rgba(3, 168, 192, 0.72)" />
+                            <stop offset="100%" stopColor="rgba(3, 168, 192, 0.42)" />
+                          </linearGradient>
+                        </defs>
+
+                        <rect x="70" y="20" width={sankeyNodeWidth} height={Math.max(sankeySourceOffset - sankeyNodeGap, sankeyStreamHeight)} rx="12" fill="url(#reportSankeySource)" />
+
+                        {sankeyLayouts.map((flow) => (
+                          <path
+                            key={flow.key}
+                            d={`M ${sankeySourceX + sankeyNodeWidth} ${flow.sourceMidY.toFixed(1)} C ${sankeySourceX + 140} ${flow.sourceMidY.toFixed(1)} ${sankeyTargetX - 140} ${flow.targetMidY.toFixed(1)} ${sankeyTargetX} ${flow.targetMidY.toFixed(1)}`}
+                            fill="none"
+                            stroke={flow.color}
+                            strokeWidth={Math.max(flow.height, 8)}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            opacity="0.26"
+                          />
+                        ))}
+
+                        {sankeyLayouts.map((flow) => (
+                          <rect
+                            key={`${flow.key}-node`}
+                            x={sankeyTargetX}
+                            y={flow.targetY}
+                            width={sankeyNodeWidth}
+                            height={flow.height}
+                            rx="12"
+                            fill={flow.color}
+                          />
+                        ))}
+
+                        <text x={58} y={56} className="report-sankey__source-label">
+                          Income
+                        </text>
+                        <text x={58} y={78} className="report-sankey__source-value">
+                          {formatCurrency(currentSummary.income)}
+                        </text>
+                        <text x={58} y={98} className="report-sankey__source-meta">
+                          {selectedRangeLabel.toLowerCase()} view
+                        </text>
+
+                        {sankeyLayouts.map((flow) => (
+                          <text key={`${flow.key}-label`} x={sankeyTargetX + sankeyNodeWidth + 12} y={flow.targetMidY - 4} className="report-sankey__target-label">
+                            <tspan x={sankeyTargetX + sankeyNodeWidth + 12} className="report-sankey__target-title">
+                              {flow.label}
+                            </tspan>
+                            <tspan x={sankeyTargetX + sankeyNodeWidth + 12} dy="1.15em" className="report-sankey__target-value">
+                              {formatCurrency(flow.amount)} · {formatPercent(flow.share * 100)}
+                            </tspan>
+                            <tspan x={sankeyTargetX + sankeyNodeWidth + 12} dy="1.15em" className="report-sankey__target-detail">
+                              {flow.detail}
+                            </tspan>
+                          </text>
+                        ))}
+                      </svg>
+                    </div>
+
+                    <div className="report-sankey__foot">
+                      {sankeyLayouts.map((flow) => (
+                        <div key={`${flow.key}-chip`} className="report-sankey__chip">
+                          <span className="report-sankey__swatch" style={{ background: flow.color }} />
+                          <div>
+                            <strong>{flow.label}</strong>
+                            <span>
+                              {formatCurrency(flow.amount)} · {formatPercent(flow.share * 100)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <ReportsEmptyNote
+                    title="Add a little more activity to see the cash flow map."
+                    copy="Once a few categories are tracked, the Sankey diagram will show how income fans out across the month."
+                  />
+                )}
               </article>
 
               <article className="report-ai-card report-ai-card--compact glass">
