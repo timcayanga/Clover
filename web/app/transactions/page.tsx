@@ -65,6 +65,12 @@ import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 
+type PlanUsage = {
+  accountCount: number;
+  monthlyUploadCount: number;
+  transactionCount: number;
+};
+
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
   { ssr: false }
@@ -2161,6 +2167,7 @@ function TransactionsPageContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
+  const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
   const [transactionsLoadFailed, setTransactionsLoadFailed] = useState(false);
@@ -2795,9 +2802,17 @@ function TransactionsPageContent() {
                 : Number(payload.user.transactionLimit),
           }
         : null;
+      const nextUsage = payload?.user?.usage
+        ? {
+            accountCount: Number(payload.user.usage.accountCount ?? 0),
+            monthlyUploadCount: Number(payload.user.usage.monthlyUploadCount ?? 0),
+            transactionCount: Number(payload.user.usage.transactionCount ?? 0),
+          }
+        : null;
 
       setPlanTier(nextPlanTier);
       setPlanLimits(nextLimits);
+      setPlanUsage(nextUsage);
     };
 
     void loadPlan();
@@ -4274,7 +4289,9 @@ function TransactionsPageContent() {
       setSelectedWorkspaceId(activeWorkspaceId);
     }
 
-    if (planLimits?.transactionLimit != null && workspaceTransactionCount >= planLimits.transactionLimit) {
+    const transactionLimitUsageCount = planUsage?.transactionCount ?? workspaceTransactionCount;
+
+    if (planLimits?.transactionLimit != null && transactionLimitUsageCount >= planLimits.transactionLimit) {
       setPlanLimitNudge({
         planTier,
         limitType: "transaction_limit",

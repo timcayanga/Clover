@@ -9,7 +9,7 @@ import { z } from "zod";
 import { validateImportFileMetadata } from "@/lib/import-file-validation";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
-import { countWorkspaceImportFilesThisMonth } from "@/lib/plan-access";
+import { countWorkspaceOwnerImportFilesThisMonth } from "@/lib/plan-access";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { prisma } from "@/lib/prisma";
 import { normalizeBankName } from "@/lib/data-qa-banks";
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
 
       const user = await getOrCreateCurrentUser(userId);
       const effectiveLimits = getEffectiveUserLimits(user);
-      const currentMonthUploads = await countWorkspaceImportFilesThisMonth(payload.workspaceId);
+      const currentMonthUploads = await countWorkspaceOwnerImportFilesThisMonth(payload.workspaceId);
 
       if (effectiveLimits.monthlyUploadLimit !== null && currentMonthUploads >= effectiveLimits.monthlyUploadLimit) {
         const isFreePlan = user.planTier === "free";

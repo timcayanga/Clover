@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { recordTrainingSignal } from "@/lib/data-engine";
 import { capturePostHogServerEvent } from "@/lib/analytics";
-import { countWorkspaceTransactions } from "@/lib/plan-access";
+import { countWorkspaceOwnerTransactions } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
@@ -963,7 +963,7 @@ export async function POST(request: Request) {
     const user = await getOrCreateCurrentUser(userId);
     const effectiveLimits = getEffectiveUserLimits(user);
     const transactionCountPromise =
-      effectiveLimits.transactionLimit !== null ? countWorkspaceTransactions(payload.workspaceId) : Promise.resolve(null);
+      effectiveLimits.transactionLimit !== null ? countWorkspaceOwnerTransactions(payload.workspaceId) : Promise.resolve(null);
     const otherCategoryPromise =
       payload.categoryId === undefined || payload.categoryId === null
         ? prisma.category.findFirst({

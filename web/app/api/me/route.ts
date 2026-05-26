@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getUserBillingSubscription } from "@/lib/paypal-billing";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
+import { getUserPlanUsage } from "@/lib/plan-access";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,10 @@ export async function GET() {
   try {
     const { userId } = await requireAuth();
     const user = await getOrCreateCurrentUser(userId);
-    const billingSubscription = await getUserBillingSubscription(user.id);
+    const [billingSubscription, planUsage] = await Promise.all([
+      getUserBillingSubscription(user.id),
+      getUserPlanUsage(user.id),
+    ]);
     const effectiveLimits = getEffectiveUserLimits(user);
 
     return NextResponse.json({
@@ -20,6 +24,7 @@ export async function GET() {
         accountLimit: effectiveLimits.accountLimit,
         monthlyUploadLimit: effectiveLimits.monthlyUploadLimit,
         transactionLimit: effectiveLimits.transactionLimit,
+        usage: planUsage,
         primaryGoal: user.primaryGoal,
         goalTargetAmount: user.goalTargetAmount ? user.goalTargetAmount.toString() : null,
         goalTargetSource: user.goalTargetSource,

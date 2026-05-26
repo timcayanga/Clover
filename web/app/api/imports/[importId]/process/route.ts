@@ -19,7 +19,7 @@ import { ensureImportProcessingWorker } from "@/lib/import-worker-runtime";
 import { loadImportStatusSnapshot } from "@/lib/import-status-snapshot";
 import { uploadObject } from "@/lib/s3";
 import { validateImportFile } from "@/lib/import-file-validation";
-import { countWorkspaceImportFilesThisMonth } from "@/lib/plan-access";
+import { countWorkspaceOwnerImportFilesThisMonth } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { summarizeErrorForLog } from "@/lib/security-logging";
@@ -208,7 +208,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           const user = await getOrCreateCurrentUser(userId);
           responsePlanTier = user.planTier;
           const effectiveLimits = getEffectiveUserLimits(user);
-          const currentMonthUploads = await countWorkspaceImportFilesThisMonth(formWorkspaceId);
+          const currentMonthUploads = await countWorkspaceOwnerImportFilesThisMonth(formWorkspaceId);
           if (effectiveLimits.monthlyUploadLimit !== null && currentMonthUploads >= effectiveLimits.monthlyUploadLimit) {
             const isFreePlan = user.planTier === "free";
             return NextResponse.json(

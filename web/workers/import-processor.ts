@@ -6,7 +6,7 @@ import { findDeletedAccountTombstoneMatch } from "@/lib/account-tombstones";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
-import { countNonCashAccounts, getWorkspaceOwnerLimits } from "@/lib/plan-access";
+import { getWorkspaceOwnerLimits, getWorkspaceOwnerPlanUsage } from "@/lib/plan-access";
 import {
   normalizeInstitutionCurrency,
   parseAmountValue,
@@ -1984,6 +1984,7 @@ const resolveConfirmationAccount = async (params: {
   planLimits?: {
     accountLimit: number | null;
   } | null;
+  planAccountCount?: number | null;
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
   const compatibleAccountColumns = await getCompatibleAccountColumns();
@@ -2261,7 +2262,7 @@ const resolveConfirmationAccount = async (params: {
   }
 
   if (inferredAccountName || inferredAccountNumber) {
-    const nonCashAccountCount = countNonCashAccounts(workspaceAccounts);
+    const nonCashAccountCount = params.planAccountCount ?? 0;
     if (params.planLimits?.accountLimit != null && accountIdentityType !== "cash" && nonCashAccountCount >= params.planLimits.accountLimit) {
       throw new Error(
         `Free plan includes up to ${params.planLimits.accountLimit} non-cash accounts. Upgrade to Pro to add more accounts from imports.`
@@ -4733,7 +4734,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     throw new Error("Import file not found");
   }
 
-  const planLimits = await getWorkspaceOwnerLimits(String(importFile.workspaceId));
+  const [planLimits, planUsage] = await Promise.all([
+    getWorkspaceOwnerLimits(String(importFile.workspaceId)),
+    getWorkspaceOwnerPlanUsage(String(importFile.workspaceId)),
+  ]);
   const documentCheckpointRecord = (await hasCompatibleTable("AccountStatementCheckpoint"))
     ? await prisma.accountStatementCheckpoint.findUnique({
         where: { importFileId },
@@ -5267,6 +5271,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     parsedRows,
     accountId,
     planLimits: planLimits ? { accountLimit: planLimits.accountLimit } : null,
+    planAccountCount: planUsage?.accountCount ?? null,
   });
   if (!account) {
     throw new Error("Account not found");
@@ -5952,7 +5957,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     }
 
     if (planLimits?.transactionLimit != null) {
-      const existingTransactionCount = await tx.transaction.count({
+      const existingTransactionCount = planUsage?.transactionCount ?? await tx.transaction.count({
         where: { workspaceId: String(importFile.workspaceId) },
       });
       const projectedTransactionCount = existingTransactionCount + preparedTransactions.length + (openingBalanceInserted ? 1 : 0);

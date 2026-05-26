@@ -69,6 +69,12 @@ import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { clearImportActivity, readImportActivity } from "@/lib/import-activity";
 
+type PlanUsage = {
+  accountCount: number;
+  monthlyUploadCount: number;
+  transactionCount: number;
+};
+
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
   { ssr: false }
@@ -1028,6 +1034,7 @@ function AccountsPageContent() {
   const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(Boolean(initialCachedWorkspace));
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
+  const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -1153,9 +1160,17 @@ function AccountsPageContent() {
                 : Number(payload.user.transactionLimit),
           }
         : null;
+      const nextUsage = payload?.user?.usage
+        ? {
+            accountCount: Number(payload.user.usage.accountCount ?? 0),
+            monthlyUploadCount: Number(payload.user.usage.monthlyUploadCount ?? 0),
+            transactionCount: Number(payload.user.usage.transactionCount ?? 0),
+          }
+        : null;
 
       setPlanTier(nextPlanTier);
       setPlanLimits(nextLimits);
+      setPlanUsage(nextUsage);
     };
 
     void loadPlan();
@@ -1170,6 +1185,7 @@ function AccountsPageContent() {
     [selectedWorkspaceId, workspaces]
   );
   const nonCashAccountCount = useMemo(() => countNonCashAccounts(accounts), [accounts]);
+  const accountLimitUsageCount = planUsage?.accountCount ?? nonCashAccountCount;
 
   const showPlanLimitNudge = (payload: PlanLimitPayload) => {
     setPlanLimitNudge(payload);
@@ -2376,7 +2392,7 @@ function AccountsPageContent() {
       closeChrome();
     });
 
-    if (!isLocalDevBrowser && planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
+    if (!isLocalDevBrowser && planLimits?.accountLimit != null && accountLimitUsageCount >= planLimits.accountLimit) {
       showPlanLimitNudge({
         planTier,
         limitType: "account_limit",
@@ -2398,7 +2414,7 @@ function AccountsPageContent() {
       closeChrome();
     });
 
-    if (!isLocalDevBrowser && planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
+    if (!isLocalDevBrowser && planLimits?.accountLimit != null && accountLimitUsageCount >= planLimits.accountLimit) {
       showPlanLimitNudge({
         planTier,
         limitType: "account_limit",

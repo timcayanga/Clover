@@ -5,7 +5,7 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { hasCompatibleTable, loadAccountRules, normalizeAccountRuleKey, upsertAccountRule } from "@/lib/data-engine";
 import { INVESTMENT_SUBTYPES, isFixedIncomeInvestmentSubtype, type InvestmentSubtype } from "@/lib/investments";
-import { countNonCashAccounts } from "@/lib/plan-access";
+import { countWorkspaceOwnerPlanLimitedAccounts } from "@/lib/plan-access";
 import { ensureWorkspaceCashAccount, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
@@ -395,7 +395,7 @@ export async function POST(request: Request) {
     if (type !== "cash") {
       const user = await getOrCreateCurrentUser(userId);
       const effectiveLimits = getEffectiveUserLimits(user);
-      const nonCashAccountCount = countNonCashAccounts(existingAccounts);
+      const nonCashAccountCount = await countWorkspaceOwnerPlanLimitedAccounts(workspaceId);
 
       if (effectiveLimits.accountLimit !== null && nonCashAccountCount >= effectiveLimits.accountLimit) {
         const isFreePlan = user.planTier === "free";
