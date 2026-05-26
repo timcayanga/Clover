@@ -67,7 +67,7 @@ import {
 import type { InstitutionSuggestion } from "@/lib/institution-suggestions";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
-import { clearImportActivity, readImportActivity } from "@/lib/import-activity";
+import { clearImportActivity, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
 
 type PlanUsage = {
   accountCount: number;
@@ -1098,6 +1098,7 @@ function AccountsPageContent() {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
+  const [importActivitySnapshot, setImportActivitySnapshot] = useState(() => readImportActivity());
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
   const stableAccountBalancesRef = useRef(new Map<string, string>());
   const accountLoadingSinceRef = useRef(new Map<string, number>());
@@ -1516,6 +1517,13 @@ function AccountsPageContent() {
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
+    setImportActivitySnapshot(readImportActivity());
+    return subscribeImportActivity(() => {
+      setImportActivitySnapshot(readImportActivity());
+    });
+  }, []);
+
+  useEffect(() => {
     if (searchParams?.get("import") === "1") {
       setImportOpen(true);
       router.replace("/accounts");
@@ -1866,6 +1874,12 @@ function AccountsPageContent() {
   };
 
   const getUploadAccountLoadingContext = (account: Account): UploadAccountLoadingContext => {
+    const matchingImportSummary =
+      pendingImportSummary && !pendingImportSummary.optimistic
+        ? pendingImportSummary
+        : importActivitySnapshot?.status === "done" && importActivitySnapshot.summary && !importActivitySnapshot.summary.optimistic
+          ? importActivitySnapshot.summary
+          : null;
     const latestCheckpoint =
       latestCheckpoints.checkpointsByAccountId.get(account.id) ??
       latestCheckpoints.checkpointsByAccountKey.get(
@@ -1876,6 +1890,19 @@ function AccountsPageContent() {
     const cachedTransactionsForAccount = Array.isArray(cachedTransactionsWorkspace?.transactions)
       ? (cachedTransactionsWorkspace.transactions as Transaction[]).some((transaction) => transactionMatchesAccount(transaction, account))
       : false;
+    const matchingImportSummaryHasRows =
+      matchingImportSummary &&
+      Number(matchingImportSummary.rowsImported ?? 0) > 0 &&
+      (
+        matchingImportSummary.accountId === account.id ||
+        matchingImportSummary.optimisticAccountId === account.id ||
+        normalizeImportedAccountKey(
+          matchingImportSummary.accountName,
+          matchingImportSummary.institution,
+          matchingImportSummary.accountNumber ?? null,
+          matchingImportSummary.accountType ?? account.type
+        ) === normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
+      );
     const checkpointBalance =
       latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
         ? String(latestCheckpoint.endingBalance)
@@ -1885,7 +1912,8 @@ function AccountsPageContent() {
     const hasLoadedTransactions =
       transactions.some((transaction) => transactionMatchesAccount(transaction, account)) ||
       cachedTransactionsForAccount ||
-      (typeof latestCheckpoint?.rowCount === "number" && latestCheckpoint.rowCount > 0);
+      (typeof latestCheckpoint?.rowCount === "number" && latestCheckpoint.rowCount > 0) ||
+      matchingImportSummaryHasRows;
     const displayedBalance = hasMeaningfulBalance(account.balance)
       ? account.balance
       : stableBalance ?? checkpointBalance;
@@ -1939,11 +1967,11 @@ function AccountsPageContent() {
     return currencyFilteredAccounts
       .filter((account) => getUploadAccountLoadingContext(account).baseIsLoading)
       .map((account) => account.id);
-  }, [accountLoadingPulse, currencyFilteredAccounts, latestCheckpoints, transactions]);
+  }, [accountLoadingPulse, currencyFilteredAccounts, importActivitySnapshot, latestCheckpoints, pendingImportSummary, transactions]);
 
   const visibleUploadLoadingAccountIds = useMemo(() => {
     return currencyFilteredAccounts.filter((account) => getUploadAccountLoadingContext(account).isLoading).map((account) => account.id);
-  }, [accountLoadingPulse, currencyFilteredAccounts, latestCheckpoints, transactions]);
+  }, [accountLoadingPulse, currencyFilteredAccounts, importActivitySnapshot, latestCheckpoints, pendingImportSummary, transactions]);
 
   useEffect(() => {
     const activeIds = new Set(activeUploadLoadingAccountIds);
@@ -2147,7 +2175,7 @@ function AccountsPageContent() {
   );
   const selectedAccountLoadingContext = useMemo(
     () => (selectedAccount ? getUploadAccountLoadingContext(selectedAccount) : null),
-    [accountLoadingPulse, selectedAccount, latestCheckpoints, transactions]
+    [accountLoadingPulse, importActivitySnapshot, pendingImportSummary, selectedAccount, latestCheckpoints, transactions]
   );
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const selectedAccountCurrency = selectedAccount?.currency ?? "PHP";
@@ -4007,6 +4035,10 @@ function AccountsPageContent() {
           setImportRefreshInFlight(true);
           try {
             await refreshAll();
+            if (Number(settledSummary.rowsImported ?? 0) > 0 && previewTransactions.length === 0) {
+              await new Promise((resolve) => window.setTimeout(resolve, 900));
+              await refreshAll();
+            }
           } finally {
             setImportRefreshInFlight(false);
           }
