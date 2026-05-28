@@ -1966,6 +1966,23 @@ const readAutoRerunValue = (entry: unknown) => {
   return null;
 };
 
+const readParsedRowAccountNumber = (row: Record<string, unknown>) => {
+  if (typeof row.accountNumber === "string" && row.accountNumber.trim()) {
+    return row.accountNumber.trim();
+  }
+
+  const rawPayload = row.rawPayload;
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const value = (rawPayload as Record<string, unknown>).accountNumber;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+};
+
+const hasMultipleParsedAccountNumbers = (rows: Array<Record<string, unknown>>) =>
+  new Set(rows.map(readParsedRowAccountNumber).filter((value): value is string => Boolean(value))).size > 1;
+
 const resolveConfirmationAccount = async (params: {
   importFile: { id?: unknown; workspaceId: unknown; fileName?: unknown };
   statementMetadata?: {
@@ -3875,7 +3892,8 @@ export const processImportFileText = async (
     statementFingerprint,
     importFileId,
   });
-  if (duplicateImportFileId && !options.allowDuplicateStatement) {
+  const shouldRepairMultiAccountDuplicate = hasMultipleParsedAccountNumbers(effectiveRows as Array<Record<string, unknown>>);
+  if (duplicateImportFileId && !options.allowDuplicateStatement && !shouldRepairMultiAccountDuplicate) {
     await updateImportFileCompat(importFileId, {
       status: "done",
     });
@@ -6051,7 +6069,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       });
     }
 
-    if (existingImportTransactions.length > 0 && preparedTransactions.length > 0) {
+    if (!multiAccountImport && existingImportTransactions.length > 0 && preparedTransactions.length > 0) {
       duplicateSkippedTransactionsCount += preparedTransactions.length;
       console.warn("[import-confirmation] skipped appending rows to visible import", {
         importFileId,
