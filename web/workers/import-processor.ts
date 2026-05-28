@@ -3500,7 +3500,7 @@ export const processImportFileText = async (
   const isDocumentImportMode =
     importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes";
   const previouslyVisibleRows = isDocumentImportMode ? 0 : await countTransactionsByImportFileCompat(importFileId).catch(() => 0);
-  if (previouslyVisibleRows > 0) {
+  if (previouslyVisibleRows > 0 && isDocumentImportMode) {
     const cleanupRows = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
     if (cleanupRows > 0) {
       await upsertImportEnrichmentJob({
