@@ -2088,6 +2088,7 @@ function TransactionsPageContent() {
   const manualNameInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const addMenuPanelRef = useRef<HTMLDivElement>(null);
+  const addFileInputRef = useRef<HTMLInputElement>(null);
   const addPhotoInputRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const initialWorkspaceId = urlSearchParams.get("workspaceId") || readSelectedWorkspaceId();
@@ -3118,6 +3119,27 @@ function TransactionsPageContent() {
     setAddMenuOpen(false);
     input.value = "";
     input.click();
+  };
+
+  const openMobileFilePicker = () => {
+    const input = addFileInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    setAddMenuOpen(false);
+    input.value = "";
+    input.click();
+  };
+
+  const handleMobileFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = "";
+    if (files.length === 0) {
+      return;
+    }
+
+    openImportFiles(files);
   };
 
   const handlePhotoCaptureChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -6123,6 +6145,17 @@ function TransactionsPageContent() {
       />
 
       <input
+        ref={addFileInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept=".csv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+        multiple
+        onChange={handleMobileFileChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
+      <input
         ref={addPhotoInputRef}
         className="hidden-file-input"
         type="file"
@@ -6186,6 +6219,11 @@ function TransactionsPageContent() {
                   className="transactions-add-menu__item"
                   type="button"
                   onClick={() => {
+                    if (isCompactViewport) {
+                      openMobileFilePicker();
+                      return;
+                    }
+
                     openImportFiles();
                   }}
                 >
@@ -6796,7 +6834,18 @@ function TransactionsPageContent() {
                     <button className="button button-primary button-small" type="button" onClick={() => openManualAdd()}>
                       Add transaction
                     </button>
-                    <button className="button button-secondary button-small transactions-empty-state__import" type="button" onClick={() => openImportFiles()}>
+                    <button
+                      className="button button-secondary button-small transactions-empty-state__import"
+                      type="button"
+                      onClick={() => {
+                        if (isCompactViewport) {
+                          openMobileFilePicker();
+                          return;
+                        }
+
+                        openImportFiles();
+                      }}
+                    >
                       Import files
                     </button>
                   </>
@@ -6953,7 +7002,18 @@ function TransactionsPageContent() {
                     <button className="button button-primary button-small" type="button" onClick={() => openManualAdd()}>
                       Add transaction
                     </button>
-                    <button className="button button-secondary button-small transactions-empty-state__import" type="button" onClick={() => openImportFiles()}>
+                    <button
+                      className="button button-secondary button-small transactions-empty-state__import"
+                      type="button"
+                      onClick={() => {
+                        if (isCompactViewport) {
+                          openMobileFilePicker();
+                          return;
+                        }
+
+                        openImportFiles();
+                      }}
+                    >
                       Import files
                     </button>
                   </>

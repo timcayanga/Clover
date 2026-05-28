@@ -572,6 +572,7 @@ export function CloverShell({
   const notificationsPopoverRef = useRef<HTMLDivElement | null>(null);
   const quickAddButtonRef = useRef<HTMLButtonElement | null>(null);
   const quickAddPopoverRef = useRef<HTMLDivElement | null>(null);
+  const quickAddFileInputRef = useRef<HTMLInputElement | null>(null);
   const quickAddPhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | "more" | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -1169,6 +1170,28 @@ export function CloverShell({
     input.click();
   };
 
+  const openQuickAddFilePicker = () => {
+    const input = quickAddFileInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.value = "";
+    input.click();
+  };
+
+  const handleQuickAddFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = "";
+    if (files.length === 0) {
+      return;
+    }
+
+    setIsQuickAddOpen(false);
+    setQuickAddSeedFiles(files);
+    setQuickAddModal("import");
+  };
+
   const handleQuickAddPhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files ? Array.from(event.target.files) : [];
     event.target.value = "";
@@ -1600,6 +1623,16 @@ export function CloverShell({
         <MenuIcon name="plus" />
       </button>
       <input
+        ref={quickAddFileInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept=".csv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+        multiple
+        onChange={handleQuickAddFileChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      <input
         ref={quickAddPhotoInputRef}
         className="hidden-file-input"
         type="file"
@@ -1641,7 +1674,7 @@ export function CloverShell({
             role="menuitem"
             onClick={() => {
               setIsQuickAddOpen(false);
-              setQuickAddModal("import");
+              openQuickAddFilePicker();
             }}
           >
             <strong>Import Files</strong>
