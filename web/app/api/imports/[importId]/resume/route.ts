@@ -130,11 +130,56 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       );
     }
 
-    if (!localDev) {
-      await ensureImportProcessingWorker();
-    }
-
     const hasCheckpointedRows = parsedRowsCount > 0 || checkpointRowCount > 0 || statementCheckpoint?.status === "reconciled";
+    const processInline = async (resumeStrategy: string) => {
+      await updateImportFileCompat(importId, {
+        status: "processing",
+        processingPhase: "reading_account_details",
+        processingMessage: `Resuming ${importFile.fileName}...`,
+        processingCurrentScore: null,
+      });
+
+      const { processImportFileText } = await import("@/workers/import-processor");
+      const result = await processImportFileText(importId, {
+        actorUserId: userId,
+        qaSource: "import_processing",
+        pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
+      });
+      const visibleRows =
+        result.status === "done"
+          ? Number(result.confirmedTransactionsCount ?? result.imported ?? 0)
+          : Number(result.confirmedTransactionsCount ?? 0);
+      const nextTelemetry = buildImportTelemetrySnapshot({
+        status: result.status ?? "processing",
+        workflowStage: result.status === "done" ? "complete" : "reading_account_details",
+        processingPhase: result.status === "done" ? "complete" : "reading_account_details",
+        processingMessage:
+          result.status === "done"
+            ? `Resumed ${importFile.fileName}.`
+            : `Clover is resuming ${importFile.fileName}.`,
+        parsedRowsCount: Math.max(parsedRowsCount, Number(result.imported ?? 0)),
+        confirmedTransactionsCount: Math.max(confirmedTransactionsCount, visibleRows),
+        confirmationStatus: result.status === "done" && visibleRows > 0 ? "confirmed" : "processing",
+        checkpointStatus: statementCheckpoint?.status ?? null,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        queued: false,
+        skipped: false,
+        resumedFromCheckpoint: hasCheckpointedRows,
+        resumeStrategy,
+        importFileId: importId,
+        accountId: result.accountId ?? importFile.accountId ?? null,
+        importedRows: result.imported ?? 0,
+        confirmedTransactionsCount: result.confirmedTransactionsCount ?? visibleRows,
+        telemetryPhase: nextTelemetry.phase,
+        telemetryLabel: nextTelemetry.phaseLabel,
+        telemetryMessage: nextTelemetry.message,
+        canResume: nextTelemetry.canResume,
+        resumeReason: nextTelemetry.resumeReason,
+      });
+    };
 
     if (hasCheckpointedRows) {
       await updateImportFileCompat(importId, {
@@ -153,6 +198,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       };
 
       if (confirmationResult.status === "staged" && confirmationResult.imported === 0) {
+        if (!localDev) {
+          return processInline("checkpoint_processed_inline");
+        }
+
         await updateImportFileCompat(importId, {
           status: "processing",
           processingPhase: "queued_retry",
@@ -160,6 +209,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           processingCurrentScore: null,
         });
 
+        await ensureImportProcessingWorker();
         await enqueueImportProcessing({
           importFileId: importId,
           actorUserId: userId,
@@ -197,6 +247,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     }
 
+    if (!localDev) {
+      return processInline("processed_inline");
+    }
+
     await updateImportFileCompat(importId, {
       status: "processing",
       processingPhase: "queued_retry",
@@ -204,6 +258,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       processingCurrentScore: null,
     });
 
+    await ensureImportProcessingWorker();
     await enqueueImportProcessing({
       importFileId: importId,
       actorUserId: userId,

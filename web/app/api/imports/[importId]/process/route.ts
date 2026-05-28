@@ -163,6 +163,65 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     let importFile = await fetchImportFileCompat(importId);
     let password: string | undefined;
     let queued = false;
+    const processInline = async (options?: {
+      text?: string;
+      textCacheInfo?: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null;
+      bankName?: string | null;
+      progressMessage?: string;
+    }) => {
+      stage = "processing statement text";
+      await updateImportFileCompat(importId, {
+        status: "processing",
+        processingPhase: "reading_account_details",
+        processingMessage: options?.progressMessage ?? "Reading file details...",
+      });
+
+      const { processImportFileText } = await import("@/workers/import-processor");
+      const result = await processImportFileText(importId, {
+        text: options?.text,
+        textCacheInfo: options?.textCacheInfo ?? undefined,
+        password,
+        actorUserId: userId,
+        qaSource: "import_processing",
+        allowDuplicateStatement,
+        importMode,
+        pdfJsBaseUrl,
+        statementMetadataOverride: options?.bankName
+          ? {
+              institution: options.bankName,
+            }
+          : null,
+      });
+      const statusSnapshot = await loadImportStatusSnapshot(importId, {
+        importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+        promoteFailedVisibleImport: true,
+      });
+
+      const visibleRows =
+        result.status === "done"
+          ? Number(result.confirmedTransactionsCount ?? result.imported ?? 0)
+          : Number(result.confirmedTransactionsCount ?? 0);
+
+      return NextResponse.json({
+        ok: true,
+        queued: false,
+        processed: true,
+        importedRows: result.imported,
+        duplicate: Boolean(result.duplicate),
+        status: result.status ?? "done",
+        importFileId: importId,
+        metadata: result.metadata,
+        accountId: result.accountId ?? null,
+        accountSummaries: result.accountSummaries ?? [],
+        confirmedTransactionsCount: result.confirmedTransactionsCount ?? (result.status === "done" ? result.imported : 0),
+        insightSummary: result.insightSummary ?? null,
+        accountBalance: result.accountBalance ?? null,
+        visibleImportComplete: visibleRows > 0,
+        finalizationInBackground: result.status === "done" && visibleRows > 0,
+        receiptDocument: statusSnapshot?.receiptDocument ?? null,
+        receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
+      });
+    };
 
     if (isMultipart) {
       stage = "reading multipart form";
@@ -385,9 +444,28 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         }
 
         if (!cachedDocTextInfo) {
+          if (!localDev) {
+            return processInline({
+              bankName: formBankName || null,
+              progressMessage:
+                importMode === "portfolio"
+                  ? "Reading portfolio details..."
+                  : importMode === "account_detail"
+                    ? "Reading account details..."
+                    : importMode === "notes"
+                      ? "Reading note details..."
+                      : "Reading document details...",
+            });
+          }
+
           stage = "scheduling background processing";
           try {
             await ensureImportProcessingWorker();
+            await updateImportFileCompat(importId, {
+              status: "processing",
+              processingPhase: "queued_retry",
+              processingMessage: "Queued for background processing...",
+            });
             await enqueueImportProcessing({
               importFileId: importId,
               actorUserId: userId,
@@ -479,20 +557,33 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         !canReuseCachedParseSnapshot;
 
       if (shouldQueuePdfImmediately) {
+        if (!localDev) {
+          return processInline({
+            text: extractedText || undefined,
+            textCacheInfo: preflightText,
+            bankName: formBankName || null,
+          });
+        }
+
         stage = "scheduling background processing";
         try {
           if (!shouldQueueDocumentUpload) {
             await ensureImportProcessingWorker();
           }
-        await enqueueImportProcessing({
-          importFileId: importId,
-          actorUserId: userId,
-          password,
-          allowDuplicateStatement,
-          bankName: formBankName || undefined,
-          importMode,
-          pdfJsBaseUrl,
-        });
+          await updateImportFileCompat(importId, {
+            status: "processing",
+            processingPhase: "queued_retry",
+            processingMessage: "Queued for background processing...",
+          });
+          await enqueueImportProcessing({
+            importFileId: importId,
+            actorUserId: userId,
+            password,
+            allowDuplicateStatement,
+            bankName: formBankName || undefined,
+            importMode,
+            pdfJsBaseUrl,
+          });
         } catch (error) {
           console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
           await updateImportFileCompat(importId, {
@@ -623,16 +714,29 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       stage = "scheduling background processing";
+      if (!localDev) {
+        return processInline({
+          text: extractedText || undefined,
+          textCacheInfo: preflightText,
+          bankName: formBankName || null,
+        });
+      }
+
       try {
         if (!shouldQueueDocumentUpload) {
           await ensureImportProcessingWorker();
         }
-      await enqueueImportProcessing({
-        importFileId: importId,
-        actorUserId: userId,
-        password,
-        allowDuplicateStatement,
-        bankName: formBankName || undefined,
+        await updateImportFileCompat(importId, {
+          status: "processing",
+          processingPhase: "queued_retry",
+          processingMessage: "Queued for background processing...",
+        });
+        await enqueueImportProcessing({
+          importFileId: importId,
+          actorUserId: userId,
+          password,
+          allowDuplicateStatement,
+          bankName: formBankName || undefined,
           importMode: importMode ?? undefined,
           pdfJsBaseUrl,
         });
