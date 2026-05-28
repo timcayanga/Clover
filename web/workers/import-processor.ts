@@ -1980,6 +1980,52 @@ const readParsedRowAccountNumber = (row: Record<string, unknown>) => {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 };
 
+const readParsedRowPayloadText = (row: Record<string, unknown>, key: string) => {
+  const rawPayload = row.rawPayload;
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const value = (rawPayload as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+};
+
+const readParsedRowAccountName = (row: Record<string, unknown>) =>
+  (typeof row.accountName === "string" && row.accountName.trim() ? row.accountName.trim() : null) ??
+  readParsedRowPayloadText(row, "accountName");
+
+const readParsedRowInstitution = (row: Record<string, unknown>, fallback?: string | null) =>
+  (typeof row.institution === "string" && row.institution.trim() ? row.institution.trim() : null) ??
+  readParsedRowPayloadText(row, "institution") ??
+  fallback ??
+  null;
+
+const accountGroupKeyForParsedRow = (row: Record<string, unknown>, fallbackInstitution?: string | null) => {
+  const accountNumber = readParsedRowAccountNumber(row);
+  if (accountNumber) {
+    return `number:${accountNumber}`;
+  }
+
+  const accountName = readParsedRowAccountName(row);
+  if (accountName) {
+    return `name:${readParsedRowInstitution(row, fallbackInstitution) ?? "unknown"}:${accountName}`;
+  }
+
+  return "__default__";
+};
+
+const groupParsedRowsByAccount = (rows: Array<Record<string, unknown>>, fallbackInstitution?: string | null) => {
+  const grouped = new Map<string, Array<Record<string, unknown>>>();
+  for (const row of rows) {
+    const key = accountGroupKeyForParsedRow(row, fallbackInstitution);
+    const group = grouped.get(key) ?? [];
+    group.push(row);
+    grouped.set(key, group);
+  }
+
+  return Array.from(grouped.entries()).map(([key, groupRows]) => ({ key, rows: groupRows }));
+};
+
 const hasMultipleParsedAccountNumbers = (rows: Array<Record<string, unknown>>) =>
   new Set(rows.map(readParsedRowAccountNumber).filter((value): value is string => Boolean(value))).size > 1;
 
@@ -2076,6 +2122,77 @@ const collapseDuplicateUploadedAccountsForAccount = async <
     type: canonical.type,
     source: canonical.source,
   };
+};
+
+const ensureParsedAccountGroupsMaterialized = async (params: {
+  importFile: { id?: unknown; workspaceId: unknown; fileName?: unknown };
+  rows: Array<Record<string, unknown>>;
+  metadata: {
+    accountName?: unknown;
+    institution?: unknown;
+    accountType?: unknown;
+    accountNumber?: unknown;
+    currency?: unknown;
+    openingBalance?: unknown;
+    endingBalance?: unknown;
+  } | null;
+}) => {
+  if (params.rows.length === 0) {
+    return [];
+  }
+
+  const fallbackInstitution = typeof params.metadata?.institution === "string" ? params.metadata.institution : null;
+  const groups = groupParsedRowsByAccount(params.rows, fallbackInstitution).filter((group) => group.key !== "__default__");
+  if (groups.length === 0) {
+    return [];
+  }
+
+  const resolvedAccounts: Array<Awaited<ReturnType<typeof resolveConfirmationAccount>>> = [];
+  for (const group of groups) {
+    const firstRow = group.rows[0] ?? {};
+    const accountNumber = readParsedRowAccountNumber(firstRow) ?? (typeof params.metadata?.accountNumber === "string" ? params.metadata.accountNumber : null);
+    const accountName = readParsedRowAccountName(firstRow) ?? (typeof params.metadata?.accountName === "string" ? params.metadata.accountName : null);
+    const institution = readParsedRowInstitution(firstRow, fallbackInstitution);
+    const groupRows = group.rows as EnrichedParsedImportRow[];
+    const groupEndingBalance = getTrailingBalanceFromParsedRows(groupRows);
+    const account = await resolveConfirmationAccount({
+      importFile: params.importFile,
+      statementMetadata: {
+        accountName,
+        institution,
+        accountNumber,
+        accountType: typeof params.metadata?.accountType === "string" ? params.metadata.accountType : null,
+        currency: typeof params.metadata?.currency === "string" ? params.metadata.currency : null,
+        openingBalance: typeof params.metadata?.openingBalance === "number" ? params.metadata.openingBalance : null,
+        endingBalance: groupEndingBalance ?? (typeof params.metadata?.endingBalance === "number" ? params.metadata.endingBalance : null),
+      },
+      parsedRows: groupRows,
+      accountId: null,
+      planLimits: null,
+      planAccountCount: null,
+    });
+    if (!account) {
+      continue;
+    }
+
+    if (groupEndingBalance !== null) {
+      await prisma.account.update({
+        where: { id: account.id },
+        data: { balance: groupEndingBalance.toString() },
+      }).catch((error) => {
+        console.warn("[import-account-match] unable to update parsed account group balance", {
+          importFileId: params.importFile.id,
+          accountId: account.id,
+          accountNumber,
+          error,
+        });
+      });
+    }
+
+    resolvedAccounts.push(account);
+  }
+
+  return resolvedAccounts;
 };
 
 const resolveConfirmationAccount = async (params: {
@@ -3987,6 +4104,16 @@ export const processImportFileText = async (
         confirmedTransactionsCount?: number | null;
       }
     | null = null;
+  await ensureParsedAccountGroupsMaterialized({
+    importFile,
+    rows: effectiveRows as Array<Record<string, unknown>>,
+    metadata: resolvedMetadata,
+  }).catch((error) => {
+    console.warn("[import-account-match] unable to materialize parsed account groups before duplicate check", {
+      importFileId,
+      error,
+    });
+  });
   const duplicateImportFileId = await findExistingImportedStatement({
     workspaceId: importFile.workspaceId,
     statementFingerprint,
