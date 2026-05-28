@@ -7147,6 +7147,7 @@ const normalizeGcashMerchant = (description: string) => {
     /^(?:\d{1,2}:\d{2}\s*)?(?:AM|PM)\s+(?=(?:Payment|Transfer|Cash|Buy|Send|Received|Sent|Add|Withdraw|Deposit|Bill|Bills|Top\s*Up|Load|Purchase|Card|ATM))/i,
     ""
   );
+  trimmed = trimmed.replace(/^account ending in\s+\d+\s+/i, "");
 
   const billsPaymentMatch = trimmed.match(/^Bills Payment to\s+(.+)$/i);
   if (billsPaymentMatch?.[1]) {
@@ -8845,6 +8846,8 @@ const parseGoTymeStatementMetadata = (text: string, context: ImportParseContext 
     normalizeAccountNumberCandidate(context.accountNumber) ??
     preserveAccountNumberDisplayCandidate(normalized.match(/Account\s+Number\s*:\s*(\d{12})(?:\s|,|$)/i)?.[1] ?? null) ??
     normalizeAccountNumberCandidate(normalized.match(/Account\s+Number\s*:\s*(\d{12})(?:\s|,|$)/i)?.[1] ?? null) ??
+    preserveAccountNumberDisplayCandidate(normalized.match(/Go\s*Save\s+No\.?\s*:\s*((?:\*+[\d*]{4,}|\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
+    normalizeAccountNumberCandidate(normalized.match(/Go\s*Save\s+No\.?\s*:\s*((?:\*+[\d*]{4,}|\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
     preserveAccountNumberDisplayCandidate(normalized.match(/Account\s+Number\s*:\s*((?:\d[\d\s-]{6,}\d|\*+[\d*]{4,}))/i)?.[1] ?? null) ??
     normalizeAccountNumberCandidate(normalized.match(/Account\s+Number\s*:\s*((?:\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
     extractFormattedAccountNumberFromLines(lines) ??
@@ -8923,6 +8926,14 @@ const classifyGoTymeTransaction = (description: string, credit: number, debit: n
 
   if (/transfer fee|deposit fee|atm fee|\bfee\b/.test(lower)) {
     return { type: "expense", categoryName: "Financial" };
+  }
+
+  if (/^(?:inbound(?:\s+interbank)?\s+transfer|received\s+transfer)/.test(lower)) {
+    return { type: "income", categoryName: "Income" };
+  }
+
+  if (/^(?:outbound(?:\s+interbank)?\s+transfer|sent\s+transfer)/.test(lower)) {
+    return { type: "expense", categoryName: "Expense" };
   }
 
   if (/qr\s+payment/.test(lower)) {

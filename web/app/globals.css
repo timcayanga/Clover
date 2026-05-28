@@ -17865,7 +17865,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  color: inherit;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -17904,7 +17904,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.82);
+  color: inherit;
   padding-left: 2px;
 }
 
