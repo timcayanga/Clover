@@ -3737,6 +3737,7 @@ export const processImportFileText = async (
           accountNumber: metadataForParse.accountNumber,
         });
   const parsedRows = parsedRowsAfterFallback.length > 0 ? parsedRowsAfterFallback : parsedRowsInitial;
+  const parsedRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(parsedRows as Array<Record<string, unknown>>);
   await updateImportFileCompat(importFileId, {
     status: "processing",
     processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "identifying_transactions",
@@ -3780,7 +3781,7 @@ export const processImportFileText = async (
       parsedRows.length === 0 ||
       prefersVisionFallbackForInstitution ||
       (metadataForParse.confidence ?? 0) < 70 ||
-      !metadataForParse.accountNumber ||
+      (!metadataForParse.accountNumber && !parsedRowsHaveMultipleAccountNumbers) ||
       !hasKnownInstitution ||
       genericParseLooksSuspicious ||
       gcashSuspiciouslySparse ||
@@ -4085,7 +4086,7 @@ export const processImportFileText = async (
     parsedRows.length >= 10 &&
     parsedDateCoverage >= 0.75 &&
     hasKnownInstitution &&
-    Boolean(metadataForParse.accountNumber) &&
+    (Boolean(metadataForParse.accountNumber) || parsedRowsHaveMultipleAccountNumbers) &&
     (metadataForParse.confidence ?? 0) >= 80;
   const openAiStatementRowsAreCompetitive =
     importMode !== "statement" ||
@@ -4096,6 +4097,7 @@ export const processImportFileText = async (
   const useOpenAiParse =
     Boolean(openAiParsed?.audit.schemaValidated) &&
     shouldAdoptOpenAiStatementParse &&
+    (!parsedRowsHaveMultipleAccountNumbers || hasMultipleParsedAccountNumbers((openAiParsed?.rows ?? []) as Array<Record<string, unknown>>)) &&
     (openAiPrimaryMode ||
       Boolean(pageImages?.length) ||
       isDocumentImport ||
@@ -4104,6 +4106,7 @@ export const processImportFileText = async (
         : parsedRows.length === 0));
   const effectiveRows = useOpenAiParse && openAiParsed ? openAiParsed.rows : parsedRows;
   const effectiveMetadataSource = useOpenAiParse && openAiMetadata ? openAiMetadata : metadataForParse;
+  const effectiveRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(effectiveRows as Array<Record<string, unknown>>);
   const parsedEndingBalance = getTrailingBalanceFromParsedRows(effectiveRows);
   const resolvedMetadata = {
     ...effectiveMetadataSource,
@@ -4112,7 +4115,7 @@ export const processImportFileText = async (
       effectiveMetadataSource.currency ?? null,
       effectiveMetadataSource.accountName ?? null
     ),
-    endingBalance: effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
+    endingBalance: effectiveRowsHaveMultipleAccountNumbers ? null : effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
   };
   let confirmedImportResult:
     | {
