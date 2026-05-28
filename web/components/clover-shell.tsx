@@ -1153,6 +1153,24 @@ export function CloverShell({
   };
 
   const openQuickAddTransaction = () => {
+    if (pathname?.startsWith("/split-bill")) {
+      setIsQuickAddOpen(false);
+      window.dispatchEvent(new CustomEvent("clover:open-split-bill-add", { detail: { mode: "manual" } }));
+      return;
+    }
+
+    if (pathname?.startsWith("/investments")) {
+      setIsQuickAddOpen(false);
+      window.dispatchEvent(new Event("clover:open-investment-add"));
+      return;
+    }
+
+    if (pathname?.startsWith("/recurring")) {
+      setIsQuickAddOpen(false);
+      window.dispatchEvent(new Event("clover:open-recurring-add"));
+      return;
+    }
+
     setIsQuickAddOpen((current) => !current);
   };
 
