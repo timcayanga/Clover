@@ -27255,8 +27255,8 @@ button.accounts-detail__transaction-head-cell {
   width: min(100%, 520px);
   display: grid;
   justify-items: center;
-  gap: 30px;
-  padding: 28px 24px;
+  gap: 34px;
+  padding: 0 24px;
   overflow: visible;
   text-align: center;
 }
@@ -27268,6 +27268,20 @@ button.accounts-detail__transaction-head-cell {
   display: grid;
   place-items: center;
   overflow: visible;
+}
+
+.clover-loading-screen__logo::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  width: 78%;
+  height: 18px;
+  border-radius: 999px;
+  background: radial-gradient(ellipse at center, rgba(15, 23, 42, 0.16), transparent 68%);
+  filter: blur(5px);
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .clover-loading-screen__mark {
@@ -27284,8 +27298,9 @@ button.accounts-detail__transaction-head-cell {
 .clover-loading-screen__copy {
   display: grid;
   justify-items: center;
+  width: min(100%, 520px);
   min-height: clamp(2.8rem, 7vw, 4.4rem);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .clover-loading-screen__copy .eyebrow {
@@ -27295,7 +27310,8 @@ button.accounts-detail__transaction-head-cell {
 .clover-loading-screen__copy h2 {
   position: relative;
   margin: 0;
-  width: min(100%, 16ch);
+  width: 100%;
+  max-width: 16ch;
   min-height: clamp(2.8rem, 7vw, 4.4rem);
   font-size: clamp(2rem, 5vw, 3rem);
   line-height: 0.98;
@@ -27308,7 +27324,7 @@ button.accounts-detail__transaction-head-cell {
   display: grid;
   place-items: center;
   opacity: 0;
-  transform: translateY(16px);
+  transform: translateY(12px);
   animation: clover-loading-title-cycle 10s ease-in-out infinite;
 }
 
@@ -27326,21 +27342,22 @@ button.accounts-detail__transaction-head-cell {
 
 @keyframes clover-loading-title-cycle {
   0%,
-  8% {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-
-  14%,
-  30% {
+  24% {
     opacity: 1;
     transform: translateY(0);
   }
 
-  38%,
+  32%,
   100% {
     opacity: 0;
-    transform: translateY(-14px);
+    transform: translateY(-12px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .clover-loading-screen__copy h2 span:nth-child(n + 2) {
+    opacity: 0;
+    transform: translateY(12px);
   }
 }
 
