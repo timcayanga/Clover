@@ -1983,6 +1983,101 @@ const readParsedRowAccountNumber = (row: Record<string, unknown>) => {
 const hasMultipleParsedAccountNumbers = (rows: Array<Record<string, unknown>>) =>
   new Set(rows.map(readParsedRowAccountNumber).filter((value): value is string => Boolean(value))).size > 1;
 
+const collapseDuplicateUploadedAccountsForAccount = async <
+  T extends {
+    id: string;
+    workspaceId?: string | null;
+    name: string;
+    institution: string | null;
+    accountNumber: string | null;
+    type: AccountType;
+    source?: string | null;
+  },
+>(
+  account: T
+) => {
+  const accountNumber = typeof account.accountNumber === "string" && account.accountNumber.trim() ? account.accountNumber.trim() : null;
+  const institution = typeof account.institution === "string" && account.institution.trim() ? account.institution.trim() : null;
+  const workspaceId = typeof account.workspaceId === "string" && account.workspaceId.trim() ? account.workspaceId.trim() : null;
+  if (!workspaceId || !accountNumber || !institution || account.source !== "upload") {
+    return account;
+  }
+
+  const duplicates = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      institution,
+      accountNumber,
+      type: account.type,
+      source: "upload",
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      workspaceId: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+      source: true,
+      currency: true,
+      balance: true,
+      createdAt: true,
+    },
+  });
+
+  if (duplicates.length <= 1) {
+    return account;
+  }
+
+  const canonical = duplicates[0];
+  const duplicateIds = duplicates.map((entry) => entry.id).filter((id) => id !== canonical.id);
+  if (duplicateIds.length === 0) {
+    return account;
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+      await tx.importFile.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+      await tx.documentImport.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+      await tx.accountStatementCheckpoint.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+      await tx.financialCommitment.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+      await tx.receiptDocument.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+      await tx.investmentSnapshot.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+      await tx.investmentHolding.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+      await tx.recurringPattern.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+      await tx.accountRule.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+      await tx.account.deleteMany({ where: { id: { in: duplicateIds }, source: "upload" } });
+    });
+  } catch (error) {
+    console.warn("[import-account-match] unable to collapse duplicate uploaded accounts", {
+      workspaceId,
+      accountNumber,
+      institution,
+      accountType: account.type,
+      canonicalAccountId: canonical.id,
+      duplicateAccountIds: duplicateIds,
+      error,
+    });
+    return account;
+  }
+
+  if (account.id === canonical.id) {
+    return account;
+  }
+
+  return {
+    ...account,
+    id: canonical.id,
+    name: canonical.name,
+    institution: canonical.institution,
+    accountNumber: canonical.accountNumber,
+    type: canonical.type,
+    source: canonical.source,
+  };
+};
+
 const resolveConfirmationAccount = async (params: {
   importFile: { id?: unknown; workspaceId: unknown; fileName?: unknown };
   statementMetadata?: {
@@ -2109,6 +2204,7 @@ const resolveConfirmationAccount = async (params: {
     typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
       ? params.statementMetadata.accountNumber.trim()
       : null;
+  const hasInferredAccountNumber = Boolean(inferredAccountNumber);
   const supportedImportAccountTypes: AccountType[] = [
     "bank",
     "wallet",
@@ -2188,15 +2284,17 @@ const resolveConfirmationAccount = async (params: {
         .filter((account) => account.id !== directAccount.id)
         .filter(accountMatchesImportIdentity)
         .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())[0] ??
-      findBestImportedAccountMatch(
-        workspaceAccounts.filter((account) => account.id !== directAccount.id),
-        {
-          name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
-          institution: inferredInstitution,
-          accountNumber: inferredAccountNumber,
-          type: accountIdentityType,
-        }
-      );
+      (hasInferredAccountNumber
+        ? null
+        : findBestImportedAccountMatch(
+            workspaceAccounts.filter((account) => account.id !== directAccount.id),
+            {
+              name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
+              institution: inferredInstitution,
+              accountNumber: inferredAccountNumber,
+              type: accountIdentityType,
+            }
+          ));
     const accountToUpdate = canonicalIdentityAccount ?? directAccount;
     const updatedAccount = await updateAccountIdentity(accountToUpdate, {
       name: inferredAccountName,
@@ -2208,7 +2306,7 @@ const resolveConfirmationAccount = async (params: {
     });
 
     await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
-    return updatedAccount;
+    return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
   const existingByKey = workspaceAccounts.find(
@@ -2225,15 +2323,17 @@ const resolveConfirmationAccount = async (params: {
     });
 
     await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
-    return updatedAccount;
+    return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
-  const existingByIdentity = findBestImportedAccountMatch(workspaceAccounts, {
-    name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
-    institution: inferredInstitution,
-    accountNumber: inferredAccountNumber,
-    type: accountIdentityType,
-  });
+  const existingByIdentity = hasInferredAccountNumber
+    ? null
+    : findBestImportedAccountMatch(workspaceAccounts, {
+        name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
+        institution: inferredInstitution,
+        accountNumber: inferredAccountNumber,
+        type: accountIdentityType,
+      });
   if (existingByIdentity) {
     const updatedAccount = await updateAccountIdentity(existingByIdentity, {
       name: inferredAccountName,
@@ -2245,7 +2345,7 @@ const resolveConfirmationAccount = async (params: {
     });
 
     await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
-    return updatedAccount;
+    return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
   const deletedAccountMatch = await findDeletedAccountTombstoneMatch(workspaceId, {
@@ -2312,7 +2412,7 @@ const resolveConfirmationAccount = async (params: {
       });
 
       await ensureWorkspaceCashAccount(workspaceId, createdAccount.currency ?? inferredCurrency ?? "PHP");
-      return createdAccount;
+      return collapseDuplicateUploadedAccountsForAccount(createdAccount);
     } catch (error) {
       if (Object.prototype.hasOwnProperty.call(accountData, "accountNumber") && isMissingAccountNumberColumnError(error)) {
         const createdAccount = await prisma.account.create({
@@ -2321,7 +2421,7 @@ const resolveConfirmationAccount = async (params: {
         });
 
         await ensureWorkspaceCashAccount(workspaceId, createdAccount.currency ?? inferredCurrency ?? "PHP");
-        return createdAccount;
+        return collapseDuplicateUploadedAccountsForAccount(createdAccount);
       }
 
       throw error;
