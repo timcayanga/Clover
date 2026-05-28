@@ -1018,6 +1018,17 @@ const main = async () => {
   if (cimbMixedRows.some((row) => row.rawPayload?.kind === "opening_balance" || /^(?:opening|beginning) balance$/i.test(String(row.merchantRaw ?? "")))) {
     throw new Error("expected CIMB opening balances to remain metadata-only, not transaction rows");
   }
+  for (const accountNumber of ["20867602571971", "20867602571932"]) {
+    const rowsForAccount = cimbMixedRows.filter((row) => row.accountNumber === accountNumber);
+    if (rowsForAccount.length !== 6) {
+      throw new Error(`expected CIMB ${accountNumber.slice(-4)} to have 6 visible rows`);
+    }
+
+    const trailingBalance = parser.getTrailingBalanceFromParsedRows(rowsForAccount);
+    if (trailingBalance !== 4294.66) {
+      throw new Error(`expected CIMB ${accountNumber.slice(-4)} ending balance to be 4294.66, got ${trailingBalance}`);
+    }
+  }
   console.log("[PASS] CIMB mixed pages | preserves two account sections");
 
   const cimbDuplicatePaths = [

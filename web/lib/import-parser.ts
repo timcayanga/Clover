@@ -916,6 +916,27 @@ const isLikelyWalletAccountNumber = (value: string | null | undefined) => {
 };
 
 export const getTrailingBalanceFromParsedRows = (rows: ParsedImportRow[]) => {
+  const statementEndingBalancePayload = [...rows]
+    .reverse()
+    .find(
+      (row) =>
+        typeof row.rawPayload === "object" &&
+        row.rawPayload !== null &&
+        (typeof row.rawPayload.statementEndingBalance === "string" ||
+          typeof row.rawPayload.statementEndingBalance === "number")
+    )?.rawPayload;
+  const statementEndingBalanceText =
+    typeof statementEndingBalancePayload?.statementEndingBalance === "string" ||
+    typeof statementEndingBalancePayload?.statementEndingBalance === "number"
+      ? String(statementEndingBalancePayload.statementEndingBalance)
+      : null;
+  const statementEndingBalance = parseMoney(
+    typeof statementEndingBalanceText === "string" ? statementEndingBalanceText.replace(/^PHP\s*/i, "") : null
+  );
+  if (statementEndingBalance !== null) {
+    return statementEndingBalance;
+  }
+
   const lastBalancePayload = [...rows]
     .reverse()
     .find(
@@ -7896,7 +7917,14 @@ const parseCimbImportText = (text: string) => {
         institution: "CIMB",
         statementStartDate: startDate ? startDate.toISOString() : null,
         statementEndDate: endDate ? endDate.toISOString() : null,
-      });
+      }).map((row) => ({
+        ...row,
+        rawPayload: {
+          ...(row.rawPayload ?? {}),
+          statementOpeningBalance: openingBalance === null ? null : openingBalance.toFixed(2),
+          statementEndingBalance: endingBalance === null ? null : endingBalance.toFixed(2),
+        },
+      }));
 
       if (parsedRows.length > 0) {
         rows.push(...parsedRows);
