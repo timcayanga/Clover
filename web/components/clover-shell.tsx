@@ -574,6 +574,7 @@ export function CloverShell({
   const quickAddPopoverRef = useRef<HTMLDivElement | null>(null);
   const quickAddFileInputRef = useRef<HTMLInputElement | null>(null);
   const quickAddPhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const quickAddPhotoLibraryInputRef = useRef<HTMLInputElement | null>(null);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | "more" | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
@@ -1170,6 +1171,16 @@ export function CloverShell({
     input.click();
   };
 
+  const openQuickAddPhotoLibrary = () => {
+    const input = quickAddPhotoLibraryInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.value = "";
+    input.click();
+  };
+
   const openQuickAddFilePicker = () => {
     const input = quickAddFileInputRef.current;
     if (!input) {
@@ -1642,6 +1653,16 @@ export function CloverShell({
         aria-hidden="true"
         tabIndex={-1}
       />
+      <input
+        ref={quickAddPhotoLibraryInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handleQuickAddPhotoChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
       {isQuickAddOpen ? (
         <div className="shell-quick-add-popover glass" ref={quickAddPopoverRef} role="menu" aria-label="Quick add">
           <button
@@ -1653,7 +1674,7 @@ export function CloverShell({
               setQuickAddModal("transaction");
             }}
           >
-            <strong>Add Transaction</strong>
+            <strong>Add Manually</strong>
             <span>Open the manual transaction field.</span>
           </button>
           <button
@@ -1674,10 +1695,22 @@ export function CloverShell({
             role="menuitem"
             onClick={() => {
               setIsQuickAddOpen(false);
+              openQuickAddPhotoLibrary();
+            }}
+          >
+            <strong>Choose Photo</strong>
+            <span>Select an existing receipt or statement image.</span>
+          </button>
+          <button
+            className="shell-quick-add-popover__item"
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setIsQuickAddOpen(false);
               openQuickAddFilePicker();
             }}
           >
-            <strong>Import Files</strong>
+            <strong>Upload File</strong>
             <span>Upload statements, CSVs, and screenshots.</span>
           </button>
         </div>

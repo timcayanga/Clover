@@ -886,7 +886,7 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
         {menuOpen ? (
           <div className="dashboard-top-actions__menu">
             <button className="dashboard-top-actions__menu-item" type="button" onClick={openManualAdd}>
-              Add transaction
+              Add manually
             </button>
             <button className="dashboard-top-actions__menu-item" type="button" onClick={openImportFiles}>
               Import files

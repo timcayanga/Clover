@@ -33996,6 +33996,17 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-size: 0.9rem;
 }
 
+.split-bill-import-modal__source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.split-bill-import-modal__source-actions .button {
+  min-width: 0;
+}
+
 .split-bill-icon-button {
   display: inline-grid;
   place-items: center;

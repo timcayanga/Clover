@@ -50,6 +50,8 @@ const createId = () => globalThis.crypto?.randomUUID?.() ?? `receipt-${Date.now(
 
 export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }: SplitBillImportModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const photoLibraryInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState("Drop a receipt file here or browse from your computer.");
@@ -97,6 +99,29 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
 
     fileInputRef.current.value = "";
     fileInputRef.current.click();
+  };
+
+  const openCamera = () => {
+    if (!cameraInputRef.current) {
+      return;
+    }
+
+    cameraInputRef.current.value = "";
+    cameraInputRef.current.click();
+  };
+
+  const openPhotoLibrary = () => {
+    if (!photoLibraryInputRef.current) {
+      return;
+    }
+
+    photoLibraryInputRef.current.value = "";
+    photoLibraryInputRef.current.click();
+  };
+
+  const chooseFile = (nextFile: File | null) => {
+    setFile(nextFile);
+    setError(validateFile(nextFile));
   };
 
   const saveReceiptBill = async (preview: ReceiptPreviewResult, fileToSave: File) => {
@@ -259,8 +284,7 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
             event.preventDefault();
             setDragActive(false);
             const nextFile = event.dataTransfer.files[0] ?? null;
-            setFile(nextFile);
-            setError(validateFile(nextFile));
+            chooseFile(nextFile);
           }}
           onClick={(event) => {
             if (event.target === event.currentTarget) {
@@ -274,16 +298,41 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
             type="file"
             accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/png,image/jpeg,image/webp"
             onChange={(event) => {
-              const nextFile = event.target.files?.[0] ?? null;
-              setFile(nextFile);
-              setError(validateFile(nextFile));
+              chooseFile(event.target.files?.[0] ?? null);
+            }}
+          />
+          <input
+            ref={cameraInputRef}
+            className="hidden-file-input"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(event) => {
+              chooseFile(event.target.files?.[0] ?? null);
+            }}
+          />
+          <input
+            ref={photoLibraryInputRef}
+            className="hidden-file-input"
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              chooseFile(event.target.files?.[0] ?? null);
             }}
           />
           <strong>Drop a receipt here</strong>
-          <span>or browse for a file from your computer.</span>
-          <button className="button button-secondary button-small" type="button" onClick={openFilePicker}>
-            Choose file
-          </button>
+          <span>or choose how you want to add it.</span>
+          <div className="split-bill-import-modal__source-actions">
+            <button className="button button-primary button-small" type="button" onClick={openCamera}>
+              Take photo
+            </button>
+            <button className="button button-secondary button-small" type="button" onClick={openPhotoLibrary}>
+              Choose photo
+            </button>
+            <button className="button button-secondary button-small" type="button" onClick={openFilePicker}>
+              Upload file
+            </button>
+          </div>
         </div>
 
         {isUploading ? (

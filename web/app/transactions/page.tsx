@@ -2090,6 +2090,7 @@ function TransactionsPageContent() {
   const addMenuPanelRef = useRef<HTMLDivElement>(null);
   const addFileInputRef = useRef<HTMLInputElement>(null);
   const addPhotoInputRef = useRef<HTMLInputElement>(null);
+  const addPhotoLibraryInputRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const initialWorkspaceId = urlSearchParams.get("workspaceId") || readSelectedWorkspaceId();
   const initialCachedWorkspace = null;
@@ -3112,6 +3113,17 @@ function TransactionsPageContent() {
 
   const openPhotoCapture = () => {
     const input = addPhotoInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    setAddMenuOpen(false);
+    input.value = "";
+    input.click();
+  };
+
+  const openPhotoLibrary = () => {
+    const input = addPhotoLibraryInputRef.current;
     if (!input) {
       return;
     }
@@ -6165,6 +6177,16 @@ function TransactionsPageContent() {
         aria-hidden="true"
         tabIndex={-1}
       />
+      <input
+        ref={addPhotoLibraryInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handlePhotoCaptureChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
 
       <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>
         <button
@@ -6204,7 +6226,7 @@ function TransactionsPageContent() {
                     void openManualAdd();
                   }}
                 >
-                  Add transaction
+                  {isCompactViewport ? "Add manually" : "Add transaction"}
                 </button>
                 {isCompactViewport ? (
                   <button
@@ -6213,6 +6235,15 @@ function TransactionsPageContent() {
                     onClick={openPhotoCapture}
                   >
                     Take photo
+                  </button>
+                ) : null}
+                {isCompactViewport ? (
+                  <button
+                    className="transactions-add-menu__item"
+                    type="button"
+                    onClick={openPhotoLibrary}
+                  >
+                    Choose photo
                   </button>
                 ) : null}
                 <button
@@ -6227,7 +6258,7 @@ function TransactionsPageContent() {
                     openImportFiles();
                   }}
                 >
-                  Import files
+                  {isCompactViewport ? "Upload file" : "Import files"}
                 </button>
               </div>,
               document.body
@@ -6832,8 +6863,18 @@ function TransactionsPageContent() {
                 actions={
                   <>
                     <button className="button button-primary button-small" type="button" onClick={() => openManualAdd()}>
-                      Add transaction
+                      Add manually
                     </button>
+                    {isCompactViewport ? (
+                      <button className="button button-secondary button-small" type="button" onClick={openPhotoCapture}>
+                        Take photo
+                      </button>
+                    ) : null}
+                    {isCompactViewport ? (
+                      <button className="button button-secondary button-small" type="button" onClick={openPhotoLibrary}>
+                        Choose photo
+                      </button>
+                    ) : null}
                     <button
                       className="button button-secondary button-small transactions-empty-state__import"
                       type="button"
@@ -6846,7 +6887,7 @@ function TransactionsPageContent() {
                         openImportFiles();
                       }}
                     >
-                      Import files
+                      {isCompactViewport ? "Upload file" : "Import files"}
                     </button>
                   </>
                 }
@@ -7000,8 +7041,18 @@ function TransactionsPageContent() {
                 actions={
                   <>
                     <button className="button button-primary button-small" type="button" onClick={() => openManualAdd()}>
-                      Add transaction
+                      Add manually
                     </button>
+                    {isCompactViewport ? (
+                      <button className="button button-secondary button-small" type="button" onClick={openPhotoCapture}>
+                        Take photo
+                      </button>
+                    ) : null}
+                    {isCompactViewport ? (
+                      <button className="button button-secondary button-small" type="button" onClick={openPhotoLibrary}>
+                        Choose photo
+                      </button>
+                    ) : null}
                     <button
                       className="button button-secondary button-small transactions-empty-state__import"
                       type="button"
@@ -7014,7 +7065,7 @@ function TransactionsPageContent() {
                         openImportFiles();
                       }}
                     >
-                      Import files
+                      {isCompactViewport ? "Upload file" : "Import files"}
                     </button>
                   </>
                 }
