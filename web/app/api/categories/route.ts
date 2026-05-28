@@ -73,7 +73,6 @@ export async function GET(request: Request) {
       orderBy: [
         { isSystem: "desc" },
         { isArchived: "asc" },
-        { type: "asc" },
         { name: "asc" },
       ],
     });
