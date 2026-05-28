@@ -224,6 +224,11 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
 
   const leftLastFour = extractLastFourDigits(left.accountNumber ?? left.name);
   const rightLastFour = extractLastFourDigits(right.accountNumber ?? right.name);
+  const leftExplicitLastFour = extractLastFourDigits(left.accountNumber);
+  const rightExplicitLastFour = extractLastFourDigits(right.accountNumber);
+  if ((leftExplicitLastFour && !rightExplicitLastFour) || (!leftExplicitLastFour && rightExplicitLastFour)) {
+    return 0;
+  }
   if (leftLastFour && rightLastFour && leftLastFour === rightLastFour) {
     return 95;
   }
