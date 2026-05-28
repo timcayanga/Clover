@@ -915,10 +915,22 @@ const isLikelyWalletAccountNumber = (value: string | null | undefined) => {
 };
 
 export const getTrailingBalanceFromParsedRows = (rows: ParsedImportRow[]) => {
-  const lastBalanceText = [...rows]
+  const lastBalancePayload = [...rows]
     .reverse()
-    .find((row) => typeof row.rawPayload === "object" && row.rawPayload !== null && typeof row.rawPayload.balanceText === "string")
-    ?.rawPayload?.balanceText;
+    .find(
+      (row) =>
+        typeof row.rawPayload === "object" &&
+        row.rawPayload !== null &&
+        (typeof row.rawPayload.balanceText === "string" ||
+          typeof row.rawPayload.balance === "string" ||
+          typeof row.rawPayload.balance === "number")
+    )?.rawPayload;
+  const lastBalanceText =
+    typeof lastBalancePayload?.balanceText === "string"
+      ? lastBalancePayload.balanceText
+      : typeof lastBalancePayload?.balance === "string" || typeof lastBalancePayload?.balance === "number"
+        ? String(lastBalancePayload.balance)
+        : null;
 
   return parseMoney(typeof lastBalanceText === "string" ? lastBalanceText.replace(/^PHP\s*/i, "") : null);
 };
@@ -1255,7 +1267,7 @@ const withDetectedCurrency = (metadata: DetectedStatementMetadata, text: string)
 
 const parseBpiDate = (value?: string | null, yearHint?: number) => {
   if (!value) return null;
-  const normalized = normalizeWhitespace(value);
+  const normalized = normalizeWhitespace(value).replace(/\b(\d{1,2})\.\s*(\d{4})\b/g, "$1, $2");
   const compact = compactWhitespace(normalized);
   const match = compact.match(/^([A-Z]{3,9})(\d{1,2})(?:,(\d{4}))?$/i);
   if (!match) {
@@ -3668,6 +3680,16 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     lines.find((line) => /PERIOD\s*COVERED/i.test(line)) ??
     lines.find((line) => /FORBES\s*PARK\s*SAVINGS/i.test(line)) ??
     normalized;
+  const periodAccountLines = lines.filter(
+    (line) =>
+      (/PERIOD\s*C[O0][VY]ERED/i.test(line) && /\bNO\s*[:：]/i.test(line)) ||
+      (/\bNO\s*[:：]\s*[A-Z0-9][A-Z0-9\s-]{5,}/i.test(line) && /PERIOD/i.test(line))
+  );
+  const statementAccountLine = periodAccountLines[0] ?? null;
+  const finalStatementAccountLine =
+    [...periodAccountLines].reverse().find((line) => /\bNO\s*[:：]\s*[0OQ]/i.test(line)) ??
+    periodAccountLines.at(-1) ??
+    null;
   const headerCompact = compactWhitespace(headerLine);
   const headerPrefix = lines.slice(0, 18).join(" ");
   const splitAccountLineIndex = lines.findIndex((line) => /^\d{4}\s*-\s*\d{4}\s*-\s*$/i.test(compactWhitespace(line)));
@@ -3697,7 +3719,18 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     lines.find((line) => /^ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#)/i.test(line))?.replace(/[^0-9]/g, "") ??
     null;
   const cardAccountMatch = normalized.match(/\bBE\d{8}\b/i)?.[0] ?? null;
+  const statementAccountNumberDisplay =
+    statementAccountLine?.match(/\bNO\s*[:：]\s*([A-Z0-9][A-Z0-9\s-]{5,})/i)?.[1]
+      ?.replace(/[OoQ]/g, "0")
+      .replace(/\s*-\s*/g, "-")
+      .replace(/[^0-9-]/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 18) ??
+    null;
+  const statementAccountNumber = statementAccountNumberDisplay?.replace(/\D/g, "").slice(0, 16) ?? null;
   const accountSection =
+    statementAccountNumber ??
     rawAccountNumber ??
     directAccountNumber ??
     (explicitAccountNumberMatch ? explicitAccountNumberMatch.replace(/\D/g, "").slice(0, 16) : null) ??
@@ -3712,13 +3745,15 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     accountSection.replace(/\D/g, "").slice(0, 16) ||
     null;
   const formattedAccountNumber =
-    accountNumber && /^\d{10}$/.test(accountNumber)
+    statementAccountNumberDisplay && statementAccountNumberDisplay.includes("-")
+      ? statementAccountNumberDisplay
+      : accountNumber && /^\d{10}$/.test(accountNumber)
       ? `${accountNumber.slice(0, 4)}-${accountNumber.slice(4, 8)}-${accountNumber.slice(8, 10)}`
       : accountNumber;
   const extractedAccountName = extractAccountHolderNameFromLines(lines, accountLineIndex);
   const isNoisyBpiAccountName =
     extractedAccountName !== null &&
-    /(?:ATM|DEPOSIT|WITHDRAWAL|TRANSFER|TRANSACTIONS?|BALANCE|SUMMARY|ACCOUNT|CARD|CREDIT|DEBIT)/i.test(
+    /(?:REFERENCE\s+NO|BANK\s+CERTIFICATION|VISA\s+PURPOSES|ATM|DEPOSIT|WITHDRAWAL|TRANSFER|TRANSACTIONS?|BALANCE|SUMMARY|ACCOUNT|CARD|CREDIT|DEBIT)/i.test(
       extractedAccountName
     );
   const accountName =
@@ -3726,12 +3761,16 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     (accountNumber ? `BPI ${accountNumber.replace(/\D/g, "").slice(-4)}` : "BPI");
 
   const periodMatch =
+    statementAccountLine?.match(/PERIOD\s*C[O0][VY]ERED\s*[:\-]?\s*([A-Z]{3}\s*\d{1,2}\s*[,.\s]\s*\d{4})\s*[–—-]\s*([A-Z]{3}\s*\d{1,2}\s*[,.\s]\s*\d{4})/i) ??
     compactWhitespace(normalized).match(/(?:ACCOUNTSUMMARYFORTHEPERIOD|PERIODCOVERED|FORTHEPERIOD)(?:.*?)([A-Z]{3}\d{1,2},?\d{4})[-–—]([A-Z]{3}\d{1,2},?\d{4})/i) ??
     normalized.match(/PERIOD\s*COVERED\s*[:\-]?\s*([A-Z]{3}\s*\d{1,2}\s*,\s*\d{4})\s*[–—-]\s*([A-Z]{3}\s*\d{1,2}\s*,\s*\d{4})/i) ??
     headerCompact.match(/PERIODCOVERED(?:.*?)([A-Z]{3}\d{1,2},\d{4})[-–—]([A-Z]{3}\d{1,2},\d{4})/i) ??
     normalized.match(/PERIOD\s*COVERED\s+([A-Z]{3}\s+\d{1,2}\s*,?\s*\d{4})\s*(?:TO|THRU|THROUGH|[-–—])\s*([A-Z]{3}\s+\d{1,2}\s*,?\s*\d{4})/i);
+  const finalPeriodMatch =
+    finalStatementAccountLine?.match(/PERIOD\s*C[O0][VY]ERED\s*[:\-]?\s*([A-Z]{3}\s*\d{1,2}\s*[,.\s]\s*\d{4})\s*[–—-]\s*([A-Z]{3}\s*\d{1,2}\s*[,.\s]\s*\d{4})/i) ??
+    null;
   const startDate = parseBpiDate(periodMatch?.[1] ?? null);
-  const endDate = parseBpiDate(periodMatch?.[2] ?? null);
+  const endDate = parseBpiDate(finalPeriodMatch?.[2] ?? periodMatch?.[2] ?? null);
 
   const openingLine = lines.find((line) => /BEGINNING\s*BALANCE/i.test(line)) ?? normalized;
   const openingCompact = compactWhitespace(openingLine);
@@ -8261,10 +8300,13 @@ const parseBpiImportText = (text: string) => {
   const hasTransactionTable = transactionHeaderIndex >= 0 || hasStatementTotals;
   const adjustedConfidence =
     rows.length > 0 && rows.length <= 2 && hasTransactionTable ? Math.min(metadata.confidence, 60) : metadata.confidence;
+  const periodHeaderCount = lines.filter((line) => /PERIOD\s+C[O0][VY]ERED/i.test(line)).length;
+  const trailingBalance = getTrailingBalanceFromParsedRows(rows);
 
   return {
     metadata: {
       ...metadata,
+      endingBalance: periodHeaderCount > 1 && trailingBalance !== null ? trailingBalance : metadata.endingBalance,
       confidence: adjustedConfidence,
     },
     rows,
@@ -14158,6 +14200,24 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
   const gcashMetadata = gcashStatementMetadata(text);
   if (gcashMetadata) {
     return withDetectedCurrency(gcashMetadata, text);
+  }
+
+  const strongBpiSavingsParsed = parseBpiImportText(text);
+  if (
+    strongBpiSavingsParsed &&
+    /\b(?:BANK\s+OF\s+THE\s+PHILIPPINE\s+ISLANDS|BPI)\b/i.test(text) &&
+    /\bPERIOD\s+C[O0][VY]ERED\b/i.test(text) &&
+    /\bDEBIT\s+AMT\b[\s\S]{0,80}\bCREDIT\s+AMT\b[\s\S]{0,80}\bBALANCE\b/i.test(text)
+  ) {
+    const bpiPeriodCount = text.match(/\bPERIOD\s+C[O0][VY]ERED\b/gi)?.length ?? 0;
+    const trailingBalance = getTrailingBalanceFromParsedRows(strongBpiSavingsParsed.rows);
+    return withDetectedCurrency(
+      {
+        ...strongBpiSavingsParsed.metadata,
+        endingBalance: bpiPeriodCount > 1 && trailingBalance !== null ? trailingBalance : strongBpiSavingsParsed.metadata.endingBalance,
+      },
+      text
+    );
   }
 
   const aubCardMetadata = parseAubCardImportText(text);

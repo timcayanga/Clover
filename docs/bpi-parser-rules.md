@@ -19,6 +19,9 @@ Use these rules for BPI savings and related statement imports.
 - BPI savings account numbers can be line-wrapped in OCR, so a split pattern like `3189-2104-84` should still resolve to the full account number and a visible suffix of `0484`, not `2104`.
 - When the account number is split across lines, the parser should join the trailing 2-digit suffix back onto the `4-4` prefix before deriving the visible suffix.
 - When a BPI savings account number is available, store the full formatted account number in the statement metadata using the `####-####-##` style that the source JSON fixtures expect.
+- Some uploads combine a bank certification page before the actual BPI statement pages. The certificate page can include `Reference No.` and other bank-looking labels; do not use those as account identity.
+- For bank-certification plus statement bundles, prefer the BPI `PERIOD COVERED ... NO:` statement header over certificate account tables when resolving account number and account display name.
+- If a scanned BPI bundle contains multiple statement periods, preserve the earliest statement start date, latest statement end date, and latest parsed running balance for the account balance.
 
 ## Parsing Guidance
 

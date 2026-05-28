@@ -1720,6 +1720,17 @@ const main = async () => {
   if (bpiHybridRows.length === 0) {
     console.warn("[WARN] BPI OCR fallback | bank-statement-and-cert hybrid remained unreadable in this regression harness");
   } else {
+    if (bpiHybridMetadata.institution !== "BPI") {
+      throw new Error(`expected BPI bank-statement-and-cert hybrid to detect BPI, got ${bpiHybridMetadata.institution ?? "missing"}`);
+    }
+    if (bpiHybridMetadata.accountNumber !== "008096-3258-11" || bpiHybridMetadata.accountName !== "BPI 5811") {
+      throw new Error(
+        `expected BPI hybrid account BPI 5811 / 008096-3258-11, got ${bpiHybridMetadata.accountName ?? "missing"} / ${bpiHybridMetadata.accountNumber ?? "missing"}`
+      );
+    }
+    if (bpiHybridMetadata.endingBalance !== 210920.62) {
+      throw new Error(`expected BPI hybrid trailing balance 210920.62, got ${bpiHybridMetadata.endingBalance ?? "missing"}`);
+    }
     console.log(`[PASS] BPI OCR fallback | bank-statement-and-cert hybrid yields ${bpiHybridRows.length} rows`);
   }
 
