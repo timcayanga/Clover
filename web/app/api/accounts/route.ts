@@ -13,6 +13,7 @@ import { capturePostHogServerEvent } from "@/lib/analytics";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { isSupportedAccountType } from "@/lib/account-types";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
+import { formatUploadAccountDisplayName } from "@/lib/account-display";
 
 export const dynamic = "force-dynamic";
 
@@ -148,6 +149,265 @@ const normalizeInvestmentSubtype = (value: unknown): InvestmentSubtype | null =>
   return INVESTMENT_SUBTYPES.includes(subtype as InvestmentSubtype) ? (subtype as InvestmentSubtype) : null;
 };
 
+const normalizeImportInstitution = (value?: string | null) => String(value ?? "").replace(/\s+/g, " ").trim();
+
+const normalizeImportAccountNumber = (value?: string | null) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits.length >= 4 ? digits : null;
+};
+
+const importedAccountIdentityKey = (institution?: string | null, accountNumber?: string | null) => {
+  const normalizedAccountNumber = normalizeImportAccountNumber(accountNumber);
+  return normalizedAccountNumber ? `${normalizeImportInstitution(institution).toLowerCase()}:${normalizedAccountNumber}` : null;
+};
+
+const readImportedJsonNumber = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const numeric = Number(value.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  return null;
+};
+
+const readImportedJsonText = (payload: unknown, key: string) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+};
+
+const readImportedSourceRowIndex = (payload: unknown) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  return readImportedJsonNumber((payload as Record<string, unknown>).sourceRowIndex);
+};
+
+const readImportedRunningBalance = (payload: unknown) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  return readImportedJsonNumber(record.balance ?? record.runningBalance ?? record.endingBalance);
+};
+
+const isGenericUploadedAccountForInstitution = (account: {
+  name: string;
+  institution: string | null;
+  accountNumber?: string | null;
+  source: string;
+}) => {
+  if (account.source !== "upload" || normalizeImportAccountNumber(account.accountNumber ?? null)) {
+    return false;
+  }
+
+  const institution = normalizeImportInstitution(account.institution).toLowerCase();
+  const name = normalizeImportInstitution(account.name).toLowerCase();
+  return Boolean(institution && (name === institution || name === `${institution} account`));
+};
+
+const repairParsedImportedAccounts = async (workspaceId: string, compatibleColumns: Set<string>) => {
+  if (!compatibleColumns.has("accountNumber") || !(await hasCompatibleTable("ParsedTransaction"))) {
+    return;
+  }
+
+  const parsedRows = await prisma.parsedTransaction.findMany({
+    where: {
+      workspaceId,
+      accountNumber: { not: null },
+    },
+    orderBy: [{ createdAt: "desc" }],
+    take: 10_000,
+    select: {
+      importFileId: true,
+      accountNumber: true,
+      accountName: true,
+      institution: true,
+      currency: true,
+      rawPayload: true,
+    },
+  }).catch(() => []);
+  if (parsedRows.length === 0) {
+    return;
+  }
+
+  const existingAccounts = await prisma.account.findMany({
+    where: { workspaceId },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+      currency: true,
+      source: true,
+      balance: true,
+      createdAt: true,
+    },
+  });
+  const accountByNumber = new Map(
+    existingAccounts
+      .map((account) => [importedAccountIdentityKey(account.institution, account.accountNumber), account] as const)
+      .filter((entry): entry is [string, (typeof existingAccounts)[number]] => Boolean(entry[0]))
+  );
+  const groups = new Map<
+    string,
+    {
+      accountNumber: string;
+      accountName: string | null;
+      institution: string | null;
+      currency: string | null;
+      balance: string | null;
+      rows: typeof parsedRows;
+    }
+  >();
+
+  for (const row of parsedRows) {
+    const accountNumber =
+      normalizeImportAccountNumber(row.accountNumber) ??
+      normalizeImportAccountNumber(readImportedJsonText(row.rawPayload, "accountNumber"));
+    if (!accountNumber) {
+      continue;
+    }
+
+    const institution = normalizeImportInstitution(row.institution ?? readImportedJsonText(row.rawPayload, "institution"));
+    const key = `${institution.toLowerCase() || "unknown"}:${accountNumber}`;
+    const group =
+      groups.get(key) ??
+      {
+        accountNumber,
+        accountName: row.accountName?.trim() || readImportedJsonText(row.rawPayload, "accountName"),
+        institution: institution || null,
+        currency: row.currency?.trim().toUpperCase() || null,
+        balance: null,
+        rows: [],
+      };
+    const runningBalance = readImportedRunningBalance(row.rawPayload);
+    if (group.balance === null && runningBalance !== null) {
+      group.balance = runningBalance.toFixed(2);
+    }
+    group.rows.push(row);
+    groups.set(key, group);
+  }
+
+  for (const group of groups.values()) {
+    const accountType = "bank" as const;
+    const groupIdentityKey = importedAccountIdentityKey(group.institution, group.accountNumber);
+    let account = groupIdentityKey ? accountByNumber.get(groupIdentityKey) ?? null : null;
+    const accountName = formatUploadAccountDisplayName(
+      group.accountName ?? group.institution ?? "Imported account",
+      group.institution,
+      group.accountNumber,
+      accountType
+    );
+    const currency = normalizeInstitutionCurrency(group.institution, group.currency, accountName) ?? group.currency ?? "PHP";
+    if (!account) {
+      account = await prisma.account.create({
+        data: {
+          workspaceId,
+          name: accountName,
+          institution: group.institution,
+          accountNumber: group.accountNumber,
+          type: accountType,
+          currency,
+          source: "upload",
+          ...(group.balance !== null ? { balance: group.balance } : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          institution: true,
+          accountNumber: true,
+          type: true,
+          currency: true,
+          source: true,
+          balance: true,
+          createdAt: true,
+        },
+      });
+      if (groupIdentityKey) {
+        accountByNumber.set(groupIdentityKey, account);
+      }
+    } else if (account.source === "upload") {
+      await prisma.account.update({
+        where: { id: account.id },
+        data: {
+          name: account.name || accountName,
+          institution: account.institution ?? group.institution,
+          currency: account.currency ?? currency,
+          ...(group.balance !== null ? { balance: group.balance } : {}),
+        },
+      }).catch(() => null);
+    }
+
+    const importRows = group.rows
+      .map((row) => ({
+        importFileId: row.importFileId,
+        sourceRowIndex: readImportedSourceRowIndex(row.rawPayload),
+      }))
+      .filter((row): row is { importFileId: string; sourceRowIndex: number } => Boolean(row.importFileId && row.sourceRowIndex !== null));
+    for (const row of importRows) {
+      await prisma.transaction.updateMany({
+        where: {
+          workspaceId,
+          importFileId: row.importFileId,
+          deletedAt: null,
+          rawPayload: {
+            path: ["sourceRowIndex"],
+            equals: row.sourceRowIndex,
+          },
+        },
+        data: { accountId: account.id },
+      }).catch(() => null);
+    }
+  }
+
+  const numberedInstitutions = new Set(
+    Array.from(groups.values())
+      .map((group) => normalizeImportInstitution(group.institution).toLowerCase())
+      .filter(Boolean)
+  );
+  const genericPlaceholderIds = existingAccounts
+    .filter((account) => numberedInstitutions.has(normalizeImportInstitution(account.institution).toLowerCase()))
+    .filter(isGenericUploadedAccountForInstitution)
+    .map((account) => account.id);
+  if (genericPlaceholderIds.length === 0) {
+    return;
+  }
+
+  const occupiedGenericAccounts = await prisma.account.findMany({
+    where: {
+      id: { in: genericPlaceholderIds },
+      transactions: {
+        some: {
+          deletedAt: null,
+        },
+      },
+    },
+    select: { id: true },
+  }).catch(() => []);
+  const occupiedIds = new Set(occupiedGenericAccounts.map((account) => account.id));
+  const deletableIds = genericPlaceholderIds.filter((id) => !occupiedIds.has(id));
+  if (deletableIds.length > 0) {
+    await prisma.account.deleteMany({
+      where: {
+        id: { in: deletableIds },
+        source: "upload",
+        accountNumber: null,
+      },
+    }).catch(() => null);
+  }
+};
+
 export async function GET(request: Request) {
   try {
     const userId = await resolveAccountsRouteUserId();
@@ -160,6 +420,12 @@ export async function GET(request: Request) {
 
     await assertWorkspaceAccess(userId, workspaceId);
     const compatibleColumns = await getCompatibleAccountColumns();
+    await repairParsedImportedAccounts(workspaceId, compatibleColumns).catch((error) => {
+      console.warn("[accounts] unable to repair parsed imported account materialization", {
+        workspaceId,
+        error,
+      });
+    });
 
     const accounts = await prisma.account.findMany({
       where: { workspaceId },
@@ -216,7 +482,21 @@ export async function GET(request: Request) {
       }));
     })();
 
-    return NextResponse.json({ accounts: accounts.map((account) => serializeAccount(account)), accountRules, statementCheckpoints });
+    const numberedInstitutionKeys = new Set(
+      accounts
+        .filter((account) => normalizeImportAccountNumber(account.accountNumber ?? null))
+        .map((account) => normalizeImportInstitution(account.institution).toLowerCase())
+        .filter(Boolean)
+    );
+    const visibleAccounts = accounts.filter(
+      (account) =>
+        !(
+          numberedInstitutionKeys.has(normalizeImportInstitution(account.institution).toLowerCase()) &&
+          isGenericUploadedAccountForInstitution(account)
+        )
+    );
+
+    return NextResponse.json({ accounts: visibleAccounts.map((account) => serializeAccount(account)), accountRules, statementCheckpoints });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
