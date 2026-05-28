@@ -2799,24 +2799,24 @@ export const findExistingImportedStatement = async (params: {
 }) => {
   const parsedColumns = new Set(await getCompatibleParsedTransactionColumns());
   const importFileColumns = new Set(await getCompatibleImportFileColumns());
+  const transactionColumns = new Set(await getCompatibleTransactionColumns());
   const supportsStatusGate = importFileColumns.has("status") || importFileColumns.has("confirmedAt");
 
   if (parsedColumns.has("statementFingerprint") && parsedColumns.has("workspaceId") && supportsStatusGate) {
     const supportsImportFileId = parsedColumns.has("importFileId");
     const completedGateParts: string[] = [];
-    const visibleImportGateParts = [
-      `EXISTS (SELECT 1 FROM "Transaction" t WHERE t."importFileId" = i."id" AND t."deletedAt" IS NULL LIMIT 1)`,
-    ];
+    const visibleImportGateParts = transactionColumns.has("importFileId")
+      ? [
+          `EXISTS (SELECT 1 FROM "Transaction" t WHERE t."importFileId" = i."id" AND t."deletedAt" IS NULL LIMIT 1)`,
+        ]
+      : [];
     if (importFileColumns.has("confirmedAt")) {
       completedGateParts.push(`i."confirmedAt" IS NOT NULL`);
     } else if (importFileColumns.has("status")) {
       completedGateParts.push(`i."status" = 'done'`);
     }
-    if (importFileColumns.has("confirmedTransactionsCount")) {
-      visibleImportGateParts.push(`COALESCE(i."confirmedTransactionsCount", 0) > 0`);
-    }
 
-    if (completedGateParts.length > 0 && supportsImportFileId) {
+    if (completedGateParts.length > 0 && supportsImportFileId && visibleImportGateParts.length > 0) {
       const rows = await prisma.$queryRawUnsafe<Array<{ importFileId: string | null }>>(
         `SELECT DISTINCT pt."importFileId" FROM "ParsedTransaction" pt INNER JOIN "ImportFile" i ON i."id" = pt."importFileId" LEFT JOIN "Account" a ON a."id" = i."accountId" WHERE pt."workspaceId" = $1 AND pt."statementFingerprint" = $2${params.importFileId ? ' AND pt."importFileId" <> $3' : ""} AND (${completedGateParts.join(" OR ")}) AND (${visibleImportGateParts.join(" OR ")}) AND i."accountId" IS NOT NULL AND a."id" IS NOT NULL LIMIT 1`,
         ...(params.importFileId ? [params.workspaceId, params.statementFingerprint, params.importFileId] : [params.workspaceId, params.statementFingerprint])

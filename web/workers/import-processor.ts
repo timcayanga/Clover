@@ -3508,7 +3508,7 @@ export const processImportFileText = async (
     metadataForParse.accountName === metadataForParse.institution ||
     /^Account\s+\d{4}$/i.test(metadataForParse.accountName) ||
     /^(CUSTOMER NUMBER|ACCOUNT NUMBER)$/i.test(metadataForParse.accountName);
-  const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"]);
+  const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB"]);
   const prefersVisionFallbackForInstitution =
     typeof metadataForParse.institution === "string" && noisyVisionPreferredInstitutions.has(metadataForParse.institution);
   const genericParseLooksSuspicious =
@@ -3825,8 +3825,22 @@ export const processImportFileText = async (
     });
   }
 
+  const deterministicStatementParseLooksStrong =
+    importMode === "statement" &&
+    parsedRows.length >= 10 &&
+    parsedDateCoverage >= 0.75 &&
+    hasKnownInstitution &&
+    Boolean(metadataForParse.accountNumber) &&
+    (metadataForParse.confidence ?? 0) >= 80;
+  const openAiStatementRowsAreCompetitive =
+    importMode !== "statement" ||
+    parsedRows.length === 0 ||
+    (openAiParsed?.rows.length ?? 0) >= Math.max(1, Math.floor(parsedRows.length * 0.9));
+  const shouldAdoptOpenAiStatementParse =
+    importMode !== "statement" || !deterministicStatementParseLooksStrong || openAiStatementRowsAreCompetitive;
   const useOpenAiParse =
     Boolean(openAiParsed?.audit.schemaValidated) &&
+    shouldAdoptOpenAiStatementParse &&
     (openAiPrimaryMode ||
       Boolean(pageImages?.length) ||
       isDocumentImport ||
