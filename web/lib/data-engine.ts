@@ -972,10 +972,21 @@ export const detectAccountNumber = (text: string | null | undefined) => {
 export const detectStatementMetadataFromText = (text: string): StatementMetadataSnapshot => {
   const metadata = detectStatementMetadata(text);
   const institution = sanitizeBankNameLabel(metadata?.institution ?? detectInstitutionFromText(text));
-  const accountNumber = metadata?.accountNumber ?? detectAccountNumber(text);
   const normalizedText = normalizeWhitespace(text);
+  const cimbAccountNumbers =
+    institution === "CIMB"
+      ? Array.from(
+          new Set(
+            Array.from(normalizedText.matchAll(/GSave\s*-\s*Savings\s+Account\s+No\.\s*([0-9\s-]+)/gi))
+              .map((match) => match[1]?.replace(/\D/g, "").slice(0, 16) ?? "")
+              .filter(Boolean)
+          )
+        )
+      : [];
+  const isMultiAccountCimbStatement = cimbAccountNumbers.length > 1;
+  const accountNumber = isMultiAccountCimbStatement ? null : metadata?.accountNumber ?? detectAccountNumber(text);
   const accountName =
-    sanitizeBankNameLabel(metadata?.accountName) ??
+    (isMultiAccountCimbStatement ? "CIMB" : sanitizeBankNameLabel(metadata?.accountName)) ??
     (institution && accountNumber ? `${institution} ${accountNumber.slice(-4)}` : institution ?? null);
   const refinedAccountType =
     metadata?.accountType ??
@@ -1016,8 +1027,8 @@ export const detectStatementMetadataFromText = (text: string): StatementMetadata
     accountName,
     accountType,
     currency: metadata?.currency ?? null,
-    openingBalance: metadata?.openingBalance ?? null,
-    endingBalance: metadata?.endingBalance ?? null,
+    openingBalance: isMultiAccountCimbStatement ? null : metadata?.openingBalance ?? null,
+    endingBalance: isMultiAccountCimbStatement ? null : metadata?.endingBalance ?? null,
     paymentDueDate: metadata?.paymentDueDate ?? null,
     totalAmountDue: metadata?.totalAmountDue ?? null,
     startDate: metadata?.startDate ?? null,

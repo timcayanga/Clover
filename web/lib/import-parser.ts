@@ -7901,12 +7901,17 @@ const parseCimbImportText = (text: string) => {
   const mergedRows = parsedSections.flatMap((section) => section.rows);
   const firstSection = parsedSections[0];
   const lastSection = parsedSections[parsedSections.length - 1] ?? firstSection;
+  const isMultiAccountStatement =
+    new Set(parsedSections.map((section) => section.metadata.accountNumber).filter((value): value is string => Boolean(value))).size > 1;
 
   return mergedRows.length > 0
     ? {
         metadata: {
           ...firstSection.metadata,
-          endingBalance: lastSection.metadata.endingBalance ?? getTrailingBalanceFromParsedRows(mergedRows),
+          accountNumber: isMultiAccountStatement ? null : firstSection.metadata.accountNumber,
+          accountName: isMultiAccountStatement ? "CIMB" : firstSection.metadata.accountName,
+          openingBalance: isMultiAccountStatement ? null : firstSection.metadata.openingBalance,
+          endingBalance: isMultiAccountStatement ? null : lastSection.metadata.endingBalance ?? getTrailingBalanceFromParsedRows(mergedRows),
         },
         rows: mergedRows,
       }

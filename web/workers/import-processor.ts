@@ -257,6 +257,7 @@ const resolveOrCreateWorkspaceCategoryId = async (params: {
 };
 
 const buildConfirmedTransactionDedupeKey = (params: {
+  accountId?: unknown;
   date: unknown;
   amount: unknown;
   currency: unknown;
@@ -292,8 +293,13 @@ const buildConfirmedTransactionDedupeKey = (params: {
     typeof params.sourceStatementFingerprint === "string" && params.sourceStatementFingerprint.trim()
       ? params.sourceStatementFingerprint.trim()
       : "";
+  const accountId =
+    typeof params.accountId === "string" && params.accountId.trim()
+      ? params.accountId.trim()
+      : "";
 
   return [
+    accountId,
     date,
     amount === null ? "" : amount.toFixed(2),
     normalizeTransactionDedupeText(params.currency || "PHP").toUpperCase(),
@@ -2775,6 +2781,18 @@ const getImportSourceStatementFingerprint = (rawPayload: Prisma.JsonValue | null
     : null;
 };
 
+const buildAccountScopedSourceRowKey = (accountId: unknown, sourceRowIndex: unknown) => {
+  const normalizedAccountId = typeof accountId === "string" && accountId.trim() ? accountId.trim() : "";
+  const normalizedSourceRowIndex =
+    typeof sourceRowIndex === "number" && Number.isFinite(sourceRowIndex) && sourceRowIndex > 0
+      ? String(Math.trunc(sourceRowIndex))
+      : typeof sourceRowIndex === "string" && sourceRowIndex.trim()
+        ? sourceRowIndex.trim()
+        : "";
+
+  return normalizedSourceRowIndex ? `${normalizedAccountId}:${normalizedSourceRowIndex}` : null;
+};
+
 const listImportStatementFingerprints = async (importFileId: string) => {
   const parsedStatementFingerprints = await prisma.$queryRaw<Array<{ statementFingerprint: string | null }>>`
     SELECT DISTINCT "statementFingerprint"
@@ -2826,6 +2844,7 @@ const buildImportTransactionWhere = async (
 };
 
 const buildImportTransactionCollapseKey = (transaction: {
+  accountId: string;
   date: Date;
   amount: unknown;
   currency: string;
@@ -2837,11 +2856,11 @@ const buildImportTransactionCollapseKey = (transaction: {
   const sourceRowIndex = getImportSourceRowIndex(transaction.rawPayload);
   const sourceStatementFingerprint = getImportSourceStatementFingerprint(transaction.rawPayload);
   if (sourceStatementFingerprint && sourceRowIndex !== null) {
-    return `source-statement:${sourceStatementFingerprint}:${sourceRowIndex}`;
+    return `source-statement:${transaction.accountId}:${sourceStatementFingerprint}:${sourceRowIndex}`;
   }
 
   if (sourceRowIndex !== null) {
-    return `source-row:${sourceRowIndex}`;
+    return `source-row:${transaction.accountId}:${sourceRowIndex}`;
   }
 
   const merchant =
@@ -2851,6 +2870,7 @@ const buildImportTransactionCollapseKey = (transaction: {
 
   return [
     "fallback",
+    transaction.accountId,
     normalizeEnrichmentMatchDate(transaction.date),
     normalizeEnrichmentMatchAmount(transaction.amount),
     normalizeTransactionDedupeText(transaction.currency || "PHP").toUpperCase(),
@@ -2869,6 +2889,7 @@ const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
     where: transactionWhere,
     select: {
       id: true,
+      accountId: true,
       importFileId: true,
       reviewStatus: true,
       parserConfidence: true,
@@ -5770,6 +5791,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       },
       select: {
         id: true,
+        accountId: true,
         rawPayload: true,
         date: true,
         amount: true,
@@ -5781,12 +5803,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         reviewStatus: true,
       },
     });
-    const existingImportTransactionBySourceIndex = new Map<number, (typeof existingImportTransactions)[number]>();
+    const existingImportTransactionBySourceIndex = new Map<string, (typeof existingImportTransactions)[number]>();
     const existingImportTransactionsByDedupeKey = new Map<string, Array<(typeof existingImportTransactions)[number]>>();
     for (const transaction of existingImportTransactions) {
       const sourceRowIndex = getImportSourceRowIndex(transaction.rawPayload);
-      if (sourceRowIndex !== null && !existingImportTransactionBySourceIndex.has(sourceRowIndex)) {
-        existingImportTransactionBySourceIndex.set(sourceRowIndex, transaction);
+      const accountScopedSourceRowKey = buildAccountScopedSourceRowKey(transaction.accountId, sourceRowIndex);
+      if (accountScopedSourceRowKey && !existingImportTransactionBySourceIndex.has(accountScopedSourceRowKey)) {
+        existingImportTransactionBySourceIndex.set(accountScopedSourceRowKey, transaction);
       }
 
       const dedupeKey = buildConfirmedTransactionDedupeKey({
@@ -6021,6 +6044,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       OR: [{ importFileId: null }, { importFileId: { not: importFileId } }],
     },
     select: {
+      accountId: true,
       date: true,
       amount: true,
       currency: true,
@@ -6184,6 +6208,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const transactionId = String(insertRow.id ?? crypto.randomUUID());
     const dedupeKey = buildConfirmedTransactionDedupeKey({
       ...insertRow,
+      accountId: rowResolvedAccountId,
       sourceRowIndex: index + 1,
       sourceStatementFingerprint:
         typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
@@ -6191,7 +6216,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           : checkpointStatementFingerprint,
     } as Parameters<typeof buildConfirmedTransactionDedupeKey>[0]);
     const existingImportTransaction =
-      existingImportTransactionBySourceIndex.get(index + 1) ??
+      existingImportTransactionBySourceIndex.get(buildAccountScopedSourceRowKey(rowResolvedAccountId, index + 1) ?? "") ??
       (existingImportTransactionsByDedupeKey.get(dedupeKey) ?? []).find(
         (candidate) => !retainedExistingImportTransactionIds.has(candidate.id)
       ) ??

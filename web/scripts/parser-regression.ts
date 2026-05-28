@@ -12,6 +12,8 @@ type Fixture = {
   institution: string;
   accountName: string;
   accountNumber: string;
+  expectedMetadataAccountName?: string | null;
+  expectedMetadataAccountNumber?: string | null;
   accountType: ImportedAccountType;
   minRows: number;
   exactRows?: number;
@@ -220,10 +222,12 @@ const fixtures: Fixture[] = [
     institution: "CIMB",
     accountName: "Daisy Mae Dalapo",
     accountNumber: "20867602571971",
+    expectedMetadataAccountName: "CIMB",
+    expectedMetadataAccountNumber: null,
     accountType: "bank",
     minRows: 12,
     exactRows: 12,
-    expectedTrailingBalance: 4294.66,
+    expectedTrailingBalance: 2392.08,
     expectedStartDate: "2024-12-11",
     expectedEndDate: "2024-12-29",
     minConfidence: 85,
@@ -929,11 +933,13 @@ const main = async () => {
     if (metadata.institution !== fixture.institution) {
       errors.push(`institution expected ${fixture.institution} but got ${metadata.institution ?? "null"}`);
     }
-    if (metadata.accountName !== fixture.accountName) {
-      errors.push(`accountName expected ${fixture.accountName} but got ${metadata.accountName ?? "null"}`);
+    const expectedMetadataAccountName = fixture.expectedMetadataAccountName === undefined ? fixture.accountName : fixture.expectedMetadataAccountName;
+    const expectedMetadataAccountNumber = fixture.expectedMetadataAccountNumber === undefined ? fixture.accountNumber : fixture.expectedMetadataAccountNumber;
+    if (metadata.accountName !== expectedMetadataAccountName) {
+      errors.push(`accountName expected ${expectedMetadataAccountName ?? "null"} but got ${metadata.accountName ?? "null"}`);
     }
-    if (metadata.accountNumber !== fixture.accountNumber) {
-      errors.push(`accountNumber expected ${fixture.accountNumber} but got ${metadata.accountNumber ?? "null"}`);
+    if (metadata.accountNumber !== expectedMetadataAccountNumber) {
+      errors.push(`accountNumber expected ${expectedMetadataAccountNumber ?? "null"} but got ${metadata.accountNumber ?? "null"}`);
     }
     if (accountType !== fixture.accountType) {
       errors.push(`accountType expected ${fixture.accountType} but got ${accountType}`);
