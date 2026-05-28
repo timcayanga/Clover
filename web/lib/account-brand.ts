@@ -512,8 +512,8 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       label: "GoTyme",
       logoSrcs: philippinesLogoWithVariants("gotyme"),
       fallbackIconSrc: walletIcon,
-      accent: "#0EA5A8",
-      background: "linear-gradient(135deg, rgba(14, 165, 168, 0.18), rgba(14, 165, 168, 0.06))",
+      accent: "#00F5FA",
+      background: "linear-gradient(135deg, rgba(0, 245, 250, 0.26), rgba(0, 245, 250, 0.08))",
     }),
   },
   {
