@@ -66,7 +66,7 @@ import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toIntern
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { mergeCheckpointSourceMetadata } from "@/lib/import-workflow";
-import { findBestImportedAccountMatch, normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import { findBestImportedAccountMatch, matchesImportedAccountIdentity, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
   claimNextImportEnrichmentJob,
   completeImportEnrichmentJob,
@@ -179,7 +179,13 @@ const rowMentionsAnotherWorkspaceAccount = (
     }
 
     const accountLastFour = extractTransferLastFour(account.accountNumber ?? account.name);
-    if (accountLastFour && haystackDigits.includes(accountLastFour)) {
+    const explicitAccountNumberContext = accountLastFour
+      ? new RegExp(
+          `(?:account|acct|card|wallet|number|no\\.?|ending\\s+in|ending|last\\s+4|last\\s+four)[^\\n\\r]{0,24}\\b${accountLastFour}\\b`,
+          "i"
+        )
+      : null;
+    if (accountLastFour && explicitAccountNumberContext?.test(normalizedHaystack)) {
       return true;
     }
 
@@ -2455,25 +2461,17 @@ const resolveConfirmationAccount = async (params: {
     (parsedTrailingBalance !== null && Number.isFinite(parsedTrailingBalance) ? parsedTrailingBalance : null);
   const accountIdentityType: AccountType =
     inferredAccountType ?? (inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank") as AccountType);
-  const candidateKey = normalizeImportedAccountKey(
-    inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
-    inferredInstitution,
-    inferredAccountNumber,
-    accountIdentityType
-  );
-  const looseCandidateKey = normalizeImportedAccountKey(
-    inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
-    inferredInstitution,
-    inferredAccountNumber,
-    null
-  );
   const workspaceAccounts = await prisma.account.findMany({
     where: { workspaceId },
     select: getCompatibleAccountSelect(compatibleAccountColumns),
   });
   const accountMatchesImportIdentity = (account: (typeof workspaceAccounts)[number]) =>
-    normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === candidateKey ||
-    normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, null) === looseCandidateKey;
+    matchesImportedAccountIdentity(account, {
+      name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
+      institution: inferredInstitution,
+      accountNumber: inferredAccountNumber,
+      type: accountIdentityType,
+    });
 
   const providedAccountId = typeof params.accountId === "string" && params.accountId.trim() ? params.accountId.trim() : null;
   const isOptimisticId = providedAccountId ? providedAccountId.startsWith("optimistic-") : false;

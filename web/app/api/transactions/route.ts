@@ -513,7 +513,7 @@ const mapTransactionRow = (transaction: {
     date: transaction.date.toISOString(),
     amount: transaction.amount.toString(),
     currency: normalizedCurrency,
-    type: coerceTransactionTypeFromCategoryName(categoryName, transaction.type),
+    type: coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount, transaction.isTransfer),
     merchantRaw: transaction.merchantRaw,
     merchantClean: getEffectiveTransactionMerchantName({
       merchantClean: transaction.merchantClean,
@@ -521,7 +521,7 @@ const mapTransactionRow = (transaction: {
       institution: transaction.account.institution,
     }),
     description: transaction.description,
-    isTransfer: coerceTransactionTypeFromCategoryName(categoryName, transaction.type) === "transfer",
+    isTransfer: coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount, transaction.isTransfer) === "transfer",
     isExcluded: transaction.isExcluded,
     createdAt: transaction.createdAt.toISOString(),
     warningReason: transaction.warningReason,

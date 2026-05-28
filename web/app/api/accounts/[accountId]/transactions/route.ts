@@ -95,7 +95,7 @@ const mapTransactionRow = (transaction: {
     categoryId: transaction.category?.id ?? null,
     amount: transaction.amount.toString(),
     currency: normalizedCurrency,
-    type: coerceTransactionTypeFromCategoryName(categoryName, transaction.type),
+    type: coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount),
     date: transaction.date.toISOString(),
     merchantRaw: transaction.merchantRaw,
     merchantClean: getEffectiveTransactionMerchantName({

@@ -102,7 +102,7 @@ const getReportTransactionCategoryName = (transaction: ReportTransaction) =>
   }) ?? "Uncategorized";
 
 const getReportTransactionType = (transaction: ReportTransaction) =>
-  coerceTransactionTypeFromCategoryName(getReportTransactionCategoryName(transaction), transaction.type);
+  coerceTransactionTypeFromCategoryName(getReportTransactionCategoryName(transaction), transaction.type, transaction.amount);
 
 type SankeyFlow = {
   key: string;

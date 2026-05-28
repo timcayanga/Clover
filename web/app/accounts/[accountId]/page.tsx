@@ -654,7 +654,7 @@ const createDetailDraft = (
       source: transaction.source ?? null,
       type: transaction.type,
     }) ?? transaction.categoryName ?? null;
-  const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type);
+  const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount);
 
   return {
     merchantClean:
@@ -695,7 +695,7 @@ const getDisplayTransactionCategoryName = (
     source: transaction.source ?? null,
     type: transaction.type,
   });
-  const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type);
+  const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount);
   return (
     categoryName ??
     guessCategoryName(
@@ -3422,7 +3422,7 @@ function AccountDetailPageContent() {
                     const categoryValue = transaction.categoryId ?? "";
                     const categoryLabel = getDisplayTransactionCategoryName(transaction, categories, account?.institution);
                     const effectiveCategoryValue = getCategoryIdByName(categories, categoryLabel) || categoryValue;
-                    const effectiveType = coerceTransactionTypeFromCategoryName(categoryLabel, transaction.type);
+                    const effectiveType = coerceTransactionTypeFromCategoryName(categoryLabel, transaction.type, transaction.amount);
                     const amountToneClass = effectiveType === "transfer" ? "neutral" : effectiveType === "income" ? "positive" : "negative";
                     const normalizedName =
                       getEffectiveTransactionMerchantName({

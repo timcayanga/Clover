@@ -7,6 +7,10 @@ const normalizeAmount = (value: unknown) => {
     return Number.isFinite(value) ? value : null;
   }
 
+  if (value && typeof value === "object" && "toString" in value) {
+    return normalizeAmount(String((value as { toString?: () => string }).toString?.() ?? ""));
+  }
+
   if (typeof value !== "string") {
     return null;
   }
@@ -21,6 +25,16 @@ const normalizeCategoryTypeText = (value: unknown) => String(value ?? "").trim()
 
 const normalizeCategoryKey = (value: unknown) => normalizeCategoryTypeText(value).replace(/[^a-z0-9]+/g, " ").trim();
 
+export const inferTransactionTypeFromAmount = (amount: unknown): TransactionType | null => {
+  const normalizedAmount = normalizeAmount(amount);
+
+  if (normalizedAmount === null || normalizedAmount === 0) {
+    return null;
+  }
+
+  return normalizedAmount > 0 ? "income" : "expense";
+};
+
 export const isTransferCategoryName = (value: unknown) => {
   const normalized = normalizeCategoryKey(value);
   return normalized === "transfer" || normalized === "transfers";
@@ -28,8 +42,14 @@ export const isTransferCategoryName = (value: unknown) => {
 
 export const coerceTransactionTypeFromCategoryName = (
   categoryName: unknown,
-  fallback: TransactionType = "expense"
+  fallback: TransactionType = "expense",
+  amount?: unknown,
+  isTransfer?: boolean
 ): TransactionType => {
+  if (isTransfer) {
+    return "transfer";
+  }
+
   const normalized = normalizeCategoryKey(categoryName);
 
   if (!normalized) {
@@ -41,6 +61,11 @@ export const coerceTransactionTypeFromCategoryName = (
   }
 
   if (isTransferCategoryName(categoryName)) {
+    const inferredFromAmount = inferTransactionTypeFromAmount(amount);
+    if (inferredFromAmount) {
+      return inferredFromAmount;
+    }
+
     return fallback;
   }
 

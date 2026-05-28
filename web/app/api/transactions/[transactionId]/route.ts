@@ -94,7 +94,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       : null;
     const resolvedType = coerceTransactionTypeFromCategoryName(
       resolvedCategory?.name ?? null,
-      payload.type ?? transaction.type
+      payload.type ?? transaction.type,
+      payload.amount ?? transaction.amount,
+      payload.isTransfer ?? transaction.isTransfer
     );
     const resolvedIsTransfer = payload.isTransfer ?? resolvedType === "transfer";
 

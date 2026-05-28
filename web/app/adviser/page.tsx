@@ -747,7 +747,7 @@ const buildTransactionSummary = (transactions: AdviserTransaction[]) =>
           source: transaction.importFileId ? "upload" : "manual",
           type: transaction.type,
         }) ?? "Uncategorized";
-      const transactionType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type);
+      const transactionType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount);
       if (transactionType === "income") {
         accumulator.income += amount;
       } else if (transactionType === "expense") {
