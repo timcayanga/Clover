@@ -1165,13 +1165,11 @@ const loadOptimisticPreviewTransactions = async (
     const response = await fetch(`/api/imports/${importFileId}/preview`);
     if (response.ok) {
       const payload = await response.json().catch(() => ({}));
-      const parsedRows = Array.isArray(payload.parsedRows) ? payload.parsedRows : [];
+      const parsedRows: Record<string, unknown>[] = Array.isArray(payload.parsedRows)
+        ? payload.parsedRows.filter((row: unknown): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row)))
+        : [];
       const scopedRows = accountNumber
         ? parsedRows.filter((row) => {
-            if (!row || typeof row !== "object" || Array.isArray(row)) {
-              return false;
-            }
-
             const rowRecord = row as Record<string, unknown>;
             const rowAccountNumber =
               typeof rowRecord.accountNumber === "string" && rowRecord.accountNumber.trim()
@@ -1520,6 +1518,7 @@ export function ImportFilesModal({
   const autoLoadedQaIdsRef = useRef(new Set<string>());
   const localPreparseStartedRef = useRef(new Set<string>());
   const localPreparseSummaryByItemIdRef = useRef(new Map<string, UploadInsightsSummary>());
+  const localPreparseTextByItemIdRef = useRef(new Map<string, string>());
   const handleStartImportRef = useRef<null | (() => Promise<void>)>(null);
   const initialFilesSignatureRef = useRef<string | null>(null);
   const importActivitySurfaceRef = useRef<ImportActivityLocation>("modal");
@@ -1990,6 +1989,7 @@ export function ImportFilesModal({
       }
 
       clearImportActivity();
+      localPreparseTextByItemIdRef.current.clear();
     };
   }, [open]);
 
@@ -4218,6 +4218,9 @@ export function ImportFilesModal({
 
     try {
       const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
+      if (text.trim()) {
+        localPreparseTextByItemIdRef.current.set(itemId, text);
+      }
       const itemImportMode = item.importMode ?? "statement";
       if (itemImportMode === "receipt") {
         const receiptPreview = parseReceiptText(text);
@@ -4360,6 +4363,7 @@ export function ImportFilesModal({
 
   const removeItem = (id: string) => {
     localPreparseSummaryByItemIdRef.current.delete(id);
+    localPreparseTextByItemIdRef.current.delete(id);
     setItems((current) => current.filter((item) => item.id !== id));
   };
 
@@ -4802,6 +4806,7 @@ export function ImportFilesModal({
           fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
           password: item.password.trim() || undefined,
           importMode: itemImportMode,
+          extractedText: localPreparseTextByItemIdRef.current.get(itemId),
         },
         (progress) => {
           publishImportActivity({

@@ -232,6 +232,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const formFileName = typeof formData.get("fileName") === "string" ? String(formData.get("fileName")) : "";
       const formFileType = typeof formData.get("fileType") === "string" ? String(formData.get("fileType")) : "";
       const formBankName = typeof formData.get("bankName") === "string" ? String(formData.get("bankName")) : "";
+      const formExtractedText =
+        typeof formData.get("extractedText") === "string"
+          ? String(formData.get("extractedText"))
+          : typeof formData.get("text") === "string"
+            ? String(formData.get("text"))
+            : "";
       const formImportMode = readImportMode(formData.get("importMode"));
       const formTrainingMode =
         formData.get("trainingMode") === "generic_parser" ? "generic_parser" : formData.get("trainingMode") === "bank_context" ? "bank_context" : undefined;
@@ -423,7 +429,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       let metadata: Record<string, unknown> | null = null;
-      let extractedText = "";
+      let extractedText = formExtractedText;
       let cachedDocTextInfo: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       let preflightText: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       if (shouldQueueDocumentUpload) {
@@ -503,7 +509,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
       const shouldPreflightPdf = isPdfUpload(effectiveFileName, effectiveFileType) && bytes.length <= 10_000_000;
 
-      if (shouldPreflightPdf && !preflightText) {
+      if (shouldPreflightPdf && !preflightText && !extractedText.trim()) {
         stage = "reading statement metadata";
         try {
           preflightText = await readImportedStatementTextWithCache(
@@ -533,6 +539,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         } catch (error) {
           console.warn("Unable to pre-read statement metadata", { importId, error: summarizeErrorForLog(error) });
         }
+      }
+
+      if (!metadata && extractedText.trim()) {
+        const detectedMetadata = detectStatementMetadataFromText(extractedText);
+        const statementFingerprint = buildStatementFingerprint(extractedText, detectedMetadata, effectiveFileName, effectiveFileType || "application/octet-stream");
+        const template = await loadStatementTemplate({
+          workspaceId: String(importFile.workspaceId),
+          fingerprint: statementFingerprint,
+        });
+        metadata = mergeStatementMetadataWithTemplate(
+          detectedMetadata,
+          template?.metadata && typeof template.metadata === "object" && !Array.isArray(template.metadata)
+            ? (template.metadata as Record<string, unknown>)
+            : null
+        );
       }
 
       const parsedMetadataConfidence = Number((metadata as { confidence?: unknown } | null)?.confidence ?? 0);
@@ -611,7 +632,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       stage = "reading statement metadata";
-      if (!metadata || !extractedText) {
+      if (!extractedText) {
         try {
           preflightText ??= await readImportedStatementTextWithCache(
             {
