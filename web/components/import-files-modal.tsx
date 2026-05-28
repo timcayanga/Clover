@@ -447,6 +447,7 @@ const buildOptimisticUploadSummary = (
   accountNumber,
   accountType,
   balance: showBalanceEvenIfEmpty || importedRows > 0 ? balance : null,
+  accountSummaries: undefined,
   optimistic: true,
   optimisticAccountId,
   incomeTotal: 0,
@@ -486,6 +487,7 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
     accountNumber: null,
     accountType: sameAccountType ? first.accountType : null,
     balance: null,
+    accountSummaries: summaries.flatMap((summary) => summary.accountSummaries ?? []),
     optimistic: summaries.some((summary) => summary.optimistic),
     optimisticAccountId: null,
     incomeTotal,
@@ -520,6 +522,39 @@ const toBalanceString = (value: unknown): string | null => {
   } catch {
     return null;
   }
+};
+
+const normalizeServerAccountSummaries = (value: unknown): NonNullable<UploadInsightsSummary["accountSummaries"]> => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        return null;
+      }
+
+      const record = entry as Record<string, unknown>;
+      const accountId = typeof record.accountId === "string" && record.accountId.trim() ? record.accountId.trim() : null;
+      if (!accountId) {
+        return null;
+      }
+
+      return {
+        accountId,
+        accountName: typeof record.accountName === "string" && record.accountName.trim() ? record.accountName.trim() : null,
+        institution: typeof record.institution === "string" && record.institution.trim() ? record.institution.trim() : null,
+        accountNumber: typeof record.accountNumber === "string" && record.accountNumber.trim() ? record.accountNumber.trim() : null,
+        accountType:
+          typeof record.accountType === "string" && record.accountType.trim()
+            ? (record.accountType as UploadInsightsSummary["accountType"])
+            : null,
+        balance: toBalanceString(record.balance),
+        rowsImported: Number(record.rowsImported ?? 0) || 0,
+      };
+    })
+    .filter((entry): entry is NonNullable<UploadInsightsSummary["accountSummaries"]>[number] => entry !== null);
 };
 
 const pickStableBalance = (...values: Array<unknown>) => {
@@ -843,6 +878,7 @@ const buildOptimisticPreviewTransactions = (
     accountId: string;
     accountName: string;
     institution: string | null;
+    accountNumber?: string | null;
   }
 ): NonNullable<UploadInsightsSummary["previewTransactions"]> => {
   const previewTransactions = rows
@@ -876,7 +912,7 @@ const buildOptimisticPreviewTransactions = (
         accountId: params.accountId,
         accountName: params.accountName,
         institution: params.institution,
-        accountNumber: null,
+        accountNumber: params.accountNumber ?? null,
         accountType: null,
         categoryId: null,
         categoryName,
@@ -1120,7 +1156,8 @@ const loadOptimisticPreviewTransactions = async (
   importFileId: string,
   accountId: string,
   accountName: string,
-  institution: string | null
+  institution: string | null,
+  accountNumber?: string | null
 ) => {
   const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
@@ -1129,12 +1166,32 @@ const loadOptimisticPreviewTransactions = async (
     if (response.ok) {
       const payload = await response.json().catch(() => ({}));
       const parsedRows = Array.isArray(payload.parsedRows) ? payload.parsedRows : [];
-      if (parsedRows.length > 0) {
-        return buildOptimisticPreviewTransactions(parsedRows, {
+      const scopedRows = accountNumber
+        ? parsedRows.filter((row) => {
+            if (!row || typeof row !== "object" || Array.isArray(row)) {
+              return false;
+            }
+
+            const rowRecord = row as Record<string, unknown>;
+            const rowAccountNumber =
+              typeof rowRecord.accountNumber === "string" && rowRecord.accountNumber.trim()
+                ? rowRecord.accountNumber.trim()
+                : rowRecord.rawPayload &&
+                    typeof rowRecord.rawPayload === "object" &&
+                    !Array.isArray(rowRecord.rawPayload) &&
+                    typeof (rowRecord.rawPayload as Record<string, unknown>).accountNumber === "string"
+                  ? String((rowRecord.rawPayload as Record<string, unknown>).accountNumber).trim()
+                  : null;
+            return rowAccountNumber === accountNumber;
+          })
+        : parsedRows;
+      if (scopedRows.length > 0) {
+        return buildOptimisticPreviewTransactions(scopedRows, {
           importFileId,
           accountId,
           accountName,
           institution,
+          accountNumber: accountNumber ?? null,
         });
       }
     }
@@ -3109,7 +3166,8 @@ export function ImportFilesModal({
                     importFileId,
                     fallbackAccountId ?? "",
                     resolvedAccountDisplayName,
-                    processingIdentity?.institution ?? null
+                    processingIdentity?.institution ?? null,
+                    processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
                   )
                     .catch(() => [])
                     .then((rows) =>
@@ -3321,7 +3379,8 @@ export function ImportFilesModal({
                     importFileId,
                     completedAccountId,
                     resolvedAccountDisplayName,
-                    processingIdentity?.institution ?? summaryContext.institution ?? null
+                    processingIdentity?.institution ?? summaryContext.institution ?? null,
+                    processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
                   )
                     .catch(() => [])
                     .then((rows) =>
@@ -3553,7 +3612,8 @@ export function ImportFilesModal({
                     importFileId,
                     fallbackAccountId ?? "",
                     resolvedAccountDisplayName,
-                    null
+                    null,
+                    summaryContext.accountNumber ?? null
                   ).catch(() => []);
               const fallbackSummary = buildOptimisticUploadSummary(
                 summaryContext.fileName,
@@ -5038,16 +5098,143 @@ export function ImportFilesModal({
         typeof processPayload?.accountId === "string" && processPayload.accountId.trim()
           ? processPayload.accountId.trim()
           : null;
+      const serverAccountSummaries = normalizeServerAccountSummaries(processPayload?.accountSummaries);
+      if (serverAccountSummaries.length > 1) {
+        const confirmedInsightSummary =
+          processPayload?.insightSummary ??
+          {
+            incomeTotal: 0,
+            expenseTotal: 0,
+            netTotal: 0,
+            topCategoryName: null,
+            topCategoryAmount: null,
+            topCategoryShare: null,
+            topMerchantName: null,
+            topMerchantCount: null,
+          };
+        const emittedSummaries: UploadInsightsSummary[] = [];
+        for (const accountSummary of serverAccountSummaries) {
+          const confirmedAccountName = accountSummary.accountName ?? statementIdentity?.accountName ?? guessedIdentity?.accountName ?? item.file.name;
+          const confirmedInstitution = accountSummary.institution ?? statementIdentity?.institution ?? guessedIdentity?.institution ?? null;
+          const confirmedAccountType =
+            accountSummary.accountType ??
+            statementIdentity?.accountType ??
+            statementAccountType ??
+            inferAccountTypeFromStatement(confirmedInstitution, confirmedAccountName, "bank");
+          const confirmedPreviewTransactions = await loadOptimisticPreviewTransactions(
+            importFileId,
+            accountSummary.accountId,
+            confirmedAccountName ?? "",
+            confirmedInstitution,
+            accountSummary.accountNumber
+          )
+            .catch(() => [])
+            .then((rows) =>
+              rows.length > 0
+                ? rows
+                : getKnownPreviewTransactions({
+                    workspaceId,
+                    accountId: accountSummary.accountId,
+                    optimisticAccountId: item.optimisticAccountId ?? null,
+                    accountName: confirmedAccountName ?? null,
+                    institution: confirmedInstitution,
+                    accountNumber: accountSummary.accountNumber,
+                    accountType: confirmedAccountType,
+                  })
+            );
+          const settledRows = Math.max(Number(accountSummary.rowsImported ?? 0), confirmedPreviewTransactions.length);
+          const accountUploadSummary = ({
+            fileName: item.file.name,
+            rowsImported: settledRows,
+            accountId: accountSummary.accountId,
+            accountName: confirmedAccountName ?? null,
+            institution: confirmedInstitution,
+            accountNumber: accountSummary.accountNumber,
+            accountType: confirmedAccountType,
+            balance: pickStableBalance(
+              accountSummary.balance,
+              findKnownImportedBalance(accounts, {
+                workspaceId,
+                accountId: accountSummary.accountId,
+                accountName: confirmedAccountName ?? null,
+                institution: confirmedInstitution,
+                accountNumber: accountSummary.accountNumber,
+                accountType: confirmedAccountType,
+              })
+            ),
+            accountSummaries: [accountSummary],
+            optimisticAccountId: null,
+            previewTransactions: confirmedPreviewTransactions,
+            incomeTotal: Number(confirmedInsightSummary.incomeTotal ?? 0),
+            expenseTotal: Number(confirmedInsightSummary.expenseTotal ?? 0),
+            netTotal: Number(confirmedInsightSummary.netTotal ?? 0),
+            topCategoryName: confirmedInsightSummary.topCategoryName ?? null,
+            topCategoryAmount:
+              confirmedInsightSummary.topCategoryAmount === null
+                ? null
+                : Number(confirmedInsightSummary.topCategoryAmount),
+            topCategoryShare:
+              confirmedInsightSummary.topCategoryShare === null
+                ? null
+                : Number(confirmedInsightSummary.topCategoryShare),
+            topMerchantName: confirmedInsightSummary.topMerchantName ?? null,
+            topMerchantCount:
+              confirmedInsightSummary.topMerchantCount === null
+                ? null
+                : Number(confirmedInsightSummary.topMerchantCount),
+          } satisfies UploadInsightsSummary);
+
+          seedImportedWorkspaceCaches(workspaceId, accountUploadSummary);
+          emittedSummaries.push(accountUploadSummary);
+          await Promise.resolve(onImported(accountUploadSummary));
+        }
+
+        const combinedSummary = combineUploadInsightsSummaries(emittedSummaries);
+        const settledRows = emittedSummaries.reduce((total, summary) => total + Number(summary.rowsImported ?? 0), 0);
+        updateItem(itemId, {
+          status: "done",
+          confirmationState: "confirmed",
+          error: null,
+          importFileId,
+          targetAccountId: serverConfirmedAccountId,
+          importedRows: settledRows,
+          progress: 100,
+          progressLabel: "Done",
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "done",
+          fileName: item.file.name,
+          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount + 1,
+          progress: 100,
+          detail: "All set",
+          summary: combinedSummary,
+          errorMessage: null,
+        });
+        setMessage(`Imported ${item.file.name}.`);
+        router.refresh();
+        return {
+          status: "done",
+          importedRows: settledRows,
+          summary: combinedSummary,
+        };
+      }
       if (serverConfirmedAccountId) {
+        const serverAccountSummary = serverAccountSummaries.find((summary) => summary.accountId === serverConfirmedAccountId) ?? serverAccountSummaries[0] ?? null;
         const confirmedRows = Number(processPayload?.confirmedTransactionsCount ?? processPayload?.imported ?? 0) || 0;
-        const confirmedAccountName = statementIdentity?.accountName ?? guessedIdentity?.accountName ?? item.file.name;
-        const confirmedInstitution = statementIdentity?.institution ?? guessedIdentity?.institution ?? null;
-        const confirmedAccountNumber = statementIdentity?.accountNumber ?? guessedIdentity?.accountNumber ?? null;
+        const confirmedAccountName = serverAccountSummary?.accountName ?? statementIdentity?.accountName ?? guessedIdentity?.accountName ?? item.file.name;
+        const confirmedInstitution = serverAccountSummary?.institution ?? statementIdentity?.institution ?? guessedIdentity?.institution ?? null;
+        const confirmedAccountNumber = serverAccountSummary?.accountNumber ?? statementIdentity?.accountNumber ?? guessedIdentity?.accountNumber ?? null;
         const confirmedAccountType =
+          serverAccountSummary?.accountType ??
           statementIdentity?.accountType ??
           statementAccountType ??
           inferAccountTypeFromStatement(confirmedInstitution, confirmedAccountName, "bank");
         const confirmedBalance = pickStableBalance(
+          serverAccountSummary?.balance ?? null,
           typeof processPayload.accountBalance === "string" ? processPayload.accountBalance : null,
           findKnownImportedBalance(accounts, {
             workspaceId,
@@ -5062,7 +5249,8 @@ export function ImportFilesModal({
           importFileId,
           serverConfirmedAccountId,
           confirmedAccountName ?? "",
-          confirmedInstitution
+          confirmedInstitution,
+          confirmedAccountNumber
         )
           .catch(() => [])
           .then((rows) =>
@@ -5100,6 +5288,7 @@ export function ImportFilesModal({
           accountNumber: confirmedAccountNumber,
           accountType: confirmedAccountType,
           balance: confirmedBalance,
+          accountSummaries: serverAccountSummary ? [serverAccountSummary] : undefined,
           optimisticAccountId: item.optimisticAccountId ?? null,
           previewTransactions: confirmedPreviewTransactions,
           incomeTotal: Number(confirmedInsightSummary.incomeTotal ?? 0),
@@ -5207,7 +5396,8 @@ export function ImportFilesModal({
                 importFileId,
                 optimisticAccountId,
                 statementIdentity.accountName ?? "",
-                statementIdentity?.institution ?? null
+                statementIdentity?.institution ?? null,
+                statementIdentity?.accountNumber ?? null
               ).then((rows) =>
                 rows.length > 0
                   ? rows
@@ -5441,7 +5631,8 @@ export function ImportFilesModal({
               importFileId,
               targetAccountId,
               statementIdentity.accountName ?? "",
-              statementIdentity?.institution ?? null
+              statementIdentity?.institution ?? null,
+              statementIdentity?.accountNumber ?? null
             ).then((rows) =>
               rows.length > 0
                 ? rows
@@ -5759,7 +5950,8 @@ export function ImportFilesModal({
                 recoverableImportFileId,
                 fallbackAccountId,
                 recoverableIdentity?.accountName ?? item.file.name,
-                recoverableIdentity?.institution ?? null
+                recoverableIdentity?.institution ?? null,
+                recoverableIdentity?.accountNumber ?? null
               ).catch(() => [])
             : [];
         const recoveredRowsCount = Math.max(

@@ -13,6 +13,15 @@ export type UploadInsightsSummary = {
   accountNumber?: string | null;
   accountType?: AccountType | null;
   balance: string | null;
+  accountSummaries?: Array<{
+    accountId: string;
+    accountName: string | null;
+    institution: string | null;
+    accountNumber: string | null;
+    accountType: AccountType | null;
+    balance: string | null;
+    rowsImported: number;
+  }>;
   optimistic?: boolean;
   optimisticAccountId?: string | null;
   previewTransactions?: Array<{

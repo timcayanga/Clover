@@ -167,13 +167,14 @@ const rowMentionsAnotherWorkspaceAccount = (
   const haystack = buildTransferCandidateText(row);
   const normalizedHaystack = normalizeTransferMatchText(haystack);
   const haystackDigits = normalizeTransferDigits(haystack);
+  const currentAccount = workspaceAccounts.find((account) => account.id === currentAccountId) ?? null;
 
   if (!normalizedHaystack && !haystackDigits) {
     return false;
   }
 
-  return workspaceAccounts.some((account) => {
-    if (account.id === currentAccountId || account.type === "cash") {
+  const accountMatchesRow = (account: TransferAccountLookup) => {
+    if (account.type === "cash") {
       return false;
     }
 
@@ -192,6 +193,17 @@ const rowMentionsAnotherWorkspaceAccount = (
     }
 
     return Boolean(institutionToken && accountLastFour && normalizedHaystack.includes(institutionToken));
+  };
+
+  if (!currentAccount || !accountMatchesRow(currentAccount)) {
+    return false;
+  }
+
+  return workspaceAccounts.some((account) => {
+    if (account.id === currentAccountId) {
+      return false;
+    }
+    return accountMatchesRow(account);
   });
 };
 
@@ -314,6 +326,15 @@ type ProcessImportResult = {
   duplicate: boolean;
   metadata: ReturnType<typeof detectStatementMetadataFromText>;
   accountId?: string | null;
+  accountSummaries?: Array<{
+    accountId: string;
+    accountName: string | null;
+    institution: string | null;
+    accountNumber: string | null;
+    accountType: AccountType | null;
+    balance: string | null;
+    rowsImported: number;
+  }>;
   confirmedTransactionsCount?: number | null;
   insightSummary?: ImportInsightSummary;
   accountBalance?: string | null;
@@ -4578,6 +4599,7 @@ export const processImportFileText = async (
           duplicate: Boolean(confirmedImportResult.duplicate),
           metadata: resolvedMetadata,
           accountId: confirmedImportResult.accountId ?? null,
+          accountSummaries: confirmedImportResult.accountSummaries,
           confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
           insightSummary: confirmedImportResult.insightSummary ?? undefined,
           accountBalance: confirmedImportResult.accountBalance ?? null,
@@ -4641,6 +4663,7 @@ export const processImportFileText = async (
         duplicate: Boolean(confirmedImportResult.duplicate),
         metadata: resolvedMetadata,
         accountId: confirmedImportResult.accountId ?? null,
+        accountSummaries: confirmedImportResult.accountSummaries,
         confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
         insightSummary: confirmedImportResult.insightSummary ?? undefined,
         accountBalance: confirmedImportResult.accountBalance ?? null,
@@ -4845,6 +4868,7 @@ export const processImportFileText = async (
             duplicate: Boolean(confirmedImportResult.duplicate),
             metadata: resolvedMetadata,
             accountId: confirmedImportResult.accountId ?? null,
+            accountSummaries: confirmedImportResult.accountSummaries,
             confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
             insightSummary: confirmedImportResult.insightSummary ?? undefined,
             accountBalance: confirmedImportResult.accountBalance ?? null,
@@ -4878,6 +4902,7 @@ export const processImportFileText = async (
             duplicate: false,
             metadata: resolvedMetadata,
             accountId: confirmedImportResult.accountId ?? null,
+            accountSummaries: confirmedImportResult.accountSummaries,
             confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
             insightSummary: confirmedImportResult.insightSummary ?? undefined,
             accountBalance: confirmedImportResult.accountBalance ?? null,
@@ -4948,6 +4973,7 @@ export const processImportFileText = async (
     duplicate: false,
     metadata: resolvedMetadata,
     accountId: confirmedImportResult?.accountId ?? null,
+    accountSummaries: confirmedImportResult?.accountSummaries,
     confirmedTransactionsCount: confirmedImportResult?.imported ?? null,
     insightSummary: confirmedImportResult?.insightSummary ?? undefined,
     accountBalance: confirmedImportResult?.accountBalance ?? undefined,
@@ -5701,6 +5727,46 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     (entry): entry is NonNullable<typeof entry> => Boolean(entry)
   );
   const resolvedAccountId = account.id;
+  const accountSummaryById = new Map<
+    string,
+    {
+      accountId: string;
+      accountName: string | null;
+      institution: string | null;
+      accountNumber: string | null;
+      accountType: AccountType | null;
+      balance: string | null;
+      rowsImported: number;
+    }
+  >();
+  for (const group of parsedAccountGroups) {
+    const groupAccount = accountByGroupKey.get(group.key);
+    if (!groupAccount) {
+      continue;
+    }
+
+    const visibleGroupRows = group.rows.filter((row) => {
+      const rawPayload = row.rawPayload;
+      return !(
+        rawPayload &&
+        typeof rawPayload === "object" &&
+        !Array.isArray(rawPayload) &&
+        (rawPayload as Record<string, unknown>).kind === "opening_balance"
+      );
+    });
+    const groupBalance = getTrailingBalanceFromParsedRows(group.rows as EnrichedParsedImportRow[]);
+    const existingSummary = accountSummaryById.get(groupAccount.id);
+    accountSummaryById.set(groupAccount.id, {
+      accountId: groupAccount.id,
+      accountName: groupAccount.name,
+      institution: groupAccount.institution,
+      accountNumber: groupAccount.accountNumber,
+      accountType: groupAccount.type,
+      balance: groupBalance !== null ? groupBalance.toString() : snapshotBalanceToString(groupAccount.balance),
+      rowsImported: (existingSummary?.rowsImported ?? 0) + visibleGroupRows.length,
+    });
+  }
+  const accountSummaries = Array.from(accountSummaryById.values());
   const resolvedAccountIdentityKeys = new Set(
     resolvedAccounts.map((entry) => normalizeImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type))
   );
@@ -5832,6 +5898,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         imported: existingVisibleRows,
         duplicate: true,
         accountId: resolvedAccountId,
+        accountSummaries,
         insightSummary: null,
         accountBalance: null,
         confirmedTransactionsCount: existingVisibleRows,
@@ -6572,6 +6639,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       imported: visibleTransactionsCount,
       duplicate: duplicateSkippedTransactionsCount > 0 && preparedTransactions.length === 0,
       accountId: resolvedAccountId,
+      accountSummaries,
       insightSummary,
       accountBalance: reconciledAccountBalance,
       confirmedTransactionsCount: visibleTransactionsCount,

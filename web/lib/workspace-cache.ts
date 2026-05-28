@@ -74,8 +74,8 @@ export type ImportedWorkspaceTransaction = CachedRecord & {
   source?: string | null;
 };
 
-export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v1";
-export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v1";
+export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v2";
+export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v2";
 export const deletedAccountsWorkspaceCacheKey = "clover.accounts.deleted-account-ids.v1";
 export const deletingAccountsWorkspaceCacheKey = "clover.accounts.deleting-account-ids.v1";
 
@@ -227,6 +227,9 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
   const leftExplicitLastFour = extractLastFourDigits(left.accountNumber);
   const rightExplicitLastFour = extractLastFourDigits(right.accountNumber);
   if ((leftExplicitLastFour && !rightExplicitLastFour) || (!leftExplicitLastFour && rightExplicitLastFour)) {
+    return 0;
+  }
+  if ((leftLastFour && !rightLastFour) || (!leftLastFour && rightLastFour)) {
     return 0;
   }
   if (leftLastFour && rightLastFour && leftLastFour === rightLastFour) {
