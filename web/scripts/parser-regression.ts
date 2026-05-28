@@ -221,8 +221,8 @@ const fixtures: Fixture[] = [
     accountName: "Daisy Mae Dalapo",
     accountNumber: "20867602571971",
     accountType: "bank",
-    minRows: 14,
-    exactRows: 14,
+    minRows: 12,
+    exactRows: 12,
     expectedTrailingBalance: 4294.66,
     expectedStartDate: "2024-12-11",
     expectedEndDate: "2024-12-29",
@@ -250,7 +250,8 @@ const fixtures: Fixture[] = [
     accountName: "Farhana Usman Mentok",
     accountNumber: "30865602571091",
     accountType: "bank",
-    minRows: 7,
+    minRows: 6,
+    exactRows: 6,
     expectedTrailingBalance: 4294.66,
     expectedStartDate: "2025-05-01",
     expectedEndDate: "2025-06-10",
@@ -278,7 +279,8 @@ const fixtures: Fixture[] = [
     accountName: "Farhana Usman Mentok",
     accountNumber: "30865602571091",
     accountType: "bank",
-    minRows: 7,
+    minRows: 6,
+    exactRows: 6,
     expectedTrailingBalance: 4294.66,
     minConfidence: 85,
   },
@@ -1007,6 +1009,9 @@ const main = async () => {
   if (!cimbMixedAccounts.has("Daisy Mae Dalapo|20867602571971") || !cimbMixedAccounts.has("Raihana Mentok Said|20867602571932")) {
     throw new Error("expected CIMB mixed-page statement to preserve both GSave account sections");
   }
+  if (cimbMixedRows.some((row) => row.rawPayload?.kind === "opening_balance" || /^(?:opening|beginning) balance$/i.test(String(row.merchantRaw ?? "")))) {
+    throw new Error("expected CIMB opening balances to remain metadata-only, not transaction rows");
+  }
   console.log("[PASS] CIMB mixed pages | preserves two account sections");
 
   const cimbDuplicatePaths = [
@@ -1044,6 +1049,12 @@ const main = async () => {
   const cimbVisibleRows = cimbDuplicatePayloads[0].rows.filter((row) => row.rawPayload?.kind !== "opening_balance");
   if (cimbVisibleRows.some((row) => row.type === "transfer")) {
     throw new Error("expected CIMB visible transfer-like rows to classify as income or expense unless they match another Clover account");
+  }
+  const cimbTransferLikeRows = cimbVisibleRows.filter((row) =>
+    /(?:insta\s*pay|instapay|cash in|transfer to|inward transfer)/i.test(`${row.merchantRaw ?? ""} ${row.merchantClean ?? ""}`)
+  );
+  if (cimbTransferLikeRows.length === 0 || cimbTransferLikeRows.some((row) => row.categoryName !== "Transfers")) {
+    throw new Error("expected CIMB transfer-like rows to use the Transfers category");
   }
   console.log("[PASS] CIMB duplicates | same statement fingerprints and external transfers are income/expense");
 

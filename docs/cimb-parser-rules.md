@@ -17,7 +17,7 @@ This document captures the CIMB / GSave parsing rules learned from the training 
 - Use statement date range and account metadata as the starting point for identity.
 - Keep summary totals, ledger rows, and reference numbers separate.
 - Preserve interest and tax pairings as linked ledger logic when possible.
-- Keep statement-shell rows like `Opening Balance`, `Closing Balance`, `Statement of Account`, and page labels out of the transaction stream unless they are explicit ledger movements.
+- Keep statement-shell rows like `Opening Balance`, `Beginning Balance`, `Closing Balance`, `Statement of Account`, and page labels out of the transaction stream unless they are explicit ledger movements.
 
 ## Ledger Rules
 
@@ -31,6 +31,7 @@ This document captures the CIMB / GSave parsing rules learned from the training 
 ## Simplification Layer
 
 - Keep both the raw description and the simplified title when a CIMB row can be normalized safely.
+- Categorize transfer-like CIMB activity as `Transfers` while preserving ledger direction as `income` or `expense` unless the transaction is proven to move between Clover accounts.
 - Use the simplifier rules from `CIMB_transaction_simplifier_rules.json` as durable mapping memory.
 - The code-level title lookup lives in `web/lib/merchant-labels.ts` so the same mappings apply automatically during parsing.
 - Common simplifications include:

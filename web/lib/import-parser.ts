@@ -7590,10 +7590,10 @@ const guessCimbCategoryName = (description: string, type: TransactionType) => {
   if (/^opening balance$/i.test(description)) return "Opening Balance";
   if (/credit interest/.test(lower)) return "Income";
   if (/tax rate|withheld tax|tax withheld/.test(lower)) return "Financial";
-  if (/back office cash in|cash in adjustment/.test(lower)) return "Financial";
-  if (/instapay inward transfer|inward transfer/.test(lower)) return type === "income" ? "Income" : "Other";
-  if (/instapay transfer to|transfer to|transfer from/.test(lower)) return type === "income" ? "Income" : "Other";
-  if (/cash in|cash out/.test(lower)) return type === "income" ? "Income" : "Other";
+  if (/back office cash in|cash in adjustment/.test(lower)) return "Transfers";
+  if (/instapay inward transfer|inward transfer/.test(lower)) return "Transfers";
+  if (/instapay transfer to|transfer to|transfer from/.test(lower)) return "Transfers";
+  if (/cash in|cash out/.test(lower)) return "Transfers";
   if (/interest/.test(lower)) return "Income";
   return guessCategoryName(description, type);
 };
@@ -7660,31 +7660,6 @@ const parseCimbTransactionSegment = (
 
     const description = normalizeWhitespace(activeRow.descriptionParts.join(" "));
     if (activeRow.isOpeningBalance) {
-      rows.push({
-        date: activeRow.date.toISOString().slice(0, 10),
-        amount: activeRow.balance.toFixed(2),
-        merchantRaw: "Beginning balance",
-        merchantClean: "Beginning balance",
-        description: `Opening balance for ${state.accountName}`,
-        categoryName: "Opening Balance",
-        accountName: state.accountName,
-        accountNumber: state.accountNumber ?? undefined,
-        institution: state.institution ?? undefined,
-        type: "transfer",
-        rawPayload: {
-          bank: "CIMB",
-          kind: "opening_balance",
-          accountName: state.accountName,
-          accountNumber: state.accountNumber,
-          statementStartDate: state.statementStartDate,
-          statementEndDate: state.statementEndDate,
-          openingBalance: activeRow.balance.toFixed(2),
-          balance: activeRow.balance.toFixed(2),
-          line: activeRow.rawLine,
-          ref: activeRow.reference,
-        },
-        confidence: 100,
-      });
       activeRow = null;
       return;
     }
