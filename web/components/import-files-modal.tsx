@@ -5365,32 +5365,40 @@ export function ImportFilesModal({
           };
         }
 
-        retiredImportActivityFileNamesRef.current.add(item.file.name);
         updateItem(itemId, {
-          status: "done",
-          confirmationState: "confirmed",
+          status: "importing",
+          confirmationState: "pending",
           error: null,
           importFileId,
           targetAccountId: optimisticAccountId,
           importedRows: visibleRows,
-          progress: 100,
-          progressLabel: "Done",
+          progress: IMPORT_PROGRESS.loadingAccount,
+          progressLabel: hasStatementIdentity || canUseOptimisticGuess ? "Loading account" : "Reading statement",
         });
         publishImportActivity({
           workspaceId,
           surface: importActivitySurfaceRef.current,
-          status: "done",
+          status: "active",
           fileName: item.file.name,
           fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
           fileTotal: items.length,
-          completedFiles: completedFileCount + 1,
-          progress: 100,
-          detail: "Clover has the file. Accounts and transactions will stay visible while names and categories finish in the background.",
-          summary: optimisticSummary,
+          completedFiles: completedFileCount,
+          progress: IMPORT_PROGRESS.loadingAccount,
+          detail: hasStatementIdentity || canUseOptimisticGuess
+            ? getProgressDetail(
+                {
+                  accountName: statementIdentity?.accountName ?? guessedIdentity?.accountName ?? null,
+                  institution: statementIdentity?.institution ?? guessedIdentity?.institution ?? null,
+                  accountNumber: statementIdentity?.accountNumber ?? null,
+                },
+                previewTransactions.length
+              )
+            : "Clover is reading the statement and will keep this import open until rows are visible.",
+          summary: null,
           errorMessage: null,
         });
 
-        void monitorQueuedImportAndConfirm(itemId, importFileId, optimisticAccountId, {
+        await monitorQueuedImportAndConfirm(itemId, importFileId, optimisticAccountId, {
           fileName: item.file.name,
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
           guessedAccountName: guessedIdentity?.accountName ?? null,
@@ -5407,8 +5415,6 @@ export function ImportFilesModal({
           initialBalance: null,
           password: item.password.trim() || undefined,
           previewTransactions,
-        }, {
-          backgroundOnly: true,
         });
 
         return {
