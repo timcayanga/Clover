@@ -1,6 +1,6 @@
 "use client";
 
-const PDF_ENCRYPTION_MARKERS = ["/Encrypt", "/Standard", "/V 2", "/V 4", "/V 5"];
+const PDF_ENCRYPTION_MARKERS = ["/Encrypt"];
 
 export const isLikelyPasswordProtectedPdf = async (file: File) => {
   const lowerName = file.name.toLowerCase();

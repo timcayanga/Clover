@@ -18,6 +18,9 @@ This document captures the GoTyme parsing rules learned from the synthetic train
 - Keep `ATM Withdrawal` and `ATM Fee` as separate rows.
 - Preserve `Interest Earned` and `Tax Withheld` separately.
 - Treat `Adjustment Reversal` as a review-worthy adjustment entry.
+- Classify `QR Payment` as `Shopping` with an `Expense` type.
+- Classify person-to-person `Transfer to/from ... Go Tyme Bank Account` rows as `Expense` or `Income` when the counterparty account is not owned by the user.
+- Keep `Transfer Fee` as `Financial` with an `Expense` type.
 
 ## Review Gating
 
@@ -35,6 +38,7 @@ This document captures the GoTyme parsing rules learned from the synthetic train
 - Keep raw statement data, parsed rows, and normalized transactions separate.
 - Preserve bank-specific transfer, fee, sweep, and adjustment wording instead of collapsing it into generic spend.
 - The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable GoTyme simplifications such as `Grab`, `Move It`, `Lazada`, `Shopee`, `Transfer to Go Save`, `Transfer from Go Save`, `Transfer Fee`, and the interbank transfer variants.
+- The code-level title lookup also covers `Pay Maya Load Purchase` and `GCash Received` variants so these titles stay normalized across statement families.
 
 ## Notes Handling
 

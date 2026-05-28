@@ -8904,6 +8904,18 @@ const classifyGoTymeTransaction = (description: string, credit: number, debit: n
     return { type: "expense", categoryName: "Financial" };
   }
 
+  if (/qr\s+payment/.test(lower)) {
+    return { type: "expense", categoryName: "Shopping" };
+  }
+
+  if (/transfer\s+to\s+.+go\s*tyme\s+bank\s+account/.test(lower)) {
+    return { type: "expense", categoryName: "Transfers" };
+  }
+
+  if (/transfer\s+from\s+.+go\s*tyme\s+bank\s+account/.test(lower)) {
+    return { type: "income", categoryName: "Transfers" };
+  }
+
   if (/transfer|interbank|go save|gotyme bank account|qr payment|cash in|cash out|withdrawal|deposit|redemption/.test(lower)) {
     return { type: "transfer", categoryName: "Transfers" };
   }

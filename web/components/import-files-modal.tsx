@@ -427,7 +427,7 @@ const getKnownPreviewTransactions = (params: {
   return cached.transactions as NonNullable<UploadInsightsSummary["previewTransactions"]>;
 };
 
-const PDF_ENCRYPTION_MARKERS = ["/Encrypt", "/Standard", "/V 2", "/V 4", "/V 5"];
+const PDF_ENCRYPTION_MARKERS = ["/Encrypt"];
 
 const buildOptimisticUploadSummary = (
   fileName: string,
@@ -5308,20 +5308,24 @@ export function ImportFilesModal({
         updateItem(itemId, {
           importFileId,
           targetAccountId: queuedVisibleSummary?.accountId ?? optimisticAccountId,
-          confirmationState: queuedVisibleSummary ? "confirmed" : "staged",
-          progress: queuedVisibleSummary ? 100 : IMPORT_PROGRESS.loadingAccount,
-          progressLabel: queuedVisibleSummary ? "Done" : hasStatementIdentity || canUseOptimisticGuess ? "Loading account" : "Waiting for account details",
-          status: queuedVisibleSummary ? "done" : "importing",
+          confirmationState: "staged",
+          progress: queuedVisibleSummary ? Math.max(IMPORT_PROGRESS.loadingAccount, 99) : IMPORT_PROGRESS.loadingAccount,
+          progressLabel: queuedVisibleSummary
+            ? "Accounts are visible"
+            : hasStatementIdentity || canUseOptimisticGuess
+              ? "Loading account"
+              : "Waiting for account details",
+          status: "importing",
         });
         publishImportActivity({
           workspaceId,
           surface: importActivitySurfaceRef.current,
-          status: queuedVisibleSummary ? "done" : "active",
+          status: "active",
           fileName: item.file.name,
           fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
           fileTotal: items.length,
-          completedFiles: queuedVisibleSummary ? completedFileCount + 1 : completedFileCount,
-          progress: queuedVisibleSummary ? 100 : IMPORT_PROGRESS.loadingAccount,
+          completedFiles: completedFileCount,
+          progress: queuedVisibleSummary ? Math.max(IMPORT_PROGRESS.loadingAccount, 99) : IMPORT_PROGRESS.loadingAccount,
           detail: queuedVisibleSummary
             ? "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background."
             : hasStatementIdentity || canUseOptimisticGuess

@@ -1252,7 +1252,7 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Netflix",
     },
     {
-      patterns: [/paymaya\s+load\s+purchase/i, /in-app\s+purchase\s+for\s+mobile/i],
+      patterns: [/pay\s*maya\s+load\s+purchase/i, /paymaya\s+load\s+purchase/i, /in-app\s+purchase\s+for\s+mobile/i],
       replacement: "Load Purchase",
     },
     {
@@ -1320,6 +1320,10 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Transfer to GoTyme",
     },
     {
+      patterns: [/received\s+gcash/i, /gcash\s+received/i, /gcash\s+received\s+from/i],
+      replacement: "GCash Received",
+    },
+    {
       patterns: [/earned\s+interest/i],
       replacement: "Interest Earned",
     },
@@ -1330,10 +1334,6 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     {
       patterns: [/salary\s+credit/i],
       replacement: "Salary Credit",
-    },
-    {
-      patterns: [/gcash\s+received/i],
-      replacement: "GCash Received",
     },
   ],
 };
