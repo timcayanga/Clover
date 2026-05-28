@@ -1414,12 +1414,33 @@ const getImportVisibilityTimeoutMs = (fileCount: number) =>
   IMPORT_VISIBILITY_BASE_TIMEOUT_MS +
   Math.max(0, fileCount - 1) * IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS;
 
-const summarizeVisibilityOutcome = (items: QueuedFile[]) => {
+const hasVisibleImportData = (
+  item: QueuedFile,
+  summary: UploadInsightsSummary | null | undefined
+) => {
+  if (item.status === "error" || item.status === "needs_password") {
+    return false;
+  }
+
+  const localRows = Number(summary?.rowsImported ?? 0);
+  const localPreviewRows = Array.isArray(summary?.previewTransactions)
+    ? summary.previewTransactions.length
+    : 0;
+  const localHasRows = Math.max(localRows, localPreviewRows) > 0 && Boolean(summary?.accountId);
+  const localHasAccountDetails =
+    Boolean(summary?.accountId) &&
+    Boolean(summary?.accountName || summary?.accountNumber || summary?.balance);
+  const itemHasRows = item.importedRows !== null && item.importedRows > 0 && Boolean(item.targetAccountId);
+
+  return itemHasRows || localHasRows || localHasAccountDetails;
+};
+
+const summarizeVisibilityOutcome = (
+  items: QueuedFile[],
+  getSummary: (item: QueuedFile) => UploadInsightsSummary | null | undefined
+) => {
   const successful = items.filter(
-    (item) =>
-      item.status !== "error" &&
-      item.status !== "needs_password" &&
-      (item.confirmationState === "confirmed" || (item.importedRows !== null && item.importedRows > 0 && Boolean(item.targetAccountId)))
+    (item) => hasVisibleImportData(item, getSummary(item))
   );
   const failed = items.filter((item) => item.status === "error" || item.status === "needs_password");
   const partial = items.filter(
@@ -1433,17 +1454,24 @@ const summarizeVisibilityOutcome = (items: QueuedFile[]) => {
         item.progress >= IMPORT_PROGRESS.uploading)
   );
 
+  const blocked = items.filter(
+    (item) => !successful.includes(item) && !failed.includes(item) && !partial.includes(item)
+  );
+
   const listNames = (label: string, entries: QueuedFile[]) =>
     entries.length > 0 ? `${label}: ${entries.map((entry) => entry.file.name).join(", ")}.` : "";
+  const issueCount = partial.length + failed.length + blocked.length;
 
   return {
     successful,
     partial,
     failed,
+    blocked,
+    issueCount,
     message: [
-      `${successful.length} successful, ${partial.length} partially parsed, ${failed.length} failed.`,
+      `${successful.length} visible, ${partial.length} partially parsed, ${failed.length + blocked.length} failed.`,
       listNames("Partial", partial),
-      listNames("Failed", failed),
+      listNames("Failed", [...failed, ...blocked]),
       partial.length > 0
         ? `Clover will keep working in the background for up to ${Math.round(IMPORT_BACKGROUND_HARD_STOP_MS / 60_000)} minutes.`
         : "",
@@ -1693,7 +1721,8 @@ export function ImportFilesModal({
       return;
     }
 
-    const outcome = summarizeVisibilityOutcome(currentItems);
+    const getItemSummary = (item: QueuedFile) => localPreparseSummaryByItemIdRef.current.get(item.id) ?? null;
+    const outcome = summarizeVisibilityOutcome(currentItems, getItemSummary);
     const completedSummary = buildVisibleImportSummary(currentItems);
     const outcomeMessage =
       reason === "visible"
@@ -1702,25 +1731,48 @@ export function ImportFilesModal({
           ? `Initial visibility window ended. ${outcome.message}`
           : outcome.message;
 
-    for (const item of currentItems) {
+    for (const item of outcome.successful) {
       retiredImportActivityFileNamesRef.current.add(item.file.name);
     }
 
     setItems((current) =>
-      current.map((item) =>
-        item.confirmationState === "confirmed"
-          ? item
-          : {
-              ...item,
-              status: "done",
-              confirmationState: "confirmed",
-              progress: 100,
-              progressLabel:
-                item.status === "error" || item.status === "needs_password"
-                  ? "Needs attention"
-                  : "Continuing in background",
-            }
-      )
+      current.map((item) => {
+        const itemSummary = getItemSummary(item);
+        if (hasVisibleImportData(item, itemSummary)) {
+          return {
+            ...item,
+            status: "done",
+            confirmationState: "confirmed",
+            error: null,
+            errorCode: null,
+            errorTitle: null,
+            errorNextSteps: null,
+            progress: 100,
+            progressLabel: "Visible in Clover",
+          };
+        }
+
+        if (item.status === "error" || item.status === "needs_password") {
+          return item;
+        }
+
+        return {
+          ...item,
+          status: "error",
+          confirmationState: item.confirmationState === "confirmed" ? "confirmed" : "staged",
+          error:
+            "Clover could not read enough details to show this file in your workspace. Try uploading a clearer original PDF or image.",
+          errorCode: "I-104",
+          errorTitle: "File not readable",
+          errorNextSteps: [
+            "Upload the original PDF when available, or use a clearer screenshot with the account details and transactions visible.",
+            "Try importing the file by itself so Clover can focus on that statement.",
+            "If Clover still cannot read it, add the account or transactions manually.",
+          ],
+          progress: Math.min(item.progress, IMPORT_PROGRESS.finalizing),
+          progressLabel: "Review needed",
+        };
+      })
     );
     setMessage(outcomeMessage);
     setBusy(false);
@@ -1735,35 +1787,37 @@ export function ImportFilesModal({
     publishImportActivity({
       workspaceId,
       surface: "background",
-      status: outcome.failed.length > 0 ? "error" : "done",
+      status: outcome.issueCount > 0 ? "error" : "done",
       fileName: currentItems[currentItems.length - 1]?.file.name ?? null,
       fileIndex: currentItems.length,
       fileTotal: currentItems.length,
       completedFiles: outcome.successful.length,
-      progress: 100,
+      progress: outcome.issueCount > 0 ? Math.min(displayedOverallProgress || IMPORT_PROGRESS.finalizing, 99) : 100,
       detail: outcomeMessage,
       summary: completedSummary,
-      errorMessage: outcome.failed.length > 0 ? outcomeMessage : null,
-      errorTitle: outcome.failed.length > 0 ? "Import review needed" : null,
+      errorMessage: outcome.issueCount > 0 ? outcomeMessage : null,
+      errorTitle: outcome.issueCount > 0 ? "Import review needed" : null,
       errorNextSteps:
-        outcome.failed.length > 0
+        outcome.issueCount > 0
           ? [
               "Check the files listed as failed or partially parsed.",
-              "Re-upload failed files one at a time if they do not appear in Clover.",
-              "Clover will keep finalizing partially parsed files in the background.",
+              "Re-upload failed files one at a time with a clearer original PDF or image.",
+              "If a file still does not appear in Clover, add the account or transactions manually.",
             ]
           : null,
     });
 
-    if (autoCloseCompletedBatchTimerRef.current) {
-      window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
+    if (outcome.issueCount === 0) {
+      if (autoCloseCompletedBatchTimerRef.current) {
+        window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
+      }
+      autoCloseCompletedBatchTimerRef.current = window.setTimeout(() => {
+        autoCloseCompletedBatchTimerRef.current = null;
+        clearImportActivity();
+        lastImportActivityRef.current = null;
+        onClose();
+      }, 10_000);
     }
-    autoCloseCompletedBatchTimerRef.current = window.setTimeout(() => {
-      autoCloseCompletedBatchTimerRef.current = null;
-      clearImportActivity();
-      lastImportActivityRef.current = null;
-      onClose();
-    }, 10_000);
   };
 
   const closeVisibleImportModalIfPrimaryDataReady = () => {
@@ -1773,17 +1827,7 @@ export function ImportFilesModal({
     }
 
     const allPrimaryDataVisible = currentItems.every((item) => {
-      if (item.status === "error" || item.status === "needs_password") {
-        return true;
-      }
-
-      const localSummary = localPreparseSummaryByItemIdRef.current.get(item.id);
-      const localRows = Number(localSummary?.rowsImported ?? 0);
-      return (
-        item.confirmationState === "confirmed" ||
-        (item.importedRows !== null && item.importedRows > 0 && Boolean(item.targetAccountId)) ||
-        (localRows > 0 && Boolean(localSummary?.accountId))
-      );
+      return hasVisibleImportData(item, localPreparseSummaryByItemIdRef.current.get(item.id));
     });
 
     if (allPrimaryDataVisible) {
@@ -1792,17 +1836,7 @@ export function ImportFilesModal({
   };
 
   const hasPrimaryDataForItem = (item: QueuedFile) => {
-    if (item.status === "error" || item.status === "needs_password") {
-      return true;
-    }
-
-    const localSummary = localPreparseSummaryByItemIdRef.current.get(item.id);
-    const localRows = Number(localSummary?.rowsImported ?? 0);
-    return (
-      item.confirmationState === "confirmed" ||
-      (item.importedRows !== null && item.importedRows > 0 && Boolean(item.targetAccountId)) ||
-      (localRows > 0 && Boolean(localSummary?.accountId))
-    );
+    return hasVisibleImportData(item, localPreparseSummaryByItemIdRef.current.get(item.id));
   };
 
   const waitForLocalPrimaryVisibility = async (timeoutMs: number) => {
