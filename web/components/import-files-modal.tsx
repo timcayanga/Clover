@@ -3347,11 +3347,6 @@ export function ImportFilesModal({
         const hasSettledRows = visibleImportComplete;
 
         if (hasSettledRows) {
-          if (backgroundOnly) {
-            triggerImportEnrichment(importFileId);
-            return;
-          }
-
           triggerImportEnrichment(importFileId);
           const completedAccountId =
             latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-")
@@ -3418,6 +3413,10 @@ export function ImportFilesModal({
           };
           seedImportedWorkspaceCaches(workspaceId, finalizedSummary);
           await Promise.resolve(onImported(finalizedSummary));
+          if (backgroundOnly) {
+            return;
+          }
+
           emitItemUpdate({
             status: "done",
             confirmationState: "confirmed",
