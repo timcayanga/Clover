@@ -10,6 +10,7 @@ import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { loadSplitBillWorkspaceData } from "@/lib/split-bill-loaders";
+import { loadBudgetWorkspaceData } from "@/lib/budgeting-data";
 import { AdviserChat } from "@/components/adviser-chat";
 import { AdviserSectionCarousel, type AdviserSectionCard } from "@/components/adviser-section-carousel";
 import { isLiabilityAccountType, isSpendableAccountType, isTrackedAssetAccountType } from "@/lib/account-types";
@@ -1180,6 +1181,8 @@ async function AdviserPageContent() {
     },
     displayCurrency
   );
+  const budgetData = await loadBudgetWorkspaceData(resolvedWorkspace.id, now);
+  const budgetOverview = budgetData.overview;
   const goalLabel = goalValue ? ({ save_more: "Save more", pay_down_debt: "Pay down debt", track_spending: "Track spending", build_emergency_fund: "Build an emergency fund", invest_better: "Invest better" }[goalValue] ?? goalValue) : null;
 
   const topCategories = Array.from(currentSummary.expenseCategories.entries())
@@ -1703,6 +1706,33 @@ async function AdviserPageContent() {
 
   const passiveCards: RankedAdviserCard[] = selectTopRanked(
     [
+      budgetOverview.activeBudgetCount > 0
+        ? {
+            id: "budget_pressure",
+            title: budgetOverview.alerts.length > 0 ? "Budget pressure" : "Budget watch",
+            summary:
+              budgetOverview.alerts.length > 0
+                ? "One or more budgets are pushing into alert territory."
+                : "Budgets are active and being tracked by Clover.",
+            evidence:
+              budgetOverview.alerts.length > 0
+                ? `${budgetOverview.alerts[0].name} is at ${Math.round(budgetOverview.alerts[0].progressPercent)}% of its target.`
+                : `${budgetOverview.activeBudgetCount} budget${budgetOverview.activeBudgetCount === 1 ? "" : "s"} active across the workspace`,
+            ctaLabel: "Open budgeting",
+            href: "/budgeting",
+            tone: budgetOverview.alerts.length > 0 ? budgetOverview.alerts[0].tone : "neutral",
+            group: "cashflow",
+            breakdown: {
+              impact: clamp(budgetOverview.totalProgressPercent),
+              urgency: clamp(budgetOverview.alerts.length > 0 ? 82 + budgetOverview.alerts[0].progressPercent * 0.15 : 38),
+              confidence: clamp(currentTransactionConfidence),
+              personalization: 92,
+              recency: 100,
+              actionability: 92,
+            },
+            score: 0,
+          }
+        : null,
       workspaceAccounts.length > 0
         ? {
             id: "account_snapshot",
@@ -2424,6 +2454,24 @@ async function AdviserPageContent() {
               personalization: 88,
               recency: 100,
               actionability: 80,
+            },
+            score: 0,
+          }
+        : null,
+      budgetOverview.activeBudgetCount > 0
+        ? {
+            id: "prompt-budgeting",
+            label: "How are my budgets doing?",
+            prompt: "Which budget is closest to its limit, and what should I watch first?",
+            group: "cashflow",
+            diversityKey: "cashflow-budgeting",
+            breakdown: {
+              impact: clamp(budgetOverview.totalProgressPercent),
+              urgency: clamp(budgetOverview.alerts.length > 0 ? 88 : 55),
+              confidence: clamp(currentTransactionConfidence),
+              personalization: 90,
+              recency: 100,
+              actionability: 88,
             },
             score: 0,
           }

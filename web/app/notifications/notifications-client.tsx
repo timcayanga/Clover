@@ -9,6 +9,25 @@ import {
   type ImportActivitySnapshot,
 } from "@/lib/import-activity";
 import { buildImportResultChecklist, formatImportResultHeadline } from "@/lib/import-result-summary";
+import { formatCurrencyAmount } from "@/lib/currency-format";
+
+type BudgetAlert = {
+  id: string;
+  name: string;
+  kindLabel: string;
+  scopeLabel: string;
+  periodLabel: string;
+  currency: string;
+  targetAmount: number;
+  actualAmount: number;
+  progressPercent: number;
+  stage: "safe" | "watch" | "warning" | "critical" | "exceeded";
+  statusLabel: string;
+  statusDetail: string;
+  tone: "positive" | "warning" | "danger";
+  actionLabel: string;
+  href: string;
+};
 
 const formatUpdatedAt = (updatedAt: number) => {
   if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
@@ -57,8 +76,36 @@ const getImportNotificationBody = (activity: ImportActivitySnapshot) => {
 
 export function NotificationsClient() {
   const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
+  const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
 
   useEffect(() => subscribeImportActivity(() => setActivity(readImportActivity())), []);
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBudgetAlerts = async () => {
+      try {
+        const response = await fetch("/api/budgets", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+
+        const result = (await response.json()) as { overview?: { alerts?: BudgetAlert[] } };
+        if (!cancelled) {
+          setBudgetAlerts(result.overview?.alerts ?? []);
+        }
+      } catch {
+        if (!cancelled) {
+          setBudgetAlerts([]);
+        }
+      }
+    };
+
+    void loadBudgetAlerts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const dismissImportActivity = () => {
     clearImportActivity();
@@ -111,6 +158,48 @@ export function NotificationsClient() {
                 <p className="notification-item__tone">All caught up</p>
                 <h4>No active import notifications</h4>
                 <p>When you close an import progress window, its latest status will show here.</p>
+              </div>
+            </article>
+          )}
+
+          {budgetAlerts.length > 0 ? (
+            <section className="notifications-budget">
+              <div className="report-card__head report-card__head--compact">
+                <div>
+                  <p className="eyebrow">Budget alerts</p>
+                  <h4>Thresholds Clover is watching</h4>
+                </div>
+              </div>
+              <div className="notifications-budget__grid">
+                {budgetAlerts.slice(0, 4).map((budget) => (
+                  <article key={budget.id} className={`notification-item glass notification-item--budget notification-item--${budget.tone}`}>
+                    <div className="notification-item__main">
+                      <p className="notification-item__tone">{budget.kindLabel}</p>
+                      <h4>{budget.name}</h4>
+                      <p>
+                        {budget.statusLabel} · {budget.statusDetail}
+                      </p>
+                      <p className="notification-item__tone">
+                        {budget.scopeLabel} · {budget.periodLabel} · {formatCurrencyAmount(budget.actualAmount, budget.currency)} of{" "}
+                        {formatCurrencyAmount(budget.targetAmount, budget.currency)}
+                      </p>
+                    </div>
+                    <div className="notification-item__time">
+                      <time>{Math.round(budget.progressPercent)}%</time>
+                      <a className="button button-secondary button-small" href={budget.href}>
+                        {budget.actionLabel}
+                      </a>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : (
+            <article className="notification-item glass">
+              <div className="notification-item__main">
+                <p className="notification-item__tone">Budgets</p>
+                <h4>No budget alerts yet</h4>
+                <p>Set a budget in Budgeting and Clover will show threshold alerts here as limits get closer.</p>
               </div>
             </article>
           )}

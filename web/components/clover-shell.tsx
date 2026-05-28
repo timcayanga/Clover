@@ -49,6 +49,7 @@ type CloverShellProps = {
   | "reports"
   | "adviser"
   | "goals"
+  | "budgeting"
   | "more"
   | "settings"
   | "profile"
@@ -176,6 +177,14 @@ const sidebarSearchPages: Array<{
     terms: ["goals", "goal", "savings", "save", "debt", "milestone"],
   },
   {
+    key: "budgeting",
+    title: "Budgeting",
+    href: "/budgeting",
+    icon: "budgeting",
+    detail: "Spending limits, scope, and threshold warnings.",
+    terms: ["budget", "budgeting", "limit", "limits", "threshold", "caps", "guardrail"],
+  },
+  {
     key: "settings",
     title: "Settings",
     href: "/settings",
@@ -263,6 +272,7 @@ const navItems = [
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/recurring", label: "Recurring", key: "recurring" as const },
   { href: "/adviser", label: "Adviser", key: "adviser" as const },
+  { href: "/budgeting", label: "Budgeting", key: "budgeting" as const },
   { href: "/more", label: "More", key: "more" as const },
 ];
 
@@ -278,6 +288,7 @@ type IconName =
   | "reports"
   | "adviser"
   | "goals"
+  | "budgeting"
   | "menu"
   | "chevron-left"
   | "search"
@@ -454,6 +465,15 @@ function MenuIcon({ name }: { name: IconName }) {
       return (
         <svg {...common}>
           <path d="m12 3.5 2.71 5.49 6.06.88-4.39 4.28 1.04 6.03L12 17.98l-5.42 2.85 1.04-6.03-4.39-4.28 6.06-.88L12 3.5Z" />
+        </svg>
+      );
+    case "budgeting":
+      return (
+        <svg {...common}>
+          <path d="M4 18.5h16" />
+          <path d="M6.5 15a5.5 5.5 0 0 1 11 0" />
+          <path d="M12 9v3.5" />
+          <path d="m12 12.5 2.2-2.2" />
         </svg>
       );
   }
@@ -1469,6 +1489,17 @@ export function CloverShell({
                         Goals
                       </button>
                       <button
+                        className={`sidebar-nav__submenu-link${active === "budgeting" || pathname?.startsWith("/budgeting") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/budgeting")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="budgeting" />
+                        </span>
+                        Budgeting
+                      </button>
+                      <button
                         className={`sidebar-nav__submenu-link${pathname?.startsWith("/help") ? " is-active" : ""}`}
                         type="button"
                         role="menuitem"
@@ -1802,6 +1833,19 @@ export function CloverShell({
             <MenuIcon name="adviser" />
           </span>
           <span className="shell-bottom-nav__label">Adviser</span>
+        </Link>
+        <Link
+          className={`shell-bottom-nav__item${active === "budgeting" || pathname?.startsWith("/budgeting") ? " is-active" : ""}`}
+          aria-current={active === "budgeting" || pathname?.startsWith("/budgeting") ? "page" : undefined}
+          href="/budgeting"
+          prefetch={shouldPrefetchNavHref("/budgeting")}
+          onMouseEnter={() => prefetchNavTarget("/budgeting")}
+          onTouchStart={() => prefetchNavTarget("/budgeting")}
+        >
+          <span className="shell-bottom-nav__icon" aria-hidden="true">
+            <MenuIcon name="budgeting" />
+          </span>
+          <span className="shell-bottom-nav__label">Budgeting</span>
         </Link>
         <Link
           className={`shell-bottom-nav__item${isMoreActive ? " is-active" : ""}`}

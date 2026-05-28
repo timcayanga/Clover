@@ -19,6 +19,7 @@ import { DashboardTopActions } from "@/components/dashboard-top-actions";
 import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
 import { GoalsEditor as GoalsEditorModal } from "@/components/goals-editor-modal";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
+import { loadBudgetWorkspaceData } from "@/lib/budgeting-data";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -631,6 +632,9 @@ async function DashboardStream({
     spendDelta,
     recurringShare: 0,
   }, displayCurrency);
+  const budgetData = await loadBudgetWorkspaceData(workspaceSummary.id, now);
+  const budgetOverview = budgetData.overview;
+  const budgetHeroAlert = budgetOverview.alerts[0] ?? null;
   const goalProgressPercent = clamp(goalProgress.progressPercent ?? 0, 0, 100);
   const daysSinceLastImport = latestImport
     ? Math.max(0, Math.floor((now.getTime() - latestImport.uploadedAt.getTime()) / 86400000))
@@ -654,6 +658,15 @@ async function DashboardStream({
     ? `Last import was ${daysSinceLastImport === 0 ? "today" : `${daysSinceLastImport ?? 0} day${daysSinceLastImport === 1 ? "" : "s"} ago`}. Add recent statements so advice stays current.`
     : "Upload a recent statement so Clover can start finding spending patterns.";
   const insightCandidates: Array<HomeAdviserItem | null> = [
+    budgetHeroAlert
+      ? {
+          label: budgetHeroAlert.stage === "exceeded" || budgetHeroAlert.stage === "critical" ? "Budget alert" : "Budget watch",
+          copy: `${budgetHeroAlert.name} is at ${Math.round(budgetHeroAlert.progressPercent)}% of ${formatCurrency(budgetHeroAlert.targetAmount, budgetHeroAlert.currency)}.`,
+          href: "/budgeting",
+          actionLabel: "Open budgeting",
+          tone: budgetHeroAlert.tone === "positive" ? "positive" : "warning",
+        }
+      : null,
     categorySpike
       ? {
           label: "Watch spending",
@@ -849,6 +862,44 @@ async function DashboardStream({
           </article>
 
           <div className="dashboard-home__hero-side">
+            {budgetOverview.activeBudgetCount > 0 ? (
+              <div className="dashboard-home__goal-card dashboard-home__budget-card">
+                <div className="dashboard-home__goal-card-head">
+                  <p className="eyebrow">Budget watch</p>
+                </div>
+                <div className="dashboard-home__goal-card-body">
+                  <div
+                    className="dashboard-home__ring dashboard-home__ring--compact"
+                    style={{
+                      background: `conic-gradient(var(--accent) 0 ${Math.min(budgetOverview.totalProgressPercent, 100)}%, rgba(15, 23, 42, 0.08) ${Math.min(
+                        budgetOverview.totalProgressPercent,
+                        100
+                      )}% 100%)`,
+                    }}
+                  >
+                    <div className="dashboard-home__ring-inner">
+                      <strong>{budgetOverview.alerts.length > 0 ? `${Math.round(budgetOverview.alerts[0].progressPercent)}%` : `${Math.round(budgetOverview.totalProgressPercent)}%`}</strong>
+                    </div>
+                  </div>
+                  <div className="dashboard-home__goal-card-copy">
+                    <strong>{budgetOverview.alerts[0]?.name ?? "All budgets calm"}</strong>
+                    <small>
+                      {budgetOverview.alerts.length > 0
+                        ? `${budgetOverview.alerts.length} alert${budgetOverview.alerts.length === 1 ? "" : "s"} active`
+                        : `${budgetOverview.activeBudgetCount} budget${budgetOverview.activeBudgetCount === 1 ? "" : "s"} active`}
+                    </small>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="dashboard-home__goal-card dashboard-home__budget-card dashboard-home__goal-card--empty">
+                <p className="eyebrow">Budget watch</p>
+                <strong>Set a budget to keep spending visible.</strong>
+                <Link className="button button-secondary button-small" href="/budgeting">
+                  Create budget
+                </Link>
+              </div>
+            )}
             {shouldShowStarterCard ? (
               <div className="dashboard-home__starter-card">
                 <p className="eyebrow">Get started</p>

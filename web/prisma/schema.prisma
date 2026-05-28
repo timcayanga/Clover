@@ -81,6 +81,23 @@ enum CommitmentRecurrence {
   annual
 }
 
+enum BudgetScope {
+  global
+  account
+  category
+}
+
+enum BudgetCadence {
+  daily
+  weekly
+  monthly
+}
+
+enum BudgetKind {
+  spend_limit
+  savings_target
+}
+
 enum CommitmentStatus {
   active
   paused
@@ -177,6 +194,30 @@ model User {
   billingEvents            BillingEvent[]
   brankasStatementSessions BrankasStatementSession[]
   appErrorLogs             AppErrorLog[]
+}
+
+model Budget {
+  id          String        @id @default(cuid())
+  workspaceId String
+  accountId   String?
+  categoryId  String?
+  name        String
+  kind        BudgetKind    @default(spend_limit)
+  scope       BudgetScope   @default(global)
+  cadence     BudgetCadence @default(monthly)
+  targetAmount Decimal      @db.Decimal(18, 2)
+  currency    String        @default("PHP")
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account     Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  category    Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([workspaceId, scope, cadence, isActive])
+  @@index([accountId])
+  @@index([categoryId])
 }
 
 model BillingSubscription {
@@ -356,6 +397,7 @@ model Workspace {
   investmentSnapshots      InvestmentSnapshot[]
   investmentHoldings       InvestmentHolding[]
   recurringPatterns        RecurringPattern[]
+  budgets                  Budget[]
 
   @@index([userId])
 }
@@ -395,6 +437,7 @@ model Account {
   investmentSnapshots     InvestmentSnapshot[]
   investmentHoldings      InvestmentHolding[]
   recurringPatterns       RecurringPattern[]
+  budgets                 Budget[]
 
   @@index([workspaceId])
 }
@@ -467,6 +510,7 @@ model Category {
   transactions     Transaction[]
   trainingSignals  TrainingSignal[]
   merchantRules    MerchantRule[]
+  budgets          Budget[]
 
   @@index([workspaceId])
 }
