@@ -5068,6 +5068,19 @@ body.transactions-manual-open .shell-quick-add-button {
   align-items: center;
 }
 
+.budgeting-hero__quick-pick {
+  width: fit-content;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  background: rgba(3, 168, 192, 0.07);
+  color: var(--text);
+}
+
+.budgeting-hero__quick-pick:hover,
+.budgeting-hero__quick-pick:focus-visible {
+  background: rgba(3, 168, 192, 0.12);
+  border-color: rgba(3, 168, 192, 0.24);
+}
+
 .budgeting-hero__note {
   color: var(--muted-2);
   font-size: 13px;
@@ -5086,6 +5099,7 @@ body.transactions-manual-open .shell-quick-add-button {
   padding: 18px;
   display: grid;
   gap: 16px;
+  justify-items: center;
   align-content: start;
   border-radius: 24px;
   border: 1px solid rgba(15, 23, 42, 0.06);
@@ -5099,24 +5113,51 @@ body.transactions-manual-open .shell-quick-add-button {
   align-items: baseline;
 }
 
-.budgeting-hero__summary-head strong {
-  font-size: 34px;
-  line-height: 1;
-  letter-spacing: -0.05em;
+.budgeting-hero__summary-subtext {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
-.budgeting-hero__summary-bar {
-  height: 12px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.18);
-  overflow: hidden;
+.budgeting-hero__ring {
+  --budget-progress: 0%;
+  width: min(100%, 232px);
+  aspect-ratio: 1;
+  padding: 14px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 220deg,
+    rgba(3, 168, 192, 0.95) 0 var(--budget-progress),
+    rgba(148, 163, 184, 0.18) var(--budget-progress) 100%
+  );
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8);
 }
 
-.budgeting-hero__summary-bar span {
-  display: block;
+.budgeting-hero__ring-inner {
+  width: 100%;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(3, 168, 192, 0.95), rgba(14, 165, 233, 0.84));
+  background:
+    radial-gradient(circle at top, rgba(3, 168, 192, 0.08), transparent 48%),
+    rgba(255, 255, 255, 0.96);
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  text-align: center;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
+.budgeting-hero__ring-inner strong {
+  font-size: clamp(2rem, 4vw, 2.7rem);
+  line-height: 1;
+  letter-spacing: -0.06em;
+}
+
+.budgeting-hero__ring-inner span {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
 }
 
 .budgeting-hero__stats {
@@ -5322,6 +5363,10 @@ body.transactions-manual-open .shell-quick-add-button {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.budget-card__meta span:last-child {
+  text-align: right;
 }
 
 .budget-card__actions {

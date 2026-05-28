@@ -207,6 +207,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const openBudgetCount = data.overview.activeBudgetCount;
   const visibleBudgets = data.budgets;
   const suggestions = data.suggestions;
+  const primarySuggestion = suggestions[0] ?? null;
   const isScopeSelectionComplete =
     form.kind === "savings_target"
       ? true
@@ -400,6 +401,15 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
               Set budget
             </button>
           </div>
+          {primarySuggestion ? (
+            <button
+              className="budgeting-hero__quick-pick pill pill-subtle"
+              type="button"
+              onClick={() => openCreateEditorWithSuggestion(primarySuggestion)}
+            >
+              Try {primarySuggestion.title}
+            </button>
+          ) : null}
           <div className="budgeting-hero__note-row">
             <span className="pill pill-subtle">{openBudgetCount} active</span>
             <span className="pill pill-subtle">{activeAlerts.length} alerts</span>
@@ -417,10 +427,15 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
         <div className="budgeting-hero__summary glass">
           <div className="budgeting-hero__summary-head">
             <span className="eyebrow">At a glance</span>
-            <strong>{toPercentage(totalProgress)}</strong>
+            <span className="budgeting-hero__summary-subtext">
+              {openBudgetCount} active · {activeAlerts.length} alerts
+            </span>
           </div>
-          <div className="budgeting-hero__summary-bar" aria-hidden="true">
-            <span style={{ width: `${Math.min(totalProgress, 100)}%` }} />
+          <div className="budgeting-hero__ring" style={{ ["--budget-progress" as string]: `${Math.min(totalProgress, 100)}%` }}>
+            <div className="budgeting-hero__ring-inner">
+              <strong>{toPercentage(totalProgress)}</strong>
+              <span>usage</span>
+            </div>
           </div>
           <div className="budgeting-hero__stats">
             <div>
@@ -504,39 +519,35 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
             {visibleBudgets.map((budget) => {
               const isOver = budget.stage === "critical" || budget.stage === "exceeded";
               return (
-                <article key={budget.id} className="budget-card glass">
-                  <div className="report-card__head report-card__head--compact">
-                    <div>
-                      <h4>{budget.name}</h4>
-                      <p className="budget-card__subhead">
+              <article key={budget.id} className="budget-card glass">
+                <div className="report-card__head report-card__head--compact">
+                  <div>
+                    <h4>{budget.name}</h4>
+                    <p className="budget-card__subhead">
                         {budget.kindLabel} · {budget.scopeLabel} · {cadenceLabels[budget.cadence]}
                       </p>
-                    </div>
-                    <div className={`pill ${isOver ? "pill-danger" : "pill-subtle"}`}>{toPercentage(budget.progressPercent)}</div>
                   </div>
+                  <div className={`pill ${isOver ? "pill-danger" : "pill-subtle"}`}>{toPercentage(budget.progressPercent)}</div>
+                </div>
 
-                  <div className="budget-card__progress">
-                    <div className="budget-card__amounts">
+                <div className="budget-card__progress">
+                  <div className="budget-card__amounts">
                       <strong>{formatCurrency(budget.actualAmount, budget.currency)}</strong>
                       <span>of {formatCurrency(budget.targetAmount, budget.currency)}</span>
-                    </div>
-                    <span>{budget.periodLabel}</span>
                   </div>
-                  <div className="budget-card__bar" aria-hidden="true">
-                    <span className={`budget-card__bar-fill budget-card__bar-fill--${budget.stage}`} style={{ width: `${Math.min(budget.progressPercent, 100)}%` }} />
-                  </div>
-                  <div className="budget-card__meta">
-                    <span>{budget.statusLabel}</span>
-                    <span>
-                      {budget.stage === "exceeded"
-                        ? `${formatCurrency(Math.abs(budget.remainingAmount), budget.currency)} over`
-                        : `${formatCurrency(Math.max(budget.remainingAmount, 0), budget.currency)} left`}
-                    </span>
-                  </div>
-                  <div className="budget-card__actions">
-                    <button className="pill-link pill-link--inline" type="button" onClick={() => openEditEditor(budget.id)}>
-                      Edit
-                    </button>
+                  <span>{budget.periodLabel}</span>
+                </div>
+                <div className="budget-card__bar" aria-hidden="true">
+                  <span className={`budget-card__bar-fill budget-card__bar-fill--${budget.stage}`} style={{ width: `${Math.min(budget.progressPercent, 100)}%` }} />
+                </div>
+                <div className="budget-card__meta">
+                  <span>{budget.statusLabel}</span>
+                  <span>{budget.nextThreshold ? `Next alert at ${budget.nextThreshold}%` : "No next alert"}</span>
+                </div>
+                <div className="budget-card__actions">
+                  <button className="pill-link pill-link--inline" type="button" onClick={() => openEditEditor(budget.id)}>
+                    Edit
+                  </button>
                   </div>
                 </article>
               );
