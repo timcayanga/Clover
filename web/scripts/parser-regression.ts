@@ -1971,12 +1971,52 @@ const main = async () => {
     );
   }
 
+  const eastWestSampleChecks = [
+    join(root, "Samples/EastWest Bank/Philippines EastWest bank statement template in Excel and PDF format.pdf"),
+    join(root, "Samples/EastWest Bank/Philippines Eastwest bank st Word.pdf"),
+  ];
+
+  for (const eastWestPath of eastWestSampleChecks) {
+    try {
+      const bytes = await readFile(eastWestPath);
+      const text = await readUploadedFileText({
+        name: eastWestPath.split("/").at(-1),
+        type: "application/pdf",
+        arrayBuffer: async () => {
+          const copy = new Uint8Array(bytes.length);
+          copy.set(bytes);
+          return copy.buffer as ArrayBuffer;
+        },
+      });
+      const metadata = detectStatementMetadataFromText(text);
+      const rows = parser.parseImportText(text, eastWestPath.split("/").at(-1)!, "application/pdf", {
+        institution: metadata.institution ?? "EastWest Bank",
+        accountName: metadata.accountName,
+        accountNumber: metadata.accountNumber,
+      });
+      if (metadata.accountNumber !== "205050623445") {
+        throw new Error(`expected EastWest sample account number 205050623445, got ${metadata.accountNumber ?? "missing"}`);
+      }
+      if (rows.length !== 15) {
+        throw new Error(`expected 15 deterministic EastWest rows, got ${rows.length}`);
+      }
+      if (rows[0]?.date !== "2022-01-20" || rows[0]?.amount !== "5000.00" || rows[0]?.type !== "income") {
+        throw new Error(
+          `expected first EastWest row to be 2022-01-20 5000.00 income, got ${rows[0]?.date ?? "missing"} ${rows[0]?.amount ?? "missing"} ${rows[0]?.type ?? "missing"}`
+        );
+      }
+      if (rows.at(-1)?.date !== "2022-02-24" || rows.at(-1)?.amount !== "1000.00") {
+        throw new Error(
+          `expected final EastWest row to be 2022-02-24 1000.00, got ${rows.at(-1)?.date ?? "missing"} ${rows.at(-1)?.amount ?? "missing"}`
+        );
+      }
+      console.log(`[PASS] EastWest deterministic parser | ${eastWestPath.split("/").at(-1)} | ${rows.length} rows`);
+    } catch (error) {
+      failures.push(`[EastWest deterministic parser] ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   const noisyFallbackChecks = [
-    {
-      label: "EastWest fallback",
-      path: join(root, "Samples/EastWest Bank/Philippines EastWest bank statement template in Excel and PDF format.pdf"),
-      institution: "EastWest Bank",
-    },
     {
       label: "Landbank fallback",
       path: join(root, "Samples/Landbank/Philippines Land Bank of the Philippines word.pdf"),

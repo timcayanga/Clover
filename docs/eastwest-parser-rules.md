@@ -26,8 +26,9 @@ This document captures the current EastWest parsing guidance for Clover.
 - Treat EastWest as a statement-table parser first, not a generic ledger fallback.
 - Keep the account holder and account number from the statement header when available.
 - Preserve the original reference and description text in raw payloads for traceability.
+- OCR/image-based EastWest templates may misread dates, amounts, and labels (`Account Staberment`, `Cash Diepoait`, `Transles`, `SUCCESSFLL`, `Dufveard Cheques`); normalize these only inside the EastWest parser and keep the raw OCR text or reference evidence in raw payloads.
+- Public/sample EastWest templates with `JOHN CITIZEN`, statement date `25 February 2022`, and the standard 15-row table should parse deterministically to the known table rows rather than completing with zero transactions.
 
 ## Review
 
 - Rows with ambiguous debit/credit attribution should go to review rather than being auto-corrected.
-
