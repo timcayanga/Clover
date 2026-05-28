@@ -7293,8 +7293,8 @@ const guessGcashCategoryName = (description: string, type: TransactionType) => {
     return "Bills & Utilities";
   }
 
-  if (/^(?:received gcash from|received money)\b/i.test(description)) {
-    return "Income";
+  if (/^(?:gcash received|received gcash(?: from)?|received money)\b/i.test(description)) {
+    return "Transfers";
   }
 
   if (/^(?:sent gcash to|send money|cash out)\b/i.test(description) && type === "expense") {
@@ -8948,7 +8948,7 @@ const classifyGoTymeTransaction = (description: string, credit: number, debit: n
   }
 
   if (/^(?:gcash received|received gcash(?: from)?|received money)/.test(lower)) {
-    return { type: "income", categoryName: "Income" };
+    return { type: "income", categoryName: "Transfers" };
   }
 
   if (/transfer\s+to\s+.+go\s*tyme\s+bank\s+account/.test(lower)) {
@@ -11689,7 +11689,7 @@ const classifyGenericStatementTransaction = (description: string, credit: number
   }
 
   if (/^received gcash from\b|^received money\b|^cash in\b|^add money\b/.test(lower)) {
-    return { type: "income" as TransactionType, categoryName: "Income" };
+    return { type: "income" as TransactionType, categoryName: "Transfers" };
   }
 
   if (/^sent gcash to\b|^deposit to gsave\b|^withdraw from gsave\b/.test(lower)) {
@@ -12514,7 +12514,7 @@ const classifyGenericWalletHistoryTransaction = (description: string, previousBa
   }
 
   if (/^received gcash from\b|^received money\b/.test(lower)) {
-    return { type: "income" as TransactionType, categoryName: "Income" };
+    return { type: "income" as TransactionType, categoryName: "Transfers" };
   }
 
   if (/^cash in\b|^add money\b|^deposit to gsave\b|^withdraw from gsave\b/.test(lower)) {
