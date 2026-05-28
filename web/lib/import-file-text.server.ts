@@ -1317,6 +1317,17 @@ const createPdfJsLoadOptions = (data: Uint8Array, password?: string, baseUrl?: s
   };
 };
 
+const isPdfPasswordError = (error: unknown) => {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const name = "name" in error ? String((error as { name?: unknown }).name ?? "") : "";
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+
+  return /passwordexception/i.test(name) || /password/i.test(message) || /encrypted pdf/i.test(message);
+};
+
 export const getConfiguredPdfJsBaseUrl = () => {
   const configuredBaseUrl =
     process.env.APP_URL ??
@@ -1421,21 +1432,33 @@ type ImportFileLike = {
 
 const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
   const pdfjs = await loadPdfJsText();
-  const options = createPdfJsLoadOptions(data, password, baseUrl);
-  const loadingTask = pdfjs.getDocument(options as any);
-  const pdf = await loadingTask.promise;
-  const pages: string[] = [];
+  const readPdfText = async (pdfPassword?: string) => {
+    const options = createPdfJsLoadOptions(data, pdfPassword, baseUrl);
+    const loadingTask = pdfjs.getDocument(options as any);
+    const pdf = await loadingTask.promise;
+    const pages: string[] = [];
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const content = await page.getTextContent();
-    const simpleText = buildSimplePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
-    const layoutAwareText = buildLayoutAwarePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
-    const text = pickBetterPdfTextLayerCandidate(simpleText, layoutAwareText);
-    pages.push(text);
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const simpleText = buildSimplePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
+      const layoutAwareText = buildLayoutAwarePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
+      const text = pickBetterPdfTextLayerCandidate(simpleText, layoutAwareText);
+      pages.push(text);
+    }
+
+    return pages.join("\n");
+  };
+
+  try {
+    return await readPdfText(password);
+  } catch (error) {
+    if (password || !isPdfPasswordError(error)) {
+      throw error;
+    }
+
+    return readPdfText("");
   }
-
-  return pages.join("\n");
 };
 
 export const buildLayoutAwarePdfTextFromContentItems = (items: PdfTextContentItemLike[]) => {
@@ -1738,40 +1761,52 @@ const renderPdfPageImagesFromBytes = async (
 
   const pdfjsModule = await loadPdfJsRender();
   const pdfjs = (pdfjsModule as any).pdfjs ?? pdfjsModule;
-  const options = {
-    data: clonePdfBytes(data),
-    ...(password ? { password } : {}),
-    disableWorker: true,
-    useWorkerFetch: false,
-    isOffscreenCanvasSupported: false,
-    isImageDecoderSupported: false,
-  };
-  const loadingTask = pdfjs.getDocument(options as any);
-  const pdf = await loadingTask.promise;
-  const pageImages: Array<{ page: number; dataUrl: string }> = [];
-  const pageCount = Math.max(0, Math.min(pdf.numPages, maxPages));
+  const renderPdfPages = async (pdfPassword?: string) => {
+    const options = {
+      data: clonePdfBytes(data),
+      ...(pdfPassword ? { password: pdfPassword } : {}),
+      disableWorker: true,
+      useWorkerFetch: false,
+      isOffscreenCanvasSupported: false,
+      isImageDecoderSupported: false,
+    };
+    const loadingTask = pdfjs.getDocument(options as any);
+    const pdf = await loadingTask.promise;
+    const pageImages: Array<{ page: number; dataUrl: string }> = [];
+    const pageCount = Math.max(0, Math.min(pdf.numPages, maxPages));
 
-  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-    try {
-      const page = await pdf.getPage(pageNumber);
-      const viewport = page.getViewport({ scale });
-      const canvas = canvasModule.createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      await page.render({ canvasContext: context as any, viewport }).promise;
-      const buffer = enhanceForOcr ? await enhancePageImageBufferForOcr(canvas.toBuffer("image/jpeg", 65)) : canvas.toBuffer("image/jpeg", 65);
-      pageImages.push({
-        page: pageNumber,
-        dataUrl: `data:image/jpeg;base64,${buffer.toString("base64")}`,
-      });
-    } catch (error) {
-      console.warn("PDF page render failed; continuing with remaining pages", {
-        page: pageNumber,
-        error,
-      });
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+      try {
+        const page = await pdf.getPage(pageNumber);
+        const viewport = page.getViewport({ scale });
+        const canvas = canvasModule.createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        await page.render({ canvasContext: context as any, viewport }).promise;
+        const buffer = enhanceForOcr ? await enhancePageImageBufferForOcr(canvas.toBuffer("image/jpeg", 65)) : canvas.toBuffer("image/jpeg", 65);
+        pageImages.push({
+          page: pageNumber,
+          dataUrl: `data:image/jpeg;base64,${buffer.toString("base64")}`,
+        });
+      } catch (error) {
+        console.warn("PDF page render failed; continuing with remaining pages", {
+          page: pageNumber,
+          error,
+        });
+      }
     }
-  }
 
-  return pageImages;
+    return pageImages;
+  };
+
+  try {
+    return await renderPdfPages(password);
+  } catch (error) {
+    if (password || !isPdfPasswordError(error)) {
+      throw error;
+    }
+
+    return renderPdfPages("");
+  }
 };
 
 export const readUploadedFileText = async (file: File | ImportFileLike, password?: string) => {

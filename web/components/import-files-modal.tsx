@@ -11,7 +11,6 @@ import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { capturePostHogClientEvent, capturePostHogClientEventOnce, analyticsOnceKey } from "@/components/posthog-analytics";
 import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
-import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { extractTextFromFile } from "@/lib/import-file-text";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
@@ -426,8 +425,6 @@ const getKnownPreviewTransactions = (params: {
 
   return cached.transactions as NonNullable<UploadInsightsSummary["previewTransactions"]>;
 };
-
-const PDF_ENCRYPTION_MARKERS = ["/Encrypt"];
 
 const buildOptimisticUploadSummary = (
   fileName: string,
@@ -1148,18 +1145,6 @@ const loadOptimisticPreviewTransactions = async (
   }
 
   return [];
-};
-
-const isQuickPasswordProtectedPdf = async (file: File) => {
-  const lowerName = file.name.toLowerCase();
-  if (!lowerName.endsWith(".pdf") && file.type !== "application/pdf") {
-    return false;
-  }
-
-  const bytes = await file.slice(0, 65536).arrayBuffer();
-  const header = new TextDecoder("latin1").decode(bytes);
-  const normalized = header.replace(/\s+/g, " ");
-  return PDF_ENCRYPTION_MARKERS.some((marker) => normalized.includes(marker));
 };
 
 const guessStatementIdentity = (fileName: string) => {
@@ -3981,27 +3966,6 @@ export function ImportFilesModal({
     );
   };
 
-  const preflightPasswordProtectedFiles = async () => {
-    let foundPasswordProtected = false;
-
-    const pendingItems = items.filter((item) => item.status === "pending" && !item.password.trim());
-    for (const item of pendingItems) {
-      if (await isQuickPasswordProtectedPdf(item.file)) {
-        foundPasswordProtected = true;
-        updateItem(item.id, {
-          status: "needs_password",
-          error: `${item.file.name} is password-protected. Enter the password to continue.`,
-          password: "",
-          passwordVisible: false,
-          progress: 0,
-          progressLabel: "Password needed",
-        });
-      }
-    }
-
-    return foundPasswordProtected;
-  };
-
   const ensureTargetAccountId = async (
     statementAccountName?: string | null,
     institution?: string | null,
@@ -4706,29 +4670,6 @@ export function ImportFilesModal({
     if (!workspaceId) {
       closeImportAfterError(itemId, "validation", item?.file.name ?? "This file", "Select a workspace before importing files.");
       return { status: "error", importedRows: null, summary: null };
-    }
-
-    if (await isLikelyPasswordProtectedPdf(item.file) && !item.password.trim()) {
-      updateItem(itemId, {
-        status: "needs_password",
-        error: `${item.file.name} is password-protected. Enter the password to continue.`,
-        progress: 0,
-        progressLabel: "Password needed",
-      });
-      publishImportActivity({
-        workspaceId,
-        surface: importActivitySurfaceRef.current,
-        status: "active",
-        fileName: item.file.name,
-        fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
-        fileTotal: items.length,
-        completedFiles: completedFileCount,
-        progress: 0,
-        detail: "This file needs a password",
-        summary: null,
-        errorMessage: `${item.file.name} is password-protected. Enter the password to continue.`,
-      });
-      return { status: "needs_password", importedRows: null, summary: null };
     }
 
     try {
@@ -6222,16 +6163,6 @@ export function ImportFilesModal({
     let errorCount = 0;
     const alreadyConfirmedCount = items.filter((item) => item.confirmationState === "confirmed").length;
     const uploadInsightsSummaries: UploadInsightsSummary[] = [];
-
-    const pendingPasswordFiles = items.some((item) => item.status === "needs_password" && !item.password.trim());
-    if (!pendingPasswordFiles) {
-      const foundPasswordProtected = await preflightPasswordProtectedFiles();
-      if (foundPasswordProtected) {
-        setMessage("A few files need passwords before Clover can continue.");
-        setBusy(false);
-        return;
-      }
-    }
 
     const itemsToProcess = items.filter(
       (item) => item.confirmationState !== "confirmed" && item.status !== "needs_password"
