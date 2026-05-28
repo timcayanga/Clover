@@ -1,13 +1,8 @@
+import { CloverLoadingTitle } from "@/components/clover-loading-title";
+
 type CloverLoadingScreenProps = {
   label?: string;
 };
-
-const loadingTitles = [
-  "Bringing your money into focus",
-  "Finding clarity in your cash flow",
-  "Getting your finances ready",
-  "Building your next money move",
-] as const;
 
 export function CloverLoadingScreen({ label = "page" }: CloverLoadingScreenProps) {
   return (
@@ -18,11 +13,7 @@ export function CloverLoadingScreen({ label = "page" }: CloverLoadingScreenProps
         </div>
 
         <div className="clover-loading-screen__copy">
-          <h2>
-            {loadingTitles.map((title) => (
-              <span key={title}>{title}</span>
-            ))}
-          </h2>
+          <CloverLoadingTitle />
         </div>
       </div>
     </div>
