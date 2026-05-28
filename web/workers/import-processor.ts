@@ -5265,48 +5265,114 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     new Set([...parsedStatementFingerprints, ...(checkpointStatementFingerprint ? [checkpointStatementFingerprint] : [])])
   );
 
-  const account = await resolveConfirmationAccount({
-    importFile,
-    statementMetadata: {
-      accountName:
-        typeof statementMetadata?.accountName === "string" ? statementMetadata.accountName : null,
-      institution:
-        typeof statementMetadata?.institution === "string" ? statementMetadata.institution : null,
-      accountNumber:
-        typeof statementMetadata?.accountNumber === "string" ? statementMetadata.accountNumber : null,
-      accountType:
-        typeof statementMetadata?.accountType === "string" ? statementMetadata.accountType : null,
-      currency:
-        typeof statementMetadata?.currency === "string" ? statementMetadata.currency : null,
-      openingBalance:
-        typeof statementMetadata?.openingBalance === "number" ? statementMetadata.openingBalance : null,
-      endingBalance:
-        typeof statementMetadata?.endingBalance === "number" ? statementMetadata.endingBalance : null,
-    },
-    parsedRows,
-    accountId,
-    planLimits: planLimits ? { accountLimit: planLimits.accountLimit } : null,
-    planAccountCount: planUsage?.accountCount ?? null,
-  });
+  const baseStatementMetadata = {
+    accountName:
+      typeof statementMetadata?.accountName === "string" ? statementMetadata.accountName : null,
+    institution:
+      typeof statementMetadata?.institution === "string" ? statementMetadata.institution : null,
+    accountNumber:
+      typeof statementMetadata?.accountNumber === "string" ? statementMetadata.accountNumber : null,
+    accountType:
+      typeof statementMetadata?.accountType === "string" ? statementMetadata.accountType : null,
+    currency:
+      typeof statementMetadata?.currency === "string" ? statementMetadata.currency : null,
+    openingBalance:
+      typeof statementMetadata?.openingBalance === "number" ? statementMetadata.openingBalance : null,
+    endingBalance:
+      typeof statementMetadata?.endingBalance === "number" ? statementMetadata.endingBalance : null,
+  };
+  const readRowPayloadText = (row: Record<string, unknown>, key: string) => {
+    const rawPayload = row.rawPayload;
+    if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+      return null;
+    }
+
+    const value = (rawPayload as Record<string, unknown>)[key];
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  };
+  const readRowAccountNumber = (row: Record<string, unknown>) =>
+    (typeof row.accountNumber === "string" && row.accountNumber.trim() ? row.accountNumber.trim() : null) ??
+    readRowPayloadText(row, "accountNumber");
+  const readRowAccountName = (row: Record<string, unknown>) =>
+    (typeof row.accountName === "string" && row.accountName.trim() ? row.accountName.trim() : null) ??
+    readRowPayloadText(row, "accountName");
+  const readRowInstitution = (row: Record<string, unknown>) =>
+    (typeof row.institution === "string" && row.institution.trim() ? row.institution.trim() : null) ??
+    baseStatementMetadata.institution;
+  const accountGroupKeyForRow = (row: Record<string, unknown>) => {
+    const accountNumber = readRowAccountNumber(row);
+    if (accountNumber) {
+      return `number:${accountNumber}`;
+    }
+
+    const accountName = readRowAccountName(row);
+    const institution = readRowInstitution(row);
+    if (accountName) {
+      return `name:${institution ?? "unknown"}:${accountName}`;
+    }
+
+    return "__default__";
+  };
+  const parsedRowsByAccount = new Map<string, Array<Record<string, unknown>>>();
+  for (const row of parsedRows as Array<Record<string, unknown>>) {
+    const key = accountGroupKeyForRow(row);
+    const group = parsedRowsByAccount.get(key) ?? [];
+    group.push(row);
+    parsedRowsByAccount.set(key, group);
+  }
+  const parsedAccountGroups = Array.from(parsedRowsByAccount.entries()).map(([key, rows]) => ({ key, rows }));
+  const multiAccountImport =
+    parsedAccountGroups.filter((group) => group.key !== "__default__").length > 1 &&
+    parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))));
+  const accountByGroupKey = new Map<string, Awaited<ReturnType<typeof resolveConfirmationAccount>>>();
+  let resolvedAccountSequence = 0;
+  for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
+    const firstGroupRow = group.rows[0] ?? {};
+    const groupRows = group.rows as EnrichedParsedImportRow[];
+    const groupEndingBalance = getTrailingBalanceFromParsedRows(groupRows);
+    const groupAccount = await resolveConfirmationAccount({
+      importFile,
+      statementMetadata: {
+        ...baseStatementMetadata,
+        accountName: readRowAccountName(firstGroupRow) ?? baseStatementMetadata.accountName,
+        institution: readRowInstitution(firstGroupRow),
+        accountNumber: readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
+        endingBalance: groupEndingBalance ?? baseStatementMetadata.endingBalance,
+      },
+      parsedRows: groupRows,
+      accountId: multiAccountImport ? null : accountId,
+      planLimits: planLimits ? { accountLimit: planLimits.accountLimit } : null,
+      planAccountCount:
+        planUsage?.accountCount === null || planUsage?.accountCount === undefined
+          ? null
+          : planUsage.accountCount + resolvedAccountSequence,
+    });
+    if (!groupAccount) {
+      throw new Error("Account not found");
+    }
+
+    accountByGroupKey.set(group.key, groupAccount);
+    resolvedAccountSequence += 1;
+  }
+  const account = accountByGroupKey.get(parsedAccountGroups[0]?.key ?? "__default__") ?? accountByGroupKey.values().next().value ?? null;
   if (!account) {
     throw new Error("Account not found");
   }
-  const resolvedAccountId = account.id;
-  const resolvedAccountIdentityKey = normalizeImportedAccountKey(
-    account.name,
-    account.institution,
-    account.accountNumber,
-    account.type
+  const rowAccountFor = (row: Record<string, unknown>) =>
+    accountByGroupKey.get(accountGroupKeyForRow(row)) ?? accountByGroupKey.get("__default__") ?? account;
+  const resolvedAccounts = Array.from(new Map(Array.from(accountByGroupKey.values()).map((entry) => [entry?.id, entry])).values()).filter(
+    (entry): entry is NonNullable<typeof entry> => Boolean(entry)
   );
-  const looseResolvedAccountIdentityKey = normalizeImportedAccountKey(
-    account.name,
-    account.institution,
-    account.accountNumber,
-    null
+  const resolvedAccountId = account.id;
+  const resolvedAccountIdentityKeys = new Set(
+    resolvedAccounts.map((entry) => normalizeImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type))
+  );
+  const looseResolvedAccountIdentityKeys = new Set(
+    resolvedAccounts.map((entry) => normalizeImportedAccountKey(entry.name, entry.institution, entry.accountNumber, null))
   );
   const matchingAccountIdsForImport = Array.from(
     new Set([
-      resolvedAccountId,
+      ...resolvedAccounts.map((entry) => entry.id),
       ...(
         await prisma.account.findMany({
           where: { workspaceId: String(importFile.workspaceId) },
@@ -5321,10 +5387,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       )
         .filter(
           (candidate) =>
-            normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, candidate.type) ===
-              resolvedAccountIdentityKey ||
-            normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, null) ===
-              looseResolvedAccountIdentityKey
+            resolvedAccountIdentityKeys.has(normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, candidate.type)) ||
+            looseResolvedAccountIdentityKeys.has(normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, null))
         )
         .map((candidate) => candidate.id),
     ])
@@ -5395,7 +5459,9 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const confirmationLockKey = [
       "import-confirm",
       String(importFile.workspaceId),
-      looseResolvedAccountIdentityKey || resolvedAccountIdentityKey || resolvedAccountId,
+      Array.from(looseResolvedAccountIdentityKeys).filter(Boolean).join(",") ||
+        Array.from(resolvedAccountIdentityKeys).filter(Boolean).join(",") ||
+        resolvedAccountId,
       statementFingerprints.length > 0 ? statementFingerprints.join(",") : importFileId,
     ].join(":");
     const lockRows = await tx.$queryRaw<Array<{ locked: boolean }>>`
@@ -5644,26 +5710,48 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     : [],
   });
   reconciledAccountBalance = statementEndingBalance ?? latestExplicitStatementBalance ?? fallbackReconciledBalance;
-  const currentAccountBalance = snapshotBalanceToString(account.balance);
-  const shouldPreserveUploadedAccountBalance =
-    account.source === "upload" &&
-    currentAccountBalance !== null &&
-    parseAmountValue(currentAccountBalance) !== null &&
-    parseAmountValue(currentAccountBalance) !== 0 &&
-    reconciledAccountBalance !== null &&
-    parseAmountValue(reconciledAccountBalance) === 0 &&
-    statementEndingBalance === null &&
-    latestExplicitStatementBalance === null;
-  const balanceToPersist = shouldPreserveUploadedAccountBalance ? currentAccountBalance : reconciledAccountBalance;
-  reconciledAccountBalance = balanceToPersist;
+  if (multiAccountImport) {
+    for (const group of parsedAccountGroups) {
+      const groupAccount = accountByGroupKey.get(group.key);
+      if (!groupAccount) {
+        continue;
+      }
 
-  if (balanceToPersist !== null) {
-    await tx.account.update({
-      where: { id: resolvedAccountId },
-      data: {
-        balance: balanceToPersist,
-      },
-    });
+      const groupBalance = getTrailingBalanceFromParsedRows(group.rows as EnrichedParsedImportRow[]);
+      if (groupBalance === null) {
+        continue;
+      }
+
+      await tx.account.update({
+        where: { id: groupAccount.id },
+        data: { balance: groupBalance.toString() },
+      });
+      if (groupAccount.id === resolvedAccountId) {
+        reconciledAccountBalance = groupBalance.toString();
+      }
+    }
+  } else {
+    const currentAccountBalance = snapshotBalanceToString(account.balance);
+    const shouldPreserveUploadedAccountBalance =
+      account.source === "upload" &&
+      currentAccountBalance !== null &&
+      parseAmountValue(currentAccountBalance) !== null &&
+      parseAmountValue(currentAccountBalance) !== 0 &&
+      reconciledAccountBalance !== null &&
+      parseAmountValue(reconciledAccountBalance) === 0 &&
+      statementEndingBalance === null &&
+      latestExplicitStatementBalance === null;
+    const balanceToPersist = shouldPreserveUploadedAccountBalance ? currentAccountBalance : reconciledAccountBalance;
+    reconciledAccountBalance = balanceToPersist;
+
+    if (balanceToPersist !== null) {
+      await tx.account.update({
+        where: { id: resolvedAccountId },
+        data: {
+          balance: balanceToPersist,
+        },
+      });
+    }
   }
 
   const existingCategories = await tx.category.findMany({
@@ -5710,6 +5798,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   const currentDedupeCounts = new Map<string, number>();
 
   for (const [index, row] of parsedRows.entries()) {
+    const rowAccount = rowAccountFor(row as Record<string, unknown>);
+    const rowResolvedAccountId = rowAccount.id;
     const rowType =
       row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : undefined;
     const parsedCategoryName =
@@ -5745,7 +5835,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       },
       candidateType: categoryCoercedType,
       workspaceAccounts: workspaceAccountsForTransferMatching,
-      currentAccountId: resolvedAccountId,
+      currentAccountId: rowResolvedAccountId,
     });
     const categoryName = parsedCategoryName;
     const rowTransferConfidence =
@@ -5801,7 +5891,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     });
     const insertRow = buildTransactionInsertRecord({
       workspaceId: String(importFile.workspaceId),
-      accountId: resolvedAccountId,
+      accountId: rowResolvedAccountId,
       importFileId,
       categoryId,
       categoryName,
@@ -5834,8 +5924,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       currency:
         normalizeInstitutionCurrency(
           statementInstitution,
-          typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : account.currency ?? "PHP",
-          account.name
+          typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : rowAccount.currency ?? "PHP",
+          rowAccount.name
         ) ?? "PHP",
       type: canonicalType,
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
@@ -5870,7 +5960,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       await tx.transaction.update({
         where: { id: existingImportTransaction.id },
         data: {
-          accountId: resolvedAccountId,
+          accountId: rowResolvedAccountId,
           importFileId,
           date: insertRow.date as Date,
           amount: insertRow.amount as Prisma.Decimal | string | number,

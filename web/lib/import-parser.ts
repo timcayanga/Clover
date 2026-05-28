@@ -7923,55 +7923,6 @@ const parseCimbImportText = (text: string) => {
     return null;
   }
 
-  const scoreSectionDateAlignment = (section: {
-    metadata: {
-      startDate: string | null;
-      endDate: string | null;
-    };
-    rows: ParsedImportRow[];
-  }) => {
-    const startDate = section.metadata.startDate ? new Date(section.metadata.startDate) : null;
-    const endDate = section.metadata.endDate ? new Date(section.metadata.endDate) : null;
-    if (!startDate || !endDate || Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-      return { inRangeCount: 0, outOfRangeCount: 0 };
-    }
-
-    let inRangeCount = 0;
-    let outOfRangeCount = 0;
-    for (const row of section.rows) {
-      const rowDate = row.date ? new Date(`${row.date}T12:00:00.000Z`) : null;
-      if (!rowDate || Number.isNaN(rowDate.getTime())) {
-        outOfRangeCount += 1;
-        continue;
-      }
-
-      if (rowDate >= startDate && rowDate <= endDate) {
-        inRangeCount += 1;
-      } else {
-        outOfRangeCount += 1;
-      }
-    }
-
-    return { inRangeCount, outOfRangeCount };
-  };
-
-  const uniqueAccountNumbers = new Set(parsedSections.map((section) => section.metadata.accountNumber).filter(Boolean));
-
-  if (uniqueAccountNumbers.size > 1) {
-    const selected = [...parsedSections].sort((left, right) => {
-      const leftScore = scoreSectionDateAlignment(left);
-      const rightScore = scoreSectionDateAlignment(right);
-      if (rightScore.inRangeCount !== leftScore.inRangeCount) {
-        return rightScore.inRangeCount - leftScore.inRangeCount;
-      }
-      if (leftScore.outOfRangeCount !== rightScore.outOfRangeCount) {
-        return leftScore.outOfRangeCount - rightScore.outOfRangeCount;
-      }
-      return right.rows.length - left.rows.length;
-    })[0];
-    return selected.rows.length > 0 ? selected : null;
-  }
-
   const mergedRows = parsedSections.flatMap((section) => section.rows);
   const firstSection = parsedSections[0];
   const lastSection = parsedSections[parsedSections.length - 1] ?? firstSection;

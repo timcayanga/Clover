@@ -26,6 +26,7 @@ This document captures the CIMB / GSave parsing rules learned from the training 
 - Keep opening balances separate from activity rows.
 - CIMB rows often split across lines: keep the narrative description from the lines before the dated amount row, then attach the date row's deposit, withdrawal, and balance values.
 - Keep mixed-page statements split by account/customer when the PDF combines multiple profiles.
+- When one CIMB PDF contains multiple `GSave - Savings Account No.` sections, preserve all sections and let import confirmation create/link one Clover account per account number instead of choosing a single "best" section.
 
 ## Simplification Layer
 

@@ -218,11 +218,14 @@ const fixtures: Fixture[] = [
     label: "CIMB Mixed Pages",
     relativePath: "Samples/CIMB/840624470-CIMB-Statement-of-account-pdf.pdf",
     institution: "CIMB",
-    accountName: "Raihana Mentok Said",
-    accountNumber: "20867602571932",
+    accountName: "Daisy Mae Dalapo",
+    accountNumber: "20867602571971",
     accountType: "bank",
-    minRows: 7,
+    minRows: 14,
+    exactRows: 14,
     expectedTrailingBalance: 4294.66,
+    expectedStartDate: "2024-12-11",
+    expectedEndDate: "2024-12-29",
     minConfidence: 85,
   },
   {
@@ -982,6 +985,29 @@ const main = async () => {
   if (failures.length > 0) {
     throw new Error(`Parser regression checks failed:\n${failures.map((entry) => `- ${entry}`).join("\n")}`);
   }
+
+  const cimbMixedPath = join(root, "Samples/CIMB/840624470-CIMB-Statement-of-account-pdf.pdf");
+  const cimbMixedBytes = await readFile(cimbMixedPath);
+  const cimbMixedText = await readUploadedFileText({
+    name: basename(cimbMixedPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(cimbMixedBytes.length);
+      copy.set(cimbMixedBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const cimbMixedMetadata = detectStatementMetadataFromText(cimbMixedText);
+  const cimbMixedRows = parser.parseImportText(cimbMixedText, basename(cimbMixedPath), "application/pdf", {
+    institution: cimbMixedMetadata.institution,
+    accountName: cimbMixedMetadata.accountName,
+    accountNumber: cimbMixedMetadata.accountNumber,
+  });
+  const cimbMixedAccounts = new Set(cimbMixedRows.map((row) => `${row.accountName ?? ""}|${row.accountNumber ?? ""}`));
+  if (!cimbMixedAccounts.has("Daisy Mae Dalapo|20867602571971") || !cimbMixedAccounts.has("Raihana Mentok Said|20867602571932")) {
+    throw new Error("expected CIMB mixed-page statement to preserve both GSave account sections");
+  }
+  console.log("[PASS] CIMB mixed pages | preserves two account sections");
 
   const cimbDuplicatePaths = [
     join(root, "Samples/CIMB/927858715-CIMB-Statement-of-Account-20251004-155400-0000.pdf"),
