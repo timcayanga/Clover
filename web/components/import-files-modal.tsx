@@ -2424,6 +2424,13 @@ export function ImportFilesModal({
       throw new Error("Unable to determine the destination account for this document.");
     }
 
+    const resolvedSummaryAccountName = formatUploadAccountDisplayName(
+      summaryContext.accountName ?? summaryContext.fileName,
+      summaryContext.institution ?? null,
+      summaryContext.accountNumber ?? null,
+      summaryContext.accountType ?? null
+    );
+
     let finalizingProgress = 90;
     let lastKnownConfirmedRows = 0;
     let lastKnownAccountBalance: string | null = null;

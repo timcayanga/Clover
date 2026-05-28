@@ -3356,7 +3356,7 @@ const parseUcpbDateToken = (value?: string | null, yearHint?: number | null) => 
     const month = Number(compact.slice(0, 2));
     const day = Number(compact.slice(2, 4));
     const yearSeed = Number(compact.slice(4, 6));
-    const year = Number.isFinite(yearHint) ? yearHint : yearSeed >= 70 ? 1900 + yearSeed : 2000 + yearSeed;
+    const year = typeof yearHint === "number" && Number.isFinite(yearHint) ? yearHint : yearSeed >= 70 ? 1900 + yearSeed : 2000 + yearSeed;
     if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
       return new Date(Date.UTC(year, month - 1, day, 12));
     }
@@ -9243,10 +9243,10 @@ const parseGenericDigitalSavingsStatement = (
     .filter(
       (line): line is string =>
         Boolean(line) &&
-        isLikelyHeaderAccountName(line) &&
-        !/^BANK\s+STATEMENT$/i.test(line) &&
-        !/^CONTACT\s+US$/i.test(line) &&
-        !/\b(?:call|email|philippines|city|street|st\b|road|village|barangay|brgy)\b/i.test(line)
+        isLikelyHeaderAccountName(line ?? "") &&
+        !/^BANK\s+STATEMENT$/i.test(line ?? "") &&
+        !/^CONTACT\s+US$/i.test(line ?? "") &&
+        !/\b(?:call|email|philippines|city|street|st\b|road|village|barangay|brgy)\b/i.test(line ?? "")
     );
   const accountName =
     cleanAccountHolderDisplayName(context.accountName) ??
@@ -9580,7 +9580,7 @@ const parseChinaBankDateToken = (value: string | null | undefined, yearHint?: nu
     const month = Number(compact.slice(0, 2));
     const day = Number(compact.slice(2, 4));
     const yearSeed = Number(compact.slice(4, 6));
-    const year = Number.isFinite(yearHint) ? yearHint : yearSeed >= 70 ? 1900 + yearSeed : 2000 + yearSeed;
+    const year = typeof yearHint === "number" && Number.isFinite(yearHint) ? yearHint : yearSeed >= 70 ? 1900 + yearSeed : 2000 + yearSeed;
     if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
       return new Date(Date.UTC(year, month - 1, day, 12));
     }
@@ -10530,8 +10530,8 @@ const extractLatestRepeatedStatementSummary = (text: string) => {
 
   const parsed = matches
     .map((match) => {
-      const endDate = parseGenericStatementDateText(match.groups?.end ?? null);
-      const startDate = parseGenericStatementDateText(match.groups?.start ?? null, endDate?.getUTCFullYear() ?? null);
+      const endDate = parseGenericStatementDateText(match.groups?.end ?? "");
+      const startDate = parseGenericStatementDateText(match.groups?.start ?? "", endDate?.getUTCFullYear() ?? null);
       const openingBalance = parseMoney(match.groups?.opening ?? null);
       const endingBalance = parseMoney(match.groups?.ending ?? null);
       if (!startDate || !endDate || openingBalance === null || endingBalance === null) {
@@ -11715,7 +11715,7 @@ const postProcessGenericStatementRows = (rows: ParsedImportRow[]) => {
       continue;
     }
 
-    if (!/fund\s+transfer/i.test(current.description) || !/atm\s+withdrawal/i.test(next.description)) {
+    if (!/fund\s+transfer/i.test(current.description ?? "") || !/atm\s+withdrawal/i.test(next.description ?? "")) {
       continue;
     }
 
@@ -11731,8 +11731,7 @@ const postProcessGenericStatementRows = (rows: ParsedImportRow[]) => {
     const nextAmount = parseMoney(next.amount);
     const nextRawAmount = parseMoney(typeof nextRaw?.amountText === "string" ? nextRaw.amountText : null);
     const nextRawBalanceText = parseMoney(typeof nextRaw?.balanceText === "string" ? nextRaw.balanceText : null);
-    const nextDescriptionAmount =
-      parseMoney(next.description.match(/([0-9][0-9,]*\.\d{2})/)?.[1] ?? null);
+    const nextDescriptionAmount = parseMoney((next.description ?? "").match(/([0-9][0-9,]*\.\d{2})/)?.[1] ?? null);
     if (currentBalance === null || nextAmount === null) {
       continue;
     }
@@ -11756,7 +11755,7 @@ const postProcessGenericStatementRows = (rows: ParsedImportRow[]) => {
         approxMoney(currentBalance - candidate.balance, candidate.amount)
     );
     const preferredPairedCandidate =
-      /atm\s+withdrawal/i.test(next.description) && validPairedCandidates.length > 1
+      /atm\s+withdrawal/i.test(next.description ?? "") && validPairedCandidates.length > 1
         ? [...validPairedCandidates].sort((left, right) => (right.amount ?? 0) - (left.amount ?? 0))[0]
         : validPairedCandidates[0];
     if (preferredPairedCandidate) {
@@ -12996,8 +12995,8 @@ const reconstructGenericPairedTransferAtmRows = (
 };
 
 const repairGenericPairedTransferAtmRows = (rows: ParsedImportRow[]) => {
-  const atmRows = rows.filter((row) => /ATM Withdrawal/i.test(row.description));
-  const transferRows = rows.filter((row) => /Fund Transfer/i.test(row.description));
+  const atmRows = rows.filter((row) => /ATM Withdrawal/i.test(row.description ?? ""));
+  const transferRows = rows.filter((row) => /Fund Transfer/i.test(row.description ?? ""));
   const uniqueAtmDates = [...new Set(atmRows.map((row) => row.date).filter(Boolean))];
   if (atmRows.length !== 4 || uniqueAtmDates.length !== 4 || transferRows.length < 3 || transferRows.length > 4) {
     return rows;
@@ -13005,11 +13004,11 @@ const repairGenericPairedTransferAtmRows = (rows: ParsedImportRow[]) => {
 
   const repaired = rows.map((row) => {
     const next = { ...row, rawPayload: row.rawPayload ? { ...(row.rawPayload as Record<string, unknown>) } : row.rawPayload };
-    if (/Fund Transfer/i.test(next.description)) {
+    if (/Fund Transfer/i.test(next.description ?? "")) {
       next.type = "transfer";
       next.categoryName = "Transfers";
       next.confidence = Math.max(Number(next.confidence ?? 0), 94);
-    } else if (/ATM Withdrawal/i.test(next.description)) {
+    } else if (/ATM Withdrawal/i.test(next.description ?? "")) {
       next.type = "expense";
       next.categoryName = "Cash & ATM";
       next.confidence = Math.max(Number(next.confidence ?? 0), 94);
@@ -13019,7 +13018,7 @@ const repairGenericPairedTransferAtmRows = (rows: ParsedImportRow[]) => {
   const missingTransfers: ParsedImportRow[] = [];
 
   for (const row of repaired) {
-    if (!/ATM Withdrawal/i.test(row.description)) {
+    if (!/ATM Withdrawal/i.test(row.description ?? "")) {
       continue;
     }
     const payload = row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : null;
@@ -13027,6 +13026,9 @@ const repairGenericPairedTransferAtmRows = (rows: ParsedImportRow[]) => {
     const rawBalance = parseMoney(typeof payload?.balanceText === "string" ? payload.balanceText : null);
     const currentAmount = parseMoney(row.amount);
     if (rawAmount === null || rawBalance === null) {
+      continue;
+    }
+    if (!payload) {
       continue;
     }
     const inferredAmount = Math.abs(rawAmount - rawBalance);
@@ -13037,7 +13039,7 @@ const repairGenericPairedTransferAtmRows = (rows: ParsedImportRow[]) => {
       row.amount = inferredAmount.toFixed(2);
       payload.amountText = inferredAmount.toFixed(2);
     }
-    if (row.date && !repaired.some((candidate) => candidate !== row && /Fund Transfer/i.test(candidate.description) && candidate.date === row.date)) {
+    if (row.date && !repaired.some((candidate) => candidate !== row && /Fund Transfer/i.test(candidate.description ?? "") && candidate.date === row.date)) {
       missingTransfers.push({
         ...row,
         amount: inferredAmount.toFixed(2),
@@ -13064,8 +13066,8 @@ const repairGenericPairedTransferAtmRows = (rows: ParsedImportRow[]) => {
 
   const merged: ParsedImportRow[] = [];
   for (const row of repaired) {
-    const insertions = missingTransfers.filter((candidate) => candidate.date === row.date && /ATM Withdrawal/i.test(row.description));
-    if (insertions.length > 0 && /ATM Withdrawal/i.test(row.description)) {
+    const insertions = missingTransfers.filter((candidate) => candidate.date === row.date && /ATM Withdrawal/i.test(row.description ?? ""));
+    if (insertions.length > 0 && /ATM Withdrawal/i.test(row.description ?? "")) {
       merged.push(...insertions);
     }
     merged.push(row);
@@ -13262,7 +13264,7 @@ const applyGenericCorporateLedgerSubset = (
 
   const extractCode = (row: ParsedImportRow) =>
     normalizeWhitespace(
-      row.description.match(/\b(ICC|ENC|ILNSDM1|CD|CK1|DRT|DM1|PDCK3|INT|TAX|ONUS)\b/i)?.[1] ?? ""
+      (row.description ?? "").match(/\b(ICC|ENC|ILNSDM1|CD|CK1|DRT|DM1|PDCK3|INT|TAX|ONUS)\b/i)?.[1] ?? ""
     ).toUpperCase();
   const parseRowAmount = (row: ParsedImportRow) => parseMoney(row.amount);
   const strongCodes = new Set(["CD", "CK1", "PDCK3", "DRT", "DM1", "INT", "TAX"]);
@@ -13893,7 +13895,7 @@ export const parseGenericBankStatementText = (
       : effectiveRows;
   const candidateRows = summaryFilteredRows.length > 0 ? summaryFilteredRows : effectiveRows;
   const rowsWithLeadingCreditMemo =
-    leadingCreditMemoRow && !candidateRows.some((row) => row.date === leadingCreditMemoRow.date && /Credit Memo/i.test(row.description))
+    leadingCreditMemoRow && !candidateRows.some((row) => row.date === leadingCreditMemoRow.date && /Credit Memo/i.test(row.description ?? ""))
       ? [leadingCreditMemoRow, ...candidateRows]
       : candidateRows;
   const corporateSubsetRows = aubCorporateSubsetRows ?? applyGenericCorporateLedgerSubset(rowsWithLeadingCreditMemo, effectiveMetadata);
@@ -13937,7 +13939,7 @@ export const parseGenericBankStatementText = (
     (typeof firstRowBalance === "number" && typeof firstRowAmount === "number"
       ? firstRow.type === "income"
         ? firstRowBalance - firstRowAmount
-        : firstRow.type === "transfer" && /deposit|credit|cash in|received|branch over-the-counter/i.test(firstRow.description)
+        : firstRow.type === "transfer" && /deposit|credit|cash in|received|branch over-the-counter/i.test(firstRow.description ?? "")
           ? firstRowBalance - firstRowAmount
           : firstRowBalance + firstRowAmount
       : null);
