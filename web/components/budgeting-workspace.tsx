@@ -130,6 +130,29 @@ const defaultFormState = (currency = "PHP"): BudgetFormState => ({
 
 const toPercentage = (value: number) => `${Math.max(0, Math.round(value))}%`;
 
+const getBudgetDraftName = (form: BudgetFormState, accounts: BudgetOption[], categories: BudgetCategoryOption[]) => {
+  const customName = form.name.trim();
+  if (customName) {
+    return customName;
+  }
+
+  if (form.kind === "savings_target") {
+    return "Savings target";
+  }
+
+  if (form.scope === "account") {
+    const accountName = accounts.find((account) => account.id === form.accountId)?.name;
+    return `${accountName ?? "Account"} budget`;
+  }
+
+  if (form.scope === "category") {
+    const categoryName = categories.find((category) => category.id === form.categoryId)?.name;
+    return `${categoryName ?? "Category"} budget`;
+  }
+
+  return `${cadenceLabels[form.cadence]} spending limit`;
+};
+
 export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const [data, setData] = useState<BudgetingData>(initialData);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -288,8 +311,9 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   };
 
   const saveBudget = async () => {
+    const draftName = getBudgetDraftName(form, data.accounts, data.categories);
     const payload = {
-      name: form.name.trim(),
+      name: draftName,
       kind: form.kind,
       scope: form.kind === "savings_target" ? "global" : form.scope,
       cadence: form.cadence,
@@ -533,21 +557,22 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
       {isEditorOpen ? (
         <div className="budget-editor__backdrop" role="presentation" onClick={() => !saving && resetEditor()}>
           <div className="budget-editor glass" role="dialog" aria-modal="true" aria-label={editingBudget ? "Edit budget" : "Set budget"} onClick={(event) => event.stopPropagation()}>
-            <div className="budget-editor__head">
-              <div>
-                <p className="eyebrow">{editingBudget ? "Change budget" : "Set budget"}</p>
-                <h4>{editingBudget ? "Refine the limit" : "Create a guardrail"}</h4>
-              </div>
+        <div className="budget-editor__head">
+          <div>
+            <p className="eyebrow">{editingBudget ? "Change budget" : "Set budget"}</p>
+            <h4>{editingBudget ? "Refine the limit" : "Create a guardrail"}</h4>
+          </div>
               <button className="icon-button" type="button" onClick={resetEditor} aria-label="Close budget editor">
                 ×
               </button>
             </div>
 
             <div className="budget-editor__form">
-              <label className="budget-editor__field">
-                <span>Name</span>
-                <input value={form.name} onChange={(event) => updateFormField("name", event.target.value)} placeholder="Groceries cap" />
-              </label>
+              <div className="budget-editor__preview glass">
+                <span className="budget-editor__preview-label">Saved as</span>
+                <strong>{getBudgetDraftName(form, data.accounts, data.categories)}</strong>
+                <p>This name updates automatically unless you choose to edit it below.</p>
+              </div>
 
               <label className="budget-editor__field">
                 <span>Amount</span>
@@ -595,6 +620,11 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
 
               {showAdvancedOptions || form.kind === "savings_target" || form.scope !== "global" ? (
                 <div className="budget-editor__advanced">
+                  <label className="budget-editor__field budget-editor__field--full">
+                    <span>Name</span>
+                    <input value={form.name} onChange={(event) => updateFormField("name", event.target.value)} placeholder="Optional custom name" />
+                  </label>
+
                   <label className="budget-editor__field">
                     <span>Scope</span>
                     <select

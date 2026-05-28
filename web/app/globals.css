@@ -5396,6 +5396,37 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 12px;
 }
 
+.budget-editor__preview {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.1), transparent 28%),
+    rgba(255, 255, 255, 0.86);
+}
+
+.budget-editor__preview-label {
+  color: var(--muted-2);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.budget-editor__preview strong {
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.budget-editor__preview p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .budget-editor__inline-controls,
 .budget-editor__advanced {
   grid-column: 1 / -1;
