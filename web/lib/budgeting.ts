@@ -90,6 +90,8 @@ export type BudgetOverview = {
 const thresholdSteps = [50, 70, 90, 100];
 
 const toAmount = (value: unknown) => Number(value ?? 0);
+const budgetSuggestionLookbackDays = 45;
+const monthlyEquivalent = (amount: number) => (amount <= 0 ? 0 : amount * (30 / budgetSuggestionLookbackDays));
 
 export const formatBudgetCadenceLabel = (cadence: BudgetCadence) => {
   if (cadence === "daily") return "Daily";
@@ -289,6 +291,24 @@ export const buildBudgetSuggestions = (params: {
   const accountMap = new Map(params.accounts.map((account) => [account.id, account.name]));
 
   const suggestions: BudgetSuggestion[] = [];
+  if (totalExpenses > 0) {
+    const globalLimit = Math.max(1, Math.round(monthlyEquivalent(totalExpenses) * 1.05));
+    suggestions.push({
+      id: "global-spend-limit",
+      title: "Set a global spending limit",
+      detail: `Your recent spending works out to about ${formatCurrencyAmount(monthlyEquivalent(totalExpenses), currency)} a month.`,
+      amount: globalLimit,
+      currency,
+      kind: "spend_limit",
+      scope: "global",
+      cadence: "monthly",
+      accountId: null,
+      categoryId: null,
+      actionLabel: "Use as budget",
+      tone: "positive",
+    });
+  }
+
   const topCategory = groupExpenseTotals(params.transactions, "categoryId")[0];
   const topAccount = groupExpenseTotals(params.transactions, "accountId")[0];
 
@@ -297,11 +317,12 @@ export const buildBudgetSuggestions = (params: {
     const categoryName = categoryMap.get(categoryId);
 
     if (categoryName && amount > 0) {
+      const monthlyAmount = Math.max(1, Math.round(monthlyEquivalent(amount) * 1.05));
       suggestions.push({
         id: `category-${categoryId}`,
         title: `Cap ${categoryName}`,
-        detail: `Recent category spend reached ${formatCurrencyAmount(amount, currency)} across the last 45 days.`,
-        amount: Math.max(1, Math.round(amount)),
+        detail: `Recent category spend works out to about ${formatCurrencyAmount(monthlyEquivalent(amount), currency)} a month.`,
+        amount: monthlyAmount,
         currency,
         kind: "spend_limit",
         scope: "category",
@@ -319,11 +340,12 @@ export const buildBudgetSuggestions = (params: {
     const accountName = accountMap.get(accountId);
 
     if (accountName && amount > 0) {
+      const monthlyAmount = Math.max(1, Math.round(monthlyEquivalent(amount) * 1.05));
       suggestions.push({
         id: `account-${accountId}`,
         title: `Watch ${accountName}`,
-        detail: `This account carried ${formatCurrencyAmount(amount, currency)} of recent expense activity.`,
-        amount: Math.max(1, Math.round(amount)),
+        detail: `This account averages about ${formatCurrencyAmount(monthlyEquivalent(amount), currency)} a month in spending.`,
+        amount: monthlyAmount,
         currency,
         kind: "spend_limit",
         scope: "account",
@@ -337,11 +359,12 @@ export const buildBudgetSuggestions = (params: {
   }
 
   if (netSaved > 0) {
+    const monthlySavingsTarget = Math.max(1, Math.round(monthlyEquivalent(netSaved)));
     suggestions.push({
       id: "savings-target",
       title: "Set a savings target",
-      detail: `You held onto ${formatCurrencyAmount(netSaved, currency)} after spending over the last 45 days.`,
-      amount: Math.max(1, Math.round(netSaved)),
+      detail: `You held onto about ${formatCurrencyAmount(monthlyEquivalent(netSaved), currency)} a month after spending.`,
+      amount: monthlySavingsTarget,
       currency,
       kind: "savings_target",
       scope: "global",
@@ -353,5 +376,5 @@ export const buildBudgetSuggestions = (params: {
     });
   }
 
-  return suggestions.slice(0, 3);
+  return suggestions.slice(0, 4);
 };

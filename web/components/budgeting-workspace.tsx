@@ -690,7 +690,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                 className="button button-primary button-pill"
                 type="button"
                 onClick={saveBudget}
-                disabled={saving || !form.name.trim() || !form.targetAmount.trim() || !isScopeSelectionComplete}
+                disabled={saving || !form.targetAmount.trim() || !isScopeSelectionComplete}
               >
                 {saving ? "Saving..." : editingBudget ? "Save changes" : "Save budget"}
               </button>
