@@ -4797,6 +4797,19 @@ export function ImportFilesModal({
         file_size_bytes: item.file.size,
         import_mode: itemImportMode,
       });
+      const lowerFileName = item.file.name.toLowerCase();
+      let extractedTextForUpload = localPreparseTextByItemIdRef.current.get(itemId);
+      if (!extractedTextForUpload && itemImportMode === "statement" && (lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv"))) {
+        updateItem(itemId, {
+          progress: IMPORT_PROGRESS.preparing,
+          progressLabel: "Reading the file",
+          status: "importing",
+        });
+        extractedTextForUpload = await extractTextFromFile(item.file, item.password.trim() || undefined);
+        if (extractedTextForUpload.trim()) {
+          localPreparseTextByItemIdRef.current.set(itemId, extractedTextForUpload);
+        }
+      }
       const processResponse = await postFileWithProgress(
         `/api/imports/${importFileId}/process`,
         item.file,
@@ -4806,7 +4819,7 @@ export function ImportFilesModal({
           fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
           password: item.password.trim() || undefined,
           importMode: itemImportMode,
-          extractedText: localPreparseTextByItemIdRef.current.get(itemId),
+          extractedText: extractedTextForUpload,
         },
         (progress) => {
           publishImportActivity({
