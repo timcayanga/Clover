@@ -2035,6 +2035,15 @@ const groupParsedRowsByAccount = (rows: Array<Record<string, unknown>>, fallback
 const hasMultipleParsedAccountNumbers = (rows: Array<Record<string, unknown>>) =>
   new Set(rows.map(readParsedRowAccountNumber).filter((value): value is string => Boolean(value))).size > 1;
 
+const extractCimbGSaveAccountNumbersFromText = (text: string | null | undefined) =>
+  Array.from(
+    new Set(
+      Array.from(String(text ?? "").matchAll(/GSave\s*-\s*Savings\s+Account\s+No\.\s*([0-9\s-]+)/gi))
+        .map((match) => match[1]?.replace(/\D/g, "").slice(0, 16) ?? "")
+        .filter(Boolean)
+    )
+  );
+
 const collapseDuplicateUploadedAccountsForAccount = async <
   T extends {
     id: string;
@@ -2196,6 +2205,58 @@ const ensureParsedAccountGroupsMaterialized = async (params: {
     }
 
     resolvedAccounts.push(account);
+  }
+
+  const resolvedAccountIds = new Set(resolvedAccounts.map((account) => account?.id).filter((id): id is string => Boolean(id)));
+  const institutionNames = new Set(
+    resolvedAccounts.map((account) => account?.institution).filter((institution): institution is string => Boolean(institution?.trim()))
+  );
+  for (const institution of institutionNames) {
+    const placeholderAccounts = await prisma.account.findMany({
+      where: {
+        workspaceId: String(params.importFile.workspaceId),
+        source: "upload",
+        institution,
+        accountNumber: null,
+        id: { notIn: Array.from(resolvedAccountIds) },
+      },
+      select: {
+        id: true,
+        name: true,
+        _count: {
+          select: {
+            transactions: {
+              where: {
+                deletedAt: null,
+                reviewStatus: { in: ["edited", "rejected"] },
+              },
+            },
+          },
+        },
+      },
+    }).catch(() => []);
+
+    const placeholderIds = placeholderAccounts
+      .filter((account) => account._count.transactions === 0)
+      .filter((account) => normalizeImportedAccountKey(account.name, institution, null, null) === normalizeImportedAccountKey(institution, institution, null, null))
+      .map((account) => account.id);
+
+    if (placeholderIds.length > 0) {
+      await prisma.account.deleteMany({
+        where: {
+          id: { in: placeholderIds },
+          source: "upload",
+          accountNumber: null,
+        },
+      }).catch((error) => {
+        console.warn("[import-account-match] unable to delete generic imported placeholder accounts", {
+          importFileId: params.importFile.id,
+          institution,
+          placeholderIds,
+          error,
+        });
+      });
+    }
   }
 
   return resolvedAccounts;
@@ -3604,10 +3665,17 @@ export const processImportFileText = async (
     }
   }
 
+  const cachedParsedRows = Array.isArray(textCacheInfo?.cacheRecord?.parsedRows)
+    ? ((textCacheInfo?.cacheRecord?.parsedRows ?? []) as Array<Record<string, unknown>>)
+    : [];
+  const textHasMultipleCimbAccountSections = extractCimbGSaveAccountNumbersFromText(text).length > 1;
+  const cachedParsePreservesMultiAccountIdentity =
+    !textHasMultipleCimbAccountSections || hasMultipleParsedAccountNumbers(cachedParsedRows);
   const canReuseCachedStatementParse =
     importMode === "statement" &&
     Boolean(textCacheInfo?.cacheHit) &&
-    Array.isArray(textCacheInfo?.cacheRecord?.parsedRows) &&
+    cachedParsedRows.length > 0 &&
+    cachedParsePreservesMultiAccountIdentity &&
     Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) &&
     Boolean(textCacheInfo?.cacheRecord?.metadata);
 
