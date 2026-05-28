@@ -711,6 +711,20 @@ const main = async () => {
     metadata?: { institution?: string | null; accountType?: ImportedAccountType | null } | null,
     fileType?: string | null
   ) => string | null;
+  const buildStatementFingerprint = dataEngine.buildStatementFingerprint as (
+    text: string,
+    metadata: {
+      institution: string | null;
+      accountNumber: string | null;
+      accountName: string | null;
+      accountType?: ImportedAccountType | null;
+      startDate: string | null;
+      endDate: string | null;
+    },
+    fileName?: string | null,
+    fileType?: string | null,
+    documentFamily?: string | null
+  ) => string;
   const mergeCompatibleStatementTextCandidates = importFileTextModule.mergeCompatibleStatementTextCandidates as (
     left: { text: string; label: string; score: number },
     right: { text: string; label: string; score: number }
@@ -968,6 +982,44 @@ const main = async () => {
   if (failures.length > 0) {
     throw new Error(`Parser regression checks failed:\n${failures.map((entry) => `- ${entry}`).join("\n")}`);
   }
+
+  const cimbDuplicatePaths = [
+    join(root, "Samples/CIMB/927858715-CIMB-Statement-of-Account-20251004-155400-0000.pdf"),
+    join(root, "Samples/CIMB/947472452-CIMB-Statement-of-Account-20251112-141921-0000.pdf"),
+  ];
+  const cimbDuplicatePayloads = await Promise.all(
+    cimbDuplicatePaths.map(async (filePath) => {
+      const bytes = await readFile(filePath);
+      const fileName = basename(filePath);
+      const text = await readUploadedFileText({
+        name: fileName,
+        type: "application/pdf",
+        arrayBuffer: async () => {
+          const copy = new Uint8Array(bytes.length);
+          copy.set(bytes);
+          return copy.buffer as ArrayBuffer;
+        },
+      });
+      const metadata = detectStatementMetadataFromText(text);
+      const rows = parser.parseImportText(text, fileName, "application/pdf", {
+        institution: metadata.institution,
+        accountName: metadata.accountName,
+        accountNumber: metadata.accountNumber,
+      });
+      return {
+        fingerprint: buildStatementFingerprint(text, metadata, fileName, "application/pdf", "statement"),
+        rows,
+      };
+    })
+  );
+  if (cimbDuplicatePayloads[0].fingerprint !== cimbDuplicatePayloads[1].fingerprint) {
+    throw new Error("expected duplicate CIMB files with different names to share the same statement fingerprint");
+  }
+  const cimbVisibleRows = cimbDuplicatePayloads[0].rows.filter((row) => row.rawPayload?.kind !== "opening_balance");
+  if (cimbVisibleRows.some((row) => row.type === "transfer")) {
+    throw new Error("expected CIMB visible transfer-like rows to classify as income or expense unless they match another Clover account");
+  }
+  console.log("[PASS] CIMB duplicates | same statement fingerprints and external transfers are income/expense");
 
   const bdoPath = join(root, "Samples/BDO/648293940-BDO.pdf");
   const bdoBytes = await readFile(bdoPath);

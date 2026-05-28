@@ -2321,7 +2321,7 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("importFileId")) record.importFileId = params.importFileId;
     if (columns.has("workspaceId")) record.workspaceId = params.workspaceId;
     if (columns.has("institution")) record.institution = params.metadata.institution;
-    if (columns.has("accountNumber")) record.accountNumber = params.metadata.accountNumber;
+    if (columns.has("accountNumber")) record.accountNumber = row.accountNumber ?? params.metadata.accountNumber;
     if (columns.has("accountName")) record.accountName = row.accountName ?? null;
     if (columns.has("date")) record.date = parseDateValue(row.date ?? null);
     if (columns.has("amount")) record.amount = amount;
@@ -2679,16 +2679,18 @@ export const buildStatementFingerprint = (
     .filter(Boolean)
     .slice(0, 32);
 
+  const normalizedTextFingerprint = normalizedLines.join("\n");
+  const fallbackFileIdentity = normalizedTextFingerprint ? "" : (fileName ?? "").toLowerCase();
   const fingerprintSource = [
     metadata.institution ?? "",
     metadata.accountNumber ?? "",
     metadata.accountType ?? "",
     metadata.startDate ?? "",
     metadata.endDate ?? "",
-    (fileName ?? "").toLowerCase(),
+    fallbackFileIdentity,
     (fileType ?? "").toLowerCase(),
     (documentFamily ?? "").toLowerCase(),
-    normalizedLines.join("\n"),
+    normalizedTextFingerprint,
   ].join("|");
 
   return `stmt_${fnv1a(fingerprintSource)}`;

@@ -27,6 +27,7 @@ export type ParsedImportRow = {
   description?: string;
   categoryName?: string;
   accountName?: string;
+  accountNumber?: string;
   institution?: string | null;
   type?: TransactionType;
   rawPayload?: Record<string, unknown>;
@@ -7515,14 +7516,14 @@ const parseGcashImportText = (text: string) => {
   };
 };
 
-const cimbDatePattern = `(?:${monthNamePattern}\\s+\\d{1,2},\\s+\\d{4}|\\d{1,2}\\s+${monthNamePattern}\\s+\\d{4}|\\d{4}-\\d{2}-\\d{2})`;
+const cimbDatePattern = `(?:${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}|\\d{1,2}\\s+${monthNamePattern}\\s+\\d{4}|\\d{4}-\\d{2}-\\d{2})`;
 
 const parseCimbDate = (value?: string | null) => {
   if (!value) {
     return null;
   }
 
-  const normalized = normalizeWhitespace(value);
+  const normalized = normalizeWhitespace(value).replace(/\b([A-Z]{3,9}\s+\d{1,2}),\s*(\d{4})\b/i, "$1, $2");
   const monthFirstMatch = normalized.match(new RegExp(`^(${monthNamePattern})\\s+(\\d{1,2}),\\s*(\\d{4})$`, "i"));
   const dayFirstMatch = normalized.match(new RegExp(`^(\\d{1,2})\\s+(${monthNamePattern})\\s+(\\d{4})$`, "i"));
 
@@ -7557,6 +7558,15 @@ const isCimbBoilerplateLine = (line: string) =>
   /^TOTAL\s+DEPOSIT/i.test(line) ||
   /^TOTAL\s+WITHDRAWAL/i.test(line) ||
   /^STATEMENT\s+IS\s+GENERATED\s+ON/i.test(line) ||
+  /\bCIMB\s+Bank\s+Philippines\b/i.test(line) ||
+  /\bcimbbankph\b/i.test(line) ||
+  /\bORE\s+Central\b/i.test(line) ||
+  /\bBonifacio\s+Global\s+City\b/i.test(line) ||
+  /\bwww\.cimbbank\.com\.ph\b/i.test(line) ||
+  /\bDeposits\s+are\s+insured\s+by\s+PDIC\b/i.test(line) ||
+  /\bBangko\s+Sentral\s+ng\s+Pilipinas\b/i.test(line) ||
+  /\bFinancial\s+Consumer\s+Protection\b/i.test(line) ||
+  /\bconsumeraffairs@bsp\.gov\.ph\b/i.test(line) ||
   /^DEPOSIT$/i.test(line) ||
   /^WITHDRAWAL$/i.test(line) ||
   /^BALANCE$/i.test(line) ||
@@ -7565,7 +7575,7 @@ const isCimbBoilerplateLine = (line: string) =>
 
 const splitCimbStatementSections = (lines: string[]) => {
   const sectionStarts = lines
-    .map((line, index) => (/^FOR\s+.+\s+TO\s+.+$/i.test(line) ? index : -1))
+    .map((line, index) => (/\bFOR\s+.+\s+TO\s+.+$/i.test(line) ? index : -1))
     .filter((index) => index >= 0);
 
   if (sectionStarts.length === 0) {
@@ -7581,9 +7591,9 @@ const guessCimbCategoryName = (description: string, type: TransactionType) => {
   if (/credit interest/.test(lower)) return "Income";
   if (/tax rate|withheld tax|tax withheld/.test(lower)) return "Financial";
   if (/back office cash in|cash in adjustment/.test(lower)) return "Financial";
-  if (/instapay inward transfer|inward transfer/.test(lower)) return "Transfers";
-  if (/instapay transfer to|transfer to|transfer from/.test(lower)) return "Transfers";
-  if (/cash in|cash out/.test(lower)) return "Transfers";
+  if (/instapay inward transfer|inward transfer/.test(lower)) return type === "income" ? "Income" : "Other";
+  if (/instapay transfer to|transfer to|transfer from/.test(lower)) return type === "income" ? "Income" : "Other";
+  if (/cash in|cash out/.test(lower)) return type === "income" ? "Income" : "Other";
   if (/interest/.test(lower)) return "Income";
   return guessCategoryName(description, type);
 };
@@ -7592,6 +7602,7 @@ const parseCimbTransactionSegment = (
   segmentLines: string[],
   state: {
     accountName: string;
+    accountNumber: string | null;
     institution: string | null;
     statementStartDate: string | null;
     statementEndDate: string | null;
@@ -7657,12 +7668,14 @@ const parseCimbTransactionSegment = (
         description: `Opening balance for ${state.accountName}`,
         categoryName: "Opening Balance",
         accountName: state.accountName,
+        accountNumber: state.accountNumber ?? undefined,
         institution: state.institution ?? undefined,
         type: "transfer",
         rawPayload: {
           bank: "CIMB",
           kind: "opening_balance",
           accountName: state.accountName,
+          accountNumber: state.accountNumber,
           statementStartDate: state.statementStartDate,
           statementEndDate: state.statementEndDate,
           openingBalance: activeRow.balance.toFixed(2),
@@ -7677,16 +7690,11 @@ const parseCimbTransactionSegment = (
     }
 
     const descriptionLower = description.toLowerCase();
-    const transferLike =
-      /transfer|instapay|inward transfer|outward transfer|cash in|cash out|send money|receive money/.test(descriptionLower);
-
     let type: TransactionType = activeRow.amountDelta >= 0 ? "income" : "expense";
     if (/credit interest/.test(descriptionLower)) {
       type = "income";
     } else if (/tax rate|withheld tax|tax withheld/.test(descriptionLower)) {
       type = "expense";
-    } else if (transferLike) {
-      type = "transfer";
     }
 
     const ambiguousTransfer = /transfer to/.test(descriptionLower) && activeRow.deposit > 0 && activeRow.withdrawal === 0;
@@ -7700,11 +7708,13 @@ const parseCimbTransactionSegment = (
       description: description || activeRow.rawLine,
       categoryName: guessCimbCategoryName(description || activeRow.rawLine, type),
       accountName: state.accountName,
+      accountNumber: state.accountNumber ?? undefined,
       institution: state.institution ?? undefined,
       type,
       rawPayload: {
         bank: "CIMB",
         accountName: state.accountName,
+        accountNumber: state.accountNumber,
         statementStartDate: state.statementStartDate,
         statementEndDate: state.statementEndDate,
         amountDelta: activeRow.amountDelta.toFixed(2),
@@ -7840,26 +7850,30 @@ const parseCimbImportText = (text: string) => {
   const parsedSections = sections
     .map((sectionLines) => {
       const sectionText = sectionLines.join(" ");
+      const accountNumber =
+        sectionText.match(/GSave\s*-\s*Savings\s+Account\s+No\.\s*([0-9\s-]+)/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+        sectionText.match(/Savings\s+Account\s+No\.\s*([0-9\s-]+)/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+        sectionText.match(/Account\s+No\.\s*([0-9\s-]+)/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+        null;
+      const holderLine =
+        sectionLines.find((line) => /Reference\s+No\.?/i.test(line) && /[A-Za-z]/.test(line.replace(/Reference\s+No\.?.*$/i, ""))) ??
+        null;
       const holderName =
+        (holderLine ? normalizeWhitespace(holderLine.replace(/Reference\s+No\.?.*$/i, "").trim()) : null) ??
         sectionLines
-          .slice(0, 6)
+          .slice(0, 8)
           .map((line) => normalizeWhitespace(line.replace(/Reference\s+No\.?.*$/i, "").trim()))
           .find(
             (line) =>
               line &&
               !isCimbBoilerplateLine(line) &&
               !/^\d/.test(line) &&
-              !/^(?:DEPOSIT|WITHDRAWAL|BALANCE|REF)$/i.test(line) &&
+              !/\b(?:STATEMENT\s+OF\s+ACCOUNT|SUMMARY|CIMB|BANK|FOR\s+.+\s+TO\s+.+|DEPOSIT|WITHDRAWAL|BALANCE|REF)\b/i.test(line) &&
               /[A-Za-z]/.test(line)
           ) ?? null;
-      const accountNumber =
-        sectionText.match(/GSave\s*-\s*Savings\s+Account\s+No\.\s*([0-9\s-]+)/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
-        sectionText.match(/Savings\s+Account\s+No\.\s*([0-9\s-]+)/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
-        sectionText.match(/Account\s+No\.\s*([0-9\s-]+)/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
-        null;
       const accountName = holderName ?? (accountNumber ? `CIMB ${accountNumber.slice(-4)}` : "CIMB");
-      const periodLine = sectionLines.find((line) => /^For\s+.+\s+to\s+.+$/i.test(line)) ?? null;
-      const statementPeriodMatch = periodLine?.match(/^For\s+(.+?)\s+to\s+(.+)$/i);
+      const periodLine = sectionLines.find((line) => /\bFor\s+.+\s+to\s+.+$/i.test(line)) ?? null;
+      const statementPeriodMatch = periodLine?.match(/\bFor\s+(.+?)\s+to\s+(.+)$/i);
       const startDate = parseCimbDate(statementPeriodMatch?.[1] ?? null);
       const endDate = parseCimbDate(statementPeriodMatch?.[2] ?? null);
       const openingBalance =
@@ -7878,6 +7892,7 @@ const parseCimbImportText = (text: string) => {
 
       const parsedRows = parseCimbTransactionSegment(ledgerLines, {
         accountName,
+        accountNumber,
         institution: "CIMB",
         statementStartDate: startDate ? startDate.toISOString() : null,
         statementEndDate: endDate ? endDate.toISOString() : null,
