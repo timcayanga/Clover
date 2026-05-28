@@ -137,6 +137,8 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const [editorPreset, setEditorPreset] = useState<BudgetFormState | null>(null);
   const [form, setForm] = useState<BudgetFormState>(() => defaultFormState(initialData.budgets[0]?.currency ?? "PHP"));
   const [saving, setSaving] = useState(false);
+  const [savingSuggestionId, setSavingSuggestionId] = useState<string | null>(null);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const editingBudget = useMemo(
@@ -194,6 +196,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const resetEditor = () => {
     setEditingBudgetId(null);
     setEditorPreset(null);
+    setShowAdvancedOptions(false);
     setError(null);
     setIsEditorOpen(false);
   };
@@ -201,6 +204,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const openCreateEditor = () => {
     setEditingBudgetId(null);
     setEditorPreset(null);
+    setShowAdvancedOptions(false);
     setError(null);
     setIsEditorOpen(true);
   };
@@ -208,6 +212,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const openCreateEditorWithSuggestion = (suggestion: BudgetSuggestion) => {
     setEditingBudgetId(null);
     setError(null);
+    setShowAdvancedOptions(false);
     setEditorPreset({
       name: suggestion.title,
       kind: suggestion.kind,
@@ -224,6 +229,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const openEditEditor = (budgetId: string) => {
     setEditingBudgetId(budgetId);
     setEditorPreset(null);
+    setShowAdvancedOptions(true);
     setError(null);
     setIsEditorOpen(true);
   };
@@ -244,7 +250,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
     });
   };
 
-  const saveBudget = async () => {
+  const runBudgetRequest = async (payload: Record<string, unknown>, mode: "create" | "update", budgetId?: string) => {
     if (saving) {
       return;
     }
@@ -252,20 +258,9 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
     setSaving(true);
     setError(null);
 
-    const payload = {
-      name: form.name.trim(),
-      kind: form.kind,
-      scope: form.kind === "savings_target" ? "global" : form.scope,
-      cadence: form.cadence,
-      targetAmount: Number(form.targetAmount),
-      currency: form.currency.trim() || "PHP",
-      accountId: form.scope === "account" ? form.accountId || null : null,
-      categoryId: form.scope === "category" ? form.categoryId || null : null,
-    };
-
     try {
-      const response = await fetch(editingBudgetId ? `/api/budgets/${editingBudgetId}` : "/api/budgets", {
-        method: editingBudgetId ? "PATCH" : "POST",
+      const response = await fetch(mode === "update" ? `/api/budgets/${budgetId}` : "/api/budgets", {
+        method: mode === "update" ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -289,6 +284,48 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save budget");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveBudget = async () => {
+    const payload = {
+      name: form.name.trim(),
+      kind: form.kind,
+      scope: form.kind === "savings_target" ? "global" : form.scope,
+      cadence: form.cadence,
+      targetAmount: Number(form.targetAmount),
+      currency: form.currency.trim() || "PHP",
+      accountId: form.scope === "account" ? form.accountId || null : null,
+      categoryId: form.scope === "category" ? form.categoryId || null : null,
+    };
+
+    await runBudgetRequest(payload, editingBudgetId ? "update" : "create", editingBudgetId ?? undefined);
+  };
+
+  const saveSuggestionBudget = async (suggestion: BudgetSuggestion) => {
+    if (saving || savingSuggestionId) {
+      return;
+    }
+
+    setSavingSuggestionId(suggestion.id);
+    setError(null);
+
+    try {
+      await runBudgetRequest(
+        {
+          name: suggestion.title,
+          kind: suggestion.kind,
+          scope: suggestion.scope,
+          cadence: suggestion.cadence,
+          targetAmount: suggestion.amount,
+          currency: suggestion.currency,
+          accountId: suggestion.accountId,
+          categoryId: suggestion.categoryId,
+        },
+        "create"
+      );
+    } finally {
+      setSavingSuggestionId(null);
     }
   };
 
@@ -392,12 +429,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
           </div>
           <div className="budgeting-suggestion-grid">
             {suggestions.map((suggestion) => (
-              <button
-                key={suggestion.id}
-                className={`budget-suggestion budget-suggestion--${suggestion.tone}`}
-                type="button"
-                onClick={() => openCreateEditorWithSuggestion(suggestion)}
-              >
+              <article key={suggestion.id} className={`budget-suggestion budget-suggestion--${suggestion.tone}`}>
                 <div className="budget-suggestion__head">
                   <span className="pill pill-subtle">{kindLabels[suggestion.kind]}</span>
                   <span className="pill pill-subtle">{scopeLabels[suggestion.scope]}</span>
@@ -408,7 +440,25 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                   <span>{formatCurrency(suggestion.amount, suggestion.currency)}</span>
                   <span>{suggestion.actionLabel}</span>
                 </div>
-              </button>
+                <div className="budget-suggestion__actions">
+                  <button
+                    className="button button-primary button-small button-pill"
+                    type="button"
+                    onClick={() => void saveSuggestionBudget(suggestion)}
+                    disabled={saving || savingSuggestionId === suggestion.id}
+                  >
+                    {savingSuggestionId === suggestion.id ? "Saving..." : "Use suggestion"}
+                  </button>
+                  <button
+                    className="button button-secondary button-small button-pill"
+                    type="button"
+                    onClick={() => openCreateEditorWithSuggestion(suggestion)}
+                    disabled={saving}
+                  >
+                    Customize
+                  </button>
+                </div>
+              </article>
             ))}
           </div>
         </section>
@@ -500,37 +550,6 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
               </label>
 
               <label className="budget-editor__field">
-                <span>Type</span>
-                <select value={form.kind} onChange={(event) => updateFormField("kind", event.target.value as BudgetKind)}>
-                  <option value="spend_limit">Spend limit</option>
-                  <option value="savings_target">Savings target</option>
-                </select>
-              </label>
-
-              <label className="budget-editor__field">
-                <span>Cadence</span>
-                <select value={form.cadence} onChange={(event) => updateFormField("cadence", event.target.value as BudgetCadence)}>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </label>
-
-              <label className="budget-editor__field">
-                <span>Scope</span>
-                <select
-                  value={form.scope}
-                  onChange={(event) => updateFormField("scope", event.target.value as BudgetScope)}
-                  disabled={form.kind === "savings_target"}
-                >
-                  <option value="global">Global</option>
-                  <option value="account">Per account</option>
-                  <option value="category">Category</option>
-                </select>
-                {form.kind === "savings_target" ? <small>Savings targets are global by design.</small> : null}
-              </label>
-
-              <label className="budget-editor__field">
                 <span>Amount</span>
                 <input
                   inputMode="decimal"
@@ -540,37 +559,88 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                 />
               </label>
 
-              <label className="budget-editor__field">
-                <span>Currency</span>
-                <input value={form.currency} onChange={(event) => updateFormField("currency", event.target.value)} placeholder="PHP" />
-              </label>
-
-              {form.scope === "account" ? (
-                <label className="budget-editor__field budget-editor__field--full">
-                  <span>Account</span>
-                  <select value={form.accountId} onChange={(event) => updateFormField("accountId", event.target.value)}>
-                    <option value="">Choose an account</option>
-                    {data.accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
+              <div className="budget-editor__inline-controls">
+                <label className="budget-editor__field">
+                  <span>Type</span>
+                  <select value={form.kind} onChange={(event) => updateFormField("kind", event.target.value as BudgetKind)}>
+                    <option value="spend_limit">Spend limit</option>
+                    <option value="savings_target">Savings target</option>
                   </select>
                 </label>
-              ) : null}
 
-              {form.scope === "category" ? (
-                <label className="budget-editor__field budget-editor__field--full">
-                  <span>Category</span>
-                  <select value={form.categoryId} onChange={(event) => updateFormField("categoryId", event.target.value)}>
-                    <option value="">Choose a category</option>
-                    {data.categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
+                <label className="budget-editor__field">
+                  <span>Cadence</span>
+                  <select value={form.cadence} onChange={(event) => updateFormField("cadence", event.target.value as BudgetCadence)}>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
                   </select>
                 </label>
+              </div>
+
+              <div className="budget-editor__toggle-row">
+                <button
+                  className="pill-link pill-link--inline"
+                  type="button"
+                  onClick={() => setShowAdvancedOptions((current) => !current)}
+                >
+                  {showAdvancedOptions || form.kind === "savings_target" || form.scope !== "global" ? "Hide more options" : "More options"}
+                </button>
+                <span className="budget-editor__hint">
+                  {form.kind === "savings_target"
+                    ? "Savings targets stay global."
+                    : "Choose an account or category only when you need a scoped budget."}
+                </span>
+              </div>
+
+              {showAdvancedOptions || form.kind === "savings_target" || form.scope !== "global" ? (
+                <div className="budget-editor__advanced">
+                  <label className="budget-editor__field">
+                    <span>Scope</span>
+                    <select
+                      value={form.scope}
+                      onChange={(event) => updateFormField("scope", event.target.value as BudgetScope)}
+                      disabled={form.kind === "savings_target"}
+                    >
+                      <option value="global">Global</option>
+                      <option value="account">Per account</option>
+                      <option value="category">Category</option>
+                    </select>
+                  </label>
+
+                  <label className="budget-editor__field">
+                    <span>Currency</span>
+                    <input value={form.currency} onChange={(event) => updateFormField("currency", event.target.value)} placeholder="PHP" />
+                  </label>
+
+                  {form.scope === "account" ? (
+                    <label className="budget-editor__field budget-editor__field--full">
+                      <span>Account</span>
+                      <select value={form.accountId} onChange={(event) => updateFormField("accountId", event.target.value)}>
+                        <option value="">Choose an account</option>
+                        {data.accounts.map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {account.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+
+                  {form.scope === "category" ? (
+                    <label className="budget-editor__field budget-editor__field--full">
+                      <span>Category</span>
+                      <select value={form.categoryId} onChange={(event) => updateFormField("categoryId", event.target.value)}>
+                        <option value="">Choose a category</option>
+                        {data.categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                </div>
               ) : null}
             </div>
 
