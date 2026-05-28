@@ -272,7 +272,6 @@ const navItems = [
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/recurring", label: "Recurring", key: "recurring" as const },
   { href: "/adviser", label: "Adviser", key: "adviser" as const },
-  { href: "/budgeting", label: "Budgeting", key: "budgeting" as const },
   { href: "/more", label: "More", key: "more" as const },
 ];
 
@@ -626,7 +625,7 @@ export function CloverShell({
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account";
   const profileImage = user?.imageUrl ?? null;
   const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
-  const isMoreActive = active === "more" || pathname?.startsWith("/more");
+  const isMoreActive = active === "more" || active === "budgeting" || pathname?.startsWith("/more") || pathname?.startsWith("/budgeting");
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
   const isMoreMenuOpen = openMenu === "more";
@@ -1833,19 +1832,6 @@ export function CloverShell({
             <MenuIcon name="adviser" />
           </span>
           <span className="shell-bottom-nav__label">Adviser</span>
-        </Link>
-        <Link
-          className={`shell-bottom-nav__item${active === "budgeting" || pathname?.startsWith("/budgeting") ? " is-active" : ""}`}
-          aria-current={active === "budgeting" || pathname?.startsWith("/budgeting") ? "page" : undefined}
-          href="/budgeting"
-          prefetch={shouldPrefetchNavHref("/budgeting")}
-          onMouseEnter={() => prefetchNavTarget("/budgeting")}
-          onTouchStart={() => prefetchNavTarget("/budgeting")}
-        >
-          <span className="shell-bottom-nav__icon" aria-hidden="true">
-            <MenuIcon name="budgeting" />
-          </span>
-          <span className="shell-bottom-nav__label">Budgeting</span>
         </Link>
         <Link
           className={`shell-bottom-nav__item${isMoreActive ? " is-active" : ""}`}

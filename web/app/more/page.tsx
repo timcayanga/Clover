@@ -15,7 +15,7 @@ type MoreSection = {
   items: MoreLink[];
 };
 
-type PageIconName = "accounts" | "recurring" | "split-bill" | "investments" | "reports" | "goals" | "notifications" | "settings" | "help";
+type PageIconName = "accounts" | "recurring" | "split-bill" | "investments" | "reports" | "goals" | "budgeting" | "notifications" | "settings" | "help";
 
 function PageIcon({ name }: { name: PageIconName }) {
   const common = {
@@ -82,6 +82,15 @@ function PageIcon({ name }: { name: PageIconName }) {
           <path d="m12 3.5 2.71 5.49 6.06.88-4.39 4.28 1.04 6.03L12 17.98l-5.42 2.85 1.04-6.03-4.39-4.28 6.06-.88L12 3.5Z" />
         </svg>
       );
+    case "budgeting":
+      return (
+        <svg {...common}>
+          <path d="M4 18.5h16" />
+          <path d="M6.5 15a5.5 5.5 0 0 1 11 0" />
+          <path d="M12 9v3.5" />
+          <path d="m12 12.5 2.2-2.2" />
+        </svg>
+      );
     case "notifications":
       return (
         <svg {...common}>
@@ -146,6 +155,11 @@ const moreSections: MoreSection[] = [
         href: "/goals",
         title: "Goals",
         icon: "goals",
+      },
+      {
+        href: "/budgeting",
+        title: "Budgeting",
+        icon: "budgeting",
       },
     ],
   },
