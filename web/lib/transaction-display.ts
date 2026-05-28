@@ -97,6 +97,10 @@ const getAubCategoryOverride = (merchantText: string) => {
 const getGcashCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
 
+  if (/deposit to gsave|withdraw from gsave|seamoney credit|maribank credit/.test(lower)) {
+    return "Financial";
+  }
+
   if (
     /auto cash-?in|gcashcashin|gcash cash in|wallet transfer|gcash transfer|cash in|cash out|send money|received money|received gcash|sent gcash|fund transfer|(?:edi\/)?mbpay/.test(
       lower
@@ -270,6 +274,15 @@ export const getEffectiveTransactionCategoryName = (params: {
   const genericOverride = getGenericCategoryOverride(
     [effectiveMerchantName, params.merchantRaw, descriptionText].filter(Boolean).join(" ")
   );
+  const overrideText = [effectiveMerchantName, params.merchantRaw, descriptionText].filter(Boolean).join(" ");
+  if (
+    params.institution &&
+    /\bgcash\b/i.test(params.institution) &&
+    institutionOverride === "Financial" &&
+    /deposit to gsave|withdraw from gsave|seamoney credit|maribank credit/i.test(overrideText)
+  ) {
+    return institutionOverride;
+  }
   const heuristic = guessCategoryName(effectiveMerchantName || descriptionText || params.merchantRaw, params.type);
 
   if (isMeaningfulCategoryName(directCategory)) {

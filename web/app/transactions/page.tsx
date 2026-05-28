@@ -7099,6 +7099,8 @@ function TransactionsPageContent() {
                     }
                   >
                     <span className="warning-mark warning-mark--small" aria-hidden="true" />
+                    <span>{warningTransactionCount}</span>
+                    <span>{warningTransactionCount === 1 ? "warning" : "warnings"}</span>
                   </button>
                 ) : null}
               </div>

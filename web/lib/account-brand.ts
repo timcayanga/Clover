@@ -922,6 +922,15 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
 ];
 
 export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
+  if (params.type === "wallet" && /\bgcash\b/i.test([params.institution, params.name].filter(Boolean).join(" "))) {
+    return makeBrand({
+      label: "GCash",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: walletIcon,
+      accent: "#1479E7",
+    });
+  }
+
   const inferredInstitution = inferBankNameFromText([params.institution, params.name].filter(Boolean).join(" "));
   const normalizedInstitution = normalizeBankName(params.institution);
   const institution =
