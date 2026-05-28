@@ -1784,30 +1784,29 @@ export function ImportFilesModal({
       visibilityHardStopTimerRef.current = null;
     }
 
-    publishImportActivity({
-      workspaceId,
-      surface: "background",
-      status: outcome.issueCount > 0 ? "error" : "done",
-      fileName: currentItems[currentItems.length - 1]?.file.name ?? null,
-      fileIndex: currentItems.length,
-      fileTotal: currentItems.length,
-      completedFiles: outcome.successful.length,
-      progress: outcome.issueCount > 0 ? Math.min(displayedOverallProgress || IMPORT_PROGRESS.finalizing, 99) : 100,
-      detail: outcomeMessage,
-      summary: completedSummary,
-      errorMessage: outcome.issueCount > 0 ? outcomeMessage : null,
-      errorTitle: outcome.issueCount > 0 ? "Import review needed" : null,
-      errorNextSteps:
-        outcome.issueCount > 0
-          ? [
-              "Check the files listed as failed or partially parsed.",
-              "Re-upload failed files one at a time with a clearer original PDF or image.",
-              "If a file still does not appear in Clover, add the account or transactions manually.",
-            ]
-          : null,
-    });
+    if (outcome.issueCount > 0) {
+      clearImportActivity();
+      lastImportActivityRef.current = null;
+      return;
+    }
 
     if (outcome.issueCount === 0) {
+      publishImportActivity({
+        workspaceId,
+        surface: "background",
+        status: "done",
+        fileName: currentItems[currentItems.length - 1]?.file.name ?? null,
+        fileIndex: currentItems.length,
+        fileTotal: currentItems.length,
+        completedFiles: outcome.successful.length,
+        progress: 100,
+        detail: outcomeMessage,
+        summary: completedSummary,
+        errorMessage: null,
+        errorTitle: null,
+        errorNextSteps: null,
+      });
+
       if (autoCloseCompletedBatchTimerRef.current) {
         window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
       }
@@ -6286,6 +6285,16 @@ export function ImportFilesModal({
       ? friendlyImportProgressLabel(activeProgressItem.progressLabel, activeProgressItem.file.name, activeProgressItem.importMode)
       : validationNotice ?? message;
     const activeErrorItem = items.find((item) => item.status === "error") ?? null;
+    const isModalOnlyReadError =
+      activeErrorItem?.errorCode === "I-104" &&
+      /file not readable|could not read enough details/i.test(
+        `${activeErrorItem.errorTitle ?? ""} ${activeErrorItem.error ?? ""}`
+      );
+    if (isModalOnlyReadError) {
+      clearImportActivity();
+      lastImportActivityRef.current = null;
+      return;
+    }
     const previousSummary =
       lastImportActivityRef.current?.summary ??
       (hasCompletedBatchNow ? buildVisibleImportSummary(items) : null);
