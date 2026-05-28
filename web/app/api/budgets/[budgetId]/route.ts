@@ -111,6 +111,7 @@ export async function PATCH(request: Request, { params }: Params) {
     budget,
     budgets: data.overview.budgets,
     overview: data.overview,
+    suggestions: data.suggestions,
   });
 }
 
@@ -154,5 +155,6 @@ export async function DELETE(_request: Request, { params }: Params) {
   return NextResponse.json({
     budgets: data.overview.budgets,
     overview: data.overview,
+    suggestions: data.suggestions,
   });
 }

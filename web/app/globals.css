@@ -5031,7 +5031,7 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .budgeting-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
   gap: 16px;
   padding: 22px;
   border-radius: 28px;
@@ -5071,67 +5071,52 @@ body.transactions-manual-open .shell-quick-add-button {
 .budgeting-hero__note {
   color: var(--muted-2);
   font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
 }
 
-.budgeting-hero__ring {
+.budgeting-hero__note-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.budgeting-hero__summary {
   padding: 18px;
   display: grid;
   gap: 16px;
   align-content: start;
   border-radius: 24px;
   border: 1px solid rgba(15, 23, 42, 0.06);
-  background: rgba(255, 255, 255, 0.64);
+  background: rgba(255, 255, 255, 0.74);
 }
 
-.budgeting-ring {
-  position: relative;
-  display: grid;
-  place-items: center;
-  min-height: 192px;
+.budgeting-hero__summary-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
 }
 
-.budgeting-ring svg {
-  width: 156px;
-  height: 156px;
-  transform: rotate(-90deg);
-}
-
-.budgeting-ring__track,
-.budgeting-ring__progress {
-  fill: none;
-  stroke-width: 12;
-}
-
-.budgeting-ring__track {
-  stroke: rgba(148, 163, 184, 0.2);
-}
-
-.budgeting-ring__progress {
-  stroke: var(--accent);
-  stroke-linecap: round;
-  filter: drop-shadow(0 8px 14px rgba(3, 168, 192, 0.16));
-}
-
-.budgeting-ring__center {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  gap: 2px;
-  text-align: center;
-}
-
-.budgeting-ring__center strong {
-  font-size: 30px;
+.budgeting-hero__summary-head strong {
+  font-size: 34px;
   line-height: 1;
   letter-spacing: -0.05em;
 }
 
-.budgeting-ring__center span {
-  color: var(--muted);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
+.budgeting-hero__summary-bar {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+
+.budgeting-hero__summary-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(3, 168, 192, 0.95), rgba(14, 165, 233, 0.84));
 }
 
 .budgeting-hero__stats {
@@ -5162,100 +5147,92 @@ body.transactions-manual-open .shell-quick-add-button {
   letter-spacing: -0.03em;
 }
 
-.budgeting-alert-strip {
+.budgeting-section {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.budgeting-alert {
+  gap: 14px;
   padding: 18px;
   border: 1px solid var(--stroke);
   box-shadow: var(--shadow);
-  display: grid;
-  gap: 10px;
 }
 
-.budgeting-alert--positive {
-  background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 28%),
-    rgba(255, 255, 255, 0.9);
-}
-
-.budgeting-alert--warning {
-  background:
-    radial-gradient(circle at top left, rgba(245, 158, 11, 0.08), transparent 28%),
-    rgba(255, 255, 255, 0.9);
-}
-
-.budgeting-alert--danger {
-  background:
-    radial-gradient(circle at top left, rgba(239, 68, 68, 0.08), transparent 28%),
-    rgba(255, 255, 255, 0.9);
-}
-
-.budgeting-alert h4 {
-  margin: 0;
-  font-size: 18px;
-  line-height: 1.2;
-  letter-spacing: -0.03em;
-}
-
-.budgeting-alert p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
-.budgeting-alert__head {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.budgeting-alert__meta {
+.budgeting-section__head {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: center;
-  color: var(--muted-2);
-  font-size: 13px;
+  align-items: flex-start;
 }
 
-.budgeting-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
-  gap: 16px;
-}
-
-.budgeting-body__main {
-  display: grid;
-  gap: 12px;
-}
-
-.budgeting-body__rail {
-  display: grid;
-  gap: 12px;
-  align-content: start;
-}
-
-.budgeting-toolbar {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-
-.budgeting-toolbar h4 {
+.budgeting-section__head h4 {
   margin: 4px 0 0;
   font-size: 22px;
   line-height: 1.18;
   letter-spacing: -0.035em;
 }
 
+.budgeting-suggestion-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.budget-suggestion {
+  appearance: none;
+  text-align: left;
+  cursor: pointer;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 10px;
+  color: inherit;
+}
+
+.budget-suggestion--positive {
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 28%),
+    rgba(255, 255, 255, 0.9);
+}
+
+.budget-suggestion--warning {
+  background:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.08), transparent 28%),
+    rgba(255, 255, 255, 0.9);
+}
+
+.budget-suggestion--neutral {
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 28%),
+    rgba(255, 255, 255, 0.9);
+}
+
+.budget-suggestion strong {
+  font-size: 18px;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.budget-suggestion p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.budget-suggestion__head,
+.budget-suggestion__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.budget-suggestion__foot span:first-child {
+  font-weight: 700;
+}
+
 .budgeting-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -5294,8 +5271,7 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .budget-card__amounts span,
 .budget-card__progress > span,
-.budget-card__meta,
-.budget-card__remaining {
+.budget-card__meta {
   color: var(--muted);
   font-size: 13px;
 }
@@ -5337,27 +5313,14 @@ body.transactions-manual-open .shell-quick-add-button {
   flex-wrap: wrap;
 }
 
-.budget-card__detail {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
 .budget-card__actions {
   display: flex;
-  justify-content: space-between;
   gap: 12px;
   align-items: center;
 }
 
-.budget-card__remaining {
-  font-weight: 600;
-}
-
 .budget-empty {
-  padding: 24px;
-  border: 1px solid var(--stroke);
-  box-shadow: var(--shadow);
+  padding: 22px;
   display: grid;
   gap: 10px;
   background:
@@ -5378,49 +5341,6 @@ body.transactions-manual-open .shell-quick-add-button {
   color: var(--muted);
   line-height: 1.55;
   max-width: 58ch;
-}
-
-.budget-rail {
-  padding: 18px;
-  border: 1px solid var(--stroke);
-  box-shadow: var(--shadow);
-  display: grid;
-  gap: 12px;
-}
-
-.budget-thresholds,
-.budget-scope-list {
-  display: grid;
-  gap: 10px;
-}
-
-.budget-threshold,
-.budget-scope-item {
-  padding: 12px 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.58);
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-
-.budget-threshold strong,
-.budget-scope-item strong {
-  font-size: 14px;
-}
-
-.budget-threshold span,
-.budget-scope-item span {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.budget-rail__copy {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.55;
 }
 
 .budget-editor__backdrop {
@@ -25017,9 +24937,9 @@ button.accounts-detail__transaction-head-cell {
   .reports-ai-grid,
   .reports-brief-grid,
   .budgeting-hero,
-  .budgeting-body,
+  .budgeting-section,
+  .budgeting-suggestion-grid,
   .budgeting-grid,
-  .budgeting-alert-strip,
   .insights-snapshot,
   .insights-hero,
   .insights-grid,
@@ -25121,13 +25041,15 @@ button.accounts-detail__transaction-head-cell {
     align-items: flex-start;
   }
 
-  .budgeting-hero,
-  .budgeting-body {
+  .budgeting-hero {
     grid-template-columns: 1fr;
   }
 
-  .budgeting-grid,
-  .budgeting-alert-strip {
+  .budgeting-suggestion-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .budgeting-grid {
     grid-template-columns: 1fr;
   }
 
@@ -25260,9 +25182,9 @@ button.accounts-detail__transaction-head-cell {
   .reports-summary-grid--three,
   .reports-attention-strip,
   .budgeting-hero,
-  .budgeting-body,
+  .budgeting-section,
+  .budgeting-suggestion-grid,
   .budgeting-grid,
-  .budgeting-alert-strip,
   .reports-ai-signal-grid,
   .insights-snapshot__metrics,
   .insights-snapshot__actions,
@@ -25457,8 +25379,8 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .budgeting-hero,
-  .budgeting-hero__ring,
-  .budget-rail,
+  .budgeting-hero__summary,
+  .budgeting-section,
   .budget-card,
   .budget-editor {
     padding: 12px;
@@ -25468,11 +25390,12 @@ button.accounts-detail__transaction-head-cell {
     grid-template-columns: 1fr;
   }
 
-  .budgeting-toolbar,
   .budgeting-hero__actions,
+  .budgeting-section__head,
+  .budgeting-hero__summary-head,
   .budget-card__progress,
-  .budget-card__actions,
-  .budgeting-alert__meta {
+  .budget-card__progress,
+  .budget-card__actions {
     flex-direction: column;
     align-items: flex-start;
   }

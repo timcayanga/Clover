@@ -1,4 +1,5 @@
 import type { BudgetCadence, BudgetKind, BudgetScope, TransactionType } from "@prisma/client";
+import { formatCurrencyAmount } from "@/lib/currency-format";
 
 export type BudgetRecord = {
   id: string;
@@ -59,6 +60,21 @@ export type BudgetAlert = BudgetProgress & {
   tone: "positive" | "warning" | "danger";
   actionLabel: string;
   href: string;
+};
+
+export type BudgetSuggestion = {
+  id: string;
+  title: string;
+  detail: string;
+  amount: number;
+  currency: string;
+  kind: BudgetKind;
+  scope: BudgetScope;
+  cadence: BudgetCadence;
+  accountId: string | null;
+  categoryId: string | null;
+  actionLabel: string;
+  tone: "positive" | "warning" | "neutral";
 };
 
 export type BudgetOverview = {
@@ -230,4 +246,112 @@ export const buildBudgetOverview = (params: {
     totalProgressPercent,
     highestAlert: budgets[0] ?? null,
   } satisfies BudgetOverview;
+};
+
+const groupExpenseTotals = (
+  transactions: BudgetTransaction[],
+  key: "accountId" | "categoryId"
+) => {
+  const totals = new Map<string, number>();
+
+  for (const transaction of transactions) {
+    if (transaction.type !== "expense" || transaction.isExcluded) {
+      continue;
+    }
+
+    const groupId = transaction[key];
+    if (!groupId) {
+      continue;
+    }
+
+    totals.set(groupId, (totals.get(groupId) ?? 0) + Math.abs(toAmount(transaction.amount)));
+  }
+
+  return [...totals.entries()].sort((left, right) => right[1] - left[1]);
+};
+
+export const buildBudgetSuggestions = (params: {
+  transactions: BudgetTransaction[];
+  accounts: Array<{ id: string; name: string; currency: string | null }>;
+  categories: Array<{ id: string; name: string }>;
+  currency?: string;
+}) => {
+  const currency = params.currency ?? params.accounts.find((account) => account.currency)?.currency ?? "PHP";
+  const totalIncome = params.transactions
+    .filter((transaction) => transaction.type === "income" && !transaction.isExcluded)
+    .reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0);
+  const totalExpenses = params.transactions
+    .filter((transaction) => transaction.type === "expense" && !transaction.isExcluded)
+    .reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0);
+  const netSaved = Math.max(totalIncome - totalExpenses, 0);
+
+  const categoryMap = new Map(params.categories.map((category) => [category.id, category.name]));
+  const accountMap = new Map(params.accounts.map((account) => [account.id, account.name]));
+
+  const suggestions: BudgetSuggestion[] = [];
+  const topCategory = groupExpenseTotals(params.transactions, "categoryId")[0];
+  const topAccount = groupExpenseTotals(params.transactions, "accountId")[0];
+
+  if (topCategory) {
+    const [categoryId, amount] = topCategory;
+    const categoryName = categoryMap.get(categoryId);
+
+    if (categoryName && amount > 0) {
+      suggestions.push({
+        id: `category-${categoryId}`,
+        title: `Cap ${categoryName}`,
+        detail: `Recent category spend reached ${formatCurrencyAmount(amount, currency)} across the last 45 days.`,
+        amount: Math.max(1, Math.round(amount)),
+        currency,
+        kind: "spend_limit",
+        scope: "category",
+        cadence: "monthly",
+        accountId: null,
+        categoryId,
+        actionLabel: "Use as budget",
+        tone: "warning",
+      });
+    }
+  }
+
+  if (topAccount) {
+    const [accountId, amount] = topAccount;
+    const accountName = accountMap.get(accountId);
+
+    if (accountName && amount > 0) {
+      suggestions.push({
+        id: `account-${accountId}`,
+        title: `Watch ${accountName}`,
+        detail: `This account carried ${formatCurrencyAmount(amount, currency)} of recent expense activity.`,
+        amount: Math.max(1, Math.round(amount)),
+        currency,
+        kind: "spend_limit",
+        scope: "account",
+        cadence: "monthly",
+        accountId,
+        categoryId: null,
+        actionLabel: "Use as budget",
+        tone: "neutral",
+      });
+    }
+  }
+
+  if (netSaved > 0) {
+    suggestions.push({
+      id: "savings-target",
+      title: "Set a savings target",
+      detail: `You held onto ${formatCurrencyAmount(netSaved, currency)} after spending over the last 45 days.`,
+      amount: Math.max(1, Math.round(netSaved)),
+      currency,
+      kind: "savings_target",
+      scope: "global",
+      cadence: "monthly",
+      accountId: null,
+      categoryId: null,
+      actionLabel: "Start target",
+      tone: "positive",
+    });
+  }
+
+  return suggestions.slice(0, 3);
 };

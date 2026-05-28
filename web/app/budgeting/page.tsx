@@ -30,6 +30,7 @@ export default async function BudgetingPage() {
             overview: data.overview,
             accounts: data.accounts,
             categories: data.categories,
+            suggestions: data.suggestions,
           }}
         />
       </CloverShell>

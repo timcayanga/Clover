@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { buildBudgetOverview } from "@/lib/budgeting";
+import { buildBudgetOverview, buildBudgetSuggestions } from "@/lib/budgeting";
 
 export const budgetLookbackDays = 45;
 
@@ -105,6 +105,19 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
     transactions,
     now,
   });
+  const suggestions = buildBudgetSuggestions({
+    transactions,
+    accounts: accounts.map((account) => ({
+      id: account.id,
+      name: account.name,
+      currency: account.currency,
+    })),
+    categories: categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+    })),
+    currency: budgets[0]?.currency ?? accounts.find((account) => account.currency)?.currency ?? "PHP",
+  });
 
   return {
     budgets,
@@ -112,5 +125,6 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
     accounts,
     categories,
     overview,
+    suggestions,
   };
 };

@@ -53,6 +53,7 @@ export async function GET() {
     overview: data.overview,
     accounts: data.accounts,
     categories: data.categories,
+    suggestions: data.suggestions,
     workspaceId: context.workspaceId,
   });
 }
@@ -105,5 +106,6 @@ export async function POST(request: Request) {
     budget,
     budgets: data.overview.budgets,
     overview: data.overview,
+    suggestions: data.suggestions,
   });
 }

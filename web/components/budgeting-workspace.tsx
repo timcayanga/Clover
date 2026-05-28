@@ -48,6 +48,21 @@ type BudgetOverview = {
   highestAlert: BudgetItem | null;
 };
 
+type BudgetSuggestion = {
+  id: string;
+  title: string;
+  detail: string;
+  amount: number;
+  currency: string;
+  kind: BudgetKind;
+  scope: BudgetScope;
+  cadence: BudgetCadence;
+  accountId: string | null;
+  categoryId: string | null;
+  actionLabel: string;
+  tone: "positive" | "warning" | "neutral";
+};
+
 type BudgetOption = {
   id: string;
   name: string;
@@ -65,6 +80,7 @@ type BudgetingData = {
   overview: BudgetOverview;
   accounts: BudgetOption[];
   categories: BudgetCategoryOption[];
+  suggestions: BudgetSuggestion[];
 };
 
 type BudgetFormState = {
@@ -99,14 +115,6 @@ const kindLabels: Record<BudgetKind, string> = {
   savings_target: "Savings target",
 };
 
-const stageCopy: Record<BudgetStage, { label: string; hint: string; tone: "positive" | "warning" | "danger" }> = {
-  safe: { label: "Room left", hint: "Healthy breathing room remains.", tone: "positive" },
-  watch: { label: "Halfway there", hint: "The budget is moving faster.", tone: "warning" },
-  warning: { label: "Getting tight", hint: "This one needs a closer eye.", tone: "warning" },
-  critical: { label: "Near the edge", hint: "A slowdown would help.", tone: "danger" },
-  exceeded: { label: "Over limit", hint: "The cap has already been crossed.", tone: "danger" },
-};
-
 const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
 
 const defaultFormState = (currency = "PHP"): BudgetFormState => ({
@@ -126,6 +134,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const [data, setData] = useState<BudgetingData>(initialData);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
+  const [editorPreset, setEditorPreset] = useState<BudgetFormState | null>(null);
   const [form, setForm] = useState<BudgetFormState>(() => defaultFormState(initialData.budgets[0]?.currency ?? "PHP"));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -162,9 +171,9 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
             accountId: editingBudget.accountId ?? "",
             categoryId: editingBudget.categoryId ?? "",
           }
-        : defaultFormState(nextCurrency)
+        : editorPreset ?? defaultFormState(nextCurrency)
     );
-  }, [data.accounts, data.categories, editingBudget, isEditorOpen]);
+  }, [data.accounts, data.categories, editingBudget, editorPreset, isEditorOpen]);
 
   const totalProgress = data.overview.totalProgressPercent;
   const totalBudgeted = data.overview.totalTargetAmount;
@@ -172,11 +181,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const activeAlerts = data.overview.alerts;
   const openBudgetCount = data.overview.activeBudgetCount;
   const visibleBudgets = data.budgets;
-  const gaugeSize = 124;
-  const gaugeStroke = 12;
-  const gaugeRadius = (gaugeSize - gaugeStroke) / 2;
-  const gaugeCircumference = 2 * Math.PI * gaugeRadius;
-  const gaugeDash = (Math.min(Math.max(totalProgress, 0), 100) / 100) * gaugeCircumference;
+  const suggestions = data.suggestions;
   const isScopeSelectionComplete =
     form.kind === "savings_target"
       ? true
@@ -188,18 +193,37 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
 
   const resetEditor = () => {
     setEditingBudgetId(null);
+    setEditorPreset(null);
     setError(null);
     setIsEditorOpen(false);
   };
 
   const openCreateEditor = () => {
     setEditingBudgetId(null);
+    setEditorPreset(null);
     setError(null);
+    setIsEditorOpen(true);
+  };
+
+  const openCreateEditorWithSuggestion = (suggestion: BudgetSuggestion) => {
+    setEditingBudgetId(null);
+    setError(null);
+    setEditorPreset({
+      name: suggestion.title,
+      kind: suggestion.kind,
+      scope: suggestion.scope,
+      cadence: suggestion.cadence,
+      targetAmount: String(suggestion.amount),
+      currency: suggestion.currency,
+      accountId: suggestion.accountId ?? "",
+      categoryId: suggestion.categoryId ?? "",
+    });
     setIsEditorOpen(true);
   };
 
   const openEditEditor = (budgetId: string) => {
     setEditingBudgetId(budgetId);
+    setEditorPreset(null);
     setError(null);
     setIsEditorOpen(true);
   };
@@ -256,6 +280,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
           ...current,
           budgets: result.budgets ?? current.budgets,
           overview: result.overview ?? current.overview,
+          suggestions: result.suggestions ?? current.suggestions,
         }));
       }
 
@@ -290,6 +315,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
           ...current,
           budgets: result.budgets ?? current.budgets,
           overview: result.overview ?? current.overview,
+          suggestions: result.suggestions ?? current.suggestions,
         }));
       }
 
@@ -306,48 +332,36 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
       <section className="budgeting-hero glass">
         <div className="budgeting-hero__copy">
           <p className="eyebrow">Budgeting</p>
-          <h3>Set guardrails that your whole Clover workspace can respect.</h3>
-          <p>
-            Build budgets for whole accounts, specific categories, or your entire spending picture. When a budget reaches 50%, 70%, 90%,
-            or 100%, Clover will surface the warning in Budgeting, Notifications, Home, and Adviser.
-          </p>
+          <h3>Simple limits that stay visible everywhere you need them.</h3>
+          <p>Set a cap for an account, a category, or your whole workspace, then let Clover watch it for you.</p>
           <div className="budgeting-hero__actions">
             <button className="button button-primary button-pill" type="button" onClick={openCreateEditor}>
               Set budget
             </button>
-            <span className="budgeting-hero__note">Separate from Goals, but still goal-aware.</span>
           </div>
+          <div className="budgeting-hero__note-row">
+            <span className="pill pill-subtle">{openBudgetCount} active</span>
+            <span className="pill pill-subtle">{activeAlerts.length} alerts</span>
+            <span className="pill pill-subtle">{toPercentage(totalProgress)} usage</span>
+          </div>
+          {activeAlerts[0] ? (
+            <p className="budgeting-hero__note">
+              {activeAlerts[0].name} is currently at {toPercentage(activeAlerts[0].progressPercent)} of its limit.
+            </p>
+          ) : (
+            <p className="budgeting-hero__note">Clover will surface budget pressure in Home, Notifications, and Adviser.</p>
+          )}
         </div>
 
-        <div className="budgeting-hero__ring glass">
-          <div className="budgeting-ring" role="img" aria-label="Overall budget progress">
-            <svg viewBox={`0 0 ${gaugeSize} ${gaugeSize}`}>
-              <circle cx={gaugeSize / 2} cy={gaugeSize / 2} r={gaugeRadius} className="budgeting-ring__track" />
-              <circle
-                cx={gaugeSize / 2}
-                cy={gaugeSize / 2}
-                r={gaugeRadius}
-                className="budgeting-ring__progress"
-                style={{
-                  strokeDasharray: `${gaugeDash} ${gaugeCircumference}`,
-                }}
-              />
-            </svg>
-            <div className="budgeting-ring__center">
-              <strong>{toPercentage(totalProgress)}</strong>
-              <span>overall usage</span>
-            </div>
+        <div className="budgeting-hero__summary glass">
+          <div className="budgeting-hero__summary-head">
+            <span className="eyebrow">At a glance</span>
+            <strong>{toPercentage(totalProgress)}</strong>
           </div>
-
+          <div className="budgeting-hero__summary-bar" aria-hidden="true">
+            <span style={{ width: `${Math.min(totalProgress, 100)}%` }} />
+          </div>
           <div className="budgeting-hero__stats">
-            <div>
-              <span>Active budgets</span>
-              <strong>{openBudgetCount}</strong>
-            </div>
-            <div>
-              <span>Alerts</span>
-              <strong>{activeAlerts.length}</strong>
-            </div>
             <div>
               <span>Tracked</span>
               <strong>{formatCurrency(totalUsed, data.budgets[0]?.currency ?? "PHP")}</strong>
@@ -356,157 +370,114 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
               <span>Budgeted</span>
               <strong>{formatCurrency(totalBudgeted, data.budgets[0]?.currency ?? "PHP")}</strong>
             </div>
+            <div>
+              <span>Left</span>
+              <strong>{formatCurrency(Math.max(totalBudgeted - totalUsed, 0), data.budgets[0]?.currency ?? "PHP")}</strong>
+            </div>
+            <div>
+              <span>Alerts</span>
+              <strong>{activeAlerts.length}</strong>
+            </div>
           </div>
         </div>
       </section>
 
-      {activeAlerts.length > 0 ? (
-        <section className="budgeting-alert-strip">
-          {activeAlerts.slice(0, 3).map((alert) => {
-            const copy = stageCopy[alert.stage];
-            return (
-              <article key={alert.id} className={`budgeting-alert budgeting-alert--${copy.tone} glass`}>
-                <div className="budgeting-alert__head">
-                  <span className="pill pill-subtle">{alert.kindLabel}</span>
-                  <span className="pill pill-subtle">{alert.periodLabel}</span>
+      {suggestions.length > 0 ? (
+        <section className="budgeting-section budgeting-section--suggestions glass">
+          <div className="budgeting-section__head">
+            <div>
+              <p className="eyebrow">Useful next steps</p>
+              <h4>Suggested budgets from your recent activity</h4>
+            </div>
+          </div>
+          <div className="budgeting-suggestion-grid">
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion.id}
+                className={`budget-suggestion budget-suggestion--${suggestion.tone}`}
+                type="button"
+                onClick={() => openCreateEditorWithSuggestion(suggestion)}
+              >
+                <div className="budget-suggestion__head">
+                  <span className="pill pill-subtle">{kindLabels[suggestion.kind]}</span>
+                  <span className="pill pill-subtle">{scopeLabels[suggestion.scope]}</span>
                 </div>
-                <h4>{alert.name}</h4>
-                <p>{copy.hint}</p>
-                <div className="budgeting-alert__meta">
-                  <strong>{formatCurrency(alert.actualAmount, alert.currency)} of {formatCurrency(alert.targetAmount, alert.currency)}</strong>
-                  <span>{toPercentage(alert.progressPercent)}</span>
+                <strong>{suggestion.title}</strong>
+                <p>{suggestion.detail}</p>
+                <div className="budget-suggestion__foot">
+                  <span>{formatCurrency(suggestion.amount, suggestion.currency)}</span>
+                  <span>{suggestion.actionLabel}</span>
                 </div>
-              </article>
-            );
-          })}
+              </button>
+            ))}
+          </div>
         </section>
       ) : null}
 
-      <section className="budgeting-body">
-        <div className="budgeting-body__main">
-          <div className="budgeting-toolbar">
-            <div>
-              <p className="eyebrow">Budgets</p>
-              <h4>{visibleBudgets.length === 0 ? "Create your first budget" : "Active guardrails"}</h4>
-            </div>
-            <button className="button button-secondary button-pill" type="button" onClick={openCreateEditor}>
-              Add budget
-            </button>
+      <section className="budgeting-section glass">
+        <div className="budgeting-section__head">
+          <div>
+            <p className="eyebrow">Budgets</p>
+            <h4>{visibleBudgets.length === 0 ? "Create your first budget" : "Current budgets"}</h4>
           </div>
-
-          {visibleBudgets.length > 0 ? (
-            <div className="budgeting-grid">
-              {visibleBudgets.map((budget) => {
-                const copy = stageCopy[budget.stage];
-                const nextThreshold = budget.nextThreshold === null ? "Limit reached" : `${budget.nextThreshold}% next`;
-                const isOver = budget.stage === "critical" || budget.stage === "exceeded";
-                return (
-                  <article key={budget.id} className="budget-card glass">
-                    <div className="report-card__head report-card__head--compact">
-                      <div>
-                        <h4>{budget.name}</h4>
-                        <p className="budget-card__subhead">
-                          {budget.kindLabel} · {budget.scopeLabel} · {cadenceLabels[budget.cadence]}
-                        </p>
-                      </div>
-                      <div className={`pill ${isOver ? "pill-danger" : "pill-subtle"}`}>{copy.label}</div>
-                    </div>
-
-                    <div className="budget-card__progress">
-                      <div className="budget-card__amounts">
-                        <strong>{formatCurrency(budget.actualAmount, budget.currency)}</strong>
-                        <span>of {formatCurrency(budget.targetAmount, budget.currency)}</span>
-                      </div>
-                      <span>{toPercentage(budget.progressPercent)}</span>
-                    </div>
-                    <div className="budget-card__bar" aria-hidden="true">
-                      <span className={`budget-card__bar-fill budget-card__bar-fill--${budget.stage}`} style={{ width: `${Math.min(budget.progressPercent, 100)}%` }} />
-                    </div>
-                    <div className="budget-card__meta">
-                      <span>{budget.periodLabel}</span>
-                      <span>{nextThreshold}</span>
-                    </div>
-                    <p className="budget-card__detail">{budget.statusDetail}</p>
-                    <div className="budget-card__actions">
-                      <button className="pill-link pill-link--inline" type="button" onClick={() => openEditEditor(budget.id)}>
-                        Edit
-                      </button>
-                      <span className="budget-card__remaining">
-                        {budget.stage === "exceeded"
-                          ? `${formatCurrency(Math.abs(budget.remainingAmount), budget.currency)} over`
-                          : `${formatCurrency(Math.max(budget.remainingAmount, 0), budget.currency)} left`}
-                      </span>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <article className="budget-empty glass">
-              <p className="eyebrow">Nothing yet</p>
-              <h4>Set a budget to start watching limits in real time.</h4>
-              <p>Use a global cap, a per-account limit, or a category limit. Clover will keep the thresholds visible wherever you work.</p>
-              <button className="button button-primary button-pill" type="button" onClick={openCreateEditor}>
-                Create budget
-              </button>
-            </article>
-          )}
+          <button className="button button-secondary button-pill" type="button" onClick={openCreateEditor}>
+            Add budget
+          </button>
         </div>
 
-        <aside className="budgeting-body__rail">
-          <article className="budget-rail glass">
-            <div className="report-card__head report-card__head--compact">
-              <div>
-                <h4>Notification thresholds</h4>
-              </div>
-            </div>
-            <div className="budget-thresholds">
-              {[
-                { label: "50%", detail: "Early heads-up" },
-                { label: "70%", detail: "Time to slow down" },
-                { label: "90%", detail: "Strong warning" },
-                { label: "100%", detail: "Limit reached" },
-              ].map((threshold) => (
-                <div key={threshold.label} className="budget-threshold">
-                  <strong>{threshold.label}</strong>
-                  <span>{threshold.detail}</span>
-                </div>
-              ))}
-            </div>
-          </article>
+        {visibleBudgets.length > 0 ? (
+          <div className="budgeting-grid">
+            {visibleBudgets.map((budget) => {
+              const isOver = budget.stage === "critical" || budget.stage === "exceeded";
+              return (
+                <article key={budget.id} className="budget-card glass">
+                  <div className="report-card__head report-card__head--compact">
+                    <div>
+                      <h4>{budget.name}</h4>
+                      <p className="budget-card__subhead">
+                        {budget.kindLabel} · {budget.scopeLabel} · {cadenceLabels[budget.cadence]}
+                      </p>
+                    </div>
+                    <div className={`pill ${isOver ? "pill-danger" : "pill-subtle"}`}>{toPercentage(budget.progressPercent)}</div>
+                  </div>
 
-          <article className="budget-rail glass">
-            <div className="report-card__head report-card__head--compact">
-              <div>
-                <h4>Budget by scope</h4>
-              </div>
-            </div>
-            <div className="budget-scope-list">
-              {[
-                { label: "Global", count: data.budgets.filter((budget) => budget.scope === "global").length },
-                { label: "Accounts", count: data.budgets.filter((budget) => budget.scope === "account").length },
-                { label: "Categories", count: data.budgets.filter((budget) => budget.scope === "category").length },
-              ].map((entry) => (
-                <div key={entry.label} className="budget-scope-item">
-                  <strong>{entry.label}</strong>
-                  <span>{entry.count}</span>
-                </div>
-              ))}
-            </div>
+                  <div className="budget-card__progress">
+                    <div className="budget-card__amounts">
+                      <strong>{formatCurrency(budget.actualAmount, budget.currency)}</strong>
+                      <span>of {formatCurrency(budget.targetAmount, budget.currency)}</span>
+                    </div>
+                    <span>{budget.periodLabel}</span>
+                  </div>
+                  <div className="budget-card__bar" aria-hidden="true">
+                    <span className={`budget-card__bar-fill budget-card__bar-fill--${budget.stage}`} style={{ width: `${Math.min(budget.progressPercent, 100)}%` }} />
+                  </div>
+                  <div className="budget-card__meta">
+                    <span>{budget.statusLabel}</span>
+                    <span>
+                      {budget.stage === "exceeded"
+                        ? `${formatCurrency(Math.abs(budget.remainingAmount), budget.currency)} over`
+                        : `${formatCurrency(Math.max(budget.remainingAmount, 0), budget.currency)} left`}
+                    </span>
+                  </div>
+                  <div className="budget-card__actions">
+                    <button className="pill-link pill-link--inline" type="button" onClick={() => openEditEditor(budget.id)}>
+                      Edit
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <article className="budget-empty">
+            <p className="eyebrow">Nothing yet</p>
+            <h4>Set one budget and Clover will handle the reminders.</h4>
+            <p>Start with a simple global cap or let one of the suggestions above fill in the details.</p>
+            <button className="button button-primary button-pill" type="button" onClick={openCreateEditor}>
+              Create budget
+            </button>
           </article>
-
-          <article className="budget-rail glass">
-            <div className="report-card__head report-card__head--compact">
-              <div>
-                <h4>Goal tie-in</h4>
-              </div>
-            </div>
-            <p className="budget-rail__copy">
-              Budgeting helps saving goals breathe and spending goals stay honest. Adviser can read this same pressure data to keep advice
-              more structured.
-            </p>
-          </article>
-        </aside>
+        )}
       </section>
 
       {isEditorOpen ? (
