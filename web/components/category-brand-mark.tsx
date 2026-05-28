@@ -87,7 +87,35 @@ export function CategoryBrandMark({ categoryName, size = 24, radius = 8, classNa
       title={categoryName}
       aria-hidden="true"
     >
-      <img src={iconSrc} alt="" aria-hidden="true" loading="eager" fetchPriority="high" decoding="async" />
+      <span className="category-brand-mark__glyph" aria-hidden="true">
+        <img
+          className="category-brand-mark__glyph-layer category-brand-mark__glyph-layer--extrude"
+          src={iconSrc}
+          alt=""
+          aria-hidden="true"
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+        />
+        <img
+          className="category-brand-mark__glyph-layer category-brand-mark__glyph-layer--highlight"
+          src={iconSrc}
+          alt=""
+          aria-hidden="true"
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+        />
+        <img
+          className="category-brand-mark__glyph-layer category-brand-mark__glyph-layer--face"
+          src={iconSrc}
+          alt=""
+          aria-hidden="true"
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+        />
+      </span>
     </span>
   );
 }
