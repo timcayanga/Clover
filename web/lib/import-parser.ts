@@ -7148,6 +7148,9 @@ const normalizeGcashMerchant = (description: string) => {
     ""
   );
   trimmed = trimmed.replace(/^account ending in\s+\d+\s+/i, "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return "GCash Transaction";
+  }
 
   const billsPaymentMatch = trimmed.match(/^Bills Payment to\s+(.+)$/i);
   if (billsPaymentMatch?.[1]) {
@@ -8938,6 +8941,14 @@ const classifyGoTymeTransaction = (description: string, credit: number, debit: n
 
   if (/qr\s+payment/.test(lower)) {
     return { type: "expense", categoryName: "Shopping" };
+  }
+
+  if (/^(?:load purchase|buy load|mobile load|top up|top-up)/.test(lower)) {
+    return { type: "expense", categoryName: "Bills & Utilities" };
+  }
+
+  if (/^(?:gcash received|received gcash(?: from)?|received money)/.test(lower)) {
+    return { type: "income", categoryName: "Income" };
   }
 
   if (/transfer\s+to\s+.+go\s*tyme\s+bank\s+account/.test(lower)) {
