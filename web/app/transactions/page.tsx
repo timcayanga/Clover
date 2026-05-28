@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ChangeEvent,
   type MouseEvent as ReactMouseEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
@@ -2087,6 +2088,7 @@ function TransactionsPageContent() {
   const manualNameInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const addMenuPanelRef = useRef<HTMLDivElement>(null);
+  const addPhotoInputRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const initialWorkspaceId = urlSearchParams.get("workspaceId") || readSelectedWorkspaceId();
   const initialCachedWorkspace = null;
@@ -3105,6 +3107,27 @@ function TransactionsPageContent() {
       setImportSeedFiles(files && files.length > 0 ? files : null);
       setImportOpen(true);
     });
+  };
+
+  const openPhotoCapture = () => {
+    const input = addPhotoInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    setAddMenuOpen(false);
+    input.value = "";
+    input.click();
+  };
+
+  const handlePhotoCaptureChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = "";
+    if (files.length === 0) {
+      return;
+    }
+
+    openImportFiles(files);
   };
 
   useEffect(() => {
@@ -6099,6 +6122,17 @@ function TransactionsPageContent() {
         showChevron={false}
       />
 
+      <input
+        ref={addPhotoInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handlePhotoCaptureChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
       <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>
         <button
           className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
@@ -6139,6 +6173,15 @@ function TransactionsPageContent() {
                 >
                   Add transaction
                 </button>
+                {isCompactViewport ? (
+                  <button
+                    className="transactions-add-menu__item"
+                    type="button"
+                    onClick={openPhotoCapture}
+                  >
+                    Take photo
+                  </button>
+                ) : null}
                 <button
                   className="transactions-add-menu__item"
                   type="button"

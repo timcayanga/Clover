@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -572,11 +572,13 @@ export function CloverShell({
   const notificationsPopoverRef = useRef<HTMLDivElement | null>(null);
   const quickAddButtonRef = useRef<HTMLButtonElement | null>(null);
   const quickAddPopoverRef = useRef<HTMLDivElement | null>(null);
+  const quickAddPhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | "more" | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [notificationsPopoverStyle, setNotificationsPopoverStyle] = useState<{ left: number; bottom: number } | null>(null);
   const [quickAddModal, setQuickAddModal] = useState<"transaction" | "import" | null>(null);
+  const [quickAddSeedFiles, setQuickAddSeedFiles] = useState<File[] | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchWorkspaceId, setSearchWorkspaceId] = useState(() => readSelectedWorkspaceId());
@@ -748,6 +750,7 @@ export function CloverShell({
     setSearchQuery("");
     setIsQuickAddOpen(false);
     setQuickAddModal(null);
+    setQuickAddSeedFiles(null);
   }, [pathname]);
 
   useEffect(() => {
@@ -1153,6 +1156,29 @@ export function CloverShell({
 
   const closeQuickAddModal = () => {
     setQuickAddModal(null);
+    setQuickAddSeedFiles(null);
+  };
+
+  const openQuickAddCamera = () => {
+    const input = quickAddPhotoInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.value = "";
+    input.click();
+  };
+
+  const handleQuickAddPhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = "";
+    if (files.length === 0) {
+      return;
+    }
+
+    setIsQuickAddOpen(false);
+    setQuickAddSeedFiles(files);
+    setQuickAddModal("import");
   };
 
   const handleSignOut = () => {
@@ -1573,6 +1599,16 @@ export function CloverShell({
       >
         <MenuIcon name="plus" />
       </button>
+      <input
+        ref={quickAddPhotoInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleQuickAddPhotoChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
       {isQuickAddOpen ? (
         <div className="shell-quick-add-popover glass" ref={quickAddPopoverRef} role="menu" aria-label="Quick add">
           <button
@@ -1586,6 +1622,18 @@ export function CloverShell({
           >
             <strong>Add Transaction</strong>
             <span>Open the manual transaction field.</span>
+          </button>
+          <button
+            className="shell-quick-add-popover__item"
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setIsQuickAddOpen(false);
+              openQuickAddCamera();
+            }}
+          >
+            <strong>Take Photo</strong>
+            <span>Use your camera for a receipt or statement.</span>
           </button>
           <button
             className="shell-quick-add-popover__item"
@@ -1612,6 +1660,8 @@ export function CloverShell({
           workspaceId={searchWorkspaceId}
           accounts={quickAddAccounts}
           defaultAccountId={quickAddAccounts.find((account) => account.type !== "cash" && account.type !== "other" && account.type !== "investment")?.id ?? quickAddAccounts[0]?.id ?? null}
+          initialFiles={quickAddSeedFiles}
+          onInitialFilesConsumed={() => setQuickAddSeedFiles(null)}
           onClose={closeQuickAddModal}
           onImported={async () => {
             router.refresh();
