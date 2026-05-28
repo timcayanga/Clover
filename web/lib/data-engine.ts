@@ -19,7 +19,7 @@ import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
-export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v3";
+export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v4";
 
 type TrainingSignalRow = {
   categoryId: string;
