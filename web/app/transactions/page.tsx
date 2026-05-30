@@ -2290,9 +2290,7 @@ function TransactionsPageContent() {
         if (
           !currentBrand ||
           isGenericAccountBrand(currentBrand) ||
-          (transactionBrand.label === "GCash" && currentBrand.label !== "GCash") ||
-          (!currentBrand.logoSrc && transactionBrand.logoSrcs.length > 0) ||
-          (currentBrand.logoSrcs.length === 0 && transactionBrand.logoSrcs.length > 0)
+          (!currentBrand.logoSrc && currentBrand.logoSrcs.length === 0 && transactionBrand.logoSrcs.length > 0)
         ) {
           brandById.set(transaction.accountId, transactionBrand);
         }

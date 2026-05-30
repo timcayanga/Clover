@@ -922,7 +922,17 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
 ];
 
 export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
-  if (/\bgcash\b/i.test([params.institution, params.name].filter(Boolean).join(" "))) {
+  const rawBrandText = [params.institution, params.name].filter(Boolean).join(" ");
+  const isGSaveBackedCimbAccount = /\bgsave\b/i.test(rawBrandText) || (/\bcimb\b/i.test(rawBrandText) && /\bgcash\b/i.test(rawBrandText));
+
+  if (isGSaveBackedCimbAccount) {
+    const cimbBrand = BANK_BRANDS.find((entry) => entry.brand.label === "CIMB")?.brand;
+    if (cimbBrand) {
+      return cimbBrand;
+    }
+  }
+
+  if (/\bgcash\b/i.test(rawBrandText)) {
     return makeBrand({
       label: "GCash",
       logoSrcs: philippinesLogoWithVariants("gcash"),
@@ -931,7 +941,7 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
     });
   }
 
-  const inferredInstitution = inferBankNameFromText([params.institution, params.name].filter(Boolean).join(" "));
+  const inferredInstitution = inferBankNameFromText(rawBrandText);
   const normalizedInstitution = normalizeBankName(params.institution);
   const institution =
     normalizedInstitution !== "Unknown"
