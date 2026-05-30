@@ -5917,18 +5917,29 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       };
     }
 
+    const existingImportTransactionMatchClauses = [
+      { importFileId },
+      {
+        rawPayload: {
+          path: ["sourceImportFileId"],
+          equals: importFileId,
+        },
+      },
+      ...statementFingerprints.map((fingerprint) => ({
+        rawPayload: {
+          path: ["sourceStatementFingerprint"],
+          equals: fingerprint,
+        },
+      })),
+    ];
     const existingImportTransactions = await tx.transaction.findMany({
       where: {
         deletedAt: null,
         workspaceId: String(importFile.workspaceId),
-        accountId: { in: matchingAccountIdsForImport },
         OR: [
-          { importFileId },
           {
-            rawPayload: {
-              path: ["sourceImportFileId"],
-              equals: importFileId,
-            },
+            accountId: { in: matchingAccountIdsForImport },
+            OR: existingImportTransactionMatchClauses,
           },
           ...statementFingerprints.map((fingerprint) => ({
             rawPayload: {
@@ -5953,18 +5964,26 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       },
     });
     const existingImportTransactionBySourceIndex = new Map<string, (typeof existingImportTransactions)[number]>();
+    const existingImportTransactionByStatementSourceIndex = new Map<string, (typeof existingImportTransactions)[number]>();
     const existingImportTransactionsByDedupeKey = new Map<string, Array<(typeof existingImportTransactions)[number]>>();
     for (const transaction of existingImportTransactions) {
       const sourceRowIndex = getImportSourceRowIndex(transaction.rawPayload);
+      const sourceStatementFingerprint = getImportSourceStatementFingerprint(transaction.rawPayload);
       const accountScopedSourceRowKey = buildAccountScopedSourceRowKey(transaction.accountId, sourceRowIndex);
       if (accountScopedSourceRowKey && !existingImportTransactionBySourceIndex.has(accountScopedSourceRowKey)) {
         existingImportTransactionBySourceIndex.set(accountScopedSourceRowKey, transaction);
+      }
+      if (sourceRowIndex && sourceStatementFingerprint && statementFingerprints.includes(sourceStatementFingerprint)) {
+        const statementSourceRowKey = `${sourceStatementFingerprint}:${sourceRowIndex}`;
+        if (!existingImportTransactionByStatementSourceIndex.has(statementSourceRowKey)) {
+          existingImportTransactionByStatementSourceIndex.set(statementSourceRowKey, transaction);
+        }
       }
 
       const dedupeKey = buildConfirmedTransactionDedupeKey({
         ...transaction,
         sourceRowIndex,
-        sourceStatementFingerprint: getImportSourceStatementFingerprint(transaction.rawPayload),
+        sourceStatementFingerprint,
       });
       const bucket = existingImportTransactionsByDedupeKey.get(dedupeKey) ?? [];
       bucket.push(transaction);
@@ -6366,6 +6385,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     } as Parameters<typeof buildConfirmedTransactionDedupeKey>[0]);
     const existingImportTransaction =
       existingImportTransactionBySourceIndex.get(buildAccountScopedSourceRowKey(rowResolvedAccountId, index + 1) ?? "") ??
+      (typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
+        ? existingImportTransactionByStatementSourceIndex.get(`${row.statementFingerprint.trim()}:${index + 1}`)
+        : checkpointStatementFingerprint
+          ? existingImportTransactionByStatementSourceIndex.get(`${checkpointStatementFingerprint}:${index + 1}`)
+          : null) ??
       (existingImportTransactionsByDedupeKey.get(dedupeKey) ?? []).find(
         (candidate) => !retainedExistingImportTransactionIds.has(candidate.id)
       ) ??
@@ -6657,6 +6681,31 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       status: "done",
     };
   }, { maxWait: 15_000, timeout: 30_000 });
+
+  if (multiAccountImport) {
+    const resolvedAccountIdsForCleanup = resolvedAccounts.map((entry) => entry.id);
+    const resolvedInstitutionsForCleanup = Array.from(
+      new Set(resolvedAccounts.map((entry) => entry.institution).filter((institution): institution is string => Boolean(institution?.trim())))
+    );
+    if (resolvedAccountIdsForCleanup.length > 0 && resolvedInstitutionsForCleanup.length > 0) {
+      await prisma.account.deleteMany({
+        where: {
+          workspaceId: String(importFile.workspaceId),
+          source: "upload",
+          institution: { in: resolvedInstitutionsForCleanup },
+          accountNumber: null,
+          id: { notIn: resolvedAccountIdsForCleanup },
+          transactions: { none: {} },
+        },
+      }).catch((error) => {
+        console.warn("[import-account-match] unable to delete empty generic multi-account placeholder", {
+          importFileId,
+          institutions: resolvedInstitutionsForCleanup,
+          error,
+        });
+      });
+    }
+  }
 
   await collapseDuplicateTransactionsForImport(importFileId).catch((error) => {
     console.warn("Unable to collapse duplicate transactions after confirmation", {

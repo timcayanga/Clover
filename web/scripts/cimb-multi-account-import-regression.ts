@@ -98,24 +98,30 @@ const main = async () => {
 
     try {
       const fileName = basename(cimbMixedFile);
-      const importFile = await prisma.importFile.create({
-        data: {
-          workspaceId,
-          fileName,
-          fileType: "application/pdf",
-          storageKey: `qa/${runId}/${fileName}`,
-          status: "processing",
-        },
-      });
-
       const text = await readStatementText(cimbMixedFile, readUploadedFileText);
-      const result = await processImportFileText(importFile.id, {
-        text,
-        actorUserId: user.clerkUserId,
-        qaSource: "import_processing",
-        allowDuplicateStatement: false,
-        importMode: "statement",
-      });
+      const processQaImport = async (label: string) => {
+        const importFile = await prisma.importFile.create({
+          data: {
+            workspaceId,
+            fileName,
+            fileType: "application/pdf",
+            storageKey: `qa/${runId}/${label}/${fileName}`,
+            status: "processing",
+          },
+        });
+
+        const result = await processImportFileText(importFile.id, {
+          text,
+          actorUserId: user.clerkUserId,
+          qaSource: "import_processing",
+          allowDuplicateStatement: false,
+          importMode: "statement",
+        });
+
+        return { importFile, result };
+      };
+
+      const { importFile, result } = await processQaImport("fresh");
 
       assert.equal(result.status, "done", "CIMB mixed statement should finish import.");
       assert.equal(result.imported, 12, `CIMB mixed statement should import 12 visible rows, got ${result.imported}.`);
@@ -160,6 +166,81 @@ const main = async () => {
         },
       });
       assert.equal(genericCimbAccount, null, "CIMB mixed import should not leave a generic uploaded CIMB account.");
+
+      const staleGenericAccount = await prisma.account.create({
+        data: {
+          workspaceId,
+          name: "CIMB",
+          institution: "CIMB",
+          type: "bank",
+          currency: "PHP",
+          balance: "4294.66",
+          source: "upload",
+        },
+      });
+      await prisma.transaction.updateMany({
+        where: {
+          workspaceId,
+          importFileId: importFile.id,
+          deletedAt: null,
+        },
+        data: {
+          accountId: staleGenericAccount.id,
+        },
+      });
+
+      const staleGenericRows = await prisma.transaction.count({
+        where: {
+          workspaceId,
+          accountId: staleGenericAccount.id,
+          deletedAt: null,
+        },
+      });
+      assert.equal(staleGenericRows, 12, "Regression setup should mimic 12 stale rows on a generic CIMB account.");
+
+      const { importFile: repairImportFile, result: repairResult } = await processQaImport("repair");
+      assert.equal(repairResult.status, "done", "CIMB duplicate repair import should finish.");
+      assertCimbAccountSummaries(repairResult.accountSummaries, "CIMB duplicate repair result");
+
+      const repairStatusSnapshot = await loadImportStatusSnapshot(repairImportFile.id, { promoteFailedVisibleImport: true });
+      assert.ok(repairStatusSnapshot, "Expected CIMB duplicate repair status snapshot.");
+      assert.equal(repairStatusSnapshot.visibleImportComplete, true, "CIMB duplicate repair should be visible to the UI.");
+      assert.equal(repairStatusSnapshot.confirmedTransactionsCount, 12, "CIMB duplicate repair should keep 12 visible rows.");
+      assertCimbAccountSummaries(repairStatusSnapshot.accountSummaries, "CIMB duplicate repair status snapshot");
+
+      const repairedGenericRows = await prisma.transaction.count({
+        where: {
+          workspaceId,
+          accountId: staleGenericAccount.id,
+          deletedAt: null,
+        },
+      });
+      assert.equal(repairedGenericRows, 0, "CIMB duplicate repair should move stale generic rows to numbered accounts.");
+      const repairedGenericAccount = await prisma.account.findUnique({
+        where: { id: staleGenericAccount.id },
+      });
+      assert.equal(repairedGenericAccount, null, "CIMB duplicate repair should delete the empty generic account card.");
+
+      for (const expected of expectedAccounts) {
+        const account = await prisma.account.findFirst({
+          where: {
+            workspaceId,
+            institution: "CIMB",
+            accountNumber: expected.accountNumber,
+            source: "upload",
+          },
+        });
+        assert.ok(account, `Expected repaired account CIMB ${expected.lastFour}.`);
+        const transactions = await prisma.transaction.findMany({
+          where: {
+            workspaceId,
+            accountId: account.id,
+            importFileId: repairImportFile.id,
+            deletedAt: null,
+          },
+        });
+        assert.equal(transactions.length, 6, `Expected repaired 6 persisted transactions for CIMB ${expected.lastFour}.`);
+      }
 
       console.log("[PASS] CIMB mixed import creates two GSave accounts with correct rows and balances.");
     } finally {
