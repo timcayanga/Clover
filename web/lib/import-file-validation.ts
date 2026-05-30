@@ -45,7 +45,7 @@ export const validateImportFile = (params: {
   }
 
   if (params.fileSize > MAX_IMPORT_FILE_SIZE) {
-    return "Import files must be 10 MB or smaller.";
+    return "Uploaded files must be 10 MB or smaller.";
   }
 
   if (!isSupportedImportFile(params.fileName, params.contentType, { importMode: params.importMode ?? null })) {

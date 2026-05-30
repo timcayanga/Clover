@@ -3066,7 +3066,7 @@ function AccountsPageContent() {
           </button>
           <button className="button button-secondary button-small accounts-toolbar-button" type="button" onClick={() => openImportFiles()}>
             <ActionIcon name="upload" />
-            <span>Import files</span>
+            <span>Upload files</span>
           </button>
         </>
       }
@@ -3158,7 +3158,7 @@ function AccountsPageContent() {
                       Add account
                     </button>
                     <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
-                      Import files
+                      Upload files
                     </button>
                   </div>
                 </div>
@@ -3190,7 +3190,7 @@ function AccountsPageContent() {
                         Add account
                       </button>
                       <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
-                        Import files
+                        Upload files
                       </button>
                     </div>
                   </div>
@@ -3211,7 +3211,7 @@ function AccountsPageContent() {
                           Add account
                         </button>
                         <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
-                          Import files
+                          Upload files
                         </button>
                       </>
                     }
@@ -3505,7 +3505,7 @@ function AccountsPageContent() {
                       {latestCheckpoint.status === "mismatch" ? "Review mismatch" : "View checkpoint"}
                     </button>
                     <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
-                      Import files
+                      Upload files
                     </button>
                     <button
                       className="button button-secondary button-small"
@@ -3541,7 +3541,7 @@ function AccountsPageContent() {
               )}
               <div className="accounts-drawer__actions">
                 <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
-                  Import files
+                  Upload files
                 </button>
                 <button className="button button-secondary button-small" type="button" onClick={openFullAccountPage} disabled={!selectedAccount}>
                   Open account page

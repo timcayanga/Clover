@@ -903,11 +903,11 @@ async function DashboardStream({
             {shouldShowStarterCard ? (
               <div className="dashboard-home__starter-card">
                 <p className="eyebrow">Get started</p>
-                <strong>Import files to unlock your dashboard.</strong>
+                <strong>Upload files to unlock your dashboard.</strong>
                 <p>Bring in a statement and Clover will populate balance, movement, and goal progress in one place.</p>
                 <div className="dashboard-home__starter-actions">
                   <DashboardImportTrigger className="button button-primary button-small">
-                    Import files
+                    Upload files
                   </DashboardImportTrigger>
                   <Link className="button button-secondary button-small" href="/accounts">
                     Add an account

@@ -350,7 +350,7 @@ export const helpSections: HelpSection[] = [
         "supported-import-file-types-and-passwords",
         "Supported import file types and passwords",
         "Know what Clover can handle and what to do when a file is password-protected.",
-        "Find out which import files Clover supports and how to handle password-protected statements.",
+        "Find out which file uploads Clover supports and how to handle password-protected statements.",
         ["supported file types", "password protected file", "import troubleshooting", "png", "jpg", "jpeg", "webp", "heic", "heif", "pdf", "csv", "receipts", "screenshots"],
         [
           "Use PDF, CSV, or supported image files that match Clover’s import flow.",

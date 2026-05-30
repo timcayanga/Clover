@@ -260,7 +260,7 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
         onClick={(event) => event.stopPropagation()}
       >
         <div className="accounts-import-modal__toolbar">
-          <button className="accounts-import-close" type="button" onClick={closeModal} aria-label="Close import files" disabled={isUploading}>
+          <button className="accounts-import-close" type="button" onClick={closeModal} aria-label="Close upload files" disabled={isUploading}>
             ×
           </button>
         </div>

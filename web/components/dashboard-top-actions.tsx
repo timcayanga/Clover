@@ -889,7 +889,7 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
               Add manually
             </button>
             <button className="dashboard-top-actions__menu-item" type="button" onClick={openImportFiles}>
-              Import files
+              Upload files
             </button>
           </div>
         ) : null}

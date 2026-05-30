@@ -2231,7 +2231,7 @@ export function ImportFilesModal({
         });
 
         if (validationError) {
-          if (validationError === "Import files must be 10 MB or smaller.") {
+          if (validationError === "Uploaded files must be 10 MB or smaller.") {
             validationIssues.push(`${file.name} is larger than 10 MB.`);
           } else if (validationError === "Only PDF, CSV, and common image files are supported.") {
             validationIssues.push(`${file.name} has an invalid file extension.`);
@@ -6948,11 +6948,11 @@ export function ImportFilesModal({
         className="modal-card modal-card--wide accounts-import-modal glass"
         role="dialog"
         aria-modal="true"
-        aria-label="Import files"
+        aria-label="Upload files"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="accounts-import-modal__toolbar">
-          <button className="accounts-import-close" type="button" onClick={onClose} aria-label="Close import files">
+          <button className="accounts-import-close" type="button" onClick={onClose} aria-label="Close upload files">
             ×
           </button>
         </div>
@@ -7261,7 +7261,7 @@ export function ImportFilesModal({
             Close
           </button>
           <button className="button button-primary" type="button" onClick={() => void handleStartImport()} disabled={busy || !readyToImport || !workspaceId}>
-            {busy ? "Importing..." : "Import files"}
+            {busy ? "Uploading..." : "Upload files"}
           </button>
         </div>
       </section>

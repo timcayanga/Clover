@@ -145,7 +145,7 @@ export function PageFileDropZone({
         <img src={illustration} alt="" loading="eager" fetchPriority="high" decoding="async" />
       </div>
       <div className="page-file-drop-zone__content">
-        <p className="page-file-drop-zone__eyebrow">Import files</p>
+        <p className="page-file-drop-zone__eyebrow">Upload files</p>
         <strong>{title}</strong>
         <span>{subtitle}</span>
       </div>

@@ -30,7 +30,7 @@ export function EmptyDataCta({
   importHref,
   accountHref,
   transactionHref,
-  importLabel = "Import files",
+  importLabel = "Upload files",
   accountLabel = "Add an account",
   transactionLabel = "Add a transaction",
 }: EmptyDataCtaProps) {

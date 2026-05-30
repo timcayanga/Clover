@@ -28,7 +28,7 @@ const destructiveCopy = {
     token: "WIPE",
     confirmLabel: "Wipe my data",
     confirmTone: "neutral",
-    helper: "You’ll land back on the dashboard and can import files again whenever you’re ready.",
+    helper: "You’ll land back on the dashboard and can upload files again whenever you’re ready.",
   },
   delete: {
     title: "Remove your Clover account?",

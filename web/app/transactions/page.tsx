@@ -6362,7 +6362,7 @@ function TransactionsPageContent() {
                     openImportFiles();
                   }}
                 >
-                  {isCompactViewport ? "Upload file" : "Import files"}
+                  {isCompactViewport ? "Upload file" : "Upload files"}
                 </button>
               </div>,
               document.body
@@ -6962,7 +6962,7 @@ function TransactionsPageContent() {
                 className="transactions-empty-state--table"
                 eyebrow=""
                 title="It is quiet in here"
-                copy="Add your first transaction or import files to bring rows in."
+                copy="Add your first transaction or upload files to bring rows in."
                 illustration={transactionsEmptyStateIllustration}
                 illustrationAlt=""
                 importHref="/transactions?import=1"
@@ -6995,7 +6995,7 @@ function TransactionsPageContent() {
                         openImportFiles();
                       }}
                     >
-                      {isCompactViewport ? "Upload file" : "Import files"}
+                      {isCompactViewport ? "Upload file" : "Upload files"}
                     </button>
                   </>
                 }
@@ -7144,7 +7144,7 @@ function TransactionsPageContent() {
                 className="transactions-empty-state--table"
                 eyebrow=""
                 title="It is quiet in here"
-                copy="Add your first transaction or import files to bring rows in."
+                copy="Add your first transaction or upload files to bring rows in."
                 illustration={transactionsEmptyStateIllustration}
                 illustrationAlt=""
                 importHref="/transactions?import=1"
@@ -7177,7 +7177,7 @@ function TransactionsPageContent() {
                         openImportFiles();
                       }}
                     >
-                      {isCompactViewport ? "Upload file" : "Import files"}
+                      {isCompactViewport ? "Upload file" : "Upload files"}
                     </button>
                   </>
                 }
