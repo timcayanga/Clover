@@ -8967,6 +8967,7 @@ const parseGoTymeDate = (value?: string | null) => {
 
 const classifyGoTymeTransaction = (description: string, credit: number, debit: number): { type: TransactionType; categoryName: string } => {
   const lower = description.toLowerCase();
+  const compact = compactWhitespace(lower);
 
   if (/interest|salary credit/.test(lower)) {
     return { type: "income", categoryName: /interest/.test(lower) ? "Financial" : "Income" };
@@ -8989,6 +8990,22 @@ const classifyGoTymeTransaction = (description: string, credit: number, debit: n
   }
 
   if (/qr\s+payment/.test(lower)) {
+    return { type: "expense", categoryName: "Shopping" };
+  }
+
+  if (
+    /pvb\s+building|justice\s+romualdez/.test(lower) ||
+    /^tacloban(?:city)?ph$/.test(compact) ||
+    /^tacloban2taclobanlytph$/.test(compact)
+  ) {
+    return { type: "expense", categoryName: "Cash & ATM" };
+  }
+
+  if (/gsis\s+tacloban/.test(lower)) {
+    return { type: "expense", categoryName: "Financial" };
+  }
+
+  if (/smct[_\s-]*grndc\s+east\s+gracepaph|sm\s*city\s+tacloban/.test(lower)) {
     return { type: "expense", categoryName: "Shopping" };
   }
 

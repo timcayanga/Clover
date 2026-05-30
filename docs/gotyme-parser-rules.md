@@ -21,6 +21,8 @@ This document captures the GoTyme parsing rules learned from the synthetic train
 - Classify `QR Payment` as `Shopping` with an `Expense` type.
 - Classify person-to-person `Transfer to/from ... Go Tyme Bank Account` rows as `Expense` or `Income` when the counterparty account is not owned by the user.
 - Keep `Transfer Fee` as `Financial` with an `Expense` type.
+- Normalize Tacloban location-coded rows like `PVB Building`, `GSIS Tacloban`, and `SM City Tacloban` to explicit merchants so they do not fall through to `Other`.
+- Treat bare Tacloban location descriptors as `Cash & ATM` when they are debit-only rows and no better merchant match exists.
 
 ## Review Gating
 

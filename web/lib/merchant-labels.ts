@@ -1272,6 +1272,22 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "ATM Withdrawal",
     },
     {
+      patterns: [/pvb\s+building\s+justice\s+r\s*omu\s+tacloban\s+cty\s*ph/i, /\bjustice\s+romualdez\b.*\btacloban\b/i],
+      replacement: "PVB ATM",
+    },
+    {
+      patterns: [/\bgsis\s+tacloban\b/i],
+      replacement: "GSIS Tacloban",
+    },
+    {
+      patterns: [/\bsmct[_\s-]*grndc\s+east\s+gracepaph\b/i, /\bsm\s*city\s+tacloban\b/i],
+      replacement: "SM City Tacloban",
+    },
+    {
+      patterns: [/^tacloban(?:\s+city)?\s+ph$/i, /^tacloban\s+2\s+tacloban\s+lytph$/i],
+      replacement: "Tacloban",
+    },
+    {
       patterns: [/atm\s+withdrawal\s+fee/i],
       replacement: "ATM Fee",
     },
