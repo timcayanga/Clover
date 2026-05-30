@@ -72,6 +72,17 @@ const assertEastWestAccountTransactionsPayload = (
     assert.equal(record.institution, "EastWest Bank", `${fileName} transaction should carry EastWest institution.`);
     assert.equal(record.accountNumber, "205050623445", `${fileName} transaction should carry account number.`);
   }
+
+  const cashDeposits = importedTransactions.filter((entry) => {
+    const record = entry as Record<string, unknown>;
+    return record.merchantRaw === "Cash Deposit" || record.merchantClean === "Cash Deposit";
+  });
+  assert.equal(cashDeposits.length, 11, `${fileName} should include 11 cash deposit rows.`);
+  for (const transaction of cashDeposits) {
+    const record = transaction as Record<string, unknown>;
+    assert.equal(record.categoryName, "Cash & ATM", `${fileName} Cash Deposit should use Cash & ATM.`);
+    assert.equal(record.type, "income", `${fileName} Cash Deposit should remain an income-direction row.`);
+  }
 };
 
 const readJsonResponse = async (response: Response) => {

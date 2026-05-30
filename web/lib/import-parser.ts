@@ -10200,9 +10200,9 @@ const buildEastWestTemplateSampleRows = (accountName: string, institution = "Eas
     chequeNo?: string;
     confidence?: number;
   }> = [
-    { date: "2022-01-20", amount: 5000, description: "Cash Deposit", type: "income", categoryName: "Income", reference: "TT220224YCCF", closingBalance: 5000 },
-    { date: "2022-01-24", amount: 1000, description: "Cash Deposit", type: "income", categoryName: "Income", reference: "TT22024MPDF5269", closingBalance: 6000 },
-    { date: "2022-01-31", amount: 30000, description: "Cash Deposit", type: "income", categoryName: "Income", reference: "TT2201PP202F60", closingBalance: 36000 },
+    { date: "2022-01-20", amount: 5000, description: "Cash Deposit", type: "income", categoryName: "Cash & ATM", reference: "TT220224YCCF", closingBalance: 5000 },
+    { date: "2022-01-24", amount: 1000, description: "Cash Deposit", type: "income", categoryName: "Cash & ATM", reference: "TT22024MPDF5269", closingBalance: 6000 },
+    { date: "2022-01-31", amount: 30000, description: "Cash Deposit", type: "income", categoryName: "Cash & ATM", reference: "TT2201PP202F60", closingBalance: 36000 },
     {
       date: "2022-02-02",
       amount: 4500,
@@ -10225,12 +10225,12 @@ const buildEastWestTemplateSampleRows = (accountName: string, institution = "Eas
       closingBalance: 7500,
       confidence: 86,
     },
-    { date: "2022-02-04", amount: 500, description: "Cash Deposit", type: "income", categoryName: "Income", reference: "TT220264Y2FWF9", closingBalance: 8000 },
-    { date: "2022-02-07", amount: 1000, description: "Cash Deposit", type: "income", categoryName: "Income", reference: "TT220CMCH72263", closingBalance: 9500 },
-    { date: "2022-02-09", amount: 1000, description: "Cash Deposit", type: "income", categoryName: "Income", reference: "TT220CMGH7ZIT69", closingBalance: 14000 },
-    { date: "2022-02-10", amount: 1000, description: "Cash Deposit", type: "income", categoryName: "Income", reference: "TT22H1VGJVF69", closingBalance: 15000 },
-    { date: "2022-02-14", amount: 3000, description: "Cash Deposit", type: "income", categoryName: "Income", reference: "TT2204F24D01F0", closingBalance: 10000 },
-    { date: "2022-02-17", amount: 5000, description: "Cash Deposit", type: "income", categoryName: "Income", reference: "TT2204F24DDF69", closingBalance: 14000 },
+    { date: "2022-02-04", amount: 500, description: "Cash Deposit", type: "income", categoryName: "Cash & ATM", reference: "TT220264Y2FWF9", closingBalance: 8000 },
+    { date: "2022-02-07", amount: 1000, description: "Cash Deposit", type: "income", categoryName: "Cash & ATM", reference: "TT220CMCH72263", closingBalance: 9500 },
+    { date: "2022-02-09", amount: 1000, description: "Cash Deposit", type: "income", categoryName: "Cash & ATM", reference: "TT220CMGH7ZIT69", closingBalance: 14000 },
+    { date: "2022-02-10", amount: 1000, description: "Cash Deposit", type: "income", categoryName: "Cash & ATM", reference: "TT22H1VGJVF69", closingBalance: 15000 },
+    { date: "2022-02-14", amount: 3000, description: "Cash Deposit", type: "income", categoryName: "Cash & ATM", reference: "TT2204F24D01F0", closingBalance: 10000 },
+    { date: "2022-02-17", amount: 5000, description: "Cash Deposit", type: "income", categoryName: "Cash & ATM", reference: "TT2204F24DDF69", closingBalance: 14000 },
     {
       date: "2022-02-21",
       amount: 5000,
@@ -10242,7 +10242,7 @@ const buildEastWestTemplateSampleRows = (accountName: string, institution = "Eas
       closingBalance: 10000,
       confidence: 86,
     },
-    { date: "2022-02-22", amount: 1000, description: "Cash Deposit", type: "income", categoryName: "Income", reference: "TT22053KJ865F66", closingBalance: 15000 },
+    { date: "2022-02-22", amount: 1000, description: "Cash Deposit", type: "income", categoryName: "Cash & ATM", reference: "TT22053KJ865F66", closingBalance: 15000 },
     {
       date: "2022-02-22",
       amount: 5000,
@@ -10254,7 +10254,7 @@ const buildEastWestTemplateSampleRows = (accountName: string, institution = "Eas
       closingBalance: 8000,
       confidence: 86,
     },
-    { date: "2022-02-24", amount: 1000, description: "Cash Deposit", type: "income", categoryName: "Income", reference: "TT226TIKGMM0X24", closingBalance: 9000 },
+    { date: "2022-02-24", amount: 1000, description: "Cash Deposit", type: "income", categoryName: "Cash & ATM", reference: "TT226TIKGMM0X24", closingBalance: 9000 },
   ];
 
   return transactionSpecs.map((spec) => ({
@@ -10420,7 +10420,7 @@ const parseGenericEastWestTemplateStatement = (
     if (/cash dep(?:osit|oait|osil|oslt|esit|enit)/i.test(blockText)) {
       description = "Cash Deposit";
       type = "income";
-      categoryName = "Income";
+      categoryName = "Cash & ATM";
     } else if (/(?:outward|cutward|oubwas'?d|dufveard|dubwird|cartvsard)\s+chequ/i.test(blockText)) {
       description = /dr\b/i.test(blockText) ? "Outward Cheque Dr / Cheque Enlistment" : "Outward Cheque / Cheque Enlistment";
       type = "expense";

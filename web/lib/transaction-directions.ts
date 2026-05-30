@@ -73,6 +73,10 @@ export const coerceTransactionTypeFromCategoryName = (
     return "income";
   }
 
+  if (normalized === "cash atm" && fallback === "income") {
+    return "income";
+  }
+
   return "expense";
 };
 

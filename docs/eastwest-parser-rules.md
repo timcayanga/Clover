@@ -16,7 +16,7 @@ This document captures the current EastWest parsing guidance for Clover.
 
 ## Transaction Rules
 
-- `Cash Deposit` should normalize as income.
+- `Cash Deposit` should remain a positive/income amount, but its category should be `Cash & ATM`.
 - `Transfer SUCCESSFUL` should normalize as a transfer.
 - `Outward Cheque / Cheque Enlistment` should normalize as an expense.
 - `Outward Cheque Dr / Cheque Enlistment` should normalize as an expense.

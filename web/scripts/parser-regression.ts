@@ -2072,6 +2072,9 @@ const main = async () => {
           `expected first EastWest row to be 2022-01-20 5000.00 income, got ${rows[0]?.date ?? "missing"} ${rows[0]?.amount ?? "missing"} ${rows[0]?.type ?? "missing"}`
         );
       }
+      if (rows.some((row) => row.merchantRaw === "Cash Deposit" && row.categoryName !== "Cash & ATM")) {
+        throw new Error("expected EastWest Cash Deposit rows to use Cash & ATM category");
+      }
       if (rows.at(-1)?.date !== "2022-02-24" || rows.at(-1)?.amount !== "1000.00") {
         throw new Error(
           `expected final EastWest row to be 2022-02-24 1000.00, got ${rows.at(-1)?.date ?? "missing"} ${rows.at(-1)?.amount ?? "missing"}`
@@ -2147,6 +2150,9 @@ const main = async () => {
   }
   if (eastWestSyntheticRows[0]?.type !== "income") {
     throw new Error(`expected EastWest synthetic cash deposit to classify as income, got ${eastWestSyntheticRows[0]?.type ?? "null"}`);
+  }
+  if (eastWestSyntheticRows[0]?.categoryName !== "Cash & ATM") {
+    throw new Error(`expected EastWest synthetic cash deposit to use Cash & ATM, got ${eastWestSyntheticRows[0]?.categoryName ?? "null"}`);
   }
   if (!eastWestSyntheticRows.some((row) => row.description === "Transfer SUCCESSFUL" && row.type === "transfer")) {
     throw new Error("expected EastWest synthetic transfer row to classify as transfer");
