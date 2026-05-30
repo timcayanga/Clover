@@ -46,6 +46,34 @@ const assertEastWestStatusPayload = (fileName: string, payload: Record<string, u
   assert.equal(summary.rowsImported, 15, `${fileName} status summary should include 15 rows.`);
 };
 
+const assertEastWestAccountTransactionsPayload = (
+  fileName: string,
+  importId: string,
+  payload: Record<string, unknown>
+) => {
+  const transactions = Array.isArray(payload.transactions) ? payload.transactions : [];
+  const importedTransactions = transactions.filter((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return false;
+    }
+
+    const transaction = entry as Record<string, unknown>;
+    const rawPayload =
+      transaction.rawPayload && typeof transaction.rawPayload === "object" && !Array.isArray(transaction.rawPayload)
+        ? (transaction.rawPayload as Record<string, unknown>)
+        : null;
+
+    return transaction.importFileId === importId || rawPayload?.sourceImportFileId === importId;
+  });
+
+  assert.equal(importedTransactions.length, 15, `${fileName} account transactions should include 15 rows for this import.`);
+  for (const transaction of importedTransactions) {
+    const record = transaction as Record<string, unknown>;
+    assert.equal(record.institution, "EastWest Bank", `${fileName} transaction should carry EastWest institution.`);
+    assert.equal(record.accountNumber, "205050623445", `${fileName} transaction should carry account number.`);
+  }
+};
+
 const readJsonResponse = async (response: Response) => {
   const text = await response.text();
   try {
@@ -86,7 +114,14 @@ const main = async () => {
     assert.equal(statusResponse.ok, true, `${fileName} status route should return 2xx.`);
     assertEastWestStatusPayload(fileName, statusPayload);
 
-    console.log(`[PASS] ${fileName}: process + status returned visible EastWest rows.`);
+    const accountId = (statusPayload.importFile as { accountId?: unknown } | null)?.accountId;
+    assert.equal(typeof accountId, "string", `${fileName} status should expose accountId for transaction verification.`);
+    const transactionsResponse = await fetch(`${baseUrl}/api/accounts/${accountId}/transactions?pageSize=200`);
+    const transactionsPayload = await readJsonResponse(transactionsResponse);
+    assert.equal(transactionsResponse.ok, true, `${fileName} account transactions route should return 2xx.`);
+    assertEastWestAccountTransactionsPayload(fileName, importId, transactionsPayload);
+
+    console.log(`[PASS] ${fileName}: process, status, and account transactions returned visible EastWest rows.`);
   }
 };
 

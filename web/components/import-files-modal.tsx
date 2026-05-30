@@ -191,6 +191,7 @@ type ImportStatusPayload = {
   parsedRowsCount?: number;
   confirmedTransactionsCount?: number;
   visibleImportComplete?: boolean;
+  accountSummaries?: UploadInsightsSummary["accountSummaries"];
   confirmationStatus?: string;
   telemetryPhase?: string | null;
   telemetryLabel?: string | null;
@@ -2942,6 +2943,11 @@ export function ImportFilesModal({
         const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
         const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
         const visibleImportComplete = Boolean(payload.visibleImportComplete || confirmedTransactionsCount > 0);
+        const statusAccountSummaries = normalizeServerAccountSummaries(payload.accountSummaries);
+        const primaryStatusAccountSummary =
+          statusAccountSummaries.find((summary) => summary.accountId === latestResolvedAccountId) ??
+          statusAccountSummaries[0] ??
+          null;
         const finalizationNeedsReview = Boolean(payload.finalizationNeedsReview);
         const processingPhase = typeof importFile?.processingPhase === "string" ? importFile.processingPhase : null;
         const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
@@ -2951,6 +2957,9 @@ export function ImportFilesModal({
             : null;
         if (statusAccountId) {
           latestResolvedAccountId = statusAccountId;
+        }
+        if (!latestResolvedAccountId && primaryStatusAccountSummary?.accountId) {
+          latestResolvedAccountId = primaryStatusAccountSummary.accountId;
         }
         const telemetryPhase = typeof payload.telemetryPhase === "string" ? payload.telemetryPhase : null;
         const telemetryLabel = typeof payload.telemetryLabel === "string" ? payload.telemetryLabel : null;
@@ -2964,6 +2973,20 @@ export function ImportFilesModal({
             : null;
         const checkpointIdentity = resolveStatementIdentityFromMetadata(statementMetadata);
         const processingIdentity =
+          (primaryStatusAccountSummary
+            ? {
+                accountName: primaryStatusAccountSummary.accountName,
+                institution: primaryStatusAccountSummary.institution,
+                accountNumber: primaryStatusAccountSummary.accountNumber,
+                accountType:
+                  primaryStatusAccountSummary.accountType ??
+                  inferAccountTypeFromStatement(
+                    primaryStatusAccountSummary.institution,
+                    primaryStatusAccountSummary.accountName,
+                    "bank"
+                  ),
+              }
+            : null) ??
           checkpointIdentity ??
           (summaryContext.guessedAccountName
             ? {
@@ -3439,18 +3462,20 @@ export function ImportFilesModal({
                 : [];
           const completedSummary = buildOptimisticUploadSummary(
             summaryContext.fileName,
-            confirmedTransactionsCount > 0 ? confirmedTransactionsCount : parsedRowsCount,
-            completedAccountId,
-            resolvedAccountDisplayName,
-            processingIdentity?.institution ?? summaryContext.institution ?? null,
-            processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+            primaryStatusAccountSummary?.rowsImported ||
+              (confirmedTransactionsCount > 0 ? confirmedTransactionsCount : parsedRowsCount),
+            primaryStatusAccountSummary?.accountId ?? completedAccountId,
+            primaryStatusAccountSummary?.accountName ?? resolvedAccountDisplayName,
+            primaryStatusAccountSummary?.institution ?? processingIdentity?.institution ?? summaryContext.institution ?? null,
+            primaryStatusAccountSummary?.accountType ?? processingIdentity?.accountType ?? summaryContext.accountType ?? null,
             summaryContext.optimisticAccountId,
-            stableOptimisticBalance,
+            pickStableBalance(primaryStatusAccountSummary?.balance, stableOptimisticBalance),
             fallbackPreviewTransactions,
-            processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
+            primaryStatusAccountSummary?.accountNumber ?? processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
           );
           const finalizedSummary: UploadInsightsSummary = {
             ...completedSummary,
+            accountSummaries: statusAccountSummaries.length > 0 ? statusAccountSummaries : completedSummary.accountSummaries,
             optimistic: false,
             optimisticAccountId: null,
           };
