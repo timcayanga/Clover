@@ -1182,6 +1182,62 @@ const main = async () => {
   }
   console.log(`[PASS] Maya classification | ${mayaSampleFiles.length} samples finalize without low-confidence Other rows`);
 
+  const gotymeSamplesDir = join(root, "Samples/GoTyme");
+  const gotymeSampleFiles = (await readdir(gotymeSamplesDir)).filter((entry) => /\.pdf$/i.test(entry)).sort();
+  for (const gotymeFile of gotymeSampleFiles) {
+    const gotymePath = join(gotymeSamplesDir, gotymeFile);
+    const gotymeBytes = await readFile(gotymePath);
+    const gotymeText = await readUploadedFileText({
+      name: basename(gotymePath),
+      type: "application/pdf",
+      arrayBuffer: async () => {
+        const copy = new Uint8Array(gotymeBytes.length);
+        copy.set(gotymeBytes);
+        return copy.buffer as ArrayBuffer;
+      },
+    });
+    const gotymeMetadata = detectStatementMetadataFromText(gotymeText);
+    const gotymeRows = parser.parseImportText(gotymeText, basename(gotymePath), "application/pdf", {
+      institution: gotymeMetadata.institution,
+      accountName: gotymeMetadata.accountName,
+      accountNumber: gotymeMetadata.accountNumber,
+    });
+    const gotymeOtherRows = gotymeRows.filter((row) => row.categoryName === "Other");
+    if (gotymeOtherRows.length > 0) {
+      const sample = gotymeOtherRows
+        .slice(0, 5)
+        .map((row) => `${row.description ?? row.merchantRaw ?? "missing"}:${row.categoryName}/${row.type}/${row.confidence ?? "no-confidence"}`)
+        .join(", ");
+      throw new Error(`expected ${gotymeFile} to avoid Other classifications; problematic rows: ${sample}`);
+    }
+
+    const gotymeProblematicTypes = gotymeRows.filter((row) => {
+      if (/qr\s+payment/i.test(row.description ?? "") && row.categoryName !== "Shopping") {
+        return true;
+      }
+
+      if (/gcash\s+received/i.test(row.description ?? "") && row.categoryName !== "Transfers") {
+        return true;
+      }
+
+      if (/transfer\s+fee/i.test(row.description ?? "") && row.categoryName !== "Financial") {
+        return true;
+      }
+
+      return false;
+    });
+
+    if (gotymeProblematicTypes.length > 0) {
+      const sample = gotymeProblematicTypes
+        .slice(0, 5)
+        .map((row) => `${row.description ?? row.merchantRaw ?? "missing"}:${row.categoryName}/${row.type}`)
+        .join(", ");
+      throw new Error(`expected ${gotymeFile} to classify known GoTyme rows consistently; problematic rows: ${sample}`);
+    }
+
+    console.log(`[PASS] GoTyme deterministic parser | ${gotymeFile} | ${gotymeRows.length} rows`);
+  }
+
   const dateStampedBankName = normalizeBankName("2026-05-01 22.01.12 0112");
   if (dateStampedBankName !== "Unknown") {
     throw new Error(`expected date-stamped bank label to normalize to Unknown but got ${dateStampedBankName}`);
