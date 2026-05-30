@@ -28085,8 +28085,7 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .clover-loading-screen {
-  --splash-logo-field-size: clamp(360px, 78vmin, 820px);
-  --splash-logo-mark-size: 148px;
+  --splash-logo-mark-size: clamp(118px, 16vw, 152px);
   position: relative;
   min-height: 100dvh;
   display: grid;
@@ -28102,46 +28101,49 @@ button.accounts-detail__transaction-head-cell {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse 260px 64px at 50% calc(50% - 8px), rgba(15, 23, 42, 0.18), rgba(3, 168, 192, 0.1) 38%, transparent 74%);
+  background:
+    radial-gradient(ellipse 240px 72px at 50% calc(50% - 18px), rgba(15, 23, 42, 0.13), rgba(3, 168, 192, 0.08) 40%, transparent 72%),
+    radial-gradient(circle at 50% 45%, rgba(236, 253, 245, 0.74), transparent 28%),
+    radial-gradient(circle at 42% 58%, rgba(0, 223, 255, 0.08), transparent 26%);
 }
 
 .clover-loading-screen__card {
   position: relative;
   z-index: 1;
-  width: min(100%, 520px);
+  width: min(100%, 560px);
   display: grid;
   justify-items: center;
-  gap: 34px;
-  padding: 0 24px;
+  gap: 18px;
+  padding: 0;
   overflow: visible;
   text-align: center;
 }
 
 .clover-loading-screen__logo {
   position: relative;
-  width: var(--splash-logo-field-size);
-  height: var(--splash-logo-field-size);
+  width: var(--splash-logo-mark-size);
+  height: var(--splash-logo-mark-size);
   display: grid;
   place-items: center;
-  margin-block: calc((var(--splash-logo-mark-size) - var(--splash-logo-field-size)) / 2);
   overflow: visible;
+  filter: drop-shadow(0 24px 24px rgba(15, 23, 42, 0.14));
 }
 
 .clover-loading-screen__mark {
   position: relative;
   z-index: 1;
   display: block;
-  width: var(--splash-logo-mark-size);
-  height: var(--splash-logo-mark-size);
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
   overflow: visible;
+  animation: clover-loading-mark-breathe 4.8s ease-in-out infinite;
 }
 
 .clover-loading-screen__copy {
   display: grid;
   justify-items: center;
   width: min(100%, 520px);
-  min-height: clamp(2.8rem, 7vw, 4.4rem);
+  min-height: 1.6rem;
   overflow: visible;
 }
 
@@ -28153,12 +28155,24 @@ button.accounts-detail__transaction-head-cell {
   position: relative;
   margin: 0;
   width: 100%;
-  max-width: 16ch;
-  min-height: clamp(2.8rem, 7vw, 4.4rem);
-  font-size: clamp(1.35rem, 3.4vw, 2.05rem);
-  font-weight: 500;
-  line-height: 1.08;
-  letter-spacing: -0.025em;
+  max-width: 34ch;
+  min-height: 1.6rem;
+  color: rgba(31, 41, 51, 0.72);
+  font-size: clamp(0.98rem, 1.8vw, 1.2rem);
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: -0.012em;
+}
+
+@keyframes clover-loading-mark-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-4px) scale(1.035) rotate(1.2deg);
+  }
 }
 
 @keyframes clover-loading-screen-pulse {
@@ -29782,12 +29796,11 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .clover-loading-screen__logo {
-    --splash-logo-field-size: clamp(300px, 88vmin, 560px);
-    --splash-logo-mark-size: 124px;
+    --splash-logo-mark-size: 118px;
   }
 
   .clover-loading-screen__copy h2 {
-    font-size: clamp(1.25rem, 6vw, 1.65rem);
+    font-size: clamp(0.95rem, 4.2vw, 1.08rem);
   }
 
   .landing-hero {

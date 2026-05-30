@@ -11,18 +11,26 @@ const loadingTitles = [
 
 const TITLE_INTERVAL_MS = 2400;
 
-function getCurrentTitleIndex() {
-  return Math.floor(Date.now() / TITLE_INTERVAL_MS) % loadingTitles.length;
+function getRandomTitleIndex(currentIndex?: number) {
+  if (loadingTitles.length <= 1) {
+    return 0;
+  }
+
+  let nextIndex = Math.floor(Math.random() * loadingTitles.length);
+  while (nextIndex === currentIndex) {
+    nextIndex = Math.floor(Math.random() * loadingTitles.length);
+  }
+
+  return nextIndex;
 }
 
 export function CloverLoadingTitle() {
-  const [titleIndex, setTitleIndex] = useState(getCurrentTitleIndex);
+  const [titleIndex, setTitleIndex] = useState(() => getRandomTitleIndex());
 
   useEffect(() => {
-    const updateTitle = () => setTitleIndex(getCurrentTitleIndex());
-    updateTitle();
-
-    const interval = window.setInterval(updateTitle, TITLE_INTERVAL_MS);
+    const interval = window.setInterval(() => {
+      setTitleIndex((currentIndex) => getRandomTitleIndex(currentIndex));
+    }, TITLE_INTERVAL_MS);
     return () => window.clearInterval(interval);
   }, []);
 
