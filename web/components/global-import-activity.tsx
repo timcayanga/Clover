@@ -228,6 +228,25 @@ export function GlobalImportActivity() {
 
     const code = activity.errorCode ?? "I-199";
     const spec = getImportErrorSpecForCode(code);
+    if (code === "I-104") {
+      return (
+        <ImportUploadDock
+          open
+          tone="error"
+          fileName={activity.fileName}
+          fileIndex={activity.fileIndex}
+          fileTotal={activity.fileTotal}
+          completedFiles={activity.completedFiles}
+          progress={activity.progress}
+          detail={activity.errorMessage ?? spec.message}
+          errorCode={code}
+          errorTitle={activity.errorTitle || spec.title || "File not readable"}
+          errorNextSteps={activity.errorNextSteps ?? getImportErrorNextSteps(code)}
+          onClose={handleClose}
+        />
+      );
+    }
+
     return (
       <ImportErrorToast
         code={code}

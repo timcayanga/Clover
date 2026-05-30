@@ -15,6 +15,9 @@ type ImportUploadDockProps = {
   phaseLabel?: string | null;
   summary?: UploadInsightsSummary | null;
   tone?: "default" | "error" | "success";
+  errorCode?: string | null;
+  errorTitle?: string | null;
+  errorNextSteps?: string[] | null;
   onClose?: () => void;
 };
 
@@ -31,6 +34,9 @@ export function ImportUploadDock({
   phaseLabel = null,
   summary = null,
   tone = "default",
+  errorCode = null,
+  errorTitle = null,
+  errorNextSteps = null,
   onClose,
 }: ImportUploadDockProps) {
   if (!open) {
@@ -81,17 +87,21 @@ export function ImportUploadDock({
         ]
       : "";
   const resultChecklist = isComplete ? importMilestones : [];
-  const statusDetail = resultHeadline || (activeMilestone ? `✓ ${activeMilestone}` : detail);
+  const statusDetail =
+    tone === "error"
+      ? detail
+      : resultHeadline || (activeMilestone ? `✓ ${activeMilestone}` : detail);
 
   return (
-    <div className={`import-upload-dock import-upload-dock--${tone}`} role="status" aria-live="polite">
+    <div className={`import-upload-dock import-upload-dock--${tone}`} role={tone === "error" ? "alert" : "status"} aria-live={tone === "error" ? "assertive" : "polite"}>
       <div className="import-upload-dock__inner glass">
         <div className="import-upload-dock__header">
           <div>
             <p className="eyebrow">Import progress</p>
-            <strong>{fileLabel}</strong>
+            <strong>{tone === "error" && errorTitle ? errorTitle : fileLabel}</strong>
             {phaseLabel ? <p className="import-upload-dock__phase">{phaseLabel}</p> : null}
             <p>{statusDetail}</p>
+            {tone === "error" && errorCode ? <p className="import-upload-dock__phase">Import code {errorCode}</p> : null}
           </div>
           <div className="import-upload-dock__header-actions">
             {onClose ? (
@@ -117,6 +127,13 @@ export function ImportUploadDock({
         {resultChecklist.length > 0 ? (
           <ul className="import-upload-dock__checklist" aria-label="Import highlights">
             {resultChecklist.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        ) : null}
+        {tone === "error" && errorNextSteps?.length ? (
+          <ul className="import-upload-dock__checklist" aria-label="What to do next">
+            {errorNextSteps.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>

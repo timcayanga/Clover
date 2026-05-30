@@ -6193,16 +6193,16 @@ export function ImportFilesModal({
     passwordItems.find((item) => item.id === selectedPasswordItemId) ?? passwordItems[0] ?? null;
   const completedFileCount = items.filter((item) => item.confirmationState === "confirmed").length;
   const activeProgressItem = activeItem ?? (busy ? items.find((item) => item.status === "pending") ?? null : null);
+  const currentErrorItem = items.find((item) => item.status === "error") ?? null;
   const overallProgress = items.length > 0
     ? ((completedFileCount + (activeProgressItem ? activeProgressItem.progress / 100 : 0)) / items.length) * 100
     : 0;
   const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
-  const showCompactProgress = busy || Boolean(activeItem) || hasCompletedBatch;
+  const showCompactProgress = busy || Boolean(activeItem) || hasCompletedBatch || Boolean(currentErrorItem);
   const targetDisplayProgress = showCompactProgress ? overallProgress : 0;
   const shouldLockPageInteraction =
     open && !backgroundOnly && !launchInBackground && (Boolean(activePasswordItem) || !showCompactProgress);
   const hasImportIssue = items.some((item) => item.status === "error" || item.status === "needs_password") || Boolean(validationNotice);
-  const currentErrorItem = items.find((item) => item.status === "error") ?? null;
   const showImportHelp = hasImportIssue || items.some((item) => item.confirmationState === "staged");
   const importHelpTitle = items.some((item) => item.status === "needs_password")
     ? "Password needed"
@@ -6338,16 +6338,6 @@ export function ImportFilesModal({
       ? friendlyImportProgressLabel(activeProgressItem.progressLabel, activeProgressItem.file.name, activeProgressItem.importMode)
       : validationNotice ?? message;
     const activeErrorItem = items.find((item) => item.status === "error") ?? null;
-    const isModalOnlyReadError =
-      activeErrorItem?.errorCode === "I-104" &&
-      /file not readable|could not read enough details/i.test(
-        `${activeErrorItem.errorTitle ?? ""} ${activeErrorItem.error ?? ""}`
-      );
-    if (isModalOnlyReadError) {
-      clearImportActivity();
-      lastImportActivityRef.current = null;
-      return;
-    }
     const previousSummary =
       lastImportActivityRef.current?.summary ??
       (hasCompletedBatchNow ? buildVisibleImportSummary(items) : null);
@@ -6920,27 +6910,44 @@ export function ImportFilesModal({
     ) : showCompactProgress ? (
       <ImportUploadDock
         open
-        fileName={activeProgressItem?.file.name ?? null}
-        fileIndex={activeProgressItem ? items.findIndex((item) => item.id === activeProgressItem.id) + 1 : completedFileCount}
+        tone={currentErrorItem ? "error" : "default"}
+        fileName={currentErrorItem?.file.name ?? activeProgressItem?.file.name ?? null}
+        fileIndex={
+          currentErrorItem
+            ? items.findIndex((item) => item.id === currentErrorItem.id) + 1
+            : activeProgressItem
+              ? items.findIndex((item) => item.id === activeProgressItem.id) + 1
+              : completedFileCount
+        }
         fileTotal={items.length}
         completedFiles={completedFileCount}
-        progress={displayedOverallProgress}
+        progress={currentErrorItem ? currentErrorItem.progress : displayedOverallProgress}
         summary={compactProgressSummary}
         detail={
-          !activeProgressItem && hasCompletedBatch && message
+          currentErrorItem?.error ??
+          ((!activeProgressItem && hasCompletedBatch && message)
             ? message
             : friendlyImportProgressLabel(
                 activeProgressItem ? activeProgressItem.progressLabel : completedFileCount > 0 ? "Done" : "Queued",
                 activeProgressItem?.file.name ?? null,
                 activeProgressItem?.importMode ?? null
-              )
+              ))
         }
+        errorCode={currentErrorItem?.errorCode ?? null}
+        errorTitle={currentErrorItem?.errorTitle ?? null}
+        errorNextSteps={currentErrorItem?.errorNextSteps ?? null}
         phaseLabel={
           activeProgressItem
             ? friendlyImportPhaseLabel(activeProgressItem.progressLabel, activeProgressItem.file.name, activeProgressItem.importMode)
             : null
         }
-        onClose={onClose}
+        onClose={() => {
+          if (currentErrorItem) {
+            clearImportActivity();
+            lastImportActivityRef.current = null;
+          }
+          onClose();
+        }}
         />
     ) : (
     <div className="modal-backdrop modal-backdrop--import-fullscreen" role="presentation" onClick={onClose}>
