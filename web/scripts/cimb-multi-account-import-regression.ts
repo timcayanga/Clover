@@ -7,13 +7,14 @@ const webRoot = basename(process.cwd()) === "web" ? process.cwd() : join(process
 loadEnvConfig(webRoot);
 
 const loadRuntime = async () => {
-  const [{ prisma }, { readUploadedFileText }, { processImportFileText }] = await Promise.all([
+  const [{ prisma }, { readUploadedFileText }, { processImportFileText }, { loadImportStatusSnapshot }] = await Promise.all([
     import("@/lib/prisma"),
     import("@/lib/import-file-text.server"),
     import("@/workers/import-processor"),
+    import("@/lib/import-status-snapshot"),
   ]);
 
-  return { prisma, readUploadedFileText, processImportFileText };
+  return { prisma, readUploadedFileText, processImportFileText, loadImportStatusSnapshot };
 };
 
 const statementRoot = process.env.CLOVER_STATEMENT_ROOT ?? "/Users/TimCayanga1/Documents/Bank Statements";
@@ -51,8 +52,27 @@ const assertDatabaseReady = async (prisma: Awaited<ReturnType<typeof loadRuntime
   }
 };
 
+const assertCimbAccountSummaries = (
+  summaries: Array<{
+    accountNumber: string | null;
+    rowsImported: number;
+    balance: string | null;
+  }> | null | undefined,
+  source: string,
+) => {
+  const summaryList = summaries ?? [];
+  assert.equal(summaryList.length, 2, `${source} should report two account summaries.`);
+
+  for (const expected of expectedAccounts) {
+    const summary = summaryList.find((entry) => entry.accountNumber === expected.accountNumber);
+    assert.ok(summary, `${source} should include CIMB ${expected.lastFour}.`);
+    assert.equal(summary.rowsImported, 6, `${source} should report 6 rows for CIMB ${expected.lastFour}.`);
+    assert.equal(summary.balance, "4294.66", `${source} should report balance 4294.66 for CIMB ${expected.lastFour}.`);
+  }
+};
+
 const main = async () => {
-  const { prisma, readUploadedFileText, processImportFileText } = await loadRuntime();
+  const { prisma, readUploadedFileText, processImportFileText, loadImportStatusSnapshot } = await loadRuntime();
 
   try {
     await assertDatabaseReady(prisma);
@@ -99,14 +119,15 @@ const main = async () => {
 
       assert.equal(result.status, "done", "CIMB mixed statement should finish import.");
       assert.equal(result.imported, 12, `CIMB mixed statement should import 12 visible rows, got ${result.imported}.`);
-      assert.equal(result.accountSummaries?.length, 2, "CIMB mixed statement should report two account summaries.");
+      assertCimbAccountSummaries(result.accountSummaries, "CIMB mixed import result");
+
+      const statusSnapshot = await loadImportStatusSnapshot(importFile.id, { promoteFailedVisibleImport: true });
+      assert.ok(statusSnapshot, "Expected CIMB import status snapshot.");
+      assert.equal(statusSnapshot.visibleImportComplete, true, "CIMB status snapshot should be visible to the UI.");
+      assert.equal(statusSnapshot.confirmedTransactionsCount, 12, "CIMB status snapshot should report 12 confirmed rows.");
+      assertCimbAccountSummaries(statusSnapshot.accountSummaries, "CIMB status snapshot");
 
       for (const expected of expectedAccounts) {
-        const summary = result.accountSummaries?.find((entry) => entry.accountNumber === expected.accountNumber);
-        assert.ok(summary, `Expected account summary for CIMB ${expected.lastFour}.`);
-        assert.equal(summary.rowsImported, 6, `Expected CIMB ${expected.lastFour} to have 6 rows.`);
-        assert.equal(summary.balance, "4294.66", `Expected CIMB ${expected.lastFour} balance to be 4294.66.`);
-
         const account = await prisma.account.findFirst({
           where: {
             workspaceId,

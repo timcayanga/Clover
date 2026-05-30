@@ -233,11 +233,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         importFile: (await fetchImportFileCompat(importId)) ?? importFile,
         promoteFailedVisibleImport: true,
       });
+      const accountSummaries =
+        statusSnapshot?.accountSummaries?.length ? statusSnapshot.accountSummaries : result.accountSummaries ?? [];
+      const responseAccountId =
+        result.accountId ??
+        statusSnapshot?.importFile.accountId ??
+        (accountSummaries.length === 1 ? accountSummaries[0]?.accountId ?? null : null);
 
-      const visibleRows =
+      const visibleRows = Math.max(
         result.status === "done"
           ? Number(result.confirmedTransactionsCount ?? result.imported ?? 0)
-          : Number(result.confirmedTransactionsCount ?? 0);
+          : Number(result.confirmedTransactionsCount ?? 0),
+        Number(statusSnapshot?.confirmedTransactionsCount ?? 0)
+      );
 
       return NextResponse.json({
         ok: true,
@@ -248,12 +256,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         status: result.status ?? "done",
         importFileId: importId,
         metadata: result.metadata,
-        accountId: result.accountId ?? null,
-        accountSummaries: result.accountSummaries ?? [],
-        confirmedTransactionsCount: result.confirmedTransactionsCount ?? (result.status === "done" ? result.imported : 0),
+        accountId: responseAccountId,
+        accountSummaries,
+        confirmedTransactionsCount:
+          statusSnapshot?.confirmedTransactionsCount ??
+          result.confirmedTransactionsCount ??
+          (result.status === "done" ? result.imported : 0),
         insightSummary: result.insightSummary ?? null,
         accountBalance: result.accountBalance ?? null,
-        visibleImportComplete: visibleRows > 0,
+        visibleImportComplete: statusSnapshot?.visibleImportComplete ?? visibleRows > 0,
         finalizationInBackground: result.status === "done" && visibleRows > 0,
         receiptDocument: statusSnapshot?.receiptDocument ?? null,
         receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
@@ -438,11 +449,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           importFile: (await fetchImportFileCompat(importId)) ?? importFile,
           promoteFailedVisibleImport: true,
         });
+        const accountSummaries =
+          statusSnapshot?.accountSummaries?.length ? statusSnapshot.accountSummaries : result.accountSummaries ?? [];
+        const responseAccountId =
+          result.accountId ??
+          statusSnapshot?.importFile.accountId ??
+          (accountSummaries.length === 1 ? accountSummaries[0]?.accountId ?? null : null);
 
-        const visibleRows =
+        const visibleRows = Math.max(
           result.status === "done"
             ? Number(result.confirmedTransactionsCount ?? result.imported ?? 0)
-            : Number(result.confirmedTransactionsCount ?? 0);
+            : Number(result.confirmedTransactionsCount ?? 0),
+          Number(statusSnapshot?.confirmedTransactionsCount ?? 0)
+        );
 
         return NextResponse.json({
           ok: true,
@@ -453,12 +472,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           status: result.status ?? "done",
           importFileId: importId,
           metadata: result.metadata,
-          accountId: result.accountId ?? null,
-          accountSummaries: result.accountSummaries ?? [],
-          confirmedTransactionsCount: result.confirmedTransactionsCount ?? (result.status === "done" ? result.imported : 0),
+          accountId: responseAccountId,
+          accountSummaries,
+          confirmedTransactionsCount:
+            statusSnapshot?.confirmedTransactionsCount ??
+            result.confirmedTransactionsCount ??
+            (result.status === "done" ? result.imported : 0),
           insightSummary: result.insightSummary ?? null,
           accountBalance: result.accountBalance ?? null,
-          visibleImportComplete: visibleRows > 0,
+          visibleImportComplete: statusSnapshot?.visibleImportComplete ?? visibleRows > 0,
           finalizationInBackground: result.status === "done" && visibleRows > 0,
           receiptDocument: statusSnapshot?.receiptDocument ?? null,
           receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
@@ -746,11 +768,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           importFile: (await fetchImportFileCompat(importId)) ?? importFile,
           promoteFailedVisibleImport: true,
         });
+        const accountSummaries =
+          statusSnapshot?.accountSummaries?.length ? statusSnapshot.accountSummaries : result.accountSummaries ?? [];
+        const responseAccountId =
+          result.accountId ??
+          statusSnapshot?.importFile.accountId ??
+          (accountSummaries.length === 1 ? accountSummaries[0]?.accountId ?? null : null);
 
-        const visibleRows =
+        const visibleRows = Math.max(
           result.status === "done"
             ? Number(result.confirmedTransactionsCount ?? result.imported ?? 0)
-            : Number(result.confirmedTransactionsCount ?? 0);
+            : Number(result.confirmedTransactionsCount ?? 0),
+          Number(statusSnapshot?.confirmedTransactionsCount ?? 0)
+        );
 
         return NextResponse.json({
           ok: true,
@@ -761,12 +791,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           status: result.status ?? "done",
           importFileId: importId,
           metadata: result.metadata,
-          accountId: result.accountId ?? null,
-          accountSummaries: result.accountSummaries ?? [],
-          confirmedTransactionsCount: result.confirmedTransactionsCount ?? (result.status === "done" ? result.imported : 0),
+          accountId: responseAccountId,
+          accountSummaries,
+          confirmedTransactionsCount:
+            statusSnapshot?.confirmedTransactionsCount ??
+            result.confirmedTransactionsCount ??
+            (result.status === "done" ? result.imported : 0),
           insightSummary: result.insightSummary ?? null,
           accountBalance: result.accountBalance ?? null,
-          visibleImportComplete: visibleRows > 0,
+          visibleImportComplete: statusSnapshot?.visibleImportComplete ?? visibleRows > 0,
           finalizationInBackground: result.status === "done" && visibleRows > 0,
           receiptDocument: statusSnapshot?.receiptDocument ?? null,
           receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
@@ -908,11 +941,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         importFile: (await fetchImportFileCompat(importId)) ?? importFile,
         promoteFailedVisibleImport: true,
       });
+      const accountSummaries =
+        statusSnapshot?.accountSummaries?.length ? statusSnapshot.accountSummaries : result.accountSummaries ?? [];
+      const responseAccountId =
+        result.accountId ??
+        statusSnapshot?.importFile.accountId ??
+        (accountSummaries.length === 1 ? accountSummaries[0]?.accountId ?? null : null);
 
-      const visibleRows =
+      const visibleRows = Math.max(
         result.status === "done"
           ? Number(result.confirmedTransactionsCount ?? result.imported ?? 0)
-          : Number(result.confirmedTransactionsCount ?? 0);
+          : Number(result.confirmedTransactionsCount ?? 0),
+        Number(statusSnapshot?.confirmedTransactionsCount ?? 0)
+      );
 
       return NextResponse.json({
         ok: true,
@@ -923,12 +964,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         status: result.status ?? "done",
         importFileId: importId,
         metadata: result.metadata,
-        accountId: result.accountId ?? null,
-        accountSummaries: result.accountSummaries ?? [],
-        confirmedTransactionsCount: result.confirmedTransactionsCount ?? (result.status === "done" ? result.imported : 0),
+        accountId: responseAccountId,
+        accountSummaries,
+        confirmedTransactionsCount:
+          statusSnapshot?.confirmedTransactionsCount ??
+          result.confirmedTransactionsCount ??
+          (result.status === "done" ? result.imported : 0),
         insightSummary: result.insightSummary ?? null,
         accountBalance: result.accountBalance ?? null,
-        visibleImportComplete: visibleRows > 0,
+        visibleImportComplete: statusSnapshot?.visibleImportComplete ?? visibleRows > 0,
         finalizationInBackground: result.status === "done" && visibleRows > 0,
         receiptDocument: statusSnapshot?.receiptDocument ?? null,
         receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
