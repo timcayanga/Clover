@@ -7087,21 +7087,27 @@ function TransactionsPageContent() {
                   <button
                     type="button"
                     className="warning-summary-button"
-                    title={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning. Open the first one.`}
+                    data-tooltip={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"}`}
+                    title={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"}`}
                     onClick={() => {
-                      if (firstReviewTransaction) {
-                        openTransactionReview(firstReviewTransaction, transactionsSummary.firstReviewTransactionIndex);
+                      const nextReviewTransaction =
+                        activeWarningTransactionId ? nextReviewTransactionAfter(activeWarningTransactionId) : null;
+                      const targetReviewTransaction = nextReviewTransaction ?? firstReviewTransaction;
+                      if (targetReviewTransaction) {
+                        openTransactionReview(
+                          targetReviewTransaction,
+                          visibleTransactions.findIndex((transaction) => transaction.id === targetReviewTransaction.id)
+                        );
                       }
                     }}
                     aria-label={
                       firstReviewTransaction
-                        ? `${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning. Open the first one: ${firstReviewTransaction.merchantRaw}`
+                        ? `${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning. Open next warning.`
                         : `${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning`
                     }
                   >
                     <span className="warning-mark warning-mark--small" aria-hidden="true" />
-                    <span>{warningTransactionCount}</span>
-                    <span>{warningTransactionCount === 1 ? "warning" : "warnings"}</span>
+                    <span className="warning-summary-button__count" aria-hidden="true">{warningTransactionCount}</span>
                   </button>
                 ) : null}
               </div>
