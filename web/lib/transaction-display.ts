@@ -185,6 +185,12 @@ const getGenericCategoryOverride = (merchantText: string) => {
 const getInstitutionSpecificCategoryOverride = (institution: string | null | undefined, merchantText: string) => {
   const normalizedInstitution = (institution ?? "").trim();
 
+  if (/\beast\s*west\b/i.test(normalizedInstitution) || /eastwest/i.test(normalizedInstitution)) {
+    if (/\bcash\s+deposit\b/i.test(merchantText)) {
+      return "Cash & ATM";
+    }
+  }
+
   if (/\b(?:aub|asia united bank)\b/i.test(normalizedInstitution)) {
     return getAubCategoryOverride(merchantText);
   }
@@ -287,6 +293,9 @@ export const getEffectiveTransactionCategoryName = (params: {
 
   if (isMeaningfulCategoryName(directCategory)) {
     if ((isImportedRow || hasImportedRawPayload) && isBroadCategoryName(directCategory)) {
+      if (institutionOverride === directCategory) {
+        return directCategory;
+      }
       if (isMeaningfulCategoryName(institutionOverride) && institutionOverride !== directCategory) {
         return institutionOverride;
       }
@@ -300,6 +309,9 @@ export const getEffectiveTransactionCategoryName = (params: {
 
   if (isMeaningfulCategoryName(rawPayloadCategory)) {
     if ((isImportedRow || hasImportedRawPayload) && isBroadCategoryName(rawPayloadCategory)) {
+      if (institutionOverride === rawPayloadCategory) {
+        return rawPayloadCategory;
+      }
       if (isMeaningfulCategoryName(institutionOverride) && institutionOverride !== rawPayloadCategory) {
         return institutionOverride;
       }
