@@ -16,6 +16,7 @@
     "qa:imports": "tsx scripts/import-smoke-regression.ts",
     "qa:bpi-enrichment": "tsx scripts/bpi-four-file-enrichment-regression.ts",
     "qa:bpi-import-worker-enrichment": "tsx scripts/bpi-import-worker-enrichment-regression.ts",
+    "qa:cimb-multi-account": "tsx scripts/cimb-multi-account-import-regression.ts",
     "qa:training-signals": "tsx scripts/training-signal-dedupe.ts",
     "qa:training-signals-db": "tsx scripts/record-training-signal-regression.ts",
     "qa:data-loop": "tsx scripts/data-qa-regression.ts",
