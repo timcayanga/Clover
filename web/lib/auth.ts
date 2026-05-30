@@ -8,6 +8,18 @@ const stagingHosts = new Set(["staging.clover.ph", "clover-stage.vercel.app"]);
 const localDevHosts = new Set(["localhost", "127.0.0.1", "::1"]);
 const stagingGuestUserId = "staging-guest";
 
+const isKnownStagingHost = (hostname: string) => {
+  if (!hostname) {
+    return false;
+  }
+
+  if (stagingHosts.has(hostname)) {
+    return true;
+  }
+
+  return hostname.startsWith("clover-stage-") && hostname.endsWith(".vercel.app");
+};
+
 const getHostname = async () => {
   try {
     const headerList = await headers();
@@ -43,7 +55,7 @@ const resolveStagingUserIdFromRememberedSession = async () => {
   }
 };
 
-export const isStagingHost = async () => stagingHosts.has(await getHostname());
+export const isStagingHost = async () => isKnownStagingHost(await getHostname());
 
 export const isLocalDevHost = async () => {
   const hostname = await getHostname();
@@ -53,7 +65,7 @@ export const isLocalDevHost = async () => {
 export const getSessionContext = async () => {
   const hostname = await getHostname();
   const localDevHost = localDevHosts.has(hostname);
-  const stagingHost = stagingHosts.has(hostname);
+  const stagingHost = isKnownStagingHost(hostname);
 
   if (localDevHost) {
     return { userId: stagingGuestUserId, isGuest: true };
