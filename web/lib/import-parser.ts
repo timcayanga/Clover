@@ -93,14 +93,16 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
   if (/gcash\s+cash\s+in|gcashcashin/.test(lower)) return "Transfers";
   if (/salary|payroll|income|deposit|cash\s*(?:in|deposit)|credit memo/.test(lower)) return "Income";
+  if (/refund|reversal|cashback|cash back|reward|rebate|interest/.test(lower)) return "Income";
   if (/epsaten/.test(lower)) return type === "expense" ? "Cash & ATM" : "Income";
   if (/el\/?espay/.test(lower)) return type === "expense" || type === "transfer" ? "Transfers" : "Income";
   if (/payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
-  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut/.test(lower)) return "Food & Dining";
+  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut|yoshinoya/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
-  if (/bill|utilities|electric|water|internet|phone|subscription|openai|netflix|spotify/.test(lower)) return "Bills & Utilities";
+  if (/bill|utilities|electric|water|internet|phone|subscription|openai|netflix|spotify|load purchase|pay\s*maya\s*load purchase|paymaya\s*load purchase|mobile load/.test(lower))
+    return "Bills & Utilities";
   if (/travel|airbnb|hotel|airline|flight|tour|holiday/.test(lower)) return "Travel & Lifestyle";
   if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox/.test(lower))
     return "Entertainment";
@@ -8971,7 +8973,7 @@ const classifyGoTymeTransaction = (description: string, credit: number, debit: n
     return { type: "expense", categoryName: "Shopping" };
   }
 
-  if (/^(?:load purchase|buy load|mobile load|top up|top-up)/.test(lower)) {
+  if (/load purchase|in-app purchase for mobile|in app purchase for mobile|buy load|mobile load|top up|top-up/.test(lower)) {
     return { type: "expense", categoryName: "Bills & Utilities" };
   }
 
