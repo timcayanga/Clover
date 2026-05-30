@@ -291,14 +291,14 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
 
     await assertWorkspaceAccess(userId, existingAccount.workspaceId);
 
-    await prisma.$transaction(async (tx) => {
-      await deleteAccountsAndImportArtifacts(tx, {
+    const deletionResult = await prisma.$transaction(async (tx) => {
+      return deleteAccountsAndImportArtifacts(tx, {
         workspaceId: existingAccount.workspaceId,
         accountIds: [accountId],
       });
     });
 
-    return NextResponse.json({ account: serializeAccount(existingAccount) });
+    return NextResponse.json({ account: serializeAccount(existingAccount), deletedTransactions: deletionResult.transactionsDeleted });
   } catch (error) {
     return NextResponse.json(
       {

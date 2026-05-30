@@ -6,15 +6,20 @@ type DeleteAccountArtifactsOptions = {
   includeWorkspaceImportArtifacts?: boolean;
 };
 
+type DeleteAccountArtifactsResult = {
+  accountsDeleted: number;
+  transactionsDeleted: number;
+};
+
 const inList = (values: string[]) => ({ in: values });
 
 export const deleteAccountsAndImportArtifacts = async (
   tx: any,
   { workspaceId, accountIds, includeWorkspaceImportArtifacts = false }: DeleteAccountArtifactsOptions
-) => {
+): Promise<DeleteAccountArtifactsResult> => {
   const uniqueAccountIds = Array.from(new Set(accountIds.filter(Boolean)));
   if (!workspaceId || (uniqueAccountIds.length === 0 && !includeWorkspaceImportArtifacts)) {
-    return;
+    return { accountsDeleted: 0, transactionsDeleted: 0 };
   }
 
   const accountIdFilter = inList(uniqueAccountIds);
@@ -118,7 +123,7 @@ export const deleteAccountsAndImportArtifacts = async (
       ? { workspaceId, id: inList(relatedImportFileIds()) }
       : importFileWhere;
 
-  await tx.transaction.deleteMany({
+  const deletedTransactions = await tx.transaction.deleteMany({
     where: {
       workspaceId,
       OR: [
@@ -197,7 +202,7 @@ export const deleteAccountsAndImportArtifacts = async (
     where: importFileDeleteWhere,
   });
 
-  await tx.account.deleteMany({
+  const deletedAccounts = await tx.account.deleteMany({
     where: {
       workspaceId,
       id: accountIdFilter,
@@ -209,4 +214,9 @@ export const deleteAccountsAndImportArtifacts = async (
       where: { workspaceId },
     });
   }
+
+  return {
+    accountsDeleted: deletedAccounts.count,
+    transactionsDeleted: deletedTransactions.count,
+  };
 };

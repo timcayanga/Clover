@@ -69,21 +69,20 @@ export async function DELETE(request: Request) {
       await prisma.account.findMany({
         where: {
           workspaceId,
-          type: { not: "cash" },
         },
         select: { id: true },
       })
     ).map((account) => account.id);
 
-    await prisma.$transaction(async (tx) => {
-      await deleteAccountsAndImportArtifacts(tx, {
+    const deletionResult = await prisma.$transaction(async (tx) => {
+      return deleteAccountsAndImportArtifacts(tx, {
         workspaceId,
         accountIds,
         includeWorkspaceImportArtifacts: true,
       });
     });
 
-    return NextResponse.json({ deleted: accountIds.length });
+    return NextResponse.json({ deleted: deletionResult.accountsDeleted, deletedTransactions: deletionResult.transactionsDeleted });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -682,14 +682,14 @@ export function SettingsHub({
     },
     accounts: {
       confirmTitle: "Delete accounts and linked transactions?",
-      body: "This removes non-cash accounts and the transactions tied to them.",
+      body: "This removes your accounts and the transactions tied to them.",
       confirmLabel: "Delete accounts",
       successTitle: "Accounts deleted",
       successBody: (count: number | null) =>
         count === null
           ? "Accounts and linked import data were deleted."
           : count === 0
-          ? "No non-cash accounts were available to delete."
+          ? "No accounts were available to delete."
           : `Deleted ${count.toLocaleString()} account${count === 1 ? "" : "s"}.`,
     },
     all: {
