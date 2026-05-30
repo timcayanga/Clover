@@ -13,6 +13,25 @@ type DeleteAccountArtifactsResult = {
 
 const inList = (values: string[]) => ({ in: values });
 
+export const deleteOrphanedWorkspaceTransactions = async (tx: any, workspaceId: string) => {
+  if (!workspaceId) {
+    return 0;
+  }
+
+  const deletedRows = await tx.$queryRaw<Array<{ id: string }>>`
+    DELETE FROM "Transaction" t
+    WHERE t."workspaceId" = ${workspaceId}
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "Account" a
+        WHERE a."id" = t."accountId"
+      )
+    RETURNING t."id"
+  `;
+
+  return deletedRows.length;
+};
+
 export const deleteAccountsAndImportArtifacts = async (
   tx: any,
   { workspaceId, accountIds, includeWorkspaceImportArtifacts = false }: DeleteAccountArtifactsOptions
@@ -123,15 +142,19 @@ export const deleteAccountsAndImportArtifacts = async (
       ? { workspaceId, id: inList(relatedImportFileIds()) }
       : importFileWhere;
 
-  const deletedTransactions = await tx.transaction.deleteMany({
-    where: {
-      workspaceId,
-      OR: [
-        { accountId: accountIdFilter },
-        ...(relatedImportFileIds().length > 0 ? [{ importFileId: inList(relatedImportFileIds()) }] : []),
-      ],
-    },
-  });
+  const deletedTransactions = includeWorkspaceImportArtifacts
+    ? await tx.transaction.deleteMany({
+        where: { workspaceId },
+      })
+    : await tx.transaction.deleteMany({
+        where: {
+          workspaceId,
+          OR: [
+            { accountId: accountIdFilter },
+            ...(relatedImportFileIds().length > 0 ? [{ importFileId: inList(relatedImportFileIds()) }] : []),
+          ],
+        },
+      });
 
   await tx.financialCommitment.deleteMany({
     where: {

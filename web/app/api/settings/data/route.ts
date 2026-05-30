@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { hasCompatibleTable } from "@/lib/data-engine";
-import { deleteAccountsAndImportArtifacts } from "@/lib/account-deletion";
+import { deleteAccountsAndImportArtifacts, deleteOrphanedWorkspaceTransactions } from "@/lib/account-deletion";
 
 export const dynamic = "force-dynamic";
 
@@ -34,14 +34,23 @@ export async function DELETE(request: Request) {
     await assertWorkspaceAccess(userId, workspaceId);
 
     if (scope === "transactions") {
-      const result = await prisma.transaction.deleteMany({
-        where: {
-          workspaceId,
-          date: { lt: cutoff },
-        },
+      const result = await prisma.$transaction(async (tx) => {
+        const deletedTransactions = await tx.transaction.deleteMany({
+          where: {
+            workspaceId,
+            date: { lt: cutoff },
+          },
+        });
+        const deletedOrphanedTransactions = await deleteOrphanedWorkspaceTransactions(tx, workspaceId);
+
+        return {
+          deleted: deletedTransactions.count + deletedOrphanedTransactions,
+          deletedTransactions: deletedTransactions.count,
+          deletedOrphanedTransactions,
+        };
       });
 
-      return NextResponse.json({ deleted: result.count });
+      return NextResponse.json(result);
     }
 
     if (scope === "balances") {

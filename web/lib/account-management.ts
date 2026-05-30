@@ -17,6 +17,20 @@ export const wipeLocalUserData = async (
   }
 
   await prisma.$transaction(async (tx: any) => {
+    const workspaces = await tx.workspace.findMany({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    const workspaceIds = workspaces.map((workspace: { id: string }) => workspace.id);
+
+    if (workspaceIds.length > 0) {
+      await tx.transaction.deleteMany({
+        where: {
+          workspaceId: { in: workspaceIds },
+        },
+      });
+    }
+
     await tx.workspace.deleteMany({
       where: { userId: user.id },
     });
