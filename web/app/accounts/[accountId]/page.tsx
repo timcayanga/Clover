@@ -1,12 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { CategoryBrandMark } from "@/components/category-brand-mark";
+import { CurrencySelector } from "@/components/currency-selector";
 import { FinancialAccountCard } from "@/components/financial-account-card";
-import { formatUploadAccountDisplayName, getAccountCardName } from "@/lib/account-display";
+import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
+import { formatUploadAccountDisplayName, getAccountCardName, getAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
@@ -17,6 +21,9 @@ import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { guessCategoryName } from "@/lib/import-parser";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
+import { getCurrencyCatalogCodes } from "@/lib/currencies";
+import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { clearImportActivity, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
 import {
@@ -83,6 +90,7 @@ type Account = {
 
 type Transaction = {
   id: string;
+  workspaceId?: string;
   accountId: string;
   accountName?: string | null;
   categoryId: string | null;
@@ -94,13 +102,20 @@ type Transaction = {
   merchantClean: string | null;
   categoryName: string | null;
   reviewStatus?: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped" | null;
+  parserConfidence?: number | null;
   categoryConfidence?: number | null;
+  accountMatchConfidence?: number | null;
+  duplicateConfidence?: number | null;
+  transferConfidence?: number | null;
   description: string | null;
   isExcluded: boolean;
+  isTransfer?: boolean;
   institution?: string | null;
   accountNumber?: string | null;
   source?: string | null;
   importFileId?: string | null;
+  warningReason?: string | null;
+  splitBill?: { id: string; title: string } | null;
   rawPayload?: unknown;
 };
 
@@ -126,14 +141,39 @@ type InlineEditableCellProps = {
 };
 
 type TransactionDetailDraft = {
+  merchantRaw: string;
   merchantClean: string;
   date: string;
+  accountId: string;
   categoryId: string;
   amount: string;
   currency: string;
-  type: "debit" | "credit" | "transfer";
+  type: "debit" | "credit";
   description: string;
   isExcluded: boolean;
+  isTransfer: boolean;
+  receiptLineItems: ReceiptLineItemDraft[];
+};
+
+type ReceiptLineItemDraft = {
+  description: string;
+  quantity: string;
+  currency: string;
+  unitPrice: string;
+  amount: string;
+};
+
+type ReceiptLineItem = {
+  description: string;
+  quantity?: string | null;
+  currency?: string | null;
+  unitPrice?: string | null;
+  amount?: string | null;
+};
+
+type TransactionReviewChip = {
+  label: string;
+  tone: "clear" | "warn" | "danger" | "neutral";
 };
 
 type ImportFile = {
@@ -545,6 +585,269 @@ const buildInvestmentDraftSyncKey = (account: Account) =>
   ].join("|");
 
 const formatAccountAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
+const formatTransactionAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const looksLikeJsonBlob = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed || !/^[\[{]/.test(trimmed)) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed !== null && typeof parsed === "object";
+  } catch {
+    return true;
+  }
+};
+
+const normalizeTransactionNotes = (value: string | null | undefined) => {
+  if (!value) {
+    return "";
+  }
+
+  const trimmed = value.trim();
+  return trimmed && !looksLikeJsonBlob(trimmed) ? trimmed : "";
+};
+
+const getRawPayloadTextCandidate = (rawPayload: unknown, keys: string[]) => {
+  if (!isRecord(rawPayload)) {
+    return "";
+  }
+
+  for (const key of keys) {
+    const candidate = rawPayload[key];
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return "";
+};
+
+const createEmptyReceiptLineItem = (): ReceiptLineItemDraft => ({
+  description: "",
+  quantity: "",
+  currency: "",
+  unitPrice: "",
+  amount: "",
+});
+
+const normalizeReceiptLineItemText = (value: unknown) => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : "";
+  }
+
+  return typeof value === "string" ? value.trim() : "";
+};
+
+const parseReceiptLineItemsFromPayload = (rawPayload: unknown): ReceiptLineItem[] => {
+  if (!isRecord(rawPayload)) {
+    return [];
+  }
+
+  const candidateSources: unknown[] = [];
+  if (Array.isArray(rawPayload.receiptLineItems)) {
+    candidateSources.push(rawPayload.receiptLineItems);
+  }
+
+  const receiptDetails = isRecord(rawPayload.receiptDetails) ? rawPayload.receiptDetails : null;
+  if (receiptDetails) {
+    if (Array.isArray(receiptDetails.lineItems)) {
+      candidateSources.push(receiptDetails.lineItems);
+    }
+
+    if (Array.isArray(receiptDetails.line_items)) {
+      candidateSources.push(receiptDetails.line_items);
+    }
+  }
+
+  for (const source of candidateSources) {
+    const lineItems = (source as unknown[]).flatMap((entry) => {
+      if (!isRecord(entry)) {
+        return [];
+      }
+
+      const description = normalizeReceiptLineItemText(entry.description ?? entry.name ?? entry.label);
+      if (!description) {
+        return [];
+      }
+
+      return [
+        {
+          description,
+          quantity: normalizeReceiptLineItemText(entry.quantity) || null,
+          currency: normalizeReceiptLineItemText(entry.currency) || null,
+          unitPrice: normalizeReceiptLineItemText(entry.unitPrice ?? entry.unit_price) || null,
+          amount: normalizeReceiptLineItemText(entry.amount ?? entry.total) || null,
+        },
+      ];
+    });
+
+    if (lineItems.length > 0) {
+      return lineItems;
+    }
+  }
+
+  return [];
+};
+
+const parseReceiptLineItemNumber = (value: string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number(String(value).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getReceiptLineItemComputedAmount = (item: ReceiptLineItemDraft | ReceiptLineItem) => {
+  const amount = parseReceiptLineItemNumber(item.amount);
+  if (amount !== null) {
+    return amount;
+  }
+
+  const unitPrice = parseReceiptLineItemNumber(item.unitPrice);
+  const quantity = parseReceiptLineItemNumber(item.quantity);
+  return unitPrice !== null && quantity !== null ? unitPrice * quantity : null;
+};
+
+const getManualReceiptLineItemTotal = (lineItems: ReceiptLineItemDraft[]) =>
+  lineItems.reduce((total, item) => total + (getReceiptLineItemComputedAmount(item) ?? 0), 0);
+
+const sanitizeReceiptLineItems = (lineItems: ReceiptLineItemDraft[]) =>
+  lineItems
+    .map((item) => ({
+      description: item.description.trim(),
+      quantity: item.quantity.trim(),
+      currency: item.currency.trim(),
+      unitPrice: item.unitPrice.trim(),
+      amount: item.amount.trim(),
+    }))
+    .filter((item) => Boolean(item.description))
+    .map((item) => ({
+      description: item.description,
+      quantity: item.quantity || null,
+      currency: item.currency || null,
+      unitPrice: item.unitPrice || null,
+      amount: item.amount || null,
+    }));
+
+const receiptLineItemToDraft = (lineItem: ReceiptLineItem): ReceiptLineItemDraft => ({
+  description: lineItem.description ?? "",
+  quantity: lineItem.quantity ?? "",
+  currency: lineItem.currency ?? "",
+  unitPrice: lineItem.unitPrice ?? "",
+  amount: lineItem.amount ?? "",
+});
+
+const receiptLineItemSignature = (lineItems: ReceiptLineItemDraft[] | ReceiptLineItem[]) =>
+  JSON.stringify(
+    sanitizeReceiptLineItems(
+      lineItems.map((lineItem) => ({
+        description: lineItem.description ?? "",
+        quantity: lineItem.quantity ?? "",
+        currency: lineItem.currency ?? "",
+        unitPrice: lineItem.unitPrice ?? "",
+        amount: lineItem.amount ?? "",
+      }))
+    )
+  );
+
+const mergeReceiptLineItemsIntoPayload = (rawPayload: unknown, lineItems: ReceiptLineItemDraft[], fallbackCurrency: string) => {
+  const sanitizedLineItems = sanitizeReceiptLineItems(
+    lineItems.map((lineItem) => ({
+      ...lineItem,
+      currency: lineItem.currency.trim() || fallbackCurrency,
+    }))
+  );
+  const nextPayload: Record<string, unknown> = isRecord(rawPayload) ? { ...rawPayload } : {};
+  nextPayload.receiptLineItems = sanitizedLineItems;
+
+  if (isRecord(nextPayload.receiptDetails)) {
+    nextPayload.receiptDetails = {
+      ...nextPayload.receiptDetails,
+      lineItems: sanitizedLineItems,
+    };
+  }
+
+  return nextPayload;
+};
+
+const normalizeConfidenceScore = (value: number | null | undefined) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  const score = value <= 1 ? value * 100 : value;
+  return Math.max(0, Math.min(100, Math.round(score)));
+};
+
+const getConfidenceLabel = (value: number) => {
+  if (value >= 85) {
+    return "High";
+  }
+
+  if (value >= 65) {
+    return "Medium";
+  }
+
+  return "Needs review";
+};
+
+const getTransactionConfidenceScore = (transaction: Transaction, warningReason: string | null) => {
+  const confidenceSignals = [
+    normalizeConfidenceScore(transaction.parserConfidence),
+    normalizeConfidenceScore(transaction.categoryConfidence),
+    normalizeConfidenceScore(transaction.accountMatchConfidence),
+    transaction.type === "transfer" ? normalizeConfidenceScore(transaction.transferConfidence) : null,
+  ].filter((value): value is number => typeof value === "number");
+
+  if (confidenceSignals.length > 0) {
+    return Math.round(confidenceSignals.reduce((sum, value) => sum + value, 0) / confidenceSignals.length);
+  }
+
+  const sourceBoost = transaction.source === "manual" ? 6 : transaction.source === "upload" ? 0 : -4;
+  const hasWarning = Boolean(warningReason);
+  const isDuplicateWarning = warningReason === "Review similar transaction";
+  const values = [
+    Math.max(40, Math.min(98, (transaction.merchantClean?.trim() ? 88 : 74) + sourceBoost + (transaction.merchantRaw.trim() ? 4 : -10))),
+    Math.max(40, Math.min(98, (transaction.accountId ? 92 : 58) + sourceBoost + (transaction.accountName ? 2 : -6))),
+    Math.max(20, Math.min(98, (!transaction.categoryId ? 28 : 86) + sourceBoost + (isDuplicateWarning ? -8 : 0) + (hasWarning ? -4 : 0))),
+  ];
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+};
+
+const getTransactionReviewChips = (transaction: Transaction, warningReason: string | null): TransactionReviewChip[] => {
+  const confidenceScore = getTransactionConfidenceScore(transaction, warningReason);
+  const reviewReasons = getTransactionReviewReasons(transaction);
+  const chips: TransactionReviewChip[] = [];
+
+  if (confidenceScore >= 85 && reviewReasons.length === 0) {
+    chips.push({ label: "High confidence", tone: "clear" });
+  }
+
+  for (const reason of reviewReasons) {
+    chips.push({
+      label: reason,
+      tone:
+        reason === "Review similar transaction"
+          ? "danger"
+          : reason === "Ignored from totals" || reason === "Could not identify merchant"
+            ? "neutral"
+            : "warn",
+    });
+  }
+
+  if (chips.length === 0) {
+    chips.push({ label: getConfidenceLabel(confidenceScore), tone: confidenceScore >= 85 ? "clear" : "neutral" });
+  }
+
+  return chips;
+};
 
 const hexToRgba = (hex: string, alpha: number) => {
   const normalized = hex.trim().replace("#", "");
@@ -657,6 +960,7 @@ const createDetailDraft = (
   const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount);
 
   return {
+    merchantRaw: transaction.merchantRaw,
     merchantClean:
       getEffectiveTransactionMerchantName({
         merchantClean: transaction.merchantClean,
@@ -664,17 +968,20 @@ const createDetailDraft = (
         rawPayload: transaction.rawPayload as never,
       }) ?? transaction.merchantRaw,
     date: transaction.date.slice(0, 10),
+    accountId: transaction.accountId,
     categoryId: options.categoryId ?? transaction.categoryId ?? "",
     amount: transaction.amount,
     currency: transaction.currency ?? "PHP",
-    type: effectiveType === "income" ? "credit" : effectiveType === "transfer" ? "transfer" : "debit",
-    description: transaction.description ?? "",
+    type: effectiveType === "income" ? "credit" : "debit",
+    description: normalizeTransactionNotes(transaction.description),
     isExcluded: transaction.isExcluded,
+    isTransfer: Boolean(transaction.isTransfer || effectiveType === "transfer"),
+    receiptLineItems: parseReceiptLineItemsFromPayload(transaction.rawPayload).map(receiptLineItemToDraft),
   };
 };
 
 const detailDraftTypeToTransactionType = (type: TransactionDetailDraft["type"]) =>
-  type === "credit" ? "income" : type === "transfer" ? "transfer" : "expense";
+  type === "credit" ? "income" : "expense";
 
 const getDisplayTransactionCategoryName = (
   transaction: Transaction,
@@ -783,6 +1090,14 @@ function AccountDetailPageContent() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
   const [isSavingTransactionDetail, setIsSavingTransactionDetail] = useState(false);
+  const [transactionDeleteConfirmOpen, setTransactionDeleteConfirmOpen] = useState(false);
+  const [transactionSplitBillOpen, setTransactionSplitBillOpen] = useState(false);
+  const [transactionSplitBillDraft, setTransactionSplitBillDraft] = useState<SplitBillTransactionLinkDraft>({
+    groupId: "",
+    participantNames: [],
+  });
+  const [transactionSplitBillSaving, setTransactionSplitBillSaving] = useState(false);
+  const [transactionSplitBillError, setTransactionSplitBillError] = useState<string | null>(null);
   const [investmentEditDraft, setInvestmentEditDraft] = useState<InvestmentEditDraft | null>(null);
   const [investmentAutosaveState, setInvestmentAutosaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [investmentPurchases, setInvestmentPurchases] = useState<InvestmentPurchase[]>([]);
@@ -808,6 +1123,7 @@ function AccountDetailPageContent() {
   const [importActivitySnapshot, setImportActivitySnapshot] = useState(() => readImportActivity());
   const loadedAccountIdRef = useRef<string | null>(null);
   const selectAllTransactionsRef = useRef<HTMLInputElement | null>(null);
+  const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -2036,6 +2352,99 @@ function AccountDetailPageContent() {
     () => categories.find((category) => category.id === (detailDraft?.categoryId ?? "")) ?? null,
     [categories, detailDraft?.categoryId]
   );
+  const detailAccountOptions = useMemo(() => {
+    const accountsById = new Map<string, Account>();
+    if (account) {
+      accountsById.set(account.id, account);
+    }
+
+    for (const workspaceAccount of workspaceAccounts) {
+      accountsById.set(workspaceAccount.id, workspaceAccount);
+    }
+
+    return Array.from(accountsById.values());
+  }, [account, workspaceAccounts]);
+  const detailSelectedAccount = useMemo(
+    () => (detailDraft ? detailAccountOptions.find((entry) => entry.id === detailDraft.accountId) ?? account : account),
+    [account, detailAccountOptions, detailDraft]
+  );
+  const detailSelectedAccountBrand = useMemo(
+    () =>
+      detailSelectedAccount
+        ? getAccountBrand({
+            name: detailSelectedAccount.name,
+            institution: detailSelectedAccount.institution,
+            type: detailSelectedAccount.type,
+          })
+        : null,
+    [detailSelectedAccount]
+  );
+  const selectedTransactionWarningReason = selectedTransaction?.warningReason ?? null;
+  const selectedTransactionReviewReasons = selectedTransaction ? getTransactionReviewReasons(selectedTransaction) : [];
+  const selectedTransactionWarningReasonSummary =
+    selectedTransactionReviewReasons.length > 0 ? selectedTransactionReviewReasons.join(" · ") : selectedTransactionWarningReason;
+  const selectedTransactionConfidenceScore = selectedTransaction
+    ? getTransactionConfidenceScore(selectedTransaction, selectedTransactionWarningReason)
+    : null;
+  const selectedTransactionReviewChips = selectedTransaction
+    ? getTransactionReviewChips(selectedTransaction, selectedTransactionWarningReason)
+    : [];
+  const detailTransactionSummary = useMemo(() => {
+    if (!selectedTransaction) {
+      return "";
+    }
+
+    return (
+      getEffectiveTransactionMerchantName({
+        merchantClean: detailDraft?.merchantClean ?? selectedTransaction.merchantClean,
+        merchantRaw: selectedTransaction.merchantRaw,
+        rawPayload: selectedTransaction.rawPayload as never,
+      }) ?? selectedTransaction.merchantRaw
+    );
+  }, [detailDraft?.merchantClean, selectedTransaction]);
+  const detailTransactionRawName = selectedTransaction?.merchantRaw.trim() ?? "";
+  const hasDistinctDetailRawName = Boolean(
+    detailTransactionRawName &&
+      detailTransactionSummary &&
+      detailTransactionRawName.toLowerCase() !== detailTransactionSummary.toLowerCase()
+  );
+  const selectedTransactionReceiptLineItems = useMemo(
+    () => parseReceiptLineItemsFromPayload(selectedTransaction?.rawPayload),
+    [selectedTransaction?.rawPayload]
+  );
+  const selectedTransactionRawSourceLine = useMemo(
+    () => getRawPayloadTextCandidate(selectedTransaction?.rawPayload, ["line", "rawLine", "sourceLine", "rawText", "text"]),
+    [selectedTransaction?.rawPayload]
+  );
+  const selectedTransactionRawNote = useMemo(
+    () => getRawPayloadTextCandidate(selectedTransaction?.rawPayload, ["notes", "note", "detail", "details"]),
+    [selectedTransaction?.rawPayload]
+  );
+  const detailReceiptLineItems = detailDraft?.receiptLineItems ?? selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
+  const detailReceiptLineItemTotal = useMemo(
+    () => getManualReceiptLineItemTotal(detailReceiptLineItems),
+    [detailReceiptLineItems]
+  );
+  const hasDetailDraftChanges = useMemo(() => {
+    if (!selectedTransaction || !detailDraft) {
+      return false;
+    }
+
+    return (
+      (detailDraft.merchantClean.trim() || "") !== (selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw).trim() ||
+      detailDraft.date !== selectedTransaction.date.slice(0, 10) ||
+      detailDraft.accountId !== selectedTransaction.accountId ||
+      detailDraft.categoryId !== (getDisplayCategoryIdForTransaction(selectedTransaction) || "") ||
+      detailDraft.amount !== selectedTransaction.amount ||
+      detailDraft.currency !== (selectedTransaction.currency ?? account?.currency ?? "PHP") ||
+      detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
+      normalizeTransactionNotes(detailDraft.description) !== normalizeTransactionNotes(selectedTransaction.description ?? "") ||
+      detailDraft.isExcluded !== selectedTransaction.isExcluded ||
+      detailDraft.isTransfer !== Boolean(selectedTransaction.isTransfer || selectedTransaction.type === "transfer") ||
+      receiptLineItemSignature(detailDraft.receiptLineItems) !==
+        receiptLineItemSignature(parseReceiptLineItemsFromPayload(selectedTransaction.rawPayload))
+    );
+  }, [account?.currency, detailDraft, getDisplayCategoryIdForTransaction, selectedTransaction]);
 
   const hasMoreTransactions = transactionTotalCount > transactions.length;
   const hasVisibleTransactions = visibleTransactions.length > 0;
@@ -2201,34 +2610,191 @@ function AccountDetailPageContent() {
   const openTransactionDetail = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
     setDetailDraft(createDetailDraft(transaction, { categoryId: getDisplayCategoryIdForTransaction(transaction) }));
+    setTransactionDeleteConfirmOpen(false);
+    setTransactionSplitBillOpen(false);
+    setTransactionSplitBillDraft({
+      groupId: "",
+      participantNames: [],
+    });
+    setTransactionSplitBillError(null);
   };
 
   const closeTransactionDetail = () => {
+    if (selectedTransaction && detailDraft && hasDetailDraftChanges && !isSavingTransactionDetail) {
+      void persistDetailDraft({ closeAfterSave: true });
+      return;
+    }
+
     setSelectedTransaction(null);
     setDetailDraft(null);
+    setTransactionDeleteConfirmOpen(false);
+    setTransactionSplitBillOpen(false);
+    setTransactionSplitBillDraft({
+      groupId: "",
+      participantNames: [],
+    });
+    setTransactionSplitBillSaving(false);
+    setTransactionSplitBillError(null);
   };
 
-  const persistDetailDraft = async () => {
+  const persistDetailDraft = async ({ closeAfterSave = true }: { closeAfterSave?: boolean } = {}) => {
     if (!selectedTransaction || !detailDraft) {
       return;
     }
 
     setIsSavingTransactionDetail(true);
     try {
+      const previousCategoryId = selectedTransaction.categoryId ?? "";
+      const nextCategoryId = detailDraft.categoryId || "";
+      const categoryChanged = previousCategoryId !== nextCategoryId;
+      const previousCategoryName = selectedTransaction.categoryName ?? categories.find((category) => category.id === previousCategoryId)?.name ?? "Other";
+      const nextCategoryName = categories.find((category) => category.id === nextCategoryId)?.name ?? (nextCategoryId ? selectedTransaction.categoryName ?? "Other" : "Other");
       await updateTransaction(selectedTransaction.id, {
+        merchantRaw: detailDraft.merchantRaw,
         merchantClean: detailDraft.merchantClean.trim() || null,
         date: detailDraft.date,
+        accountId: detailDraft.accountId,
         categoryId: detailDraft.categoryId || null,
         amount: detailDraft.amount,
         currency: detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency || account?.currency || "PHP",
         type: detailDraftTypeToTransactionType(detailDraft.type),
-        description: detailDraft.description.trim() || null,
+        description: detailDraft.description || null,
         isExcluded: detailDraft.isExcluded,
+        isTransfer: detailDraft.isTransfer,
+        rawPayload: mergeReceiptLineItemsIntoPayload(
+          selectedTransaction.rawPayload,
+          detailDraft.receiptLineItems,
+          detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency || account?.currency || "PHP"
+        ),
       });
-      setMessage("Transaction details updated.");
-      closeTransactionDetail();
+      setMessage(
+        categoryChanged
+          ? `Category updated: ${previousCategoryName} → ${nextCategoryName}. We'll remember this next time.`
+          : "Transaction details updated."
+      );
+      if (closeAfterSave) {
+        setSelectedTransaction(null);
+        setDetailDraft(null);
+        setTransactionDeleteConfirmOpen(false);
+        setTransactionSplitBillOpen(false);
+        setTransactionSplitBillError(null);
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
+    } finally {
+      setIsSavingTransactionDetail(false);
+    }
+  };
+
+  const updateDetailReceiptLineItem = (index: number, field: keyof ReceiptLineItemDraft, value: string) => {
+    setDetailDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const nextLineItems = current.receiptLineItems.length > 0 ? [...current.receiptLineItems] : selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
+      nextLineItems[index] = {
+        ...(nextLineItems[index] ?? createEmptyReceiptLineItem()),
+        [field]: value,
+      };
+      return {
+        ...current,
+        receiptLineItems: nextLineItems,
+      };
+    });
+  };
+
+  const addDetailReceiptLineItem = () => {
+    setDetailDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        receiptLineItems: [...current.receiptLineItems, createEmptyReceiptLineItem()],
+      };
+    });
+  };
+
+  const deleteDetailReceiptLineItem = (index: number) => {
+    setDetailDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        receiptLineItems: current.receiptLineItems.filter((_, itemIndex) => itemIndex !== index),
+      };
+    });
+  };
+
+  const createTransactionSplitBill = async () => {
+    if (!selectedTransaction || !account) {
+      return;
+    }
+
+    const transactionTitle = (detailDraft?.merchantClean ?? selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw).trim();
+    const transactionAmount = detailDraft?.amount ?? selectedTransaction.amount;
+    const transactionCurrency = detailDraft?.currency ?? selectedTransaction.currency ?? account.currency;
+    const transactionDate = detailDraft?.date ?? selectedTransaction.date.slice(0, 10);
+
+    setTransactionSplitBillSaving(true);
+    try {
+      const createdBill = (await createSplitBillFromTransaction({
+        workspaceId: selectedTransaction.workspaceId ?? account.workspaceId,
+        transactionId: selectedTransaction.id,
+        transactionTitle: transactionTitle || "Split Bill",
+        billDate: transactionDate,
+        currency: transactionCurrency,
+        amount: transactionAmount,
+        draft: transactionSplitBillDraft,
+        receiptLineItems: selectedTransactionReceiptLineItems.map((lineItem) => ({
+          description: lineItem.description,
+          amount:
+            lineItem.amount ??
+            (getReceiptLineItemComputedAmount(lineItem) !== null ? String(getReceiptLineItemComputedAmount(lineItem)) : ""),
+        })),
+      })) as { id: string; title: string } | null;
+
+      setTransactionSplitBillOpen(false);
+      setTransactionSplitBillDraft({
+        groupId: "",
+        participantNames: [],
+      });
+      setTransactionSplitBillError(null);
+      if (createdBill) {
+        setSelectedTransaction((current) => (current ? { ...current, splitBill: createdBill } : current));
+        setTransactions((current) => current.map((entry) => (entry.id === selectedTransaction.id ? { ...entry, splitBill: createdBill } : entry)));
+      }
+      router.refresh();
+    } catch (error) {
+      setTransactionSplitBillError(error instanceof Error ? error.message : "Unable to create split bill.");
+    } finally {
+      setTransactionSplitBillSaving(false);
+    }
+  };
+
+  const confirmDeleteTransaction = async () => {
+    if (!selectedTransaction || !account) {
+      return;
+    }
+
+    const transactionId = selectedTransaction.id;
+    setIsSavingTransactionDetail(true);
+    try {
+      await deleteTransactionRemote(transactionId);
+      applyOptimisticWorkspaceTransactionDeletion(account.workspaceId, transactionId);
+      setTransactions((current) => current.filter((entry) => entry.id !== transactionId));
+      setTransactionTotalCount((current) => Math.max(0, current - 1));
+      setSelectedTransaction(null);
+      setDetailDraft(null);
+      setTransactionDeleteConfirmOpen(false);
+      setTransactionSplitBillOpen(false);
+      setMessage("Transaction deleted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete transaction.");
     } finally {
       setIsSavingTransactionDetail(false);
     }
@@ -3646,9 +4212,8 @@ function AccountDetailPageContent() {
                   </button>
                   <div>
                     <p className="eyebrow">Transaction details</p>
-                    <h4 id="account-transaction-detail-title">
-                      {detailDraft?.merchantClean?.trim() || selectedTransaction.merchantClean || selectedTransaction.merchantRaw}
-                    </h4>
+                    <h4 id="account-transaction-detail-title">{detailTransactionSummary || selectedTransaction.merchantRaw}</h4>
+                    {hasDistinctDetailRawName ? <p className="transaction-drawer__merchant-raw">{detailTransactionRawName}</p> : null}
                   </div>
                 </div>
                 <button className="icon-button transaction-drawer__close-button" type="button" onClick={closeTransactionDetail} aria-label="Close transaction details">
@@ -3656,13 +4221,26 @@ function AccountDetailPageContent() {
                 </button>
               </div>
 
+              {selectedTransactionReviewChips.length > 0 ? (
+                <div className="transaction-drawer-review-status" aria-label="Transaction review context">
+                  {selectedTransactionReviewChips.map((chip) => (
+                    <span
+                      key={chip.label}
+                      className={`transaction-drawer-review-status__chip transaction-drawer-review-status__chip--${chip.tone}`}
+                    >
+                      {chip.label}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
               <div className="transaction-drawer-form transaction-drawer-form--single">
                 <label>
                   Name
                   <input
                     value={detailDraft?.merchantClean ?? selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw}
                     onChange={(event) => setDetailDraft((current) => (current ? { ...current, merchantClean: event.target.value } : current))}
-                    placeholder="Normalized transaction name"
+                    placeholder="Merchant or payee"
                   />
                 </label>
 
@@ -3675,13 +4253,87 @@ function AccountDetailPageContent() {
                   />
                 </label>
 
+                <div className="transaction-drawer-form__amount-field">
+                  <span className="transaction-drawer-field-label">
+                    <span>Amount</span>
+                  </span>
+                  <div className="transaction-drawer-form__money-row">
+                    <CurrencySelector
+                      value={detailDraft?.currency ?? selectedTransaction.currency ?? account?.currency ?? "PHP"}
+                      onChange={(value) => setDetailDraft((current) => (current ? { ...current, currency: value } : current))}
+                      options={currencyCatalogCodes}
+                      ariaLabel="Select transaction currency"
+                      className="transaction-drawer-form__currency-selector"
+                      buttonClassName="transaction-drawer-form__currency-button"
+                      menuClassName="transaction-drawer-form__currency-menu"
+                      optionClassName="transaction-drawer-form__currency-option"
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={detailDraft?.amount ?? selectedTransaction.amount}
+                      onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
+                    />
+                  </div>
+                </div>
+
                 <label>
-                  Category
+                  <span className="transactions-manual-type-label">
+                    <span>Type</span>
+                  </span>
+                  <div className="transactions-manual-type-control transaction-drawer-type-control">
+                    <span className="transactions-manual-type-symbol" aria-hidden="true">
+                      {(detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : "debit")) === "credit" ? "+" : "-"}
+                    </span>
+                    <select
+                      value={detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : "debit")}
+                      onChange={(event) =>
+                        setDetailDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                type: event.target.value as TransactionDetailDraft["type"],
+                              }
+                            : current
+                        )
+                      }
+                    >
+                      <option value="debit">Debit</option>
+                      <option value="credit">Credit</option>
+                    </select>
+                  </div>
+                </label>
+
+                <label>
+                  <span className="transaction-drawer-field-label">
+                    <span>Account</span>
+                  </span>
                   <div className="transaction-drawer-select">
                     <span className="transaction-drawer-select__icon" aria-hidden="true">
-                      <span className="transaction-category-icon transaction-drawer-category-icon" style={getCategoryIconTone(detailSelectedCategory?.name ?? "Other")}>
-                        <img src={getCategoryIconSrc(detailSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
-                      </span>
+                      {detailSelectedAccountBrand ? (
+                        <AccountBrandMark accountBrand={detailSelectedAccountBrand} label={detailSelectedAccount?.name ?? "Account"} />
+                      ) : null}
+                    </span>
+                    <select
+                      value={detailDraft?.accountId ?? selectedTransaction.accountId}
+                      onChange={(event) => setDetailDraft((current) => (current ? { ...current, accountId: event.target.value } : current))}
+                    >
+                      {detailAccountOptions.map((entry) => (
+                        <option key={entry.id} value={entry.id}>
+                          {getAccountDisplayName(entry)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </label>
+
+                <label>
+                  <span className="transaction-drawer-field-label">
+                    <span>Category</span>
+                  </span>
+                  <div className="transaction-drawer-select">
+                    <span className="transaction-drawer-select__icon" aria-hidden="true">
+                      <CategoryBrandMark categoryName={detailSelectedCategory?.name ?? "Other"} size={24} radius={8} className="transaction-drawer-category-icon" />
                     </span>
                     <select
                       value={detailDraft?.categoryId ?? ""}
@@ -3696,80 +4348,225 @@ function AccountDetailPageContent() {
                     </select>
                   </div>
                 </label>
-
-                <label>
-                  Amount
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={detailDraft?.amount ?? selectedTransaction.amount}
-                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
-                  />
-                </label>
-
-                <label>
-                  Type
-                  <div className="transactions-manual-type-control transaction-drawer-type-control">
-                    <span className="transactions-manual-type-symbol" aria-hidden="true">
-                      {(detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")) === "credit"
-                        ? "+"
-                        : (detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")) === "transfer"
-                          ? "↔"
-                          : "-"}
-                    </span>
-                    <select
-                      value={detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")}
-                      onChange={(event) =>
-                        setDetailDraft((current) =>
-                          current
-                            ? {
-                                ...current,
-                                type: event.target.value as TransactionDetailDraft["type"],
-                              }
-                            : current
-                        )
-                      }
-                    >
-                      <option value="debit">Debit</option>
-                      <option value="credit">Credit</option>
-                      <option value="transfer">Transfer</option>
-                    </select>
-                  </div>
-                </label>
-
-                <label className="transaction-drawer-form__notes">
-                  Notes
-                  <textarea
-                    value={detailDraft?.description ?? ""}
-                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, description: event.target.value } : current))}
-                    placeholder="Optional note"
-                  />
-                </label>
-
-                <label
-                  className="transaction-drawer-form__notes"
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
-                >
-                  <span className="transaction-drawer-field-label" style={{ marginBottom: 0 }}>
-                    <span>Exclude from totals</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={detailDraft?.isExcluded ?? selectedTransaction.isExcluded}
-                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, isExcluded: event.target.checked } : current))}
-                    style={{ width: 16, height: 16, margin: 0, flex: "0 0 auto" }}
-                  />
-                </label>
-
-                <div className="detail-warning-actions">
-                  <button className="button button-secondary button-small" type="button" onClick={closeTransactionDetail} disabled={isSavingTransactionDetail}>
-                    Cancel
-                  </button>
-                  <button className="button button-primary button-small" type="button" onClick={() => void persistDetailDraft()} disabled={isSavingTransactionDetail}>
-                    {isSavingTransactionDetail ? "Saving..." : "Save changes"}
-                  </button>
-                </div>
               </div>
+
+              {selectedTransactionWarningReasonSummary ? (
+                <div className="detail-warning-box detail-warning-box--compact transaction-drawer-warning">
+                  <div className="detail-warning-box__header">
+                    <span className="detail-warning-box__icon" aria-hidden="true">
+                      <span className="warning-mark warning-mark--small" aria-hidden="true" />
+                    </span>
+                    <strong>Review warning</strong>
+                    <span className="detail-warning-box__reason">{selectedTransactionWarningReasonSummary}</span>
+                  </div>
+                  <div className="detail-warning-actions detail-warning-actions--compact">
+                    <button
+                      className="button button-primary button-small"
+                      type="button"
+                      onClick={() => {
+                        void updateTransaction(selectedTransaction.id, {
+                          isExcluded: false,
+                          isTransfer: false,
+                          reviewStatus: "confirmed",
+                        }).then(() => setMessage("Transaction kept."));
+                      }}
+                    >
+                      Keep
+                    </button>
+                    <button
+                      className="button button-danger button-small detail-warning-delete"
+                      type="button"
+                      onClick={() => {
+                        setTransactionDeleteConfirmOpen(true);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <details className="transaction-drawer-more">
+                <summary>More</summary>
+                <div className="transaction-drawer-more__body">
+                  <label className="transaction-drawer-form__notes">
+                    Notes
+                    <textarea
+                      value={detailDraft?.description ?? ""}
+                      onChange={(event) => setDetailDraft((current) => (current ? { ...current, description: event.target.value } : current))}
+                      placeholder="Optional note or review context"
+                    />
+                  </label>
+                  {selectedTransactionRawSourceLine ? (
+                    <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
+                      <span>Raw source line</span>
+                      <strong>{selectedTransactionRawSourceLine}</strong>
+                    </div>
+                  ) : null}
+                  {selectedTransactionRawNote ? (
+                    <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
+                      <span>Parsed note</span>
+                      <strong>{selectedTransactionRawNote}</strong>
+                    </div>
+                  ) : null}
+
+                  <div className="transaction-drawer-receipt-lines">
+                    <div className="transaction-drawer-receipt-lines__head">
+                      <span className="transaction-drawer-field-label">
+                        <span>Receipt line items</span>
+                      </span>
+                      <span className="field-help">
+                        {formatTransactionAmount(detailReceiptLineItemTotal, detailDraft?.currency ?? selectedTransaction.currency ?? account?.currency ?? "PHP")}
+                      </span>
+                    </div>
+                    <div className="transaction-drawer-receipt-table" role="table" aria-label="Receipt line items">
+                      <div className="transaction-drawer-receipt-table__row transaction-drawer-receipt-table__row--head" role="row">
+                        <span role="columnheader">Name</span>
+                        <span role="columnheader">Quantity</span>
+                        <span role="columnheader">Currency</span>
+                        <span role="columnheader">Amount</span>
+                        <span role="columnheader" className="sr-only">Actions</span>
+                      </div>
+                      {detailReceiptLineItems.length > 0 ? (
+                        detailReceiptLineItems.map((lineItem, index) => (
+                          <div key={`${lineItem.description || "line"}-${index}`} className="transaction-drawer-receipt-table__row" role="row">
+                            <input
+                              aria-label={`Receipt line item ${index + 1} name`}
+                              value={lineItem.description}
+                              placeholder="Item name"
+                              onChange={(event) => updateDetailReceiptLineItem(index, "description", event.target.value)}
+                            />
+                            <input
+                              aria-label={`Receipt line item ${index + 1} quantity`}
+                              value={lineItem.quantity}
+                              placeholder="1"
+                              inputMode="decimal"
+                              onChange={(event) => updateDetailReceiptLineItem(index, "quantity", event.target.value)}
+                            />
+                            <input
+                              aria-label={`Receipt line item ${index + 1} currency`}
+                              value={lineItem.currency || detailDraft?.currency || selectedTransaction.currency || account?.currency || "PHP"}
+                              placeholder={detailDraft?.currency || selectedTransaction.currency || account?.currency || "PHP"}
+                              onChange={(event) => updateDetailReceiptLineItem(index, "currency", event.target.value.toUpperCase())}
+                            />
+                            <input
+                              aria-label={`Receipt line item ${index + 1} amount`}
+                              value={lineItem.amount}
+                              placeholder="0.00"
+                              inputMode="decimal"
+                              onChange={(event) => updateDetailReceiptLineItem(index, "amount", event.target.value)}
+                            />
+                            <button
+                              className="button button-ghost button-small transaction-drawer-receipt-table__delete"
+                              type="button"
+                              onClick={() => deleteDetailReceiptLineItem(index)}
+                              aria-label={`Delete receipt line item ${index + 1}`}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="transaction-drawer-receipt-table__empty">No line items yet.</div>
+                      )}
+                    </div>
+                    <button className="button button-secondary button-small transaction-drawer-receipt-lines__add" type="button" onClick={addDetailReceiptLineItem}>
+                      Add line item
+                    </button>
+                  </div>
+
+                  <label
+                    className="transaction-drawer-form__notes"
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
+                  >
+                    <span className="transaction-drawer-field-label" style={{ marginBottom: 0 }}>
+                      <span>Exclude from totals</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={detailDraft?.isExcluded ?? selectedTransaction.isExcluded}
+                      onChange={(event) => setDetailDraft((current) => (current ? { ...current, isExcluded: event.target.checked } : current))}
+                      style={{ width: 16, height: 16, margin: 0, flex: "0 0 auto" }}
+                    />
+                  </label>
+
+                  <div className="transaction-drawer-more__row">
+                    <span>Confidence score</span>
+                    <strong>{selectedTransactionConfidenceScore ?? 0}%</strong>
+                  </div>
+                  <p>Based on Clover's merchant, account, category, duplicate, and parser checks.</p>
+                </div>
+              </details>
+
+              <div className="form-actions detail-actions">
+                <div className="detail-actions__left">
+                  {selectedTransaction.splitBill ? (
+                    <Link className="button button-secondary" href={`/split-bill?bill=${selectedTransaction.splitBill.id}`} prefetch={false}>
+                      Open In Split Bills
+                    </Link>
+                  ) : (
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={() => {
+                        setTransactionSplitBillError(null);
+                        setTransactionSplitBillOpen((current) => !current);
+                      }}
+                    >
+                      {transactionSplitBillOpen ? "Hide Split Bills" : "Add To Split Bills"}
+                    </button>
+                  )}
+                </div>
+                {!selectedTransactionWarningReason && !transactionDeleteConfirmOpen ? (
+                  <button
+                    className="button button-danger"
+                    type="button"
+                    onClick={() => setTransactionDeleteConfirmOpen(true)}
+                  >
+                    Delete Transaction
+                  </button>
+                ) : null}
+                {transactionDeleteConfirmOpen ? (
+                  <div className="detail-warning-box transaction-delete-confirm">
+                    <p>
+                      <strong>Delete transaction:</strong> This cannot be undone.
+                    </p>
+                    <div className="detail-warning-actions detail-warning-actions--compact">
+                      <button
+                        className="button button-secondary button-small"
+                        type="button"
+                        onClick={() => setTransactionDeleteConfirmOpen(false)}
+                        disabled={isSavingTransactionDetail}
+                      >
+                        Cancel
+                      </button>
+                      <button className="button button-danger button-small" type="button" onClick={() => void confirmDeleteTransaction()} disabled={isSavingTransactionDetail}>
+                        {isSavingTransactionDetail ? "Deleting..." : "Delete transaction"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {(transactionSplitBillError || (transactionSplitBillOpen && !selectedTransaction.splitBill && account)) ? (
+                <div className="transaction-drawer-split-bill">
+                  {transactionSplitBillError ? <p className="field-help field-help--compact transaction-drawer-split-bill__error">{transactionSplitBillError}</p> : null}
+                  {transactionSplitBillOpen && !selectedTransaction.splitBill && account ? (
+                    <SplitBillTransactionLinkFields
+                      workspaceId={selectedTransaction.workspaceId ?? account.workspaceId}
+                      draft={transactionSplitBillDraft}
+                      onChange={setTransactionSplitBillDraft}
+                      open={transactionSplitBillOpen}
+                      title="Add transaction to Split Bills"
+                      helperText="Choose a group or add names. The split bill will be created from this transaction."
+                      actionLabel="Create split bill"
+                      onAction={createTransactionSplitBill}
+                      actionBusy={transactionSplitBillSaving}
+                      actionDisabled={!transactionSplitBillDraft.groupId.trim() && transactionSplitBillDraft.participantNames.length === 0}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
             </section>
           </div>
         ) : null}
