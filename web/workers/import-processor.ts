@@ -347,6 +347,18 @@ type ProcessImportResult = {
   status?: "done" | "staged";
 };
 
+type ConfirmImportResult = {
+  imported: number;
+  duplicate?: boolean;
+  metadata?: ReturnType<typeof detectStatementMetadataFromText>;
+  accountId?: string | null;
+  accountSummaries?: ProcessImportResult["accountSummaries"];
+  confirmedTransactionsCount?: number | null;
+  insightSummary?: ImportInsightSummary | null;
+  accountBalance?: string | null;
+  status?: string;
+};
+
 type ImportFileTextCacheInfo = Awaited<ReturnType<typeof readImportedFileTextWithCacheInfo>>;
 
 let accountColumnCache: Set<string> | null = null;
@@ -3861,9 +3873,19 @@ export const processImportFileText = async (
     (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && parsedRowsWithDates === 0
       ? true
       : (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 10 && parsedDateCoverage < 0.25;
+  const hasReliableDeterministicStatementParse =
+    importMode === "statement" &&
+    !imageImport &&
+    parsedRows.length > 0 &&
+    (metadataForParse.confidence ?? 0) >= 80 &&
+    hasKnownInstitution &&
+    Boolean(metadataForParse.accountNumber || parsedRowsHaveMultipleAccountNumbers) &&
+    !genericParseLooksSuspicious &&
+    !suspiciousDateCoverage;
   const shouldUseVisionFallback =
     (importFile.fileType === "application/pdf" || imageImport) &&
     !canReuseCachedStatementParse &&
+    !hasReliableDeterministicStatementParse &&
     (!text.trim() ||
       parsedRows.length === 0 ||
       prefersVisionFallbackForInstitution ||
@@ -3885,6 +3907,7 @@ export const processImportFileText = async (
     );
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
+    hasReliableDeterministicStatementParse ||
     (imageImport &&
     ((importMode === "receipt" && receiptPreviewLooksLikeReceipt) ||
       (parsedRows.length > 0 && (metadataForParse.confidence ?? 0) >= 75 && !genericParseLooksSuspicious && !suspiciousDateCoverage)));
@@ -4204,17 +4227,7 @@ export const processImportFileText = async (
     ),
     endingBalance: effectiveRowsHaveMultipleAccountNumbers ? null : effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
   };
-  let confirmedImportResult:
-    | {
-        imported: number;
-        accountId?: string | null;
-        insightSummary?: ImportInsightSummary | null;
-        accountBalance?: string | null;
-        status?: string;
-        duplicate?: boolean;
-        confirmedTransactionsCount?: number | null;
-      }
-    | null = null;
+  let confirmedImportResult: ConfirmImportResult | null = null;
   await ensureParsedAccountGroupsMaterialized({
     importFile,
     rows: effectiveRows as Array<Record<string, unknown>>,
@@ -5102,7 +5115,7 @@ const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | nul
   return null;
 };
 
-export const confirmImportFile = async (importFileId: string, accountId?: string | null) => {
+export const confirmImportFile = async (importFileId: string, accountId?: string | null): Promise<ConfirmImportResult> => {
   const startedAt = Date.now();
   const importFile = await fetchImportFileCompat(importFileId);
 

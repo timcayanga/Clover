@@ -279,7 +279,7 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
   });
 
   await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`
+    await tx.$executeRaw`
       SELECT pg_advisory_xact_lock(hashtextextended(${`recurring-pattern-sync:${workspaceId}`}, 0))
     `;
 
