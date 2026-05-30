@@ -35,6 +35,25 @@ const isDeterministicLearningSource = (source: string | null | undefined) =>
   typeof source === "string" && source.startsWith("deterministic_");
 const isExactLearningReason = (reason: string | null | undefined) =>
   reason === "rule-exact" || reason === "learned-exact" || reason === "hardcoded-exact" || reason === "hardcoded-override";
+const isProtectedParserCategory = (params: {
+  institution?: string | null;
+  parserCategoryName: string;
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  description?: string | null;
+}) => {
+  const institution = (params.institution ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const category = params.parserCategoryName.trim().toLowerCase();
+  const text = [params.merchantRaw, params.merchantClean, params.description]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+
+  return (
+    institution === "eastwestbank" &&
+    category === "cash & atm" &&
+    /\bcash\s+deposit\b/i.test(text)
+  );
+};
 
 type NegativeMerchantSignalRow = {
   merchantKey: string;
@@ -3921,6 +3940,13 @@ export const enrichParsedRowsWithTraining = async (params: {
     const accountName = row.accountName ?? null;
     const parserCategoryName = typeof row.categoryName === "string" ? row.categoryName.trim() : "";
     const parserSuppliedConcreteCategory = Boolean(parserCategoryName) && parserCategoryName.toLowerCase() !== "other";
+    const protectedParserCategory = isProtectedParserCategory({
+      institution: rowWithInstitution.institution ?? null,
+      parserCategoryName,
+      merchantRaw: row.merchantRaw ?? null,
+      merchantClean: row.merchantClean ?? null,
+      description: row.description ?? null,
+    });
     const learnedCategorySource = typeof learned.categorySource === "string" ? learned.categorySource : null;
     const learnedCategoryName = typeof learned.categoryName === "string" ? learned.categoryName.trim() : "";
     const learnedConflictsWithParser =
@@ -3934,6 +3960,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       (isDeterministicLearningSource(learnedCategorySource) ||
         (isExactLearningReason(learnedCategoryReason) && normalizeConfidenceScore(learned.confidence) >= 85));
     const shouldKeepParserCategory =
+      protectedParserCategory ||
       (learnedConflictsWithParser && !isDeterministicLearningSource(learnedCategorySource)) ||
       (!parserSuppliedConcreteCategory &&
         parserCategoryName.toLowerCase() === "other" &&
