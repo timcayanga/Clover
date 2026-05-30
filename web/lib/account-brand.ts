@@ -271,6 +271,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       fallbackIconSrc: bankIcon,
       accent: "#A3D900",
       background: "linear-gradient(135deg, rgba(163, 217, 0, 0.18), rgba(40, 56, 104, 0.08))",
+      foreground: "#0f172a",
     }),
   },
   {
