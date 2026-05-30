@@ -3976,6 +3976,25 @@ function TransactionsPageContent() {
     row?.focus();
   };
 
+  const revealTransactionRow = (transactionId: string) => {
+    let attempts = 0;
+    const tryReveal = () => {
+      const row = transactionRowRefs.current.get(transactionId);
+      if (row) {
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.focus();
+        return;
+      }
+
+      attempts += 1;
+      if (attempts < 12) {
+        window.setTimeout(tryReveal, 80);
+      }
+    };
+
+    window.setTimeout(tryReveal, 0);
+  };
+
   const handleTransactionRowKeyDown = (event: ReactKeyboardEvent<HTMLElement>, transaction: Transaction, index: number) => {
     if (event.target !== event.currentTarget) {
       return;
@@ -4024,6 +4043,7 @@ function TransactionsPageContent() {
     const revealWarning = () => {
       setActiveWarningTransactionId(transaction.id);
       setTransactionDeleteConfirmOpen(false);
+      revealTransactionRow(transaction.id);
 
       const warningReason = reviewReasonsFor(transaction).join(" · ");
       if (warningReason) {
@@ -7092,9 +7112,16 @@ function TransactionsPageContent() {
                         activeWarningTransactionId ? nextReviewTransactionAfter(activeWarningTransactionId) : null;
                       const targetReviewTransaction = nextReviewTransaction ?? firstReviewTransaction;
                       if (targetReviewTransaction) {
+                        const visibleTargetIndex = visibleTransactions.findIndex(
+                          (transaction) => transaction.id === targetReviewTransaction.id
+                        );
                         openTransactionReview(
                           targetReviewTransaction,
-                          visibleTransactions.findIndex((transaction) => transaction.id === targetReviewTransaction.id)
+                          visibleTargetIndex >= 0
+                            ? visibleTargetIndex
+                            : targetReviewTransaction.id === firstReviewTransaction?.id
+                              ? transactionsSummary.firstReviewTransactionIndex
+                              : null
                         );
                       }
                     }}
