@@ -808,6 +808,7 @@ export async function GET(request: Request) {
           workspaceId,
           accountId: transaction.accountId,
           account: transaction.account,
+          accountNumber: transaction.account?.accountNumber ?? null,
           categoryId: transaction.categoryId,
           rawPayload: transaction.rawPayload,
           normalizedPayload: transaction.normalizedPayload,

@@ -49,9 +49,10 @@ export async function GET(request: Request) {
 
     const categoriesForSeeding = await prisma.category.findMany({
       where: { workspaceId },
-      select: { name: true },
+      select: { id: true, name: true, type: true, isArchived: true, isSystem: true },
     });
-    const existingCategoryNames = new Set(categoriesForSeeding.map((category) => normalizeCategoryName(category.name)));
+    const existingCategoriesByName = new Map(categoriesForSeeding.map((category) => [normalizeCategoryName(category.name), category] as const));
+    const existingCategoryNames = new Set(existingCategoriesByName.keys());
     const missingDefaultCategories = DEFAULT_CATEGORY_ROWS.filter((category) => !existingCategoryNames.has(normalizeCategoryName(category.name)));
     if (missingDefaultCategories.length > 0) {
       await prisma.category.createMany({
@@ -63,6 +64,29 @@ export async function GET(request: Request) {
         })),
         skipDuplicates: true,
       });
+    }
+
+    const archivedDefaultCategories = DEFAULT_CATEGORY_ROWS.flatMap((category): Array<{ id: string; name: string; type: TransactionType }> => {
+      const existingCategory = existingCategoriesByName.get(normalizeCategoryName(category.name));
+      return existingCategory && (existingCategory.isArchived || !existingCategory.isSystem || existingCategory.type !== category.type)
+        ? [{ id: existingCategory.id, name: category.name, type: category.type }]
+        : [];
+    });
+
+    if (archivedDefaultCategories.length > 0) {
+      await prisma.$transaction(
+        archivedDefaultCategories.map((category) =>
+          prisma.category.update({
+            where: { id: category.id },
+            data: {
+              name: category.name,
+              type: category.type,
+              isArchived: false,
+              isSystem: true,
+            },
+          })
+        )
+      );
     }
 
     const categories = await prisma.category.findMany({

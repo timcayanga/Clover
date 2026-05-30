@@ -137,6 +137,61 @@ const getImportedAccountLastFour = (value?: string | null) => {
   return digits.length >= 4 ? digits.slice(-4) : null;
 };
 
+const appendAccountLastFour = (label: string, accountNumber?: string | null) => {
+  const suffix = getImportedAccountLastFour(accountNumber);
+  if (!suffix) {
+    return label;
+  }
+
+  const normalizedLabel = label.replace(/\s+/g, " ").trim();
+  if (new RegExp(`\\b${suffix}$`).test(normalizedLabel)) {
+    return normalizedLabel;
+  }
+
+  return `${normalizedLabel} ${suffix}`.trim();
+};
+
+const formatTransactionAccountName = (account: Account) => {
+  if (account.type === "cash") {
+    return getAccountDisplayName(account);
+  }
+
+  return appendAccountLastFour(getAccountDisplayName(account), account.accountNumber);
+};
+
+const formatTransactionAccountDisplayName = (
+  transaction: { accountName?: string | null; institution?: string | null; accountNumber?: string | null },
+  account?: Account | null
+) => {
+  if (account) {
+    return formatTransactionAccountName(account);
+  }
+
+  return formatUploadAccountDisplayName(
+    transaction.accountName,
+    transaction.institution,
+    transaction.accountNumber ?? null,
+    null
+  );
+};
+
+const formatEditableSignedAmount = (transaction: { amount: string; type: "income" | "expense" | "transfer" }, effectiveType: "income" | "expense" | "transfer") => {
+  const amount = Math.abs(Number(transaction.amount));
+  if (!Number.isFinite(amount)) {
+    return transaction.amount;
+  }
+
+  if (effectiveType === "expense") {
+    return `-${amount}`;
+  }
+
+  if (effectiveType === "income") {
+    return `${amount}`;
+  }
+
+  return transaction.amount;
+};
+
 const matchesImportedAccountIdentity = (left: Account, right: Account) => {
   return isImportedAccountIdentityMatch(left, right);
 };
@@ -2341,7 +2396,8 @@ function TransactionsPageContent() {
     () => new Map(accounts.map((account) => [account.id, account.institution ?? null] as const)),
     [accounts]
   );
-  const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, getAccountDisplayName(account)] as const)), [accounts]);
+  const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account] as const)), [accounts]);
+  const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, formatTransactionAccountName(account)] as const)), [accounts]);
   const accountBrandById = useMemo(
     () => {
       const brandById = new Map(
@@ -2487,7 +2543,7 @@ function TransactionsPageContent() {
           input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`,
         }),
         fetchJsonOnce<{ categories?: Category[] }>({
-          key: `transactions:categories:${workspaceId}`,
+          key: `transactions:categories:${workspaceId}:defaults-v2`,
           route: "transactions.categories",
           workspaceId,
           detail: options?.background ? "background" : "foreground",
@@ -5183,7 +5239,26 @@ function TransactionsPageContent() {
     } else if (field === "currency") {
       payload.currency = value.trim().toUpperCase();
     } else if (field === "amount") {
-      payload.amount = value;
+      const trimmedValue = value.trim();
+      const parsedAmount = Number(trimmedValue);
+      if (!Number.isFinite(parsedAmount)) {
+        setMessage("Enter a valid amount.");
+        return;
+      }
+
+      const currentDisplayType = getTransactionDisplayType(
+        transaction,
+        accountNumberById.get(transaction.accountId) ?? null,
+        workspaceAccountNumbers
+      );
+      payload.amount = Math.abs(parsedAmount).toString();
+      if (trimmedValue.startsWith("-")) {
+        payload.type = "expense";
+        payload.isTransfer = false;
+      } else if (currentDisplayType !== "transfer") {
+        payload.type = "income";
+        payload.isTransfer = false;
+      }
     }
 
     if (Object.keys(payload).length === 0) {
@@ -5324,7 +5399,7 @@ function TransactionsPageContent() {
       .map((transactionId) => transactions.find((entry) => entry.id === transactionId))
       .filter((entry): entry is Transaction => Boolean(entry));
     const originalTransactions = new Map(selected.map((transaction) => [transaction.id, transaction] as const));
-    const accountNames = new Map(accounts.map((account) => [account.id, getAccountDisplayName(account)] as const));
+    const accountNames = new Map(accounts.map((account) => [account.id, formatTransactionAccountName(account)] as const));
     const categoryNames = new Map(categories.map((category) => [category.id, category.name] as const));
 
     const payloads: Array<{
@@ -6088,7 +6163,7 @@ function TransactionsPageContent() {
             label="Accounts"
             options={accounts.map((account) => ({
               value: account.id,
-              label: getAccountDisplayName(account),
+              label: formatTransactionAccountName(account),
             }))}
             selected={accountFilters}
             onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))}
@@ -6481,7 +6556,7 @@ function TransactionsPageContent() {
                   label="Accounts"
                   options={accounts.map((account) => ({
                     value: account.id,
-                    label: getAccountDisplayName(account),
+                    label: formatTransactionAccountName(account),
                   }))}
                   selected={accountFilters}
                   onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))}
@@ -6780,7 +6855,9 @@ function TransactionsPageContent() {
                     const effectiveCategoryValue = getCategoryIdByName(categories, categoryLabel) || categoryValue;
                     const isTransferTransaction = effectiveType === "transfer";
                 const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
-                const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
+                const accountDisplayName =
+                  accountNameById.get(transaction.accountId) ??
+                  formatTransactionAccountDisplayName(transaction, accountById.get(transaction.accountId) ?? null);
                 const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
                   institution: accountInstitution,
                   name: accountDisplayName,
@@ -6855,7 +6932,7 @@ function TransactionsPageContent() {
                         className="transaction-inline-edit transaction-inline-edit--select"
                         options={accounts.map((account) => ({
                           value: account.id,
-                          label: getAccountDisplayName(account),
+                          label: formatTransactionAccountName(account),
                         }))}
                         onCommit={(value) => commitInlineEdit(transaction, "accountId", value)}
                       />
@@ -6876,7 +6953,7 @@ function TransactionsPageContent() {
                     </div>
                     <div className={`transaction-amount-cell ${amountToneClass}`}>
                       <InlineEditableCell
-                        value={transaction.amount}
+                        value={formatEditableSignedAmount(transaction, effectiveType)}
                         displayValue={formatTransactionAmount(amount, transaction.currency)}
                         ariaLabel={`Edit amount for ${transaction.merchantRaw}`}
                         kind="number"
@@ -7063,7 +7140,9 @@ function TransactionsPageContent() {
                         const merchantSummary =
                           transaction.merchantClean?.trim() ||
                           summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
-                        const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
+                        const accountDisplayName =
+                          accountNameById.get(transaction.accountId) ??
+                          formatTransactionAccountDisplayName(transaction, accountById.get(transaction.accountId) ?? null);
                         const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
                           institution: accountInstitution,
                           name: accountDisplayName,
@@ -7406,7 +7485,7 @@ function TransactionsPageContent() {
                     <option value="">Leave unchanged</option>
                     {accounts.map((account) => (
                       <option key={account.id} value={account.id}>
-                        {getAccountDisplayName(account)}
+                        {formatTransactionAccountName(account)}
                       </option>
                     ))}
                   </select>
