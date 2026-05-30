@@ -64,7 +64,7 @@ const getSummaryTransactionType = (transaction: {
     return "income" as const;
   }
 
-  if (normalizedCategoryName === "transfers" || transaction.isTransfer) {
+  if (transaction.isTransfer) {
     return "transfer" as const;
   }
 
@@ -346,6 +346,48 @@ const getRawPayloadSourceRowIndex = (rawPayload: Prisma.JsonValue | null | undef
   return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
 };
 
+const normalizeDigits = (value?: string | null) => String(value ?? "").replace(/\D/g, "");
+
+const getTransferCounterpartNumbers = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return { from: null as string | null, to: null as string | null };
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const from = typeof payload.transferFromAccountNumber === "string" && payload.transferFromAccountNumber.trim() ? payload.transferFromAccountNumber.trim() : null;
+  const to = typeof payload.transferToAccountNumber === "string" && payload.transferToAccountNumber.trim() ? payload.transferToAccountNumber.trim() : null;
+  return { from, to };
+};
+
+const isInternalWorkspaceTransfer = (
+  transaction: { accountId: string; accountNumber?: string | null; rawPayload: Prisma.JsonValue },
+  workspaceAccounts: Array<{ id: string; accountNumber: string | null }>
+) => {
+  const currentAccountNumber = normalizeDigits(transaction.accountNumber ?? null);
+  if (!currentAccountNumber) {
+    return false;
+  }
+
+  const { from, to } = getTransferCounterpartNumbers(transaction.rawPayload);
+  const fromDigits = normalizeDigits(from);
+  const toDigits = normalizeDigits(to);
+
+  const counterpartNumber =
+    fromDigits && currentAccountNumber === fromDigits
+      ? toDigits
+      : toDigits && currentAccountNumber === toDigits
+        ? fromDigits
+        : null;
+
+  if (!counterpartNumber) {
+    return false;
+  }
+
+  return workspaceAccounts.some(
+    (account) => account.id !== transaction.accountId && normalizeDigits(account.accountNumber ?? null) === counterpartNumber
+  );
+};
+
 const getImportedTransactionAccountIdentityKey = (transaction: TransactionApiRow) =>
   normalizeImportedAccountKey(transaction.accountName, transaction.institution, transaction.accountNumber, null) || transaction.accountId;
 
@@ -476,7 +518,7 @@ const mapTransactionRow = (transaction: {
   isExcluded: boolean;
   warningReason: string | null;
   splitBill: { id: string; title: string } | null;
-}): TransactionApiRow => {
+}, workspaceAccounts: Array<{ id: string; accountNumber: string | null }>): TransactionApiRow => {
   const normalizedCurrency =
     normalizeInstitutionCurrency(
       transaction.account.institution,
@@ -495,6 +537,15 @@ const mapTransactionRow = (transaction: {
     source,
     type: transaction.type,
   });
+  const effectiveIsTransfer = isInternalWorkspaceTransfer(
+    {
+      accountId: transaction.accountId,
+      accountNumber: transaction.accountNumber ?? null,
+      rawPayload: transaction.rawPayload,
+    },
+    workspaceAccounts
+  );
+  const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount, effectiveIsTransfer);
 
   return {
     id: transaction.id,
@@ -513,7 +564,7 @@ const mapTransactionRow = (transaction: {
     date: transaction.date.toISOString(),
     amount: transaction.amount.toString(),
     currency: normalizedCurrency,
-    type: coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount, transaction.isTransfer),
+    type: effectiveType,
     merchantRaw: transaction.merchantRaw,
     merchantClean: getEffectiveTransactionMerchantName({
       merchantClean: transaction.merchantClean,
@@ -521,7 +572,7 @@ const mapTransactionRow = (transaction: {
       institution: transaction.account.institution,
     }),
     description: transaction.description,
-    isTransfer: coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount, transaction.isTransfer) === "transfer",
+    isTransfer: effectiveType === "transfer",
     isExcluded: transaction.isExcluded,
     createdAt: transaction.createdAt.toISOString(),
     warningReason: transaction.warningReason,
@@ -613,6 +664,10 @@ export async function GET(request: Request) {
 
     await assertWorkspaceAccess(userId, workspaceId);
     await normalizeLegacyTransactionVisibility(workspaceId);
+    const workspaceAccounts = await prisma.account.findMany({
+      where: { workspaceId },
+      select: { id: true, accountNumber: true },
+    });
 
     const parsedFilters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
     const expandedAccountIds = await expandImportedAccountFilters(workspaceId, parsedFilters.accountIds);
@@ -700,6 +755,7 @@ export async function GET(request: Request) {
               select: {
                 name: true,
                 institution: true,
+                accountNumber: true,
               },
             },
             splitBill: {
@@ -774,7 +830,7 @@ export async function GET(request: Request) {
           createdAt: transaction.createdAt,
           warningReason: getTransactionWarningReason(transaction, duplicateCounts),
           splitBill: transaction.splitBill,
-        })
+        }, workspaceAccounts)
       );
       const lightSummary = {
         income: 0,
@@ -915,7 +971,7 @@ export async function GET(request: Request) {
           createdAt: transaction.createdAt,
           warningReason,
           splitBill: transaction.splitBill,
-        }),
+        }, workspaceAccounts),
       };
     });
     const transactions = dedupeImportedTransactionRows(
