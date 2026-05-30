@@ -3142,9 +3142,9 @@ const main = async () => {
   }
 
   const chinaBankProbe = detectStatementMetadataFromText("China Bank Statement of Account\nStatement Period Aug. 01, 2024 To Aug. 31, 2024");
-  if (chinaBankProbe.institution !== "Chinabank") {
+  if (chinaBankProbe.institution !== "China Bank") {
     throw new Error(
-      `Parser regression checks failed:\n- [China Bank detection] expected Chinabank but got ${chinaBankProbe.institution ?? "null"}`
+      `Parser regression checks failed:\n- [China Bank detection] expected China Bank but got ${chinaBankProbe.institution ?? "null"}`
     );
   }
 

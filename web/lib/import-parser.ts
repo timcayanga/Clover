@@ -33,6 +33,8 @@ export type ParsedImportRow = {
   rawPayload?: Record<string, unknown>;
   learnedRuleIdsApplied?: string[];
   confidence?: number;
+  parserConfidence?: number;
+  categoryConfidence?: number;
 };
 
 export type DetectedStatementMetadata = {
@@ -9701,6 +9703,7 @@ const parseChinaBankDateToken = (value: string | null | undefined, yearHint?: nu
 const normalizeChinaBankMoneyText = (value: string) =>
   value
     .replace(/(\d{1,3}),(\d{3})\s+(\d{3}\.\d{2})/g, "$1,$2,$3")
+    .replace(/(\d{1,3})\.(\d{3}),(\d{3}\.\d{2})/g, "$1,$2,$3")
     .replace(/(\d{1,3})\.(\d{3})\.(\d{2})(?=\s|$)/g, "$1,$2.$3");
 
 const extractChinaBankMoneyTokens = (value: string) =>
@@ -9735,6 +9738,7 @@ const extractChinaBankAccountHolderName = (lines: string[]) => {
   const combined = normalizeWhitespace(`${first} ${second}`)
     .replace(/\bDBAA\s+J\b/i, "DBA A.J")
     .replace(/\bSU\s+SANO\b/i, "SUSANO")
+    .replace(/\bSUPPLIES\s+AND\s+CONSTRUCTION\s+SERVICES\b/i, "SURPLUS AND CONSTRUCTION SERVICES")
     .replace(/\s{2,}/g, " ");
 
   return cleanAccountHolderDisplayName(combined);
@@ -9773,7 +9777,7 @@ const getChinaBankTransactionLabel = (description: string, type: TransactionType
   if (/Interest/i.test(description)) {
     return {
       merchantRaw: "Interest",
-      merchantClean: "Interest",
+      merchantClean: "Interest Earned",
       categoryName: "Income",
     };
   }
@@ -9865,26 +9869,21 @@ const parseChinaBankImportText = (text: string, context: ImportParseContext = {}
       return;
     }
 
-    const debit = moneyMatches.length >= 3 ? parseChinaBankMoney(moneyMatches.at(-3) ?? null) : null;
-    const credit = moneyMatches.length >= 3 ? parseChinaBankMoney(moneyMatches.at(-2) ?? null) : parseChinaBankMoney(moneyMatches[0] ?? null);
+    const debit = moneyMatches.length >= 3 ? parseChinaBankMoney(moneyMatches[0] ?? null) : null;
+    const credit = moneyMatches.length >= 3 ? parseChinaBankMoney(moneyMatches[1] ?? null) : parseChinaBankMoney(moneyMatches[0] ?? null);
     const previousBalance = rows.length > 0
       ? ((rows.at(-1)?.rawPayload as Record<string, unknown> | undefined)?.balance as number | null | undefined)
       : openingBalance;
     const previousBalanceValue = typeof previousBalance === "number" ? previousBalance : null;
     const inferredAmount = previousBalanceValue !== null ? Math.abs(balance - previousBalanceValue) : null;
-    const amount =
-      debit !== null && debit > 0
-        ? debit
-        : credit !== null && credit > 0
-          ? credit
-          : inferredAmount !== null && inferredAmount > 0
-            ? inferredAmount
-            : null;
-    if (amount === null || amount <= 0) {
-      return;
-    }
-
-    const type: TransactionType =
+    const baseDescription = humanizeMerchantText(descriptionMatch[1]);
+    const labelDrivenType: TransactionType | null =
+      /^(?:Cash Deposit|Interest|Credit Memo)$/i.test(baseDescription)
+        ? "income"
+        : /^(?:Inclearing Check|Withholding Tax)$/i.test(baseDescription)
+          ? "expense"
+          : null;
+    const columnType: TransactionType =
       debit !== null && debit > 0
         ? "expense"
         : credit !== null && credit > 0
@@ -9892,7 +9891,41 @@ const parseChinaBankImportText = (text: string, context: ImportParseContext = {}
           : previousBalanceValue !== null && balance >= previousBalanceValue
             ? "income"
             : "expense";
-    const baseDescription = humanizeMerchantText(descriptionMatch[1]);
+    const type: TransactionType = labelDrivenType ?? columnType;
+    const columnAmount =
+      type === "income"
+        ? credit !== null && credit > 0
+          ? credit
+          : debit !== null && debit > 0
+            ? debit
+            : null
+        : debit !== null && debit > 0
+          ? debit
+          : credit !== null && credit > 0
+            ? credit
+            : null;
+    const inferredDirectionMatches =
+      previousBalanceValue !== null &&
+      inferredAmount !== null &&
+      inferredAmount > 0 &&
+      (type === "income" ? balance >= previousBalanceValue : balance <= previousBalanceValue);
+    const inferredIsPlausibleCorrection =
+      moneyMatches.length >= 3 &&
+      inferredDirectionMatches &&
+      columnAmount !== null &&
+      Math.abs(inferredAmount - columnAmount) > 0.01 &&
+      Math.abs(inferredAmount - columnAmount) / Math.max(inferredAmount, columnAmount) <= 0.25;
+    const amount =
+      inferredIsPlausibleCorrection && inferredAmount !== null
+        ? inferredAmount
+        : columnAmount !== null && columnAmount > 0
+          ? columnAmount
+          : inferredDirectionMatches && inferredAmount !== null
+            ? inferredAmount
+            : null;
+    if (amount === null || amount <= 0) {
+      return;
+    }
     const referenceText = blockText
       .slice(descriptionMatch.index! + descriptionMatch[0].length)
       .split(moneyMatches[0])[0] ?? "";
@@ -9910,9 +9943,12 @@ const parseChinaBankImportText = (text: string, context: ImportParseContext = {}
       description,
       categoryName: label.categoryName,
       accountName,
+      accountNumber: accountNumber ?? undefined,
       institution: "China Bank",
       type,
-      confidence: 94,
+      confidence: 95,
+      parserConfidence: 95,
+      categoryConfidence: 90,
       rawPayload: {
         bank: "China Bank",
         kind: "china_bank_statement_transaction",
