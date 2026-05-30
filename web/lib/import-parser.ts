@@ -7171,6 +7171,7 @@ const normalizeGcashMerchant = (description: string) => {
     ""
   );
   trimmed = trimmed.replace(/^account ending in\s+\d+\s+/i, "");
+  trimmed = stripGcashPreambleToStarter(trimmed);
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
     return "GCash Transaction";
   }
@@ -7228,6 +7229,18 @@ const normalizeGcashMerchant = (description: string) => {
     .trim();
 
   return trimmed;
+};
+
+const stripGcashPreambleToStarter = (value: string) => {
+  const match = value.match(
+    /(?:Received GCash from|Sent GCash to|Transfer from|Transfer to|Cash In|Cash Out|Add Money|Send Money|Received Money|Payment to|Bills Payment to|Buy Load Transaction for|Deposit to GSave Account(?: with Reference No\.)?|Withdraw from GSave Account(?: with Reference No\.)?|Seamoney Credit)\b/i
+  );
+
+  if (match?.index !== undefined && match.index > 0) {
+    return value.slice(match.index).trim();
+  }
+
+  return value;
 };
 
 const stripGcashRecordNoise = (value: string) => {
@@ -7304,7 +7317,7 @@ const looksLikeGcashRecordTail = (value: string) =>
 
 const guessGcashCategoryName = (description: string, type: TransactionType) => {
   const merchant = normalizeGcashMerchant(description);
-  if (/^(?:deposit to gsave|withdraw from gsave)\b/i.test(description) || /seamoney credit/i.test(description)) {
+  if (/^(?:deposit to gsave|withdraw from gsave|transfer (?:to|from) gsave)\b/i.test(description) || /seamoney credit/i.test(description)) {
     return "Financial";
   }
 
@@ -7367,6 +7380,7 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
     .replace(/\s+with\s*$/i, " with")
     .replace(/\s{2,}/g, " ");
   description = normalizeWhitespace(description);
+  description = stripGcashPreambleToStarter(description);
   const merchantClean = normalizeGcashMerchant(description);
   const type: TransactionType =
     /^Received GCash from/i.test(description) ||
@@ -7392,6 +7406,7 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
   const transferMatch = description.match(/\bTransfer\s+from\s+(09\d{9})\s+to\s+(09\d{9})\b/i);
   const gsaveMatch = /(?:Deposit to|Withdraw from) GSave Account/i.test(description);
   const seamoneyMatch = /\bSeamoney Credit\b/i.test(description);
+  const gsaveAccountMatch = description.match(/\baccount ending in\s+(\d{4,})\b/i);
 
   if (!date || amount === null) {
     return null;
@@ -7423,7 +7438,11 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
       balance: parseMoney(balanceText),
       transferFromAccountNumber: transferMatch?.[1] ?? null,
       transferToAccountNumber: transferMatch?.[2] ?? null,
-      notes: gsaveMatch ? "GSave savings account" : seamoneyMatch ? "Seamoney Credit (Maribank)" : null,
+      notes: gsaveMatch
+        ? `GSave savings account${gsaveAccountMatch?.[1] ? ` ending in ${gsaveAccountMatch[1]}` : ""}`
+        : seamoneyMatch
+          ? "Seamoney Credit (Maribank)"
+          : null,
       line: normalized,
     },
   } satisfies ParsedImportRow;
