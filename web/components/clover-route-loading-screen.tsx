@@ -1,4 +1,3 @@
-import { CloverLoadingMark } from "@/components/clover-loading-mark";
 import { CloverLoadingTitle } from "@/components/clover-loading-title";
 
 type CloverRouteLoadingScreenProps = {
@@ -10,7 +9,7 @@ export function CloverRouteLoadingScreen({ label = "page" }: CloverRouteLoadingS
     <div className="clover-loading-screen" role="status" aria-live="polite" aria-label={`Loading ${label}`}>
       <div className="clover-loading-screen__card">
         <div className="clover-loading-screen__logo" aria-hidden="true">
-          <CloverLoadingMark />
+          <img className="clover-loading-screen__mark" src="/assets/logos/Logos%20V3/logo_color.svg" alt="" loading="eager" fetchPriority="high" />
         </div>
 
         <div className="clover-loading-screen__copy">
