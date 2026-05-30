@@ -8,6 +8,17 @@ import {
   updateImportFileCompat,
 } from "@/lib/data-engine";
 import { getImportEnrichmentJobByImportFileId, MAX_IMPORT_ENRICHMENT_ATTEMPTS } from "@/lib/import-enrichment-jobs";
+import type { AccountType } from "@/lib/domain-types";
+
+type ImportAccountSummary = {
+  accountId: string;
+  accountName: string | null;
+  institution: string | null;
+  accountNumber: string | null;
+  accountType: AccountType | null;
+  balance: string | null;
+  rowsImported: number;
+};
 
 export type ImportStatusSnapshot = {
   importFile: {
@@ -65,6 +76,7 @@ export type ImportStatusSnapshot = {
   parsedRowsCount: number;
   confirmedTransactionsCount: number;
   visibleImportComplete: boolean;
+  accountSummaries: ImportAccountSummary[];
   confirmationStatus: string;
   telemetryPhase: string;
   telemetryLabel: string;
@@ -82,6 +94,58 @@ export type ImportStatusSnapshot = {
   finalizationMaxAttempts: number;
   finalizationNeedsReview: boolean;
   statementCheckpoint: Awaited<ReturnType<(typeof prisma)["accountStatementCheckpoint"]["findUnique"]>>;
+};
+
+const loadVisibleImportAccountSummaries = async (importFileId: string): Promise<ImportAccountSummary[]> => {
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      deletedAt: null,
+      OR: [
+        { importFileId },
+        {
+          rawPayload: {
+            path: ["sourceImportFileId"],
+            equals: importFileId,
+          },
+        },
+      ],
+    },
+    select: {
+      accountId: true,
+      account: {
+        select: {
+          name: true,
+          institution: true,
+          accountNumber: true,
+          type: true,
+          balance: true,
+        },
+      },
+    },
+  }).catch(() => []);
+
+  const summariesByAccountId = new Map<string, ImportAccountSummary>();
+  for (const transaction of transactions) {
+    const existing = summariesByAccountId.get(transaction.accountId);
+    if (existing) {
+      existing.rowsImported += 1;
+      continue;
+    }
+
+    summariesByAccountId.set(transaction.accountId, {
+      accountId: transaction.accountId,
+      accountName: transaction.account?.name ?? null,
+      institution: transaction.account?.institution ?? null,
+      accountNumber: transaction.account?.accountNumber ?? null,
+      accountType: (transaction.account?.type ?? null) as AccountType | null,
+      balance: transaction.account?.balance?.toString() ?? null,
+      rowsImported: 1,
+    });
+  }
+
+  return Array.from(summariesByAccountId.values()).sort((left, right) =>
+    (left.accountName ?? left.accountId).localeCompare(right.accountName ?? right.accountId)
+  );
 };
 
 const estimateFinalizationSecondsRemaining = (job: Awaited<ReturnType<typeof getImportEnrichmentJobByImportFileId>>) => {
@@ -190,27 +254,44 @@ export const loadImportStatusSnapshot = async (
   let checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
   const checkpointWorkflowStage = readCheckpointWorkflowStage(statementCheckpoint?.sourceMetadata);
   const hasParsedRows = parsedRowsCountBefore > 0 || checkpointRowCount > 0;
-  const hasConfirmedRows = confirmedTransactionsCountBefore > 0 || statementCheckpoint?.status === "reconciled";
+  const savedTransactionsCount = await countTransactionsByImportFileCompat(importFileId).catch(() => 0);
+  const hasConfirmedRows = confirmedTransactionsCountBefore > 0 || savedTransactionsCount > 0;
 
   let parsedRowsCount = Math.max(Number(importFile.parsedRowsCount ?? 0), checkpointRowCount);
-  const savedTransactionsCount = await countTransactionsByImportFileCompat(importFileId).catch(() => 0);
   let confirmedTransactionsCount = Math.max(
     Number(importFile.confirmedTransactionsCount ?? 0),
-    savedTransactionsCount,
-    statementCheckpoint?.status === "reconciled" ? checkpointRowCount : 0
+    savedTransactionsCount
   );
   const visibleImportComplete = confirmedTransactionsCount > 0 || hasConfirmedRows;
   const hasVisibleImportData = visibleImportComplete || parsedRowsCount > 0 || checkpointRowCount > 0;
+  const accountSummaries = visibleImportComplete ? await loadVisibleImportAccountSummaries(importFileId) : [];
+  const resolvedAccountId =
+    importFile.accountId ??
+    (accountSummaries.length === 1 ? accountSummaries[0]?.accountId ?? null : null);
 
-  if (options?.promoteFailedVisibleImport && importFile.status === "failed" && hasVisibleImportData) {
+  if (visibleImportComplete && !importFile.accountId && resolvedAccountId) {
+    importFile =
+      (await updateImportFileCompat(importFileId, {
+        accountId: resolvedAccountId,
+        confirmedTransactionsCount,
+      }).catch(() => null)) ?? importFile;
+    if (statementCheckpoint && !statementCheckpoint.accountId) {
+      await prisma.accountStatementCheckpoint.update({
+        where: { importFileId },
+        data: { accountId: resolvedAccountId },
+      }).catch(() => null);
+      statementCheckpoint = (await prisma.accountStatementCheckpoint.findUnique({
+        where: { importFileId },
+      }).catch(() => null)) ?? statementCheckpoint;
+    }
+  }
+
+  if (options?.promoteFailedVisibleImport && importFile.status === "failed" && visibleImportComplete) {
     importFile =
       (await updateImportFileCompat(importFileId, {
         status: "done",
         processingPhase: "complete",
-        processingMessage:
-          confirmedTransactionsCount > 0
-            ? "Transactions are visible. Clover is cleaning up names and categories in the background."
-            : "Account details are visible. Clover is finishing transaction cleanup in the background.",
+        processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
         confirmedTransactionsCount,
       }).catch(() => null)) ?? importFile;
   }
@@ -260,7 +341,7 @@ export const loadImportStatusSnapshot = async (
       processingAttempt: Number(importFile.processingAttempt ?? 0),
       processingTargetScore: importFile.processingTargetScore ?? null,
       processingCurrentScore: importFile.processingCurrentScore ?? null,
-      accountId: importFile.accountId,
+      accountId: resolvedAccountId,
       confirmedAt: importFile.confirmedAt?.toISOString() ?? null,
       uploadedAt: importFile.uploadedAt.toISOString(),
       updatedAt: importFile.updatedAt.toISOString(),
@@ -321,6 +402,7 @@ export const loadImportStatusSnapshot = async (
     parsedRowsCount,
     confirmedTransactionsCount,
     visibleImportComplete,
+    accountSummaries,
     confirmationStatus,
     telemetryPhase: telemetry.phase,
     telemetryLabel: telemetry.phaseLabel,
