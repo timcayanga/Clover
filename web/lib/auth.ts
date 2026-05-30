@@ -7,6 +7,7 @@ import { rememberedSessionIdKey } from "@/lib/clerk-session-persistence";
 const stagingHosts = new Set(["staging.clover.ph", "clover-stage.vercel.app"]);
 const localDevHosts = new Set(["localhost", "127.0.0.1", "::1"]);
 const stagingGuestUserId = "staging-guest";
+const isPreviewDeployment = () => process.env.VERCEL_ENV === "preview";
 
 const isKnownStagingHost = (hostname: string) => {
   if (!hostname) {
@@ -55,7 +56,7 @@ const resolveStagingUserIdFromRememberedSession = async () => {
   }
 };
 
-export const isStagingHost = async () => isKnownStagingHost(await getHostname());
+export const isStagingHost = async () => isPreviewDeployment() || isKnownStagingHost(await getHostname());
 
 export const isLocalDevHost = async () => {
   const hostname = await getHostname();
@@ -65,7 +66,7 @@ export const isLocalDevHost = async () => {
 export const getSessionContext = async () => {
   const hostname = await getHostname();
   const localDevHost = localDevHosts.has(hostname);
-  const stagingHost = isKnownStagingHost(hostname);
+  const stagingHost = isPreviewDeployment() || isKnownStagingHost(hostname);
 
   if (localDevHost) {
     return { userId: stagingGuestUserId, isGuest: true };
