@@ -23,6 +23,7 @@ type AccountTombstoneMatch = {
     accountType: AccountType;
     currency: string;
     deletedAt: Date;
+    reason: string;
   };
   confidence: number;
   reason: string;
@@ -167,6 +168,7 @@ export const findDeletedAccountTombstoneMatch = async (
     .findMany({
       where: {
         workspaceId,
+        reason: { not: "workspace_data_deleted" },
       },
       orderBy: { deletedAt: "desc" },
       take: 200,
@@ -180,6 +182,7 @@ export const findDeletedAccountTombstoneMatch = async (
         accountType: true,
         currency: true,
         deletedAt: true,
+        reason: true,
       },
     })
     .catch((error) => {

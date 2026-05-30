@@ -36,11 +36,13 @@ export const deleteAccountsAndImportArtifacts = async (
           },
         })
       : [];
-  await recordAccountTombstones(tx, {
-    workspaceId,
-    accounts: accountsToDelete,
-    reason: includeWorkspaceImportArtifacts ? "workspace_data_deleted" : "account_deleted",
-  });
+  if (!includeWorkspaceImportArtifacts) {
+    await recordAccountTombstones(tx, {
+      workspaceId,
+      accounts: accountsToDelete,
+      reason: "account_deleted",
+    });
+  }
 
   const importFileWhere = includeWorkspaceImportArtifacts
     ? { workspaceId }
@@ -201,4 +203,10 @@ export const deleteAccountsAndImportArtifacts = async (
       id: accountIdFilter,
     },
   });
+
+  if (includeWorkspaceImportArtifacts) {
+    await tx.accountTombstone.deleteMany({
+      where: { workspaceId },
+    });
+  }
 };

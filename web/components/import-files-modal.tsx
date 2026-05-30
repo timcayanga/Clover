@@ -3024,6 +3024,16 @@ export function ImportFilesModal({
             processingIdentity?.accountNumber
         );
 
+        if (processingPhase === "account_match_needs_confirmation") {
+          closeImportAfterError(
+            itemId,
+            "confirm",
+            summaryContext.fileName,
+            processingMessage ?? "Clover needs confirmation before recreating an account that was previously deleted."
+          );
+          return;
+        }
+
         if (finalizationNeedsReview && visibleImportComplete) {
           triggerImportEnrichment(importFileId);
           emitItemUpdate({
