@@ -23,6 +23,7 @@ const expectedAccounts = [
   { accountNumber: "20867602571971", lastFour: "1971" },
   { accountNumber: "20867602571932", lastFour: "1932" },
 ] as const;
+const expectedCimbMixedBalance = "2392.08";
 
 const readStatementText = async (
   relativePath: string,
@@ -67,7 +68,11 @@ const assertCimbAccountSummaries = (
     const summary = summaryList.find((entry) => entry.accountNumber === expected.accountNumber);
     assert.ok(summary, `${source} should include CIMB ${expected.lastFour}.`);
     assert.equal(summary.rowsImported, 6, `${source} should report 6 rows for CIMB ${expected.lastFour}.`);
-    assert.equal(summary.balance, "4294.66", `${source} should report balance 4294.66 for CIMB ${expected.lastFour}.`);
+    assert.equal(
+      summary.balance,
+      expectedCimbMixedBalance,
+      `${source} should report balance ${expectedCimbMixedBalance} for CIMB ${expected.lastFour}.`
+    );
   }
 };
 
@@ -144,7 +149,7 @@ const main = async () => {
         });
         assert.ok(account, `Expected uploaded account CIMB ${expected.lastFour}.`);
         assert.equal(account.name, `CIMB ${expected.lastFour}`, `Expected account display name CIMB ${expected.lastFour}.`);
-        assert.equal(account.balance?.toString(), "4294.66", `Expected account ${expected.lastFour} balance to persist.`);
+        assert.equal(account.balance?.toString(), expectedCimbMixedBalance, `Expected account ${expected.lastFour} balance to persist.`);
 
         const transactions = await prisma.transaction.findMany({
           where: {
@@ -178,11 +183,38 @@ const main = async () => {
           source: "upload",
         },
       });
-      await prisma.transaction.updateMany({
+      const staleWrongAccount = await prisma.account.create({
+        data: {
+          workspaceId,
+          name: "CIMB 1091",
+          institution: "CIMB",
+          accountNumber: "20867602571091",
+          type: "bank",
+          currency: "PHP",
+          balance: "4294.66",
+          source: "upload",
+        },
+      });
+      const staleRows = await prisma.transaction.findMany({
         where: {
           workspaceId,
           importFileId: importFile.id,
           deletedAt: null,
+        },
+        orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+        select: { id: true },
+      });
+      await prisma.transaction.updateMany({
+        where: {
+          id: { in: staleRows.slice(0, 6).map((row) => row.id) },
+        },
+        data: {
+          accountId: staleWrongAccount.id,
+        },
+      });
+      await prisma.transaction.updateMany({
+        where: {
+          id: { in: staleRows.slice(6).map((row) => row.id) },
         },
         data: {
           accountId: staleGenericAccount.id,
@@ -196,7 +228,15 @@ const main = async () => {
           deletedAt: null,
         },
       });
-      assert.equal(staleGenericRows, 12, "Regression setup should mimic 12 stale rows on a generic CIMB account.");
+      assert.equal(staleGenericRows, 6, "Regression setup should mimic stale rows on a generic CIMB account.");
+      const staleWrongRows = await prisma.transaction.count({
+        where: {
+          workspaceId,
+          accountId: staleWrongAccount.id,
+          deletedAt: null,
+        },
+      });
+      assert.equal(staleWrongRows, 6, "Regression setup should mimic stale rows on a wrong-number CIMB account.");
 
       const { importFile: repairImportFile, result: repairResult } = await processQaImport("repair");
       assert.equal(repairResult.status, "done", "CIMB duplicate repair import should finish.");
@@ -216,6 +256,14 @@ const main = async () => {
         },
       });
       assert.equal(repairedGenericRows, 0, "CIMB duplicate repair should move stale generic rows to numbered accounts.");
+      const repairedWrongRows = await prisma.transaction.count({
+        where: {
+          workspaceId,
+          accountId: staleWrongAccount.id,
+          deletedAt: null,
+        },
+      });
+      assert.equal(repairedWrongRows, 0, "CIMB duplicate repair should remove stale rows from the wrong-number account.");
       const repairedGenericAccount = await prisma.account.findUnique({
         where: { id: staleGenericAccount.id },
       });

@@ -2074,6 +2074,45 @@ const groupParsedRowsByAccount = (rows: Array<Record<string, unknown>>, fallback
 const hasMultipleParsedAccountNumbers = (rows: Array<Record<string, unknown>>) =>
   new Set(rows.map(readParsedRowAccountNumber).filter((value): value is string => Boolean(value))).size > 1;
 
+const getImportAccountBalanceFromParsedRows = (rows: EnrichedParsedImportRow[]) => {
+  const hasCimbRows = rows.some((row) => {
+    const rawPayload = row.rawPayload;
+    return (
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      String((rawPayload as Record<string, unknown>).bank ?? "").toUpperCase() === "CIMB"
+    );
+  });
+
+  if (hasCimbRows) {
+    const lastLedgerBalancePayload = [...rows]
+      .reverse()
+      .find((row) => {
+        const rawPayload = row.rawPayload;
+        return (
+          rawPayload &&
+          typeof rawPayload === "object" &&
+          !Array.isArray(rawPayload) &&
+          ((rawPayload as Record<string, unknown>).balanceText !== undefined ||
+            (rawPayload as Record<string, unknown>).balance !== undefined)
+        );
+      })?.rawPayload as Record<string, unknown> | undefined;
+    const balanceText =
+      lastLedgerBalancePayload?.balanceText !== undefined
+        ? String(lastLedgerBalancePayload.balanceText)
+        : lastLedgerBalancePayload?.balance !== undefined
+          ? String(lastLedgerBalancePayload.balance)
+          : null;
+    const ledgerBalance = parseAmountValue(balanceText);
+    if (ledgerBalance !== null) {
+      return ledgerBalance;
+    }
+  }
+
+  return getTrailingBalanceFromParsedRows(rows);
+};
+
 const extractCimbGSaveAccountNumbersFromText = (text: string | null | undefined) =>
   Array.from(
     new Set(
@@ -2208,7 +2247,7 @@ const ensureParsedAccountGroupsMaterialized = async (params: {
     const accountName = readParsedRowAccountName(firstRow) ?? (typeof params.metadata?.accountName === "string" ? params.metadata.accountName : null);
     const institution = readParsedRowInstitution(firstRow, fallbackInstitution);
     const groupRows = group.rows as EnrichedParsedImportRow[];
-    const groupEndingBalance = getTrailingBalanceFromParsedRows(groupRows);
+    const groupEndingBalance = getImportAccountBalanceFromParsedRows(groupRows);
     const account = await resolveConfirmationAccount({
       importFile: params.importFile,
       statementMetadata: {
@@ -2456,12 +2495,7 @@ const resolveConfirmationAccount = async (params: {
       : null,
     inferredAccountName
   );
-  const parsedTrailingBalance = getTrailingBalanceFromParsedRows(
-    params.parsedRows as Array<{
-      amount?: string | undefined;
-      rawPayload?: Record<string, unknown> | undefined;
-    }>
-  );
+  const parsedTrailingBalance = getImportAccountBalanceFromParsedRows(params.parsedRows as EnrichedParsedImportRow[]);
   const parsedCheckpointBalance =
     typeof params.statementMetadata?.endingBalance === "number" && Number.isFinite(params.statementMetadata.endingBalance)
       ? params.statementMetadata.endingBalance
@@ -5703,7 +5737,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
     const firstGroupRow = group.rows[0] ?? {};
     const groupRows = group.rows as EnrichedParsedImportRow[];
-    const groupEndingBalance = getTrailingBalanceFromParsedRows(groupRows);
+    const groupEndingBalance = getImportAccountBalanceFromParsedRows(groupRows);
     const groupAccount = await resolveConfirmationAccount({
       importFile,
       statementMetadata: {
@@ -5765,7 +5799,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         (rawPayload as Record<string, unknown>).kind === "opening_balance"
       );
     });
-    const groupBalance = getTrailingBalanceFromParsedRows(group.rows as EnrichedParsedImportRow[]);
+    const groupBalance = getImportAccountBalanceFromParsedRows(group.rows as EnrichedParsedImportRow[]);
     const existingSummary = accountSummaryById.get(groupAccount.id);
     accountSummaryById.set(groupAccount.id, {
       accountId: groupAccount.id,
@@ -6153,7 +6187,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         continue;
       }
 
-      const groupBalance = getTrailingBalanceFromParsedRows(group.rows as EnrichedParsedImportRow[]);
+      const groupBalance = getImportAccountBalanceFromParsedRows(group.rows as EnrichedParsedImportRow[]);
       if (groupBalance === null) {
         continue;
       }
@@ -6684,10 +6718,53 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
 
   if (multiAccountImport) {
     const resolvedAccountIdsForCleanup = resolvedAccounts.map((entry) => entry.id);
+    const resolvedAccountBalanceById = new Map(
+      accountSummaries
+        .map((summary) => [summary.accountId, summary.balance] as const)
+        .filter((entry): entry is readonly [string, string] => Boolean(entry[0] && entry[1]))
+    );
     const resolvedInstitutionsForCleanup = Array.from(
       new Set(resolvedAccounts.map((entry) => entry.institution).filter((institution): institution is string => Boolean(institution?.trim())))
     );
+    await Promise.allSettled(
+      Array.from(resolvedAccountBalanceById.entries()).map(([accountId, balance]) =>
+        prisma.account.update({
+          where: { id: accountId },
+          data: { balance },
+        })
+      )
+    );
     if (resolvedAccountIdsForCleanup.length > 0 && resolvedInstitutionsForCleanup.length > 0) {
+      const staleStatementTransactionWhere = {
+        workspaceId: String(importFile.workspaceId),
+        deletedAt: null,
+        accountId: { notIn: resolvedAccountIdsForCleanup },
+        reviewStatus: { notIn: ["edited", "rejected"] },
+        OR: [
+          {
+            rawPayload: {
+              path: ["sourceImportFileId"],
+              equals: importFileId,
+            },
+          },
+          ...statementFingerprints.map((fingerprint) => ({
+            rawPayload: {
+              path: ["sourceStatementFingerprint"],
+              equals: fingerprint,
+            },
+          })),
+        ],
+      } satisfies Prisma.TransactionWhereInput;
+      await prisma.transaction.deleteMany({
+        where: staleStatementTransactionWhere,
+      }).catch((error) => {
+        console.warn("[import-account-match] unable to delete stale current-statement rows from unresolved multi-account cards", {
+          importFileId,
+          institutions: resolvedInstitutionsForCleanup,
+          error,
+        });
+      });
+
       await prisma.account.deleteMany({
         where: {
           workspaceId: String(importFile.workspaceId),
