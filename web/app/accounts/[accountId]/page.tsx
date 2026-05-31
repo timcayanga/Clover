@@ -1340,18 +1340,21 @@ function AccountDetailPageContent() {
           return null;
         }
 
-        if (!hasPendingImportSettlement()) {
+        const importStillSettling = hasPendingImportSettlement();
+        const shouldResolveCompletedUploadAccount =
+          baseAccount.source === "upload" || baseAccount.id.startsWith("optimistic-") || accountId.startsWith("optimistic-");
+        if (!importStillSettling && !shouldResolveCompletedUploadAccount) {
           return null;
         }
 
-        const retryDelays = [900, 1800, 3000];
+        const retryDelays = importStillSettling ? [900, 1800, 3000] : [0];
         for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
           try {
             const response = await fetchJsonOnce<{ accounts?: Account[] }>({
               key: `account-detail:accounts:${baseAccount.workspaceId}`,
               route: "account-detail.accounts",
               workspaceId: baseAccount.workspaceId,
-              detail: "import-settlement",
+              detail: importStillSettling ? "import-settlement" : "completed-upload-resolution",
               input: `/api/accounts?workspaceId=${encodeURIComponent(baseAccount.workspaceId)}`,
             });
             if (response.ok) {
@@ -1369,7 +1372,9 @@ function AccountDetailPageContent() {
             // Keep polling briefly; upload-backed accounts can settle a moment later.
           }
 
-          await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
+          if (retryDelays[attempt] > 0) {
+            await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
+          }
         }
 
         return null;
