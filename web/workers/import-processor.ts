@@ -327,6 +327,38 @@ const buildConfirmedTransactionDedupeKey = (params: {
   ].join("|");
 };
 
+const buildConfirmedTransactionContentKey = (params: {
+  date: unknown;
+  amount: unknown;
+  currency: unknown;
+  merchantRaw: unknown;
+  merchantClean: unknown;
+  description: unknown;
+}) => {
+  const date =
+    params.date instanceof Date && !Number.isNaN(params.date.getTime())
+      ? params.date.toISOString().slice(0, 10)
+      : normalizeTransactionDedupeText(params.date).slice(0, 10);
+  const amount = parseAmountValue(
+    typeof params.amount === "number" || typeof params.amount === "string"
+      ? String(params.amount)
+      : params.amount && typeof params.amount === "object" && "toString" in params.amount
+        ? String((params.amount as { toString?: () => string }).toString?.() ?? "")
+        : null
+  );
+  const merchant =
+    normalizeTransactionDedupeText(params.merchantRaw) ||
+    normalizeTransactionDedupeText(params.merchantClean) ||
+    normalizeTransactionDedupeText(params.description);
+
+  return [
+    date,
+    amount === null ? "" : amount.toFixed(2),
+    normalizeTransactionDedupeText(params.currency || "PHP").toUpperCase(),
+    merchant,
+  ].join("|");
+};
+
 type ProcessImportResult = {
   imported: number;
   duplicate: boolean;
@@ -6718,6 +6750,54 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
 
   if (multiAccountImport) {
     const resolvedAccountIdsForCleanup = resolvedAccounts.map((entry) => entry.id);
+    const resolvedAccountNumbersForCleanup = new Set(
+      resolvedAccounts
+        .map((entry) => (typeof entry.accountNumber === "string" && entry.accountNumber.trim() ? entry.accountNumber.trim() : null))
+        .filter((value): value is string => value !== null)
+    );
+    const canonicalImportTransactionContentKeys = new Set(
+      await prisma.transaction.findMany({
+        where: {
+          workspaceId: String(importFile.workspaceId),
+          accountId: { in: resolvedAccountIdsForCleanup },
+          deletedAt: null,
+          OR: [
+            { importFileId },
+            {
+              rawPayload: {
+                path: ["sourceImportFileId"],
+                equals: importFileId,
+              },
+            },
+            ...statementFingerprints.map((fingerprint) => ({
+              rawPayload: {
+                path: ["sourceStatementFingerprint"],
+                equals: fingerprint,
+              },
+            })),
+          ],
+        },
+        select: {
+          date: true,
+          amount: true,
+          currency: true,
+          merchantRaw: true,
+          merchantClean: true,
+          description: true,
+        },
+      }).then((rows) =>
+        rows.map((row) =>
+          buildConfirmedTransactionContentKey({
+            date: row.date,
+            amount: row.amount,
+            currency: row.currency,
+            merchantRaw: row.merchantRaw,
+            merchantClean: row.merchantClean,
+            description: row.description,
+          })
+        )
+      ).catch(() => [])
+    );
     const resolvedAccountBalanceById = new Map(
       accountSummaries
         .map((summary) => [summary.accountId, summary.balance] as const)
@@ -6765,17 +6845,72 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         });
       });
 
+      if (canonicalImportTransactionContentKeys.size > 0) {
+        const staleCandidateTransactions = await prisma.transaction.findMany({
+          where: {
+            workspaceId: String(importFile.workspaceId),
+            deletedAt: null,
+            accountId: { notIn: resolvedAccountIdsForCleanup },
+            reviewStatus: { notIn: ["edited", "rejected"] },
+            account: {
+              source: "upload",
+              institution: { in: resolvedInstitutionsForCleanup },
+            },
+          },
+          select: {
+            id: true,
+            date: true,
+            amount: true,
+            currency: true,
+            merchantRaw: true,
+            merchantClean: true,
+            description: true,
+          },
+        }).catch(() => []);
+        const staleDuplicateIds = staleCandidateTransactions
+          .filter((row) =>
+            canonicalImportTransactionContentKeys.has(
+              buildConfirmedTransactionContentKey({
+                date: row.date,
+                amount: row.amount,
+                currency: row.currency,
+                merchantRaw: row.merchantRaw,
+                merchantClean: row.merchantClean,
+                description: row.description,
+              })
+            )
+          )
+          .map((row) => row.id);
+        if (staleDuplicateIds.length > 0) {
+          await prisma.transaction.deleteMany({
+            where: {
+              id: { in: staleDuplicateIds },
+              reviewStatus: { notIn: ["edited", "rejected"] },
+            },
+          }).catch((error) => {
+            console.warn("[import-account-match] unable to delete stale duplicate multi-account rows by content", {
+              importFileId,
+              staleDuplicateCount: staleDuplicateIds.length,
+              error,
+            });
+          });
+        }
+      }
+
       await prisma.account.deleteMany({
         where: {
           workspaceId: String(importFile.workspaceId),
           source: "upload",
           institution: { in: resolvedInstitutionsForCleanup },
-          accountNumber: null,
           id: { notIn: resolvedAccountIdsForCleanup },
           transactions: { none: {} },
+          OR: [
+            { accountNumber: null },
+            { accountNumber: { notIn: Array.from(resolvedAccountNumbersForCleanup) } },
+          ],
         },
       }).catch((error) => {
-        console.warn("[import-account-match] unable to delete empty generic multi-account placeholder", {
+        console.warn("[import-account-match] unable to delete empty stale multi-account placeholders", {
           importFileId,
           institutions: resolvedInstitutionsForCleanup,
           error,

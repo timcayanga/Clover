@@ -238,8 +238,7 @@ export const updateImportEnrichmentJobProgress = async (params: {
     params.phase,
     Math.max(0, params.lastRowIndex),
     Math.max(0, params.processedRows),
-    Math.max(0, params.totalRows),
-    params.workerId
+    Math.max(0, params.totalRows)
   );
   return rows[0] ? normalizeJob(rows[0]) : null;
 };

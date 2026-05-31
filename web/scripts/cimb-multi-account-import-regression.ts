@@ -268,6 +268,10 @@ const main = async () => {
         where: { id: staleGenericAccount.id },
       });
       assert.equal(repairedGenericAccount, null, "CIMB duplicate repair should delete the empty generic account card.");
+      const repairedWrongAccount = await prisma.account.findUnique({
+        where: { id: staleWrongAccount.id },
+      });
+      assert.equal(repairedWrongAccount, null, "CIMB duplicate repair should delete the empty wrong-number account card.");
 
       for (const expected of expectedAccounts) {
         const account = await prisma.account.findFirst({
