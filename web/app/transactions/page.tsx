@@ -196,6 +196,32 @@ const matchesImportedAccountIdentity = (left: Account, right: Account) => {
   return isImportedAccountIdentityMatch(left, right);
 };
 
+const normalizeImportedInstitutionKey = (value?: string | null) => String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+
+const isGenericUploadedImportAccount = (account: Account) => {
+  if (account.source !== "upload" || getImportedAccountLastFour(account.accountNumber)) {
+    return false;
+  }
+
+  const institution = normalizeImportedInstitutionKey(account.institution);
+  const name = normalizeImportedInstitutionKey(account.name);
+  return Boolean(institution && (name === institution || name === `${institution} account` || !name));
+};
+
+const isGenericUploadedAccountShadowed = (account: Account, numberedAccounts: Account[]) => {
+  if (!isGenericUploadedImportAccount(account)) {
+    return false;
+  }
+
+  const institution = normalizeImportedInstitutionKey(account.institution);
+  return numberedAccounts.some(
+    (numberedAccount) =>
+      numberedAccount.source === "upload" &&
+      getImportedAccountLastFour(numberedAccount.accountNumber) &&
+      normalizeImportedInstitutionKey(numberedAccount.institution) === institution
+  );
+};
+
 const transactionsEmptyStateIllustration = "/illustrations/clover-transactions-search-3d.png";
 
 const isImageImportFile = (file: File) =>
@@ -253,6 +279,10 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
       return false;
     }
 
+    if (isGenericUploadedAccountShadowed(account, fetchedAccounts)) {
+      return false;
+    }
+
     const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
     return !fetchedById.has(account.id) && !fetchedAccounts.some((fetchedAccount) => matchesImportedAccountIdentity(account, fetchedAccount)) && !fetchedByKey.has(accountKey);
   });
@@ -296,6 +326,10 @@ const mergeOptimisticImportedAccount = (currentAccounts: Account[], optimisticAc
 
     if (account.source !== "upload") {
       return true;
+    }
+
+    if (isGenericUploadedAccountShadowed(account, [optimisticAccount])) {
+      return false;
     }
 
     return !matchesImportedAccountIdentity(account, optimisticAccount);
@@ -2573,7 +2607,7 @@ function TransactionsPageContent() {
           route: "transactions.accounts",
           workspaceId,
           detail: options?.background ? "background" : "foreground",
-          input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`,
+          input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&cleanupImportedAccounts=1`,
         }),
         fetchJsonOnce<{ categories?: Category[] }>({
           key: `transactions:categories:${workspaceId}:defaults-v2`,

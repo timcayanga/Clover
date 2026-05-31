@@ -74,8 +74,8 @@ export type ImportedWorkspaceTransaction = CachedRecord & {
   source?: string | null;
 };
 
-export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v2";
-export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v2";
+export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v3";
+export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v3";
 export const deletedAccountsWorkspaceCacheKey = "clover.accounts.deleted-account-ids.v1";
 export const deletingAccountsWorkspaceCacheKey = "clover.accounts.deleting-account-ids.v1";
 
@@ -206,6 +206,47 @@ export const normalizeImportedAccountKey = (
       normalizeWhitespace(String(accountName ?? ""))
     } ${normalizeWhitespace(String(accountType ?? ""))}`
   );
+
+const normalizeImportedAccountInstitutionKey = (value?: string | null) =>
+  normalizeWhitespace(String(value ?? "")).toLowerCase();
+
+const hasImportedAccountNumber = (value?: unknown) => Boolean(extractLastFourDigits(typeof value === "string" ? value : null));
+
+const readImportedAccountText = (account: CachedRecord | ImportedAccountIdentityLike, key: "name" | "institution" | "accountNumber" | "source") => {
+  const value = account[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+};
+
+const isGenericImportedUploadAccount = (account: CachedRecord | ImportedAccountIdentityLike) => {
+  if (account.source !== "upload" || hasImportedAccountNumber(account.accountNumber)) {
+    return false;
+  }
+
+  const institution = normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "institution"));
+  const name = normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "name"));
+  return Boolean(institution && (name === institution || name === `${institution} account` || !name));
+};
+
+const pruneGenericImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) => {
+  const institutionsWithNumberedUploadAccounts = new Set(
+    accounts
+      .filter((account) => readImportedAccountText(account, "source") === "upload" && hasImportedAccountNumber(account.accountNumber))
+      .map((account) => normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "institution")))
+      .filter(Boolean)
+  );
+
+  if (institutionsWithNumberedUploadAccounts.size === 0) {
+    return accounts;
+  }
+
+  return accounts.filter((account) => {
+    if (!isGenericImportedUploadAccount(account)) {
+      return true;
+    }
+
+    return !institutionsWithNumberedUploadAccounts.has(normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "institution")));
+  });
+};
 
 const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, right: ImportedAccountIdentityLike) => {
   const leftKey = normalizeImportedAccountKey(left.name, left.institution, left.accountNumber, left.type);
@@ -886,16 +927,21 @@ const filterAccountsWorkspaceSnapshot = (
 ): AccountsWorkspaceCacheSnapshot => {
   const deletedIds = getWorkspaceAccountDeletionIds(workspaceId);
   if (deletedIds.size === 0) {
-    return snapshot;
+    return {
+      ...snapshot,
+      accounts: Array.isArray(snapshot.accounts) ? pruneGenericImportedAccountPlaceholders(snapshot.accounts) : [],
+    };
   }
 
   const accountMatches = (entry: CachedRecord) => typeof entry.id === "string" && deletedIds.has(entry.id);
   const relationMatches = (entry: CachedRecord) =>
     typeof entry.accountId === "string" && deletedIds.has(entry.accountId);
 
+  const visibleAccounts = Array.isArray(snapshot.accounts) ? snapshot.accounts.filter((entry) => !accountMatches(entry)) : [];
+
   return {
     ...snapshot,
-    accounts: Array.isArray(snapshot.accounts) ? snapshot.accounts.filter((entry) => !accountMatches(entry)) : [],
+    accounts: pruneGenericImportedAccountPlaceholders(visibleAccounts),
     accountRules: snapshot.accountRules.filter((entry) => !relationMatches(entry)),
     transactions: Array.isArray(snapshot.transactions)
       ? snapshot.transactions.filter((entry) => !relationMatches(entry))
@@ -913,16 +959,21 @@ const filterTransactionsWorkspaceSnapshot = (
 ): WritableTransactionsWorkspaceCacheSnapshot => {
   const deletedIds = getWorkspaceAccountDeletionIds(workspaceId);
   if (deletedIds.size === 0) {
-    return snapshot;
+    return {
+      ...snapshot,
+      accounts: Array.isArray(snapshot.accounts) ? pruneGenericImportedAccountPlaceholders(snapshot.accounts) : [],
+    };
   }
 
   const accountMatches = (entry: CachedRecord) => typeof entry.id === "string" && deletedIds.has(entry.id);
   const relationMatches = (entry: CachedRecord) =>
     typeof entry.accountId === "string" && deletedIds.has(entry.accountId);
 
+  const visibleAccounts = Array.isArray(snapshot.accounts) ? snapshot.accounts.filter((entry) => !accountMatches(entry)) : [];
+
   return {
     ...snapshot,
-    accounts: Array.isArray(snapshot.accounts) ? snapshot.accounts.filter((entry) => !accountMatches(entry)) : [],
+    accounts: pruneGenericImportedAccountPlaceholders(visibleAccounts),
     categories: Array.isArray(snapshot.categories) ? snapshot.categories : [],
     transactions: Array.isArray(snapshot.transactions)
       ? snapshot.transactions.filter((entry) => !relationMatches(entry))
@@ -1295,7 +1346,7 @@ export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account:
   const nextAccountsSnapshot: AccountsWorkspaceCacheSnapshot = {
     workspaceId,
     updatedAt: Date.now(),
-    accounts: mergeImportedAccount(accountsCache?.snapshots[workspaceId]?.accounts ?? [], account),
+    accounts: pruneGenericImportedAccountPlaceholders(mergeImportedAccount(accountsCache?.snapshots[workspaceId]?.accounts ?? [], account)),
     accountRules: accountsCache?.snapshots[workspaceId]?.accountRules ?? [],
     transactions: accountsCache?.snapshots[workspaceId]?.transactions ?? [],
     statementCheckpoints: accountsCache?.snapshots[workspaceId]?.statementCheckpoints ?? [],
@@ -1306,7 +1357,7 @@ export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account:
   const nextTransactionsSnapshot: TransactionsWorkspaceCacheSnapshot = {
     workspaceId,
     updatedAt: Date.now(),
-    accounts: mergeImportedAccount(transactionsCache?.snapshots[workspaceId]?.accounts ?? [], account),
+    accounts: pruneGenericImportedAccountPlaceholders(mergeImportedAccount(transactionsCache?.snapshots[workspaceId]?.accounts ?? [], account)),
     categories: transactionsCache?.snapshots[workspaceId]?.categories ?? [],
     transactions: transactionsCache?.snapshots[workspaceId]?.transactions ?? [],
     imports: transactionsCache?.snapshots[workspaceId]?.imports ?? [],
