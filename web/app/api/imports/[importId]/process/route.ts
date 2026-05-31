@@ -32,7 +32,7 @@ import type { Prisma } from "@prisma/client";
 import { makeImportFileBytesFingerprint } from "@/lib/import-file-text.server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const upsertUploadBankHint = async (params: {
   importFileId: string;
