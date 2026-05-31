@@ -113,6 +113,65 @@ const main = async () => {
     assert.ok(noisy, "Expected a noisy legacy row.");
     assert.equal(noisy?.merchantClean, "GCash Transaction");
 
+    const conflictingAccountText = `
+GCash Transaction History
+Wallet Number 09164013313
+Wallet Number 09164013313
+Wallet Number 09164013313
+Wallet Number 09164013313
+Wallet Number 09164013313
+Wallet Number 09164013313
+Date and Time Description Reference No. Debit Credit Balance
+STARTING BALANCE 0.00
+2024-02-07 06:59 PM 1015099065672 2900.00 705.31 Transfer from 09112223333 to 09112223333
+2024-02-07 07:05 PM 1015099909989 700.00 5.31 Transfer from 09112223333 to 09112223333
+ENDING BALANCE 0.00
+`.trim();
+
+    const conflictingImportFile = await prisma.importFile.create({
+      data: {
+        workspaceId,
+        fileName: "gcash-account-precedence-regression.pdf",
+        fileType: "application/pdf",
+        storageKey: `qa/gcash-precedence/${Date.now()}.pdf`,
+        status: "processing",
+      },
+    });
+
+    const conflictingResult = await processImportFileText(conflictingImportFile.id, {
+      text: conflictingAccountText,
+      actorUserId: user.clerkUserId,
+      qaSource: "import_processing",
+      allowDuplicateStatement: false,
+      importMode: "statement",
+    });
+
+    assert.equal(conflictingResult.status, "done", "Expected the conflicting GCash import to finish.");
+
+    const conflictingTransactions = await prisma.transaction.findMany({
+      where: {
+        importFileId: conflictingImportFile.id,
+        deletedAt: null,
+      },
+      select: {
+        merchantRaw: true,
+        type: true,
+        account: {
+          select: {
+            name: true,
+            accountNumber: true,
+          },
+        },
+      },
+      orderBy: { date: "asc" },
+    });
+
+    assert.equal(conflictingTransactions.length, 2, "Expected the conflicting GCash import to persist two rows.");
+    assert.ok(
+      conflictingTransactions.every((entry) => entry.account?.name === "GCash 3313" && entry.account?.accountNumber === "09164013313"),
+      `Expected the conflicting GCash import to stay on GCash 3313, got ${JSON.stringify(conflictingTransactions)}`
+    );
+
     console.log("[PASS] GCash legacy regression normalizes 2020-era rows correctly.");
   } finally {
     await prisma.user.delete({

@@ -1579,26 +1579,13 @@ function AccountDetailPageContent() {
           router.replace(canonicalPath);
         }
 
-        const transactionsSearchParams = buildTransactionQuerySearchParams(
-          mergedAccount.workspaceId,
-          {
-            accountIds: [mergedAccount.id],
-          },
-          {
-            page: 1,
-            pageSize: TRANSACTION_PAGE_SIZE,
-          }
+        const transactionsSearchParams = new URLSearchParams({
+          page: "1",
+          pageSize: String(TRANSACTION_PAGE_SIZE),
+        });
+        const transactionsPromise = fetch(
+          `/api/accounts/${encodeURIComponent(mergedAccount.id)}/transactions?${transactionsSearchParams.toString()}`
         );
-        transactionsSearchParams.set("accountName", mergedAccount.name);
-        if (mergedAccount.institution) {
-          transactionsSearchParams.set("accountInstitution", mergedAccount.institution);
-        }
-        if (mergedAccount.accountNumber) {
-          transactionsSearchParams.set("accountNumber", mergedAccount.accountNumber);
-        }
-        transactionsSearchParams.set("accountType", mergedAccount.type);
-        transactionsSearchParams.set("summaryMode", "light");
-        const transactionsPromise = fetch(`/api/transactions?${transactionsSearchParams.toString()}`);
 
         void Promise.all([
           fetch(`/api/imports?workspaceId=${nextAccount.workspaceId}`),

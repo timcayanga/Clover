@@ -7571,7 +7571,7 @@ const parseGcashImportText = (text: string) => {
 
   const inferredAccountNumber = inferGcashAccountNumberFromRows(rows, metadata.accountNumber);
   const endingBalance = getTrailingBalanceFromParsedRows(rows);
-  const accountNumber = inferredAccountNumber ?? metadata.accountNumber;
+  const accountNumber = metadata.accountNumber ?? inferredAccountNumber;
 
   return {
     metadata: {
