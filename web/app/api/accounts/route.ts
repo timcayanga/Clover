@@ -488,12 +488,17 @@ export async function GET(request: Request) {
         });
       });
     }
-    await cleanupEmptyGenericUploadedAccountPlaceholders(workspaceId, compatibleColumns).catch((error) => {
-      console.warn("[accounts] unable to clean up empty generic imported account placeholders", {
-        workspaceId,
-        error,
+    const shouldCleanupImportedAccounts = ["1", "true"].includes(
+      (searchParams.get("cleanupImportedAccounts") ?? "").trim().toLowerCase()
+    );
+    if (shouldCleanupImportedAccounts) {
+      await cleanupEmptyGenericUploadedAccountPlaceholders(workspaceId, compatibleColumns).catch((error) => {
+        console.warn("[accounts] unable to clean up empty generic imported account placeholders", {
+          workspaceId,
+          error,
+        });
       });
-    });
+    }
 
     const accounts = await prisma.account.findMany({
       where: { workspaceId },
