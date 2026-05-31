@@ -1244,6 +1244,28 @@ const main = async () => {
     console.log(`[PASS] GoTyme deterministic parser | ${gotymeFile} | ${gotymeRows.length} rows`);
   }
 
+  const maribankSamplePath = join(root, "Samples/Maribank/1026596528-MariBank-Statement-20260403.pdf");
+  const maribankBytes = await readFile(maribankSamplePath);
+  const maribankText = await readUploadedFileText({
+    name: basename(maribankSamplePath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(maribankBytes.length);
+      copy.set(maribankBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const maribankMetadata = detectStatementMetadataFromText(maribankText);
+  const maribankRows = parser.parseImportText(maribankText, basename(maribankSamplePath), "application/pdf", {
+    institution: maribankMetadata.institution,
+    accountName: maribankMetadata.accountName,
+    accountNumber: maribankMetadata.accountNumber,
+  });
+  if (maribankRows.length !== 63) {
+    throw new Error(`expected MariBank sample to keep all 63 transaction rows, got ${maribankRows.length}`);
+  }
+  console.log(`[PASS] MariBank row preservation | ${basename(maribankSamplePath)} | ${maribankRows.length} rows`);
+
   const dateStampedBankName = normalizeBankName("2026-05-01 22.01.12 0112");
   if (dateStampedBankName !== "Unknown") {
     throw new Error(`expected date-stamped bank label to normalize to Unknown but got ${dateStampedBankName}`);
@@ -2093,6 +2115,11 @@ const main = async () => {
   }
 
   const noisyFallbackChecks = [
+    {
+      label: "Landbank fallback excel",
+      path: join(root, "Samples/Landbank/Philippines Land Bank of the Philippines excel pdf.pdf"),
+      institution: "Landbank",
+    },
     {
       label: "Landbank fallback",
       path: join(root, "Samples/Landbank/Philippines Land Bank of the Philippines word.pdf"),

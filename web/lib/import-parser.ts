@@ -2881,15 +2881,6 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
     }
     return leftDate.localeCompare(rightDate);
   });
-  const seenCategories = new Set<string>();
-  const selectedRows = filteredRows.filter((row) => {
-    const category = row.categoryName ?? "";
-    if (seenCategories.has(category)) {
-      return false;
-    }
-    seenCategories.add(category);
-    return true;
-  });
 
   return {
     metadata: {
@@ -2912,7 +2903,7 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
         endDate: endDate ? endDate.toISOString() : null,
       }),
     } satisfies DetectedStatementMetadata,
-    rows: selectedRows,
+    rows: filteredRows,
   };
 };
 
@@ -3054,7 +3045,7 @@ const parsePsBankImportText = (text: string) => {
 
 const isLandbankStatementText = (text: string) => {
   const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
-  return /\bLANDBANK\b/i.test(normalized) && /\bACCOUNT SUMMARY\b/i.test(normalized);
+  return /\bLANDBANK\b/i.test(normalized) && /\b(?:ACCOUNT SUMMARY|STATEMENT PERIOD|ACCOUNT NUMBER|TRANSACTION DESCRIPTION|CLOSING BALANCE)\b/i.test(normalized);
 };
 
 const parseLandbankDateToken = (value?: string | null, yearHint?: number | null) => {
@@ -3095,6 +3086,44 @@ const parseLandbankDateToken = (value?: string | null, yearHint?: number | null)
   return null;
 };
 
+const parseLandbankPeriodDateToken = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeWhitespace(value);
+  const slashMatch = normalized.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (slashMatch) {
+    const day = Number(slashMatch[1]);
+    const month = Number(slashMatch[2]);
+    const year = Number(slashMatch[3]);
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return new Date(Date.UTC(year, month - 1, day, 12));
+    }
+  }
+
+  return parseLandbankDateToken(value, null);
+};
+
+const parseLandbankMoneyToken = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeWhitespace(value).replace(/[, ]/g, "");
+  const direct = parseMoney(normalized);
+  if (direct !== null) {
+    return direct;
+  }
+
+  const compact = normalized.replace(/[^\d]/g, "");
+  if (/^\d{4,6}$/.test(compact)) {
+    return Number(`${compact.slice(0, -2)}.${compact.slice(-2)}`);
+  }
+
+  return null;
+};
+
 const parseLandbankStatementMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
   if (!isLandbankStatementText(text)) {
     return null;
@@ -3102,11 +3131,23 @@ const parseLandbankStatementMetadata = (text: string, context: ImportParseContex
 
   const normalized = text.replace(/\u00a0/g, " ");
   const lines = splitStatementLines(text);
+  const accountLine =
+    lines.slice(0, 12).find((line) => /(?:Account|Acct)\s+(?:Number|Humber)/i.test(line)) ??
+    lines.slice(0, 12).find((line) => /\b(?:Account|Acct)\b/i.test(line)) ??
+    null;
+  const accountLineCandidate =
+    accountLine?.match(/(?:Account|Acct)\s+(?:Number|Humber)\s*[:;\-]?\s*([0-9][0-9\s-]{6,}[0-9])/i)?.[1] ??
+    accountLine?.match(/([0-9][0-9\s-]{6,}[0-9])/)?.[1] ??
+    null;
   const accountNumber =
     preserveAccountNumberDisplayCandidate(context.accountNumber) ??
     normalizeAccountNumberCandidate(context.accountNumber) ??
-    preserveAccountNumberDisplayCandidate(normalized.match(/Account\s+Number\s*[:\-]?\s*(\d{12})\s*(\d{5})/i)?.slice(1).join("-") ?? null) ??
-    normalizeAccountNumberCandidate(normalized.match(/Account\s+Number\s*[:\-]?\s*(\d{12})\s*(\d{5})/i)?.slice(1).join("-") ?? null) ??
+    preserveAccountNumberDisplayCandidate(accountLineCandidate) ??
+    normalizeAccountNumberCandidate(accountLineCandidate) ??
+    preserveAccountNumberDisplayCandidate(normalized.match(/(?:Account|Acct)\s+(?:Number|Humber)\s*[:\-]?\s*([0-9][0-9\s-]{10,}[0-9])/i)?.[1] ?? null) ??
+    normalizeAccountNumberCandidate(normalized.match(/(?:Account|Acct)\s+(?:Number|Humber)\s*[:\-]?\s*([0-9][0-9\s-]{10,}[0-9])/i)?.[1] ?? null) ??
+    preserveAccountNumberDisplayCandidate(normalized.match(/Account\s+Number\s*[:\-]?\s*([0-9][0-9\s-]{10,}[0-9])/i)?.[1] ?? null) ??
+    normalizeAccountNumberCandidate(normalized.match(/Account\s+Number\s*[:\-]?\s*([0-9][0-9\s-]{10,}[0-9])/i)?.[1] ?? null) ??
     preserveAccountNumberDisplayCandidate(normalized.match(/\bAccount\s+Number\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
     normalizeAccountNumberCandidate(normalized.match(/\bAccount\s+Number\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
     extractFormattedAccountNumberFromLines(lines) ??
@@ -3121,12 +3162,17 @@ const parseLandbankStatementMetadata = (text: string, context: ImportParseContex
     context.accountName?.trim() ||
     cleanAccountHolderDisplayName(accountHolderLine?.replace(/^\s*\d+\s+/, "").replace(/\bCustomer\s*:\s*/i, "") ?? null) ||
     (accountNumber ? `Landbank ${accountNumber.slice(-4)}` : "Landbank");
+  const periodLine =
+    lines.find((line) => /(?:As\s+)?Statement\s+Period/i.test(line)) ??
+    lines.find((line) => /\bStatement\s+Period\b/i.test(line)) ??
+    null;
   const periodMatch =
-    normalized.match(/Statement\s+Period\.?\s*:?[\s\S]{0,40}?(\d{1,2}[/-]\d{1,2}[/-]\d{4})\s*(?:to|[-–—])\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})/i) ??
-    normalized.match(/Statement\s+Period\.?\s*:?[\s\S]{0,40}?(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:to|[-–—])\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i);
+    periodLine?.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{4})\s*(?:to|[-–—]|so)\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})/i) ??
+    normalized.match(/Statement\s+Period\.?\s*:?[\s\S]{0,80}?(\d{1,2}[/-]\d{1,2}[/-]\d{4})\s*(?:to|[-–—]|so)\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})/i) ??
+    normalized.match(/Statement\s+Period\.?\s*:?[\s\S]{0,80}?(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:to|[-–—]|so)\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i);
   const detectedRange = detectStatementDatesFromText(normalized);
-  const startDate = parseDateValue(periodMatch?.[1] ?? null) ?? detectedRange?.startDate ?? null;
-  const endDate = parseDateValue(periodMatch?.[2] ?? null) ?? detectedRange?.endDate ?? null;
+  const startDate = parseLandbankPeriodDateToken(periodMatch?.[1] ?? null) ?? detectedRange?.startDate ?? null;
+  const endDate = parseLandbankPeriodDateToken(periodMatch?.[2] ?? null) ?? detectedRange?.endDate ?? null;
   const openingBalance =
     parseMoney(normalized.match(/Balance\s+Forwarded[\s\S]{0,80}?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(normalized.match(/Beginning\s+Balance[\s\S]{0,80}?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
@@ -3178,7 +3224,7 @@ const parseLandbankTransactionBlock = (
     return null;
   }
 
-  if (!/cash\s+out\s*[- ]?order|transfer\s*\(internet\s+banking\)/i.test(blockText)) {
+  if (!/cash\s+out\s*[- ]?order|cash\s+out|transfer\s*\(internet\s+banking\)|transfer\b|cash\s+deposit/i.test(blockText)) {
     return null;
   }
 
@@ -3213,6 +3259,10 @@ const parseLandbankTransactionBlock = (
 
   if (/cash\s+out\s*-\s*order/i.test(blockText)) {
     transactionName = "Cash Out - Order";
+    categoryName = "Cash & ATM";
+    type = "expense";
+  } else if (/cash\s+out\b/i.test(blockText)) {
+    transactionName = "Cash Out";
     categoryName = "Cash & ATM";
     type = "expense";
   } else if (/transfer\s*\(internet\s+banking\)/i.test(blockText)) {
@@ -3272,7 +3322,7 @@ const parseLandbankImportText = (text: string, context: ImportParseContext = {})
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
 
-  const transactionStartPattern = /^(?:\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2}|\d{8})\b/;
+  const transactionStartPattern = /(?:^|\b)(?:\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2}|\d{8})\b/;
   const blocks: string[][] = [];
   let current: string[] = [];
 
@@ -3299,7 +3349,8 @@ const parseLandbankImportText = (text: string, context: ImportParseContext = {})
       continue;
     }
 
-    if (transactionStartPattern.test(line)) {
+    const isTransactionStart = transactionStartPattern.test(line) && /cash\s+out|transfer|deposit|withdraw|balance/i.test(line);
+    if (isTransactionStart) {
       if (current.length > 0) {
         blocks.push(current);
       }
@@ -3336,6 +3387,75 @@ const parseLandbankImportText = (text: string, context: ImportParseContext = {})
   }
 
   if (rows.length === 0) {
+    const fallbackRows = lines
+      .map((line, index) => {
+        const normalizedLine = normalizeWhitespace(decompactOcrText(line));
+        if (/balance\s*-\s*closing/i.test(normalizedLine) || !/\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2}|\d{8})\b/.test(normalizedLine)) {
+          return null;
+        }
+
+        const hasRelevantText = /(cash\s+out|transfer|deposit|withdraw|replenish|replenishment|reversal|order)/i.test(normalizedLine);
+        const hasMoneyToken = /\b\d[\d,]*(?:\.\d{2})?\b/.test(normalizedLine);
+        if (!hasRelevantText && !hasMoneyToken) {
+          return null;
+        }
+
+        const dateToken = normalizedLine.match(/\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2}|\d{8})\b/)?.[0] ?? null;
+        const date = parseLandbankDateToken(dateToken, yearHint);
+        const amountMatches = Array.from(normalizedLine.matchAll(/\b\d[\d,]*(?:\.\d{2})?\b/g)).map((match) => match[0]);
+        const amountText = amountMatches.find((token) => parseLandbankMoneyToken(token) !== null) ?? null;
+        const balanceText = amountMatches.at(-1) ?? amountText;
+        const description = normalizedLine.match(/(?:cash\s+out\s*-\s*order|cash\s+out|transfer\s*\(internet\s+banking\)|cash\s+deposit|withdrawal)/i)?.[0] ?? "Landbank Transaction";
+        if (!date || !amountText || !balanceText) {
+          return null;
+        }
+
+        const amount = parseLandbankMoneyToken(amountText);
+        const balance = parseLandbankMoneyToken(balanceText);
+        if (amount === null || balance === null) {
+          return null;
+        }
+
+        return {
+          date: date.toISOString().slice(0, 10),
+          amount: amount.toFixed(2),
+          merchantRaw: humanizeMerchantText(description),
+          merchantClean: summarizeMerchantText(description, metadata.institution),
+          description,
+          categoryName: /transfer/i.test(description) ? "Transfers" : /cash\s+out|withdrawal/i.test(description) ? "Cash & ATM" : "Other",
+          accountName: metadata.accountName ?? undefined,
+          institution: metadata.institution ?? undefined,
+          type: /transfer/i.test(description) ? "transfer" : /cash\s+out|withdrawal/i.test(description) ? "expense" : "expense",
+          confidence: 70,
+          rawPayload: {
+            bank: metadata.institution,
+            kind: "landbank_statement_transaction",
+            line: normalizedLine,
+            amountText: amount.toFixed(2),
+            balanceText: balance.toFixed(2),
+            balance,
+            previousBalance: null,
+          },
+        } satisfies ParsedImportRow;
+      })
+      .filter(Boolean) as ParsedImportRow[];
+
+    if (fallbackRows.length >= 10) {
+      const endingBalance = getTrailingBalanceFromParsedRows(fallbackRows);
+      return {
+        metadata: {
+          ...metadata,
+          endingBalance: endingBalance ?? metadata.endingBalance ?? null,
+          confidence: Math.min(100, metadata.confidence + 5),
+        },
+        rows: fallbackRows,
+      };
+    }
+
+    return null;
+  }
+
+  if (rows.length < 10) {
     return null;
   }
 
@@ -14681,6 +14801,27 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     return withDetectedCurrency(bdoParsed.metadata, text);
   }
 
+  const landbankMetadata = parseLandbankStatementMetadata(text, {});
+  if (landbankMetadata) {
+    return withDetectedCurrency(landbankMetadata, text);
+  }
+  if (/\bLANDBANK\b/i.test(text)) {
+    return withDetectedCurrency(
+      {
+        institution: "Landbank",
+        accountNumber: null,
+        accountName: "Landbank",
+        accountType: "bank",
+        openingBalance: null,
+        endingBalance: null,
+        startDate: null,
+        endDate: null,
+        confidence: 40,
+      },
+      text
+    );
+  }
+
   const genericMetadata = parseGenericStatementMetadata(text);
   if (genericMetadata) {
     return withDetectedCurrency(genericMetadata, text);
@@ -14881,6 +15022,11 @@ export const parseImportText = (
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
   const institution = context.institution ?? null;
+  const isLandbankText = isLandbankStatementText(text);
+  if (isLandbankText) {
+    const landbankParsed = parseLandbankImportText(text, context);
+    return landbankParsed && landbankParsed.rows.length > 0 ? landbankParsed.rows : [];
+  }
   const chinaBankParsed = parseChinaBankImportText(text, context);
   if (chinaBankParsed && chinaBankParsed.rows.length > 0) {
     return chinaBankParsed.rows;
@@ -14891,11 +15037,6 @@ export const parseImportText = (
   });
   if (genericEastWestParsed && genericEastWestParsed.rows.length > 0) {
     return genericEastWestParsed.rows;
-  }
-
-  const landbankParsed = parseLandbankImportText(text, context);
-  if (landbankParsed && landbankParsed.rows.length > 0) {
-    return landbankParsed.rows;
   }
 
   const ucpbParsed = parseUcpbImportText(text, context);
