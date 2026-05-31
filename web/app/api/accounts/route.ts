@@ -116,6 +116,17 @@ const serializeAccount = <T extends {
   updatedAt: account.updatedAt.toISOString(),
 });
 
+const normalizeAccountIdentityKey = (accountName?: string | null, institution?: string | null, accountNumber?: string | null) => {
+  const digits = String(accountNumber ?? "").replace(/\D/g, "");
+  const accountNumberKey = digits.length >= 4 ? digits.slice(-4) : "";
+  const nameKey = accountNumberKey || String(accountName ?? "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  return `${String(institution ?? "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim()} ${nameKey}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
 const parseNullableDecimal = (value: unknown) => {
   if (value === undefined || value === null || value === "") {
     return null;
@@ -521,7 +532,35 @@ export async function GET(request: Request) {
       });
 
       const latestByAccountId = new Map<string, (typeof checkpoints)[number]>();
+      const latestByAccountKey = new Map<string, (typeof checkpoints)[number]>();
       for (const checkpoint of checkpoints) {
+        const sourceMetadata =
+          checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+            ? (checkpoint.sourceMetadata as Record<string, unknown>)
+            : null;
+        const checkpointKey = normalizeAccountIdentityKey(
+          typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+          typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+          typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null
+        );
+        if (checkpointKey) {
+          const currentByKey = latestByAccountKey.get(checkpointKey);
+          const checkpointTime = Math.max(
+            checkpoint.statementEndDate?.getTime() ?? 0,
+            checkpoint.createdAt.getTime()
+          );
+          const currentTimeByKey = currentByKey
+            ? Math.max(
+                currentByKey.statementEndDate?.getTime() ?? 0,
+                currentByKey.createdAt.getTime()
+              )
+            : -1;
+
+          if (!currentByKey || checkpointTime >= currentTimeByKey) {
+            latestByAccountKey.set(checkpointKey, checkpoint);
+          }
+        }
+
         if (!checkpoint.accountId) {
           continue;
         }
@@ -543,7 +582,14 @@ export async function GET(request: Request) {
         }
       }
 
-      return Array.from(latestByAccountId.values()).map((checkpoint) => ({
+      const checkpointValues = Array.from(
+        new Map([
+          ...Array.from(latestByAccountId.entries()),
+          ...Array.from(latestByAccountKey.entries()).map(([key, checkpoint]) => [`key:${key}`, checkpoint] as const),
+        ]).values()
+      );
+
+      return checkpointValues.map((checkpoint) => ({
         ...checkpoint,
         openingBalance: checkpoint.openingBalance?.toString() ?? null,
         endingBalance: checkpoint.endingBalance?.toString() ?? null,

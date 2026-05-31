@@ -33,6 +33,11 @@ const normalizeAccountKey = (accountName?: string | null, institution?: string |
     .replace(/\s+/g, " ")
     .trim();
 
+const normalizeAccountNumberKey = (accountNumber?: string | null) => {
+  const digits = String(accountNumber ?? "").replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : "";
+};
+
 export async function GET(_request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
     const userId = await resolveStatementCheckpointsRouteUserId();
@@ -44,6 +49,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
         workspaceId: true,
         name: true,
         institution: true,
+        accountNumber: true,
       },
     });
 
@@ -66,6 +72,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
     });
 
     const accountKey = normalizeAccountKey(account.name, account.institution);
+    const accountNumberKey = normalizeAccountNumberKey(account.accountNumber);
     const filteredCheckpoints = checkpoints.filter((checkpoint) => {
       if (checkpoint.accountId === accountId) {
         return true;
@@ -79,7 +86,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
         typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
         typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null
       );
-      return checkpointKey === accountKey;
+      const checkpointNumberKey = normalizeAccountNumberKey(
+        typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null
+      );
+      return checkpointKey === accountKey || (accountNumberKey && checkpointNumberKey === accountNumberKey);
     });
 
     return NextResponse.json({
