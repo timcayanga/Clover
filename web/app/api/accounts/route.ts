@@ -191,6 +191,20 @@ const readImportedSourceRowIndex = (payload: unknown) => {
   return readImportedJsonNumber((payload as Record<string, unknown>).sourceRowIndex);
 };
 
+const isCimbParsedAccountRepairRow = (row: {
+  institution: string | null;
+  accountName: string | null;
+  rawPayload: Prisma.JsonValue | null;
+}) => {
+  const institution =
+    normalizeImportInstitution(row.institution).toLowerCase() ||
+    normalizeImportInstitution(readImportedJsonText(row.rawPayload, "institution")).toLowerCase() ||
+    normalizeImportInstitution(readImportedJsonText(row.rawPayload, "bank")).toLowerCase();
+  const accountName = normalizeImportInstitution(row.accountName).toLowerCase();
+
+  return institution === "cimb" || accountName.startsWith("cimb ");
+};
+
 const readImportedRunningBalance = (payload: unknown) => {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return null;
@@ -239,6 +253,10 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
   if (parsedRows.length === 0) {
     return;
   }
+  const repairRows = parsedRows.filter((row) => !isCimbParsedAccountRepairRow(row));
+  if (repairRows.length === 0) {
+    return;
+  }
 
   const existingAccounts = await prisma.account.findMany({
     where: { workspaceId },
@@ -271,7 +289,7 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
     }
   >();
 
-  for (const row of parsedRows) {
+  for (const row of repairRows) {
     const accountNumber =
       normalizeImportAccountNumber(row.accountNumber) ??
       normalizeImportAccountNumber(readImportedJsonText(row.rawPayload, "accountNumber"));
@@ -408,6 +426,43 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
   }
 };
 
+const cleanupEmptyGenericUploadedAccountPlaceholders = async (workspaceId: string, compatibleColumns: Set<string>) => {
+  if (!compatibleColumns.has("accountNumber")) {
+    return;
+  }
+
+  const numberedUploadAccounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      accountNumber: { not: null },
+    },
+    select: {
+      institution: true,
+    },
+  }).catch(() => []);
+  const institutionsWithNumberedAccounts = Array.from(
+    new Set(
+      numberedUploadAccounts
+        .map((account) => normalizeImportInstitution(account.institution))
+        .filter(Boolean)
+    )
+  );
+  if (institutionsWithNumberedAccounts.length === 0) {
+    return;
+  }
+
+  await prisma.account.deleteMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      institution: { in: institutionsWithNumberedAccounts },
+      accountNumber: null,
+      transactions: { none: {} },
+    },
+  }).catch(() => null);
+};
+
 export async function GET(request: Request) {
   try {
     const userId = await resolveAccountsRouteUserId();
@@ -422,6 +477,12 @@ export async function GET(request: Request) {
     const compatibleColumns = await getCompatibleAccountColumns();
     await repairParsedImportedAccounts(workspaceId, compatibleColumns).catch((error) => {
       console.warn("[accounts] unable to repair parsed imported account materialization", {
+        workspaceId,
+        error,
+      });
+    });
+    await cleanupEmptyGenericUploadedAccountPlaceholders(workspaceId, compatibleColumns).catch((error) => {
+      console.warn("[accounts] unable to clean up empty generic imported account placeholders", {
         workspaceId,
         error,
       });
