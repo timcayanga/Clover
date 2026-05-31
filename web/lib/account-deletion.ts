@@ -231,6 +231,7 @@ export const deleteAccountsAndImportArtifacts = async (
       id: accountIdFilter,
     },
   });
+  const deletedOrphanedTransactions = await deleteOrphanedWorkspaceTransactions(tx, workspaceId);
 
   if (includeWorkspaceImportArtifacts) {
     await tx.accountTombstone.deleteMany({
@@ -240,6 +241,6 @@ export const deleteAccountsAndImportArtifacts = async (
 
   return {
     accountsDeleted: deletedAccounts.count,
-    transactionsDeleted: deletedTransactions.count,
+    transactionsDeleted: deletedTransactions.count + deletedOrphanedTransactions,
   };
 };

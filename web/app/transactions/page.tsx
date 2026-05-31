@@ -2801,8 +2801,8 @@ function TransactionsPageContent() {
       const shouldPreserveImportedTransactions =
         !hasServerSideFilters &&
         importedTransactionsToPreserve.length > 0 &&
+        exactServerTotalCount > 0 &&
         (
-          !hasFreshTransactions ||
           Boolean(options?.background) ||
           importedTransactionsToPreserve.length > fetchedTransactions.length ||
           exactServerTotalCount > fetchedTransactions.length
