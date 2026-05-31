@@ -2398,6 +2398,27 @@ function TransactionsPageContent() {
   );
   const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account] as const)), [accounts]);
   const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, formatTransactionAccountName(account)] as const)), [accounts]);
+  const getAccountOptionsForTransaction = useCallback(
+    (transaction: Transaction) => {
+      const options = accounts.map((account) => ({
+        value: account.id,
+        label: formatTransactionAccountName(account),
+      }));
+
+      if (options.some((option) => option.value === transaction.accountId)) {
+        return options;
+      }
+
+      return [
+        {
+          value: transaction.accountId,
+          label: formatTransactionAccountDisplayName(transaction, null),
+        },
+        ...options,
+      ];
+    },
+    [accounts]
+  );
   const accountBrandById = useMemo(
     () => {
       const brandById = new Map(
@@ -2722,7 +2743,15 @@ function TransactionsPageContent() {
           : typeof summaryPayload?.totalCount === "number"
             ? summaryPayload.totalCount
             : fetchedTransactions.length;
-      const shouldPreserveImportedTransactions = !hasFreshTransactions && !hasServerSideFilters && exactServerTotalCount > 0;
+      const shouldPreserveImportedTransactions =
+        !hasServerSideFilters &&
+        importedTransactionsToPreserve.length > 0 &&
+        (
+          !hasFreshTransactions ||
+          Boolean(options?.background) ||
+          importedTransactionsToPreserve.length > fetchedTransactions.length ||
+          exactServerTotalCount > fetchedTransactions.length
+        );
       const mergedTransactionsWithImports =
         shouldPreserveImportedTransactions && importedTransactionsToPreserve.length > 0
           ? mergeImportedWorkspaceTransactions(mergedTransactions, importedTransactionsToPreserve as unknown as ImportedWorkspaceTransaction[])
@@ -6938,10 +6967,7 @@ function TransactionsPageContent() {
                         ariaLabel={`Edit account for ${transaction.merchantRaw}`}
                         kind="select"
                         className="transaction-inline-edit transaction-inline-edit--select"
-                        options={accounts.map((account) => ({
-                          value: account.id,
-                          label: formatTransactionAccountName(account),
-                        }))}
+                        options={getAccountOptionsForTransaction(transaction)}
                         onCommit={(value) => commitInlineEdit(transaction, "accountId", value)}
                       />
                     </div>
@@ -8033,9 +8059,14 @@ function TransactionsPageContent() {
                     value={detailDraft?.accountId ?? ""}
                     onChange={(event) => setDetailDraft((current) => (current ? { ...current, accountId: event.target.value } : current))}
                   >
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {getAccountDisplayName(account)}
+                    {(selectedTransaction
+                      ? getAccountOptionsForTransaction(selectedTransaction)
+                      : accounts.map((account) => ({
+                          value: account.id,
+                          label: formatTransactionAccountName(account),
+                        }))).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
                     ))}
                   </select>
