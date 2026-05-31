@@ -8895,13 +8895,51 @@ const parseGoTymeStatementMetadata = (text: string, context: ImportParseContext 
 
   const normalized = text.replace(/\u00a0/g, " ");
   const lines = splitStatementLines(text);
+  const extractLabeledGoTymeAccountNumber = () => {
+    const patterns = [
+      /Go\s*Save\s+No\.?\s*:\s*((?:\*+[\d*]{4,}|\d[\d\s-]{4,}\d))/i,
+      /Account\s+Number\s*:\s*((?:\*+[\d*]{4,}|\d[\d\s-]{6,}\d))/i,
+    ];
+
+    for (const [index, line] of lines.entries()) {
+      const nextLine = lines[index + 1] ?? "";
+      const combinedLine = normalizeWhitespace(`${line} ${nextLine}`);
+      const candidates = [line, normalizeWhitespace(decompactOcrText(line)), combinedLine, normalizeWhitespace(decompactOcrText(combinedLine))];
+
+      for (const candidate of candidates) {
+        for (const pattern of patterns) {
+          const match = candidate.match(pattern)?.[1] ?? null;
+          if (!match) {
+            continue;
+          }
+
+          const compact = normalizeWhitespace(match).replace(/\s+/g, "");
+          const digitsOnly = compact.replace(/\D/g, "");
+
+          if (/\*+/.test(compact) && digitsOnly.length >= 4) {
+            return compact;
+          }
+
+          if (digitsOnly.length >= 8) {
+            return digitsOnly;
+          }
+
+          if (/Go\s*Save\s+No\.?/i.test(candidate) && digitsOnly.length >= 4) {
+            return digitsOnly;
+          }
+        }
+      }
+    }
+
+    return null;
+  };
+
   const accountNumber =
     preserveAccountNumberDisplayCandidate(context.accountNumber) ??
     normalizeAccountNumberCandidate(context.accountNumber) ??
     preserveAccountNumberDisplayCandidate(normalized.match(/Account\s+Number\s*:\s*(\d{12})(?:\s|,|$)/i)?.[1] ?? null) ??
     normalizeAccountNumberCandidate(normalized.match(/Account\s+Number\s*:\s*(\d{12})(?:\s|,|$)/i)?.[1] ?? null) ??
-    preserveAccountNumberDisplayCandidate(normalized.match(/Go\s*Save\s+No\.?\s*:\s*((?:\*+[\d*]{4,}|\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
-    normalizeAccountNumberCandidate(normalized.match(/Go\s*Save\s+No\.?\s*:\s*((?:\*+[\d*]{4,}|\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
+    extractLabeledGoTymeAccountNumber() ??
     preserveAccountNumberDisplayCandidate(normalized.match(/Account\s+Number\s*:\s*((?:\d[\d\s-]{6,}\d|\*+[\d*]{4,}))/i)?.[1] ?? null) ??
     normalizeAccountNumberCandidate(normalized.match(/Account\s+Number\s*:\s*((?:\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
     extractFormattedAccountNumberFromLines(lines) ??

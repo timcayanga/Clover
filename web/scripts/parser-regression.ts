@@ -1197,6 +1197,12 @@ const main = async () => {
       },
     });
     const gotymeMetadata = detectStatementMetadataFromText(gotymeText);
+    if (!gotymeMetadata.accountNumber) {
+      throw new Error(`expected ${gotymeFile} to resolve a GoTyme account number`);
+    }
+    if (gotymeMetadata.accountNumber === "2025") {
+      throw new Error(`expected ${gotymeFile} to avoid year-like GoTyme account numbers`);
+    }
     const gotymeRows = parser.parseImportText(gotymeText, basename(gotymePath), "application/pdf", {
       institution: gotymeMetadata.institution,
       accountName: gotymeMetadata.accountName,
