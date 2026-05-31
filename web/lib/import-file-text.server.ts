@@ -244,9 +244,15 @@ type ImportFileTextCacheRecord = {
 };
 
 type ImportedFileTextWithCacheInfo = {
+  fileFingerprint: string;
   text: string;
   cacheHit: boolean;
   cacheRecord: ImportFileTextCacheRecord | null;
+};
+
+type OcrWorker = {
+  setParameters: (params: Record<string, unknown>) => Promise<unknown>;
+  recognize: (source: unknown) => Promise<{ data: { text?: string } }>;
 };
 
 const readImportedFileTextCacheRecord = async (params: {
@@ -369,13 +375,17 @@ const enhancePageImageBufferForOcr = async (buffer: Buffer) => {
 const loadCanvasModule = async (): Promise<CanvasModule | null> => {
   try {
     const loaded = await import("@napi-rs/canvas");
-    return loaded as CanvasModule;
+    const canvasModule = ((loaded as unknown as { default?: CanvasModule }).default ?? loaded) as CanvasModule;
+    canvasModuleCache = canvasModule;
+    return canvasModule;
   } catch {
-    return loadNativeCanvasModule();
+    const canvasModule = loadNativeCanvasModule();
+    canvasModuleCache = canvasModule;
+    return canvasModule;
   }
 };
 
-let ocrWorkerPromise: Promise<unknown> | null = null;
+let ocrWorkerPromise: Promise<OcrWorker | null> | null = null;
 let ocrWorkerUnavailable = false;
 
 const getOcrWorker = async () => {
@@ -393,11 +403,11 @@ const getOcrWorker = async () => {
   if (!ocrWorkerPromise) {
     ocrWorkerPromise = (async () => {
       const { createWorker } = await import("tesseract.js");
-      const worker = await createWorker("eng", 1, {
+      const worker = (await createWorker("eng", 1, {
         logger: () => {
           // Keep OCR logs quiet during imports.
         },
-      });
+      })) as OcrWorker;
       try {
         await worker.setParameters({
           preserve_interword_spaces: "1",
@@ -1754,10 +1764,11 @@ const renderPdfPageImagesFromBytes = async (
   scale = 1.1,
   enhanceForOcr = false
 ) => {
-  const canvasModule = getCanvasModule();
+  const canvasModule = getCanvasModule() ?? (await loadCanvasModule());
   if (!canvasModule?.createCanvas) {
     throw new Error("@napi-rs/canvas is not available in this environment");
   }
+  const createCanvas = canvasModule.createCanvas;
 
   const pdfjsModule = await loadPdfJsRender();
   const pdfjs = (pdfjsModule as any).pdfjs ?? pdfjsModule;
@@ -1779,7 +1790,7 @@ const renderPdfPageImagesFromBytes = async (
       try {
         const page = await pdf.getPage(pageNumber);
         const viewport = page.getViewport({ scale });
-        const canvas = canvasModule.createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+        const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
         const context = canvas.getContext("2d", { willReadFrequently: true });
         await page.render({ canvasContext: context as any, viewport }).promise;
         const buffer = enhanceForOcr ? await enhancePageImageBufferForOcr(canvas.toBuffer("image/jpeg", 65)) : canvas.toBuffer("image/jpeg", 65);
