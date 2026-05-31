@@ -2845,6 +2845,8 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
       continue;
     }
 
+  const notesLabel = descriptionCandidate ?? transactionName;
+
     rows.push({
       date: date.toISOString().slice(0, 10),
       amount: amount.toFixed(2),
@@ -2863,9 +2865,9 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
         line,
         descriptionLine: descriptionCandidate,
         detailLine: detailLabel,
-        note: transactionName,
-        notes: transactionName,
-        counterpartyName: transactionName,
+        note: notesLabel,
+        notes: notesLabel,
+        counterpartyName: notesLabel,
         amountText: match[3],
       },
     } satisfies ParsedImportRow);

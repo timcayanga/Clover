@@ -1283,6 +1283,10 @@ const main = async () => {
   if (!maribankRewardRow || maribankRewardRow.categoryName !== "Financial") {
     throw new Error(`expected MariBank reward rows to classify as Financial, got ${JSON.stringify(maribankRewardRow ?? null)}`);
   }
+  const maribankLoadRow = maribankRows.find((row) => /top up - data/i.test(row.description ?? ""));
+  if (!maribankLoadRow || !/go\+99/i.test(((maribankLoadRow.rawPayload as Record<string, unknown> | undefined)?.notes as string | undefined) ?? "")) {
+    throw new Error(`expected MariBank load rows to preserve the merchant name in notes, got ${JSON.stringify(maribankLoadRow ?? null)}`);
+  }
   console.log(`[PASS] MariBank row preservation | ${basename(maribankSamplePath)} | ${maribankRows.length} rows`);
 
   const dateStampedBankName = normalizeBankName("2026-05-01 22.01.12 0112");

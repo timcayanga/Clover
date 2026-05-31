@@ -10,6 +10,8 @@ import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib
 import { ACCOUNT_TYPES } from "@/lib/account-types";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { deleteAccountsAndImportArtifacts } from "@/lib/account-deletion";
+import { formatUploadAccountDisplayName } from "@/lib/account-display";
+import { hasCompatibleTable } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -156,6 +158,21 @@ const normalizeInvestmentSubtype = (value: unknown): InvestmentSubtype | null =>
   return INVESTMENT_SUBTYPES.includes(subtype as InvestmentSubtype) ? (subtype as InvestmentSubtype) : null;
 };
 
+const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+
+const extractLastFourDigits = (value?: string | null) => {
+  if (!value) return null;
+  const digits = String(value).replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : null;
+};
+
+const normalizeAccountKey = (accountName?: string | null, institution?: string | null, accountNumber?: string | null) =>
+  normalizeWhitespace(`${institution ?? ""} ${extractLastFourDigits(accountNumber) ?? normalizeWhitespace(String(accountName ?? ""))}`)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
 export async function GET(_request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
     const userId = await resolveAccountRouteUserId();
@@ -171,6 +188,65 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
     }
 
     await assertWorkspaceAccess(userId, account.workspaceId);
+
+    let latestCheckpoint:
+      | {
+          accountId: string | null;
+          statementEndDate: Date | null;
+          createdAt: Date;
+          endingBalance: { toString: () => string } | null;
+          sourceMetadata: unknown;
+        }
+      | null = null;
+    if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+      const checkpoints = await prisma.accountStatementCheckpoint.findMany({
+        where: { workspaceId: account.workspaceId },
+        orderBy: [
+          { statementEndDate: "desc" },
+          { createdAt: "desc" },
+        ],
+      });
+      const accountNumber = typeof account.accountNumber === "string" ? account.accountNumber : null;
+      const accountKey = normalizeAccountKey(account.name, account.institution, accountNumber);
+      let latestTime = -1;
+
+      for (const checkpoint of checkpoints) {
+        const sourceMetadata =
+          checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+            ? (checkpoint.sourceMetadata as Record<string, unknown>)
+            : null;
+        const checkpointKey = normalizeAccountKey(
+          typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+          typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+          typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null
+        );
+        const checkpointNumber = typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null;
+        const matchesAccount =
+          checkpoint.accountId === accountId ||
+          (accountKey !== "" && checkpointKey === accountKey) ||
+          Boolean(
+            accountNumber &&
+              checkpointNumber &&
+              extractLastFourDigits(accountNumber) === extractLastFourDigits(checkpointNumber) &&
+              normalizeWhitespace(String(sourceMetadata?.institution ?? account.institution ?? "")).toLowerCase() ===
+                normalizeWhitespace(String(account.institution ?? "")).toLowerCase()
+          );
+
+        if (!matchesAccount) {
+          continue;
+        }
+
+        const checkpointTime = Math.max(
+          checkpoint.statementEndDate?.getTime() ?? 0,
+          checkpoint.createdAt.getTime()
+        );
+        if (checkpointTime >= latestTime) {
+          latestTime = checkpointTime;
+          latestCheckpoint = checkpoint;
+        }
+      }
+    }
+
     const transactionCount = await prisma.transaction.count({
       where: {
         accountId,
@@ -179,8 +255,32 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
       },
     });
 
+    const latestCheckpointAccountNumber =
+      latestCheckpoint?.sourceMetadata &&
+      typeof latestCheckpoint.sourceMetadata === "object" &&
+      !Array.isArray(latestCheckpoint.sourceMetadata) &&
+      typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber === "string"
+        ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber).trim()
+        : null;
+    const latestCheckpointBalance =
+      latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
+        ? latestCheckpoint.endingBalance.toString()
+        : null;
+    const effectiveAccountNumber = account.accountNumber ?? latestCheckpointAccountNumber ?? null;
+    const effectiveAccountName =
+      account.source === "upload"
+        ? formatUploadAccountDisplayName(account.name, account.institution, effectiveAccountNumber, account.type)
+        : account.name;
+    const effectiveBalance = latestCheckpointBalance ?? account.balance?.toString() ?? null;
+
     return NextResponse.json({
-      account: serializeAccount({ ...account, transactionCount }),
+      account: serializeAccount({
+        ...account,
+        name: effectiveAccountName,
+        accountNumber: effectiveAccountNumber,
+        balance: effectiveBalance,
+        transactionCount,
+      }),
     });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
