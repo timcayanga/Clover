@@ -83,6 +83,7 @@ type Account = {
   currency: string;
   source: string;
   balance: string | null;
+  transactionCount?: number | null;
   favorite?: boolean;
   updatedAt: string;
   createdAt: string;
@@ -1920,7 +1921,8 @@ function AccountDetailPageContent() {
     [matchingImportSummary]
   );
   const hasLoadedTransactions = account
-    ? transactions.some((transaction) => {
+    ? Number(account.transactionCount ?? 0) > 0 ||
+      transactions.some((transaction) => {
         if (transaction.accountId === account.id) {
           return true;
         }
@@ -1967,7 +1969,8 @@ function AccountDetailPageContent() {
   const isPendingBalance =
     account?.source === "upload" &&
     !hasVisibleBalance &&
-    !hasMeaningfulBalance(checkpointBalance);
+    !hasMeaningfulBalance(checkpointBalance) &&
+    !hasLoadedTransactions;
   const stableDisplayBalance = useMemo(() => {
     const candidates = [stableBalanceRef.current, cachedImportedBalance, account?.balance, checkpointBalance, String(currentBalance)];
     for (const candidate of candidates) {

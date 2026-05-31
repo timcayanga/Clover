@@ -5,17 +5,18 @@ import type { AccountBrand } from "@/lib/account-brand";
 
 export function AccountBrandMark({ accountBrand, label }: { accountBrand: AccountBrand; label: string }) {
   const [failed, setFailed] = useState(false);
+  const [fallbackFailed, setFallbackFailed] = useState(false);
   const [logoIndex, setLogoIndex] = useState(0);
-  const logoCandidates = useMemo(
-    () => (accountBrand.logoSrcs.length ? accountBrand.logoSrcs : accountBrand.logoSrc ? [accountBrand.logoSrc] : []),
-    [accountBrand.logoSrc, accountBrand.logoSrcs]
-  );
-  const currentLogoSrc = logoCandidates[logoIndex] ?? null;
-  const hasBrandLogo = Boolean(accountBrand.logoSrcs.length || accountBrand.logoSrc);
   const logoResetKey = useMemo(
     () => `${accountBrand.logoSrc ?? ""}::${accountBrand.logoSrcs.join("|")}::${accountBrand.fallbackIconSrc}`,
     [accountBrand.fallbackIconSrc, accountBrand.logoSrc, accountBrand.logoSrcs]
   );
+  const logoCandidates = useMemo(() => {
+    const candidates = accountBrand.logoSrcs.length ? accountBrand.logoSrcs : accountBrand.logoSrc ? [accountBrand.logoSrc] : [];
+    return Array.from(new Set(candidates.filter(Boolean)));
+  }, [accountBrand.logoSrc, logoResetKey]);
+  const currentLogoSrc = logoCandidates[logoIndex] ?? null;
+  const hasBrandLogo = Boolean(accountBrand.logoSrcs.length || accountBrand.logoSrc);
   const parseHexColor = (value: string) => {
     const normalized = value.trim().replace("#", "");
     if (!/^[0-9a-f]{6}$/i.test(normalized)) {
@@ -101,6 +102,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
 
   useEffect(() => {
     setFailed(false);
+    setFallbackFailed(false);
     setLogoIndex(0);
   }, [logoResetKey]);
 
@@ -142,7 +144,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
             }
           }}
         />
-      ) : accountBrand.fallbackIconSrc ? (
+      ) : accountBrand.fallbackIconSrc && !fallbackFailed ? (
         <img
           className="accounts-brand-mark__fallback"
           src={accountBrand.fallbackIconSrc}
@@ -150,7 +152,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
           aria-hidden="true"
           loading="eager"
           decoding="async"
-          onError={() => setFailed(true)}
+          onError={() => setFallbackFailed(true)}
         />
       ) : (
         <svg

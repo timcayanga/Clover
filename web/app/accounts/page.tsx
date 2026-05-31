@@ -120,6 +120,7 @@ type Account = {
   currency: string;
   source: string;
   balance: string | null;
+  transactionCount?: number | null;
   favorite?: boolean;
   updatedAt: string;
   createdAt: string;
@@ -1899,8 +1900,10 @@ function AccountsPageContent() {
         : null;
     const stableBalance = stableAccountBalancesRef.current.get(account.id) ?? null;
     const hasVisibleBalance = hasMeaningfulBalance(account.balance);
+    const hasApiConfirmedTransactions = Number(account.transactionCount ?? 0) > 0;
     const hasLoadedTransactions = Boolean(
-      transactions.some((transaction) => transactionMatchesAccount(transaction, account)) ||
+      hasApiConfirmedTransactions ||
+        transactions.some((transaction) => transactionMatchesAccount(transaction, account)) ||
         cachedTransactionsForAccount ||
         (typeof latestCheckpoint?.rowCount === "number" && latestCheckpoint.rowCount > 0) ||
         matchingImportSummaryHasRows

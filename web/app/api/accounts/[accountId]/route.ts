@@ -104,6 +104,7 @@ const serializeAccount = <T extends {
   institution?: string | null;
   name?: string | null;
   favorite?: boolean;
+  transactionCount?: number | null;
   balance: { toString: () => string } | null;
   investmentQuantity: { toString: () => string } | null;
   investmentCostBasis: { toString: () => string } | null;
@@ -118,6 +119,7 @@ const serializeAccount = <T extends {
   ...account,
   accountNumber: account.accountNumber ?? null,
   favorite: account.favorite ?? false,
+  transactionCount: Number(account.transactionCount ?? 0),
   currency: normalizeAccountCurrency(account),
   balance: account.balance?.toString() ?? null,
   investmentQuantity: account.investmentQuantity?.toString() ?? null,
@@ -169,9 +171,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
     }
 
     await assertWorkspaceAccess(userId, account.workspaceId);
+    const transactionCount = await prisma.transaction.count({
+      where: {
+        accountId,
+        workspaceId: account.workspaceId,
+        deletedAt: null,
+      },
+    });
 
     return NextResponse.json({
-      account: serializeAccount(account),
+      account: serializeAccount({ ...account, transactionCount }),
     });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

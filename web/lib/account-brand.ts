@@ -330,7 +330,8 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     match: /\b(CHINABANK|CHINA\s*BANK|CHINA BANKING CORPORATION)\b/i,
     brand: makeBrand({
       label: "Chinabank",
-      logoSrcs: philippinesLogoWithVariants("china bank", "chinabank"),
+      logoSrc: philippinesLogoPath("chinabank.png"),
+      logoSrcs: [philippinesLogoPath("chinabank.png")],
       fallbackIconSrc: bankIcon,
       accent: "#C81F25",
       background: "linear-gradient(135deg, rgba(200, 31, 37, 0.16), rgba(200, 31, 37, 0.06))",

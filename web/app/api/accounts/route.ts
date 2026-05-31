@@ -87,6 +87,7 @@ const serializeAccount = <T extends {
   institution?: string | null;
   name?: string | null;
   favorite?: boolean;
+  transactionCount?: number | null;
   balance: { toString: () => string } | null;
   investmentQuantity: { toString: () => string } | null;
   investmentCostBasis: { toString: () => string } | null;
@@ -101,6 +102,7 @@ const serializeAccount = <T extends {
   ...account,
   accountNumber: account.accountNumber ?? null,
   favorite: account.favorite ?? false,
+  transactionCount: Number(account.transactionCount ?? 0),
   currency: normalizeAccountCurrency(account),
   balance: account.balance?.toString() ?? null,
   investmentQuantity: account.investmentQuantity?.toString() ?? null,
@@ -556,8 +558,34 @@ export async function GET(request: Request) {
           isGenericUploadedAccountForInstitution(account)
         )
     );
+    const visibleAccountIds = visibleAccounts.map((account) => account.id);
+    const transactionCounts = visibleAccountIds.length
+      ? await prisma.transaction.groupBy({
+          by: ["accountId"],
+          where: {
+            workspaceId,
+            accountId: { in: visibleAccountIds },
+            deletedAt: null,
+          },
+          _count: { _all: true },
+        })
+      : [];
+    const transactionCountByAccountId = new Map(
+      transactionCounts
+        .filter((row) => row.accountId)
+        .map((row) => [row.accountId as string, row._count._all])
+    );
 
-    return NextResponse.json({ accounts: visibleAccounts.map((account) => serializeAccount(account)), accountRules, statementCheckpoints });
+    return NextResponse.json({
+      accounts: visibleAccounts.map((account) =>
+        serializeAccount({
+          ...account,
+          transactionCount: transactionCountByAccountId.get(account.id) ?? 0,
+        })
+      ),
+      accountRules,
+      statementCheckpoints,
+    });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
