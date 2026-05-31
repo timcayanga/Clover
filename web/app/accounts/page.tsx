@@ -1909,9 +1909,9 @@ function AccountsPageContent() {
 
   const getUploadAccountLoadingContext = (account: Account): UploadAccountLoadingContext => {
     const matchingImportSummary =
-      pendingImportSummary && !pendingImportSummary.optimistic
+      pendingImportSummary
         ? pendingImportSummary
-        : importActivitySnapshot?.status === "done" && importActivitySnapshot.summary && !importActivitySnapshot.summary.optimistic
+        : importActivitySnapshot?.status === "done" && importActivitySnapshot.summary
           ? importActivitySnapshot.summary
           : null;
     const latestCheckpoint =

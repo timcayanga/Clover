@@ -1903,7 +1903,7 @@ function AccountDetailPageContent() {
     ? String(latestCheckpoint.endingBalance)
     : null;
   const matchingImportSummary =
-    (importActivitySnapshot?.status === "done" && importActivitySnapshot.summary && !importActivitySnapshot.summary.optimistic
+    (importActivitySnapshot?.status === "done" && importActivitySnapshot.summary
       ? importActivitySnapshot.summary
       : null) ??
     null;
