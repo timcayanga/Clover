@@ -208,7 +208,10 @@ export const normalizeImportedAccountKey = (
   );
 
 const normalizeImportedAccountInstitutionKey = (value?: string | null) =>
-  normalizeWhitespace(String(value ?? "")).toLowerCase();
+  normalizeWhitespace(String(value ?? ""))
+    .toLowerCase()
+    .replace(/\s+\d{4}$/, "")
+    .trim();
 
 const hasImportedAccountNumber = (value?: unknown) => Boolean(extractLastFourDigits(typeof value === "string" ? value : null));
 
@@ -222,16 +225,22 @@ const isGenericImportedUploadAccount = (account: CachedRecord | ImportedAccountI
     return false;
   }
 
-  const institution = normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "institution"));
+  const institution =
+    normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "institution")) ||
+    normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "name"));
   const name = normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "name"));
   return Boolean(institution && (name === institution || name === `${institution} account` || !name));
 };
+
+const getImportedAccountInstitutionShadowKey = (account: CachedRecord | ImportedAccountIdentityLike) =>
+  normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "institution")) ||
+  normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "name"));
 
 const pruneGenericImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) => {
   const institutionsWithNumberedUploadAccounts = new Set(
     accounts
       .filter((account) => readImportedAccountText(account, "source") === "upload" && hasImportedAccountNumber(account.accountNumber))
-      .map((account) => normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "institution")))
+      .map(getImportedAccountInstitutionShadowKey)
       .filter(Boolean)
   );
 
@@ -244,7 +253,7 @@ const pruneGenericImportedAccountPlaceholders = <T extends CachedRecord>(account
       return true;
     }
 
-    return !institutionsWithNumberedUploadAccounts.has(normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "institution")));
+    return !institutionsWithNumberedUploadAccounts.has(getImportedAccountInstitutionShadowKey(account));
   });
 };
 

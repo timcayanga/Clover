@@ -424,11 +424,14 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
 
   const numberedInstitutions = new Set(
     Array.from(groups.values())
-      .map((group) => normalizeImportInstitution(group.institution).toLowerCase())
+      .map((group) => importedAccountInstitutionKey({ institution: group.institution, accountNumber: group.accountNumber }))
       .filter(Boolean)
   );
   const genericPlaceholderIds = existingAccounts
-    .filter((account) => numberedInstitutions.has(normalizeImportInstitution(account.institution).toLowerCase()))
+    .filter((account) => {
+      const institutionKey = importedAccountInstitutionKey(account);
+      return Boolean(institutionKey && numberedInstitutions.has(institutionKey));
+    })
     .filter(isGenericUploadedAccountForInstitution)
     .map((account) => account.id);
   if (genericPlaceholderIds.length === 0) {
@@ -471,29 +474,55 @@ const cleanupEmptyGenericUploadedAccountPlaceholders = async (workspaceId: strin
       accountNumber: { not: null },
     },
     select: {
+      name: true,
       institution: true,
+      accountNumber: true,
     },
   }).catch(() => []);
-  const institutionsWithNumberedAccounts = Array.from(
+  const institutionsWithNumberedAccounts = new Set(
     new Set(
       numberedUploadAccounts
-        .map((account) => normalizeImportInstitution(account.institution))
+        .map((account) => importedAccountInstitutionKey(account))
         .filter(Boolean)
     )
   );
-  if (institutionsWithNumberedAccounts.length === 0) {
+  if (institutionsWithNumberedAccounts.size === 0) {
     return;
   }
 
-  await prisma.account.deleteMany({
+  const emptyPlaceholderAccounts = await prisma.account.findMany({
     where: {
       workspaceId,
       source: "upload",
-      institution: { in: institutionsWithNumberedAccounts },
       accountNumber: null,
       transactions: { none: {} },
     },
-  }).catch(() => null);
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      source: true,
+    },
+  }).catch(() => []);
+  const deletableIds = emptyPlaceholderAccounts
+    .filter(isGenericUploadedAccountForInstitution)
+    .filter((account) => {
+      const institutionKey = importedAccountInstitutionKey(account);
+      return Boolean(institutionKey && institutionsWithNumberedAccounts.has(institutionKey));
+    })
+    .map((account) => account.id);
+
+  if (deletableIds.length > 0) {
+    await prisma.account.deleteMany({
+      where: {
+        workspaceId,
+        id: { in: deletableIds },
+        source: "upload",
+        accountNumber: null,
+      },
+    }).catch(() => null);
+  }
 };
 
 export async function GET(request: Request) {
@@ -624,15 +653,18 @@ export async function GET(request: Request) {
     const numberedInstitutionKeys = new Set(
       accounts
         .filter((account) => normalizeImportAccountNumber(account.accountNumber ?? null))
-        .map((account) => normalizeImportInstitution(account.institution).toLowerCase())
+        .map((account) => importedAccountInstitutionKey(account))
         .filter(Boolean)
     );
     const visibleAccounts = accounts.filter(
-      (account) =>
-        !(
-          numberedInstitutionKeys.has(normalizeImportInstitution(account.institution).toLowerCase()) &&
+      (account) => {
+        const institutionKey = importedAccountInstitutionKey(account);
+        return !(
+          institutionKey &&
+          numberedInstitutionKeys.has(institutionKey) &&
           isGenericUploadedAccountForInstitution(account)
-        )
+        );
+      }
     );
     const visibleAccountIds = visibleAccounts.map((account) => account.id);
     const transactionCounts = visibleAccountIds.length

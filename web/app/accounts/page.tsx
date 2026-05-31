@@ -204,14 +204,23 @@ const matchesImportedAccountIdentity = (left: Account, right: Account) => {
   return isImportedAccountIdentityMatch(left, right);
 };
 
-const normalizeImportedInstitutionKey = (value?: string | null) => String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+const normalizeImportedInstitutionKey = (value?: string | null) =>
+  String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+\d{4}$/, "")
+    .trim();
+
+const getImportedInstitutionShadowKey = (account: Account) =>
+  normalizeImportedInstitutionKey(account.institution) || normalizeImportedInstitutionKey(account.name);
 
 const isGenericUploadedImportAccount = (account: Account) => {
   if (account.source !== "upload" || getImportedAccountLastFour(account.accountNumber)) {
     return false;
   }
 
-  const institution = normalizeImportedInstitutionKey(account.institution);
+  const institution = getImportedInstitutionShadowKey(account);
   const name = normalizeImportedInstitutionKey(account.name);
   return Boolean(institution && (name === institution || name === `${institution} account` || !name));
 };
@@ -221,12 +230,12 @@ const isGenericUploadedAccountShadowed = (account: Account, numberedAccounts: Ac
     return false;
   }
 
-  const institution = normalizeImportedInstitutionKey(account.institution);
+  const institution = getImportedInstitutionShadowKey(account);
   return numberedAccounts.some(
     (numberedAccount) =>
       numberedAccount.source === "upload" &&
       getImportedAccountLastFour(numberedAccount.accountNumber) &&
-      normalizeImportedInstitutionKey(numberedAccount.institution) === institution
+      getImportedInstitutionShadowKey(numberedAccount) === institution
   );
 };
 
