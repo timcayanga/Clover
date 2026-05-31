@@ -33,6 +33,8 @@ export type TransactionsWorkspaceCacheSnapshot = {
   categories: CachedRecord[];
   transactions: CachedRecord[];
   imports: CachedRecord[];
+  totalCount?: number;
+  summary?: Record<string, unknown> | null;
   updatedAt: number;
 };
 
@@ -41,10 +43,7 @@ export type TransactionsWorkspaceCacheState = {
   snapshots: Record<string, TransactionsWorkspaceCacheSnapshot>;
 };
 
-type WritableTransactionsWorkspaceCacheSnapshot = TransactionsWorkspaceCacheSnapshot & {
-  totalCount?: number;
-  summary?: Record<string, unknown> | null;
-};
+type WritableTransactionsWorkspaceCacheSnapshot = TransactionsWorkspaceCacheSnapshot;
 
 type TransactionsWorkspaceSnapshotLike = {
   workspaceId: string;

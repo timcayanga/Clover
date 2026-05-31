@@ -567,6 +567,12 @@ type UpdateTransactionOptions = {
 };
 
 const todayIso = new Date().toISOString().slice(0, 10);
+const importedTransactionsRefreshDelays = [0, 750, 1_500, 3_000, 6_000];
+
+const wait = (milliseconds: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
 
 const formatTransactionAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
 
@@ -2937,6 +2943,26 @@ function TransactionsPageContent() {
         setTransactionsLoadFailed(true);
         setIsWorkspaceDataReady(true);
         setHasInitialTransactionsLoaded(true);
+      }
+    }
+  };
+
+  const refreshTransactionsAfterImport = async (workspaceId: string) => {
+    for (const delay of importedTransactionsRefreshDelays) {
+      if (delay > 0) {
+        await wait(delay);
+      }
+
+      try {
+        await loadWorkspaceMetadata(workspaceId, { skipImports: true, background: true });
+        await loadTransactionsPage(workspaceId, {
+          background: true,
+          pageOverride: 1,
+          pageSizeOverride: transactionsPageSize,
+          summaryMode: "light",
+        });
+      } catch {
+        // Import settlement is best-effort; the regular page retry path remains available.
       }
     }
   };
@@ -8554,12 +8580,9 @@ function TransactionsPageContent() {
           }
 
           setImportRefreshInFlight(true);
-          try {
-            await loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
-            await loadTransactionsPage(selectedWorkspaceId, { background: true });
-          } finally {
+          void refreshTransactionsAfterImport(selectedWorkspaceId).finally(() => {
             setImportRefreshInFlight(false);
-          }
+          });
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />
