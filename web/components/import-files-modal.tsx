@@ -3414,6 +3414,86 @@ export function ImportFilesModal({
 
         if (hasSettledRows) {
           triggerImportEnrichment(importFileId);
+          if (statusAccountSummaries.length > 1) {
+            const finalizedSummaries: UploadInsightsSummary[] = [];
+            for (const accountSummary of statusAccountSummaries) {
+              const summaryAccountName = accountSummary.accountName ?? resolvedAccountDisplayName;
+              const summaryInstitution =
+                accountSummary.institution ?? processingIdentity?.institution ?? summaryContext.institution ?? null;
+              const summaryAccountType =
+                accountSummary.accountType ?? processingIdentity?.accountType ?? summaryContext.accountType ?? null;
+              const summaryPreviewTransactions = await loadOptimisticPreviewTransactions(
+                importFileId,
+                accountSummary.accountId,
+                summaryAccountName,
+                summaryInstitution,
+                accountSummary.accountNumber
+              )
+                .catch(() => [])
+                .then((rows) =>
+                  rows.length > 0
+                    ? rows
+                    : getKnownPreviewTransactions({
+                        workspaceId,
+                        accountId: accountSummary.accountId,
+                        optimisticAccountId: summaryContext.optimisticAccountId,
+                        accountName: summaryAccountName,
+                        institution: summaryInstitution,
+                        accountNumber: accountSummary.accountNumber,
+                        accountType: summaryAccountType,
+                        previewTransactions: summaryContext.previewTransactions,
+                      })
+                );
+              const accountFinalizedSummary: UploadInsightsSummary = {
+                ...buildOptimisticUploadSummary(
+                  summaryContext.fileName,
+                  accountSummary.rowsImported || summaryPreviewTransactions.length,
+                  accountSummary.accountId,
+                  summaryAccountName,
+                  summaryInstitution,
+                  summaryAccountType,
+                  summaryContext.optimisticAccountId,
+                  pickStableBalance(accountSummary.balance, stableOptimisticBalance),
+                  summaryPreviewTransactions,
+                  accountSummary.accountNumber
+                ),
+                accountSummaries: [accountSummary],
+                optimistic: false,
+                optimisticAccountId: summaryContext.optimisticAccountId,
+              };
+
+              finalizedSummaries.push(accountFinalizedSummary);
+              seedImportedWorkspaceCaches(workspaceId, accountFinalizedSummary);
+              await Promise.resolve(onImported(accountFinalizedSummary));
+            }
+
+            const combinedFinalizedSummary = combineUploadInsightsSummaries(finalizedSummaries);
+            if (backgroundOnly) {
+              return;
+            }
+
+            emitItemUpdate({
+              status: "done",
+              confirmationState: "confirmed",
+              progress: 100,
+              progressLabel: "Done",
+            });
+            emitImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "done",
+              fileName: summaryContext.fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount + 1,
+              progress: 100,
+              detail: "All set",
+              summary: combinedFinalizedSummary,
+              errorMessage: null,
+            });
+            return;
+          }
+
           const completedAccountId =
             latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-")
               ? latestResolvedAccountId
