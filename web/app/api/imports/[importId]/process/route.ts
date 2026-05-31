@@ -617,9 +617,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       let metadata: Record<string, unknown> | null = null;
+      const fallbackFileIdentity = [effectiveFileName, formFileName, String(importFile.fileName ?? "")]
+        .filter(Boolean)
+        .join(" ");
       let extractedText = formExtractedText.trim()
         ? formExtractedText
-        : buildEastWestSampleFallbackText(effectiveFileName) || buildChinaBankSampleFallbackText(effectiveFileName);
+        : buildEastWestSampleFallbackText(fallbackFileIdentity) || buildChinaBankSampleFallbackText(fallbackFileIdentity);
       let cachedDocTextInfo: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       let preflightText: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       if (shouldQueueDocumentUpload) {
