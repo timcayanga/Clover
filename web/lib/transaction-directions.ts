@@ -77,6 +77,10 @@ export const coerceTransactionTypeFromCategoryName = (
     return "income";
   }
 
+  if (normalized === "financial" && fallback === "income") {
+    return "income";
+  }
+
   return "expense";
 };
 

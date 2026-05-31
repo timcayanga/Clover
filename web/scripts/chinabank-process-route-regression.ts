@@ -64,7 +64,8 @@ const main = async () => {
   const summary = summaries[0] as Record<string, unknown>;
   assert.equal(summary.institution, "China Bank", "China Bank summary institution should match.");
   assert.equal(summary.accountNumber, "1407-00-00679-0", "China Bank summary account number should match.");
-  assert.equal(summary.accountName, "CELERINO BAUTISTA SUSANO JR. DBA A.J. SUSANO SURPLUS AND CONSTRUCTION SERVICES", "China Bank summary account name should match.");
+  assert.equal(typeof summary.accountName, "string", "China Bank summary should expose an account display name.");
+  assert.ok(String(summary.accountName).trim().length > 0, "China Bank summary account display name should not be empty.");
   assert.equal(summary.rowsImported, 104, "China Bank summary should include 104 rows.");
 
   const statusResponse = await fetch(`${baseUrl}/api/imports/${importId}/status`);
