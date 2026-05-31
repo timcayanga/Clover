@@ -825,6 +825,18 @@ function InlineEditableCell({
   };
 
   if (kind === "select") {
+    const normalizedDisplayValue = displayValue.trim();
+    const optionForValue = options.find((option) => option.value === value);
+    const displayOptions = optionForValue
+      ? options.map((option) =>
+          option.value === value && normalizedDisplayValue && option.label !== normalizedDisplayValue
+            ? { ...option, label: normalizedDisplayValue }
+            : option
+        )
+      : normalizedDisplayValue
+        ? [{ value, label: normalizedDisplayValue }, ...options]
+        : options;
+
     return (
       <select
         ref={(node) => {
@@ -847,7 +859,7 @@ function InlineEditableCell({
             });
           }}
       >
-        {options.map((option) => (
+        {displayOptions.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
@@ -2679,7 +2691,7 @@ function TransactionsPageContent() {
             : options?.pageSizeOverride ?? (compactViewport ? MOBILE_TRANSACTIONS_BATCH_SIZE : transactionsPageSize),
       }
     );
-    searchParams.set("summaryMode", options?.summaryMode ?? "full");
+    searchParams.set("summaryMode", options?.summaryMode ?? "light");
 
     try {
       const response = await fetchJsonOnce<{ transactions?: Transaction[]; totalCount?: number; summary?: TransactionPageMeta; currencyCodes?: string[] }>({
