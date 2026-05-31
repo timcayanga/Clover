@@ -14656,6 +14656,21 @@ body[data-clover-page-modal] .modal-card {
   width: calc(100vw - 236px);
 }
 
+.modal-backdrop--transactions-confirm {
+  z-index: 4200;
+  place-items: center;
+}
+
+.modal-backdrop--transactions-confirm .transactions-confirm-modal {
+  width: min(760px, calc(100vw - 276px));
+  max-width: calc(100vw - 276px);
+  margin: 0 auto;
+}
+
+.modal-backdrop--transactions-confirm .modal-actions {
+  justify-content: flex-start;
+}
+
 .modal-backdrop--soft {
   background: rgba(9, 15, 20, 0.1);
   backdrop-filter: none;
@@ -26640,6 +26655,11 @@ button.accounts-detail__transaction-head-cell {
   .modal-backdrop--transactions-content {
     left: 0;
     width: 100vw;
+  }
+
+  .modal-backdrop--transactions-confirm .transactions-confirm-modal {
+    width: min(100%, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
   }
 
   .modal-backdrop--centered-mobile {

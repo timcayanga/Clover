@@ -6467,6 +6467,12 @@ function TransactionsPageContent() {
   }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes]);
 
   useEffect(() => {
+    if (bulkDeleteConfirmOpen) {
+      setSelectionMenuOpen(false);
+    }
+  }, [bulkDeleteConfirmOpen]);
+
+  useEffect(() => {
     if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic) {
       return;
     }
@@ -6630,28 +6636,30 @@ function TransactionsPageContent() {
                       <ActionIcon name="chevron-down" />
                     </span>
                   </button>
-                  <div className="transactions-selection-menu__panel" hidden={!selectionMenuOpen}>
-                    <button
-                      className="transactions-selection-menu__item"
-                      type="button"
-                      onClick={() => {
-                        setSelectionMenuOpen(false);
-                        openBulkEdit();
-                      }}
-                    >
-                      Bulk edit
-                    </button>
-                    <button
-                      className="transactions-selection-menu__item transactions-selection-menu__item--danger"
-                      type="button"
-                      onClick={() => {
-                        setSelectionMenuOpen(false);
-                        setBulkDeleteConfirmOpen(true);
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
+                  {selectionMenuOpen ? (
+                    <div className="transactions-selection-menu__panel">
+                      <button
+                        className="transactions-selection-menu__item"
+                        type="button"
+                        onClick={() => {
+                          setSelectionMenuOpen(false);
+                          openBulkEdit();
+                        }}
+                      >
+                        Bulk edit
+                      </button>
+                      <button
+                        className="transactions-selection-menu__item transactions-selection-menu__item--danger"
+                        type="button"
+                        onClick={() => {
+                          setSelectionMenuOpen(false);
+                          setBulkDeleteConfirmOpen(true);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
                 <button
                   className="button button-secondary button-small transactions-action-button"
@@ -6667,12 +6675,12 @@ function TransactionsPageContent() {
 
           {bulkDeleteConfirmOpen ? (
             <div
-              className="modal-backdrop modal-backdrop--transactions-content"
+              className="modal-backdrop modal-backdrop--transactions-content modal-backdrop--transactions-confirm"
               role="presentation"
               onClick={() => setBulkDeleteConfirmOpen(false)}
             >
               <section
-                className="modal-card glass"
+                className="modal-card glass transactions-confirm-modal"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="bulk-delete-title"
