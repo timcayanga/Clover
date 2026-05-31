@@ -22,6 +22,87 @@ const resolveAccountTransactionsRouteUserId = async () => {
 
 const normalizeTransactionKey = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
 
+const getLastFourDigits = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const digits = String(value).replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : null;
+};
+
+const expandImportedAccountFilters = async (
+  workspaceId: string,
+  requestedAccount: {
+    id: string;
+    name: string;
+    institution: string | null;
+    type: string;
+    accountNumber: string | null;
+  }
+) => {
+  const siblingAccounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+    },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      type: true,
+      accountNumber: true,
+    },
+  });
+
+  const requestedDescriptor = {
+    id: requestedAccount.id,
+    key: normalizeImportedAccountKey(
+      requestedAccount.name,
+      requestedAccount.institution,
+      requestedAccount.accountNumber,
+      requestedAccount.type
+    ),
+    institution: (requestedAccount.institution ?? "").trim().toLowerCase(),
+    lastFour: getLastFourDigits(requestedAccount.accountNumber ?? requestedAccount.name),
+    type: requestedAccount.type,
+  };
+  const expandedAccountIds = new Set([requestedAccount.id]);
+
+  for (const candidate of siblingAccounts) {
+    const candidateDescriptor = {
+      id: candidate.id,
+      key: normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, candidate.type),
+      institution: (candidate.institution ?? "").trim().toLowerCase(),
+      lastFour: getLastFourDigits(candidate.accountNumber ?? candidate.name),
+      type: candidate.type,
+    };
+
+    if (candidateDescriptor.id === requestedDescriptor.id) {
+      expandedAccountIds.add(candidate.id);
+      continue;
+    }
+
+    if (candidateDescriptor.key && candidateDescriptor.key === requestedDescriptor.key) {
+      expandedAccountIds.add(candidate.id);
+      continue;
+    }
+
+    if (
+      requestedDescriptor.institution &&
+      candidateDescriptor.institution &&
+      requestedDescriptor.institution === candidateDescriptor.institution &&
+      requestedDescriptor.lastFour &&
+      candidateDescriptor.lastFour &&
+      requestedDescriptor.lastFour === candidateDescriptor.lastFour &&
+      requestedDescriptor.type === candidateDescriptor.type
+    ) {
+      expandedAccountIds.add(candidate.id);
+    }
+  }
+
+  return Array.from(expandedAccountIds);
+};
+
 type TransactionApiRow = {
   id: string;
   accountId: string;
@@ -258,7 +339,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
 
     const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const pageSize = Math.max(1, Number(searchParams.get("pageSize") ?? "25") || 25);
-    const where = buildTransactionQueryWhere(account.workspaceId, { accountIds: [account.id] });
+    const accountIds = await expandImportedAccountFilters(account.workspaceId, account);
+    const where = buildTransactionQueryWhere(account.workspaceId, { accountIds });
     const skip = (page - 1) * pageSize;
 
     const [totalCount, rows] = await Promise.all([
@@ -282,7 +364,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
           createdAt: true,
           account: {
             select: {
+              name: true,
               institution: true,
+              accountNumber: true,
             },
           },
           category: {
@@ -304,8 +388,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
         mapTransactionRow({
           ...row,
           institution: row.account?.institution ?? account.institution ?? null,
-          accountName: account.name,
-          accountNumber: account.accountNumber ?? null,
+          accountName: row.account?.name ?? account.name,
+          accountNumber: row.account?.accountNumber ?? account.accountNumber ?? null,
         })
       )
     );
