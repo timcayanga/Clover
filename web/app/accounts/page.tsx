@@ -1215,36 +1215,26 @@ function AccountsPageContent() {
                         const effectiveType = getEffectiveAccountType(account);
                         const accountCheckpoints = latestCheckpoint ? [latestCheckpoint] : [];
                         const checkpointBalance =
-                          latestCheckpoint?.status === "reconciled" && latestCheckpoint.endingBalance !== null
+                          latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
                             ? String(latestCheckpoint.endingBalance)
                             : null;
-                        const currentAccountBalance = parseAmount(account.balance);
-                        const currentAccountBalanceIsNonZero =
-                          currentAccountBalance !== null && Number.isFinite(currentAccountBalance) && currentAccountBalance !== 0;
                         const shouldPreserveImportedBalance =
-                          account.source === "upload" &&
-                          (!latestCheckpoint ||
-                            latestCheckpoint.status !== "reconciled" ||
-                            checkpointBalance === null);
-                        const reconciledBalance = checkpointBalance && !(shouldPreserveImportedBalance && currentAccountBalanceIsNonZero)
-                          ? checkpointBalance
-                          : shouldPreserveImportedBalance
+                          account.source === "upload" && checkpointBalance === null;
+                        const reconciledBalance =
+                          checkpointBalance ??
+                          (shouldPreserveImportedBalance
                             ? account.balance
                             : deriveReconciledBalance({
                                 balance: account.balance,
                                 transactions: accountTransactions,
                                 checkpoints: accountCheckpoints,
-                              });
+                              }));
                         const normalizedBalance = normalizeAccountBalance(effectiveType, parseAmount(reconciledBalance ?? account.balance));
-                        const preservedImportedBalance =
-                          shouldPreserveImportedBalance && currentAccountBalanceIsNonZero
-                            ? account.balance
-                            : null;
 
         return {
           ...account,
           type: effectiveType,
-          balance: preservedImportedBalance ?? String(normalizedBalance),
+          balance: String(normalizedBalance),
         };
       }),
     [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, statementCheckpoints, transactions]
@@ -1909,21 +1899,24 @@ function AccountsPageContent() {
         : null;
     const stableBalance = stableAccountBalancesRef.current.get(account.id) ?? null;
     const hasVisibleBalance = hasMeaningfulBalance(account.balance);
-    const hasLoadedTransactions =
+    const hasLoadedTransactions = Boolean(
       transactions.some((transaction) => transactionMatchesAccount(transaction, account)) ||
-      cachedTransactionsForAccount ||
-      (typeof latestCheckpoint?.rowCount === "number" && latestCheckpoint.rowCount > 0) ||
-      matchingImportSummaryHasRows;
-    const displayedBalance = hasMeaningfulBalance(account.balance)
-      ? account.balance
-      : stableBalance ?? checkpointBalance;
-    const isLoading =
+        cachedTransactionsForAccount ||
+        (typeof latestCheckpoint?.rowCount === "number" && latestCheckpoint.rowCount > 0) ||
+        matchingImportSummaryHasRows
+    );
+    const displayedBalance = hasMeaningfulBalance(checkpointBalance)
+      ? checkpointBalance
+      : hasMeaningfulBalance(account.balance)
+        ? account.balance
+        : stableBalance;
+    const isLoading = Boolean(
       account.source === "upload" &&
-      (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
-      !hasVisibleBalance &&
-      !hasMeaningfulBalance(checkpointBalance) &&
-      !stableBalance &&
-      !hasLoadedTransactions;
+        !hasVisibleBalance &&
+        !hasMeaningfulBalance(checkpointBalance) &&
+        !stableBalance &&
+        !hasLoadedTransactions
+    );
     const loadingSince = accountLoadingSinceRef.current.get(account.id);
     const isTimedOut =
       isLoading &&
@@ -1947,12 +1940,12 @@ function AccountsPageContent() {
   const getDisplayedAccountBalance = (account: Account) => {
     const latestCheckpoint = getLatestCheckpointForAccount(account, statementCheckpoints);
     const checkpointBalance =
-      latestCheckpoint?.status === "reconciled" && latestCheckpoint.endingBalance !== null
+      latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
         ? String(latestCheckpoint.endingBalance)
         : null;
     const stableBalance = stableAccountBalancesRef.current.get(account.id) ?? null;
 
-    if (account.source === "upload" && hasMeaningfulBalance(checkpointBalance)) {
+    if (hasMeaningfulBalance(checkpointBalance)) {
       return checkpointBalance;
     }
 

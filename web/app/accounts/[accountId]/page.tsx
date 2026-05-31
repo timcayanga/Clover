@@ -1876,24 +1876,18 @@ function AccountDetailPageContent() {
         checkpoint?.endingBalance !== null && checkpoint?.endingBalance !== undefined
           ? String(checkpoint.endingBalance)
           : null;
-      const currentAccountBalance = parseAmount(account?.balance ?? cachedImportedBalance ?? null);
-      const currentAccountBalanceIsNonZero =
-        currentAccountBalance !== null && Number.isFinite(currentAccountBalance) && currentAccountBalance !== 0;
       const shouldPreserveImportedBalance =
-        account?.source === "upload" &&
-        (!checkpoint ||
-          checkpoint.status !== "reconciled" ||
-          checkpointBalance === null);
+        account?.source === "upload" && checkpointBalance === null;
 
-      const reconciledValue = checkpointBalance && !(shouldPreserveImportedBalance && currentAccountBalanceIsNonZero)
-        ? checkpointBalance
-        : shouldPreserveImportedBalance
+      const reconciledValue =
+        checkpointBalance ??
+        (shouldPreserveImportedBalance
           ? account?.balance ?? cachedImportedBalance ?? null
           : deriveReconciledBalance({
               balance: account?.balance ?? cachedImportedBalance ?? null,
               transactions: transactions as BalanceLikeTransaction[],
               checkpoints: checkpoint ? [checkpoint] : [],
-            });
+            }));
 
       return normalizeAccountBalance(account?.type ?? null, parseAmount(reconciledValue));
     },
@@ -1973,9 +1967,7 @@ function AccountDetailPageContent() {
   const isPendingBalance =
     account?.source === "upload" &&
     !hasVisibleBalance &&
-    !hasMeaningfulBalance(checkpointBalance) &&
-    !hasLoadedTransactions &&
-    (!latestCheckpoint || latestCheckpoint.status !== "reconciled");
+    !hasMeaningfulBalance(checkpointBalance);
   const stableDisplayBalance = useMemo(() => {
     const candidates = [stableBalanceRef.current, cachedImportedBalance, account?.balance, checkpointBalance, String(currentBalance)];
     for (const candidate of candidates) {
