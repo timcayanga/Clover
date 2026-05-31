@@ -169,6 +169,26 @@ const normalizeImportAccountNumber = (value?: string | null) => {
   return digits.length >= 4 ? digits : null;
 };
 
+const normalizeImportIdentityText = (value?: string | null) =>
+  normalizeImportInstitution(value)
+    .toLowerCase()
+    .replace(/\s+\d{4}$/, "")
+    .trim();
+
+const importedAccountInstitutionKey = (account: {
+  name?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+}) => {
+  const institution = normalizeImportIdentityText(account.institution);
+  if (institution) {
+    return institution;
+  }
+
+  const name = normalizeImportIdentityText(account.name);
+  return name || null;
+};
+
 const importedAccountIdentityKey = (institution?: string | null, accountNumber?: string | null) => {
   const normalizedAccountNumber = normalizeImportAccountNumber(accountNumber);
   return normalizedAccountNumber ? `${normalizeImportInstitution(institution).toLowerCase()}:${normalizedAccountNumber}` : null;
@@ -237,9 +257,9 @@ const isGenericUploadedAccountForInstitution = (account: {
     return false;
   }
 
-  const institution = normalizeImportInstitution(account.institution).toLowerCase();
+  const institution = normalizeImportIdentityText(account.institution) || normalizeImportIdentityText(account.name);
   const name = normalizeImportInstitution(account.name).toLowerCase();
-  return Boolean(institution && (name === institution || name === `${institution} account`));
+  return Boolean(institution && (name === institution || name === `${institution} account` || !name));
 };
 
 const repairParsedImportedAccounts = async (workspaceId: string, compatibleColumns: Set<string>) => {
@@ -631,9 +651,71 @@ export async function GET(request: Request) {
         .filter((row) => row.accountId)
         .map((row) => [row.accountId as string, row._count._all])
     );
+    const latestCheckpointForAccount = (account: {
+      id: string;
+      name: string;
+      institution: string | null;
+      accountNumber?: string | null;
+      type: string;
+    }) => {
+      let latestCheckpoint: (typeof statementCheckpoints)[number] | null = null;
+      let latestTime = -1;
+      const accountKey = normalizeAccountIdentityKey(account.name, account.institution, account.accountNumber ?? null);
+
+      for (const checkpoint of statementCheckpoints) {
+        const sourceMetadata =
+          checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+            ? (checkpoint.sourceMetadata as Record<string, unknown>)
+            : null;
+        const checkpointKey = normalizeAccountIdentityKey(
+          typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+          typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+          typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null
+        );
+        const matchesAccount =
+          checkpoint.accountId === account.id ||
+          (accountKey !== "" && checkpointKey === accountKey) ||
+          Boolean(
+            typeof sourceMetadata?.accountNumber === "string" &&
+              account.accountNumber &&
+              normalizeImportAccountNumber(sourceMetadata.accountNumber) === normalizeImportAccountNumber(account.accountNumber)
+          );
+
+        if (!matchesAccount) {
+          continue;
+        }
+
+        const checkpointTime = Math.max(
+          checkpoint.statementEndDate?.getTime() ?? 0,
+          checkpoint.createdAt.getTime()
+        );
+
+        if (checkpointTime >= latestTime) {
+          latestCheckpoint = checkpoint;
+          latestTime = checkpointTime;
+        }
+      }
+
+      return latestCheckpoint;
+    };
+    const accountsWithCheckpointBackfill = visibleAccounts.map((account) => {
+      const latestCheckpoint = latestCheckpointForAccount(account);
+      const checkpointAccountNumber =
+        latestCheckpoint?.sourceMetadata &&
+        typeof latestCheckpoint.sourceMetadata === "object" &&
+        !Array.isArray(latestCheckpoint.sourceMetadata) &&
+        typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber === "string"
+          ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber).trim()
+          : null;
+
+      return {
+        ...account,
+        accountNumber: account.accountNumber ?? checkpointAccountNumber ?? null,
+      };
+    });
 
     return NextResponse.json({
-      accounts: visibleAccounts.map((account) =>
+      accounts: accountsWithCheckpointBackfill.map((account) =>
         serializeAccount({
           ...account,
           transactionCount: transactionCountByAccountId.get(account.id) ?? 0,

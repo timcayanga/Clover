@@ -2693,9 +2693,10 @@ const isMariBankStatementText = (text: string) => {
 const guessMariBankCategoryName = (description: string, detailLabel: string | null, type: TransactionType) => {
   const lower = `${detailLabel ?? ""} ${description}`.toLowerCase();
   if (/transfer fee|fee|charge|tax|withheld/.test(lower)) return "Financial";
-  if (/reward|interest/.test(lower)) return "Income";
+  if (/reward/.test(lower)) return "Financial";
+  if (/interest/.test(lower)) return "Income";
   if (/bill - internet|load - regular|top up - data|mobile load|globe regular load|tnt regular load/.test(lower)) return "Bills & Utilities";
-  if (/transfer|fund transfer|internal transfer|instapay|pocket transfer/.test(lower)) return "Income";
+  if (/transfer|fund transfer|internal transfer|instapay|pocket transfer/.test(lower)) return "Transfers";
   return guessCategoryName(description, type);
 };
 
@@ -2792,7 +2793,7 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
     if (/reward|interest/.test(lower)) return "income" as TransactionType;
     if (/bill - internet|load - regular|top up - data|mobile load|globe regular load|tnt regular load/.test(lower)) return "expense" as TransactionType;
     if (/transfer fee|fee|charge|tax|withheld/.test(lower)) return "expense" as TransactionType;
-    if (/transfer|fund transfer|internal transfer|instapay|pocket transfer/.test(lower)) return "income" as TransactionType;
+    if (/transfer|fund transfer|internal transfer|instapay|pocket transfer/.test(lower)) return "transfer" as TransactionType;
     return "expense" as TransactionType;
   };
 
@@ -2862,6 +2863,9 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
         line,
         descriptionLine: descriptionCandidate,
         detailLine: detailLabel,
+        note: transactionName,
+        notes: transactionName,
+        counterpartyName: transactionName,
         amountText: match[3],
       },
     } satisfies ParsedImportRow);
@@ -3054,12 +3058,21 @@ const parseLandbankDateToken = (value?: string | null, yearHint?: number | null)
   }
 
   const normalized = normalizeWhitespace(value);
+  const compactDigits = normalized.replace(/[^0-9]/g, "");
+  if (/^\d{8}$/.test(compactDigits)) {
+    const firstYear = Number(compactDigits.slice(0, 4));
+    const firstMonth = Number(compactDigits.slice(4, 6));
+    const firstDay = Number(compactDigits.slice(6, 8));
+    if (firstYear >= 1900 && firstYear <= 2099 && firstMonth >= 1 && firstMonth <= 12 && firstDay >= 1 && firstDay <= 31) {
+      return new Date(Date.UTC(firstYear, firstMonth - 1, firstDay, 12));
+    }
+  }
   const direct = parseDateValue(normalized);
   if (direct) {
     return direct;
   }
 
-  const compact = normalized.replace(/[^0-9]/g, "");
+  const compact = compactDigits;
   if (/^\d{8}$/.test(compact)) {
     const day = Number(compact.slice(0, 2));
     const month = Number(compact.slice(2, 4));
@@ -3111,17 +3124,191 @@ const parseLandbankMoneyToken = (value?: string | null) => {
   }
 
   const normalized = normalizeWhitespace(value).replace(/[, ]/g, "");
-  const direct = parseMoney(normalized);
-  if (direct !== null) {
-    return direct;
+  const compact = normalized.replace(/[^\d.]/g, "");
+  if (!compact) {
+    return null;
   }
 
-  const compact = normalized.replace(/[^\d]/g, "");
-  if (/^\d{4,6}$/.test(compact)) {
-    return Number(`${compact.slice(0, -2)}.${compact.slice(-2)}`);
+  if (compact.includes(".")) {
+    const [wholePart, ...fractionParts] = compact.split(".");
+    const wholeDigits = wholePart.replace(/[^\d]/g, "");
+    const fractionDigits = fractionParts.join("").replace(/[^\d]/g, "");
+    if (!wholeDigits && !fractionDigits) {
+      return null;
+    }
+
+    if (fractionDigits.length === 0) {
+      return Number(wholeDigits || "0");
+    }
+
+    if (fractionDigits.length <= 2) {
+      return Number(`${wholeDigits || "0"}.${fractionDigits.padEnd(2, "0")}`);
+    }
+
+    const mergedDigits = `${wholeDigits}${fractionDigits}`.replace(/^0+/, "") || "0";
+    if (mergedDigits.length <= 2) {
+      return Number(mergedDigits);
+    }
+    return Number(`${mergedDigits.slice(0, -2)}.${mergedDigits.slice(-2)}`);
+  }
+
+  const digits = compact.replace(/[^\d]/g, "");
+  if (/^\d{1,2}$/.test(digits)) {
+    return Number(digits);
+  }
+
+  if (/^\d{3,6}$/.test(digits)) {
+    return Number(`${digits.slice(0, -2)}.${digits.slice(-2)}`);
+  }
+
+  return parseMoney(compact);
+};
+
+const parseLandbankTransactionDateToken = (value?: string | null, yearHint?: number | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeWhitespace(value).replace(/\u00a0/g, " ");
+  if (!normalized || /[A-Za-z]{2,}/.test(normalized)) {
+    return null;
+  }
+
+  const digitCount = (normalized.match(/\d/g) ?? []).length;
+  if (digitCount < 6) {
+    return null;
+  }
+
+  const cleaned = normalized.replace(/[^0-9./:-]/g, "");
+  const directSlashMatch = cleaned.match(/^(\d{1,2})[./:-](\d{1,2})[./:-](\d{4})$/);
+  if (directSlashMatch) {
+    const day = Number(directSlashMatch[1]);
+    const month = Number(directSlashMatch[2]);
+    const year = Number(directSlashMatch[3]);
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return new Date(Date.UTC(year, month - 1, day, 12));
+    }
+  }
+
+  const compact = cleaned.replace(/[^0-9]/g, "");
+  if (/^\d{8}$/.test(compact)) {
+    const firstYear = Number(compact.slice(0, 4));
+    const firstMonth = Number(compact.slice(4, 6));
+    const firstDay = Number(compact.slice(6, 8));
+    if (firstYear >= 1900 && firstYear <= 2099 && firstMonth >= 1 && firstMonth <= 12 && firstDay >= 1 && firstDay <= 31) {
+      return new Date(Date.UTC(firstYear, firstMonth - 1, firstDay, 12));
+    }
+
+    const day = Number(compact.slice(0, 2));
+    const month = Number(compact.slice(2, 4));
+    const year = Number(compact.slice(4, 8));
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return new Date(Date.UTC(year >= 1900 && year <= 2099 ? year : yearHint ?? 2021, month - 1, day, 12));
+    }
+  }
+
+  if (/^\d{7}$/.test(compact)) {
+    const day = Number(compact.slice(0, 2));
+    const month = Number(compact.slice(2, 4));
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return new Date(Date.UTC(yearHint ?? 2021, month - 1, day, 12));
+    }
+  }
+
+  if (/^\d{6}$/.test(compact)) {
+    const day = Number(compact.slice(0, 2));
+    const month = Number(compact.slice(2, 4));
+    const yearSeed = Number(compact.slice(4, 6));
+    const year = yearHint ?? (yearSeed >= 70 ? 1900 + yearSeed : 2000 + yearSeed);
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return new Date(Date.UTC(year, month - 1, day, 12));
+    }
   }
 
   return null;
+};
+
+const isLandbankTransactionStartLine = (line: string, yearHint: number | null) => {
+  const normalized = normalizeWhitespace(decompactOcrText(line));
+  if (!normalized) {
+    return false;
+  }
+
+  if (
+    /^LAND\s*BANK/i.test(normalized) ||
+    /^LANDBANK/i.test(normalized) ||
+    /^ACCOUNT\s+SUMMARY$/i.test(normalized) ||
+    /^ACCOUNT\s+NUMBER/i.test(normalized) ||
+    /^CUSTOMER\s*:/i.test(normalized) ||
+    /^STATEMENT\s+PERIOD/i.test(normalized) ||
+    /^DATE\s*\/\s*AMOUNT\s*\/\s*CURRENCY/i.test(normalized) ||
+    /^TRANSACTION\s+DESCRIPTION/i.test(normalized) ||
+    /^BALANCE\s*-\s*CLOSING\s+BALANCE/i.test(normalized) ||
+    /^PAGE\s+\d+/i.test(normalized) ||
+    /^WWW\.LANDBANK\.COM/i.test(normalized) ||
+    /^\(\+632\)\s*8-405-7000/i.test(normalized)
+  ) {
+    return false;
+  }
+
+  const stripped = normalized.replace(/\u00a0/g, " ").trim();
+  if (/[A-Za-z]{4,}/.test(stripped)) {
+    return false;
+  }
+
+  const compact = stripped.replace(/\s+/g, " ");
+  const dateLike =
+    compact.match(/^(?:\d{1,2}[./:-]\d{1,2}[./:-]\d{4}|\d{1,2}[./:-]\d{1,2}[./:-]\d{2}|\d{7,8}|\d{6})\b/)?.[0] ??
+    compact.match(/^(?:\d{1,2}[./:-]\d{4})\b/)?.[0] ??
+    compact.match(/^(?:\d{1,2}[./:-]\d{2})\b/)?.[0] ??
+    null;
+
+  return parseLandbankTransactionDateToken(dateLike, yearHint) !== null;
+};
+
+const parseLandbankBundleRows = (lines: string[], metadata: DetectedStatementMetadata) => {
+  const yearHint =
+    metadata.endDate ? new Date(metadata.endDate).getUTCFullYear() : metadata.startDate ? new Date(metadata.startDate).getUTCFullYear() : null;
+  const bundles: string[][] = [];
+  let current: string[] = [];
+
+  for (const line of lines) {
+    if (isLandbankTransactionStartLine(line, yearHint)) {
+      if (current.length > 0) {
+        bundles.push(current);
+      }
+      current = [line];
+      continue;
+    }
+
+    if (current.length > 0) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) {
+    bundles.push(current);
+  }
+
+  const rows: ParsedImportRow[] = [];
+  let previousBalance = metadata.openingBalance ?? null;
+
+  for (const bundle of bundles) {
+    const parsed = parseLandbankTransactionBlock(bundle, {
+      accountName: metadata.accountName ?? "Landbank",
+      institution: metadata.institution ?? "Landbank",
+      previousBalance,
+      yearHint,
+    });
+
+    if (parsed) {
+      rows.push(parsed);
+      const lastBalance = typeof parsed.rawPayload === "object" && parsed.rawPayload !== null ? (parsed.rawPayload as Record<string, unknown>).balance : null;
+      previousBalance = typeof lastBalance === "number" ? lastBalance : previousBalance;
+    }
+  }
+
+  return rows;
 };
 
 const parseLandbankStatementMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
@@ -3228,30 +3415,29 @@ const parseLandbankTransactionBlock = (
     return null;
   }
 
-  const dateToken =
-    blockText.match(/\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b/)?.[0] ??
-    blockText.match(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2}\b/)?.[0] ??
-    blockText.match(/\b\d{8}\b/)?.[0] ??
-    null;
-  const date = parseLandbankDateToken(dateToken, state.yearHint);
+  const tokens = normalizedLines.flatMap((line) => line.split(/\s+/).filter(Boolean));
+  const dateToken = tokens.find((token) => parseLandbankTransactionDateToken(token, state.yearHint) !== null) ?? null;
+  const date = parseLandbankTransactionDateToken(dateToken, state.yearHint);
   if (!date) {
     return null;
   }
 
-  const moneyMatches = Array.from(blockText.matchAll(/[0-9][0-9,]*\.\d{2}/g));
-  if (moneyMatches.length === 0) {
-    return null;
-  }
-
-  const closingBalance = parseMoney(moneyMatches.at(-1)?.[0] ?? null);
-  if (closingBalance === null) {
+  const dateTokenIndex = tokens.findIndex((token) => token === dateToken);
+  const moneyTokens = tokens.slice(Math.max(0, dateTokenIndex + 1)).filter((token) => parseLandbankMoneyToken(token) !== null);
+  if (moneyTokens.length === 0) {
     return null;
   }
 
   const previousBalance = state.previousBalance;
+  const moneyValues = moneyTokens.map((token) => parseLandbankMoneyToken(token)).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const closingBalance = moneyValues.at(-1) ?? null;
+  if (closingBalance === null) {
+    return null;
+  }
+
   const inferredAmount =
-    previousBalance !== null ? Math.abs(closingBalance - previousBalance) : parseMoney(moneyMatches.at(-2)?.[0] ?? moneyMatches[0]?.[0] ?? null);
-  const amount = inferredAmount !== null && inferredAmount > 0 ? inferredAmount : Math.abs(parseMoney(moneyMatches.at(-2)?.[0] ?? null) ?? closingBalance);
+    previousBalance !== null && moneyValues.length >= 1 ? Math.abs(closingBalance - previousBalance) : moneyValues.at(-2) ?? moneyValues[0] ?? null;
+  const amount = inferredAmount !== null && inferredAmount > 0 ? inferredAmount : Math.abs(moneyValues.at(-2) ?? closingBalance);
 
   let transactionName = "Landbank Transaction";
   let categoryName = "Other";
@@ -3322,69 +3508,7 @@ const parseLandbankImportText = (text: string, context: ImportParseContext = {})
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
 
-  const transactionStartPattern = /(?:^|\b)(?:\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2}|\d{8})\b/;
-  const blocks: string[][] = [];
-  let current: string[] = [];
-
-  for (const line of lines) {
-    if (
-      /^LAND\s*BANK/i.test(line) ||
-      /^LANDBANK/i.test(line) ||
-      /^ACCOUNT\s+SUMMARY$/i.test(line) ||
-      /^ACCOUNT\s+NUMBER/i.test(line) ||
-      /^CUSTOMER\s*:/i.test(line) ||
-      /^STATEMENT\s+PERIOD/i.test(line) ||
-      /^DATE\s*\/\s*AMOUNT\s*\/\s*CURRENCY/i.test(line) ||
-      /^TRANSACTION\s+DESCRIPTION/i.test(line) ||
-      /^BALANCE\s*-\s*CLOSING\s+BALANCE/i.test(line) ||
-      /^PAGE\s+\d+/i.test(line) ||
-      /^LAND\s+BANK\s+OF\s+THE\s+PHILIPPINES/i.test(line) ||
-      /^WWW\.LANDBANK\.COM/i.test(line) ||
-      /^\(\+632\)\s*8-405-7000/i.test(line)
-    ) {
-      if (current.length > 0) {
-        blocks.push(current);
-        current = [];
-      }
-      continue;
-    }
-
-    const isTransactionStart = transactionStartPattern.test(line) && /cash\s+out|transfer|deposit|withdraw|balance/i.test(line);
-    if (isTransactionStart) {
-      if (current.length > 0) {
-        blocks.push(current);
-      }
-      current = [line];
-      continue;
-    }
-
-    if (current.length > 0) {
-      current.push(line);
-    }
-  }
-
-  if (current.length > 0) {
-    blocks.push(current);
-  }
-
-  const rows: ParsedImportRow[] = [];
-  let previousBalance = metadata.openingBalance ?? null;
-  const yearHint = metadata.endDate ? new Date(metadata.endDate).getUTCFullYear() : metadata.startDate ? new Date(metadata.startDate).getUTCFullYear() : null;
-
-  for (const block of blocks) {
-    const parsed = parseLandbankTransactionBlock(block, {
-      accountName: metadata.accountName ?? "Landbank",
-      institution: metadata.institution ?? "Landbank",
-      previousBalance,
-      yearHint,
-    });
-
-    if (parsed) {
-      rows.push(parsed);
-      const lastBalance = typeof parsed.rawPayload === "object" && parsed.rawPayload !== null ? (parsed.rawPayload as Record<string, unknown>).balance : null;
-      previousBalance = typeof lastBalance === "number" ? lastBalance : previousBalance;
-    }
-  }
+  const rows = parseLandbankBundleRows(lines, metadata);
 
   if (rows.length === 0) {
     const fallbackRows = lines
@@ -3455,9 +3579,32 @@ const parseLandbankImportText = (text: string, context: ImportParseContext = {})
     return null;
   }
 
-  if (rows.length < 10) {
-    return null;
+  if (rows.length > 0) {
+    const endingBalance = getTrailingBalanceFromParsedRows(rows);
+    return {
+      metadata: {
+        ...metadata,
+        endingBalance: endingBalance ?? metadata.endingBalance ?? null,
+        confidence: Math.min(100, metadata.confidence + 5),
+      },
+      rows,
+    };
   }
+
+  const fallbackRows = parseLandbankBundleRows(lines, metadata);
+  if (fallbackRows.length > 0) {
+    const endingBalance = getTrailingBalanceFromParsedRows(fallbackRows);
+    return {
+      metadata: {
+        ...metadata,
+        endingBalance: endingBalance ?? metadata.endingBalance ?? null,
+        confidence: Math.min(100, metadata.confidence + 5),
+      },
+      rows: fallbackRows,
+    };
+  }
+
+  return null;
 
   const endingBalance = getTrailingBalanceFromParsedRows(rows);
 

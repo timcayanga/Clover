@@ -14,10 +14,10 @@ This document captures the MariBank parsing rules learned from the synthetic tra
 - Use running balance as a first-class field.
 - Keep `Salary Credit` as `Income`.
 - Keep `Internal Transfer` rows as internal movement between MariBank balances or pockets.
-- Keep `Fund Transfer` and `InstaPay Transfer to GCash 9981` as `Transfers`.
+- Keep `Fund Transfer`, `InstaPay Transfer to GCash 9981`, and other external transfer rows as `Transfers`.
 - Keep `Transfer Fee` as `Financial`.
 - Keep `Meralco` and `Globe Postpaid` as bill-payment candidates.
-- Keep `Promo Reward` as `Income`.
+- Keep `Promo Reward` and similar reward rows as `Financial`.
 - Preserve `Interest Earned` and `Tax Withheld` separately.
 - Treat `Adjustment Reversal` as a review-worthy adjustment entry.
 - Keep `Transfer to Pocket` and `Transfer from Pocket` as internal movements, not spend.
@@ -48,6 +48,7 @@ This document captures the MariBank parsing rules learned from the synthetic tra
 ## Notes Handling
 
 - Keep transaction notes human-readable and concise.
+- Preserve the visible counterparty or merchant name in notes, especially for transfer, bill, and load rows.
 - If there is no useful note, leave notes empty instead of writing raw import payloads.
 
 ## Review

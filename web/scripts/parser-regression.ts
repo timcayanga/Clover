@@ -1264,6 +1264,25 @@ const main = async () => {
   if (maribankRows.length !== 63) {
     throw new Error(`expected MariBank sample to keep all 63 transaction rows, got ${maribankRows.length}`);
   }
+  const maribankTransferRow = maribankRows.find(
+    (row) => /judy sibayan|jaycelle c\./i.test(row.description ?? "") && /transfer/i.test(row.description ?? "")
+  );
+  if (
+    !maribankTransferRow ||
+    maribankTransferRow.categoryName !== "Transfers" ||
+    maribankTransferRow.type !== "transfer" ||
+    ((maribankTransferRow.rawPayload as Record<string, unknown> | undefined)?.notes as string | undefined)?.trim() === ""
+  ) {
+    throw new Error(
+      `expected MariBank transfers to preserve the full counterparty name and classify as Transfers/transfer, got ${JSON.stringify(
+        maribankTransferRow ?? null
+      )}`
+    );
+  }
+  const maribankRewardRow = maribankRows.find((row) => /reward/i.test(row.description ?? ""));
+  if (!maribankRewardRow || maribankRewardRow.categoryName !== "Financial") {
+    throw new Error(`expected MariBank reward rows to classify as Financial, got ${JSON.stringify(maribankRewardRow ?? null)}`);
+  }
   console.log(`[PASS] MariBank row preservation | ${basename(maribankSamplePath)} | ${maribankRows.length} rows`);
 
   const dateStampedBankName = normalizeBankName("2026-05-01 22.01.12 0112");
