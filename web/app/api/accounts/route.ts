@@ -477,12 +477,17 @@ export async function GET(request: Request) {
 
     await assertWorkspaceAccess(userId, workspaceId);
     const compatibleColumns = await getCompatibleAccountColumns();
-    await repairParsedImportedAccounts(workspaceId, compatibleColumns).catch((error) => {
-      console.warn("[accounts] unable to repair parsed imported account materialization", {
-        workspaceId,
-        error,
+    const shouldRepairImportedAccounts = ["1", "true"].includes(
+      (searchParams.get("repairImportedAccounts") ?? "").trim().toLowerCase()
+    );
+    if (shouldRepairImportedAccounts) {
+      await repairParsedImportedAccounts(workspaceId, compatibleColumns).catch((error) => {
+        console.warn("[accounts] unable to repair parsed imported account materialization", {
+          workspaceId,
+          error,
+        });
       });
-    });
+    }
     await cleanupEmptyGenericUploadedAccountPlaceholders(workspaceId, compatibleColumns).catch((error) => {
       console.warn("[accounts] unable to clean up empty generic imported account placeholders", {
         workspaceId,
