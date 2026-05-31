@@ -25,7 +25,7 @@ import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
-import { clearImportActivity, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
+import { clearImportActivity, getCompletedImportActivitySummary, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
 import {
   buildFinalizingNoticeDismissalKey,
   dismissFinalizingNotice,
@@ -118,6 +118,52 @@ type Transaction = {
   warningReason?: string | null;
   splitBill?: { id: string; title: string } | null;
   rawPayload?: unknown;
+};
+
+const normalizeLooseImportedValue = (value: string | null | undefined) =>
+  String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const uploadSummaryMatchesAccount = (
+  summary: NonNullable<ReturnType<typeof getCompletedImportActivitySummary>>,
+  account: Account
+) => {
+  if (summary.accountId === account.id || summary.optimisticAccountId === account.id) {
+    return true;
+  }
+
+  const summaryKey = normalizeImportedAccountKey(
+    summary.accountName,
+    summary.institution,
+    summary.accountNumber ?? null,
+    summary.accountType ?? account.type
+  );
+  const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+  if (summaryKey === accountKey) {
+    return true;
+  }
+
+  if (!summary.optimistic && !account.id.startsWith("optimistic-")) {
+    return false;
+  }
+
+  const summaryInstitution = normalizeLooseImportedValue(summary.institution);
+  const accountInstitution = normalizeLooseImportedValue(account.institution);
+  if (!summaryInstitution || !accountInstitution || summaryInstitution !== accountInstitution) {
+    return false;
+  }
+
+  const summaryAccountNumber = normalizeLooseImportedValue(summary.accountNumber);
+  const accountAccountNumber = normalizeLooseImportedValue(account.accountNumber);
+  const accountName = normalizeLooseImportedValue(account.name);
+  const summaryLastFour = summaryAccountNumber.slice(-4);
+  const accountLastFour = accountAccountNumber.slice(-4);
+
+  return Boolean(
+    (summaryAccountNumber && accountAccountNumber && summaryAccountNumber === accountAccountNumber) ||
+      (summaryLastFour.length === 4 && accountName.includes(summaryLastFour)) ||
+      (accountLastFour.length === 4 && normalizeLooseImportedValue(summary.accountName).includes(accountLastFour)) ||
+      (!summaryAccountNumber && !accountAccountNumber)
+  );
 };
 
 type Category = {
@@ -1903,24 +1949,12 @@ function AccountDetailPageContent() {
     ? String(latestCheckpoint.endingBalance)
     : null;
   const matchingImportSummary =
-    (importActivitySnapshot?.status === "done" && importActivitySnapshot.summary
-      ? importActivitySnapshot.summary
-      : null) ??
-    null;
+    getCompletedImportActivitySummary(importActivitySnapshot) ?? null;
   const matchingImportSummaryHasRows =
     account &&
     matchingImportSummary &&
     Number(matchingImportSummary.rowsImported ?? 0) > 0 &&
-    (
-      matchingImportSummary.accountId === account.id ||
-      matchingImportSummary.optimisticAccountId === account.id ||
-      normalizeImportedAccountKey(
-        matchingImportSummary.accountName,
-        matchingImportSummary.institution,
-        matchingImportSummary.accountNumber ?? null,
-        matchingImportSummary.accountType ?? account.type
-      ) === normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
-    );
+    uploadSummaryMatchesAccount(matchingImportSummary, account);
   const matchingImportSummaryPreviewTransactions = useMemo(
     () => matchingImportSummary?.previewTransactions ?? [],
     [matchingImportSummary]

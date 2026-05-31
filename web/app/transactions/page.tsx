@@ -58,6 +58,7 @@ import {
   getDeletingWorkspaceAccountIds,
   normalizeImportedAccountKey,
   matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
+  transactionsWorkspaceCacheKey,
   type ImportedWorkspaceTransaction,
 } from "@/lib/workspace-cache";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
@@ -114,6 +115,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     accountNumber: summary.accountNumber ?? null,
     type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
     currency: "PHP",
+    source: "upload",
     balance: summary.balance,
   };
 };
@@ -565,7 +567,6 @@ type UpdateTransactionOptions = {
 };
 
 const todayIso = new Date().toISOString().slice(0, 10);
-const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v1";
 
 const formatTransactionAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
 

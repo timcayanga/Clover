@@ -595,6 +595,10 @@ const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
   const accountType =
     summary.accountType ??
     inferAccountTypeFromStatement(summary.institution, normalizedAccountName, "bank");
+  const transactionCount = Math.max(
+    Number(summary.rowsImported ?? 0) || 0,
+    Array.isArray(summary.previewTransactions) ? summary.previewTransactions.length : 0
+  );
 
   return {
     id: accountId,
@@ -606,6 +610,7 @@ const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
     currency: summary.previewTransactions?.[0]?.currency ?? "PHP",
     source: "upload",
     balance: summary.balance,
+    transactionCount,
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   };

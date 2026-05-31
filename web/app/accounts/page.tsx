@@ -67,7 +67,7 @@ import {
 import type { InstitutionSuggestion } from "@/lib/institution-suggestions";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
-import { clearImportActivity, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
+import { clearImportActivity, getCompletedImportActivitySummary, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
 
 type PlanUsage = {
   accountCount: number;
@@ -95,6 +95,49 @@ const PAGE_LOADING_TIMEOUT_MS = 12_000;
 
 const isImageImportFile = (file: File) =>
   /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) || file.type.startsWith("image/");
+
+const normalizeLooseImportedValue = (value: string | null | undefined) =>
+  String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const uploadSummaryMatchesAccount = (summary: UploadInsightsSummary, account: Account) => {
+  if (summary.accountId === account.id || summary.optimisticAccountId === account.id) {
+    return true;
+  }
+
+  const summaryKey = normalizeImportedAccountKey(
+    summary.accountName,
+    summary.institution,
+    summary.accountNumber ?? null,
+    summary.accountType ?? account.type
+  );
+  const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+  if (summaryKey === accountKey) {
+    return true;
+  }
+
+  if (!summary.optimistic && !account.id.startsWith("optimistic-")) {
+    return false;
+  }
+
+  const summaryInstitution = normalizeLooseImportedValue(summary.institution);
+  const accountInstitution = normalizeLooseImportedValue(account.institution);
+  if (!summaryInstitution || !accountInstitution || summaryInstitution !== accountInstitution) {
+    return false;
+  }
+
+  const summaryAccountNumber = normalizeLooseImportedValue(summary.accountNumber);
+  const accountAccountNumber = normalizeLooseImportedValue(account.accountNumber);
+  const accountName = normalizeLooseImportedValue(account.name);
+  const summaryLastFour = summaryAccountNumber.slice(-4);
+  const accountLastFour = accountAccountNumber.slice(-4);
+
+  return Boolean(
+    (summaryAccountNumber && accountAccountNumber && summaryAccountNumber === accountAccountNumber) ||
+      (summaryLastFour.length === 4 && accountName.includes(summaryLastFour)) ||
+      (accountLastFour.length === 4 && normalizeLooseImportedValue(summary.accountName).includes(accountLastFour)) ||
+      (!summaryAccountNumber && !accountAccountNumber)
+  );
+};
 
 type Workspace = {
   id: string;
@@ -143,6 +186,10 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
   if (!optimisticAccountId || !summary.accountName) {
     return null;
   }
+  const transactionCount = Math.max(
+    Number(summary.rowsImported ?? 0) || 0,
+    Array.isArray(summary.previewTransactions) ? summary.previewTransactions.length : 0
+  );
   const displayName = formatUploadAccountDisplayName(
     summary.accountName,
     summary.institution,
@@ -168,6 +215,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     currency: summary.previewTransactions?.[0]?.currency ?? "PHP",
     source: "upload",
     balance: summary.balance,
+    transactionCount,
     favorite: false,
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
@@ -1911,9 +1959,7 @@ function AccountsPageContent() {
     const matchingImportSummary =
       pendingImportSummary
         ? pendingImportSummary
-        : importActivitySnapshot?.status === "done" && importActivitySnapshot.summary
-          ? importActivitySnapshot.summary
-          : null;
+        : getCompletedImportActivitySummary(importActivitySnapshot);
     const latestCheckpoint =
       latestCheckpoints.checkpointsByAccountId.get(account.id) ??
       latestCheckpoints.checkpointsByAccountKey.get(
@@ -1927,16 +1973,7 @@ function AccountsPageContent() {
     const matchingImportSummaryHasRows =
       matchingImportSummary &&
       Number(matchingImportSummary.rowsImported ?? 0) > 0 &&
-      (
-        matchingImportSummary.accountId === account.id ||
-        matchingImportSummary.optimisticAccountId === account.id ||
-        normalizeImportedAccountKey(
-          matchingImportSummary.accountName,
-          matchingImportSummary.institution,
-          matchingImportSummary.accountNumber ?? null,
-          matchingImportSummary.accountType ?? account.type
-        ) === normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
-      );
+      uploadSummaryMatchesAccount(matchingImportSummary, account);
     const checkpointBalance =
       latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
         ? String(latestCheckpoint.endingBalance)

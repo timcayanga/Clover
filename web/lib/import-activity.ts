@@ -107,6 +107,28 @@ export const readImportActivity = (): ImportActivitySnapshot | null => {
   return readSnapshotFromStorage(getLocalStorage()) ?? readSnapshotFromStorage(getSessionStorage());
 };
 
+export const importActivityHasCompletedRows = (activity: ImportActivitySnapshot | null) => {
+  if (!activity?.summary || activity.status === "error") {
+    return false;
+  }
+
+  const rowsImported = Number(activity.summary.rowsImported ?? 0);
+  if (!Number.isFinite(rowsImported) || rowsImported <= 0) {
+    return false;
+  }
+
+  const completedFiles = Number(activity.completedFiles ?? 0);
+  const fileTotal = Number(activity.fileTotal ?? 0);
+  const progress = Number(activity.progress ?? 0);
+  const fileBatchComplete = fileTotal > 0 && completedFiles >= fileTotal;
+
+  return activity.status === "done" || fileBatchComplete || progress >= 100;
+};
+
+export const getCompletedImportActivitySummary = (activity: ImportActivitySnapshot | null): UploadInsightsSummary | null => {
+  return importActivityHasCompletedRows(activity) ? activity?.summary ?? null : null;
+};
+
 const writeSnapshotToStorage = (snapshot: ImportActivitySnapshot) => {
   const serialized = JSON.stringify(snapshot);
   const localStorageRef = getLocalStorage();
