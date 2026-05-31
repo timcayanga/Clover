@@ -2715,12 +2715,18 @@ function TransactionsPageContent() {
       const mergedTransactions = options?.append
         ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
         : mergeImportedWorkspaceTransactions(baseTransactions, fetchedTransactions);
-      const shouldPreserveImportedTransactions = !hasFreshTransactions && !hasServerSideFilters;
+      const summaryPayload = payload?.summary && typeof payload.summary === "object" ? payload.summary : null;
+      const exactServerTotalCount =
+        typeof payload?.totalCount === "number"
+          ? payload.totalCount
+          : typeof summaryPayload?.totalCount === "number"
+            ? summaryPayload.totalCount
+            : fetchedTransactions.length;
+      const shouldPreserveImportedTransactions = !hasFreshTransactions && !hasServerSideFilters && exactServerTotalCount > 0;
       const mergedTransactionsWithImports =
         shouldPreserveImportedTransactions && importedTransactionsToPreserve.length > 0
           ? mergeImportedWorkspaceTransactions(mergedTransactions, importedTransactionsToPreserve as unknown as ImportedWorkspaceTransaction[])
           : mergedTransactions;
-      const summaryPayload = payload?.summary && typeof payload.summary === "object" ? payload.summary : null;
       const responseCurrencyCodes = Array.isArray(payload?.currencyCodes)
         ? payload.currencyCodes.map((value: unknown) => formatCurrencyCode(String(value ?? ""))).filter(Boolean)
         : [];
@@ -2728,12 +2734,6 @@ function TransactionsPageContent() {
         mergedTransactionsWithImports.length > 0 ? mergedTransactionsWithImports : fetchedTransactions
       );
       const nextCurrencyCodes = responseCurrencyCodes.length > 0 ? responseCurrencyCodes : workspaceCurrencyCodesFromData;
-      const exactServerTotalCount =
-        typeof payload?.totalCount === "number"
-          ? payload.totalCount
-          : typeof summaryPayload?.totalCount === "number"
-            ? summaryPayload.totalCount
-            : fetchedTransactions.length;
       const displayedTotalCount =
         hasServerSideFilters
           ? exactServerTotalCount
