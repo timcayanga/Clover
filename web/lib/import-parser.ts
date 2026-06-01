@@ -3524,72 +3524,7 @@ const parseLandbankImportText = (text: string, context: ImportParseContext = {})
 
   const rows = parseLandbankBundleRows(lines, metadata);
 
-  if (rows.length === 0) {
-    const fallbackRows = lines
-      .map((line, index) => {
-        const normalizedLine = normalizeWhitespace(decompactOcrText(line));
-        if (/balance\s*-\s*closing/i.test(normalizedLine) || !/\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2}|\d{8})\b/.test(normalizedLine)) {
-          return null;
-        }
-
-        const hasRelevantText = /(cash\s+out|transfer|deposit|withdraw|replenish|replenishment|reversal|order)/i.test(normalizedLine);
-        const hasMoneyToken = /\b\d[\d,]*(?:\.\d{2})?\b/.test(normalizedLine);
-        if (!hasRelevantText && !hasMoneyToken) {
-          return null;
-        }
-
-        const dateToken = normalizedLine.match(/\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2}|\d{8})\b/)?.[0] ?? null;
-        const date = parseLandbankDateToken(dateToken, yearHint);
-        const amountMatches = Array.from(normalizedLine.matchAll(/\b\d[\d,]*(?:\.\d{2})?\b/g)).map((match) => match[0]);
-        const amountText = amountMatches.find((token) => parseLandbankMoneyToken(token) !== null) ?? null;
-        const balanceText = amountMatches.at(-1) ?? amountText;
-        const description = normalizedLine.match(/(?:cash\s+out\s*-\s*order|cash\s+out|transfer\s*\(internet\s+banking\)|cash\s+deposit|withdrawal)/i)?.[0] ?? "Landbank Transaction";
-        if (!date || !amountText || !balanceText) {
-          return null;
-        }
-
-        const amount = parseLandbankMoneyToken(amountText);
-        const balance = parseLandbankMoneyToken(balanceText);
-        if (amount === null || balance === null) {
-          return null;
-        }
-
-        return {
-          date: date.toISOString().slice(0, 10),
-          amount: amount.toFixed(2),
-          merchantRaw: humanizeMerchantText(description),
-          merchantClean: summarizeMerchantText(description, metadata.institution),
-          description,
-          categoryName: /transfer/i.test(description) ? "Transfers" : /cash\s+out|withdrawal/i.test(description) ? "Cash & ATM" : "Other",
-          accountName: metadata.accountName ?? undefined,
-          institution: metadata.institution ?? undefined,
-          type: /transfer/i.test(description) ? "transfer" : /cash\s+out|withdrawal/i.test(description) ? "expense" : "expense",
-          confidence: 70,
-          rawPayload: {
-            bank: metadata.institution,
-            kind: "landbank_statement_transaction",
-            line: normalizedLine,
-            amountText: amount.toFixed(2),
-            balanceText: balance.toFixed(2),
-            balance,
-            previousBalance: null,
-          },
-        } satisfies ParsedImportRow;
-      })
-      .filter(Boolean) as ParsedImportRow[];
-
-    if (fallbackRows.length > 0) {
-      const endingBalance = getTrailingBalanceFromParsedRows(fallbackRows);
-      return {
-        metadata: {
-          ...metadata,
-          endingBalance: endingBalance ?? metadata.endingBalance ?? null,
-          confidence: Math.min(100, metadata.confidence + 5),
-        },
-        rows: fallbackRows,
-      };
-    }
-
+  if (rows.length > 0 && rows.length < 10) {
     return null;
   }
 
@@ -3602,19 +3537,6 @@ const parseLandbankImportText = (text: string, context: ImportParseContext = {})
         confidence: Math.min(100, metadata.confidence + 5),
       },
       rows,
-    };
-  }
-
-  const fallbackRows = parseLandbankBundleRows(lines, metadata);
-  if (fallbackRows.length > 0) {
-    const endingBalance = getTrailingBalanceFromParsedRows(fallbackRows);
-    return {
-      metadata: {
-        ...metadata,
-        endingBalance: endingBalance ?? metadata.endingBalance ?? null,
-        confidence: Math.min(100, metadata.confidence + 5),
-      },
-      rows: fallbackRows,
     };
   }
 

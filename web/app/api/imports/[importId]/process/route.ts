@@ -420,11 +420,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const formImportMode = readImportMode(formData.get("importMode"));
       const formTrainingMode =
         formData.get("trainingMode") === "generic_parser" ? "generic_parser" : formData.get("trainingMode") === "bank_context" ? "bank_context" : undefined;
-      const bankHint = normalizeBankName(formBankName || formFileName || file.name || "");
-      const effectiveBankName = formBankName || (bankHint !== "Unknown" ? bankHint : "");
-      const shouldAvoidPdfPreflight =
-        isPdfUpload(file.name || formFileName || "imported-file", file.type || formFileType || "") &&
-        ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bankHint);
       allowDuplicateStatement =
         String(formData.get("allowDuplicateStatement") ?? formData.get("qaMode") ?? "").toLowerCase() === "true";
       forceInlineProcessing = String(formData.get("forceInlineProcessing") ?? "").toLowerCase() === "true";
@@ -436,6 +431,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       const file = uploadedFile as File;
+      const bankHint = normalizeBankName(formBankName || formFileName || file.name || "");
+      const effectiveBankName = formBankName || (bankHint !== "Unknown" ? bankHint : "");
+      const shouldAvoidPdfPreflight =
+        isPdfUpload(file.name || formFileName || "imported-file", file.type || formFileType || "") &&
+        ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bankHint);
       const validationError = validateImportFile({
         fileName: file.name || formFileName || "imported-file",
         fileSize: file.size,

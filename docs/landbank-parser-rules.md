@@ -23,8 +23,8 @@ This document captures the current LandBank parsing guidance for Clover.
 
 - Keep transaction descriptions intact in raw payloads.
 - Do not collapse transfer and cash-out activity into generic spend unless the statement is genuinely ambiguous.
+- If OCR output is noisy or incomplete, fail closed and route the file to the vision/OCR fallback instead of inventing partial rows.
 
 ## Review
 
 - Any row that cannot be confidently classified as transfer versus cash withdrawal should be routed to review.
-
