@@ -1527,7 +1527,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       userContent.unshift({
         type: "input_file",
         filename: params.fileName ?? "imported-file.pdf",
-        file_data: pdfFileDataBase64,
+        file_data: `data:application/pdf;base64,${pdfFileDataBase64}`,
       });
       return userContent;
     }
