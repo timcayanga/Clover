@@ -315,14 +315,22 @@ export const getEffectiveTransactionCategoryName = (params: {
   });
   const descriptionText =
     typeof params.description === "string" && params.description.trim() ? params.description.trim() : null;
+  const landbankOverrideText = [effectiveMerchantName, params.merchantRaw, descriptionText].filter(Boolean).join(" ");
+  if (
+    params.institution &&
+    /(?:landbank|land\s+bank)/i.test(params.institution) &&
+    /cash\s+out\s*-\s*order|atm\s+withdrawal|\bcash\s+out\b|\bwithdrawal\b|cash\s+deposit/i.test(landbankOverrideText)
+  ) {
+    return directCategory || null;
+  }
   const institutionOverride = getInstitutionSpecificCategoryOverride(
     params.institution,
-    [effectiveMerchantName, params.merchantRaw, descriptionText].filter(Boolean).join(" ")
+    landbankOverrideText
   );
   const genericOverride = getGenericCategoryOverride(
-    [effectiveMerchantName, params.merchantRaw, descriptionText].filter(Boolean).join(" ")
+    landbankOverrideText
   );
-  const overrideText = [effectiveMerchantName, params.merchantRaw, descriptionText].filter(Boolean).join(" ");
+  const overrideText = landbankOverrideText;
   if (
     params.institution &&
     /\bgcash\b/i.test(params.institution) &&
