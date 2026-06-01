@@ -1502,7 +1502,7 @@ function AccountDetailPageContent() {
           setTransactionPage(1);
           setTransactionTotalCount(accountTransactionsLookup?.totalCount ?? cachedTransactions.length);
           setTransactionsError(null);
-          setTransactionsLoading(false);
+          setTransactionsLoading(cachedTransactions.length === 0);
           setMessage("");
           setHasInitialDataLoaded(true);
           setCheckpoints(cachedCheckpoints);
@@ -1673,6 +1673,9 @@ function AccountDetailPageContent() {
           page: "1",
           pageSize: String(TRANSACTION_PAGE_SIZE),
         });
+        if (!cancelled && resolvedCachedTransactions.length === 0) {
+          setTransactionsLoading(true);
+        }
         const transactionsPromise = fetch(
           `/api/accounts/${encodeURIComponent(mergedAccount.id)}/transactions?${transactionsSearchParams.toString()}`
         );
@@ -4175,7 +4178,9 @@ function AccountDetailPageContent() {
               <h3>Transactions</h3>
             </div>
             <div className="accounts-detail__transactions-actions">
-              <span className="accounts-summary-chip is-neutral">{`${visibleTransactions.length} of ${transactionTotalCount} loaded`}</span>
+              <span className="accounts-summary-chip is-neutral">
+                {transactionsLoading ? "Loading transactions..." : `${visibleTransactions.length} of ${transactionTotalCount} loaded`}
+              </span>
               {showFinalizingNotice ? (
                 <span className="accounts-summary-chip is-neutral">
                   <span>
@@ -4203,6 +4208,32 @@ function AccountDetailPageContent() {
           </div>
           {transactionsError ? (
             <p className="panel-muted">{transactionsError}</p>
+          ) : transactionsLoading ? (
+            <div className="transactions-loading-state" role="status" aria-live="polite" aria-label="Loading account transactions">
+              <div className="transactions-loading-header">
+                <span className="skeleton-block skeleton-block--checkbox" />
+                <span className="skeleton-block skeleton-block--icon" />
+                <span className="skeleton-block skeleton-block--name" />
+                <span className="skeleton-block skeleton-block--date" />
+                <span className="skeleton-block skeleton-block--category" />
+                <span className="skeleton-block skeleton-block--amount" />
+                <span className="skeleton-block skeleton-block--chevron" />
+              </div>
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="transactions-loading-row">
+                  <span className="skeleton-block skeleton-block--checkbox" />
+                  <span className="skeleton-block skeleton-block--icon" />
+                  <span className="transactions-loading-name">
+                    <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+                    <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+                  </span>
+                  <span className="skeleton-block skeleton-block--date" />
+                  <span className="skeleton-block skeleton-block--category" />
+                  <span className="skeleton-block skeleton-block--amount" />
+                  <span className="skeleton-block skeleton-block--chevron" />
+                </div>
+              ))}
+            </div>
           ) : hasVisibleTransactions ? (
             <>
               {!isMobileViewport ? (

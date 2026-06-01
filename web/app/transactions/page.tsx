@@ -6424,7 +6424,10 @@ function TransactionsPageContent() {
       </div>
     </div>
   ) : null;
-  const isTableLoading = Boolean(selectedWorkspaceId) && !isWorkspaceDataReady && transactions.length === 0;
+  const isWorkspaceSelectionSettling = !hasLoadedWorkspaceList || (!selectedWorkspaceId && workspaces.length > 0);
+  const isTableLoading =
+    transactions.length === 0 &&
+    (isWorkspaceSelectionSettling || (Boolean(selectedWorkspaceId) && !isWorkspaceDataReady));
   const transactionsShellActions = (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
       <label
