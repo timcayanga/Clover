@@ -3236,6 +3236,19 @@ const main = async () => {
     );
   }
 
+  const previewCategoryReasons = getTransactionReviewReasons({
+    reviewStatus: "suggested",
+    categoryId: null,
+    categoryName: "Transfers",
+    merchantRaw: "Incoming Interbank Transfer",
+    merchantClean: "Incoming Interbank Transfer",
+  });
+  if (previewCategoryReasons.length > 0) {
+    throw new Error(
+      `expected concrete category names on imported previews to avoid transient review warnings, got ${previewCategoryReasons.join(", ")}`
+    );
+  }
+
   const concreteReviewReasons = getTransactionReviewReasons({
     reviewStatus: "suggested",
     categoryId: null,

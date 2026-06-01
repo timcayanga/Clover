@@ -62,7 +62,8 @@ export const getTransactionReviewReasons = (transaction: TransactionReviewReason
   const normalizedCategoryName = (transaction.categoryName ?? "").trim().toLowerCase();
   const categoryScore = normalizeConfidenceScore(transaction.categoryConfidence);
   const categoryIsOther = normalizedCategoryName === "other";
-  const hasCategory = Boolean((transaction.categoryId ?? "").trim()) || categoryIsOther;
+  const categoryNameIsConcrete = Boolean(normalizedCategoryName) && normalizedCategoryName !== "needs category review";
+  const hasCategory = Boolean((transaction.categoryId ?? "").trim()) || categoryNameIsConcrete;
 
   if (!hasCategory && !isResolvedReviewStatus(transaction.reviewStatus)) {
     reasons.add("Needs category review");
