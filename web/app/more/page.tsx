@@ -189,7 +189,7 @@ async function MorePageContent() {
   await ensureOnboardingAccess();
 
   return (
-    <CloverShell active="more" title="More">
+    <CloverShell active="more" title="Tools" titleAddon={<span className="pill pill-accent">Pro</span>}>
       <section className="more-page">
         <div className="more-page__sections">
           {moreSections.map((section) => (

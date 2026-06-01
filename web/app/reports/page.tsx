@@ -395,9 +395,7 @@ async function ReportsStream({
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
     const [
-      currentWindowTransactions,
-      previousWindowTransactions,
-      sixMonthTransactions,
+      reportTransactions,
       importedTransactionStats,
       manualTransactionStats,
       accountStats,
@@ -412,7 +410,6 @@ async function ReportsStream({
         where: {
           workspaceId: selectedWorkspaceId,
           isExcluded: false,
-          date: { gte: currentWindowStart },
         },
         select: {
           id: true,
@@ -437,89 +434,8 @@ async function ReportsStream({
           },
         },
         orderBy: { date: "desc" },
-        take: 500,
+        take: 1000,
       }),
-      (needsSpendingData || needsTrendData || needsAdvancedData
-        ? prisma.transaction.findMany({
-            where: {
-              workspaceId: selectedWorkspaceId,
-              isExcluded: false,
-              date: {
-                gte: previousWindowStart,
-                lt: currentWindowStart,
-              },
-            },
-            select: {
-              id: true,
-              date: true,
-              amount: true,
-              type: true,
-              merchantRaw: true,
-              merchantClean: true,
-              description: true,
-              rawPayload: true,
-              importFileId: true,
-              account: {
-                select: {
-                  name: true,
-                  institution: true,
-                },
-              },
-              category: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          })
-        : Promise.resolve([] as Array<ReportTransaction>)),
-      (needsTrendData || needsAdvancedData
-        ? prisma.transaction.findMany({
-            where: {
-              workspaceId: selectedWorkspaceId,
-              isExcluded: false,
-              date: { gte: sixMonthsAgo },
-            },
-            select: {
-              date: true,
-              amount: true,
-              type: true,
-            },
-          })
-        : Promise.resolve([] as Array<{ date: Date; amount: unknown; type: "income" | "expense" | "transfer" }>)),
-      (needsSpendingData || needsTrendData || needsAdvancedData
-        ? prisma.transaction.findMany({
-            where: {
-              workspaceId: selectedWorkspaceId,
-              isExcluded: false,
-              date: { gte: currentWindowStart },
-            },
-            select: {
-              id: true,
-              date: true,
-              amount: true,
-              type: true,
-              merchantRaw: true,
-              merchantClean: true,
-              description: true,
-              rawPayload: true,
-              importFileId: true,
-              account: {
-                select: {
-                  name: true,
-                  institution: true,
-                },
-              },
-              category: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-            orderBy: { date: "desc" },
-            take: 250,
-          })
-        : Promise.resolve([] as Array<ReportTransaction>)),
       needsAdvancedData
         ? prisma.transaction.aggregate({
             where: {
@@ -590,13 +506,20 @@ async function ReportsStream({
       failed: Number(failedImportCount ?? 0),
       deleted: Number(deletedImportCount ?? 0),
     };
-    const reportCurrentWindowTransactions = Array.isArray(currentWindowTransactions)
-      ? currentWindowTransactions.filter(isDefined)
-      : [];
-    const reportPreviousWindowTransactions = Array.isArray(previousWindowTransactions)
-      ? previousWindowTransactions.filter(isDefined)
-      : [];
-    const reportSixMonthTransactions = Array.isArray(sixMonthTransactions) ? sixMonthTransactions.filter(isDefined) : [];
+    const reportAllTransactions = Array.isArray(reportTransactions) ? reportTransactions.filter(isDefined) : [];
+    const reportCurrentWindowTransactions = reportAllTransactions.filter((transaction) => transaction.date >= currentWindowStart);
+    const reportPreviousWindowTransactions = reportAllTransactions.filter(
+      (transaction) => transaction.date >= previousWindowStart && transaction.date < currentWindowStart
+    );
+    const reportSixMonthTransactions = reportAllTransactions.filter((transaction) => transaction.date >= sixMonthsAgo);
+    const reportDisplayTransactions =
+      reportCurrentWindowTransactions.length > 0
+        ? reportCurrentWindowTransactions
+        : reportSixMonthTransactions.length > 0
+          ? reportSixMonthTransactions
+          : reportAllTransactions;
+    const reportTrendTransactions =
+      reportSixMonthTransactions.length > 0 ? reportSixMonthTransactions : reportDisplayTransactions;
     const accountStatsCountId = Number((accountStats as { _count?: { id?: number } } | null | undefined)?._count?.id ?? 0);
     const isFreshResetWorkspace =
       user.dataWipedAt !== null && accountStatsCountId <= 1 && Object.values(importStatusCounts).every((count) => count === 0);
@@ -607,9 +530,13 @@ async function ReportsStream({
           uploadedAt: Date;
         }
       | null;
-    const isEmptyWorkspace = accountStatsCountId <= 1 && reportCurrentWindowTransactions.length === 0 && Object.values(importStatusCounts).every((count) => count === 0);
+    const isEmptyWorkspace = accountStatsCountId <= 1 && reportDisplayTransactions.length === 0 && Object.values(importStatusCounts).every((count) => count === 0);
+    const reportFallbackNotice =
+      reportCurrentWindowTransactions.length === 0 && reportDisplayTransactions.length > 0
+        ? "No activity in the selected range yet. Showing the latest available transactions instead."
+        : null;
 
-    const currentSummary: WindowSummary = reportCurrentWindowTransactions.reduce(
+    const currentSummary: WindowSummary = reportDisplayTransactions.reduce(
       (accumulator, transaction) => {
         const amount = Number(transaction.amount);
         const transactionType = getReportTransactionType(transaction);
@@ -668,8 +595,8 @@ async function ReportsStream({
       } as WindowSummary
     );
 
-    const monthBuckets = getMonthBuckets(now);
-    reportSixMonthTransactions.forEach((transaction) => {
+    const monthBuckets = getMonthBuckets(reportTrendTransactions[0]?.date ?? reportAllTransactions[0]?.date ?? now);
+    reportTrendTransactions.forEach((transaction) => {
       const bucket = bucketMonth(transaction.date, monthBuckets);
       if (!bucket) {
         return;
@@ -715,12 +642,12 @@ async function ReportsStream({
     const totalAccountBalance = Number(accountStatsSummary._sum?.balance ?? 0);
     const activeAccountCount = Number(accountStatsSummary._count?.balance ?? 0);
     const accountCount = Number(accountStatsSummary._count?.id ?? 0);
-    const uncategorizedTransactions = reportCurrentWindowTransactions.filter(
+    const uncategorizedTransactions = reportDisplayTransactions.filter(
       (transaction) => !transaction.category?.name || !transaction.merchantClean
     );
 
-    const duplicateGroups = new Map<string, (typeof reportCurrentWindowTransactions)[number][]>();
-    reportCurrentWindowTransactions.forEach((transaction) => {
+    const duplicateGroups = new Map<string, (typeof reportDisplayTransactions)[number][]>();
+    reportDisplayTransactions.forEach((transaction) => {
       if (!isValidDate(transaction.date)) {
         return;
       }
@@ -792,7 +719,7 @@ async function ReportsStream({
       }
     >();
 
-    [...reportPreviousWindowTransactions, ...reportCurrentWindowTransactions].forEach((transaction) => {
+    [...reportPreviousWindowTransactions, ...reportDisplayTransactions].forEach((transaction) => {
       if (!isValidDate(transaction.date)) {
         return;
       }
@@ -894,7 +821,7 @@ async function ReportsStream({
       }
     >();
 
-    reportCurrentWindowTransactions.forEach((transaction) => {
+    reportDisplayTransactions.forEach((transaction) => {
       if (transaction.type !== "expense") {
         return;
       }
@@ -1094,7 +1021,7 @@ async function ReportsStream({
       Math.min(
         99,
         60 +
-          reportCurrentWindowTransactions.length * 0.12 +
+          reportDisplayTransactions.length * 0.12 +
           doneImportCount * 1.5 +
           activeAccountCount * 1.5 -
           failedImportCount * 8 -
@@ -1315,7 +1242,7 @@ async function ReportsStream({
           properties={{
             report_type: selectedRange,
             workspace_id: selectedWorkspaceId,
-            transaction_count: reportCurrentWindowTransactions.length,
+            transaction_count: reportDisplayTransactions.length,
             import_count:
               Number(doneImportCount ?? 0) +
               Number(processingImportCount ?? 0) +
@@ -1430,16 +1357,22 @@ async function ReportsStream({
               </article>
             </section>
 
+            {reportFallbackNotice ? (
+              <div className="reports-data-note glass">
+                <strong>{reportFallbackNotice}</strong>
+              </div>
+            ) : null}
+
             <section className="reports-grid reports-grid--primary reports-overview-visual">
               <article className="report-card glass report-card--wide">
                 <div className="report-card__head">
                   <div className="report-card__head-title">
                     <h4>Money over time</h4>
-                    <ReportInfoTip label={`A ${rangeWindowText} view of how the balance moved.`} />
+                    <ReportInfoTip label={`A ${reportCurrentWindowTransactions.length > 0 ? rangeWindowText : "latest available activity"} view of how the balance moved.`} />
                   </div>
                   <div className="report-card__stat">
                     <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
-                    <span>{selectedRangeLabel}</span>
+                    <span>{reportCurrentWindowTransactions.length > 0 ? selectedRangeLabel : "Latest available"}</span>
                   </div>
                 </div>
 
@@ -1508,14 +1441,14 @@ async function ReportsStream({
                         role="img"
                         aria-label="Cash flow Sankey diagram"
                       >
-                        <defs>
-                          <linearGradient id="reportSankeySource" x1="0" x2="1" y1="0" y2="0">
-                            <stop offset="0%" stopColor="rgba(3, 168, 192, 0.72)" />
-                            <stop offset="100%" stopColor="rgba(3, 168, 192, 0.42)" />
-                          </linearGradient>
-                        </defs>
-
-                        <rect x="70" y="20" width={sankeyNodeWidth} height={Math.max(sankeySourceOffset - sankeyNodeGap, sankeyStreamHeight)} rx="12" fill="url(#reportSankeySource)" />
+                        <rect
+                          x="70"
+                          y="20"
+                          width={sankeyNodeWidth}
+                          height={Math.max(sankeySourceOffset - sankeyNodeGap, sankeyStreamHeight)}
+                          rx="12"
+                          fill="rgba(3, 168, 192, 0.52)"
+                        />
 
                         {sankeyLayouts.map((flow) => (
                           <path
@@ -1549,7 +1482,7 @@ async function ReportsStream({
                           {formatCurrency(currentSummary.income)}
                         </text>
                         <text x={58} y={98} className="report-sankey__source-meta">
-                          {selectedRangeLabel.toLowerCase()} view
+                          {reportCurrentWindowTransactions.length > 0 ? selectedRangeLabel.toLowerCase() : "latest available activity"}
                         </text>
 
                         {sankeyLayouts.map((flow) => (
@@ -1590,45 +1523,47 @@ async function ReportsStream({
                 )}
               </article>
 
-              <article className="report-ai-card report-ai-card--compact glass">
-                <div className="report-card__head report-card__head--compact">
-                  <div>
-                    <h4>Main drivers</h4>
-                  </div>
-                  <ReportInfoTip label="The biggest reasons behind the shift." />
-                </div>
-                <div className="report-ai-signal-grid report-ai-signal-grid--compact">
-                  {aiSignals.slice(0, 3).map((signal) => (
-                    <div key={signal.label} className={`report-ai-signal report-ai-signal--${signal.tone}`}>
-                      <span>{signal.label}</span>
-                      <strong>{signal.value}</strong>
-                      <small>{signal.detail}</small>
+              <div className="reports-brief-grid__split">
+                <article className="report-ai-card report-ai-card--compact glass">
+                  <div className="report-card__head report-card__head--compact">
+                    <div>
+                      <h4>Main drivers</h4>
                     </div>
-                  ))}
-                </div>
-              </article>
-
-              <article className="report-ai-card report-ai-card--compact glass">
-                <div className="report-card__head report-card__head--compact">
-                  <div>
-                    <h4>Next step</h4>
+                    <ReportInfoTip label="The biggest reasons behind the shift." />
                   </div>
-                  <ReportInfoTip label="One easy action to take right now." />
-                </div>
-                <div className="report-list">
-                  {aiActions.map((action) => (
-                    <div key={action.title} className="report-list__item report-list__item--compact">
-                      <div className="report-list__meta">
-                        <strong>{action.title}</strong>
-                        <span>{action.body}</span>
+                  <div className="report-ai-signal-grid report-ai-signal-grid--compact">
+                    {aiSignals.slice(0, 3).map((signal) => (
+                      <div key={signal.label} className={`report-ai-signal report-ai-signal--${signal.tone}`}>
+                        <span>{signal.label}</span>
+                        <strong>{signal.value}</strong>
+                        <small>{signal.detail}</small>
                       </div>
-                      <Link className="pill-link pill-link--inline" href={action.href}>
-                        {action.label}
-                      </Link>
+                    ))}
+                  </div>
+                </article>
+
+                <article className="report-ai-card report-ai-card--compact glass">
+                  <div className="report-card__head report-card__head--compact">
+                    <div>
+                      <h4>Next step</h4>
                     </div>
-                  ))}
-                </div>
-              </article>
+                    <ReportInfoTip label="One easy action to take right now." />
+                  </div>
+                  <div className="report-list">
+                    {aiActions.map((action) => (
+                      <div key={action.title} className="report-list__item report-list__item--compact">
+                        <div className="report-list__meta">
+                          <strong>{action.title}</strong>
+                          <span>{action.body}</span>
+                        </div>
+                        <Link className="pill-link pill-link--inline" href={action.href}>
+                          {action.label}
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </div>
             </section>
 
             <article className="reports-next glass">

@@ -272,7 +272,7 @@ const navItems = [
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/recurring", label: "Recurring", key: "recurring" as const },
   { href: "/adviser", label: "Adviser", key: "adviser" as const },
-  { href: "/more", label: "More", key: "more" as const },
+  { href: "/more", label: "Tools", key: "more" as const },
 ];
 
 const shouldPrefetchNavHref = (href: string) => href !== "/split-bill";
@@ -1439,10 +1439,11 @@ export function CloverShell({
                       <MenuIcon name={item.key} />
                     </span>
                     {item.label}
+                    <span className="nav-link__badge pill pill-accent">Pro</span>
                   </button>
 
                   {isMoreMenuOpen ? (
-                    <div className="sidebar-nav__submenu" role="menu" aria-label="More products">
+                    <div className="sidebar-nav__submenu" role="menu" aria-label="Tools products">
                       <button
                         className={`sidebar-nav__submenu-link${active === "split-bill" || pathname?.startsWith("/split-bill") ? " is-active" : ""}`}
                         type="button"
@@ -1844,7 +1845,7 @@ export function CloverShell({
           <span className="shell-bottom-nav__icon" aria-hidden="true">
             <MenuIcon name="more" />
           </span>
-          <span className="shell-bottom-nav__label">More</span>
+          <span className="shell-bottom-nav__label">Tools</span>
         </Link>
       </nav>
 
