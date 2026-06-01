@@ -2612,6 +2612,16 @@ const resolveConfirmationAccount = async (params: {
       accountNumber: inferredAccountNumber,
       type: accountIdentityType,
     });
+  const accountNumberDigits = (value: string | null | undefined) => String(value ?? "").replace(/\D/g, "");
+  const legacyMayaCreditAccount =
+    inferredAccountType === "credit_card" && inferredInstitution && inferredAccountNumber
+      ? workspaceAccounts
+          .filter((account) => account.source === "upload")
+          .filter((account) => account.type === "line_of_credit")
+          .filter((account) => /maya/i.test(`${account.institution ?? ""} ${account.name ?? ""}`))
+          .filter((account) => accountNumberDigits(account.accountNumber) === accountNumberDigits(inferredAccountNumber))
+          .sort(sortImportedAccountsByFreshness)[0] ?? null
+      : null;
 
   const providedAccountId = typeof params.accountId === "string" && params.accountId.trim() ? params.accountId.trim() : null;
   const isOptimisticId = providedAccountId ? providedAccountId.startsWith("optimistic-") : false;
@@ -2657,6 +2667,21 @@ const resolveConfirmationAccount = async (params: {
     workspaceAccounts
       .filter(accountMatchesImportIdentity)
       .sort(sortImportedAccountsByFreshness)[0] ?? null;
+  if (!existingByKey && legacyMayaCreditAccount) {
+    const updatedAccount = await updateAccountIdentity(legacyMayaCreditAccount, {
+      name: inferredAccountName,
+      institution: inferredInstitution,
+      accountNumber: inferredAccountNumber,
+      type: "credit_card",
+      currency: inferredCurrency,
+      balance: inferredBalance,
+      creditLimit: inferredCreditLimit,
+    });
+
+    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
+  }
+
   if (existingByKey) {
     const updatedAccount = await updateAccountIdentity(existingByKey, {
       name: inferredAccountName,

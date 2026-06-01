@@ -671,7 +671,13 @@ const parseNullableDateInput = (value: string) => {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
-const getEffectiveAccountType = (account: Account) => account.type;
+const getEffectiveAccountType = (account: Account) => {
+  if (account.type === "line_of_credit" && /maya/i.test(`${account.institution ?? ""} ${account.name ?? ""}`)) {
+    return "credit_card";
+  }
+
+  return account.type;
+};
 
 const getAccountDisplayType = (account: Account) => {
   const effectiveType = getEffectiveAccountType(account);
