@@ -11,6 +11,7 @@ import { ACCOUNT_TYPES } from "@/lib/account-types";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { deleteAccountsAndImportArtifacts } from "@/lib/account-deletion";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
+import { normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
@@ -83,6 +84,21 @@ const normalizeAccountCurrency = (account: {
   normalizeInstitutionCurrency(account.institution ?? null, account.currency ?? null, account.name ?? null) ??
   account.currency ??
   "PHP";
+
+const normalizeUploadBankName = (value?: string | null) => {
+  const normalized = normalizeBankName(value ?? null);
+  return normalized !== "Unknown" ? normalized : null;
+};
+
+const resolveUploadedAccountInstitution = (
+  currentInstitution?: string | null,
+  checkpointBankHint?: string | null,
+  checkpointInstitution?: string | null
+) =>
+  normalizeUploadBankName(currentInstitution) ??
+  normalizeUploadBankName(checkpointBankHint) ??
+  normalizeUploadBankName(checkpointInstitution) ??
+  null;
 
 const accountPatchSchema = z.object({
   workspaceId: z.string().min(1),
@@ -294,12 +310,23 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
       typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).institution === "string"
         ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).institution).trim()
         : null;
+    const latestCheckpointBankHint =
+      latestCheckpoint?.sourceMetadata &&
+      typeof latestCheckpoint.sourceMetadata === "object" &&
+      !Array.isArray(latestCheckpoint.sourceMetadata) &&
+      typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).uploadBankHint === "string"
+        ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).uploadBankHint).trim()
+        : null;
     const latestCheckpointBalance =
       latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
         ? latestCheckpoint.endingBalance.toString()
         : null;
     const effectiveAccountNumber = account.accountNumber ?? latestCheckpointAccountNumber ?? null;
-    const effectiveInstitution = account.institution ?? latestCheckpointInstitution ?? null;
+    const effectiveInstitution =
+      resolveUploadedAccountInstitution(account.institution, latestCheckpointBankHint, latestCheckpointInstitution) ??
+      account.institution ??
+      latestCheckpointInstitution ??
+      null;
     const effectiveAccountName =
       account.source === "upload"
         ? formatUploadAccountDisplayName(

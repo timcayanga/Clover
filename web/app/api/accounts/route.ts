@@ -14,6 +14,7 @@ import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib
 import { isSupportedAccountType } from "@/lib/account-types";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
+import { normalizeBankName } from "@/lib/data-qa-banks";
 
 export const dynamic = "force-dynamic";
 
@@ -164,6 +165,11 @@ const normalizeInvestmentSubtype = (value: unknown): InvestmentSubtype | null =>
 
 const normalizeImportInstitution = (value?: string | null) => String(value ?? "").replace(/\s+/g, " ").trim();
 
+const normalizeUploadBankName = (value?: string | null) => {
+  const normalized = normalizeBankName(value ?? null);
+  return normalized !== "Unknown" ? normalized : null;
+};
+
 const normalizeImportAccountNumber = (value?: string | null) => {
   const digits = String(value ?? "").replace(/\D/g, "");
   return digits.length >= 4 ? digits : null;
@@ -188,6 +194,16 @@ const importedAccountInstitutionKey = (account: {
   const name = normalizeImportIdentityText(account.name);
   return name || null;
 };
+
+const resolveUploadedAccountInstitution = (
+  currentInstitution?: string | null,
+  checkpointBankHint?: string | null,
+  checkpointInstitution?: string | null
+) =>
+  normalizeUploadBankName(currentInstitution) ??
+  normalizeUploadBankName(checkpointBankHint) ??
+  normalizeUploadBankName(checkpointInstitution) ??
+  null;
 
 const importedAccountIdentityKey = (institution?: string | null, accountNumber?: string | null) => {
   const normalizedAccountNumber = normalizeImportAccountNumber(accountNumber);
@@ -367,19 +383,20 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
     const accountType = "bank" as const;
     const groupIdentityKey = importedAccountIdentityKey(group.institution, group.accountNumber);
     let account = groupIdentityKey ? accountByNumber.get(groupIdentityKey) ?? null : null;
+    const resolvedInstitution = resolveUploadedAccountInstitution(account?.institution ?? null, null, group.institution);
     const accountName = formatUploadAccountDisplayName(
       group.accountName ?? group.institution ?? "Imported account",
-      group.institution,
+      resolvedInstitution ?? group.institution,
       group.accountNumber,
       accountType
     );
-    const currency = normalizeInstitutionCurrency(group.institution, group.currency, accountName) ?? group.currency ?? "PHP";
+    const currency = normalizeInstitutionCurrency(resolvedInstitution ?? group.institution, group.currency, accountName) ?? group.currency ?? "PHP";
     if (!account) {
       account = await prisma.account.create({
         data: {
           workspaceId,
           name: accountName,
-          institution: group.institution,
+          institution: resolvedInstitution ?? group.institution,
           accountNumber: group.accountNumber,
           type: accountType,
           currency,
@@ -406,7 +423,7 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
         where: { id: account.id },
         data: {
           name: account.name || accountName,
-          institution: account.institution ?? group.institution,
+          institution: resolveUploadedAccountInstitution(account.institution, null, group.institution) ?? account.institution ?? group.institution,
           currency: account.currency ?? currency,
           ...(group.balance !== null ? { balance: group.balance } : {}),
         },
@@ -840,6 +857,13 @@ export async function GET(request: Request) {
         typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).accountName === "string"
           ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountName).trim()
           : null;
+      const checkpointBankHint =
+        latestCheckpoint?.sourceMetadata &&
+        typeof latestCheckpoint.sourceMetadata === "object" &&
+        !Array.isArray(latestCheckpoint.sourceMetadata) &&
+        typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).uploadBankHint === "string"
+          ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).uploadBankHint).trim()
+          : null;
       const checkpointInstitution =
         latestCheckpoint?.sourceMetadata &&
         typeof latestCheckpoint.sourceMetadata === "object" &&
@@ -859,7 +883,11 @@ export async function GET(request: Request) {
           ? latestCheckpoint.endingBalance.toString()
           : null;
       const effectiveAccountNumber = account.accountNumber ?? checkpointAccountNumber ?? null;
-      const effectiveInstitution = account.institution ?? checkpointInstitution ?? null;
+      const effectiveInstitution =
+        resolveUploadedAccountInstitution(account.institution, checkpointBankHint, checkpointInstitution) ??
+        account.institution ??
+        checkpointInstitution ??
+        null;
       const effectiveAccountName =
         account.source === "upload"
           ? formatUploadAccountDisplayName(
