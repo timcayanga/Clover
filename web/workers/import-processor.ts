@@ -2201,10 +2201,12 @@ const collapseDuplicateUploadedAccountsForAccount = async <
     return account;
   }
 
-  const duplicates = await prisma.account.findMany({
+  const canonicalInstitutionKey = (value: string | null | undefined) =>
+    normalizeImportedAccountKey(value, value, null, null)
+      .replace(/\bphilippine\s+national\s+bank\b/g, "pnb");
+  const duplicateCandidates = await prisma.account.findMany({
     where: {
       workspaceId,
-      institution,
       accountNumber,
       type: account.type,
       source: "upload",
@@ -2224,6 +2226,9 @@ const collapseDuplicateUploadedAccountsForAccount = async <
       updatedAt: true,
     },
   });
+  const duplicates = duplicateCandidates.filter(
+    (candidate) => canonicalInstitutionKey(candidate.institution) === canonicalInstitutionKey(institution)
+  );
 
   if (duplicates.length <= 1) {
     return account;

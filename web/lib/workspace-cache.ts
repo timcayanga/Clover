@@ -223,7 +223,8 @@ const looksLikeImportedFileLabel = (value?: string | null) => {
 const canonicalImportedInstitutionKey = (value?: string | null) =>
   normalizeImportedAccountInstitutionKey(value)
     .replace(/\bchina\s+bank\b/g, "chinabank")
-    .replace(/\bmetro\s+bank\b/g, "metrobank");
+    .replace(/\bmetro\s+bank\b/g, "metrobank")
+    .replace(/\bphilippine\s+national\s+bank\b/g, "pnb");
 
 const hasImportedAccountNumber = (value?: unknown) => Boolean(extractLastFourDigits(typeof value === "string" ? value : null));
 
