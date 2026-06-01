@@ -9,7 +9,7 @@ import { capturePostHogServerEvent } from "@/lib/analytics";
 import { countWorkspaceOwnerTransactions } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
-import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
+import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName, getLandbankTransactionDisplayOverride } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
@@ -550,8 +550,15 @@ const mapTransactionRow = (transaction: {
     ) ?? transaction.currency;
   const importedFromStatement = Boolean(transaction.importFileId) || isImportedTransactionPayload(transaction.rawPayload);
   const source = importedFromStatement ? "upload" : "manual";
+  const landbankOverride = getLandbankTransactionDisplayOverride({
+    institution: transaction.account.institution,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    description: transaction.description,
+    rawPayload: transaction.rawPayload,
+  });
   const categoryName = getEffectiveTransactionCategoryName({
-    categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+    categoryName: landbankOverride?.categoryName ?? transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
     rawPayload: transaction.rawPayload,
     merchantRaw: transaction.merchantRaw,
     merchantClean: transaction.merchantClean,
@@ -568,7 +575,12 @@ const mapTransactionRow = (transaction: {
     },
     workspaceAccounts
   );
-  const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount, effectiveIsTransfer);
+  const effectiveType = coerceTransactionTypeFromCategoryName(
+    categoryName,
+    landbankOverride?.type ?? transaction.type,
+    transaction.amount,
+    effectiveIsTransfer
+  );
 
   return {
     id: transaction.id,

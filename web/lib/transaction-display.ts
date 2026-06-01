@@ -250,6 +250,38 @@ export const getEffectiveTransactionMerchantName = (params: {
   return summarized || params.merchantRaw;
 };
 
+export const getLandbankTransactionDisplayOverride = (params: {
+  institution?: string | null;
+  merchantRaw: string;
+  merchantClean?: string | null;
+  description?: string | null;
+  rawPayload?: Prisma.JsonValue | null;
+}) => {
+  if (!/\blandbank\b/i.test(String(params.institution ?? ""))) {
+    return null;
+  }
+
+  const merchantText = [
+    params.merchantClean?.trim() || "",
+    params.merchantRaw?.trim() || "",
+    params.description?.trim() || "",
+    getRawPayloadMerchantText(params.rawPayload) ?? "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (/cash\s+out\s*-\s*order|atm\s+withdrawal|\bcash\s+out\b|\bwithdrawal\b/.test(merchantText)) {
+    return { categoryName: "Cash & ATM", type: "expense" as const };
+  }
+
+  if (/cash\s+deposit/.test(merchantText)) {
+    return { categoryName: "Cash & ATM", type: "income" as const };
+  }
+
+  return null;
+};
+
 export const getEffectiveTransactionCategoryName = (params: {
   categoryName?: string | null;
   rawPayload?: Prisma.JsonValue | null;

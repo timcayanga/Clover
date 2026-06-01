@@ -4,7 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { buildTransactionQueryWhere } from "@/lib/transaction-query";
-import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
+import {
+  getEffectiveTransactionCategoryName,
+  getEffectiveTransactionMerchantName,
+  getLandbankTransactionDisplayOverride,
+} from "@/lib/transaction-display";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
@@ -190,8 +194,15 @@ const mapTransactionRow = (transaction: {
     ) ?? transaction.currency;
   const importedFromStatement = Boolean(transaction.importFileId) || isImportedTransactionPayload(transaction.rawPayload);
   const source = importedFromStatement ? "upload" : "manual";
+  const landbankOverride = getLandbankTransactionDisplayOverride({
+    institution: transaction.institution ?? null,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    description: transaction.description,
+    rawPayload: transaction.rawPayload,
+  });
   const categoryName = getEffectiveTransactionCategoryName({
-    categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+    categoryName: landbankOverride?.categoryName ?? transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
     rawPayload: transaction.rawPayload,
     merchantRaw: transaction.merchantRaw,
     merchantClean: transaction.merchantClean,
@@ -210,7 +221,11 @@ const mapTransactionRow = (transaction: {
     categoryId: transaction.category?.id ?? null,
     amount: transaction.amount.toString(),
     currency: normalizedCurrency,
-    type: coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount),
+    type: coerceTransactionTypeFromCategoryName(
+      categoryName,
+      landbankOverride?.type ?? transaction.type,
+      transaction.amount
+    ),
     date: transaction.date.toISOString(),
     merchantRaw: transaction.merchantRaw,
     merchantClean: getEffectiveTransactionMerchantName({
