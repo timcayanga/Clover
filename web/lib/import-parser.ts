@@ -2758,7 +2758,7 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
   const transactionStartIndex = detailIndex >= 0 ? detailIndex + 1 : 0;
   const transactionLines = lines.slice(transactionStartIndex);
   const rows: ParsedImportRow[] = [];
-  let pendingDescription: string | null = null;
+  let pendingDescriptionParts: string[] = [];
 
   const isTransactionHeaderLine = (line: string) =>
     /^DATE\s+TRANSACTION/i.test(line) ||
@@ -2798,13 +2798,13 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
     const line = transactionLines[index];
 
     if (!line || isTransactionHeaderLine(line)) {
-      pendingDescription = null;
+      pendingDescriptionParts = [];
       continue;
     }
 
     if (!isMariBankDateAmountLine(line)) {
-      if (!isLikelyMariBankPersonName(line) && !/^transfer$/i.test(line)) {
-        pendingDescription = line;
+      if (line.trim()) {
+        pendingDescriptionParts.push(line.trim());
       }
       continue;
     }
@@ -2821,9 +2821,9 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
     }
 
     const detailLabel = nextMeaningfulLine(index + 1);
-    const descriptionCandidate = pendingDescription && !isMariBankDateAmountLine(pendingDescription) ? pendingDescription : null;
+    const descriptionCandidate = pendingDescriptionParts.length > 0 ? pendingDescriptionParts.join(" • ") : null;
     const transactionName =
-      descriptionCandidate && !isLikelyMariBankPersonName(descriptionCandidate)
+      descriptionCandidate && !/^transfer$/i.test(descriptionCandidate)
         ? descriptionCandidate
         : detailLabel && !/^\d{1,2}\s+[A-Z]{3}\s+/i.test(detailLabel)
           ? detailLabel
@@ -2838,15 +2838,15 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
       /bill\s*-\s*internet|load\s*-\s*regular|mobile\s+load|globe\s+regular\s+load|tnt\s+regular\s+load/.test(detailLabelLower) ||
       /transfer fee|tax withheld|adjustment reversal|reward/.test(detailLabelLower);
     if (!keepRow) {
-      pendingDescription = null;
+      pendingDescriptionParts = [];
       continue;
     }
 
-  const notesLabel = [descriptionCandidate, detailLabel, transactionName]
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    .map((value) => value.trim())
-    .filter((value, index, values) => values.indexOf(value) === index)
-    .join(" • ");
+    const notesLabel = [descriptionCandidate, detailLabel, transactionName]
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      .map((value) => value.trim())
+      .filter((value, index, values) => values.indexOf(value) === index)
+      .join(" • ");
 
     rows.push({
       date: date.toISOString().slice(0, 10),
@@ -2868,6 +2868,7 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
         detailLine: detailLabel,
         note: notesLabel,
         notes: notesLabel,
+        fullDetails: notesLabel || null,
         parsedDetails: notesLabel || null,
         transactionDetails: detailLabel ?? null,
         trailingDetails: descriptionCandidate ?? null,
@@ -2876,7 +2877,7 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
       },
     } satisfies ParsedImportRow);
 
-    pendingDescription = null;
+    pendingDescriptionParts = [];
   }
 
   if (rows.length === 0) {

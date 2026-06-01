@@ -49,6 +49,7 @@ This document captures the MariBank parsing rules learned from the synthetic tra
 
 - Keep transaction notes human-readable and concise.
 - Preserve the visible counterparty or merchant name in notes, especially for transfer, bill, and load rows.
+- If the statement splits the counterparty across multiple lines, keep the full combined name in notes before the detail label.
 - When the normalized name collapses to a generic `Transfer`, keep the richer parsed counterparty, detail line, or trailing note in the transaction notes instead of repeating `Transfer`.
 - If there is no useful note, leave notes empty instead of writing raw import payloads.
 
