@@ -4170,6 +4170,49 @@ export function ImportFilesModal({
         const errorMessage = error instanceof Error ? error.message : String(error ?? "");
         const transientFetchFailure = /failed to fetch|networkerror|load failed|abort/i.test(errorMessage);
         const latestItem = itemsRef.current.find((entry) => entry.id === itemId);
+        const latestImportedRows = Number(latestItem?.importedRows ?? 0);
+        if (latestItem?.status === "done" || latestItem?.confirmationState === "confirmed" || latestImportedRows > 0) {
+          return;
+        }
+
+        const recoveredStatus = await fetch(`/api/imports/${importFileId}/status`, { cache: "no-store" })
+          .then((response) => (response.ok ? response.json() : null))
+          .catch(() => null) as ImportStatusPayload | null;
+        const recoveredConfirmedRows = Number(recoveredStatus?.confirmedTransactionsCount ?? 0);
+        const recoveredParsedRows = Number(recoveredStatus?.parsedRowsCount ?? 0);
+        const recoveredVisible =
+          Boolean(recoveredStatus?.visibleImportComplete) ||
+          recoveredConfirmedRows > 0 ||
+          recoveredStatus?.importFile?.status === "done";
+        if (recoveredVisible) {
+          triggerImportEnrichment(importFileId);
+          emitItemUpdate({
+            status: "done",
+            confirmationState: "confirmed",
+            progress: 100,
+            progressLabel: "Done",
+            targetAccountId:
+              latestResolvedAccountId ??
+              (typeof recoveredStatus?.importFile?.accountId === "string" ? recoveredStatus.importFile.accountId : null) ??
+              accountId,
+            importedRows: recoveredConfirmedRows || recoveredParsedRows || latestImportedRows || null,
+          });
+          emitImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "done",
+            fileName: summaryContext.fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount + 1,
+            progress: 100,
+            detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
+            summary: null,
+            errorMessage: null,
+          });
+          return;
+        }
+
         if (transientFetchFailure && latestItem?.importFileId && Date.now() - startedAt < MAX_WAIT_MS) {
           emitItemUpdate({
             status: "importing",
