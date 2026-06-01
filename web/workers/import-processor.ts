@@ -161,10 +161,6 @@ const buildTransferCandidateText = (row: ImportInsightSourceRow) =>
   ].join(" ");
 
 const normalizeLandbankImportedRow = (row: ImportInsightSourceRow, institution?: string | null): ImportInsightSourceRow => {
-  if (!institution || !/(?:landbank|land\s+bank)/i.test(institution)) {
-    return row;
-  }
-
   const text = buildTransferCandidateText(row);
   if (/cash\s+out\s*-\s*order/i.test(text)) {
     return { ...row, categoryName: "Cash & ATM", type: "expense" };
