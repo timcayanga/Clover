@@ -2193,7 +2193,7 @@ function AccountsPageContent() {
         rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "credit_card"),
       },
       {
-        title: "Loans & credit",
+        title: "Liabilities",
         tone: "liability",
         itemLabel: "account",
         rows: visibleAccounts.filter((account) => {
