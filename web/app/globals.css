@@ -34164,51 +34164,6 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   display: none;
 }
 
-.split-bill-add-menu {
-  position: relative;
-}
-
-.split-bill-add-menu > summary {
-  list-style: none;
-  cursor: pointer;
-}
-
-.split-bill-add-menu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.split-bill-add-menu__panel {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  min-width: 200px;
-  display: grid;
-  gap: 6px;
-  padding: 10px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
-  z-index: 20;
-}
-
-.split-bill-add-menu__item {
-  display: block;
-  padding: 10px 12px;
-  border-radius: 12px;
-  color: var(--text-primary);
-  font-size: 0.94rem;
-  background: transparent;
-  border: 0;
-  width: 100%;
-  text-align: left;
-  font: inherit;
-}
-
-.split-bill-add-menu__item:hover {
-  background: rgba(3, 168, 192, 0.08);
-}
-
 .split-bill-hero__stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -34263,14 +34218,6 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   align-items: flex-start;
 }
 
-.split-bill-panel__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-left: auto;
-}
-
 .split-bill-panel__head h2,
 .split-bill-panel__head h3 {
   margin: 0;
@@ -34284,24 +34231,9 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 
 .split-bill-pulse {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 1.45fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 16px;
-}
-
-.split-bill-pulse__copy {
-  display: grid;
-  gap: 5px;
-}
-
-.split-bill-pulse__copy h2 {
-  margin: 0;
-  font-size: clamp(1.3rem, 2vw, 1.9rem);
-}
-
-.split-bill-pulse__copy span {
-  color: var(--text-secondary);
-  font-size: 0.92rem;
+  gap: 12px;
 }
 
 .split-bill-pulse__metrics {
@@ -36229,11 +36161,6 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .split-bill-detail-modal__summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .split-bill-add-menu__panel {
-    left: 0;
-    right: auto;
   }
 
   .split-bill-manual-modal__head,

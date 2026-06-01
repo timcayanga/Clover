@@ -86,7 +86,6 @@ function SplitBillPeoplePicker({
 }
 
 export function SplitBillPageActions({ currentUserName, people, groups, onBillSaved, onGroupSaved, onPersonSaved }: SplitBillPageActionsProps) {
-  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [openAddMode, setOpenAddMode] = useState<"manual" | "import" | null>(null);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isPersonModalOpen, setIsPersonModalOpen] = useState(false);
@@ -98,12 +97,10 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
 
   const closeAddModal = () => {
     setOpenAddMode(null);
-    setIsAddMenuOpen(false);
   };
 
   const closeGroupModal = () => {
     setIsGroupModalOpen(false);
-    setIsAddMenuOpen(false);
     setGroupName("");
     setGroupPeople([]);
     setGroupError(null);
@@ -111,13 +108,9 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
 
   const closePersonModal = () => {
     setIsPersonModalOpen(false);
-    setIsAddMenuOpen(false);
   };
 
   useLayoutEffect(() => {
-    if (openAddMode || isGroupModalOpen || isPersonModalOpen) {
-      setIsAddMenuOpen(false);
-    }
     document.body.dataset.splitBillModalOpen = isModalOpen ? "true" : "false";
     return () => {
       if (document.body.dataset.splitBillModalOpen === "true") {
@@ -183,35 +176,12 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
     <>
       {!isModalOpen ? (
         <div className="split-bill-page-actions">
-          <div className="split-bill-add-menu">
-            <button className="button button-primary button-small" type="button" onClick={() => setIsAddMenuOpen((current) => !current)}>
-              Add Bill
-            </button>
-            {isAddMenuOpen ? (
-              <div className="split-bill-add-menu__panel">
-                <button
-                  className="split-bill-add-menu__item"
-                  type="button"
-                  onClick={() => {
-                    setIsAddMenuOpen(false);
-                    setOpenAddMode("manual");
-                  }}
-                >
-                  Add Expense
-                </button>
-                <button
-                  className="split-bill-add-menu__item"
-                  type="button"
-                  onClick={() => {
-                    setIsAddMenuOpen(false);
-                    setOpenAddMode("import");
-                  }}
-                >
-                  Upload Receipts
-                </button>
-              </div>
-            ) : null}
-          </div>
+          <button className="button button-primary button-small" type="button" onClick={() => setOpenAddMode("manual")}>
+            Add Bill
+          </button>
+          <button className="button button-secondary button-small" type="button" onClick={() => setOpenAddMode("import")}>
+            Upload Receipt
+          </button>
         </div>
       ) : null}
 

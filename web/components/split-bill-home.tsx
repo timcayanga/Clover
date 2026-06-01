@@ -58,10 +58,6 @@ const addCurrencyTotal = (totals: Map<string, number>, currency: string, amount:
   totals.set(currency, (totals.get(currency) ?? 0) + amount);
 };
 
-const openSplitBillAdd = (mode: "manual" | "import") => {
-  window.dispatchEvent(new CustomEvent("clover:open-split-bill-add", { detail: { mode } }));
-};
-
 export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBill, onOpenGroup, onOpenPerson }: SplitBillHomeProps) {
   const [showAllBills, setShowAllBills] = useState(false);
   const [billSearch, setBillSearch] = useState("");
@@ -167,17 +163,6 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
   return (
     <div className="split-bill-home">
       <section className="split-bill-pulse panel glass" aria-label="Split Bills balance summary">
-        <div className="split-bill-pulse__copy">
-          <p className="eyebrow">Balance pulse</p>
-          <h2>{balancePulse.openCount > 0 ? `${balancePulse.openCount} bill${balancePulse.openCount === 1 ? "" : "s"} still open` : "Everything is settled"}</h2>
-          <span>
-            {balancePulse.nextTransfer
-              ? balancePulse.nextTransfer.fromParticipantName === currentUserName
-                ? `Next: you pay ${balancePulse.nextTransfer.toParticipantName} for ${balancePulse.nextTransfer.billTitle}.`
-                : `Next: ${balancePulse.nextTransfer.fromParticipantName} pays you for ${balancePulse.nextTransfer.billTitle}.`
-              : "No open transfers for your profile right now."}
-          </span>
-        </div>
         <div className="split-bill-pulse__metrics">
           <article>
             <span>You owe</span>
@@ -192,11 +177,6 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
             <strong>{balancePulse.settledCount}/{bills.length}</strong>
           </article>
         </div>
-        {balancePulse.nextTransfer ? (
-          <button className="button button-primary button-small" type="button" onClick={() => onOpenBill(balancePulse.nextTransfer.billId)}>
-            Review next transfer
-          </button>
-        ) : null}
       </section>
 
       <section className="split-bill-panel panel glass">
@@ -204,16 +184,6 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
           <div>
             <h2>Bills</h2>
           </div>
-          {bills.length === 0 ? (
-            <div className="split-bill-panel__actions">
-              <button className="button button-primary button-small" type="button" onClick={() => openSplitBillAdd("manual")}>
-                Add expense
-              </button>
-              <button className="button button-secondary button-small" type="button" onClick={() => openSplitBillAdd("import")}>
-                Upload receipt
-              </button>
-            </div>
-          ) : null}
         </div>
         <div className="split-bill-filter-bar">
           <input
