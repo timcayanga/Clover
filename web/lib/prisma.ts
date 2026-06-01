@@ -8,7 +8,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 const resolveDatabaseUrl = () => {
-  const configuredUrl = process.env.DATABASE_URL;
+  const configuredUrl = process.env.DATABASE_URL?.trim() || process.env.DIRECT_URL?.trim();
 
   if (!configuredUrl) {
     return "postgresql://user:pass@localhost:5432/finance_manager";

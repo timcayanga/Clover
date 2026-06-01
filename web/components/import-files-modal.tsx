@@ -1413,11 +1413,17 @@ const IMPORT_PROGRESS = {
 const MAX_IMPORT_FILES_PER_BATCH = 25;
 const IMPORT_VISIBILITY_BASE_TIMEOUT_MS = 30_000;
 const IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 15_000;
+const IMPORT_VISIBILITY_NOISY_BANK_TIMEOUT_MS = 5 * 60_000;
 const IMPORT_BACKGROUND_HARD_STOP_MS = 10 * 60_000;
 
 const getImportVisibilityTimeoutMs = (fileCount: number) =>
   IMPORT_VISIBILITY_BASE_TIMEOUT_MS +
   Math.max(0, fileCount - 1) * IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS;
+
+const isNoisyVisibilityBank = (fileName: string) => {
+  const bank = normalizeBankName(fileName);
+  return ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bank);
+};
 
 const hasVisibleImportData = (
   item: QueuedFile,
@@ -6517,7 +6523,11 @@ export function ImportFilesModal({
     setBusy(true);
     setValidationNotice(null);
     setMessage("Clover is lining up your files...");
-    const visibilityTimeoutMs = getImportVisibilityTimeoutMs(Math.max(1, items.length));
+    const hasNoisyVisibilityBank = items.some((item) => isNoisyVisibilityBank(item.file.name));
+    const visibilityTimeoutMs = Math.max(
+      getImportVisibilityTimeoutMs(Math.max(1, items.length)),
+      hasNoisyVisibilityBank ? IMPORT_VISIBILITY_NOISY_BANK_TIMEOUT_MS : 0
+    );
     visibilityDeadlineRef.current = Date.now() + visibilityTimeoutMs;
     if (visibilityHardStopTimerRef.current) {
       window.clearTimeout(visibilityHardStopTimerRef.current);

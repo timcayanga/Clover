@@ -421,6 +421,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const formTrainingMode =
         formData.get("trainingMode") === "generic_parser" ? "generic_parser" : formData.get("trainingMode") === "bank_context" ? "bank_context" : undefined;
       const bankHint = normalizeBankName(formBankName || formFileName || file.name || "");
+      const effectiveBankName = formBankName || (bankHint !== "Unknown" ? bankHint : "");
       const shouldAvoidPdfPreflight =
         isPdfUpload(file.name || formFileName || "imported-file", file.type || formFileType || "") &&
         ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bankHint);
@@ -555,7 +556,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const uploadBankHintPromise = upsertUploadBankHint({
         importFileId: importId,
         workspaceId: String(importFile.workspaceId),
-        bankName: formBankName || null,
+        bankName: effectiveBankName || null,
         importMode,
         trainingMode: formTrainingMode,
       });
@@ -586,9 +587,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           allowDuplicateStatement,
           importMode,
           pdfJsBaseUrl,
-          statementMetadataOverride: formBankName
+          statementMetadataOverride: effectiveBankName
             ? {
-                institution: formBankName,
+                institution: effectiveBankName,
               }
             : null,
         });
@@ -664,7 +665,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         if (!cachedDocTextInfo) {
           if (!localDev) {
             return processInline({
-              bankName: formBankName || null,
+              bankName: effectiveBankName || null,
               progressMessage:
                 importMode === "portfolio"
                   ? "Reading portfolio details..."
@@ -689,7 +690,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               actorUserId: userId,
               password,
               allowDuplicateStatement,
-              bankName: formBankName || undefined,
+              bankName: effectiveBankName || undefined,
               importMode,
               pdfJsBaseUrl,
             });
@@ -794,7 +795,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           return processInline({
             text: extractedText || undefined,
             textCacheInfo: preflightText,
-            bankName: formBankName || null,
+            bankName: effectiveBankName || null,
           });
         }
 
@@ -813,7 +814,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             actorUserId: userId,
             password,
             allowDuplicateStatement,
-            bankName: formBankName || undefined,
+            bankName: effectiveBankName || undefined,
             importMode,
             pdfJsBaseUrl,
           });
@@ -909,11 +910,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           qaSource: "import_processing",
           allowDuplicateStatement,
           importMode,
-          statementMetadataOverride: formBankName
+          statementMetadataOverride: effectiveBankName
             ? {
-                institution: formBankName,
-            }
-          : null,
+                institution: effectiveBankName,
+              }
+            : null,
         });
         const statusSnapshot = await loadImportStatusSnapshot(importId, {
           importFile: (await fetchImportFileCompat(importId)) ?? importFile,
@@ -962,7 +963,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return processInline({
           text: extractedText || undefined,
           textCacheInfo: preflightText,
-          bankName: formBankName || null,
+          bankName: effectiveBankName || null,
         });
       }
 
@@ -980,7 +981,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           actorUserId: userId,
           password,
           allowDuplicateStatement,
-          bankName: formBankName || undefined,
+          bankName: effectiveBankName || undefined,
           importMode: importMode ?? undefined,
           pdfJsBaseUrl,
         });
