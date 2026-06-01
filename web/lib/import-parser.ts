@@ -3449,27 +3449,31 @@ const parseLandbankTransactionBlock = (
   let transactionName = "Landbank Transaction";
   let categoryName = "Other";
   let type: TransactionType = closingBalance >= (previousBalance ?? closingBalance) ? "income" : "expense";
+  const isTransferLike =
+    /transfer\s*\(internet\s+banking\)/i.test(blockText) ||
+    /\bbank\s+transfer\b/i.test(blockText) ||
+    /account\s+replenis/i.test(blockText);
 
   if (/cash\s+out\s*-\s*order/i.test(blockText)) {
     transactionName = "Cash Out - Order";
     categoryName = "Cash & ATM";
     type = "expense";
-  } else if (/cash\s+out\b/i.test(blockText)) {
+  } else if (/atm\s+withdrawal/i.test(blockText)) {
+    transactionName = "ATM Withdrawal";
+    categoryName = "Cash & ATM";
+    type = "expense";
+  } else if (/cash\s+out\b/i.test(blockText) || /\bwithdrawal\b/i.test(blockText)) {
     transactionName = "Cash Out";
     categoryName = "Cash & ATM";
     type = "expense";
-  } else if (/transfer\s*\(internet\s+banking\)/i.test(blockText)) {
-    transactionName = "TRANSFER (Internet Banking)";
+  } else if (isTransferLike) {
+    transactionName = /\bbank\s+transfer\b/i.test(blockText) ? "Bank Transfer" : "TRANSFER (Internet Banking)";
     categoryName = "Transfers";
     type = "transfer";
   } else if (/cash\s+deposit/i.test(blockText)) {
     transactionName = "Cash Deposit";
-    categoryName = "Transfers";
-    type = "income";
-  } else if (/withdrawal/i.test(blockText)) {
-    transactionName = "Withdrawal";
     categoryName = "Cash & ATM";
-    type = "expense";
+    type = "income";
   } else if (/balance\s+forwarded/i.test(blockText)) {
     return null;
   } else if (closingBalance < (previousBalance ?? closingBalance)) {

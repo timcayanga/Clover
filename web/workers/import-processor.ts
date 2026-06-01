@@ -160,6 +160,31 @@ const buildTransferCandidateText = (row: ImportInsightSourceRow) =>
     stringifyTransferPayload(row.rawPayload),
   ].join(" ");
 
+const normalizeLandbankImportedRow = (row: ImportInsightSourceRow, institution?: string | null): ImportInsightSourceRow => {
+  if (!institution || !/landbank/i.test(institution)) {
+    return row;
+  }
+
+  const text = buildTransferCandidateText(row);
+  if (/cash\s+out\s*-\s*order/i.test(text)) {
+    return { ...row, categoryName: "Cash & ATM", type: "expense" };
+  }
+
+  if (/atm\s+withdrawal/i.test(text) || /\bcash\s+out\b/i.test(text) || /\bwithdrawal\b/i.test(text)) {
+    return { ...row, categoryName: "Cash & ATM", type: "expense" };
+  }
+
+  if (/cash\s+deposit/i.test(text)) {
+    return { ...row, categoryName: "Cash & ATM", type: "income" };
+  }
+
+  if (/transfer\s*\(internet\s+banking\)|\bbank\s+transfer\b|account\s+replenis/i.test(text)) {
+    return { ...row, categoryName: "Transfers", type: "transfer" };
+  }
+
+  return row;
+};
+
 const rowMentionsAnotherWorkspaceAccount = (
   row: ImportInsightSourceRow,
   workspaceAccounts: TransferAccountLookup[],
@@ -6434,7 +6459,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   }
   const currentDedupeCounts = new Map<string, number>();
 
-  for (const [index, row] of parsedRows.entries()) {
+  for (const [index, originalRow] of parsedRows.entries()) {
+    const row = normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
     const rowAccount = rowAccountFor(row as Record<string, unknown>);
     const rowResolvedAccountId = rowAccount.id;
     const rowType =
