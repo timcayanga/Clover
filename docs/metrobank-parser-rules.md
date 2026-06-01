@@ -27,6 +27,10 @@ This document captures the Metrobank parsing rules learned from the synthetic tr
 - Treat `Investment Sweep` as a special transfer-like mapping.
 - Keep `Cash Payment - Thank You - MB` and bill payments to other cards as transfer-like settlement rows.
 - Keep `WA CR` as `Incoming Transfer`, `WA DB` as `Outgoing Transfer`, `ET CR IBFT` as `Incoming Interbank Transfer`, `ET DB IBFT` as `Outgoing Interbank Transfer`, `ET WDL` as `ATM Withdrawal`, and Metrobank service-charge rows as `Financial`.
+- For savings and certificate statements, keep incoming transfer codes (`WA CR`, `ET CR IBFT`, credit received from other bank) as income type with `Transfers` category, but keep outgoing transfer/debit codes (`WA DB`, `ET DB IBFT`, debit send to other bank) as expense type with `Transfers` category unless Clover can match both sides to the user's own accounts.
+- Treat `ST DM GEN`, `MO DM`, `System Debit`, and `Miscellaneous Debit` as expense-side `Financial` rows, not transfer rows.
+- Treat `ET WDL` and withdrawal rows as expense-side `Cash & ATM`.
+- Deterministically parsed Metrobank code rows should carry high parser/category confidence so they do not show `Needs Category Review` unless the category truly cannot be resolved.
 
 ## Credit Card Rules
 

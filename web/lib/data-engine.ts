@@ -52,6 +52,10 @@ const isProtectedParserCategory = (params: {
     institution === "eastwestbank" &&
     category === "cash & atm" &&
     /\bcash\s+deposit\b/i.test(text)
+  ) || (
+    institution === "metrobank" &&
+    (category === "transfers" || category === "financial" || category === "cash & atm" || category === "income") &&
+    /\b(?:wa\s+(?:cr|db)|et\s+(?:cr|db)\s+ibft|et\s+wdl|st\s+(?:dm|cm)\s+gen|mo\s+dm|system\s+(?:debit|credit)|miscellaneous\s+debit|interest\s+earned|interbank\s+fund\s+transfer|debit\s+send\s+to\s+other\s+bank|credit\s+received\s+from)\b/i.test(text)
   );
 };
 

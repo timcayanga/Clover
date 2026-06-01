@@ -6458,15 +6458,7 @@ const parseMetrobankCertificateTransactionLine = (
     return null;
   }
 
-  const descriptionLower = description.toLowerCase();
-  let type: TransactionType = "expense";
-  if (/cr ibft|wa cr|cash deposit|deposit|received|credit/.test(descriptionLower)) {
-    type = "income";
-  } else if (/db ibft|wa db|wdl|withdrawal|st dm gen|mo dm/.test(descriptionLower)) {
-    type = "transfer";
-  } else if (/st cm gen/.test(descriptionLower)) {
-    type = "income";
-  }
+  const classification = classifyMetrobankSavingsTransaction(description);
 
   return {
     date: date.toISOString().slice(0, 10),
@@ -6474,10 +6466,13 @@ const parseMetrobankCertificateTransactionLine = (
     merchantRaw: humanizeMerchantText(description),
     merchantClean: summarizeMerchantText(description, state.institution ?? "Metrobank"),
     description,
-    categoryName: guessMetrobankSavingsCategoryName(description, type),
+    categoryName: classification.categoryName,
     accountName: state.accountName,
     institution: state.institution ?? undefined,
-    type,
+    type: classification.type,
+    confidence: 96,
+    parserConfidence: 96,
+    categoryConfidence: 94,
     rawPayload: {
       bank: "Metrobank",
       kind: "certificate_savings_transaction",
@@ -6493,13 +6488,63 @@ const parseMetrobankCertificateTransactionLine = (
 const guessMetrobankSavingsCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
   if (/svchg|fee|charge|tax/.test(lower)) return "Financial";
-  if (/system\s+credit|st\s+cm\s+gen|st\s+dm\s+gen|mo\s+dm/.test(lower)) return "Transfers";
+  if (/st\s+dm\s+gen|mo\s+dm|system\s+debit|miscellaneous\s+debit/.test(lower)) return "Financial";
+  if (/system\s+credit|st\s+cm\s+gen/.test(lower)) return "Income";
+  if (/interest\s+earned/.test(lower)) return "Income";
+  if (/wdl|withdrawal/.test(lower)) return "Cash & ATM";
   if (/bills?\s+payment|card payment|payment to metrobank credit card|payment to bdo credit card|payment to bankard\/rcbc/i.test(lower)) {
     return "Transfers";
   }
   if (/cr ibft|wa cr|cash deposit|deposit|received|credit/.test(lower)) return "Transfers";
   if (/db ibft|wa db|wdl|withdrawal|debit/.test(lower)) return "Transfers";
   return guessCategoryName(description, type);
+};
+
+const classifyMetrobankSavingsTransaction = (description: string): { type: TransactionType; categoryName: string } => {
+  const lower = description.toLowerCase();
+
+  if (/svchg|service\s+charge|fee|charge|tax\s+withheld/.test(lower)) {
+    return { type: "expense", categoryName: "Financial" };
+  }
+
+  if (/interest\s+earned/.test(lower)) {
+    return { type: "income", categoryName: "Income" };
+  }
+
+  if (/et\s+wdl|\bwdl\b|withdrawal/.test(lower)) {
+    return { type: "expense", categoryName: "Cash & ATM" };
+  }
+
+  if (/st\s+dm\s+gen|mo\s+dm|system\s+debit|miscellaneous\s+debit/.test(lower)) {
+    return { type: "expense", categoryName: "Financial" };
+  }
+
+  if (/st\s+cm\s+gen|system\s+credit/.test(lower)) {
+    return { type: "income", categoryName: "Income" };
+  }
+
+  if (/bills?\s+payment|card payment|payment to metrobank credit card|payment to bdo credit card|payment to bankard\/rcbc/i.test(lower)) {
+    return { type: "expense", categoryName: "Transfers" };
+  }
+
+  if (/db\s+ibft|wa\s+db|debit\s+send\s+to\s+other\s+bank|outgoing/.test(lower)) {
+    return { type: "expense", categoryName: "Transfers" };
+  }
+
+  if (/cr\s+ibft|wa\s+cr|credit\s+received\s+from|incoming|received/.test(lower)) {
+    return { type: "income", categoryName: "Transfers" };
+  }
+
+  if (/cash\/?check\s+deposit|cash\s+deposit|\bdeposit\b/.test(lower)) {
+    return { type: "income", categoryName: "Income" };
+  }
+
+  if (/interbank\s+fund\s+transfer|fund\s+transfer|transfer/.test(lower)) {
+    return { type: "expense", categoryName: "Transfers" };
+  }
+
+  const type: TransactionType = "expense";
+  return { type, categoryName: guessMetrobankSavingsCategoryName(description, type) };
 };
 
 const parseMetrobankSavingsTransactionLine = (
@@ -6523,17 +6568,7 @@ const parseMetrobankSavingsTransactionLine = (
     return null;
   }
 
-  const descriptionLower = description.toLowerCase();
-  let type: TransactionType = "expense";
-  if (/svchg|fee|charge|tax/.test(descriptionLower)) {
-    type = "expense";
-  } else if (/bills?\s+payment|card payment|payment to metrobank credit card|payment to bdo credit card|payment to bankard\/rcbc/i.test(descriptionLower)) {
-    type = "transfer";
-  } else if (/cr ibft|wa cr|cash deposit|deposit|received|credit/.test(descriptionLower)) {
-    type = "income";
-  } else if (/db ibft|wa db|wdl|withdrawal|debit/.test(descriptionLower)) {
-    type = "transfer";
-  }
+  const classification = classifyMetrobankSavingsTransaction(description);
 
   return {
     date: date.toISOString().slice(0, 10),
@@ -6541,10 +6576,13 @@ const parseMetrobankSavingsTransactionLine = (
     merchantRaw: humanizeMerchantText(description),
     merchantClean: summarizeMerchantText(description, state.institution ?? "Metrobank"),
     description,
-    categoryName: guessMetrobankSavingsCategoryName(description, type),
+    categoryName: classification.categoryName,
     accountName: state.accountName,
     institution: state.institution ?? undefined,
-    type,
+    type: classification.type,
+    confidence: 96,
+    parserConfidence: 96,
+    categoryConfidence: 94,
     rawPayload: {
       bank: "Metrobank",
       kind: "savings_transaction",
