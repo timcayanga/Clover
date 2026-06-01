@@ -268,24 +268,10 @@ export const getLandbankTransactionDisplayOverride = (params: {
     .toLowerCase();
 
   if (/cash\s+out\s*-\s*order|atm\s+withdrawal|\bcash\s+out\b|\bwithdrawal\b/.test(merchantText)) {
-    console.warn("[landbank-display-override]", {
-      institution: params.institution,
-      merchantRaw: params.merchantRaw,
-      merchantClean: params.merchantClean,
-      description: params.description,
-      matched: "expense",
-    });
     return { categoryName: "Cash & ATM", type: "expense" as const };
   }
 
   if (/cash\s+deposit/.test(merchantText)) {
-    console.warn("[landbank-display-override]", {
-      institution: params.institution,
-      merchantRaw: params.merchantRaw,
-      merchantClean: params.merchantClean,
-      description: params.description,
-      matched: "income",
-    });
     return { categoryName: "Cash & ATM", type: "income" as const };
   }
 
