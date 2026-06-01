@@ -1667,11 +1667,6 @@ function AccountsPageContent() {
     }
     setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
 
-    if (hydrateWorkspaceFromCache(selectedWorkspaceId)) {
-      void loadWorkspaceData(selectedWorkspaceId, { silent: true });
-      return;
-    }
-
     setAccounts([]);
     setAccountRules([]);
     setTransactions([]);
