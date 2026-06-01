@@ -611,7 +611,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         importMode,
         trainingMode: formTrainingMode,
       });
-      const cachedDocRecordPromise = shouldQueueDocumentUpload
+      const cachedDocRecordPromise = shouldQueueDocumentUpload || isNoisyPdfBank
         ? loadImportFileExtractionCache({
             workspaceId: String(importFile.workspaceId),
             fileFingerprint,
@@ -694,63 +694,61 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           : sampleFallbackText;
       let cachedDocTextInfo: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       let preflightText: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
-      if (shouldQueueDocumentUpload) {
-        const cachedDocRecord = await cachedDocRecordPromise;
+      const cachedDocRecord = cachedDocRecordPromise ? await cachedDocRecordPromise : null;
 
-        if (cachedDocRecord?.parsedRows && cachedDocRecord.statementFingerprint && cachedDocRecord.metadata) {
-          cachedDocTextInfo = {
-            fileFingerprint,
-            text: String(cachedDocRecord.extractedText ?? ""),
-            cacheHit: true,
-            cacheRecord: cachedDocRecord as unknown as NonNullable<Awaited<ReturnType<typeof readImportedStatementTextWithCache>>["cacheRecord"]>,
-          };
-          const cachedTextInfo = cachedDocTextInfo;
-          preflightText = cachedTextInfo;
-          extractedText = cachedTextInfo.text;
-          metadata =
-            cachedDocRecord.metadata && typeof cachedDocRecord.metadata === "object" && !Array.isArray(cachedDocRecord.metadata)
-              ? (cachedDocRecord.metadata as Record<string, unknown>)
-              : null;
-        }
+      if (cachedDocRecord?.parsedRows && cachedDocRecord.statementFingerprint && cachedDocRecord.metadata) {
+        cachedDocTextInfo = {
+          fileFingerprint,
+          text: String(cachedDocRecord.extractedText ?? ""),
+          cacheHit: true,
+          cacheRecord: cachedDocRecord as unknown as NonNullable<Awaited<ReturnType<typeof readImportedStatementTextWithCache>>["cacheRecord"]>,
+        };
+        const cachedTextInfo = cachedDocTextInfo;
+        preflightText = cachedTextInfo;
+        extractedText = cachedTextInfo.text;
+        metadata =
+          cachedDocRecord.metadata && typeof cachedDocRecord.metadata === "object" && !Array.isArray(cachedDocRecord.metadata)
+            ? (cachedDocRecord.metadata as Record<string, unknown>)
+            : null;
+      }
 
-        if (!cachedDocTextInfo) {
-          return queueBackgroundProcessing(effectiveBankName || null);
-        }
+      if (shouldQueueDocumentUpload && !cachedDocTextInfo) {
+        return queueBackgroundProcessing(effectiveBankName || null);
+      }
 
-        if (cachedDocTextInfo.cacheRecord?.statementFingerprint && cachedDocTextInfo.cacheRecord?.parsedRows && cachedDocTextInfo.cacheRecord?.metadata) {
-          const earlyDuplicateImportFileId = await findExistingImportedStatement({
-            workspaceId: String(importFile.workspaceId),
-            statementFingerprint: cachedDocTextInfo.cacheRecord.statementFingerprint,
-            importFileId: importId,
+      if (cachedDocTextInfo?.cacheRecord?.statementFingerprint && cachedDocTextInfo.cacheRecord?.parsedRows && cachedDocTextInfo.cacheRecord?.metadata) {
+        const earlyDuplicateImportFileId = await findExistingImportedStatement({
+          workspaceId: String(importFile.workspaceId),
+          statementFingerprint: cachedDocTextInfo.cacheRecord.statementFingerprint,
+          importFileId: importId,
+        });
+
+        if (earlyDuplicateImportFileId && !allowDuplicateStatement) {
+          await updateImportFileCompat(importId, {
+            status: "done",
+            processingPhase: "complete",
+            processingMessage: "Clover found that this statement was already imported and skipped it.",
           });
 
-          if (earlyDuplicateImportFileId && !allowDuplicateStatement) {
-            await updateImportFileCompat(importId, {
-              status: "done",
-              processingPhase: "complete",
-              processingMessage: "Clover found that this statement was already imported and skipped it.",
-            });
-
-            return NextResponse.json({
-              ok: true,
-              queued: false,
-              processed: true,
-              importedRows: 0,
-              duplicate: true,
-              status: "done",
-              importFileId: importId,
-              metadata: cachedDocTextInfo.cacheRecord.metadata,
-              accountId: null,
-              accountSummaries: [],
-              confirmedTransactionsCount: 0,
-              insightSummary: null,
-              accountBalance: null,
-              visibleImportComplete: false,
-              finalizationInBackground: false,
-              receiptDocument: null,
-              receiptTransaction: null,
-            });
-          }
+          return NextResponse.json({
+            ok: true,
+            queued: false,
+            processed: true,
+            importedRows: 0,
+            duplicate: true,
+            status: "done",
+            importFileId: importId,
+            metadata: cachedDocTextInfo.cacheRecord.metadata,
+            accountId: null,
+            accountSummaries: [],
+            confirmedTransactionsCount: 0,
+            insightSummary: null,
+            accountBalance: null,
+            visibleImportComplete: false,
+            finalizationInBackground: false,
+            receiptDocument: null,
+            receiptTransaction: null,
+          });
         }
       }
       const shouldPreflightPdf = isPdfUpload(effectiveFileName, effectiveFileType) && bytes.length <= 10_000_000 && !shouldAvoidPdfPreflight;
