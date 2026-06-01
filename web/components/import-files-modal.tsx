@@ -16,6 +16,7 @@ import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
 import { type ImportImageMode } from "@/lib/import-image-mode";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
+import { normalizeBankName } from "@/lib/data-qa-banks";
 import {
   detectStatementMetadata,
   getTrailingBalanceFromParsedRows,
@@ -4918,8 +4919,19 @@ export function ImportFilesModal({
         import_mode: itemImportMode,
       });
       const lowerFileName = item.file.name.toLowerCase();
+      const inferredBankName = normalizeBankName(item.file.name);
+      const shouldSkipLocalStatementPreparse =
+        itemImportMode === "statement" &&
+        (lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv")) &&
+        inferredBankName !== "Unknown" &&
+        ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(inferredBankName);
       let extractedTextForUpload = localPreparseTextByItemIdRef.current.get(itemId);
-      if (!extractedTextForUpload && itemImportMode === "statement" && (lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv"))) {
+      if (
+        !shouldSkipLocalStatementPreparse &&
+        !extractedTextForUpload &&
+        itemImportMode === "statement" &&
+        (lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv"))
+      ) {
         updateItem(itemId, {
           progress: IMPORT_PROGRESS.preparing,
           progressLabel: "Reading the file",
@@ -4939,6 +4951,7 @@ export function ImportFilesModal({
           fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
           password: item.password.trim() || undefined,
           importMode: itemImportMode,
+          bankName: inferredBankName !== "Unknown" ? inferredBankName : undefined,
           extractedText: extractedTextForUpload,
         },
         (progress) => {
