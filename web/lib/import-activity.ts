@@ -26,7 +26,7 @@ export type ImportActivitySnapshot = {
 
 export type ImportActivityState = ImportActivitySnapshot;
 
-export const importActivityStorageKey = "clover.import.activity.v1";
+export const importActivityStorageKey = "clover.import.activity.v2";
 export const importActivityEventName = "clover:import-activity-changed";
 
 const getLocalStorage = () => {

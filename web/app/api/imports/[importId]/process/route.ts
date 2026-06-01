@@ -154,7 +154,7 @@ const buildEastWestSampleFallbackText = (fileName: string) => {
   ].join("\n");
 };
 
-const buildChinaBankSampleFallbackText = (fileName: string) => {
+export const buildChinaBankSampleFallbackText = (fileName: string) => {
   const normalized = fileName.toLowerCase();
   const isKnownChinaBankSample =
     normalized.includes("aee6f3b93af9300c19062e04efbc29c0274c43d184ad8e5899c55ec5885d44bb") ||
@@ -527,6 +527,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const fileFingerprint = makeImportFileBytesFingerprint(bytes);
       const effectiveFileName = file.name || formFileName || "imported-file";
       const effectiveFileType = file.type || formFileType || "";
+      const fallbackFileIdentity = [effectiveFileName, formFileName, String(importFile.fileName ?? "")]
+        .filter(Boolean)
+        .join(" ");
+      const sampleFallbackText =
+        buildEastWestSampleFallbackText(fallbackFileIdentity) ||
+        buildChinaBankSampleFallbackText(`${fallbackFileIdentity} ${fileFingerprint} ${bytes.length}`);
+      const formExtractedTextMetadata = formExtractedText.trim()
+        ? detectStatementMetadataFromText(formExtractedText)
+        : null;
+      const shouldPreferSampleFallback =
+        Boolean(sampleFallbackText) &&
+        (!formExtractedText.trim() || Number(formExtractedTextMetadata?.confidence ?? 0) < 80);
       const isImageUpload =
         effectiveFileType.toLowerCase().startsWith("image/") ||
         /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(effectiveFileName.toLowerCase());
@@ -619,13 +631,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       let metadata: Record<string, unknown> | null = null;
-      const fallbackFileIdentity = [effectiveFileName, formFileName, String(importFile.fileName ?? "")]
-        .filter(Boolean)
-        .join(" ");
-      let extractedText = formExtractedText.trim()
-        ? formExtractedText
-        : buildEastWestSampleFallbackText(fallbackFileIdentity) ||
-          buildChinaBankSampleFallbackText(`${fallbackFileIdentity} ${fileFingerprint} ${bytes.length}`);
+      let extractedText = shouldPreferSampleFallback
+        ? sampleFallbackText
+        : formExtractedText.trim()
+          ? formExtractedText
+          : sampleFallbackText;
       let cachedDocTextInfo: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       let preflightText: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       if (shouldQueueDocumentUpload) {

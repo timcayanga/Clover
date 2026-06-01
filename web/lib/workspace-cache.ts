@@ -73,8 +73,8 @@ export type ImportedWorkspaceTransaction = CachedRecord & {
   source?: string | null;
 };
 
-export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v3";
-export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v3";
+export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v4";
+export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v4";
 export const deletedAccountsWorkspaceCacheKey = "clover.accounts.deleted-account-ids.v1";
 export const deletingAccountsWorkspaceCacheKey = "clover.accounts.deleting-account-ids.v1";
 
