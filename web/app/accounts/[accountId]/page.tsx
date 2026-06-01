@@ -2438,7 +2438,22 @@ function AccountDetailPageContent() {
     [selectedTransaction?.rawPayload]
   );
   const selectedTransactionRawNote = useMemo(
-    () => getRawPayloadTextCandidate(selectedTransaction?.rawPayload, ["notes", "note", "detail", "details"]),
+    () =>
+      getRawPayloadTextCandidate(selectedTransaction?.rawPayload, [
+        "fullDetails",
+        "parsedDetails",
+        "transactionDetails",
+        "transactionDetail",
+        "counterpartyDetails",
+        "counterparty",
+        "recipient",
+        "sender",
+        "notes",
+        "note",
+        "detail",
+        "details",
+        "trailingDetails",
+      ]),
     [selectedTransaction?.rawPayload]
   );
   const detailReceiptLineItems = detailDraft?.receiptLineItems ?? selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);

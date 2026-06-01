@@ -14548,34 +14548,47 @@ const parseMayaSavingsTransactionBlock = (
 
     return descriptionSeed;
   })();
-  const lower = description.toLowerCase();
+  const parsedDetails = normalizeWhitespace([description, trailingDetailsText].filter(Boolean).join(" - "));
+  const classificationText = `${description} ${trailingDetailsText}`.toLowerCase();
   const balanceDelta = state.previousBalance !== null && balance !== null ? balance - state.previousBalance : null;
+  const isFeeOrTax = /\b(?:fee|tax|withholding)\b/.test(classificationText);
+  const isInterest = /\binterest\b|\bsalary\b|\bincoming\b|\bcredit\b/.test(classificationText);
+  const isWithdrawal = /\b(?:withdrawal|atm\s+withdrawal|cash\s+withdrawal)\b/.test(classificationText);
+  const isDeposit = /\b(?:deposit|cash\s+in|auto cash[- ]?in)\b/.test(classificationText);
+  const isTransfer =
+    /\b(?:wallet transfer|transfer|send money|received money|payment|cash out)\b/.test(classificationText) ||
+    /\binstapay\b|\bpesonet\b|\bbancnet\b/i.test(classificationText);
 
   let type: TransactionType = "expense";
-  if (/fee|tax/.test(lower)) {
+  if (isFeeOrTax || isWithdrawal) {
     type = "expense";
-  } else if (/deposit|withdrawal|wallet transfer|transfer|auto cash[- ]?in|send money|received money|payment|cash out|cash in/.test(lower)) {
+  } else if (isInterest) {
+    type = "income";
+  } else if (isTransfer) {
     type = "transfer";
-  } else if (/interest|salary|incoming|credit\b/.test(lower)) {
+  } else if (isDeposit) {
     type = "income";
   } else if (balanceDelta !== null) {
-    type = balanceDelta > 0 ? "income" : "transfer";
+    type = balanceDelta > 0 ? "income" : "expense";
   }
 
-  const categoryName = /fee|tax/.test(lower)
+  const categoryName = isFeeOrTax
     ? "Financial"
-    : /interest/.test(lower)
+    : isInterest
       ? "Income"
-      : /deposit|withdrawal|wallet transfer|auto cash[- ]?in|transfer|send money|received money|cash out|cash in/.test(lower)
-        ? "Transfers"
-        : guessCategoryName(description, type);
+      : isWithdrawal
+        ? "Cash & ATM"
+        : isDeposit || isTransfer
+          ? "Transfers"
+          : guessCategoryName(description, type);
+  const merchantLabelSeed = isWithdrawal ? "ATM Withdrawal" : description;
 
   return {
     date: date.toISOString().slice(0, 10),
     amount: amount.toFixed(2),
-    merchantRaw: humanizeMerchantText(description),
-    merchantClean: summarizeMerchantText(description, state.institution),
-    description,
+    merchantRaw: humanizeMerchantText(merchantLabelSeed),
+    merchantClean: summarizeMerchantText(merchantLabelSeed, state.institution),
+    description: parsedDetails || description,
     categoryName,
     accountName: state.accountName,
     institution: state.institution ?? undefined,
@@ -14587,11 +14600,14 @@ const parseMayaSavingsTransactionBlock = (
       line: rowText,
       dateText,
       description,
+      parsedDetails: parsedDetails || null,
+      fullDetails: parsedDetails || null,
       trailingDetails: trailingDetailsText || null,
       amountText: amountMatch?.[0] ?? null,
       balanceText: balanceMatch?.[0] ?? null,
       balance,
       previousBalance: state.previousBalance,
+      balanceDelta,
     },
   } satisfies ParsedImportRow;
 };

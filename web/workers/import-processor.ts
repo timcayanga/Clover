@@ -5153,10 +5153,20 @@ const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | nul
 
   const payload = rawPayload as Record<string, unknown>;
   const candidates = [
+    payload.fullDetails,
+    payload.parsedDetails,
+    payload.transactionDetails,
+    payload.transactionDetail,
+    payload.counterpartyDetails,
+    payload.counterparty,
+    payload.recipient,
+    payload.sender,
     payload.description,
     payload.notes,
     payload.memo,
     payload.detail,
+    payload.details,
+    payload.trailingDetails,
     payload.line,
     payload.merchant,
     payload.merchantRaw,
