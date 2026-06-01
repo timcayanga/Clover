@@ -348,6 +348,12 @@ const getRawPayloadSourceRowIndex = (rawPayload: Prisma.JsonValue | null | undef
 
 const normalizeDigits = (value?: string | null) => String(value ?? "").replace(/\D/g, "");
 
+const normalizeParsedImportToken = (value?: string | null) =>
+  String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
 const getTransferCounterpartNumbers = (rawPayload: Prisma.JsonValue | null | undefined) => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return { from: null as string | null, to: null as string | null };
@@ -652,6 +658,119 @@ const normalizeLegacyTransactionVisibility = async (workspaceId: string) => {
   `;
 };
 
+const findOrphanParsedImportIdsForAccount = async (account: {
+  id: string;
+  workspaceId: string;
+  name: string;
+  institution: string | null;
+  accountNumber: string | null;
+}) => {
+  const accountDigits = normalizeDigits(account.accountNumber ?? account.name);
+  const accountLastFour = accountDigits.length >= 4 ? accountDigits.slice(-4) : "";
+  const institutionToken = normalizeParsedImportToken(account.institution ?? account.name)
+    .replace(/\b(account|bank|checking|savings)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const nameToken = normalizeParsedImportToken(account.name).replace(/\d+/g, " ").replace(/\s+/g, " ").trim();
+
+  if (!accountLastFour && !institutionToken && !nameToken) {
+    return [];
+  }
+
+  const rows = await prisma.$queryRaw<Array<{ importFileId: string; rowCount: bigint }>>`
+    SELECT pt."importFileId" AS "importFileId", COUNT(*)::bigint AS "rowCount"
+    FROM "ParsedTransaction" pt
+    INNER JOIN "ImportFile" i ON i."id" = pt."importFileId"
+    WHERE pt."workspaceId" = ${account.workspaceId}
+      AND pt."importFileId" IS NOT NULL
+      AND (i."accountId" IS NULL OR i."accountId" = ${account.id})
+      AND (
+        i."status" = 'done'
+        OR i."confirmedAt" IS NOT NULL
+        OR COALESCE(i."parsedRowsCount", 0) > 0
+      )
+      AND (
+        (${accountDigits} <> '' AND regexp_replace(COALESCE(pt."accountNumber", ''), '\\D', '', 'g') = ${accountDigits})
+        OR (${accountLastFour} <> '' AND right(regexp_replace(COALESCE(pt."accountNumber", ''), '\\D', '', 'g'), 4) = ${accountLastFour})
+        OR (${institutionToken} <> '' AND lower(COALESCE(pt."institution", '')) LIKE ${`%${institutionToken}%`})
+        OR (${nameToken} <> '' AND lower(COALESCE(pt."accountName", '')) LIKE ${`%${nameToken}%`})
+      )
+    GROUP BY pt."importFileId"
+    HAVING COUNT(*) >= 2
+    ORDER BY MIN(pt."createdAt") ASC NULLS LAST, pt."importFileId" ASC
+    LIMIT 6
+  `.catch(() => []);
+
+  const candidateImportIds = rows.map((row) => row.importFileId).filter(Boolean);
+  if (candidateImportIds.length === 0) {
+    return [];
+  }
+
+  const existingRows = await prisma.transaction.groupBy({
+    by: ["importFileId"],
+    where: {
+      workspaceId: account.workspaceId,
+      deletedAt: null,
+      importFileId: { in: candidateImportIds },
+    },
+    _count: { _all: true },
+  });
+  const importIdsWithVisibleRows = new Set(existingRows.filter((row) => row.importFileId).map((row) => row.importFileId as string));
+  return candidateImportIds.filter((importFileId) => !importIdsWithVisibleRows.has(importFileId));
+};
+
+const materializeOrphanParsedImportsForWorkspace = async (
+  workspaceId: string,
+  accounts: Array<{
+    id: string;
+    workspaceId: string;
+    name: string;
+    institution: string | null;
+    type: string;
+    accountNumber: string | null;
+    source: string;
+  }>
+) => {
+  const uploadAccounts = accounts.filter((account) => account.source === "upload");
+  if (uploadAccounts.length === 0) {
+    return false;
+  }
+
+  const existingCounts = await prisma.transaction.groupBy({
+    by: ["accountId"],
+    where: {
+      workspaceId,
+      deletedAt: null,
+      accountId: { in: uploadAccounts.map((account) => account.id) },
+    },
+    _count: { _all: true },
+  });
+  const accountIdsWithRows = new Set(existingCounts.map((row) => row.accountId));
+  const accountsWithoutRows = uploadAccounts.filter((account) => !accountIdsWithRows.has(account.id));
+  if (accountsWithoutRows.length === 0) {
+    return false;
+  }
+
+  const { confirmImportFile } = await import("@/workers/import-processor");
+  let materialized = false;
+  const confirmedImportIds = new Set<string>();
+
+  for (const account of accountsWithoutRows) {
+    const orphanImportIds = await findOrphanParsedImportIdsForAccount(account);
+    for (const importFileId of orphanImportIds) {
+      if (confirmedImportIds.has(importFileId)) {
+        continue;
+      }
+
+      confirmedImportIds.add(importFileId);
+      await confirmImportFile(importFileId, account.id);
+      materialized = true;
+    }
+  }
+
+  return materialized;
+};
+
 export async function GET(request: Request) {
   try {
     const userId = await resolveTransactionsRouteUserId();
@@ -664,10 +783,20 @@ export async function GET(request: Request) {
 
     await assertWorkspaceAccess(userId, workspaceId);
     await normalizeLegacyTransactionVisibility(workspaceId);
-    const workspaceAccounts = await prisma.account.findMany({
+    const workspaceAccountRows = await prisma.account.findMany({
       where: { workspaceId },
-      select: { id: true, accountNumber: true },
+      select: { id: true, workspaceId: true, name: true, institution: true, type: true, accountNumber: true, source: true },
     });
+    await materializeOrphanParsedImportsForWorkspace(workspaceId, workspaceAccountRows).catch((error) => {
+      console.warn("[transactions] unable to materialize orphan parsed import rows", {
+        workspaceId,
+        error,
+      });
+    });
+    const workspaceAccounts = workspaceAccountRows.map((account) => ({
+      id: account.id,
+      accountNumber: account.accountNumber,
+    }));
 
     const parsedFilters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
     const expandedAccountIds = await expandImportedAccountFilters(workspaceId, parsedFilters.accountIds);
