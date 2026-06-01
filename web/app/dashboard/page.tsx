@@ -20,6 +20,7 @@ import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
 import { GoalsEditor as GoalsEditorModal } from "@/components/goals-editor-modal";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { loadBudgetWorkspaceData } from "@/lib/budgeting-data";
+import { buildRecurringTransactionSummaries } from "@/lib/recurring";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -89,6 +90,7 @@ type DailyActivityPoint = {
 };
 
 type HomeAdviserItem = {
+  emoji: string;
   label: string;
   copy: string;
   href?: string;
@@ -598,10 +600,17 @@ async function DashboardStream({
     return sum + Math.max(signedBalance, 0);
   }, 0);
   const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
+  const currentSevenDayTransactions = currentTransactions.filter((transaction) => transaction.date >= sevenDaysAgo);
+  const previousSevenDaysAgo = new Date(sevenDaysAgo);
+  previousSevenDaysAgo.setDate(previousSevenDaysAgo.getDate() - 7);
+  const previousSevenDayTransactions = currentTransactions.filter(
+    (transaction) => transaction.date >= previousSevenDaysAgo && transaction.date < sevenDaysAgo
+  );
   const previousTransactionsWindow = currentTransactions.filter(
     (transaction) => transaction.date >= sixtyDaysAgo && transaction.date < thirtyDaysAgo
   );
   const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
+  const weeklySummary = comparePeriods(currentSevenDayTransactions, previousSevenDayTransactions);
   const monthSummary = summarizeWindow(currentThirtyDayTransactions, "This month");
   const activitySeries = buildDailyActivitySeries(currentThirtyDayTransactions, 7);
   const peakActivityDay = activitySeries.reduce<DailyActivityPoint | null>((peak, point) => {
@@ -639,12 +648,6 @@ async function DashboardStream({
   const daysSinceLastImport = latestImport
     ? Math.max(0, Math.floor((now.getTime() - latestImport.uploadedAt.getTime()) / 86400000))
     : null;
-  const latestBalanceCheckpointAccount = dashboardAccounts
-    .map((account) => ({ account, checkpoint: account.statementCheckpoints[0] ?? null }))
-    .filter((entry): entry is { account: (typeof dashboardAccounts)[number]; checkpoint: NonNullable<(typeof dashboardAccounts)[number]["statementCheckpoints"][number]> } =>
-      Boolean(entry.checkpoint)
-    )
-    .sort((left, right) => right.checkpoint.createdAt.getTime() - left.checkpoint.createdAt.getTime())[0];
   const categorySpikeThreshold = Math.max(500, currentSummary.current.expense * 0.08);
   const categorySpike =
     currentSummary.biggestMover &&
@@ -653,80 +656,92 @@ async function DashboardStream({
       ? currentSummary.biggestMover
       : null;
   const encodedSpikeCategory = categorySpike ? encodeURIComponent(categorySpike.name) : "";
-  const encodedTopCategory = currentSummary.topCategory ? encodeURIComponent(currentSummary.topCategory[0]) : "";
   const uploadReminderCopy = latestImport
     ? `Last import was ${daysSinceLastImport === 0 ? "today" : `${daysSinceLastImport ?? 0} day${daysSinceLastImport === 1 ? "" : "s"} ago`}. Add recent statements so advice stays current.`
     : "Upload a recent statement so Clover can start finding spending patterns.";
+  const recurringCandidates = buildRecurringTransactionSummaries(
+    currentTransactions.map((transaction) => ({
+      amount: transaction.amount,
+      date: transaction.date,
+      type: transaction.type,
+      merchantRaw: transaction.merchantRaw,
+      merchantClean: transaction.merchantClean,
+      currency: transaction.account.currency,
+      category: transaction.category,
+    }))
+  );
+  const recurringCandidate = recurringCandidates[0] ?? null;
+  const weeklySpendDelta = weeklySummary.current.expense - weeklySummary.previous.expense;
+  const weeklyNetLabel =
+    weeklySummary.net >= 0
+      ? `${formatCurrency(weeklySummary.net)} left after spending`
+      : `${formatCurrency(Math.abs(weeklySummary.net))} short this week`;
+  const weeklySpendMovement =
+    weeklySummary.previous.expense > 0
+      ? `${weeklySpendDelta >= 0 ? "up" : "down"} ${formatCurrency(Math.abs(weeklySpendDelta))} vs last week`
+      : `${formatCurrency(weeklySummary.current.expense)} spent this week`;
   const insightCandidates: Array<HomeAdviserItem | null> = [
-    budgetHeroAlert
+    daysSinceLastImport === null || daysSinceLastImport >= 7
       ? {
-          label: budgetHeroAlert.stage === "exceeded" || budgetHeroAlert.stage === "critical" ? "Budget alert" : "Budget watch",
-          copy: `${budgetHeroAlert.name} is at ${Math.round(budgetHeroAlert.progressPercent)}% of ${formatCurrency(budgetHeroAlert.targetAmount, budgetHeroAlert.currency)}.`,
-          href: "/budgeting",
-          actionLabel: "Open budgeting",
-          tone: budgetHeroAlert.tone === "positive" ? "positive" : "warning",
+          emoji: "📥",
+          label: "Import reminder",
+          copy: uploadReminderCopy,
+          href: "/transactions",
+          actionLabel: "Import now",
+          tone: daysSinceLastImport === null ? "neutral" : "warning",
         }
       : null,
     categorySpike
       ? {
-          label: "Watch spending",
+          emoji: "📈",
+          label: "Spending spike",
           copy: `${categorySpike.name} is up ${formatCurrency(categorySpike.delta)} vs the previous 30 days.`,
           href: `/transactions?category=${encodedSpikeCategory}`,
-          actionLabel: "Open category",
+          actionLabel: "Review category",
           tone: "warning",
         }
       : null,
-    daysSinceLastImport === null || daysSinceLastImport >= 7
+    recurringCandidate
       ? {
-          label: "Keep it fresh",
-          copy: uploadReminderCopy,
-          href: "/transactions",
-          actionLabel: "Import transactions",
+          emoji: "🔁",
+          label: "Recurring check",
+          copy: `${recurringCandidate.name} looks recurring from ${recurringCandidate.count} recent hit${recurringCandidate.count === 1 ? "" : "s"}.`,
+          href: "/recurring",
+          actionLabel: "Open recurring",
           tone: "neutral",
         }
-      : latestBalanceCheckpointAccount
+      : currentThirtyDayTransactions.length >= 12
         ? {
-            label: "Synced recently",
-            copy: `${latestBalanceCheckpointAccount.account.institution ?? latestBalanceCheckpointAccount.account.name} balance updated from the latest import.`,
-            href: "/accounts",
-            actionLabel: "View accounts",
-            tone: "positive",
+            emoji: "🔁",
+            label: "Recurring check",
+            copy: "Clover has enough history to look for subscriptions and repeat bills.",
+            href: "/recurring",
+            actionLabel: "Find recurring",
+            tone: "neutral",
           }
         : null,
-    currentThirtyDayTransactions.length > 0
+    currentSevenDayTransactions.length > 0
       ? {
-          label: currentSummary.net >= 0 ? "Cash flow" : "Cash flow alert",
-          copy:
-            currentSummary.net >= 0
-              ? `You kept ${formatCurrency(currentSummary.net)} after spending over the last 30 days.`
-              : `Spending exceeded income by ${formatCurrency(Math.abs(currentSummary.net))} over the last 30 days.`,
+          emoji: "🗓️",
+          label: "Weekly summary",
+          copy: `${weeklyNetLabel}; spending is ${weeklySpendMovement}.`,
           href: "/adviser",
           actionLabel: "Open Adviser",
-          tone: currentSummary.net >= 0 ? "positive" : "warning",
-        }
-      : null,
-    !categorySpike && currentSummary.topCategory
-      ? {
-          label: "Top category",
-          copy: `${currentSummary.topCategory[0]} leads spending at ${formatCurrency(currentSummary.topCategory[1])} this period.`,
-          href: `/transactions?category=${encodedTopCategory}`,
-          actionLabel: "Review spend",
-          tone: "neutral",
-        }
-      : null,
-    currentThirtyDayTransactions.length > 0 && currentSummary.topMerchant
-      ? {
-          label: "Frequent merchant",
-          copy: `${currentSummary.topMerchant[0]} appeared ${currentSummary.topMerchant[1].count} time${currentSummary.topMerchant[1].count === 1 ? "" : "s"} recently.`,
-          href: `/transactions?q=${encodeURIComponent(currentSummary.topMerchant[0])}`,
-          actionLabel: "Search merchant",
-          tone: "neutral",
+          tone: weeklySummary.net >= 0 ? "positive" : "warning",
         }
       : null,
   ];
   const insightItems = insightCandidates.filter((item): item is HomeAdviserItem => Boolean(item)).slice(0, 3);
   const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
   const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
+  const goalProgressNudge =
+    goalProgress.progressPercent === null
+      ? "Set a target so Clover can keep the next step visible."
+      : goalProgress.achieved
+        ? "Goal reached for this period. Keep the habit steady."
+        : goalProgress.remainingAmount !== null
+          ? `${formatCurrency(goalProgress.remainingAmount)} to go. ${goalProgress.nextAction}`
+          : goalProgress.nextAction;
   const totalBalanceLabel = formatCurrency(savingsTotal, displayCurrency);
   const balanceHighlights = [
     {
@@ -823,7 +838,10 @@ async function DashboardStream({
             <div className="dashboard-home__insight-strip-list">
               {insightItems.map((item) => (
                 <div key={item.label} className={`dashboard-home__insight-strip-item${item.tone ? ` dashboard-home__insight-strip-item--${item.tone}` : ""}`}>
-                  <span>{item.label}</span>
+                  <div className="dashboard-home__insight-strip-label">
+                    <span className="dashboard-home__insight-strip-emoji" aria-hidden="true">{item.emoji}</span>
+                    <span>{item.label}</span>
+                  </div>
                   <strong>{item.copy}</strong>
                   {item.href && item.actionLabel ? (
                     <Link className="dashboard-home__insight-strip-action" href={item.href}>
@@ -933,6 +951,7 @@ async function DashboardStream({
                   <div className="dashboard-home__goal-card-copy">
                     <strong>{goalSummaryLabel}</strong>
                     <small>{goalProgressLabel} complete</small>
+                    <small>{goalProgressNudge}</small>
                   </div>
                 </div>
               </div>
