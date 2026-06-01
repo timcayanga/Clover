@@ -247,44 +247,23 @@ const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; icon: ReactNod
   {
     key: "overview",
     label: "Overview",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 19h16" />
-        <path d="M6 15h3v4H6zM11 10h3v9h-3zM16 6h3v13h-3z" />
-      </svg>
-    ),
+    icon: null,
   },
   {
     key: "portfolio",
     label: "Portfolio",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 7h16v12H4z" />
-        <path d="M8 7v12" />
-        <path d="M4 12h16" />
-      </svg>
-    ),
+    icon: null,
   },
   {
     key: "market",
     label: "Markets",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 18h16" />
-        <path d="M6 14l3-3 3 3 5-6" />
-        <path d="M15 8h3v3" />
-      </svg>
-    ),
+    icon: null,
     proOnly: true,
   },
   {
     key: "analysis",
     label: "Analysis",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3.5l1.87 4.63L18.5 10l-4.63 1.87L12 16.5l-1.87-4.63L5.5 10l4.63-1.87L12 3.5Z" />
-      </svg>
-    ),
+    icon: null,
     proOnly: true,
   },
 ];
@@ -405,9 +384,7 @@ export default function InvestmentsPage() {
 
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [investmentSnapshots, setInvestmentSnapshots] = useState<InvestmentSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
-  const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [message, setMessage] = useState("");
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
@@ -538,50 +515,6 @@ export default function InvestmentsPage() {
     };
 
     void loadAccounts();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedWorkspaceId]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadSnapshots = async () => {
-      setSnapshotLoading(true);
-
-      if (!selectedWorkspaceId) {
-        if (!cancelled) {
-          setInvestmentSnapshots([]);
-          setSnapshotLoading(false);
-        }
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/investments?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`);
-        if (!response.ok || cancelled) {
-          return;
-        }
-
-        const payload = await response.json();
-        if (cancelled) {
-          return;
-        }
-
-        setInvestmentSnapshots(Array.isArray(payload.snapshots) ? (payload.snapshots as InvestmentSnapshot[]) : []);
-      } catch {
-        if (!cancelled) {
-          setInvestmentSnapshots([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setSnapshotLoading(false);
-        }
-      }
-    };
-
-    void loadSnapshots();
 
     return () => {
       cancelled = true;
@@ -786,10 +719,6 @@ export default function InvestmentsPage() {
   const canUseProTabs = planTier !== "free";
   const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "analysis") && !canUseProTabs);
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
-  const visibleSnapshots = useMemo(
-    () => investmentSnapshots.filter((snapshot) => snapshot.documentImport?.documentFamily === "portfolio" || snapshot.documentImport?.documentFamily === "account_detail"),
-    [investmentSnapshots]
-  );
 
   const renderAddInvestmentButton = (variant: "desktop" | "mobile") => (
     <button
@@ -1052,7 +981,7 @@ export default function InvestmentsPage() {
           onChange={(key) => setSelectedTab(key as InvestmentTab)}
           tabs={INVESTMENT_TABS.map((tab) => ({
             key: tab.key,
-            label: "",
+            label: tab.label,
             icon: tab.icon,
             disabled: Boolean(tab.proOnly && !canUseProTabs),
             badge: tab.proOnly ? "Pro" : null,
@@ -1076,15 +1005,6 @@ export default function InvestmentsPage() {
           </section>
         ) : selectedTab === "overview" ? (
           <>
-            <section className="investments-overview-hero glass">
-              <div className="investments-overview-hero__copy">
-                <p className="eyebrow">Portfolio</p>
-                <h3>Add investment</h3>
-                <p>Track holdings manually or from imported statements and screenshots.</p>
-              </div>
-              <div className="investments-overview-hero__actions">{renderAddInvestmentButton("desktop")}</div>
-            </section>
-
             <section className="accounts-overview-grid">
               <article className="accounts-overview-card glass">
                 <div className="investments-metric__label">
@@ -1114,65 +1034,6 @@ export default function InvestmentsPage() {
                 </div>
                 <strong>{visibleInvestmentAccounts.length}</strong>
               </article>
-            </section>
-
-            <section className="investments-allocation glass">
-              <div className="investments-allocation__head">
-                <div className="investments-allocation__head-title">
-                  <p className="eyebrow">Imported screenshots</p>
-                  <div className="investments-allocation__title-row">
-                    <h5>Portfolio snapshots</h5>
-                    <InfoTip label="Investment screenshots parsed into snapshot records." />
-                  </div>
-                </div>
-                <div className="investments-allocation__summary">
-                  <span>Snapshots</span>
-                  <strong>{snapshotLoading ? "…" : visibleSnapshots.length}</strong>
-                </div>
-              </div>
-
-              {snapshotLoading ? (
-                <div className="investments-portfolio-table__empty">
-                  <strong>Loading imported snapshots...</strong>
-                </div>
-              ) : visibleSnapshots.length > 0 ? (
-                <div className="investments-allocation__list">
-                  {visibleSnapshots.slice(0, 4).map((snapshot) => {
-                    const totalValue = snapshot.totalValue ? formatInvestmentAmount(Number(snapshot.totalValue), snapshot.currency) : "Value not set";
-                    const gainLossValue = snapshot.gainLossValue === null ? null : formatInvestmentAmount(Math.abs(Number(snapshot.gainLossValue)), snapshot.currency);
-                    const gainTone = snapshot.gainLossValue === null ? "" : Number(snapshot.gainLossValue) >= 0 ? "is-positive" : "is-negative";
-
-                    return (
-                      <article key={snapshot.id} className="recurring-patterns__item">
-                        <div className="recurring-patterns__item-head">
-                          <strong>{snapshot.portfolioName ?? snapshot.account?.name ?? "Imported snapshot"}</strong>
-                          <span>
-                            {snapshot.documentImport?.documentFamily ?? "portfolio"}
-                            {snapshot.documentImport?.pageCount ? ` · ${snapshot.documentImport.pageCount} pages` : ""}
-                          </span>
-                        </div>
-                        <div className="recurring-patterns__item-meta">
-                          <span>{totalValue}</span>
-                          <span className={gainTone}>
-                            {gainLossValue === null ? "Gain / loss not set" : `${Number(snapshot.gainLossValue) >= 0 ? "+" : "-"}${gainLossValue}`}
-                          </span>
-                          <span>{snapshot.account?.institution ?? snapshot.documentImport?.institution ?? "No institution"}</span>
-                        </div>
-                        <div className="recurring-patterns__item-meta">
-                          <span>Snapshot: {snapshot.snapshotDate ? new Date(snapshot.snapshotDate).toLocaleDateString("en-PH") : "Unknown"}</span>
-                          <span>Holdings: {snapshot.holdings.length}</span>
-                          <span>Confidence {snapshot.confidence}%</span>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="investments-portfolio-table__empty">
-                  <strong>No imported snapshots yet.</strong>
-                  <p>When Clover parses investment screenshots, they will appear here without changing your manual holdings.</p>
-                </div>
-              )}
             </section>
 
             <section className="investments-allocation glass">
