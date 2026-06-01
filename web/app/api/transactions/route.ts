@@ -450,9 +450,16 @@ const scoreImportedTransactionForDisplay = (transaction: TransactionApiRow) => {
     transaction.merchantClean && transaction.merchantClean.trim() && transaction.merchantClean.trim() !== transaction.merchantRaw.trim()
       ? 100
       : 0;
+  const merchantText = [transaction.merchantClean, transaction.merchantRaw, transaction.description].filter(Boolean).join(" ").toLowerCase();
+  const landbankDisplayBonus =
+    transaction.categoryName?.trim().toLowerCase() === "cash & atm" &&
+    /cash\s+out\s*-\s*order|atm\s+withdrawal|\bcash\s+out\b|\bwithdrawal\b|cash\s+deposit/.test(merchantText)
+      ? 500
+      : 0;
   return (
     concreteCategory +
     cleanName +
+    landbankDisplayBonus +
     Number(transaction.categoryConfidence ?? 0) +
     Number(transaction.parserConfidence ?? 0) +
     (transaction.reviewStatus === "confirmed" ? 25 : 0)
