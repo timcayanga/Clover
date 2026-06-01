@@ -2277,7 +2277,7 @@ function TransactionsPageContent() {
   const addPhotoInputRef = useRef<HTMLInputElement>(null);
   const addPhotoLibraryInputRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
-  const initialWorkspaceId = urlSearchParams.get("workspaceId") || readSelectedWorkspaceId();
+  const initialWorkspaceId = urlSearchParams.get("workspaceId") || null;
   const initialCachedWorkspace = null;
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);

@@ -1096,8 +1096,8 @@ function AccountsPageContent() {
   const balanceInputRef = useRef<HTMLInputElement>(null);
   const workspaceLoadSeqRef = useRef(0);
   const workspaceHydrationVersionRef = useRef(new Map<string, number>());
-  const deletedAccountIdsRef = useRef(new Set<string>(getDeletedWorkspaceAccountIds(readSelectedWorkspaceId())));
-  const initialWorkspaceId = readSelectedWorkspaceId();
+  const deletedAccountIdsRef = useRef(new Set<string>());
+  const initialWorkspaceId = null;
   const deletingAccountIdFromQuery = searchParams?.get("deletingAccountId");
   const deletingWorkspaceIdFromQuery = searchParams?.get("deletingWorkspaceId");
   const initialCachedWorkspace = initialWorkspaceId ? getCachedWorkspaceHydration(initialWorkspaceId) : null;
