@@ -3,14 +3,82 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { loadEnvConfig } from "@next/env";
+import { prisma } from "@/lib/prisma";
 
 const webRoot = basename(process.cwd()) === "web" ? process.cwd() : join(process.cwd(), "web");
 loadEnvConfig(webRoot);
 
 const statementRoot = process.env.CLOVER_STATEMENT_ROOT ?? "/Users/TimCayanga1/Documents/Bank Statements";
 const baseUrl = process.env.CLOVER_IMPORT_REGRESSION_BASE_URL ?? "http://localhost:3000";
-const workspaceId = process.env.CLOVER_IMPORT_REGRESSION_WORKSPACE_ID;
+const requestedWorkspaceId = process.env.CLOVER_IMPORT_REGRESSION_WORKSPACE_ID;
 const chinaBankFile = "Samples/China Bank/860976948-CHINA-BANK-STATEMENT.pdf";
+
+const isLocalRegressionBaseUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+};
+
+const ensureLocalRegressionWorkspace = async () => {
+  try {
+    const user = await prisma.user.upsert({
+      where: { clerkUserId: "local-admin" },
+      update: {},
+      create: {
+        clerkUserId: "local-admin",
+        email: "local-admin+chinabank-qa@clover.local",
+        firstName: "Local",
+        lastName: "QA",
+        verified: true,
+        environment: "local",
+        planTier: "pro",
+        planTierLocked: true,
+      },
+      select: { id: true },
+    });
+
+    const existingWorkspace = await prisma.workspace.findFirst({
+      where: {
+        userId: user.id,
+        name: "China Bank Import Regression",
+      },
+      select: { id: true },
+    });
+    if (existingWorkspace) {
+      return existingWorkspace.id;
+    }
+
+    const workspace = await prisma.workspace.create({
+      data: {
+        userId: user.id,
+        name: "China Bank Import Regression",
+        type: "personal",
+      },
+      select: { id: true },
+    });
+
+    return workspace.id;
+  } catch (error) {
+    throw new Error(
+      "Unable to create the local China Bank QA workspace. Start the local database or set CLOVER_IMPORT_REGRESSION_WORKSPACE_ID.",
+      { cause: error }
+    );
+  }
+};
+
+const assertLocalServerReachable = async () => {
+  try {
+    await fetch(`${baseUrl}/api/health`);
+  } catch (error) {
+    throw new Error(
+      `Unable to reach ${baseUrl}. Start Clover locally with \`npm run dev\` before running qa:chinabank-process.`,
+      { cause: error }
+    );
+  }
+};
 
 const readJsonResponse = async (response: Response) => {
   const text = await response.text();
@@ -30,8 +98,15 @@ const getRawPayloadImportId = (value: unknown) => {
 };
 
 const main = async () => {
+  const workspaceId =
+    requestedWorkspaceId ??
+    (isLocalRegressionBaseUrl(baseUrl)
+      ? (await assertLocalServerReachable(), await ensureLocalRegressionWorkspace())
+      : null);
   if (!workspaceId) {
-    throw new Error("Set CLOVER_IMPORT_REGRESSION_WORKSPACE_ID to run the China Bank process route regression.");
+    throw new Error(
+      "Set CLOVER_IMPORT_REGRESSION_WORKSPACE_ID to run the China Bank process route regression against non-local URLs."
+    );
   }
 
   const absolutePath = join(statementRoot, chinaBankFile);
@@ -114,7 +189,12 @@ const main = async () => {
   console.log(`[PASS] ${fileName}: process, status, and account transactions returned 104 visible China Bank rows.`);
 };
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
-  process.exit(1);
-});
+main()
+  .catch((error) => {
+    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect().catch(() => null);
+    process.exit(process.exitCode ?? 0);
+  });
