@@ -31,6 +31,21 @@ const getLastFourDigits = (value?: string | null) => {
   return digits.length >= 4 ? digits.slice(-4) : null;
 };
 
+const looksLikeImportedFileLabel = (value?: string | null) => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return Boolean(
+    normalized &&
+      (/\.pdf|\.csv|\.xlsx|\.xls|statement|unlocked|compressor|online|msoa|cert/.test(normalized) || /^\d[\d\s._-]+/.test(normalized))
+  );
+};
+
+const canonicalInstitutionKey = (value?: string | null) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\bchina\s+bank\b/g, "chinabank")
+    .replace(/\bmetro\s+bank\b/g, "metrobank");
+
 const normalizeDigits = (value?: string | null) => String(value ?? "").replace(/\D/g, "");
 
 const normalizeParsedImportToken = (value?: string | null) =>
@@ -70,7 +85,7 @@ const expandImportedAccountFilters = async (
       requestedAccount.accountNumber,
       requestedAccount.type
     ),
-    institution: (requestedAccount.institution ?? "").trim().toLowerCase(),
+    institution: canonicalInstitutionKey(requestedAccount.institution),
     lastFour: getLastFourDigits(requestedAccount.accountNumber ?? requestedAccount.name),
     type: requestedAccount.type,
   };
@@ -80,7 +95,7 @@ const expandImportedAccountFilters = async (
     const candidateDescriptor = {
       id: candidate.id,
       key: normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, candidate.type),
-      institution: (candidate.institution ?? "").trim().toLowerCase(),
+      institution: canonicalInstitutionKey(candidate.institution),
       lastFour: getLastFourDigits(candidate.accountNumber ?? candidate.name),
       type: candidate.type,
     };
@@ -103,6 +118,17 @@ const expandImportedAccountFilters = async (
       candidateDescriptor.lastFour &&
       requestedDescriptor.lastFour === candidateDescriptor.lastFour &&
       requestedDescriptor.type === candidateDescriptor.type
+    ) {
+      expandedAccountIds.add(candidate.id);
+      continue;
+    }
+
+    if (
+      requestedDescriptor.lastFour &&
+      candidateDescriptor.lastFour &&
+      requestedDescriptor.lastFour === candidateDescriptor.lastFour &&
+      requestedDescriptor.type === candidateDescriptor.type &&
+      (looksLikeImportedFileLabel(requestedDescriptor.institution) || looksLikeImportedFileLabel(candidateDescriptor.institution))
     ) {
       expandedAccountIds.add(candidate.id);
     }

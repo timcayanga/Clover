@@ -27,7 +27,11 @@ export const isLikelyDateLikeBankLabel = (value?: string | null) => {
 
 export const sanitizeBankNameLabel = (value?: string | null) => {
   const trimmed = String(value ?? "").trim();
-  if (!trimmed || isLikelyDateLikeBankLabel(trimmed)) {
+  if (
+    !trimmed ||
+    isLikelyDateLikeBankLabel(trimmed) ||
+    /\.pdf|\.csv|\.xlsx|\.xls|unlocked|compressor|msoa|cert/i.test(trimmed)
+  ) {
     return null;
   }
 

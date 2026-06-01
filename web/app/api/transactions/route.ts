@@ -153,6 +153,21 @@ const getLastFourDigits = (value?: string | null) => {
   return digits.length >= 4 ? digits.slice(-4) : null;
 };
 
+const looksLikeImportedFileLabel = (value?: string | null) => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return Boolean(
+    normalized &&
+      (/\.pdf|\.csv|\.xlsx|\.xls|statement|unlocked|compressor|online|msoa|cert/.test(normalized) || /^\d[\d\s._-]+/.test(normalized))
+  );
+};
+
+const canonicalInstitutionKey = (value?: string | null) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\bchina\s+bank\b/g, "chinabank")
+    .replace(/\bmetro\s+bank\b/g, "metrobank");
+
 const expandImportedAccountFilters = async (workspaceId: string, accountIds: string[] | undefined) => {
   const requestedAccountIds = (accountIds ?? []).filter(Boolean);
   if (requestedAccountIds.length === 0) {
@@ -181,7 +196,7 @@ const expandImportedAccountFilters = async (workspaceId: string, accountIds: str
   const requestedDescriptors = requestedAccounts.map((account) => ({
     id: account.id,
     key: normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type),
-    institution: (account.institution ?? "").trim().toLowerCase(),
+    institution: canonicalInstitutionKey(account.institution),
     lastFour: getLastFourDigits(account.accountNumber ?? account.name),
     type: account.type,
   }));
@@ -190,7 +205,7 @@ const expandImportedAccountFilters = async (workspaceId: string, accountIds: str
     const candidateDescriptor = {
       id: candidate.id,
       key: normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, candidate.type),
-      institution: (candidate.institution ?? "").trim().toLowerCase(),
+      institution: canonicalInstitutionKey(candidate.institution),
       lastFour: getLastFourDigits(candidate.accountNumber ?? candidate.name),
       type: candidate.type,
     };
@@ -206,13 +221,15 @@ const expandImportedAccountFilters = async (workspaceId: string, accountIds: str
         }
 
         return Boolean(
-          requested.institution &&
-            candidateDescriptor.institution &&
-            requested.institution === candidateDescriptor.institution &&
-            requested.lastFour &&
+          requested.lastFour &&
             candidateDescriptor.lastFour &&
             requested.lastFour === candidateDescriptor.lastFour &&
-            requested.type === candidateDescriptor.type
+            requested.type === candidateDescriptor.type &&
+            ((requested.institution &&
+              candidateDescriptor.institution &&
+              requested.institution === candidateDescriptor.institution) ||
+              looksLikeImportedFileLabel(requested.institution) ||
+              looksLikeImportedFileLabel(candidateDescriptor.institution))
         );
       })
     ) {

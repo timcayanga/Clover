@@ -212,6 +212,19 @@ const normalizeImportedAccountInstitutionKey = (value?: string | null) =>
     .replace(/\s+\d{4}$/, "")
     .trim();
 
+const looksLikeImportedFileLabel = (value?: string | null) => {
+  const normalized = normalizeImportedAccountInstitutionKey(value);
+  return Boolean(
+    normalized &&
+      (/\.pdf|\.csv|\.xlsx|\.xls|statement|unlocked|compressor|online|msoa|cert/.test(normalized) || /^\d[\d\s._-]+/.test(normalized))
+  );
+};
+
+const canonicalImportedInstitutionKey = (value?: string | null) =>
+  normalizeImportedAccountInstitutionKey(value)
+    .replace(/\bchina\s+bank\b/g, "chinabank")
+    .replace(/\bmetro\s+bank\b/g, "metrobank");
+
 const hasImportedAccountNumber = (value?: unknown) => Boolean(extractLastFourDigits(typeof value === "string" ? value : null));
 
 const readImportedAccountText = (account: CachedRecord | ImportedAccountIdentityLike, key: "name" | "institution" | "accountNumber" | "source") => {
@@ -263,11 +276,28 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
     return 100;
   }
 
-  const leftInstitution = normalizeWhitespace(String(left.institution ?? "")).toLowerCase();
-  const rightInstitution = normalizeWhitespace(String(right.institution ?? "")).toLowerCase();
+  const leftInstitution = canonicalImportedInstitutionKey(left.institution);
+  const rightInstitution = canonicalImportedInstitutionKey(right.institution);
   const leftType = normalizeWhitespace(String(left.type ?? "")).toLowerCase();
   const rightType = normalizeWhitespace(String(right.type ?? "")).toLowerCase();
   if (!leftInstitution || !rightInstitution || leftInstitution !== rightInstitution || !leftType || leftType !== rightType) {
+    const leftLastFour = extractLastFourDigits(left.accountNumber ?? left.name);
+    const rightLastFour = extractLastFourDigits(right.accountNumber ?? right.name);
+    const leftExplicitLastFour = extractLastFourDigits(left.accountNumber);
+    const rightExplicitLastFour = extractLastFourDigits(right.accountNumber);
+    const institutionMismatchIsFileNoise = looksLikeImportedFileLabel(left.institution) || looksLikeImportedFileLabel(right.institution);
+    if (
+      institutionMismatchIsFileNoise &&
+      leftType &&
+      rightType &&
+      leftType === rightType &&
+      leftExplicitLastFour &&
+      rightExplicitLastFour &&
+      leftLastFour === rightLastFour
+    ) {
+      return 92;
+    }
+
     return 0;
   }
 
