@@ -520,6 +520,19 @@ const shouldPreferPdfOcrFirst = (fileName?: string | null) => {
   );
 };
 
+const shouldAvoidPdfRenderForServerless = (fileName?: string | null) => {
+  const lower = String(fileName ?? "").toLowerCase();
+  return (
+    lower.includes("landbank") ||
+    lower.includes("land bank") ||
+    lower.includes("eastwest") ||
+    lower.includes("ucpb") ||
+    lower.includes("china bank") ||
+    lower.includes("china-bank") ||
+    lower.includes("chinabank")
+  );
+};
+
 const shouldUseAggressivePdfOcrProfile = (fileName?: string | null) => {
   const lower = String(fileName ?? "").toLowerCase();
   return (
@@ -1845,6 +1858,9 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
     }
 
     const data = new Uint8Array(await file.arrayBuffer());
+    if (shouldAvoidPdfRenderForServerless(file.name)) {
+      return extractTextFromPdfBytes(data, password, null);
+    }
     const aggressiveProfile = shouldUseAggressivePdfOcrProfile(file.name) ? "aggressive" : "standard";
     if (shouldPreferPdfOcrFirst(file.name)) {
       return extractTextFromPdfBytesWithRenderFirstFallback(data, password, null, aggressiveProfile);

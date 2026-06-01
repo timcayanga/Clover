@@ -21,6 +21,7 @@ import {
   readImportedPdfPageImages,
   storeImportedFileTextCacheRecord,
 } from "@/lib/import-file-text.server";
+import { downloadImportObject } from "@/lib/import-storage.server";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import { parseReceiptText } from "@/lib/split-bill";
@@ -3828,6 +3829,7 @@ export const processImportFileText = async (
   const imageImport = isImageImportFile(fileType, fileName);
   const isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
+  let pdfFileDataBase64: string | null = null;
   let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
   const storageKey = String(importFile.storageKey ?? "");
 
@@ -4088,6 +4090,9 @@ export const processImportFileText = async (
           fileType,
           fileName,
         });
+      } else if (fileType === "application/pdf") {
+        const importedBytes = await downloadImportObject(storageKey);
+        pdfFileDataBase64 = Buffer.from(importedBytes).toString("base64");
       } else {
         pageImages = await readImportedPdfPageImages(
           {
@@ -4121,6 +4126,7 @@ export const processImportFileText = async (
       detectedMetadata: metadataForParse,
       parsedRows,
       pageImages,
+      fileDataBase64: pdfFileDataBase64,
       preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
       importMode,
     });
@@ -4249,6 +4255,7 @@ export const processImportFileText = async (
         detectedMetadata: openAiMetadata ?? metadataForParse,
         parsedRows: [],
         pageImages: null,
+        fileDataBase64: pdfFileDataBase64,
         preferPrimary: true,
         importMode: transcriptImportMode,
       });

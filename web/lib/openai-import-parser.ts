@@ -1260,6 +1260,7 @@ const buildOpenAIInputPayload = (params: {
   parsedRows: ParsedImportRow[];
   text: string;
   pageImages?: Array<{ page: number; dataUrl: string }> | null;
+  fileDataBase64?: string | null;
   importMode?: ImportMode | null;
 }) => {
   const institution = params.detectedMetadata?.institution ?? null;
@@ -1316,7 +1317,12 @@ const buildOpenAIInputPayload = (params: {
         ]
       : []),
     "",
-    ...(params.pageImages?.length
+    ...(params.fileDataBase64 && String(params.fileType ?? "").toLowerCase().includes("pdf")
+      ? [
+          "This PDF file itself was provided as input, so use the PDF content directly.",
+          "Read the document pages in order and extract the visible financial details conservatively.",
+        ]
+      : params.pageImages?.length
       ? [
           "This is a scanned statement, screenshot, or image-heavy file. The text layer may be empty or incomplete.",
           "Read the page images directly and extract the visible financial details for the selected document family.",
@@ -1330,6 +1336,10 @@ const buildOpenAIInputPayload = (params: {
     "Extracted text:",
     params.text,
     "",
+    ...(params.fileDataBase64 && String(params.fileType ?? "").toLowerCase().includes("pdf")
+      ? ["PDF input provided via file_data."]
+      : []),
+    "",
     `Image pages: ${(params.pageImages ?? []).map((page) => page.page).join(", ") || "none"}`,
     "",
     "Return only valid JSON matching the schema.",
@@ -1341,6 +1351,7 @@ const buildImageTranscriptionInputPayload = (params: {
   fileType?: string | null;
   detectedMetadata: DetectedStatementMetadata | null;
   pageImages?: Array<{ page: number; dataUrl: string }> | null;
+  fileDataBase64?: string | null;
   importMode?: ImportMode | null;
 }) => {
   const institution = params.detectedMetadata?.institution ?? null;
@@ -1394,6 +1405,9 @@ const buildImageTranscriptionInputPayload = (params: {
           "Capture every visible transaction row, the account number, and the final ending balance from the last page footer or summary line when present.",
         ]
       : []),
+    ...(params.fileDataBase64 && String(params.fileType ?? "").toLowerCase().includes("pdf")
+      ? ["The PDF file itself was provided as input. Use it directly if helpful."]
+      : []),
     "",
     "Extracted text:",
     "",
@@ -1428,6 +1442,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   detectedMetadata: DetectedStatementMetadata | null;
   parsedRows: ParsedImportRow[];
   pageImages?: Array<{ page: number; dataUrl: string }> | null;
+  fileDataBase64?: string | null;
   preferPrimary?: boolean;
   importMode?: ImportMode | null;
 }): Promise<
@@ -1453,7 +1468,17 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   const apiKey = (env as { OPENAI_API_KEY?: string }).OPENAI_API_KEY?.trim();
   const isPrimaryMode =
     params.preferPrimary ?? isTruthyEnvValue((env as { OPENAI_IMPORT_PARSER_PRIMARY?: string }).OPENAI_IMPORT_PARSER_PRIMARY);
-  if (!apiKey || (!isPrimaryMode && !responseLooksUseful(params.detectedMetadata, params.parsedRows, params.importMode ?? null))) {
+  const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"]);
+  const isNoisyVisionInstitution =
+    typeof params.detectedMetadata?.institution === "string" && noisyVisionPreferredInstitutions.has(params.detectedMetadata.institution);
+  const shouldForceOpenAIFallbackForNoisyInstitution =
+    isNoisyVisionInstitution && (params.importMode ?? "statement") === "statement";
+  if (
+    !apiKey ||
+    (!isPrimaryMode &&
+      !shouldForceOpenAIFallbackForNoisyInstitution &&
+      !responseLooksUseful(params.detectedMetadata, params.parsedRows, params.importMode ?? null))
+  ) {
     return null;
   }
 
@@ -1481,22 +1506,31 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     parsedRows: params.parsedRows,
     text: inputText,
     pageImages: params.pageImages ?? null,
+    fileDataBase64: params.fileDataBase64 ?? null,
     importMode: params.importMode ?? null,
   });
 
   const pageImagesInput = params.pageImages ?? [];
-  const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"]);
-  const isNoisyVisionInstitution =
-    typeof params.detectedMetadata?.institution === "string" && noisyVisionPreferredInstitutions.has(params.detectedMetadata.institution);
+  const pdfFileDataBase64 =
+    params.fileDataBase64 && String(params.fileType ?? "").toLowerCase().includes("pdf") ? params.fileDataBase64 : null;
   const pageImageLimit =
     params.text.trim().length === 0 ? 8 : params.importMode === "receipt" ? 4 : isNoisyVisionInstitution ? 8 : 2;
   const pageImagesToSend = pageImagesInput.slice(0, Math.min(pageImageLimit, pageImagesInput.length));
   const textModel = (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL?.trim() || "gpt-4.1";
   const imageModel =
     (env as { OPENAI_IMPORT_PARSER_IMAGE_MODEL?: string }).OPENAI_IMPORT_PARSER_IMAGE_MODEL?.trim() || "gpt-4.1";
-  const model = pageImagesToSend.length > 0 ? imageModel : textModel;
+  const pdfModel = (env as { OPENAI_IMPORT_PARSER_PDF_MODEL?: string }).OPENAI_IMPORT_PARSER_PDF_MODEL?.trim() || "gpt-4o";
+  const model = pdfFileDataBase64 ? pdfModel : pageImagesToSend.length > 0 ? imageModel : textModel;
   const buildUserContent = (pageImages: Array<{ page: number; dataUrl: string }>) => {
     const userContent: Array<Record<string, unknown>> = [{ type: "input_text", text: userPrompt }];
+    if (pdfFileDataBase64) {
+      userContent.unshift({
+        type: "input_file",
+        filename: params.fileName ?? "imported-file.pdf",
+        file_data: pdfFileDataBase64,
+      });
+      return userContent;
+    }
     for (const pageImage of pageImages) {
       userContent.push({
         type: "input_image",
@@ -1520,7 +1554,13 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           model: selectedModel,
           temperature: 0,
           max_output_tokens:
-            pageImages.length > 0 ? (params.text.trim().length === 0 ? 6_000 : 2_500) : 4_000,
+            pdfFileDataBase64
+              ? 6_000
+              : pageImages.length > 0
+                ? params.text.trim().length === 0
+                  ? 6_000
+                  : 2_500
+                : 4_000,
           input: [
             {
               role: "system",
@@ -1563,7 +1603,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   };
 
   try {
-    const primaryTimeoutMs = model === imageModel ? (params.text.trim().length === 0 ? 120_000 : 60_000) : 45_000;
+    const primaryTimeoutMs = model === imageModel ? (params.text.trim().length === 0 ? 120_000 : 60_000) : pdfFileDataBase64 ? 120_000 : 45_000;
     let response = await callOpenAI(model, pageImagesToSend, primaryTimeoutMs);
 
     if (!response || !response.ok) {
