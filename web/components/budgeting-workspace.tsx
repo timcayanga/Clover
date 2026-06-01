@@ -38,6 +38,36 @@ type BudgetAlert = BudgetItem & {
   href: string;
 };
 
+type BudgetHistoryPoint = {
+  label: string;
+  periodStart: string;
+  periodEnd: string;
+  actualAmount: number;
+  targetAmount: number;
+  progressPercent: number;
+  stage: BudgetStage;
+};
+
+type BudgetHistoryTransaction = {
+  id: string;
+  date: string;
+  amount: number;
+  type: "income" | "expense";
+  merchantName: string;
+  categoryName: string | null;
+};
+
+type BudgetHistoryResponse = {
+  budget: Pick<
+    BudgetItem,
+    "id" | "name" | "kind" | "scope" | "cadence" | "currency" | "targetAmount" | "accountId" | "accountName" | "categoryId" | "categoryName"
+  >;
+  history: {
+    points: BudgetHistoryPoint[];
+    recentTransactions: BudgetHistoryTransaction[];
+  };
+};
+
 type BudgetOverview = {
   budgets: BudgetItem[];
   alerts: BudgetAlert[];
@@ -78,6 +108,11 @@ const cadenceLabels: Record<BudgetCadence, string> = {
 };
 
 const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
+const formatShortDate = (value: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
 
 const defaultFormState = (currency = "PHP"): BudgetFormState => ({
   name: "",
@@ -110,6 +145,10 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const [form, setForm] = useState<BudgetFormState>(() => defaultFormState(initialData.budgets[0]?.currency ?? "PHP"));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [historyBudgetId, setHistoryBudgetId] = useState<string | null>(null);
+  const [historyData, setHistoryData] = useState<BudgetHistoryResponse | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const editingBudget = useMemo(
     () => data.budgets.find((budget) => budget.id === editingBudgetId) ?? null,
@@ -124,6 +163,24 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
       }
     };
   }, [isEditorOpen]);
+
+  useEffect(() => {
+    if (!historyBudgetId) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setHistoryBudgetId(null);
+        setHistoryData(null);
+        setHistoryError(null);
+        setHistoryLoading(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [historyBudgetId]);
 
   useEffect(() => {
     if (!isEditorOpen) {
@@ -152,6 +209,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const visibleBudgets = data.budgets;
   const onTrackBudgets = visibleBudgets.filter((budget) => budget.stage === "safe" || budget.stage === "watch");
   const atRiskBudgets = visibleBudgets.filter((budget) => budget.stage === "warning" || budget.stage === "critical" || budget.stage === "exceeded");
+  const selectedHistoryBudget = historyBudgetId ? data.budgets.find((budget) => budget.id === historyBudgetId) ?? null : null;
 
   const budgetGroups = useMemo(() => {
     const grouped = new Map<string, BudgetItem[]>();
@@ -192,6 +250,42 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
     setEditorPreset(null);
     setError(null);
     setIsEditorOpen(true);
+  };
+
+  const closeHistoryModal = () => {
+    setHistoryBudgetId(null);
+    setHistoryData(null);
+    setHistoryError(null);
+    setHistoryLoading(false);
+  };
+
+  const openHistoryModal = async (budget: BudgetItem) => {
+    setIsEditorOpen(false);
+    setEditingBudgetId(null);
+    setEditorPreset(null);
+    setError(null);
+    setHistoryBudgetId(budget.id);
+    setHistoryData(null);
+    setHistoryError(null);
+    setHistoryLoading(true);
+
+    try {
+      const response = await fetch(`/api/budgets/${budget.id}`);
+      const result = (await response.json()) as Partial<BudgetHistoryResponse> & { error?: unknown };
+      if (!response.ok) {
+        throw new Error(typeof result.error === "string" ? result.error : "Unable to load budget history");
+      }
+
+      if (!result.history || !result.budget) {
+        throw new Error("Unable to load budget history");
+      }
+
+      setHistoryData(result as BudgetHistoryResponse);
+    } catch (historyLoadError) {
+      setHistoryError(historyLoadError instanceof Error ? historyLoadError.message : "Unable to load budget history");
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   const updateFormField = <Key extends keyof BudgetFormState>(field: Key, value: BudgetFormState[Key]) => {
@@ -355,7 +449,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
 
                 <div className="budget-card__cadences">
                   {group.budgets.map((budget) => (
-                    <div key={budget.id} className="budget-card__cadence-row">
+                    <div key={budget.id} className={`budget-card__cadence-row budget-card__cadence-row--${budget.stage}`}>
                       <div className="budget-card__cadence-head">
                         <span>{cadenceLabels[budget.cadence]}</span>
                         <strong>{toPercentage(budget.progressPercent)}</strong>
@@ -371,8 +465,18 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                           {formatCurrency(budget.actualAmount, budget.currency)} of {formatCurrency(budget.targetAmount, budget.currency)}
                         </span>
                         <span>{budget.stage === "exceeded" ? "Over limit" : budget.statusLabel}</span>
+                      </div>
+                      <div className="budget-card__actions">
                         <button className="pill-link pill-link--inline" type="button" onClick={() => openEditEditor(budget.id)}>
                           Edit
+                        </button>
+                        <button
+                          className="budget-card__chevron-button"
+                          type="button"
+                          onClick={() => void openHistoryModal(budget)}
+                          aria-label={`Open history for ${budget.name} ${cadenceLabels[budget.cadence]}`}
+                        >
+                          ›
                         </button>
                       </div>
                     </div>
@@ -466,6 +570,96 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                 {saving ? "Saving..." : editingBudget ? "Save changes" : "Save budget"}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {historyBudgetId ? (
+        <div className="budget-history__backdrop" role="presentation" onClick={closeHistoryModal}>
+          <div
+            className="budget-history glass"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Budget history"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="budget-history__head">
+              <div>
+                <p className="eyebrow">Budget history</p>
+                <h4>{historyData?.budget.name ?? selectedHistoryBudget?.name ?? "Budget"}</h4>
+                <p className="budget-history__subhead">
+                  {historyData?.budget.categoryName ?? selectedHistoryBudget?.categoryName ?? "All Categories"} ·{" "}
+                  {cadenceLabels[historyData?.budget.cadence ?? selectedHistoryBudget?.cadence ?? "monthly"]} ·{" "}
+                  {historyData?.budget.scope ?? selectedHistoryBudget?.scope ?? "global"}
+                </p>
+              </div>
+              <button className="icon-button" type="button" onClick={closeHistoryModal} aria-label="Close budget history">
+                ×
+              </button>
+            </div>
+
+            {historyLoading ? (
+              <div className="budget-history__loading">
+                <div className="budget-history__skeleton" />
+                <div className="budget-history__skeleton" />
+                <div className="budget-history__skeleton" />
+              </div>
+            ) : historyError ? (
+              <p className="budget-history__error">{historyError}</p>
+            ) : historyData ? (
+              <div className="budget-history__body">
+                <div className="budget-history__chart">
+                  {historyData.history.points.map((point) => (
+                    <div key={point.periodStart} className={`budget-history__point budget-history__point--${point.stage}`}>
+                      <div className="budget-history__point-head">
+                        <span>{point.label}</span>
+                        <strong>{toPercentage(point.progressPercent)}</strong>
+                      </div>
+                      <div className="budget-history__bar" aria-hidden="true">
+                        <span
+                          className={`budget-history__bar-fill budget-history__bar-fill--${point.stage}`}
+                          style={{ width: `${Math.min(point.progressPercent, 100)}%` }}
+                        />
+                      </div>
+                      <div className="budget-history__point-meta">
+                        <span>
+                          {formatCurrency(point.actualAmount, historyData.budget.currency)} of{" "}
+                          {formatCurrency(point.targetAmount, historyData.budget.currency)}
+                        </span>
+                        <span>{point.stage === "exceeded" ? "Over limit" : point.stage === "critical" ? "At risk" : "Tracked"}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="budget-history__activity">
+                  <div className="budget-history__activity-head">
+                    <h5>Recent activity</h5>
+                    <span>{historyData.history.recentTransactions.length} items</span>
+                  </div>
+                  <div className="budget-history__activity-list">
+                    {historyData.history.recentTransactions.length > 0 ? (
+                      historyData.history.recentTransactions.map((transaction) => (
+                        <div key={transaction.id} className="budget-history__activity-item">
+                          <div>
+                            <strong>{transaction.merchantName}</strong>
+                            <span>
+                              {transaction.categoryName ?? "Uncategorized"} · {formatShortDate(transaction.date)}
+                            </span>
+                          </div>
+                          <div className="budget-history__activity-meta">
+                            <strong>{formatCurrency(transaction.amount, historyData.budget.currency)}</strong>
+                            <span>{transaction.type === "income" ? "Income" : "Expense"}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="budget-history__empty">No recent activity found for this budget.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

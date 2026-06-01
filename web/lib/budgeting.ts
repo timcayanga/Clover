@@ -62,6 +62,30 @@ export type BudgetAlert = BudgetProgress & {
   href: string;
 };
 
+export type BudgetHistoryPoint = {
+  label: string;
+  periodStart: string;
+  periodEnd: string;
+  actualAmount: number;
+  targetAmount: number;
+  progressPercent: number;
+  stage: BudgetAlertStage;
+};
+
+export type BudgetHistoryTransaction = {
+  id: string;
+  date: string;
+  amount: number;
+  type: TransactionType;
+  merchantName: string;
+  categoryName: string | null;
+};
+
+export type BudgetHistory = {
+  points: BudgetHistoryPoint[];
+  recentTransactions: BudgetHistoryTransaction[];
+};
+
 export type BudgetSuggestion = {
   id: string;
   title: string;
@@ -88,6 +112,7 @@ export type BudgetOverview = {
 };
 
 const thresholdSteps = [50, 70, 90, 100];
+const budgetHistoryPointCount = 6;
 
 const toAmount = (value: unknown) => Number(value ?? 0);
 const budgetSuggestionLookbackDays = 45;
@@ -143,6 +168,77 @@ export const getBudgetStage = (progressPercent: number): BudgetAlertStage => {
 
 export const getBudgetNextThreshold = (progressPercent: number) => thresholdSteps.find((step) => progressPercent < step) ?? null;
 
+const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const startOfWeek = (date: Date) => {
+  const day = date.getDay();
+  const daysSinceMonday = (day + 6) % 7;
+  return startOfDay(new Date(date.getFullYear(), date.getMonth(), date.getDate() - daysSinceMonday));
+};
+const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const addDays = (date: Date, days: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+const addMonths = (date: Date, months: number) => new Date(date.getFullYear(), date.getMonth() + months, 1);
+
+const getPeriodStart = (cadence: BudgetCadence, offset: number, now: Date) => {
+  if (cadence === "daily") {
+    return addDays(startOfDay(now), -offset);
+  }
+
+  if (cadence === "weekly") {
+    return addDays(startOfWeek(now), -offset * 7);
+  }
+
+  return addMonths(startOfMonth(now), -offset);
+};
+
+const getPeriodEnd = (cadence: BudgetCadence, start: Date) => {
+  if (cadence === "daily") {
+    return addDays(start, 1);
+  }
+
+  if (cadence === "weekly") {
+    return addDays(start, 7);
+  }
+
+  return addMonths(start, 1);
+};
+
+const formatHistoryLabel = (cadence: BudgetCadence, start: Date, end: Date) => {
+  const shortDateFormatter = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+  const monthYearFormatter = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    year: "numeric",
+  });
+
+  if (cadence === "daily") {
+    return shortDateFormatter.format(start);
+  }
+
+  if (cadence === "weekly") {
+    return `${shortDateFormatter.format(start)} - ${shortDateFormatter.format(addDays(end, -1))}`;
+  }
+
+  return monthYearFormatter.format(start);
+};
+
+const getBudgetActualAmount = (kind: BudgetKind, transactions: BudgetTransaction[]) => {
+  const spendingTransactions = transactions.filter((transaction) => transaction.type === "expense");
+  const incomeTransactions = transactions.filter((transaction) => transaction.type === "income");
+
+  if (kind === "savings_target") {
+    return Math.max(
+      incomeTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0) -
+        spendingTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0),
+      0
+    );
+  }
+
+  return spendingTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0);
+};
+
 const getBudgetStatus = (kind: BudgetKind, stage: BudgetAlertStage) => {
   if (kind === "savings_target") {
     if (stage === "exceeded") return { label: "Target reached", detail: "You are over the target pace.", tone: "positive" as const };
@@ -171,6 +267,62 @@ const matchesBudgetScope = (budget: BudgetRecord, transaction: BudgetTransaction
   return true;
 };
 
+export const buildBudgetHistory = (
+  budget: BudgetRecord,
+  transactions: Array<
+    BudgetTransaction & {
+      id: string;
+      merchantRaw?: string | null;
+      merchantClean?: string | null;
+      description?: string | null;
+      categoryName?: string | null;
+    }
+  >,
+  now = new Date(),
+  pointCount = budgetHistoryPointCount
+): BudgetHistory => {
+  const targetAmount = toAmount(budget.targetAmount);
+  const points: BudgetHistoryPoint[] = [];
+
+  for (let offset = pointCount - 1; offset >= 0; offset -= 1) {
+    const periodStart = getPeriodStart(budget.cadence, offset, now);
+    const periodEnd = getPeriodEnd(budget.cadence, periodStart);
+    const matchingTransactions = transactions.filter(
+      (transaction) => transaction.date >= periodStart && transaction.date < periodEnd && matchesBudgetScope(budget, transaction) && !transaction.isExcluded
+    );
+    const actualAmount = getBudgetActualAmount(budget.kind, matchingTransactions);
+    const progressPercent = targetAmount > 0 ? (actualAmount / targetAmount) * 100 : 0;
+
+    points.push({
+      label: formatHistoryLabel(budget.cadence, periodStart, periodEnd),
+      periodStart: periodStart.toISOString(),
+      periodEnd: periodEnd.toISOString(),
+      actualAmount,
+      targetAmount,
+      progressPercent,
+      stage: getBudgetStage(progressPercent),
+    });
+  }
+
+  const recentTransactions = [...transactions]
+    .filter((transaction) => matchesBudgetScope(budget, transaction) && !transaction.isExcluded)
+    .sort((left, right) => right.date.getTime() - left.date.getTime())
+    .slice(0, 8)
+    .map((transaction) => ({
+      id: transaction.id,
+      date: transaction.date.toISOString(),
+      amount: Math.abs(toAmount(transaction.amount)),
+      type: transaction.type,
+      merchantName: (transaction.merchantClean ?? transaction.merchantRaw ?? transaction.description ?? "Transaction").trim(),
+      categoryName: transaction.categoryName ?? null,
+    }));
+
+  return {
+    points,
+    recentTransactions,
+  };
+};
+
 export const buildBudgetOverview = (params: {
   budgets: BudgetRecord[];
   transactions: BudgetTransaction[];
@@ -182,14 +334,8 @@ export const buildBudgetOverview = (params: {
     .map((budget) => {
       const periodStart = getBudgetPeriodStart(budget.cadence, now);
       const periodTransactions = params.transactions.filter((transaction) => transaction.date >= periodStart && matchesBudgetScope(budget, transaction) && !transaction.isExcluded);
-      const spendingTransactions = periodTransactions.filter((transaction) => transaction.type === "expense");
-      const incomeTransactions = periodTransactions.filter((transaction) => transaction.type === "income");
       const targetAmount = toAmount(budget.targetAmount);
-      const actualAmount =
-        budget.kind === "savings_target"
-          ? Math.max(incomeTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0) -
-              spendingTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0), 0)
-          : spendingTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0);
+      const actualAmount = getBudgetActualAmount(budget.kind, periodTransactions);
       const progressPercent = targetAmount > 0 ? (actualAmount / targetAmount) * 100 : 0;
       const stage = getBudgetStage(progressPercent);
       const nextThreshold = getBudgetNextThreshold(progressPercent);
