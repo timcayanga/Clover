@@ -13023,7 +13023,10 @@ const reconstructGenericSparseSummaryRows = (
     return null;
   }
 
-  const accountName = metadata.accountName ?? metadata.institution ?? "Account";
+  const accountName =
+    metadata.accountNumber && metadata.institution === "Security Bank Corporation"
+      ? formatSimpleBankAccountName("Security Bank", metadata.accountNumber)
+      : metadata.accountName ?? metadata.institution ?? "Account";
   const institution = metadata.institution ?? undefined;
   const makeRow = (
     dateText: string,
@@ -13386,10 +13389,10 @@ const reconstructGenericSecurityBankAtmLedger = (
       merchantRaw: humanizeMerchantText(activeDescription),
       merchantClean: summarizeMerchantText(activeDescription, institutionAwareNormalization ? metadata.institution : null),
       description: activeDescription,
-      categoryName: "Cash & ATM",
+      categoryName: "Transfers",
       accountName,
       institution,
-      type: "expense",
+      type: "transfer",
       confidence: 82,
       rawPayload: {
         bank: metadata.institution ?? "Unknown",
