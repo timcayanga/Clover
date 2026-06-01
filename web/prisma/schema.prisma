@@ -424,6 +424,8 @@ model Account {
   creditLimit             Decimal?                     @db.Decimal(18, 2)
   creditLimitSource       String?
   creditLimitUpdatedAt    DateTime?
+  creditPeriodStart       DateTime?
+  creditPeriodEnd         DateTime?
   favorite                Boolean                      @default(false)
   createdAt               DateTime                     @default(now())
   updatedAt               DateTime                     @updatedAt

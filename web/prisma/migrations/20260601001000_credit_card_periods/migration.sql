@@ -1,0 +1,3 @@
+ALTER TABLE "Account"
+  ADD COLUMN IF NOT EXISTS "creditPeriodStart" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "creditPeriodEnd" TIMESTAMP(3);

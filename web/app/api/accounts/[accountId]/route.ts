@@ -69,6 +69,8 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   ...(columns.has("creditLimit") ? { creditLimit: true } : {}),
   ...(columns.has("creditLimitSource") ? { creditLimitSource: true } : {}),
   ...(columns.has("creditLimitUpdatedAt") ? { creditLimitUpdatedAt: true } : {}),
+  ...(columns.has("creditPeriodStart") ? { creditPeriodStart: true } : {}),
+  ...(columns.has("creditPeriodEnd") ? { creditPeriodEnd: true } : {}),
   updatedAt: true,
   createdAt: true,
 });
@@ -89,6 +91,8 @@ const accountPatchSchema = z.object({
   accountNumber: z.string().nullable().optional(),
   favorite: z.boolean().optional(),
   creditLimit: z.union([z.string(), z.number(), z.null()]).optional(),
+  creditPeriodStart: z.union([z.string(), z.number(), z.null()]).optional(),
+  creditPeriodEnd: z.union([z.string(), z.number(), z.null()]).optional(),
   investmentSubtype: z.string().nullable().optional(),
   investmentSymbol: z.string().nullable().optional(),
   investmentQuantity: z.union([z.string(), z.number(), z.null()]).optional(),
@@ -113,6 +117,8 @@ const serializeAccount = <T extends {
   creditLimit?: { toString: () => string } | null;
   creditLimitSource?: string | null;
   creditLimitUpdatedAt?: Date | null;
+  creditPeriodStart?: Date | null;
+  creditPeriodEnd?: Date | null;
   transactionCount?: number | null;
   balance: { toString: () => string } | null;
   investmentQuantity: { toString: () => string } | null;
@@ -134,6 +140,8 @@ const serializeAccount = <T extends {
   creditLimit: account.creditLimit?.toString() ?? null,
   creditLimitSource: account.creditLimitSource ?? null,
   creditLimitUpdatedAt: account.creditLimitUpdatedAt?.toISOString() ?? null,
+  creditPeriodStart: account.creditPeriodStart?.toISOString() ?? null,
+  creditPeriodEnd: account.creditPeriodEnd?.toISOString() ?? null,
   investmentQuantity: account.investmentQuantity?.toString() ?? null,
   investmentCostBasis: account.investmentCostBasis?.toString() ?? null,
   investmentPrincipal: account.investmentPrincipal?.toString() ?? null,
@@ -335,6 +343,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
           : {}),
         ...(compatibleColumns.has("creditLimitUpdatedAt") && payload.creditLimit !== undefined
           ? { creditLimitUpdatedAt: new Date() }
+          : {}),
+        ...(compatibleColumns.has("creditPeriodStart")
+          ? { creditPeriodStart: payload.creditPeriodStart === undefined ? undefined : parseNullableDate(payload.creditPeriodStart) }
+          : {}),
+        ...(compatibleColumns.has("creditPeriodEnd")
+          ? { creditPeriodEnd: payload.creditPeriodEnd === undefined ? undefined : parseNullableDate(payload.creditPeriodEnd) }
           : {}),
         investmentSubtype:
           payload.investmentSubtype === undefined ? undefined : normalizeInvestmentSubtype(payload.investmentSubtype),

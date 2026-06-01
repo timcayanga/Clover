@@ -86,6 +86,8 @@ type Account = {
   creditLimit?: string | null;
   creditLimitSource?: string | null;
   creditLimitUpdatedAt?: string | null;
+  creditPeriodStart?: string | null;
+  creditPeriodEnd?: string | null;
   transactionCount?: number | null;
   favorite?: boolean;
   updatedAt: string;
@@ -399,6 +401,32 @@ const formatDate = (value: string) =>
     month: "short",
     year: "numeric",
   });
+
+const formatDateInputValue = (value: Date | string | null | undefined) => {
+  if (!value) {
+    return "";
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getCurrentMonthPeriod = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return {
+    start: formatDateInputValue(start),
+    end: formatDateInputValue(end),
+  };
+};
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
@@ -1132,9 +1160,13 @@ function AccountDetailPageContent() {
   const [balanceSaveState, setBalanceSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [creditLimitDraft, setCreditLimitDraft] = useState("");
   const [creditLimitSaveState, setCreditLimitSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [creditPeriodStartDraft, setCreditPeriodStartDraft] = useState("");
+  const [creditPeriodEndDraft, setCreditPeriodEndDraft] = useState("");
   const stableBalanceRef = useRef<string | null>(null);
   const balanceInputRef = useRef<HTMLInputElement | null>(null);
   const accountInvestmentDraftSyncKeyRef = useRef<string | null>(null);
+  const creditSettingsBaselineRef = useRef("");
+  const creditSettingsAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [favoriteSaving, setFavoriteSaving] = useState(false);
   const [workspaceAccounts, setWorkspaceAccounts] = useState<Account[]>([]);
   const [mergeDirection, setMergeDirection] = useState<"into_other" | "into_current" | null>(null);
@@ -2069,8 +2101,17 @@ function AccountDetailPageContent() {
         : importedCreditLimit !== null
           ? "Read from latest statement"
           : "Not set";
-  const currentPeriodStart = latestCheckpoint?.statementStartDate ? new Date(latestCheckpoint.statementStartDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  const currentPeriodEnd = latestCheckpoint?.statementEndDate ? new Date(latestCheckpoint.statementEndDate) : new Date();
+  const monthlyDefaultPeriod = useMemo(() => getCurrentMonthPeriod(), []);
+  const detectedPeriodStartDraft = latestCheckpoint?.statementStartDate
+    ? formatDateInputValue(latestCheckpoint.statementStartDate)
+    : monthlyDefaultPeriod.start;
+  const detectedPeriodEndDraft = latestCheckpoint?.statementEndDate
+    ? formatDateInputValue(latestCheckpoint.statementEndDate)
+    : monthlyDefaultPeriod.end;
+  const effectivePeriodStartDraft = creditPeriodStartDraft || formatDateInputValue(account?.creditPeriodStart) || detectedPeriodStartDraft;
+  const effectivePeriodEndDraft = creditPeriodEndDraft || formatDateInputValue(account?.creditPeriodEnd) || detectedPeriodEndDraft;
+  const currentPeriodStart = new Date(`${effectivePeriodStartDraft}T00:00:00`);
+  const currentPeriodEnd = new Date(`${effectivePeriodEndDraft}T23:59:59`);
   const currentPeriodCharges = isCreditAccount
     ? transactions.reduce((total, transaction) => {
         const transactionDate = new Date(transaction.date);
@@ -2088,9 +2129,9 @@ function AccountDetailPageContent() {
     : 0;
   const currentPeriodRemainingLimit = effectiveCreditLimit === null ? null : Math.max(0, effectiveCreditLimit - currentPeriodCharges);
   const creditCurrentPeriodLabel =
-    latestCheckpoint?.statementStartDate && latestCheckpoint?.statementEndDate
-      ? `${formatDate(latestCheckpoint.statementStartDate)} - ${formatDate(latestCheckpoint.statementEndDate)}`
-      : "This month";
+    effectivePeriodStartDraft && effectivePeriodEndDraft
+      ? `${formatDate(effectivePeriodStartDraft)} - ${formatDate(effectivePeriodEndDraft)}`
+      : `${formatDate(detectedPeriodStartDraft)} - ${formatDate(detectedPeriodEndDraft)}`;
 
   useEffect(() => {
     if (!account || !matchingImportSummaryHasRows || matchingImportSummaryPreviewTransactions.length === 0) {
@@ -2120,13 +2161,32 @@ function AccountDetailPageContent() {
   useEffect(() => {
     if (!account || !isCreditAccount) {
       setCreditLimitDraft("");
+      setCreditPeriodStartDraft("");
+      setCreditPeriodEndDraft("");
       setCreditLimitSaveState("idle");
+      creditSettingsBaselineRef.current = "";
       return;
     }
 
-    setCreditLimitDraft(effectiveCreditLimit === null ? "" : effectiveCreditLimit.toFixed(2));
+    const nextLimitDraft = effectiveCreditLimit === null ? "" : effectiveCreditLimit.toFixed(2);
+    const nextPeriodStartDraft = formatDateInputValue(account.creditPeriodStart) || detectedPeriodStartDraft;
+    const nextPeriodEndDraft = formatDateInputValue(account.creditPeriodEnd) || detectedPeriodEndDraft;
+    const nextSignature = [nextLimitDraft, nextPeriodStartDraft, nextPeriodEndDraft].join("|");
+
+    setCreditLimitDraft(nextLimitDraft);
+    setCreditPeriodStartDraft(nextPeriodStartDraft);
+    setCreditPeriodEndDraft(nextPeriodEndDraft);
     setCreditLimitSaveState("idle");
-  }, [account, effectiveCreditLimit, isCreditAccount]);
+    creditSettingsBaselineRef.current = nextSignature;
+  }, [
+    account,
+    account?.creditPeriodEnd,
+    account?.creditPeriodStart,
+    detectedPeriodEndDraft,
+    detectedPeriodStartDraft,
+    effectiveCreditLimit,
+    isCreditAccount,
+  ]);
 
   useEffect(() => {
     if (!balanceEditorOpen) {
@@ -2192,8 +2252,7 @@ function AccountDetailPageContent() {
     }
   };
 
-  const saveCreditLimit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const saveCreditSettings = async () => {
     if (!account || !isCreditAccount) {
       return;
     }
@@ -2202,6 +2261,11 @@ function AccountDetailPageContent() {
     if (parsedCreditLimit === null || parsedCreditLimit < 0) {
       setCreditLimitSaveState("error");
       setMessage("Enter a valid credit limit before saving.");
+      return;
+    }
+    if (!creditPeriodStartDraft || !creditPeriodEndDraft || new Date(creditPeriodStartDraft) > new Date(creditPeriodEndDraft)) {
+      setCreditLimitSaveState("error");
+      setMessage("Enter a valid current period.");
       return;
     }
 
@@ -2213,6 +2277,8 @@ function AccountDetailPageContent() {
         body: JSON.stringify({
           workspaceId: account.workspaceId,
           creditLimit: parsedCreditLimit > 0 ? parsedCreditLimit.toFixed(2) : null,
+          creditPeriodStart: creditPeriodStartDraft || null,
+          creditPeriodEnd: creditPeriodEndDraft || null,
         }),
       });
 
@@ -2225,16 +2291,49 @@ function AccountDetailPageContent() {
         ...account,
         creditLimit: parsedCreditLimit > 0 ? parsedCreditLimit.toFixed(2) : null,
         creditLimitSource: parsedCreditLimit > 0 ? "manual" : null,
+        creditPeriodStart: creditPeriodStartDraft || null,
+        creditPeriodEnd: creditPeriodEndDraft || null,
       };
       setAccount(nextAccount);
       setCreditLimitDraft(nextAccount.creditLimit ?? "");
       setCreditLimitSaveState("saved");
-      setMessage(parsedCreditLimit > 0 ? "Credit limit updated." : "Credit limit cleared.");
+      creditSettingsBaselineRef.current = [
+        parsedCreditLimit > 0 ? parsedCreditLimit.toFixed(2) : "",
+        creditPeriodStartDraft,
+        creditPeriodEndDraft,
+      ].join("|");
+      setMessage("Credit card details updated.");
     } catch (error) {
       setCreditLimitSaveState("error");
       setMessage(error instanceof Error ? error.message : "Unable to update credit limit.");
     }
   };
+
+  useEffect(() => {
+    if (!account || !isCreditAccount) {
+      return;
+    }
+
+    const currentSignature = [creditLimitDraft, creditPeriodStartDraft, creditPeriodEndDraft].join("|");
+    if (!creditSettingsBaselineRef.current || currentSignature === creditSettingsBaselineRef.current) {
+      return;
+    }
+
+    if (creditSettingsAutosaveTimerRef.current) {
+      clearTimeout(creditSettingsAutosaveTimerRef.current);
+    }
+
+    creditSettingsAutosaveTimerRef.current = setTimeout(() => {
+      void saveCreditSettings();
+    }, 650);
+
+    return () => {
+      if (creditSettingsAutosaveTimerRef.current) {
+        clearTimeout(creditSettingsAutosaveTimerRef.current);
+        creditSettingsAutosaveTimerRef.current = null;
+      }
+    };
+  }, [account, creditLimitDraft, creditPeriodEndDraft, creditPeriodStartDraft, isCreditAccount]);
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {
       return null;
@@ -3723,7 +3822,7 @@ function AccountDetailPageContent() {
             ) : null}
 
             {isCreditAccount ? (
-              <form className="accounts-detail__credit-inline" aria-label="Credit card details" onSubmit={saveCreditLimit}>
+              <div className="accounts-detail__credit-inline" aria-label="Credit card details">
                 <label className="accounts-detail__credit-inline-field accounts-detail__credit-inline-field--editable">
                   <span>Monthly Limit</span>
                   <input
@@ -3741,17 +3840,40 @@ function AccountDetailPageContent() {
                   <span>Available Credit</span>
                   <strong>{currentPeriodRemainingLimit === null ? "Not set" : formatAccountAmount(currentPeriodRemainingLimit, account.currency)}</strong>
                 </div>
-                <div className="accounts-detail__credit-inline-field">
+                <div className="accounts-detail__credit-inline-field accounts-detail__credit-inline-field--period">
                   <span>Current Period</span>
-                  <strong>{creditCurrentPeriodLabel}</strong>
+                  <div className="accounts-detail__credit-period-inputs" aria-label={`Current period: ${creditCurrentPeriodLabel}`}>
+                    <input
+                      type="date"
+                      value={creditPeriodStartDraft}
+                      onChange={(event) => {
+                        setCreditPeriodStartDraft(event.target.value);
+                        setCreditLimitSaveState("idle");
+                      }}
+                      aria-label="Current period start"
+                    />
+                    <span>to</span>
+                    <input
+                      type="date"
+                      value={creditPeriodEndDraft}
+                      onChange={(event) => {
+                        setCreditPeriodEndDraft(event.target.value);
+                        setCreditLimitSaveState("idle");
+                      }}
+                      aria-label="Current period end"
+                    />
+                  </div>
                 </div>
-                <button className="accounts-detail__credit-inline-save" type="submit" disabled={creditLimitSaveState === "saving"}>
-                  {creditLimitSaveState === "saving" ? "Saving" : creditLimitSaveState === "saved" ? "Saved" : "Save"}
-                </button>
                 <span className="accounts-detail__credit-inline-meta">
-                  {creditLimitSaveState === "error" ? "Needs attention" : creditLimitSourceLabel}
+                  {creditLimitSaveState === "saving"
+                    ? "Saving..."
+                    : creditLimitSaveState === "saved"
+                      ? "Saved"
+                      : creditLimitSaveState === "error"
+                        ? "Needs attention"
+                        : creditLimitSourceLabel}
                 </span>
-              </form>
+              </div>
             ) : null}
           </div>
         ) : null}
