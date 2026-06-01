@@ -435,6 +435,27 @@ const findOrphanParsedImportIdsForAccount = async (account: {
   return candidateImportIds.filter((importFileId) => !importIdsWithVisibleRows.has(importFileId));
 };
 
+const IMPORT_RECOVERY_TIMEOUT_MS = 1200;
+
+const hasActiveWorkspaceImport = async (workspaceId: string) => {
+  const activeImportCount = await prisma.importFile.count({
+    where: {
+      workspaceId,
+      status: "processing",
+    },
+  });
+
+  return activeImportCount > 0;
+};
+
+const withImportRecoveryTimeout = async (task: Promise<boolean>) =>
+  Promise.race([
+    task,
+    new Promise<false>((resolve) => {
+      setTimeout(() => resolve(false), IMPORT_RECOVERY_TIMEOUT_MS);
+    }),
+  ]);
+
 const materializeOrphanParsedImportsForAccount = async (account: {
   id: string;
   workspaceId: string;
@@ -489,13 +510,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
 
     await assertWorkspaceAccess(userId, account.workspaceId);
     await normalizeLegacyTransactionVisibility(account.workspaceId);
-    await materializeOrphanParsedImportsForAccount(account).catch((error) => {
-      console.warn("[account-transactions] unable to materialize orphan parsed import rows", {
-        accountId: account.id,
-        workspaceId: account.workspaceId,
-        error,
+    const shouldRunImportRecovery = !(await hasActiveWorkspaceImport(account.workspaceId));
+    if (shouldRunImportRecovery) {
+      await withImportRecoveryTimeout(materializeOrphanParsedImportsForAccount(account)).catch((error) => {
+        console.warn("[account-transactions] unable to materialize orphan parsed import rows", {
+          accountId: account.id,
+          workspaceId: account.workspaceId,
+          error,
+        });
       });
-    });
+    }
 
     const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const pageSize = Math.max(1, Number(searchParams.get("pageSize") ?? "25") || 25);

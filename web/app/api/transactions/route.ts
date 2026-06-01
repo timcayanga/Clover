@@ -694,6 +694,27 @@ const normalizeLegacyTransactionVisibility = async (workspaceId: string) => {
   `;
 };
 
+const IMPORT_RECOVERY_TIMEOUT_MS = 1200;
+
+const hasActiveWorkspaceImport = async (workspaceId: string) => {
+  const activeImportCount = await prisma.importFile.count({
+    where: {
+      workspaceId,
+      status: "processing",
+    },
+  });
+
+  return activeImportCount > 0;
+};
+
+const withImportRecoveryTimeout = async (task: Promise<boolean>) =>
+  Promise.race([
+    task,
+    new Promise<false>((resolve) => {
+      setTimeout(() => resolve(false), IMPORT_RECOVERY_TIMEOUT_MS);
+    }),
+  ]);
+
 const findOrphanParsedImportIdsForAccount = async (account: {
   id: string;
   workspaceId: string;
@@ -823,12 +844,15 @@ export async function GET(request: Request) {
       where: { workspaceId },
       select: { id: true, workspaceId: true, name: true, institution: true, type: true, accountNumber: true, source: true },
     });
-    await materializeOrphanParsedImportsForWorkspace(workspaceId, workspaceAccountRows).catch((error) => {
-      console.warn("[transactions] unable to materialize orphan parsed import rows", {
-        workspaceId,
-        error,
+    const shouldRunImportRecovery = !(await hasActiveWorkspaceImport(workspaceId));
+    if (shouldRunImportRecovery) {
+      await withImportRecoveryTimeout(materializeOrphanParsedImportsForWorkspace(workspaceId, workspaceAccountRows)).catch((error) => {
+        console.warn("[transactions] unable to materialize orphan parsed import rows", {
+          workspaceId,
+          error,
+        });
       });
-    });
+    }
     const workspaceAccounts = workspaceAccountRows.map((account) => ({
       id: account.id,
       accountNumber: account.accountNumber,
