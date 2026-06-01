@@ -9069,6 +9069,196 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   line-height: 1.35;
 }
 
+.goals-page {
+  display: grid;
+  gap: 14px;
+}
+
+.goals-overview__card--current {
+  position: relative;
+}
+
+.goals-overview__card-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 2px;
+}
+
+.goals-orb-card {
+  padding: 20px;
+  border-radius: 30px;
+  border: 1px solid var(--stroke);
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 28%),
+    radial-gradient(circle at 82% 12%, rgba(3, 168, 192, 0.12), transparent 30%),
+    rgba(255, 255, 255, 0.95);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 16px;
+}
+
+.goals-orb-card__head {
+  align-items: center;
+}
+
+.goals-orb-card__head .goals-panel__stat span {
+  max-width: 18ch;
+}
+
+.goals-orb {
+  --goal-progress: 0%;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+
+.goals-orb__shell {
+  width: min(100%, 380px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  perspective: 1200px;
+}
+
+.goals-orb__ring {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  transform: translateY(2px) rotateX(16deg);
+  background:
+    radial-gradient(circle at 31% 25%, rgba(255, 255, 255, 0.9), transparent 28%),
+    conic-gradient(from 215deg, rgba(3, 168, 192, 0.96) 0 var(--goal-progress), rgba(148, 163, 184, 0.16) var(--goal-progress) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 24px 42px rgba(2, 132, 199, 0.12);
+}
+
+.goals-orb__ring::after {
+  content: "";
+  position: absolute;
+  inset: 14%;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.9) 56%, rgba(255, 255, 255, 0.96) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -18px 28px rgba(15, 23, 42, 0.06),
+    inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+.goals-orb__ring-shadow {
+  position: absolute;
+  inset: auto 10% 8%;
+  height: 22%;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(3, 168, 192, 0.22), transparent 70%);
+  filter: blur(18px);
+  transform: translateY(18px);
+}
+
+.goals-orb__core {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -10px 26px rgba(15, 23, 42, 0.06);
+  z-index: 1;
+}
+
+.goals-orb__core strong {
+  font-size: clamp(2.1rem, 5vw, 3.5rem);
+  line-height: 1;
+  letter-spacing: -0.06em;
+}
+
+.goals-orb__core span {
+  max-width: 16ch;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.goals-orb__copy {
+  margin: 0;
+  max-width: 58ch;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.goals-section--signals {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.goals-drivers-grid--simple {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.goals-driver--summary {
+  padding: 16px;
+  border-radius: 24px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 6px;
+}
+
+.goals-driver--summary span {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.goals-driver--summary small {
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.goals-driver--summary.positive {
+  border-color: rgba(34, 197, 94, 0.16);
+}
+
+.goals-driver--summary.warning {
+  border-color: rgba(245, 158, 11, 0.18);
+}
+
+.goals-driver--summary.negative {
+  border-color: rgba(239, 68, 68, 0.16);
+}
+
+.goals-driver--summary.neutral {
+  border-color: rgba(3, 168, 192, 0.14);
+}
+
+.goals-driver--summary.positive strong {
+  color: rgb(22, 163, 74);
+}
+
+.goals-driver--summary.warning strong {
+  color: rgb(217, 119, 6);
+}
+
+.goals-driver--summary.negative strong {
+  color: rgb(220, 38, 38);
+}
+
+.goals-driver--summary.neutral strong {
+  color: rgb(8, 145, 178);
+}
+
 .goals-progress-grid {
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
@@ -26150,6 +26340,27 @@ button.accounts-detail__transaction-head-cell {
 
   .budget-history__activity-meta {
     text-align: left;
+  }
+
+  .goals-section--signals,
+  .goals-overview__cards,
+  .goals-drivers-grid--simple {
+    grid-template-columns: 1fr;
+  }
+
+  .goals-orb-card,
+  .goals-weekly,
+  .goals-drivers,
+  .goals-history {
+    padding: 14px;
+  }
+
+  .goals-orb__shell {
+    width: min(100%, 300px);
+  }
+
+  .goals-overview__card-actions {
+    justify-content: flex-start;
   }
 
   .budget-summary-grid {
