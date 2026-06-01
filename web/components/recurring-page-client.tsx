@@ -8,6 +8,7 @@ type RecurringPageClientProps = {
   workspaceId: string;
   commitments: Parameters<typeof CommitmentsPanel>[0]["commitments"];
   recurringPatterns: Parameters<typeof CommitmentsPanel>[0]["recurringPatterns"];
+  plannedPaymentSuggestions: Parameters<typeof CommitmentsPanel>[0]["plannedPaymentSuggestions"];
   accounts: Parameters<typeof CommitmentsPanel>[0]["accounts"];
   transactions: Parameters<typeof CommitmentsPanel>[0]["transactions"];
   initialAddOpen?: boolean;
@@ -29,6 +30,7 @@ export function RecurringPageClient({
   workspaceId,
   commitments,
   recurringPatterns,
+  plannedPaymentSuggestions,
   accounts,
   transactions,
   initialAddOpen = false,
@@ -103,6 +105,7 @@ export function RecurringPageClient({
           workspaceId={workspaceId}
           commitments={commitments}
           recurringPatterns={recurringPatterns}
+          plannedPaymentSuggestions={plannedPaymentSuggestions}
           accounts={accounts}
           transactions={transactions}
           showAddModal={addOpen}

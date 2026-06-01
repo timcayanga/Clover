@@ -13,6 +13,7 @@ import {
   type FinancialCommitmentSummary,
 } from "@/lib/commitments";
 import type { RecurringPatternSummary } from "@/lib/recurring-page";
+import type { PlannedPaymentSuggestion } from "@/lib/planned-payment-suggestions";
 import { getAccountPath } from "@/lib/account-path";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatAccountTypeLabel, getRecurringKindSuggestionForAccountType, isLiabilityAccountType } from "@/lib/account-types";
@@ -40,6 +41,7 @@ type CommitmentsPanelProps = {
   workspaceId: string;
   commitments: FinancialCommitmentSummary[];
   recurringPatterns: RecurringPatternSummary[];
+  plannedPaymentSuggestions: PlannedPaymentSuggestion[];
   accounts: CommitmentAccountOption[];
   transactions: CommitmentTransactionOption[];
   showAddModal?: boolean;
@@ -237,6 +239,7 @@ export function CommitmentsPanel({
   workspaceId,
   commitments,
   recurringPatterns,
+  plannedPaymentSuggestions,
   accounts,
   transactions,
   showAddModal = false,
@@ -248,7 +251,22 @@ export function CommitmentsPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [confirmingPatternId, setConfirmingPatternId] = useState<string | null>(null);
   const [dismissingPatternId, setDismissingPatternId] = useState<string | null>(null);
-  const [reviewingPattern, setReviewingPattern] = useState<RecurringPatternSummary | null>(null);
+  const [reviewingSuggestion, setReviewingSuggestion] = useState<{
+    id: string;
+    sourceKind: "recurring_pattern" | PlannedPaymentSuggestion["sourceKind"];
+    title: string;
+    counterparty: string;
+    amount: string;
+    currency: string;
+    dueDate: string;
+    recurrence: (typeof commitmentRecurrenceOptions)[number]["value"];
+    accountId: string;
+    notes: string;
+    sourceLabel: string;
+    sourceDetail: string | null;
+    statementCheckpointId: string | null;
+    installmentTerms: string;
+  } | null>(null);
   const [patternDraft, setPatternDraft] = useState({
     title: "",
     counterparty: "",
@@ -258,6 +276,8 @@ export function CommitmentsPanel({
     recurrence: "monthly" as (typeof commitmentRecurrenceOptions)[number]["value"],
     accountId: "",
     notes: "",
+    statementCheckpointId: "",
+    installmentTerms: "",
   });
   const [kind, setKind] = useState<CommitmentKind>("planned_payment");
   const [title, setTitle] = useState("");
@@ -384,6 +404,19 @@ export function CommitmentsPanel({
     setNotes("");
     setAccountId("");
     setTransactionId("");
+    setPatternDraft({
+      title: "",
+      counterparty: "",
+      amount: "",
+      currency: "PHP",
+      dueDate: "",
+      recurrence: "monthly",
+      accountId: "",
+      notes: "",
+      statementCheckpointId: "",
+      installmentTerms: "",
+    });
+    setReviewingSuggestion(null);
   };
 
   const handleCreate = (event: React.FormEvent<HTMLFormElement>) => {
@@ -413,9 +446,17 @@ export function CommitmentsPanel({
         currency: shouldShowCurrency ? currency.trim() || "PHP" : "PHP",
         dueDate: shouldShowDueDate && dueDate ? dueDate : null,
         recurrence: shouldShowRecurrence ? recurrence : "once",
-        notes: shouldShowNotes && notes.trim() ? notes : null,
+        notes:
+          shouldShowNotes && notes.trim()
+            ? [notes.trim(), patternDraft.installmentTerms.trim() ? `Installment terms: ${patternDraft.installmentTerms.trim()}.` : null]
+                .filter(Boolean)
+                .join(" ")
+            : patternDraft.installmentTerms.trim()
+              ? `Installment terms: ${patternDraft.installmentTerms.trim()}.`
+              : null,
         accountId: shouldShowLinkedAccount && accountId ? accountId : null,
         transactionId: shouldShowTransaction && transactionId ? transactionId : null,
+        statementCheckpointId: patternDraft.statementCheckpointId || null,
         status: "active",
       }),
     })
@@ -464,14 +505,46 @@ export function CommitmentsPanel({
       });
   };
 
+  const openSuggestionReview = (suggestion: {
+    id: string;
+    sourceKind: "recurring_pattern" | PlannedPaymentSuggestion["sourceKind"];
+    title: string;
+    counterparty: string;
+    amount: string;
+    currency: string;
+    dueDate: string;
+    recurrence: (typeof commitmentRecurrenceOptions)[number]["value"];
+    accountId: string;
+    notes: string;
+    sourceLabel: string;
+    sourceDetail: string | null;
+    statementCheckpointId: string | null;
+    installmentTerms: string;
+  }) => {
+    setReviewingSuggestion(suggestion);
+    setPatternDraft({
+      title: suggestion.title,
+      counterparty: suggestion.counterparty,
+      amount: suggestion.amount,
+      currency: suggestion.currency || "PHP",
+      dueDate: suggestion.dueDate,
+      recurrence: suggestion.recurrence,
+      accountId: suggestion.accountId,
+      notes: suggestion.notes,
+      statementCheckpointId: suggestion.statementCheckpointId ?? "",
+      installmentTerms: suggestion.installmentTerms ?? "",
+    });
+  };
+
   const openPatternReview = (pattern: RecurringPatternSummary) => {
     const title = pattern.merchantClean ?? pattern.merchantRaw;
     const recurrenceValue = commitmentRecurrenceOptions.some((option) => option.value === pattern.frequency)
       ? (pattern.frequency as (typeof commitmentRecurrenceOptions)[number]["value"])
       : "monthly";
 
-    setReviewingPattern(pattern);
-    setPatternDraft({
+    openSuggestionReview({
+      id: pattern.id,
+      sourceKind: "recurring_pattern",
       title,
       counterparty: title,
       amount: pattern.amount ?? "",
@@ -480,28 +553,82 @@ export function CommitmentsPanel({
       recurrence: recurrenceValue,
       accountId: pattern.account?.id ?? "",
       notes: `Detected from ${pattern.transactionCount} matching transaction${pattern.transactionCount === 1 ? "" : "s"}.`,
+      sourceLabel: "Recurring pattern",
+      sourceDetail: pattern.nextExpectedDate ? `Next due ${formatDate(pattern.nextExpectedDate)}` : null,
+      statementCheckpointId: "",
+      installmentTerms: "",
+    });
+  };
+
+  const openPlannedPaymentReview = (suggestion: PlannedPaymentSuggestion) => {
+    openSuggestionReview({
+      id: suggestion.id,
+      sourceKind: suggestion.sourceKind,
+      title: suggestion.title,
+      counterparty: suggestion.counterparty ?? suggestion.title,
+      amount: suggestion.amount ?? "",
+      currency: suggestion.currency,
+      dueDate: toDateInputValue(suggestion.dueDate),
+      recurrence: suggestion.recurrence,
+      accountId: suggestion.accountId ?? "",
+      notes: suggestion.notes ?? "",
+      sourceLabel: suggestion.sourceLabel,
+      sourceDetail: suggestion.sourceDetail,
+      statementCheckpointId: suggestion.statementCheckpointId,
+      installmentTerms: suggestion.installmentTerms ?? "",
     });
   };
 
   const handleConfirmPattern = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!reviewingPattern) {
+    if (!reviewingSuggestion) {
       return;
     }
 
-    setConfirmingPatternId(reviewingPattern.id);
-    void fetch(`/api/recurring-patterns/${reviewingPattern.id}/confirm`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patternDraft),
-    })
+    setConfirmingPatternId(reviewingSuggestion.id);
+    const notesToSave =
+      patternDraft.installmentTerms.trim() && !patternDraft.notes.includes("Installment terms:")
+        ? [patternDraft.notes.trim(), `Installment terms: ${patternDraft.installmentTerms.trim()}.`].filter(Boolean).join(" ")
+        : patternDraft.notes.trim();
+    const payload = {
+      ...patternDraft,
+      notes: notesToSave,
+    };
+
+    const request = reviewingSuggestion.sourceKind === "recurring_pattern"
+      ? fetch(`/api/recurring-patterns/${reviewingSuggestion.id}/confirm`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+      : fetch("/api/commitments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId,
+            kind: "planned_payment",
+            title: patternDraft.title,
+            counterparty: patternDraft.counterparty.trim() ? patternDraft.counterparty : null,
+            amount: patternDraft.amount.trim() ? patternDraft.amount : null,
+            currency: patternDraft.currency.trim() || "PHP",
+            dueDate: patternDraft.dueDate || null,
+            recurrence: patternDraft.recurrence,
+            notes: notesToSave || null,
+            accountId: patternDraft.accountId || null,
+            transactionId: null,
+            statementCheckpointId: patternDraft.statementCheckpointId || null,
+            status: "active",
+          }),
+        });
+
+    void request
       .then(async (response) => {
         if (!response.ok) {
           const payload = (await response.json().catch(() => null)) as { error?: string } | null;
           throw new Error(payload?.error ?? "Unable to add recurring item");
         }
 
-        setReviewingPattern(null);
+        setReviewingSuggestion(null);
         router.refresh();
       })
       .catch((error: unknown) => {
@@ -537,6 +664,50 @@ export function CommitmentsPanel({
 
   return (
     <section style={{ display: "grid", gap: 24 }}>
+      {plannedPaymentSuggestions.length > 0 ? (
+        <article className="panel commitments-suggestions-panel">
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <p className="eyebrow">Planned payments</p>
+              <h3 style={{ margin: 0 }}>Clover found upcoming payments from uploaded statements</h3>
+            </div>
+            <span className="button button-secondary button-small">
+              {plannedPaymentSuggestions.length} suggestion{plannedPaymentSuggestions.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div style={{ display: "grid", gap: 10 }}>
+            {plannedPaymentSuggestions.slice(0, 6).map((suggestion) => (
+              <article key={suggestion.id} className="notification-item" style={{ alignItems: "flex-start" }}>
+                <div className="notification-item__main" style={{ gap: 4 }}>
+                  <p className="notification-item__tone">
+                    {suggestion.sourceLabel}
+                    {suggestion.confidence ? ` · ${suggestion.confidence}% confidence` : ""}
+                  </p>
+                  <h4>{suggestion.title}</h4>
+                  <p>
+                    {formatCurrency(suggestion.amount)}
+                    {suggestion.accountName ? ` · ${suggestion.accountName}` : ""}
+                    {suggestion.sourceDetail ? ` · ${suggestion.sourceDetail}` : ""}
+                    {suggestion.sourceFileName ? ` · ${suggestion.sourceFileName}` : ""}
+                  </p>
+                  {suggestion.notes ? <p className="panel-muted">{suggestion.notes}</p> : null}
+                </div>
+                <div className="notification-item__time" style={{ minWidth: 170, display: "grid", gap: 8 }}>
+                  <button
+                    type="button"
+                    className="button button-primary button-small"
+                    onClick={() => openPlannedPaymentReview(suggestion)}
+                    disabled={confirmingPatternId === suggestion.id}
+                  >
+                    {confirmingPatternId === suggestion.id ? "Adding..." : "Review and add"}
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </article>
+      ) : null}
+
       {suggestedRecurringPatterns.length > 0 ? (
         <article className="panel commitments-suggestions-panel">
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -585,7 +756,7 @@ export function CommitmentsPanel({
         </article>
       ) : null}
 
-      {reviewingPattern ? (
+      {reviewingSuggestion ? (
         <div
           style={{
             position: "fixed",
@@ -602,15 +773,18 @@ export function CommitmentsPanel({
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
               <div>
                 <p className="eyebrow">Review suggestion</p>
-                <h3 style={{ margin: 0 }}>Add this to Recurring?</h3>
+                <h3 style={{ margin: 0 }}>
+                  {reviewingSuggestion.sourceKind === "installment" ? "Add installment payment?" : "Add this to Recurring?"}
+                </h3>
                 <p className="panel-muted" style={{ margin: "6px 0 0" }}>
-                  Clover detected this from {reviewingPattern.transactionCount} matching transaction{reviewingPattern.transactionCount === 1 ? "" : "s"}. You can adjust the details first.
+                  {reviewingSuggestion.sourceLabel}
+                  {reviewingSuggestion.sourceDetail ? ` · ${reviewingSuggestion.sourceDetail}` : ""}
                 </p>
               </div>
               <button
                 className="button button-secondary button-small recurring-modal-close"
                 type="button"
-                onClick={() => setReviewingPattern(null)}
+                onClick={() => setReviewingSuggestion(null)}
                 aria-label="Close"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -727,12 +901,28 @@ export function CommitmentsPanel({
                 />
               </label>
 
+              {reviewingSuggestion.sourceKind === "installment" ? (
+                <label className="settings-field">
+                  <span>Installment terms</span>
+                  <input
+                    className="settings-input"
+                    value={patternDraft.installmentTerms}
+                    onChange={(event) => setPatternDraft((draft) => ({ ...draft, installmentTerms: event.target.value }))}
+                    placeholder="e.g. 6 months"
+                  />
+                </label>
+              ) : null}
+
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <button className="button button-secondary" type="button" onClick={() => setReviewingPattern(null)}>
+                <button className="button button-secondary" type="button" onClick={() => setReviewingSuggestion(null)}>
                   Cancel
                 </button>
-                <button className="button button-primary" type="submit" disabled={confirmingPatternId === reviewingPattern.id}>
-                  {confirmingPatternId === reviewingPattern.id ? "Saving..." : "Save recurring"}
+                <button className="button button-primary" type="submit" disabled={confirmingPatternId === reviewingSuggestion.id}>
+                  {confirmingPatternId === reviewingSuggestion.id
+                    ? "Saving..."
+                    : reviewingSuggestion.sourceKind === "installment"
+                      ? "Save installment"
+                      : "Save recurring"}
                 </button>
               </div>
             </form>

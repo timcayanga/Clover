@@ -21,6 +21,7 @@ import { GoalsEditor as GoalsEditorModal } from "@/components/goals-editor-modal
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { loadBudgetWorkspaceData } from "@/lib/budgeting-data";
 import { buildRecurringTransactionSummaries } from "@/lib/recurring";
+import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -680,6 +681,12 @@ async function DashboardStream({
     weeklySummary.previous.expense > 0
       ? `${weeklySpendDelta >= 0 ? "up" : "down"} ${formatCurrency(Math.abs(weeklySpendDelta))} vs last week`
       : `${formatCurrency(weeklySummary.current.expense)} spent this week`;
+  const nextSevenDays = new Date(now);
+  nextSevenDays.setDate(nextSevenDays.getDate() + 7);
+  const plannedPaymentSuggestions = await getPlannedPaymentSuggestions(workspaceSummary.id).catch(() => []);
+  const plannedPaymentsDueSoon = plannedPaymentSuggestions.filter(
+    (suggestion) => suggestion.dueDate && new Date(suggestion.dueDate) <= nextSevenDays
+  );
   const insightCandidates: Array<HomeAdviserItem | null> = [
     daysSinceLastImport === null || daysSinceLastImport >= 7
       ? {
@@ -698,6 +705,16 @@ async function DashboardStream({
           copy: `${categorySpike.name} is up ${formatCurrency(categorySpike.delta)} vs the previous 30 days.`,
           href: `/transactions?category=${encodedSpikeCategory}`,
           actionLabel: "Review category",
+          tone: "warning",
+        }
+      : null,
+    plannedPaymentsDueSoon.length > 0
+      ? {
+          emoji: "🗓️",
+          label: "Upcoming payment",
+          copy: `${plannedPaymentsDueSoon.length} planned payment${plannedPaymentsDueSoon.length === 1 ? "" : "s"} are due in the next 7 days.`,
+          href: "/recurring",
+          actionLabel: "Review payments",
           tone: "warning",
         }
       : null,

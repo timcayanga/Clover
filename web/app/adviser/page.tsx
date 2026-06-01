@@ -11,6 +11,7 @@ import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format"
 import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { loadSplitBillWorkspaceData } from "@/lib/split-bill-loaders";
 import { loadBudgetWorkspaceData } from "@/lib/budgeting-data";
+import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { AdviserChat } from "@/components/adviser-chat";
 import { AdviserSectionCarousel, type AdviserSectionCard } from "@/components/adviser-section-carousel";
 import { isLiabilityAccountType, isSpendableAccountType, isTrackedAssetAccountType } from "@/lib/account-types";
@@ -1037,6 +1038,7 @@ async function AdviserPageContent() {
     investmentInterestRate: account.investmentInterestRate === null ? null : Number(account.investmentInterestRate),
     investmentMaturityValue: account.investmentMaturityValue === null ? null : Number(account.investmentMaturityValue),
   })) satisfies WorkspaceAccount[];
+  const plannedPaymentSuggestions = await getPlannedPaymentSuggestions(resolvedWorkspace.id).catch(() => []);
 
   const adviserInteractions = await prisma.auditLog.findMany({
     where: {
@@ -1204,6 +1206,10 @@ async function AdviserPageContent() {
     .filter((pattern) => pattern.nextExpectedDate && pattern.nextExpectedDate <= nextFourteenDays)
     .slice(0, 3);
 
+  const plannedPaymentsDueSoon = plannedPaymentSuggestions
+    .filter((suggestion) => suggestion.dueDate && new Date(suggestion.dueDate) <= nextSevenDays)
+    .slice(0, 3);
+
   const commitmentsDueSoon = financialCommitments
     .filter((commitment) => commitment.nextDueDate && commitment.nextDueDate <= nextSevenDays)
     .slice(0, 3);
@@ -1257,6 +1263,7 @@ async function AdviserPageContent() {
     average([
       accountPressureEstimate,
       recurringDueSoon.length > 0 ? clamp(68 + recurringDueSoon.length * 8) : 20,
+      plannedPaymentsDueSoon.length > 0 ? clamp(66 + plannedPaymentsDueSoon.length * 7) : 18,
       commitmentsDueSoon.length > 0 ? clamp(70 + commitmentsDueSoon.length * 8) : 18,
       openSplitBillCount > 0 ? clamp(72 + openSplitBillCount * 6) : 18,
       currentSavingsRate !== null && currentSavingsRate < 0 ? 90 : 35,
@@ -1267,6 +1274,7 @@ async function AdviserPageContent() {
     upcomingPressureScore >= 70 ? "High" : upcomingPressureScore >= 45 ? "Moderate" : "Low";
   const upcomingPressureSignals = [
     recurringDueSoon.length > 0 ? `${recurringDueSoon.length} recurring due soon` : null,
+    plannedPaymentsDueSoon.length > 0 ? `${plannedPaymentsDueSoon.length} planned payments due soon` : null,
     commitmentsDueSoon.length > 0 ? `${commitmentsDueSoon.length} commitments due soon` : null,
     openSplitBillCount > 0 ? `${formatCurrency(openSplitBillAmount)} in split bills` : null,
     hasTransactionFlow ? `baseline spend ${formatCurrency(baselineSpend)}` : null,
@@ -1301,6 +1309,7 @@ async function AdviserPageContent() {
   const currentRecurringConfidence = clamp(
     average([
       toCountScore(recurringDueSoon.length, 3),
+      toCountScore(plannedPaymentsDueSoon.length, 3),
       toCountScore(recurringMerchantCount, 5),
       toCountScore(commitmentsDueSoon.length, 3),
       historyDepthScore,
@@ -1313,7 +1322,9 @@ async function AdviserPageContent() {
     ? clamp(average([toCountScore(openSplitBillCount, 3), openSplitBillAmount > 0 ? 100 : 0, historyDepthScore]))
     : 0;
   const currentGoalConfidence = goalLabel ? clamp(average([toCountScore(transactionCount, 20), goalProgress.bandLabel === "On track" ? 85 : 70, historyDepthScore])) : 0;
-  const recurringAmountPressure = recurringDueSoon.reduce((sum, pattern) => sum + Number(pattern.amount ?? 0), 0);
+  const recurringAmountPressure =
+    recurringDueSoon.reduce((sum, pattern) => sum + Number(pattern.amount ?? 0), 0) +
+    plannedPaymentsDueSoon.reduce((sum, suggestion) => sum + Number(suggestion.amount ?? 0), 0);
   const commitmentAmountPressure = commitmentsDueSoon.reduce((sum, commitment) => sum + Number(commitment.amount ?? 0), 0);
   const splitBillSettlementPressure = openSplitBillAmount;
   const thresholdProfile = buildThresholdProfile({
@@ -1441,6 +1452,7 @@ async function AdviserPageContent() {
     average([
       liquidBalance < currentSpend * 0.3 ? 92 : 28,
       recurringDueSoon.length > 0 ? 72 + recurringDueSoon.length * 4 : 20,
+      plannedPaymentsDueSoon.length > 0 ? 72 + plannedPaymentsDueSoon.length * 4 : 18,
       commitmentsDueSoon.length > 0 ? 72 + commitmentsDueSoon.length * 4 : 18,
       openSplitBillCount > 0 ? 68 + openSplitBillCount * 5 : 18,
       currentSavingsRate !== null && currentSavingsRate < 0 ? 90 : 35,
@@ -1841,21 +1853,26 @@ async function AdviserPageContent() {
             score: 0,
           }
         : null,
-      recurringDueSoon.length > 0
+      recurringDueSoon.length > 0 || plannedPaymentsDueSoon.length > 0
         ? {
             id: "recurring_soon",
             title: "Recurring costs coming soon",
-            summary: `${recurringDueSoon.length} recurring item${recurringDueSoon.length === 1 ? "" : "s"} are due in the next two weeks.`,
+            summary: `${recurringDueSoon.length + plannedPaymentsDueSoon.length} item${recurringDueSoon.length + plannedPaymentsDueSoon.length === 1 ? "" : "s"} are due in the next two weeks.`,
             evidence: recurringDueSoon
               .slice(0, 2)
               .map((pattern) => `${pattern.merchantClean ?? pattern.merchantRaw}${pattern.nextExpectedDate ? ` · ${toMonthLabel(pattern.nextExpectedDate)}` : ""}`)
+              .concat(
+                plannedPaymentsDueSoon
+                  .slice(0, 2)
+                  .map((suggestion) => `${suggestion.title}${suggestion.dueDate ? ` · ${toMonthLabel(new Date(suggestion.dueDate))}` : ""}`)
+              )
               .join(" • "),
             ctaLabel: "Open recurring",
             href: "/recurring",
             tone: "warning",
             group: "recurring",
             breakdown: {
-              impact: clamp(recurringDueSoon.length * 28 + commitmentsDueSoon.length * 18),
+              impact: clamp(recurringDueSoon.length * 28 + plannedPaymentsDueSoon.length * 24 + commitmentsDueSoon.length * 18),
               urgency: clamp(
                 average(
                   recurringDueSoon
@@ -1866,6 +1883,15 @@ async function AdviserPageContent() {
                       const daysUntil = Math.ceil((pattern.nextExpectedDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                       return clamp(100 - Math.max(daysUntil, 0) * 12);
                     })
+                    .concat(
+                      plannedPaymentsDueSoon.map((suggestion) => {
+                        if (!suggestion.dueDate) {
+                          return 60;
+                        }
+                        const daysUntil = Math.ceil((new Date(suggestion.dueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                        return clamp(100 - Math.max(daysUntil, 0) * 12);
+                      })
+                    )
                     .concat(
                       commitmentsDueSoon.map((commitment) => {
                         if (!commitment.nextDueDate) {
@@ -2005,7 +2031,7 @@ async function AdviserPageContent() {
               impact: clamp(forecastSignal.score),
               urgency: clamp(forecastSignal.score + 8),
               confidence: clamp(average([currentTransactionConfidence, currentRecurringConfidence, currentSplitConfidence])),
-              personalization: clamp(70 + recurringDueSoon.length * 4 + commitmentsDueSoon.length * 4),
+              personalization: clamp(70 + recurringDueSoon.length * 4 + plannedPaymentsDueSoon.length * 4 + commitmentsDueSoon.length * 4),
               recency: 100,
               actionability: 92,
             },
@@ -2033,18 +2059,22 @@ async function AdviserPageContent() {
             score: 0,
           }
         : null,
-      recurringDueSoon.length > 0
+      recurringDueSoon.length > 0 || plannedPaymentsDueSoon.length > 0
         ? {
             id: "check_recurring",
             title: "Check recurring charges",
             summary: "Review upcoming subscriptions and bills before they hit your balance.",
-            evidence: recurringDueSoon.slice(0, 3).map((pattern) => pattern.merchantClean ?? pattern.merchantRaw).join(" • "),
+            evidence: recurringDueSoon
+              .slice(0, 3)
+              .map((pattern) => pattern.merchantClean ?? pattern.merchantRaw)
+              .concat(plannedPaymentsDueSoon.slice(0, 3).map((suggestion) => suggestion.title))
+              .join(" • "),
             ctaLabel: "Open recurring",
             href: "/recurring",
             tone: "warning",
             group: "recurring",
             breakdown: {
-              impact: clamp(recurringDueSoon.length * 28 + commitmentsDueSoon.length * 18),
+              impact: clamp(recurringDueSoon.length * 28 + plannedPaymentsDueSoon.length * 24 + commitmentsDueSoon.length * 18),
               urgency: clamp(
                 average(
                   recurringDueSoon
@@ -2055,6 +2085,15 @@ async function AdviserPageContent() {
                       const daysUntil = Math.ceil((pattern.nextExpectedDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                       return clamp(100 - Math.max(daysUntil, 0) * 12);
                     })
+                    .concat(
+                      plannedPaymentsDueSoon.map((suggestion) => {
+                        if (!suggestion.dueDate) {
+                          return 60;
+                        }
+                        const daysUntil = Math.ceil((new Date(suggestion.dueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                        return clamp(100 - Math.max(daysUntil, 0) * 12);
+                      })
+                    )
                     .concat(
                       commitmentsDueSoon.map((commitment) => {
                         if (!commitment.nextDueDate) {
@@ -2267,8 +2306,8 @@ async function AdviserPageContent() {
             tone: "neutral",
             group: "recurring",
             breakdown: {
-              impact: clamp(recurringMerchantCount * 18 + recurringDueSoon.length * 12),
-              urgency: clamp(recurringDueSoon.length > 0 ? 75 : 45),
+              impact: clamp(recurringMerchantCount * 18 + recurringDueSoon.length * 12 + plannedPaymentsDueSoon.length * 10),
+              urgency: clamp(recurringDueSoon.length > 0 || plannedPaymentsDueSoon.length > 0 ? 75 : 45),
               confidence: currentRecurringConfidence,
               personalization: clamp(80 + recurringMerchantCount * 3),
               recency: 100,
@@ -2368,15 +2407,15 @@ async function AdviserPageContent() {
             score: 0,
           }
         : null,
-      recurringDueSoon.length > 0 || commitmentsDueSoon.length > 0
+      recurringDueSoon.length > 0 || plannedPaymentsDueSoon.length > 0 || commitmentsDueSoon.length > 0
         ? {
             id: "prompt-upcoming",
             label: "What’s due soon?",
-            prompt: "Which recurring bills or commitments are due soon, and which ones matter most?",
+            prompt: "Which recurring bills, planned payments, or commitments are due soon, and which ones matter most?",
             group: "recurring",
             diversityKey: "recurring-upcoming",
             breakdown: {
-              impact: clamp(recurringDueSoon.length * 28 + commitmentsDueSoon.length * 18),
+              impact: clamp(recurringDueSoon.length * 28 + plannedPaymentsDueSoon.length * 24 + commitmentsDueSoon.length * 18),
               urgency: clamp(90),
               confidence: currentRecurringConfidence,
               personalization: 90,

@@ -5,6 +5,7 @@ import { buildRecurringTransactionSummaries, type RecurringTransactionLike } fro
 import { serializeFinancialCommitment, type FinancialCommitmentSummary } from "@/lib/commitments";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
+import { getPlannedPaymentSuggestions, type PlannedPaymentSuggestion } from "@/lib/planned-payment-suggestions";
 
 export type RecurringPageAccount = {
   id: string;
@@ -22,11 +23,16 @@ export type RecurringPageTransaction = {
   type: "income" | "expense" | "transfer";
   merchantRaw: string;
   merchantClean: string | null;
+  description: string | null;
+  rawPayload: unknown;
+  importFileId: string | null;
   category: {
     name: string;
   } | null;
   account: {
+    id: string;
     name: string;
+    institution: string | null;
     currency: string | null;
   };
 };
@@ -52,6 +58,7 @@ export type RecurringPatternSummary = {
 
 export type RecurringPageData = {
   reminders: Awaited<ReturnType<typeof getUpcomingStatementReminders>>;
+  plannedPaymentSuggestions: PlannedPaymentSuggestion[];
   accounts: RecurringPageAccount[];
   transactions: RecurringPageTransaction[];
   recurringItems: ReturnType<typeof buildRecurringTransactionSummaries>;
@@ -113,7 +120,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     });
   }
 
-  const [reminders, accounts, transactions, commitments, recurringPatterns] = await Promise.all([
+  const [reminders, accounts, transactions, commitments, recurringPatterns, plannedPaymentSuggestions] = await Promise.all([
     getUpcomingStatementReminders(workspaceId),
     prisma.account.findMany({
       where: { workspaceId },
@@ -144,6 +151,9 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
         type: true,
         merchantRaw: true,
         merchantClean: true,
+        description: true,
+        rawPayload: true,
+        importFileId: true,
         category: {
           select: {
             name: true,
@@ -151,7 +161,9 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
         },
         account: {
           select: {
+            id: true,
             name: true,
+            institution: true,
             currency: true,
           },
         },
@@ -224,6 +236,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
           },
         })
       : Promise.resolve([]),
+    getPlannedPaymentSuggestions(workspaceId),
   ]);
 
   const recurringItems = buildRecurringTransactionSummaries(transactions as RecurringTransactionLike[]);
@@ -243,9 +256,14 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     type: transaction.type,
     merchantRaw: transaction.merchantRaw,
     merchantClean: transaction.merchantClean,
+    description: transaction.description,
+    rawPayload: transaction.rawPayload,
+    importFileId: transaction.importFileId,
     category: transaction.category,
     account: {
+      id: transaction.account.id,
       name: transaction.account.name,
+      institution: transaction.account.institution,
       currency: transaction.account.currency ?? null,
     },
   }));
@@ -277,6 +295,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     recurringItems,
     commitments: commitments.map((commitment) => serializeFinancialCommitment(commitment)),
     recurringPatterns: serializedRecurringPatterns,
+    plannedPaymentSuggestions,
     liabilityAccountCount,
   };
 }
