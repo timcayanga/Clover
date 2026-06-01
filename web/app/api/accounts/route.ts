@@ -224,6 +224,19 @@ const readImportedSourceRowIndex = (payload: unknown) => {
   return readImportedJsonNumber((payload as Record<string, unknown>).sourceRowIndex);
 };
 
+const readCheckpointDateTime = (value: Date | string | null | undefined) => {
+  if (!value) {
+    return 0;
+  }
+
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
 const isCimbParsedAccountRepairRow = (row: {
   institution: string | null;
   accountName: string | null;
@@ -704,8 +717,8 @@ export async function GET(request: Request) {
 
         const current = latestByAccountId.get(checkpoint.accountId);
         const checkpointTime = Math.max(
-          checkpoint.statementEndDate?.getTime() ?? 0,
-          checkpoint.createdAt.getTime()
+          readCheckpointDateTime(checkpoint.statementEndDate),
+          readCheckpointDateTime(checkpoint.createdAt)
         );
         const currentTime = current
           ? Math.max(
@@ -806,8 +819,8 @@ export async function GET(request: Request) {
         }
 
         const checkpointTime = Math.max(
-          checkpoint.statementEndDate?.getTime() ?? 0,
-          checkpoint.createdAt.getTime()
+          readCheckpointDateTime(checkpoint.statementEndDate),
+          readCheckpointDateTime(checkpoint.createdAt)
         );
 
         if (checkpointTime >= latestTime) {
