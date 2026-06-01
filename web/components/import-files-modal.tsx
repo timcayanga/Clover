@@ -4378,6 +4378,10 @@ export function ImportFilesModal({
       return;
     }
 
+    if (isNoisyVisibilityBank(item.file.name)) {
+      return;
+    }
+
     localPreparseStartedRef.current.add(itemId);
     updateItem(itemId, {
       progressLabel: "Reading locally",
@@ -5336,6 +5340,7 @@ export function ImportFilesModal({
           errorMessage: null,
         });
         setMessage(duplicateMessage);
+        router.refresh();
         return { status: "done", importedRows: 0, summary: null };
       }
 

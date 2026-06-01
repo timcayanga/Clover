@@ -9,6 +9,7 @@ import {
   loadImportFileExtractionCache,
   loadStatementTemplate,
   mergeStatementMetadataWithTemplate,
+  findExistingImportedStatement,
   updateImportFileCompat,
   buildStatementFingerprint,
   IMPORT_FILE_EXTRACTION_CACHE_VERSION,
@@ -714,6 +715,42 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
         if (!cachedDocTextInfo) {
           return queueBackgroundProcessing(effectiveBankName || null);
+        }
+
+        if (cachedDocTextInfo.cacheRecord?.statementFingerprint && cachedDocTextInfo.cacheRecord?.parsedRows && cachedDocTextInfo.cacheRecord?.metadata) {
+          const earlyDuplicateImportFileId = await findExistingImportedStatement({
+            workspaceId: String(importFile.workspaceId),
+            statementFingerprint: cachedDocTextInfo.cacheRecord.statementFingerprint,
+            importFileId: importId,
+          });
+
+          if (earlyDuplicateImportFileId && !allowDuplicateStatement) {
+            await updateImportFileCompat(importId, {
+              status: "done",
+              processingPhase: "complete",
+              processingMessage: "Clover found that this statement was already imported and skipped it.",
+            });
+
+            return NextResponse.json({
+              ok: true,
+              queued: false,
+              processed: true,
+              importedRows: 0,
+              duplicate: true,
+              status: "done",
+              importFileId: importId,
+              metadata: cachedDocTextInfo.cacheRecord.metadata,
+              accountId: null,
+              accountSummaries: [],
+              confirmedTransactionsCount: 0,
+              insightSummary: null,
+              accountBalance: null,
+              visibleImportComplete: false,
+              finalizationInBackground: false,
+              receiptDocument: null,
+              receiptTransaction: null,
+            });
+          }
         }
       }
       const shouldPreflightPdf = isPdfUpload(effectiveFileName, effectiveFileType) && bytes.length <= 10_000_000 && !shouldAvoidPdfPreflight;
