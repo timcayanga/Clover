@@ -2069,8 +2069,6 @@ function AccountDetailPageContent() {
         : importedCreditLimit !== null
           ? "Read from latest statement"
           : "Not set";
-  const creditOutstanding = isCreditAccount ? Math.max(0, Math.abs(parseAmount(displayBalance))) : 0;
-  const availableCredit = effectiveCreditLimit === null ? null : Math.max(0, effectiveCreditLimit - creditOutstanding);
   const currentPeriodStart = latestCheckpoint?.statementStartDate ? new Date(latestCheckpoint.statementStartDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const currentPeriodEnd = latestCheckpoint?.statementEndDate ? new Date(latestCheckpoint.statementEndDate) : new Date();
   const currentPeriodCharges = isCreditAccount
@@ -2089,6 +2087,10 @@ function AccountDetailPageContent() {
       }, 0)
     : 0;
   const currentPeriodRemainingLimit = effectiveCreditLimit === null ? null : Math.max(0, effectiveCreditLimit - currentPeriodCharges);
+  const creditCurrentPeriodLabel =
+    latestCheckpoint?.statementStartDate && latestCheckpoint?.statementEndDate
+      ? `${formatDate(latestCheckpoint.statementStartDate)} - ${formatDate(latestCheckpoint.statementEndDate)}`
+      : "This month";
 
   useEffect(() => {
     if (!account || !matchingImportSummaryHasRows || matchingImportSummaryPreviewTransactions.length === 0) {
@@ -3721,59 +3723,35 @@ function AccountDetailPageContent() {
             ) : null}
 
             {isCreditAccount ? (
-              <section className="accounts-detail__credit-limit glass" aria-label="Credit card limit">
-                <div className="accounts-detail__credit-limit-head">
-                  <div>
-                    <p className="eyebrow">Credit limit</p>
-                    <h3>{effectiveCreditLimit === null ? "Add this card's limit" : formatAccountAmount(effectiveCreditLimit, account.currency)}</h3>
-                    <span>{creditLimitSourceLabel}</span>
-                  </div>
-                  <form className="accounts-detail__credit-limit-form" onSubmit={saveCreditLimit}>
-                    <label>
-                      Limit
-                      <input
-                        value={creditLimitDraft}
-                        onChange={(event) => {
-                          setCreditLimitDraft(event.target.value);
-                          setCreditLimitSaveState("idle");
-                        }}
-                        inputMode="decimal"
-                        placeholder="0.00"
-                        aria-label="Credit limit"
-                      />
-                    </label>
-                    <button className="button button-secondary button-small" type="submit" disabled={creditLimitSaveState === "saving"}>
-                      Save limit
-                    </button>
-                  </form>
+              <form className="accounts-detail__credit-inline" aria-label="Credit card details" onSubmit={saveCreditLimit}>
+                <label className="accounts-detail__credit-inline-field accounts-detail__credit-inline-field--editable">
+                  <span>Monthly Limit</span>
+                  <input
+                    value={creditLimitDraft}
+                    onChange={(event) => {
+                      setCreditLimitDraft(event.target.value);
+                      setCreditLimitSaveState("idle");
+                    }}
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    aria-label="Monthly credit limit"
+                  />
+                </label>
+                <div className="accounts-detail__credit-inline-field">
+                  <span>Available Credit</span>
+                  <strong>{currentPeriodRemainingLimit === null ? "Not set" : formatAccountAmount(currentPeriodRemainingLimit, account.currency)}</strong>
                 </div>
-                <div className="accounts-detail__credit-limit-grid">
-                  <div className="status-card">
-                    <span>Available credit</span>
-                    <strong>{availableCredit === null ? "Not set" : formatAccountAmount(availableCredit, account.currency)}</strong>
-                  </div>
-                  <div className="status-card">
-                    <span>Current period used</span>
-                    <strong>{formatAccountAmount(currentPeriodCharges, account.currency)}</strong>
-                  </div>
-                  <div className="status-card">
-                    <span>Monthly limit left</span>
-                    <strong>{currentPeriodRemainingLimit === null ? "Not set" : formatAccountAmount(currentPeriodRemainingLimit, account.currency)}</strong>
-                  </div>
+                <div className="accounts-detail__credit-inline-field">
+                  <span>Current Period</span>
+                  <strong>{creditCurrentPeriodLabel}</strong>
                 </div>
-                <p className="accounts-detail__credit-limit-note">
-                  {latestCheckpoint?.statementStartDate && latestCheckpoint?.statementEndDate
-                    ? `Current period follows the latest statement dates: ${formatDate(latestCheckpoint.statementStartDate)} to ${formatDate(latestCheckpoint.statementEndDate)}.`
-                    : "Current period uses this calendar month until Clover reads a statement period."}
-                  {creditLimitSaveState === "saving"
-                    ? " Saving..."
-                    : creditLimitSaveState === "saved"
-                      ? " Saved."
-                      : creditLimitSaveState === "error"
-                        ? " Needs attention."
-                        : ""}
-                </p>
-              </section>
+                <button className="accounts-detail__credit-inline-save" type="submit" disabled={creditLimitSaveState === "saving"}>
+                  {creditLimitSaveState === "saving" ? "Saving" : creditLimitSaveState === "saved" ? "Saved" : "Save"}
+                </button>
+                <span className="accounts-detail__credit-inline-meta">
+                  {creditLimitSaveState === "error" ? "Needs attention" : creditLimitSourceLabel}
+                </span>
+              </form>
             ) : null}
           </div>
         ) : null}

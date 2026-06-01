@@ -18196,83 +18196,85 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   margin-right: auto;
 }
 
-.accounts-detail__credit-limit {
-  display: grid;
-  gap: 14px;
-  width: min(100%, 760px);
-  padding: 16px;
-  border: 1px solid var(--account-accent-soft);
-  border-radius: 24px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), var(--account-accent-faint));
-  box-shadow: var(--shadow-soft);
-}
-
-.accounts-detail__credit-limit-head {
+.accounts-detail__credit-inline {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.accounts-detail__credit-limit-head h3 {
-  margin: 2px 0 0;
-  color: var(--text-strong);
-  font-size: 1.35rem;
-  letter-spacing: -0.04em;
-}
-
-.accounts-detail__credit-limit-head span,
-.accounts-detail__credit-limit-note {
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.accounts-detail__credit-limit-form {
-  display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  width: min(100%, 760px);
+  margin-top: 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
 }
 
-.accounts-detail__credit-limit-form label {
+.accounts-detail__credit-inline-field {
   display: grid;
-  gap: 6px;
+  gap: 2px;
+  min-width: 132px;
+  padding: 6px 8px;
+}
+
+.accounts-detail__credit-inline-field span,
+.accounts-detail__credit-inline-meta {
   color: var(--muted);
   font-size: 0.7rem;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.accounts-detail__credit-limit-form input {
+.accounts-detail__credit-inline-field strong {
+  color: var(--text-strong);
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
+.accounts-detail__credit-inline-field--editable {
+  min-width: 154px;
+}
+
+.accounts-detail__credit-inline-field input {
   appearance: none;
-  width: 148px;
-  min-height: 40px;
-  border: 1px solid rgba(148, 163, 184, 0.36);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.96);
+  width: 132px;
+  min-height: 30px;
+  border: 0;
+  border-bottom: 1px solid rgba(3, 168, 192, 0.32);
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
   font: inherit;
   font-weight: 800;
-  padding: 0 12px;
+  padding: 0;
 }
 
-.accounts-detail__credit-limit-form input:focus {
-  border-color: rgba(3, 168, 192, 0.58);
-  box-shadow: 0 0 0 4px rgba(3, 168, 192, 0.12);
+.accounts-detail__credit-inline-field input:focus {
+  border-color: rgba(3, 168, 192, 0.78);
   outline: none;
 }
 
-.accounts-detail__credit-limit-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+.accounts-detail__credit-inline-save {
+  border: 0;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.1);
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 8px 12px;
 }
 
-.accounts-detail__credit-limit-note {
-  margin: 0;
+.accounts-detail__credit-inline-save:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.accounts-detail__credit-inline-meta {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .accounts-inline-edit__grid {
