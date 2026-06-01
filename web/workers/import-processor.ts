@@ -2199,6 +2199,7 @@ const collapseDuplicateUploadedAccountsForAccount = async <
       currency: true,
       balance: true,
       createdAt: true,
+      updatedAt: true,
     },
   });
 
@@ -2206,14 +2207,31 @@ const collapseDuplicateUploadedAccountsForAccount = async <
     return account;
   }
 
-  const canonical = duplicates[0];
-  const duplicateIds = duplicates.map((entry) => entry.id).filter((id) => id !== canonical.id);
+  const sortedDuplicates = [...duplicates].sort((left, right) => {
+    const rightTime = Math.max(right.updatedAt.getTime(), right.createdAt.getTime());
+    const leftTime = Math.max(left.updatedAt.getTime(), left.createdAt.getTime());
+    if (rightTime !== leftTime) {
+      return rightTime - leftTime;
+    }
+
+    return right.id.localeCompare(left.id);
+  });
+  const canonical = sortedDuplicates[0];
+  const canonicalBalance =
+    sortedDuplicates.find((entry) => entry.balance !== null && entry.balance !== undefined)?.balance?.toString() ?? null;
+  const duplicateIds = sortedDuplicates.map((entry) => entry.id).filter((id) => id !== canonical.id);
   if (duplicateIds.length === 0) {
     return account;
   }
 
   try {
     await prisma.$transaction(async (tx) => {
+      if (canonicalBalance !== null && canonical.balance?.toString() !== canonicalBalance) {
+        await tx.account.update({
+          where: { id: canonical.id },
+          data: { balance: canonicalBalance },
+        });
+      }
       await tx.transaction.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
       await tx.importFile.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
       await tx.documentImport.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
@@ -2575,6 +2593,18 @@ const resolveConfirmationAccount = async (params: {
     where: { workspaceId },
     select: getCompatibleAccountSelect(compatibleAccountColumns),
   });
+  const sortImportedAccountsByFreshness = (
+    left: { updatedAt: Date; createdAt: Date },
+    right: { updatedAt: Date; createdAt: Date }
+  ) => {
+    const leftTime = Math.max(left.updatedAt.getTime(), left.createdAt.getTime());
+    const rightTime = Math.max(right.updatedAt.getTime(), right.createdAt.getTime());
+    if (rightTime !== leftTime) {
+      return rightTime - leftTime;
+    }
+
+    return 0;
+  };
   const accountMatchesImportIdentity = (account: (typeof workspaceAccounts)[number]) =>
     matchesImportedAccountIdentity(account, {
       name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
@@ -2596,7 +2626,7 @@ const resolveConfirmationAccount = async (params: {
       workspaceAccounts
         .filter((account) => account.id !== directAccount.id)
         .filter(accountMatchesImportIdentity)
-        .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())[0] ??
+        .sort(sortImportedAccountsByFreshness)[0] ??
       (hasInferredAccountNumber
         ? null
         : findBestImportedAccountMatch(
@@ -2623,9 +2653,10 @@ const resolveConfirmationAccount = async (params: {
     return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
-  const existingByKey = workspaceAccounts.find(
-    accountMatchesImportIdentity
-  );
+  const existingByKey =
+    workspaceAccounts
+      .filter(accountMatchesImportIdentity)
+      .sort(sortImportedAccountsByFreshness)[0] ?? null;
   if (existingByKey) {
     const updatedAccount = await updateAccountIdentity(existingByKey, {
       name: inferredAccountName,
@@ -3971,7 +4002,7 @@ export const processImportFileText = async (
     metadataForParse.accountName === metadataForParse.institution ||
     /^Account\s+\d{4}$/i.test(metadataForParse.accountName) ||
     /^(CUSTOMER NUMBER|ACCOUNT NUMBER)$/i.test(metadataForParse.accountName);
-  const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB"]);
+  const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"]);
   const prefersVisionFallbackForInstitution =
     typeof metadataForParse.institution === "string" && noisyVisionPreferredInstitutions.has(metadataForParse.institution);
   const genericParseLooksSuspicious =
@@ -3988,6 +4019,7 @@ export const processImportFileText = async (
     (metadataForParse.confidence ?? 0) >= 80 &&
     hasKnownInstitution &&
     Boolean(metadataForParse.accountNumber || parsedRowsHaveMultipleAccountNumbers) &&
+    !prefersVisionFallbackForInstitution &&
     !genericParseLooksSuspicious &&
     !suspiciousDateCoverage;
   const shouldUseVisionFallback =
@@ -4018,7 +4050,11 @@ export const processImportFileText = async (
     hasReliableDeterministicStatementParse ||
     (imageImport &&
     ((importMode === "receipt" && receiptPreviewLooksLikeReceipt) ||
-      (parsedRows.length > 0 && (metadataForParse.confidence ?? 0) >= 75 && !genericParseLooksSuspicious && !suspiciousDateCoverage)));
+      (parsedRows.length > 0 &&
+        (metadataForParse.confidence ?? 0) >= 75 &&
+        !genericParseLooksSuspicious &&
+        !suspiciousDateCoverage &&
+        !prefersVisionFallbackForInstitution)));
   if (shouldUseVisionFallback && !pageImages) {
     try {
       if (imageImport) {
@@ -5694,7 +5730,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   }
 
   let parsedRows: Array<Record<string, unknown>> = [];
-  const MAX_WAIT_MS = 8_000;
+  const noisyBankName = normalizeBankName(String(importFile.fileName ?? ""));
+  const MAX_WAIT_MS = ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(noisyBankName) ? 60_000 : 8_000;
   while (Date.now() - startedAt < MAX_WAIT_MS) {
     parsedRows = await fetchParsedTransactionRows(importFileId);
     if (parsedRows.length > 0) {

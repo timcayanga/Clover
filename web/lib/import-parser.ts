@@ -2842,7 +2842,11 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
       continue;
     }
 
-  const notesLabel = descriptionCandidate ?? transactionName;
+  const notesLabel = [descriptionCandidate, detailLabel, transactionName]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .map((value) => value.trim())
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .join(" • ");
 
     rows.push({
       date: date.toISOString().slice(0, 10),
@@ -2864,6 +2868,9 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
         detailLine: detailLabel,
         note: notesLabel,
         notes: notesLabel,
+        parsedDetails: notesLabel || null,
+        transactionDetails: detailLabel ?? null,
+        trailingDetails: descriptionCandidate ?? null,
         counterpartyName: notesLabel,
         amountText: match[3],
       },
@@ -3501,6 +3508,13 @@ const parseLandbankImportText = (text: string, context: ImportParseContext = {})
     return null;
   }
 
+  const yearHint =
+    metadata.endDate
+      ? new Date(metadata.endDate).getUTCFullYear()
+      : metadata.startDate
+        ? new Date(metadata.startDate).getUTCFullYear()
+        : new Date().getUTCFullYear();
+
   const lines = text
     .replace(/\u00a0/g, " ")
     .split(/\r?\n/)
@@ -3563,7 +3577,7 @@ const parseLandbankImportText = (text: string, context: ImportParseContext = {})
       })
       .filter(Boolean) as ParsedImportRow[];
 
-    if (fallbackRows.length >= 10) {
+    if (fallbackRows.length > 0) {
       const endingBalance = getTrailingBalanceFromParsedRows(fallbackRows);
       return {
         metadata: {
@@ -3604,17 +3618,6 @@ const parseLandbankImportText = (text: string, context: ImportParseContext = {})
   }
 
   return null;
-
-  const endingBalance = getTrailingBalanceFromParsedRows(rows);
-
-  return {
-    metadata: {
-      ...metadata,
-      endingBalance: endingBalance ?? metadata.endingBalance ?? null,
-      confidence: Math.min(100, metadata.confidence + 5),
-    },
-    rows,
-  };
 };
 
 const isUcpbStatementText = (text: string) => {

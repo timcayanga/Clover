@@ -525,6 +525,88 @@ const cleanupEmptyGenericUploadedAccountPlaceholders = async (workspaceId: strin
   }
 };
 
+const collapseDuplicateUploadedAccountsByIdentity = async (workspaceId: string, compatibleColumns: Set<string>) => {
+  if (!compatibleColumns.has("accountNumber")) {
+    return;
+  }
+
+  const uploadedAccounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      accountNumber: { not: null },
+    },
+    select: getCompatibleAccountSelect(compatibleColumns),
+  }).catch(() => []);
+
+  const groups = new Map<string, typeof uploadedAccounts>();
+  for (const account of uploadedAccounts) {
+    const key = importedAccountIdentityKey(account.institution, account.accountNumber);
+    if (!key) {
+      continue;
+    }
+
+    const current = groups.get(key) ?? [];
+    current.push(account);
+    groups.set(key, current);
+  }
+
+  for (const group of groups.values()) {
+    if (group.length <= 1) {
+      continue;
+    }
+
+    const sortedGroup = [...group].sort((left, right) => {
+      const rightTime = Math.max(right.updatedAt.getTime(), right.createdAt.getTime());
+      const leftTime = Math.max(left.updatedAt.getTime(), left.createdAt.getTime());
+      if (rightTime !== leftTime) {
+        return rightTime - leftTime;
+      }
+
+      return right.id.localeCompare(left.id);
+    });
+    const canonical = sortedGroup[0];
+    const canonicalBalance =
+      sortedGroup.find((account) => account.balance !== null && account.balance !== undefined)?.balance?.toString() ?? null;
+    const duplicateIds = sortedGroup.map((account) => account.id).filter((id) => id !== canonical.id);
+    if (duplicateIds.length === 0) {
+      continue;
+    }
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        if (canonicalBalance !== null && canonical.balance?.toString() !== canonicalBalance) {
+          await tx.account.update({
+            where: { id: canonical.id },
+            data: { balance: canonicalBalance },
+          });
+        }
+
+        await tx.transaction.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.importFile.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.documentImport.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.accountStatementCheckpoint.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.financialCommitment.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.receiptDocument.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.investmentSnapshot.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.investmentHolding.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.recurringPattern.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.accountRule.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.account.deleteMany({ where: { id: { in: duplicateIds }, source: "upload" } });
+      });
+    } catch (error) {
+      console.warn("[accounts] unable to collapse duplicate uploaded accounts", {
+        workspaceId,
+        accountNumber: canonical.accountNumber,
+        institution: canonical.institution,
+        canonicalAccountId: canonical.id,
+        duplicateAccountIds: duplicateIds,
+        error,
+      });
+    }
+  }
+};
+
 export async function GET(request: Request) {
   try {
     const userId = await resolveAccountsRouteUserId();
@@ -554,6 +636,12 @@ export async function GET(request: Request) {
     if (shouldCleanupImportedAccounts) {
       await cleanupEmptyGenericUploadedAccountPlaceholders(workspaceId, compatibleColumns).catch((error) => {
         console.warn("[accounts] unable to clean up empty generic imported account placeholders", {
+          workspaceId,
+          error,
+        });
+      });
+      await collapseDuplicateUploadedAccountsByIdentity(workspaceId, compatibleColumns).catch((error) => {
+        console.warn("[accounts] unable to collapse duplicate uploaded accounts", {
           workspaceId,
           error,
         });
