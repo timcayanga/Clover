@@ -425,6 +425,9 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   currency: true,
   source: true,
   balance: true,
+  ...(columns.has("creditLimit") ? { creditLimit: true } : {}),
+  ...(columns.has("creditLimitSource") ? { creditLimitSource: true } : {}),
+  ...(columns.has("creditLimitUpdatedAt") ? { creditLimitUpdatedAt: true } : {}),
   createdAt: true,
   updatedAt: true,
 });
@@ -1264,6 +1267,7 @@ const parseTrainingJsonPayload = (jsonText: string, params: { fileName: string; 
   const accountType = readCandidateString(objects, ["accountType", "account_category", "accountKind", "type"]);
   const openingBalance = readCandidateNumber(objects, ["openingBalance", "opening_balance", "startingBalance", "beginningBalance"]);
   const endingBalance = readCandidateNumber(objects, ["endingBalance", "closingBalance", "accountBalance", "balance", "currentBalance", "statementBalance"]);
+  const creditLimit = readCandidateNumber(objects, ["creditLimit", "credit_limit", "totalCreditLimit", "approvedLimit", "limit"]);
   const paymentDueDate = readCandidateString(objects, ["paymentDueDate", "dueDate", "payment_date"]);
   const totalAmountDue = readCandidateNumber(objects, ["paymentAmountDue", "amountDue", "totalAmountDue", "minimumAmountDue"]);
   const startDate = readCandidateString(objects, ["statementStartDate", "startDate", "periodStart", "fromDate"]);
@@ -1281,6 +1285,7 @@ const parseTrainingJsonPayload = (jsonText: string, params: { fileName: string; 
     accountType: (accountType || detectedMetadata.accountType || null) as typeof detectedMetadata.accountType,
     openingBalance: openingBalance ?? detectedMetadata.openingBalance ?? null,
     endingBalance: endingBalance ?? detectedMetadata.endingBalance ?? null,
+    creditLimit: creditLimit ?? detectedMetadata.creditLimit ?? null,
     paymentDueDate: paymentDueDate ?? detectedMetadata.paymentDueDate ?? null,
     totalAmountDue: totalAmountDue ?? detectedMetadata.totalAmountDue ?? null,
     startDate: startDate ?? detectedMetadata.startDate ?? null,
@@ -2260,6 +2265,7 @@ const ensureParsedAccountGroupsMaterialized = async (params: {
     currency?: unknown;
     openingBalance?: unknown;
     endingBalance?: unknown;
+    creditLimit?: unknown;
   } | null;
 }) => {
   if (params.rows.length === 0) {
@@ -2382,6 +2388,7 @@ const resolveConfirmationAccount = async (params: {
     currency?: unknown;
     openingBalance?: unknown;
     endingBalance?: unknown;
+    creditLimit?: unknown;
   } | null;
   parsedRows: Array<{
     accountName?: unknown;
@@ -2405,6 +2412,8 @@ const resolveConfirmationAccount = async (params: {
       source?: string | null;
       currency: string | null;
       balance?: { toString: () => string } | null;
+      creditLimit?: { toString: () => string } | null;
+      creditLimitSource?: string | null;
     },
     next: {
       name?: string | null;
@@ -2413,6 +2422,7 @@ const resolveConfirmationAccount = async (params: {
       type?: AccountType | null;
       currency?: string | null;
       balance?: number | null;
+      creditLimit?: number | null;
     }
   ) => {
     const data: Record<string, unknown> = {};
@@ -2450,6 +2460,24 @@ const resolveConfirmationAccount = async (params: {
         Math.abs(currentBalance - next.balance) > 0.000001;
       if (shouldUpdateBalance) {
         data.balance = next.balance.toString();
+      }
+    }
+    if (typeof next.creditLimit === "number" && Number.isFinite(next.creditLimit) && compatibleAccountColumns.has("creditLimit")) {
+      const currentCreditLimit =
+        account.creditLimit && typeof account.creditLimit.toString === "function" ? Number(account.creditLimit.toString()) : Number.NaN;
+      const shouldUpdateCreditLimit =
+        account.creditLimitSource !== "manual" &&
+        (!Number.isFinite(currentCreditLimit) ||
+          currentCreditLimit <= 0 ||
+          Math.abs(currentCreditLimit - next.creditLimit) > 0.000001);
+      if (shouldUpdateCreditLimit) {
+        data.creditLimit = next.creditLimit.toString();
+        if (compatibleAccountColumns.has("creditLimitSource")) {
+          data.creditLimitSource = "import";
+        }
+        if (compatibleAccountColumns.has("creditLimitUpdatedAt")) {
+          data.creditLimitUpdatedAt = new Date();
+        }
       }
     }
 
@@ -2537,6 +2565,10 @@ const resolveConfirmationAccount = async (params: {
   const inferredBalance =
     parsedCheckpointBalance ??
     (parsedTrailingBalance !== null && Number.isFinite(parsedTrailingBalance) ? parsedTrailingBalance : null);
+  const inferredCreditLimit =
+    typeof params.statementMetadata?.creditLimit === "number" && Number.isFinite(params.statementMetadata.creditLimit)
+      ? params.statementMetadata.creditLimit
+      : null;
   const accountIdentityType: AccountType =
     inferredAccountType ?? (inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank") as AccountType);
   const workspaceAccounts = await prisma.account.findMany({
@@ -2584,6 +2616,7 @@ const resolveConfirmationAccount = async (params: {
       type: inferredAccountType,
       currency: inferredCurrency,
       balance: inferredBalance,
+      creditLimit: inferredCreditLimit,
     });
 
     await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
@@ -2601,6 +2634,7 @@ const resolveConfirmationAccount = async (params: {
       type: accountIdentityType,
       currency: inferredCurrency,
       balance: inferredBalance,
+      creditLimit: inferredCreditLimit,
     });
 
     await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
@@ -2623,6 +2657,7 @@ const resolveConfirmationAccount = async (params: {
       type: accountIdentityType,
       currency: inferredCurrency,
       balance: inferredBalance,
+      creditLimit: inferredCreditLimit,
     });
 
     await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
@@ -2680,6 +2715,13 @@ const resolveConfirmationAccount = async (params: {
         currency: inferredCurrency ?? "PHP",
         source: "upload",
         ...(inferredBalance !== null ? { balance: inferredBalance.toString() } : {}),
+        ...(compatibleAccountColumns.has("creditLimit") && inferredCreditLimit !== null
+          ? {
+              creditLimit: inferredCreditLimit.toString(),
+              ...(compatibleAccountColumns.has("creditLimitSource") ? { creditLimitSource: "import" } : {}),
+              ...(compatibleAccountColumns.has("creditLimitUpdatedAt") ? { creditLimitUpdatedAt: new Date() } : {}),
+            }
+          : {}),
       };
 
       if (!accountData.name) {

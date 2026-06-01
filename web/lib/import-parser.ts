@@ -45,6 +45,7 @@ export type DetectedStatementMetadata = {
   currency?: string | null;
   openingBalance: number | null;
   endingBalance: number | null;
+  creditLimit?: number | null;
   paymentDueDate?: string | null;
   totalAmountDue?: number | null;
   startDate: string | null;
@@ -11762,6 +11763,13 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
     parseMoney(normalized.match(/amount\s+due\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(signalText.match(/total\s+amount\s+due\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(signalText.match(/amount\s+due\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const creditLimit =
+    parseMoney(signalLines.find((line) => /credit\s+limit|total\s+credit\s+limit|approved\s+limit/i.test(line))?.match(/(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(lines.find((line) => /credit\s+limit|total\s+credit\s+limit|approved\s+limit/i.test(line))?.match(/(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(normalized.match(/(?:total\s+)?credit\s+limit\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(signalText.match(/(?:total\s+)?credit\s+limit\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(normalized.match(/approved\s+limit\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(signalText.match(/approved\s+limit\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
   const rawPreparedForIndex = rawNormalizedLines.findIndex((line) => /prepared\s+for/i.test(line));
   const isLikelyRawTopHumanName = (value: string | null | undefined) => {
     const line = cleanAccountHolderDisplayName(value);
@@ -12049,6 +12057,7 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
     accountType: inferredAccountType,
     openingBalance,
     endingBalance: inferredAccountType === "credit_card" && totalAmountDue !== null ? totalAmountDue : endingBalance,
+    creditLimit: inferredAccountType === "credit_card" ? creditLimit : null,
     paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
     totalAmountDue,
     startDate: returnedStartDate ? returnedStartDate.toISOString() : null,
@@ -12060,6 +12069,7 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
       accountType: inferredAccountType,
       openingBalance,
       endingBalance: inferredAccountType === "credit_card" && totalAmountDue !== null ? totalAmountDue : endingBalance,
+      creditLimit: inferredAccountType === "credit_card" ? creditLimit : null,
       paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
       totalAmountDue,
       startDate: returnedStartDate ? returnedStartDate.toISOString() : null,

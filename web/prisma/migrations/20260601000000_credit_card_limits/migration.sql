@@ -1,0 +1,4 @@
+ALTER TABLE "Account"
+  ADD COLUMN IF NOT EXISTS "creditLimit" DECIMAL(18, 2),
+  ADD COLUMN IF NOT EXISTS "creditLimitSource" TEXT,
+  ADD COLUMN IF NOT EXISTS "creditLimitUpdatedAt" TIMESTAMP(3);

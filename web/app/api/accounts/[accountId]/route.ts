@@ -66,6 +66,9 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   currency: true,
   source: true,
   balance: true,
+  ...(columns.has("creditLimit") ? { creditLimit: true } : {}),
+  ...(columns.has("creditLimitSource") ? { creditLimitSource: true } : {}),
+  ...(columns.has("creditLimitUpdatedAt") ? { creditLimitUpdatedAt: true } : {}),
   updatedAt: true,
   createdAt: true,
 });
@@ -85,6 +88,7 @@ const accountPatchSchema = z.object({
   institution: z.string().nullable().optional(),
   accountNumber: z.string().nullable().optional(),
   favorite: z.boolean().optional(),
+  creditLimit: z.union([z.string(), z.number(), z.null()]).optional(),
   investmentSubtype: z.string().nullable().optional(),
   investmentSymbol: z.string().nullable().optional(),
   investmentQuantity: z.union([z.string(), z.number(), z.null()]).optional(),
@@ -106,6 +110,9 @@ const serializeAccount = <T extends {
   institution?: string | null;
   name?: string | null;
   favorite?: boolean;
+  creditLimit?: { toString: () => string } | null;
+  creditLimitSource?: string | null;
+  creditLimitUpdatedAt?: Date | null;
   transactionCount?: number | null;
   balance: { toString: () => string } | null;
   investmentQuantity: { toString: () => string } | null;
@@ -124,6 +131,9 @@ const serializeAccount = <T extends {
   transactionCount: Number(account.transactionCount ?? 0),
   currency: normalizeAccountCurrency(account),
   balance: account.balance?.toString() ?? null,
+  creditLimit: account.creditLimit?.toString() ?? null,
+  creditLimitSource: account.creditLimitSource ?? null,
+  creditLimitUpdatedAt: account.creditLimitUpdatedAt?.toISOString() ?? null,
   investmentQuantity: account.investmentQuantity?.toString() ?? null,
   investmentCostBasis: account.investmentCostBasis?.toString() ?? null,
   investmentPrincipal: account.investmentPrincipal?.toString() ?? null,
@@ -310,6 +320,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
           ? { accountNumber: payload.accountNumber === undefined ? undefined : payload.accountNumber?.trim() || null }
           : {}),
         favorite: payload.favorite === undefined ? undefined : payload.favorite,
+        ...(compatibleColumns.has("creditLimit")
+          ? {
+              creditLimit:
+                payload.creditLimit === undefined
+                  ? undefined
+                  : payload.creditLimit === null || payload.creditLimit === ""
+                    ? null
+                    : payload.creditLimit.toString(),
+            }
+          : {}),
+        ...(compatibleColumns.has("creditLimitSource") && payload.creditLimit !== undefined
+          ? { creditLimitSource: payload.creditLimit === null || payload.creditLimit === "" ? null : "manual" }
+          : {}),
+        ...(compatibleColumns.has("creditLimitUpdatedAt") && payload.creditLimit !== undefined
+          ? { creditLimitUpdatedAt: new Date() }
+          : {}),
         investmentSubtype:
           payload.investmentSubtype === undefined ? undefined : normalizeInvestmentSubtype(payload.investmentSubtype),
         investmentSymbol: payload.investmentSymbol === undefined ? undefined : payload.investmentSymbol?.trim() || null,

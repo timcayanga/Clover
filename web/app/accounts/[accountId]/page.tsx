@@ -83,6 +83,9 @@ type Account = {
   currency: string;
   source: string;
   balance: string | null;
+  creditLimit?: string | null;
+  creditLimitSource?: string | null;
+  creditLimitUpdatedAt?: string | null;
   transactionCount?: number | null;
   favorite?: boolean;
   updatedAt: string;
@@ -344,6 +347,7 @@ type StatementCheckpoint = {
     accountName?: string | null;
     institution?: string | null;
     accountNumber?: string | null;
+    creditLimit?: number | string | null;
     importMode?: string | null;
     documentType?: string | null;
   } | null;
@@ -1126,6 +1130,8 @@ function AccountDetailPageContent() {
   const [balanceEditorOpen, setBalanceEditorOpen] = useState(false);
   const [balanceDraft, setBalanceDraft] = useState("");
   const [balanceSaveState, setBalanceSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [creditLimitDraft, setCreditLimitDraft] = useState("");
+  const [creditLimitSaveState, setCreditLimitSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const stableBalanceRef = useRef<string | null>(null);
   const balanceInputRef = useRef<HTMLInputElement | null>(null);
   const accountInvestmentDraftSyncKeyRef = useRef<string | null>(null);
@@ -2047,6 +2053,42 @@ function AccountDetailPageContent() {
       : !hasMeaningfulBalance(account?.balance) && stableDisplayBalance
         ? stableDisplayBalance
         : currentBalance.toString();
+  const isCreditAccount = account?.type === "credit_card" || account?.type === "line_of_credit";
+  const importedCreditLimit = parseNullableNumber(
+    latestCheckpoint?.sourceMetadata?.creditLimit === null || latestCheckpoint?.sourceMetadata?.creditLimit === undefined
+      ? null
+      : String(latestCheckpoint.sourceMetadata.creditLimit)
+  );
+  const accountCreditLimit = parseNullableNumber(account?.creditLimit);
+  const effectiveCreditLimit = accountCreditLimit ?? importedCreditLimit;
+  const creditLimitSourceLabel =
+    account?.creditLimitSource === "manual"
+      ? "Set manually"
+      : accountCreditLimit !== null
+        ? "Saved on account"
+        : importedCreditLimit !== null
+          ? "Read from latest statement"
+          : "Not set";
+  const creditOutstanding = isCreditAccount ? Math.max(0, Math.abs(parseAmount(displayBalance))) : 0;
+  const availableCredit = effectiveCreditLimit === null ? null : Math.max(0, effectiveCreditLimit - creditOutstanding);
+  const currentPeriodStart = latestCheckpoint?.statementStartDate ? new Date(latestCheckpoint.statementStartDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const currentPeriodEnd = latestCheckpoint?.statementEndDate ? new Date(latestCheckpoint.statementEndDate) : new Date();
+  const currentPeriodCharges = isCreditAccount
+    ? transactions.reduce((total, transaction) => {
+        const transactionDate = new Date(transaction.date);
+        if (
+          Number.isNaN(transactionDate.getTime()) ||
+          transactionDate < currentPeriodStart ||
+          transactionDate > currentPeriodEnd ||
+          transaction.type !== "expense"
+        ) {
+          return total;
+        }
+
+        return total + Math.abs(parseAmount(transaction.amount));
+      }, 0)
+    : 0;
+  const currentPeriodRemainingLimit = effectiveCreditLimit === null ? null : Math.max(0, effectiveCreditLimit - currentPeriodCharges);
 
   useEffect(() => {
     if (!account || !matchingImportSummaryHasRows || matchingImportSummaryPreviewTransactions.length === 0) {
@@ -2072,6 +2114,17 @@ function AccountDetailPageContent() {
     setBalanceDraft(nextDraft);
     setBalanceSaveState("idle");
   }, [account, balanceEditorOpen, displayBalance]);
+
+  useEffect(() => {
+    if (!account || !isCreditAccount) {
+      setCreditLimitDraft("");
+      setCreditLimitSaveState("idle");
+      return;
+    }
+
+    setCreditLimitDraft(effectiveCreditLimit === null ? "" : effectiveCreditLimit.toFixed(2));
+    setCreditLimitSaveState("idle");
+  }, [account, effectiveCreditLimit, isCreditAccount]);
 
   useEffect(() => {
     if (!balanceEditorOpen) {
@@ -2134,6 +2187,50 @@ function AccountDetailPageContent() {
     } catch (error) {
       setBalanceSaveState("error");
       setMessage(error instanceof Error ? error.message : "Unable to update account balance.");
+    }
+  };
+
+  const saveCreditLimit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!account || !isCreditAccount) {
+      return;
+    }
+
+    const parsedCreditLimit = creditLimitDraft.trim() ? parseBalanceInput(creditLimitDraft) : 0;
+    if (parsedCreditLimit === null || parsedCreditLimit < 0) {
+      setCreditLimitSaveState("error");
+      setMessage("Enter a valid credit limit before saving.");
+      return;
+    }
+
+    setCreditLimitSaveState("saving");
+    try {
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: account.workspaceId,
+          creditLimit: parsedCreditLimit > 0 ? parsedCreditLimit.toFixed(2) : null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to update credit limit.");
+      }
+
+      const payload = await response.json();
+      const nextAccount = (payload.account as Account | undefined) ?? {
+        ...account,
+        creditLimit: parsedCreditLimit > 0 ? parsedCreditLimit.toFixed(2) : null,
+        creditLimitSource: parsedCreditLimit > 0 ? "manual" : null,
+      };
+      setAccount(nextAccount);
+      setCreditLimitDraft(nextAccount.creditLimit ?? "");
+      setCreditLimitSaveState("saved");
+      setMessage(parsedCreditLimit > 0 ? "Credit limit updated." : "Credit limit cleared.");
+    } catch (error) {
+      setCreditLimitSaveState("error");
+      setMessage(error instanceof Error ? error.message : "Unable to update credit limit.");
     }
   };
   const investmentGainLoss = useMemo(() => {
@@ -3608,6 +3705,62 @@ function AccountDetailPageContent() {
                   </button>
                 </div>
               </form>
+            ) : null}
+
+            {isCreditAccount ? (
+              <section className="accounts-detail__credit-limit glass" aria-label="Credit card limit">
+                <div className="accounts-detail__credit-limit-head">
+                  <div>
+                    <p className="eyebrow">Credit limit</p>
+                    <h3>{effectiveCreditLimit === null ? "Add this card's limit" : formatAccountAmount(effectiveCreditLimit, account.currency)}</h3>
+                    <span>{creditLimitSourceLabel}</span>
+                  </div>
+                  <form className="accounts-detail__credit-limit-form" onSubmit={saveCreditLimit}>
+                    <label>
+                      Limit
+                      <input
+                        value={creditLimitDraft}
+                        onChange={(event) => {
+                          setCreditLimitDraft(event.target.value);
+                          setCreditLimitSaveState("idle");
+                        }}
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        aria-label="Credit limit"
+                      />
+                    </label>
+                    <button className="button button-secondary button-small" type="submit" disabled={creditLimitSaveState === "saving"}>
+                      Save limit
+                    </button>
+                  </form>
+                </div>
+                <div className="accounts-detail__credit-limit-grid">
+                  <div className="status-card">
+                    <span>Available credit</span>
+                    <strong>{availableCredit === null ? "Not set" : formatAccountAmount(availableCredit, account.currency)}</strong>
+                  </div>
+                  <div className="status-card">
+                    <span>Current period used</span>
+                    <strong>{formatAccountAmount(currentPeriodCharges, account.currency)}</strong>
+                  </div>
+                  <div className="status-card">
+                    <span>Monthly limit left</span>
+                    <strong>{currentPeriodRemainingLimit === null ? "Not set" : formatAccountAmount(currentPeriodRemainingLimit, account.currency)}</strong>
+                  </div>
+                </div>
+                <p className="accounts-detail__credit-limit-note">
+                  {latestCheckpoint?.statementStartDate && latestCheckpoint?.statementEndDate
+                    ? `Current period follows the latest statement dates: ${formatDate(latestCheckpoint.statementStartDate)} to ${formatDate(latestCheckpoint.statementEndDate)}.`
+                    : "Current period uses this calendar month until Clover reads a statement period."}
+                  {creditLimitSaveState === "saving"
+                    ? " Saving..."
+                    : creditLimitSaveState === "saved"
+                      ? " Saved."
+                      : creditLimitSaveState === "error"
+                        ? " Needs attention."
+                        : ""}
+                </p>
+              </section>
             ) : null}
           </div>
         ) : null}

@@ -1179,6 +1179,7 @@ type StatementMetadataSnapshot = {
   currency: string | null;
   openingBalance: number | null;
   endingBalance: number | null;
+  creditLimit?: number | null;
   paymentDueDate?: string | null;
   totalAmountDue?: number | null;
   startDate: string | null;

@@ -421,6 +421,9 @@ model Account {
   currency                String                       @default("PHP")
   source                  String                       @default("upload")
   balance                 Decimal?                     @db.Decimal(18, 2)
+  creditLimit             Decimal?                     @db.Decimal(18, 2)
+  creditLimitSource       String?
+  creditLimitUpdatedAt    DateTime?
   favorite                Boolean                      @default(false)
   createdAt               DateTime                     @default(now())
   updatedAt               DateTime                     @updatedAt
