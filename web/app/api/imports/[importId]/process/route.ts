@@ -154,7 +154,7 @@ const buildEastWestSampleFallbackText = (fileName: string) => {
   ].join("\n");
 };
 
-export const buildChinaBankSampleFallbackText = (fileName: string) => {
+const buildChinaBankSampleFallbackText = (fileName: string) => {
   const normalized = fileName.toLowerCase();
   const isKnownChinaBankSample =
     normalized.includes("aee6f3b93af9300c19062e04efbc29c0274c43d184ad8e5899c55ec5885d44bb") ||
@@ -402,6 +402,53 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     };
 
+    const queueBackgroundProcessing = async (bankName?: string | null) => {
+      stage = "scheduling background processing";
+      try {
+        if (localDev) {
+          await ensureImportProcessingWorker();
+        }
+        await updateImportFileCompat(importId, {
+          status: "processing",
+          processingPhase: "queued_retry",
+          processingMessage: "Queued for background processing...",
+        });
+        await enqueueImportProcessing({
+          importFileId: importId,
+          actorUserId: userId,
+          password,
+          allowDuplicateStatement,
+          bankName: bankName || undefined,
+          importMode,
+          pdfJsBaseUrl,
+        });
+      } catch (error) {
+        console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
+        await updateImportFileCompat(importId, {
+          status: "failed",
+        });
+        return NextResponse.json(
+          {
+            error: "Unable to queue import processing",
+            stage,
+          },
+          { status: 400 }
+        );
+      }
+
+      queued = true;
+      return NextResponse.json({
+        ok: true,
+        queued,
+        processed: false,
+        importedRows: 0,
+        duplicate: false,
+        status: "queued",
+        importFileId: importId,
+        metadata: null,
+      });
+    };
+
     if (isMultipart) {
       stage = "reading multipart form";
       const formData = await _request.formData();
@@ -433,9 +480,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const file = uploadedFile as File;
       const bankHint = normalizeBankName(formBankName || formFileName || file.name || "");
       const effectiveBankName = formBankName || (bankHint !== "Unknown" ? bankHint : "");
-      const shouldAvoidPdfPreflight =
+      const isNoisyPdfBank =
         isPdfUpload(file.name || formFileName || "imported-file", file.type || formFileType || "") &&
         ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bankHint);
+      const shouldAvoidPdfPreflight =
+        isPdfUpload(file.name || formFileName || "imported-file", file.type || formFileType || "") &&
+        isNoisyPdfBank;
       const validationError = validateImportFile({
         fileName: file.name || formFileName || "imported-file",
         fileSize: file.size,
@@ -663,61 +713,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         }
 
         if (!cachedDocTextInfo) {
-          if (!localDev) {
-            return processInline({
-              bankName: effectiveBankName || null,
-              progressMessage:
-                importMode === "portfolio"
-                  ? "Reading portfolio details..."
-                  : importMode === "account_detail"
-                    ? "Reading account details..."
-                    : importMode === "notes"
-                      ? "Reading note details..."
-                      : "Reading document details...",
-            });
-          }
-
-          stage = "scheduling background processing";
-          try {
-            await ensureImportProcessingWorker();
-            await updateImportFileCompat(importId, {
-              status: "processing",
-              processingPhase: "queued_retry",
-              processingMessage: "Queued for background processing...",
-            });
-            await enqueueImportProcessing({
-              importFileId: importId,
-              actorUserId: userId,
-              password,
-              allowDuplicateStatement,
-              bankName: effectiveBankName || undefined,
-              importMode,
-              pdfJsBaseUrl,
-            });
-          } catch (error) {
-            console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
-            await updateImportFileCompat(importId, {
-              status: "failed",
-            });
-            return NextResponse.json(
-              {
-                error: "Unable to queue import processing",
-                stage,
-              },
-              { status: 400 }
-            );
-          }
-
-          return NextResponse.json({
-            ok: true,
-            queued: true,
-            processed: false,
-            importedRows: 0,
-            duplicate: false,
-            status: "queued",
-            importFileId: importId,
-            metadata: null,
-          });
+          return queueBackgroundProcessing(effectiveBankName || null);
         }
       }
       const shouldPreflightPdf = isPdfUpload(effectiveFileName, effectiveFileType) && bytes.length <= 10_000_000 && !shouldAvoidPdfPreflight;
@@ -788,36 +784,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         !forceInlineProcessing &&
         !shouldProcessKnownStatementInline &&
         !(hasExtractedText && parsedMetadataConfidence >= 80) &&
-        !canReuseCachedParseSnapshot;
+        !canReuseCachedParseSnapshot &&
+        !isNoisyPdfBank;
 
       if (shouldQueuePdfImmediately) {
         if (!localDev) {
-          return processInline({
-            text: extractedText || undefined,
-            textCacheInfo: preflightText,
-            bankName: effectiveBankName || null,
-          });
+          return queueBackgroundProcessing(effectiveBankName || null);
         }
 
         stage = "scheduling background processing";
         try {
-          if (!shouldQueueDocumentUpload) {
-            await ensureImportProcessingWorker();
-          }
-          await updateImportFileCompat(importId, {
-            status: "processing",
-            processingPhase: "queued_retry",
-            processingMessage: "Queued for background processing...",
-          });
-          await enqueueImportProcessing({
-            importFileId: importId,
-            actorUserId: userId,
-            password,
-            allowDuplicateStatement,
-            bankName: effectiveBankName || undefined,
-            importMode,
-            pdfJsBaseUrl,
-          });
+          return queueBackgroundProcessing(effectiveBankName || null);
         } catch (error) {
           console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
           await updateImportFileCompat(importId, {
@@ -831,17 +808,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             { status: 400 }
           );
         }
-
-        return NextResponse.json({
-          ok: true,
-          queued: true,
-          processed: false,
-          importedRows: 0,
-          duplicate: false,
-          status: "queued",
-          importFileId: importId,
-          metadata: null,
-        });
       }
 
       stage = "reading statement metadata";
@@ -878,9 +844,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       const shouldProcessInlinePdf =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
-        (forceInlineProcessing || shouldProcessKnownStatementInline) &&
-        (hasExtractedText || canReuseCachedParseSnapshot) &&
-        (parsedMetadataConfidence >= 80 || shouldProcessKnownStatementInline);
+        (forceInlineProcessing || shouldProcessKnownStatementInline || isNoisyPdfBank) &&
+        (hasExtractedText || canReuseCachedParseSnapshot || isNoisyPdfBank) &&
+        (parsedMetadataConfidence >= 80 || shouldProcessKnownStatementInline || isNoisyPdfBank);
       const shouldProcessInline =
         (!shouldQueueDocumentUpload &&
           !isPdfUpload(effectiveFileName, effectiveFileType) &&
@@ -960,31 +926,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       stage = "scheduling background processing";
       if (!localDev) {
-        return processInline({
-          text: extractedText || undefined,
-          textCacheInfo: preflightText,
-          bankName: effectiveBankName || null,
-        });
+        return queueBackgroundProcessing(effectiveBankName || null);
       }
 
       try {
-        if (!shouldQueueDocumentUpload) {
-          await ensureImportProcessingWorker();
-        }
-        await updateImportFileCompat(importId, {
-          status: "processing",
-          processingPhase: "queued_retry",
-          processingMessage: "Queued for background processing...",
-        });
-        await enqueueImportProcessing({
-          importFileId: importId,
-          actorUserId: userId,
-          password,
-          allowDuplicateStatement,
-          bankName: effectiveBankName || undefined,
-          importMode: importMode ?? undefined,
-          pdfJsBaseUrl,
-        });
+        return queueBackgroundProcessing(effectiveBankName || null);
       } catch (error) {
         console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
         await updateImportFileCompat(importId, {
@@ -998,17 +944,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           { status: 400 }
         );
       }
-      queued = true;
-      return NextResponse.json({
-        ok: true,
-        queued,
-        processed: false,
-        importedRows: 0,
-        duplicate: false,
-        status: "queued",
-        importFileId: importId,
-        metadata,
-      });
     } else {
       stage = "loading import record";
       if (!importFile) {
