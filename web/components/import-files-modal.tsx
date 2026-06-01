@@ -4989,7 +4989,8 @@ export function ImportFilesModal({
           localPreparseTextByItemIdRef.current.set(itemId, extractedTextForUpload);
         }
       }
-      const processResponse = await postFileWithProgress(
+      let processResponseSettled = false;
+      const processResponsePromise = postFileWithProgress(
         `/api/imports/${importFileId}/process`,
         item.file,
         {
@@ -5022,7 +5023,47 @@ export function ImportFilesModal({
             status: "importing",
           });
         }
-      );
+      ).finally(() => {
+        processResponseSettled = true;
+      });
+      if (shouldSkipLocalStatementPreparse) {
+        void (async () => {
+          await new Promise((resolve) => window.setTimeout(resolve, 8_000));
+          if (processResponseSettled) {
+            return;
+          }
+
+          await monitorQueuedImportAndConfirm(itemId, importFileId!, null, {
+            fileName: item.file.name,
+            fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+            guessedAccountName: guessedIdentity?.accountName ?? null,
+            guessedInstitution: guessedIdentity?.institution ?? null,
+            guessedAccountNumber: null,
+            guessedAccountType: guessedIdentity
+              ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+              : null,
+            accountName: guessedIdentity?.accountName ?? null,
+            institution: guessedIdentity?.institution ?? null,
+            accountNumber: null,
+            accountType: guessedIdentity
+              ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+              : null,
+            optimisticAccountId: item.optimisticAccountId ?? null,
+            initialBalance: null,
+            password: item.password.trim() || undefined,
+          }).finally(() => {
+            if (!processResponseSettled) {
+              router.refresh();
+            }
+          });
+        })().catch((error) => {
+          console.warn("In-flight import visibility monitor failed", {
+            importFileId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+      const processResponse = await processResponsePromise;
       capturePostHogClientEvent("file_uploaded", {
         file_type: fileTypeLabel(item.file),
         file_size_bytes: item.file.size,
