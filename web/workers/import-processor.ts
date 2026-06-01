@@ -4033,8 +4033,18 @@ export const processImportFileText = async (
     /^Account\s+\d{4}$/i.test(metadataForParse.accountName) ||
     /^(CUSTOMER NUMBER|ACCOUNT NUMBER)$/i.test(metadataForParse.accountName);
   const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"]);
+  const hasStrongChinaBankDeterministicParse =
+    importMode === "statement" &&
+    !imageImport &&
+    /^(chinabank|china bank)$/i.test(String(metadataForParse.institution ?? "")) &&
+    Boolean(metadataForParse.accountNumber) &&
+    parsedRows.length >= 50 &&
+    parsedDateCoverage >= 0.75 &&
+    (metadataForParse.confidence ?? 0) >= 80;
   const prefersVisionFallbackForInstitution =
-    typeof metadataForParse.institution === "string" && noisyVisionPreferredInstitutions.has(metadataForParse.institution);
+    typeof metadataForParse.institution === "string" &&
+    noisyVisionPreferredInstitutions.has(metadataForParse.institution) &&
+    !hasStrongChinaBankDeterministicParse;
   const genericParseLooksSuspicious =
     (importFile.fileType === "application/pdf" || imageImport) &&
     (looksCharacterSpacedOcr || genericIdentityLooksWeak || (metadataForParse.confidence ?? 0) < 75);
