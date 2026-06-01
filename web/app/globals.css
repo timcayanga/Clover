@@ -5051,6 +5051,7 @@ body.transactions-manual-open .shell-quick-add-button {
   padding: 18px;
   display: grid;
   gap: 14px;
+  border-radius: 28px;
   border: 1px solid var(--stroke);
   box-shadow: var(--shadow);
 }
@@ -5376,6 +5377,7 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .budget-card {
   padding: 18px;
+  border-radius: 28px;
   border: 1px solid var(--stroke);
   box-shadow: var(--shadow);
   display: grid;
@@ -5502,6 +5504,7 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .budget-empty {
   padding: 22px;
+  border-radius: 28px;
   display: grid;
   gap: 10px;
   background:

@@ -335,7 +335,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
         <div className="budgeting-section__head">
           <div>
             <p className="eyebrow">Budgets</p>
-            <h4>{budgetGroups.length === 0 ? "Create your first budget" : "Current budgets"}</h4>
+            <h4>Current budgets</h4>
           </div>
           <button className="button button-secondary button-pill" type="button" onClick={openCreateEditor}>
             Add budget
@@ -384,8 +384,6 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
         ) : (
           <article className="budget-empty">
             <p className="eyebrow">Nothing yet</p>
-            <h4>Set one budget and Clover will keep an eye on it.</h4>
-            <p>Start with a category, amount, and cadence. Clover will track the rest.</p>
             <button className="button button-primary button-pill" type="button" onClick={openCreateEditor}>
               Create budget
             </button>
