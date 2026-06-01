@@ -12778,7 +12778,10 @@ const reconstructGenericTransferFeeCluster = (
     return null;
   }
 
-  const accountName = metadata.accountName ?? metadata.institution ?? "Account";
+  const accountName =
+    metadata.accountNumber && metadata.institution === "Security Bank Corporation"
+      ? formatSimpleBankAccountName("Security Bank", metadata.accountNumber)
+      : metadata.accountName ?? metadata.institution ?? "Account";
   const institution = metadata.institution ?? undefined;
   const makeRow = (
     description: string,
