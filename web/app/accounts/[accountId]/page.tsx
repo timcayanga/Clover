@@ -2752,12 +2752,15 @@ function AccountDetailPageContent() {
     setTransactionSplitBillError(null);
   };
 
-  const closeTransactionDetail = () => {
-    if (selectedTransaction && detailDraft && hasDetailDraftChanges && !isSavingTransactionDetail) {
-      void persistDetailDraft({ closeAfterSave: true });
-      return;
-    }
+  useEffect(() => {
+    const active = Boolean(selectedTransaction);
+    document.body.toggleAttribute("data-clover-page-modal", active);
+    return () => {
+      document.body.removeAttribute("data-clover-page-modal");
+    };
+  }, [selectedTransaction]);
 
+  const resetTransactionDetail = () => {
     setSelectedTransaction(null);
     setDetailDraft(null);
     setTransactionDeleteConfirmOpen(false);
@@ -2768,6 +2771,16 @@ function AccountDetailPageContent() {
     });
     setTransactionSplitBillSaving(false);
     setTransactionSplitBillError(null);
+  };
+
+  const closeTransactionDetail = () => {
+    if (selectedTransaction && detailDraft && hasDetailDraftChanges && !isSavingTransactionDetail) {
+      void persistDetailDraft({ closeAfterSave: false });
+      resetTransactionDetail();
+      return;
+    }
+
+    resetTransactionDetail();
   };
 
   const persistDetailDraft = async ({ closeAfterSave = true }: { closeAfterSave?: boolean } = {}) => {
