@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { buildBudgetOverview, buildBudgetSuggestions } from "@/lib/budgeting";
+import { buildBudgetOverview } from "@/lib/budgeting";
 
-export const budgetLookbackDays = 45;
+export const budgetLookbackDays = 35;
 
 export const getBudgetLookbackStart = (now = new Date()) => new Date(now.getTime() - budgetLookbackDays * 24 * 60 * 60 * 1000);
 
@@ -11,7 +11,7 @@ export const isMissingBudgetTableError = (error: unknown) =>
 export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Date()) => {
   const lookbackStart = getBudgetLookbackStart(now);
 
-  const budgets = await prisma.budget
+  const budgetsPromise = prisma.budget
     .findMany({
       where: {
         workspaceId,
@@ -46,7 +46,8 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
       throw error;
     });
 
-  const [transactions, accounts, categories] = await Promise.all([
+  const [budgets, transactions, categories] = await Promise.all([
+    budgetsPromise,
     prisma.transaction.findMany({
       where: {
         workspaceId,
@@ -62,21 +63,6 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
         amount: true,
         date: true,
         isExcluded: true,
-      },
-    }),
-    prisma.account.findMany({
-      where: {
-        workspaceId,
-      },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        currency: true,
-        balance: true,
-      },
-      orderBy: {
-        createdAt: "asc",
       },
     }),
     prisma.category.findMany({
@@ -105,26 +91,11 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
     transactions,
     now,
   });
-  const suggestions = buildBudgetSuggestions({
-    transactions,
-    accounts: accounts.map((account) => ({
-      id: account.id,
-      name: account.name,
-      currency: account.currency,
-    })),
-    categories: categories.map((category) => ({
-      id: category.id,
-      name: category.name,
-    })),
-    currency: budgets[0]?.currency ?? accounts.find((account) => account.currency)?.currency ?? "PHP",
-  });
 
   return {
     budgets,
     transactions,
-    accounts,
     categories,
     overview,
-    suggestions,
   };
 };

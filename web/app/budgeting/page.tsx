@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { RouteSplash } from "@/components/route-splash";
@@ -12,7 +13,33 @@ export const metadata = {
   title: "Budgeting",
 };
 
-export default async function BudgetingPage() {
+function BudgetingPageShell() {
+  return (
+    <RouteSplash label="budgeting">
+      <CloverShell active="budgeting" title="Budgeting">
+        <Suspense fallback={<BudgetingLoadingState />}>
+          <BudgetingPageContent />
+        </Suspense>
+      </CloverShell>
+    </RouteSplash>
+  );
+}
+
+function BudgetingLoadingState() {
+  return (
+    <section className="budgeting-page">
+      <section className="budgeting-loading glass">
+        <div className="budgeting-loading__summary" />
+        <div className="budgeting-loading__summary" />
+      </section>
+      <section className="budgeting-loading glass">
+        <div className="budgeting-loading__panel" />
+      </section>
+    </section>
+  );
+}
+
+async function BudgetingPageContent() {
   const context = await resolveBudgetingWorkspace();
 
   if (!context.workspaceId) {
@@ -22,18 +49,14 @@ export default async function BudgetingPage() {
   const data = await loadBudgetWorkspaceData(context.workspaceId);
 
   return (
-    <RouteSplash label="budgeting">
-      <CloverShell active="budgeting" title="Budgeting" subtitle="Set limits that flow through Clover">
-        <BudgetingWorkspace
-          initialData={{
-            budgets: data.overview.budgets,
-            overview: data.overview,
-            accounts: data.accounts,
-            categories: data.categories,
-            suggestions: data.suggestions,
-          }}
-        />
-      </CloverShell>
-    </RouteSplash>
+    <BudgetingWorkspace
+      initialData={{
+        budgets: data.overview.budgets,
+        overview: data.overview,
+        categories: data.categories,
+      }}
+    />
   );
 }
+
+export default BudgetingPageShell;

@@ -5041,6 +5041,80 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 16px;
 }
 
+.budget-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.budget-summary-card {
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow);
+}
+
+.budget-summary-card--positive {
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 28%),
+    rgba(255, 255, 255, 0.9);
+}
+
+.budget-summary-card--warning {
+  background:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.08), transparent 28%),
+    rgba(255, 255, 255, 0.9);
+}
+
+.budget-summary-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.budget-summary-card__head strong {
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.budget-summary-card__items {
+  display: grid;
+  gap: 10px;
+}
+
+.budget-summary-card__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.budget-summary-card__item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.budget-summary-card__item strong,
+.budget-summary-card__empty {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.budget-summary-card__empty {
+  margin: 0;
+  padding: 6px 2px 0;
+}
+
 .budgeting-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
@@ -5308,6 +5382,37 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 12px;
 }
 
+.budget-card__cadences {
+  display: grid;
+  gap: 12px;
+}
+
+.budget-card__cadence-row {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.budget-card__cadence-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.budget-card__cadence-head span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.budget-card__cadence-head strong {
+  font-size: 13px;
+  letter-spacing: -0.02em;
+}
+
 .budget-card__subhead {
   margin: 4px 0 0;
   color: var(--muted);
@@ -5379,6 +5484,14 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .budget-card__meta span:last-child {
   text-align: right;
+}
+
+.budget-card__meta--compact {
+  font-size: 12px;
+}
+
+.budget-card__meta--compact span {
+  font-size: 12px;
 }
 
 .budget-card__actions {
@@ -5453,37 +5566,6 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 12px;
 }
 
-.budget-editor__preview {
-  grid-column: 1 / -1;
-  display: grid;
-  gap: 6px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.1), transparent 28%),
-    rgba(255, 255, 255, 0.86);
-}
-
-.budget-editor__preview-label {
-  color: var(--muted-2);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.budget-editor__preview strong {
-  font-size: 16px;
-  line-height: 1.25;
-}
-
-.budget-editor__preview p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 .budget-editor__inline-controls,
 .budget-editor__advanced {
   grid-column: 1 / -1;
@@ -5498,6 +5580,41 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.budget-loading {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.budgeting-loading {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.budgeting-loading__summary,
+.budgeting-loading__panel {
+  min-height: 220px;
+  border-radius: 22px;
+  background:
+    linear-gradient(90deg, rgba(237, 242, 247, 0.9), rgba(248, 250, 252, 0.9), rgba(237, 242, 247, 0.9));
+  background-size: 200% 100%;
+  animation: budget-shimmer 1.3s linear infinite;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.budgeting-loading__panel {
+  min-height: 340px;
+  grid-column: 1 / -1;
+}
+
+@keyframes budget-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .budget-editor__hint {
@@ -25303,6 +25420,8 @@ button.accounts-detail__transaction-head-cell {
   .reports-hero,
   .reports-ai-grid,
   .reports-brief-grid,
+  .budget-summary-grid,
+  .budgeting-loading,
   .budgeting-hero,
   .budgeting-section,
   .budgeting-suggestion-grid,
@@ -25408,11 +25527,12 @@ button.accounts-detail__transaction-head-cell {
     align-items: flex-start;
   }
 
-  .budgeting-hero {
+  .budget-summary-grid,
+  .budgeting-loading {
     grid-template-columns: 1fr;
   }
 
-  .budgeting-suggestion-grid {
+  .budgeting-hero {
     grid-template-columns: 1fr;
   }
 
@@ -25548,10 +25668,12 @@ button.accounts-detail__transaction-head-cell {
   .reports-summary-grid,
   .reports-summary-grid--three,
   .reports-attention-strip,
+  .budget-summary-grid,
   .budgeting-hero,
   .budgeting-section,
   .budgeting-suggestion-grid,
   .budgeting-grid,
+  .budgeting-loading,
   .reports-ai-signal-grid,
   .insights-snapshot__metrics,
   .insights-snapshot__actions,
@@ -25747,6 +25869,7 @@ button.accounts-detail__transaction-head-cell {
 
   .budgeting-hero,
   .budgeting-hero__summary,
+  .budget-summary-card,
   .budgeting-section,
   .budget-card,
   .budget-editor {
@@ -25764,6 +25887,7 @@ button.accounts-detail__transaction-head-cell {
 
   .budgeting-hero__actions,
   .budgeting-section__head,
+  .budget-summary-card__head,
   .budgeting-hero__summary-head,
   .budget-card__progress,
   .budget-card__progress,
@@ -25772,12 +25896,8 @@ button.accounts-detail__transaction-head-cell {
     align-items: flex-start;
   }
 
-  .budget-suggestion__actions {
-    width: 100%;
-  }
-
-  .budget-suggestion__actions .button {
-    width: 100%;
+  .budget-summary-grid {
+    gap: 10px;
   }
 
   .reports-summary-grid--highlights {
