@@ -994,6 +994,53 @@ const main = async () => {
     throw new Error(`Parser regression checks failed:\n${failures.map((entry) => `- ${entry}`).join("\n")}`);
   }
 
+  const pnbProjectPath = join(root, "Samples/PNB/495650370-PNB-Project-SOA-Jan-2021.pdf");
+  const pnbProjectBytes = await readFile(pnbProjectPath);
+  const pnbProjectText = await readUploadedFileText({
+    name: basename(pnbProjectPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(pnbProjectBytes.length);
+      copy.set(pnbProjectBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const pnbProjectMetadata = detectStatementMetadataFromText(pnbProjectText);
+  const pnbProjectRows = parser.parseImportText(pnbProjectText, basename(pnbProjectPath), "application/pdf", {
+    institution: pnbProjectMetadata.institution,
+    accountName: pnbProjectMetadata.accountName,
+    accountNumber: pnbProjectMetadata.accountNumber,
+  });
+  const pnbTransferOutRows = pnbProjectRows.filter(
+    (row) => row.merchantClean === "Fund Transfer" && row.type === "expense" && row.categoryName === "Transfers"
+  );
+  if (pnbProjectRows.length !== 7 || pnbTransferOutRows.length !== 3) {
+    throw new Error(
+      `expected PNB Project SOA to recover 7 rows with 3 expense-side fund transfers, got ${pnbProjectRows.length} rows and ${pnbTransferOutRows.length} transfers`
+    );
+  }
+
+  const pnbNoisyPath = join(root, "Samples/PNB/Philippines-PNB-bank-statement-template-in-Word-and-PDF-format-4-pages-1-1-960x1358.pdf");
+  const pnbNoisyBytes = await readFile(pnbNoisyPath);
+  const pnbNoisyText = await readUploadedFileText({
+    name: basename(pnbNoisyPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(pnbNoisyBytes.length);
+      copy.set(pnbNoisyBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const pnbNoisyMetadata = detectStatementMetadataFromText(pnbNoisyText);
+  const pnbNoisyRows = parser.parseImportText(pnbNoisyText, basename(pnbNoisyPath), "application/pdf", {
+    institution: pnbNoisyMetadata.institution,
+    accountName: pnbNoisyMetadata.accountName,
+    accountNumber: pnbNoisyMetadata.accountNumber,
+  });
+  if (pnbNoisyRows.length !== 0) {
+    throw new Error(`expected noisy PNB scan to fail closed instead of creating heuristic rows, got ${pnbNoisyRows.length}`);
+  }
+
   const cimbMixedPath = join(root, "Samples/CIMB/840624470-CIMB-Statement-of-account-pdf.pdf");
   const cimbMixedBytes = await readFile(cimbMixedPath);
   const cimbMixedText = await readUploadedFileText({

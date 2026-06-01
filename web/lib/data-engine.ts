@@ -2701,6 +2701,7 @@ export const buildStatementFingerprint = (
   fileType?: string | null,
   documentFamily?: string | null
 ) => {
+  const noisyOCRInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank", "PNB", "Philippine National Bank"]);
   const normalizedLines = text
     .split(/\r?\n/)
     .map((line) =>
@@ -2715,6 +2716,17 @@ export const buildStatementFingerprint = (
 
   const normalizedTextFingerprint = normalizedLines.join("\n");
   const fallbackFileIdentity = normalizedTextFingerprint ? "" : (fileName ?? "").toLowerCase();
+  const useMetadataOnlyFingerprint = metadata.institution ? noisyOCRInstitutions.has(metadata.institution) : false;
+  const stableFingerprintSource = [
+    metadata.institution ?? "",
+    metadata.accountNumber ?? "",
+    metadata.accountType ?? "",
+    metadata.startDate ?? "",
+    metadata.endDate ?? "",
+    metadata.endingBalance != null ? String(metadata.endingBalance) : "",
+    (fileType ?? "").toLowerCase(),
+    (documentFamily ?? "").toLowerCase(),
+  ].join("|");
   const fingerprintSource = [
     metadata.institution ?? "",
     metadata.accountNumber ?? "",
@@ -2727,7 +2739,7 @@ export const buildStatementFingerprint = (
     normalizedTextFingerprint,
   ].join("|");
 
-  return `stmt_${fnv1a(fingerprintSource)}`;
+  return `stmt_${fnv1a(useMetadataOnlyFingerprint ? stableFingerprintSource : fingerprintSource)}`;
 };
 
 export const buildStatementFamilySignature = (params: {

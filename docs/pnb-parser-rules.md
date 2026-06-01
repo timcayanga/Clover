@@ -14,8 +14,8 @@ This document captures the PNB parsing rules learned from the synthetic training
 - Use running balance as a first-class field.
 - Keep salary credits as `Income`.
 - Keep `Interest Earned` as `Income`.
-- Keep `Fund Transfer` rows as `Transfers`, including sends to GCash and Maya and incoming transfers from Maya.
-- Keep `ATM Withdrawal` as `Transfers`.
+- Keep `Fund Transfer` rows in the `Transfers` category, including sends to GCash and Maya and incoming transfers from Maya. If Clover cannot match both sides to the user's own accounts, preserve the direction as income or expense instead of forcing the transaction type to `Transfer`.
+- Keep `ATM Withdrawal` as an expense-side `Cash & ATM` row.
 - Keep `Transfer Fee` and `ATM Fee` as `Financial`.
 - Keep `Bills Payment Meralco` as `Bills & Utilities`.
 - Keep `Adjustment Reversal` as a transfer-like correction row.
@@ -65,10 +65,13 @@ This document captures the PNB parsing rules learned from the synthetic training
 - Preserve the line-wrapped branch / negotiating / transaction fragments that appear before the dated row.
 - Use the dated row's running balance as the strongest balance signal, and prefer the newest row's balance as the statement ending balance.
 - Skip the report header, request metadata, and branch / office boilerplate so they do not become fake transactions.
+- If PNB OCR interleaves `STATEMENT OF ACCOUNT REPORT` transfer rows with later remittance/check rows, recover the ledger from explicit dated rows and running-balance math instead of allowing the generic parser to create partial income-only rows.
+- For the January 2021 Project SOA shape, recover the seven ledger rows: check batch local, three outward fund transfers, cash deposit, check deposit, and international remittance. The final balance should be PHP 537,915.35.
 - `PHILIPPINE NATIONAL BANK` statements with `Statement Period`, `Date Description Debit (PHP) Credit (PHP) Balance (PHP)`, and month/day rows should also parse as savings ledgers.
 - For that simpler shape, ignore `Starting Balance`, `Total Credits`, `Total Debits`, `Ending Balance`, and the system-generated footer note.
 - Treat `GCash Top-up` as a transfer, `Online Transfer` as a transfer, and keep bill-payment rows under `Bills & Utilities`.
-- For low-quality multi-page scans, the vision fallback may need multiple pages to recover the complete ledger. When the text layer is empty, inspect beyond page one so the final balance and later-page transactions are not missed.
+- For low-quality multi-page scans, the vision fallback may need multiple pages to recover the complete ledger. When the deterministic PNB parser cannot produce dated rows with trustworthy amounts and balances, fail closed instead of allowing generic OCR text to create garbage transactions.
+- Treat duplicate low-quality PNB scans with the same institution, account number, period, and ending balance as duplicates even if OCR text differs.
 
 ## Notes Handling
 
