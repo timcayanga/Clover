@@ -12,6 +12,7 @@ This document captures the current PSBank parsing guidance for Clover.
 
 - The sample statement includes recurring balance-related rows such as `Interest Due` and `Penalty Due`.
 - Preserve installment-style and loan-related rows instead of flattening them into generic spend.
+- PSBank `Statement of Account` imports that include `Payment Due Date`, `Total Amount Due`, and `Minimum Amount Due` should be classified as `credit_card` accounts so they appear in the Credit Cards section.
 
 ## Transaction Rules
 
@@ -27,4 +28,3 @@ This document captures the current PSBank parsing guidance for Clover.
 ## Review
 
 - Loan and penalty rows should be review-worthy when the statement context is incomplete.
-
