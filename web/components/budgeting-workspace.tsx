@@ -383,7 +383,6 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
           </div>
         ) : (
           <article className="budget-empty">
-            <p className="eyebrow">Nothing yet</p>
             <button className="button button-primary button-pill" type="button" onClick={openCreateEditor}>
               Create budget
             </button>
