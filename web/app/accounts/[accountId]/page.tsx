@@ -2518,20 +2518,36 @@ function AccountDetailPageContent() {
     setFinalizingNoticeDismissed(isFinalizingNoticeDismissed(finalizingNoticeDismissalKey));
   }, [finalizingNoticeDismissalKey]);
   useEffect(() => {
-    if (!finalizingNeedsReview || finalizingTransactionCount === 0 || visibleTransactions.length === 0) {
+    if (visibleTransactions.length === 0) {
       return;
     }
 
     const currentActivity = readImportActivity();
     if (currentActivity?.status === "active") {
+      const activeImportFileId =
+        typeof currentActivity.importFileId === "string" && currentActivity.importFileId.trim()
+          ? currentActivity.importFileId.trim()
+          : null;
+      const hasVisibleCurrentImportTransactions = activeImportFileId
+        ? visibleTransactions.some((transaction) => {
+            const rawPayload = transaction.rawPayload;
+            const sourceImportFileId =
+              rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+                ? (rawPayload as Record<string, unknown>).sourceImportFileId
+                : null;
+            return transaction.importFileId === activeImportFileId || sourceImportFileId === activeImportFileId;
+          })
+        : false;
       const importBatchStillRunning =
         Number(currentActivity.fileTotal ?? 0) > 0 &&
         Number(currentActivity.completedFiles ?? 0) < Number(currentActivity.fileTotal ?? 0);
-      if (importBatchStillRunning) {
+      if (importBatchStillRunning && !hasVisibleCurrentImportTransactions) {
         return;
       }
 
-      clearImportActivity();
+      if (hasVisibleCurrentImportTransactions || (finalizingNeedsReview && finalizingTransactionCount > 0)) {
+        clearImportActivity();
+      }
     }
   }, [finalizingNeedsReview, finalizingTransactionCount, visibleTransactions.length]);
   const showFinalizingNotice = finalizingTransactionCount > 0 && !finalizingNoticeDismissed;

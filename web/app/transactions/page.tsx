@@ -3773,17 +3773,31 @@ function TransactionsPageContent() {
     if (currentActivity?.status !== "active") {
       return;
     }
+    const activeImportFileId =
+      typeof currentActivity.importFileId === "string" && currentActivity.importFileId.trim()
+        ? currentActivity.importFileId.trim()
+        : null;
+    const hasVisibleCurrentImportTransactions = activeImportFileId
+      ? visibleTransactions.some((transaction) => {
+          const rawPayload = transaction.rawPayload;
+          const sourceImportFileId =
+            rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+              ? (rawPayload as Record<string, unknown>).sourceImportFileId
+              : null;
+          return transaction.importFileId === activeImportFileId || sourceImportFileId === activeImportFileId;
+        })
+      : false;
     const importBatchStillRunning =
       Number(currentActivity.fileTotal ?? 0) > 0 &&
       Number(currentActivity.completedFiles ?? 0) < Number(currentActivity.fileTotal ?? 0);
-    if (importBatchStillRunning) {
+    if (importBatchStillRunning && !hasVisibleCurrentImportTransactions) {
       return;
     }
 
     const hasVisibleImportedTransactions = visibleTransactions.some(
       (transaction) => transaction.source === "upload" || Boolean(transaction.importFileId)
     );
-    if ((finalizingNeedsReview && finalizingTransactionCount > 0) || hasVisibleImportedTransactions) {
+    if ((finalizingNeedsReview && finalizingTransactionCount > 0) || hasVisibleCurrentImportTransactions || hasVisibleImportedTransactions) {
       clearImportActivity();
     }
   }, [finalizingNeedsReview, finalizingTransactionCount, visibleTransactions]);

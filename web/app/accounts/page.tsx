@@ -1352,10 +1352,24 @@ function AccountsPageContent() {
     if (currentActivity?.status !== "active") {
       return;
     }
+    const activeImportFileId =
+      typeof currentActivity.importFileId === "string" && currentActivity.importFileId.trim()
+        ? currentActivity.importFileId.trim()
+        : null;
+    const hasVisibleCurrentImportTransactions = activeImportFileId
+      ? transactions.some((transaction) => {
+          const rawPayload = transaction.rawPayload;
+          const sourceImportFileId =
+            rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+              ? (rawPayload as Record<string, unknown>).sourceImportFileId
+              : null;
+          return transaction.importFileId === activeImportFileId || sourceImportFileId === activeImportFileId;
+        })
+      : false;
     const importBatchStillRunning =
       Number(currentActivity.fileTotal ?? 0) > 0 &&
       Number(currentActivity.completedFiles ?? 0) < Number(currentActivity.fileTotal ?? 0);
-    if (importBatchStillRunning) {
+    if (importBatchStillRunning && !hasVisibleCurrentImportTransactions) {
       return;
     }
 
@@ -1366,7 +1380,7 @@ function AccountsPageContent() {
       (transaction) => transaction.source === "upload" || Boolean(transaction.importFileId)
     );
 
-    if (hasVisibleImportedAccount && hasVisibleImportedTransactions) {
+    if (hasVisibleCurrentImportTransactions || (hasVisibleImportedAccount && hasVisibleImportedTransactions)) {
       clearImportActivity();
     }
   }, [reconciledAccounts, transactions]);

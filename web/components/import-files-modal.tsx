@@ -1598,10 +1598,18 @@ export function ImportFilesModal({
       return;
     }
 
+    const previousSnapshot = lastImportActivityRef.current;
     const nextSnapshot: ImportActivitySnapshot = {
       workspaceId: snapshot.workspaceId ?? workspaceId,
       surface: snapshot.surface ?? importActivitySurfaceRef.current,
       status: snapshot.status,
+      importFileId:
+        typeof snapshot.importFileId === "string" && snapshot.importFileId.trim()
+          ? snapshot.importFileId.trim()
+          : previousSnapshot?.workspaceId === (snapshot.workspaceId ?? workspaceId) &&
+              previousSnapshot?.fileName === (snapshot.fileName ?? null)
+            ? previousSnapshot.importFileId ?? null
+            : null,
       fileName: snapshot.fileName ?? null,
       fileIndex: Number(snapshot.fileIndex ?? 0),
       fileTotal: Number(snapshot.fileTotal ?? 0),
@@ -1659,7 +1667,6 @@ export function ImportFilesModal({
     if (nextSnapshot.status === "done" && nextSnapshot.fileName) {
       retiredImportActivityFileNamesRef.current.add(nextSnapshot.fileName);
     }
-    const previousSnapshot = lastImportActivityRef.current;
     if (
       previousSnapshot &&
       nextSnapshot.status === "active" &&
@@ -4942,6 +4949,7 @@ export function ImportFilesModal({
         workspaceId,
         surface: importActivitySurfaceRef.current,
         status: "active",
+        importFileId,
         fileName: item.file.name,
         fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
         fileTotal: items.length,
@@ -4998,6 +5006,7 @@ export function ImportFilesModal({
             workspaceId,
             surface: importActivitySurfaceRef.current,
             status: "active",
+            importFileId,
             fileName: item.file.name,
             fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
             fileTotal: items.length,

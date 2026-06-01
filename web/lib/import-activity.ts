@@ -10,6 +10,7 @@ export type ImportActivitySnapshot = {
   workspaceId: string;
   surface: ImportActivitySurface;
   status: ImportActivityStatus;
+  importFileId: string | null;
   fileName: string | null;
   fileIndex: number;
   fileTotal: number;
@@ -80,6 +81,7 @@ const readSnapshotFromStorage = (storage: Storage | null): ImportActivitySnapsho
       workspaceId,
       surface,
       status,
+      importFileId: typeof parsed.importFileId === "string" ? parsed.importFileId : null,
       fileName: typeof parsed.fileName === "string" ? parsed.fileName : null,
       fileIndex: Number.isFinite(Number(parsed.fileIndex)) ? Number(parsed.fileIndex) : 0,
       fileTotal: Number.isFinite(Number(parsed.fileTotal)) ? Number(parsed.fileTotal) : 0,
