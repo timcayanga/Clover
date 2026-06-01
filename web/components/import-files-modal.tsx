@@ -1167,6 +1167,34 @@ const loadOptimisticPreviewTransactions = async (
   accountNumber?: string | null
 ) => {
   const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+  const normalizeAccountNumber = (value: unknown) => String(value ?? "").replace(/\D/g, "");
+  const requestedAccountNumber = normalizeAccountNumber(accountNumber);
+  const accountNumbersMatch = (candidate: string | null) => {
+    const normalizedCandidate = normalizeAccountNumber(candidate);
+    if (!requestedAccountNumber || !normalizedCandidate) {
+      return false;
+    }
+
+    return (
+      normalizedCandidate === requestedAccountNumber ||
+      (requestedAccountNumber.length >= 4 && normalizedCandidate.endsWith(requestedAccountNumber.slice(-4))) ||
+      (normalizedCandidate.length >= 4 && requestedAccountNumber.endsWith(normalizedCandidate.slice(-4)))
+    );
+  };
+  const getRowAccountNumber = (row: Record<string, unknown>) => {
+    if (typeof row.accountNumber === "string" && row.accountNumber.trim()) {
+      return row.accountNumber.trim();
+    }
+
+    if (row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)) {
+      const rawAccountNumber = (row.rawPayload as Record<string, unknown>).accountNumber;
+      if (typeof rawAccountNumber === "string" && rawAccountNumber.trim()) {
+        return rawAccountNumber.trim();
+      }
+    }
+
+    return null;
+  };
 
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const response = await fetch(`/api/imports/${importFileId}/preview`);
@@ -1176,19 +1204,20 @@ const loadOptimisticPreviewTransactions = async (
         ? payload.parsedRows.filter((row: unknown): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row)))
         : [];
       const scopedRows = accountNumber
-        ? parsedRows.filter((row) => {
-            const rowRecord = row as Record<string, unknown>;
-            const rowAccountNumber =
-              typeof rowRecord.accountNumber === "string" && rowRecord.accountNumber.trim()
-                ? rowRecord.accountNumber.trim()
-                : rowRecord.rawPayload &&
-                    typeof rowRecord.rawPayload === "object" &&
-                    !Array.isArray(rowRecord.rawPayload) &&
-                    typeof (rowRecord.rawPayload as Record<string, unknown>).accountNumber === "string"
-                  ? String((rowRecord.rawPayload as Record<string, unknown>).accountNumber).trim()
-                  : null;
-            return rowAccountNumber === accountNumber;
-          })
+        ? (() => {
+            const rowsWithAccountNumbers = parsedRows
+              .map((row) => ({ row, accountNumber: getRowAccountNumber(row) }))
+              .filter((entry) => entry.accountNumber);
+            const matchedRows = rowsWithAccountNumbers
+              .filter((entry) => accountNumbersMatch(entry.accountNumber))
+              .map((entry) => entry.row);
+
+            if (matchedRows.length > 0) {
+              return matchedRows;
+            }
+
+            return rowsWithAccountNumbers.length === 0 ? parsedRows : [];
+          })()
         : parsedRows;
       if (scopedRows.length > 0) {
         return buildOptimisticPreviewTransactions(scopedRows, {
