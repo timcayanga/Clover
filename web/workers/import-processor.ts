@@ -3832,8 +3832,11 @@ export const processImportFileText = async (
   let pdfFileDataBase64: string | null = null;
   let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
   const storageKey = String(importFile.storageKey ?? "");
+  const noisyPdfBankByFileName =
+    fileType === "application/pdf" &&
+    /landbank|land bank|eastwest|ucpb|chinabank|china bank/i.test(fileName);
 
-  if (imageImport || !text) {
+  if (!noisyPdfBankByFileName && (imageImport || !text)) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
