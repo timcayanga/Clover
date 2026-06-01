@@ -15,7 +15,6 @@ import {
   GOAL_OPTIONS,
   getFinancialExperienceProfile,
   getGoalDefinition,
-  getGoalMoneyLabel,
   getGoalPlanSummary,
   getGoalProgressSnapshot,
   getGoalPlaybook,
@@ -594,15 +593,14 @@ async function GoalsPageStream() {
   const savingsScore =
     currentSavingsRate === null ? 16 : clamp(Math.round((currentSavingsRate * 100 / targetRate) * 55), 12, 65);
   const dragPenalty = clamp(Math.round(recurringShare * 100 * 0.35 + Math.max(0, recurringMerchants.length - 1) * 4), 0, 22);
-  const goalScore = clamp(Math.round(savingsScore + trendScore + consistencyScore + cleanlinessScore * 0.2 - dragPenalty), 12, 98);
+  const goalScore = hasGoalTarget ? clamp(Math.round(savingsScore + trendScore + consistencyScore + cleanlinessScore * 0.2 - dragPenalty), 12, 98) : 0;
   const onboardingDate = user.onboardingCompletedAt ? new Date(user.onboardingCompletedAt) : null;
-  const goalMoneyLabel = getGoalMoneyLabel(selectedGoalKey as GoalKey | null);
-  const coachScoreRadius = 44;
-  const coachScoreCircumference = 2 * Math.PI * coachScoreRadius;
-  const coachScoreOffset = coachScoreCircumference - (goalScore / 100) * coachScoreCircumference;
+  const goalDialProgress = hasGoalTarget && goalProgress.progressPercent !== null ? clamp(goalProgress.progressPercent, 0, 100) : 0;
+  const goalDialRadius = 42;
+  const goalDialCircumference = 2 * Math.PI * goalDialRadius;
+  const goalDialOffset = goalDialCircumference - (goalDialProgress / 100) * goalDialCircumference;
 
-  const weeklyProgress = clamp(goalScore + (currentSavingsRate !== null && currentSavingsRate >= targetRate / 100 ? 8 : 0) - (recurringShare > 0.25 ? 6 : 0), 12, 100);
-  const progressRingPercent = goalProgress.progressPercent !== null ? clamp(goalProgress.progressPercent, 0, 100) : weeklyProgress;
+  const progressRingPercent = goalDialProgress;
 
   const currentTargetValue =
     hasGoalTarget && goalProgress.targetAmount !== null
@@ -613,7 +611,7 @@ async function GoalsPageStream() {
   const currentTargetNote =
     hasGoalTarget && currentGoalPlan !== null
       ? `${goalTargetSource ?? "Saved goal"} · ${currentGoalPlan.targetMode === "percent" ? "Percent of salary" : currentGoalPlan.cadence === "annual" ? "Annual target" : "Monthly target"}`
-      : "One clear number keeps the month simple.";
+      : "";
   const goalStatusLabel = !hasGoalTarget
     ? "Not set"
     : goalProgress.achieved
@@ -624,7 +622,7 @@ async function GoalsPageStream() {
           ? "At Risk"
           : "Not Met";
   const goalStatusNote = !hasGoalTarget
-    ? "Pick a target to start tracking."
+    ? ""
     : goalProgress.achieved
       ? "You already reached the target."
       : goalProgress.bandTone === "positive"
@@ -633,7 +631,7 @@ async function GoalsPageStream() {
           ? "Keep an eye on it."
           : "The month needs a reset.";
   const goalNextAction = hasGoalTarget ? goalProgress.nextAction : "Set a target so Clover can coach the month.";
-  const goalNextActionNote = hasGoalTarget ? "One useful move is enough for now." : "Start with a monthly amount.";
+  const goalNextActionNote = hasGoalTarget ? "One useful move is enough for now." : "";
   const weeklyChangeCards = [
     {
       label: "Spending pressure",
@@ -675,13 +673,13 @@ async function GoalsPageStream() {
             label: formatShortDate(row.createdAt),
             detail:
               rowPlanSummary?.detail ??
-              `${rowGoal.title}${rowTarget !== null ? ` · ${formatCurrency(rowTarget, goalCurrency)}` : " · No amount set"} · ${row.source === "onboarding" ? "Saved during onboarding" : "Updated in Goals"}`,
+              `${rowGoal.title}${rowTarget !== null ? ` · ${formatCurrency(rowTarget, goalCurrency)}` : " · No amount set"}`,
           };
         })
-      : [
+        : [
           {
-            label: onboardingDate ? formatShortDate(onboardingDate) : "Onboarding",
-            detail: hasGoalSelection ? `You picked ${selectedGoal.title.toLowerCase()} and can set a monthly target from here.` : "You skipped goal setup, so Clover can help you define one now.",
+            label: onboardingDate ? formatShortDate(onboardingDate) : "No history yet",
+            detail: hasGoalSelection ? `You picked ${selectedGoal.title.toLowerCase()} and can set a target here.` : "Set a goal to start your history.",
           },
         ];
 
@@ -727,7 +725,7 @@ async function GoalsPageStream() {
               <article className="goals-overview__card goals-overview__card--current glass">
                 <span>Current target</span>
                 <strong>{currentTargetValue}</strong>
-                <small>{currentTargetNote}</small>
+                {currentTargetNote ? <small>{currentTargetNote}</small> : null}
                 <div className="goals-overview__card-actions">
                   <GoalsEditor
                     goals={GOAL_OPTIONS}
@@ -750,13 +748,13 @@ async function GoalsPageStream() {
               <article className="goals-overview__card glass">
                 <span>Status</span>
                 <strong>{goalStatusLabel}</strong>
-                <small>{goalStatusNote}</small>
+                {goalStatusNote ? <small>{goalStatusNote}</small> : null}
               </article>
 
               <article className="goals-overview__card glass">
                 <span>Next action</span>
                 <strong>{goalNextAction}</strong>
-                <small>{goalNextActionNote}</small>
+                {goalNextActionNote ? <small>{goalNextActionNote}</small> : null}
               </article>
             </div>
           </section>
@@ -774,10 +772,23 @@ async function GoalsPageStream() {
                 </div>
               </div>
 
-              <div className="goals-orb" style={{ ["--goal-progress" as string]: `${progressRingPercent}%` }} aria-label={`Monthly goal progress ${Math.round(progressRingPercent)} percent`}>
+              <div className="goals-orb" aria-label={`Monthly goal progress ${Math.round(progressRingPercent)} percent`}>
                 <div className="goals-orb__shell">
                   <div className="goals-orb__ring">
                     <div className="goals-orb__ring-shadow" aria-hidden="true" />
+                    <svg className="goals-orb__svg" viewBox="0 0 100 100" aria-hidden="true">
+                      <circle className="goals-orb__track" cx="50" cy="50" r={goalDialRadius} />
+                      <circle
+                        className="goals-orb__progress"
+                        cx="50"
+                        cy="50"
+                        r={goalDialRadius}
+                        style={{
+                          strokeDasharray: goalDialCircumference,
+                          strokeDashoffset: goalDialOffset,
+                        }}
+                      />
+                    </svg>
                     <div className="goals-orb__core">
                       <strong>{hasGoalTarget && goalProgress.progressPercent !== null ? `${Math.round(goalProgress.progressPercent)}%` : "0%"}</strong>
                       <span>{hasGoalTarget ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} of ${formatCurrency(goalProgress.targetAmount ?? 0, goalCurrency)}` : "No target yet"}</span>

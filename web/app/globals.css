@@ -9210,12 +9210,36 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   height: 100%;
   border-radius: 50%;
   transform: translateY(2px) rotateX(16deg);
-  background:
-    radial-gradient(circle at 31% 25%, rgba(255, 255, 255, 0.9), transparent 28%),
-    conic-gradient(from 215deg, rgba(3, 168, 192, 0.96) 0 var(--goal-progress), rgba(148, 163, 184, 0.16) var(--goal-progress) 100%);
+  background: radial-gradient(circle at 31% 25%, rgba(255, 255, 255, 0.9), transparent 28%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
     0 24px 42px rgba(2, 132, 199, 0.12);
+}
+
+.goals-orb__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  z-index: 1;
+}
+
+.goals-orb__track,
+.goals-orb__progress {
+  fill: none;
+  stroke-width: 12;
+}
+
+.goals-orb__track {
+  stroke: rgba(148, 163, 184, 0.16);
+}
+
+.goals-orb__progress {
+  stroke: rgba(3, 168, 192, 0.96);
+  stroke-linecap: round;
+  filter: drop-shadow(0 8px 20px rgba(3, 168, 192, 0.14));
+  transition: stroke-dashoffset 220ms ease;
 }
 
 .goals-orb__ring::after {
@@ -9229,6 +9253,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
     inset 0 -18px 28px rgba(15, 23, 42, 0.06),
     inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+  z-index: 0;
 }
 
 .goals-orb__ring-shadow {
@@ -9253,7 +9278,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
     inset 0 -10px 26px rgba(15, 23, 42, 0.06);
-  z-index: 1;
+  z-index: 2;
 }
 
 .goals-orb__core strong {
