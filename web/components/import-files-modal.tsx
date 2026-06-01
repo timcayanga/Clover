@@ -2036,6 +2036,10 @@ export function ImportFilesModal({
         continue;
       }
 
+      if (isNoisyVisibilityBank(item.file.name)) {
+        continue;
+      }
+
       void preparsePendingItemLocally(item.id);
     }
   }, [items, open, preparsePendingItemLocally, workspaceId]);
@@ -6561,11 +6565,14 @@ export function ImportFilesModal({
     const hasBrowserParsableStatements = itemsToProcess.some((item) => {
       const mode = item.importMode ?? "statement";
       const lowerName = item.file.name.toLowerCase();
-      return mode === "statement" && (lowerName.endsWith(".pdf") || lowerName.endsWith(".csv"));
+      return mode === "statement" && (lowerName.endsWith(".pdf") || lowerName.endsWith(".csv")) && !isNoisyVisibilityBank(item.file.name);
     });
 
     if (hasBrowserParsableStatements) {
       for (const item of itemsToProcess) {
+        if (isNoisyVisibilityBank(item.file.name)) {
+          continue;
+        }
         void preparsePendingItemLocally(item.id);
       }
 
