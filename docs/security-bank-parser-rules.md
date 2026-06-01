@@ -42,6 +42,8 @@ This document captures the Security Bank parsing rules learned from the syntheti
 - Keep raw statement data, parsed rows, and normalized transactions separate.
 - Preserve bank-specific transfer, fee, sweep, and adjustment wording instead of collapsing it into generic spend.
 - The Security Bank simplifier registry covers `DPAC DGBanker Credit`, `ATWD ATM Withdrawal`, `IBFT Bancnet Tfr-CR`, `INSTAPAY FEE - DR`, `ATRO ATM/B2C ACCOUNT`, and `ATRC ATM/B2C ACCOUNT`.
+- Low-quality Security Bank ATM/B2C ledgers should still surface the bank brand in the account label. If OCR yields a holder name instead of the bank name, prefer `Security Bank <last4>` for the account display.
+- OCR variants such as `ATRO ATM/B 2 C ACCOUNT` and `ATRC ATM/B 2 C ACCOUNT` should normalize the same way as the compact `ATM/B2C` forms.
 
 ## Notes Handling
 

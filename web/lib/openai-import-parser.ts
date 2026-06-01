@@ -954,7 +954,7 @@ const buildBankInstructionJson = (params: {
     };
   }
 
-  if (/landbank/.test(normalized)) {
+  if (/(?:landbank|land\s+bank)/.test(normalized)) {
     return {
       ...base,
       institution: "Landbank",

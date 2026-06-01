@@ -280,14 +280,34 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
       typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber === "string"
         ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber).trim()
         : null;
+    const latestCheckpointAccountName =
+      latestCheckpoint?.sourceMetadata &&
+      typeof latestCheckpoint.sourceMetadata === "object" &&
+      !Array.isArray(latestCheckpoint.sourceMetadata) &&
+      typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).accountName === "string"
+        ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountName).trim()
+        : null;
+    const latestCheckpointInstitution =
+      latestCheckpoint?.sourceMetadata &&
+      typeof latestCheckpoint.sourceMetadata === "object" &&
+      !Array.isArray(latestCheckpoint.sourceMetadata) &&
+      typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).institution === "string"
+        ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).institution).trim()
+        : null;
     const latestCheckpointBalance =
       latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
         ? latestCheckpoint.endingBalance.toString()
         : null;
     const effectiveAccountNumber = account.accountNumber ?? latestCheckpointAccountNumber ?? null;
+    const effectiveInstitution = account.institution ?? latestCheckpointInstitution ?? null;
     const effectiveAccountName =
       account.source === "upload"
-        ? formatUploadAccountDisplayName(account.name, account.institution, effectiveAccountNumber, account.type)
+        ? formatUploadAccountDisplayName(
+            latestCheckpointAccountName ?? account.name,
+            effectiveInstitution,
+            effectiveAccountNumber,
+            account.type
+          )
         : account.name;
     const effectiveBalance = latestCheckpointBalance ?? account.balance?.toString() ?? null;
 
@@ -295,6 +315,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
       account: serializeAccount({
         ...account,
         name: effectiveAccountName,
+        institution: effectiveInstitution,
         accountNumber: effectiveAccountNumber,
         balance: effectiveBalance,
         transactionCount,

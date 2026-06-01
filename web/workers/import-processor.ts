@@ -161,7 +161,7 @@ const buildTransferCandidateText = (row: ImportInsightSourceRow) =>
   ].join(" ");
 
 const normalizeLandbankImportedRow = (row: ImportInsightSourceRow, institution?: string | null): ImportInsightSourceRow => {
-  if (!institution || !/landbank/i.test(institution)) {
+  if (!institution || !/(?:landbank|land\s+bank)/i.test(institution)) {
     return row;
   }
 

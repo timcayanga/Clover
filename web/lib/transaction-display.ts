@@ -257,7 +257,8 @@ export const getLandbankTransactionDisplayOverride = (params: {
   description?: string | null;
   rawPayload?: Prisma.JsonValue | null;
 }) => {
-  if (!/\blandbank\b/i.test(String(params.institution ?? ""))) {
+  const institutionText = String(params.institution ?? "");
+  if (!/(?:\blandbank\b|\bland\s+bank\b)/i.test(institutionText)) {
     return null;
   }
 

@@ -833,6 +833,20 @@ export async function GET(request: Request) {
     };
     const accountsWithCheckpointBackfill = visibleAccounts.map((account) => {
       const latestCheckpoint = latestCheckpointForAccount(account);
+      const checkpointAccountName =
+        latestCheckpoint?.sourceMetadata &&
+        typeof latestCheckpoint.sourceMetadata === "object" &&
+        !Array.isArray(latestCheckpoint.sourceMetadata) &&
+        typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).accountName === "string"
+          ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountName).trim()
+          : null;
+      const checkpointInstitution =
+        latestCheckpoint?.sourceMetadata &&
+        typeof latestCheckpoint.sourceMetadata === "object" &&
+        !Array.isArray(latestCheckpoint.sourceMetadata) &&
+        typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).institution === "string"
+          ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).institution).trim()
+          : null;
       const checkpointAccountNumber =
         latestCheckpoint?.sourceMetadata &&
         typeof latestCheckpoint.sourceMetadata === "object" &&
@@ -845,14 +859,21 @@ export async function GET(request: Request) {
           ? latestCheckpoint.endingBalance.toString()
           : null;
       const effectiveAccountNumber = account.accountNumber ?? checkpointAccountNumber ?? null;
+      const effectiveInstitution = account.institution ?? checkpointInstitution ?? null;
       const effectiveAccountName =
         account.source === "upload"
-          ? formatUploadAccountDisplayName(account.name, account.institution, effectiveAccountNumber, account.type)
+          ? formatUploadAccountDisplayName(
+              checkpointAccountName ?? account.name,
+              effectiveInstitution,
+              effectiveAccountNumber,
+              account.type
+            )
           : account.name;
 
       return {
         ...account,
         name: effectiveAccountName,
+        institution: effectiveInstitution,
         accountNumber: effectiveAccountNumber,
         balance: checkpointBalance ?? account.balance,
       };

@@ -604,11 +604,11 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "InstaPay Fee",
     },
     {
-      patterns: [/atro\s+atm\/b2c\s+account/i, /\batro\b.*atm\/b2c\s+account/i],
+      patterns: [/atro\s+atm\/b\s*2\s*c\s+account/i, /\batro\b.*atm\/b\s*2\s*c\s+account/i, /atro\s+atm\/b2c\s+account/i, /\batro\b.*atm\/b2c\s+account/i],
       replacement: "Account Transfer Out",
     },
     {
-      patterns: [/atrc\s+atm\/b2c\s+account/i, /\batrc\b.*atm\/b2c\s+account/i],
+      patterns: [/atrc\s+atm\/b\s*2\s*c\s+account/i, /\batrc\b.*atm\/b\s*2\s*c\s+account/i, /atrc\s+atm\/b2c\s+account/i, /\batrc\b.*atm\/b2c\s+account/i],
       replacement: "Account Transfer In",
     },
   ],
