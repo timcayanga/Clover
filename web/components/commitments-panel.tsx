@@ -1039,28 +1039,30 @@ export function CommitmentsPanel({
 
       {showAddModal ? (
         <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 80,
-            background: "rgba(15, 23, 42, 0.45)",
-            backdropFilter: "blur(12px)",
-            display: "grid",
-            placeItems: "center",
-            padding: 16,
+          className="recurring-add-modal"
+          role="presentation"
+          onClick={() => {
+            onCloseAdd?.();
           }}
         >
-          <section className="panel glass" style={{ width: "min(760px, 100%)", display: "grid", gap: 16, maxHeight: "min(92vh, 920px)", overflow: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
+          <section
+            className="panel glass recurring-add-modal__card"
+            style={{ width: "min(760px, 100%)", display: "grid", gap: 16, maxHeight: "min(92vh, 920px)", overflow: "auto", position: "relative" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add recurring"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button className="button button-secondary button-small recurring-modal-close" type="button" onClick={onCloseAdd} aria-label="Close">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 6l12 12" />
+                <path d="M18 6 6 18" />
+              </svg>
+            </button>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start", paddingRight: 44 }}>
               <div>
                 <p className="eyebrow">Add recurring</p>
               </div>
-              <button className="button button-secondary button-small recurring-modal-close" type="button" onClick={onCloseAdd} aria-label="Close">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M6 6l12 12" />
-                  <path d="M18 6 6 18" />
-                </svg>
-              </button>
             </div>
 
             <form onSubmit={handleCreate} style={{ display: "grid", gap: 16 }}>
@@ -1102,14 +1104,8 @@ export function CommitmentsPanel({
                 />
               </label>
 
-              {formCopy.showCounterparty || formCopy.showAmount ? (
-                <div
-                  style={{
-                    display: "grid",
-                    gap: 12,
-                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  }}
-                >
+              {formCopy.showCounterparty || formCopy.showDueDate ? (
+                <div className="recurring-add-modal__name-row">
                   {formCopy.showCounterparty ? (
                     <label className="settings-field">
                       <span>{formCopy.counterpartyLabel ?? "Counterparty"}</span>
@@ -1118,6 +1114,40 @@ export function CommitmentsPanel({
                         value={counterparty}
                         onChange={(event) => setCounterparty(event.target.value)}
                         placeholder={formCopy.counterpartyPlaceholder ?? recurringCounterpartyPlaceholder}
+                      />
+                    </label>
+                  ) : null}
+
+                  {formCopy.showDueDate ? (
+                    <label className="settings-field">
+                      <span>{formCopy.dueDateLabel ?? "Due date"}</span>
+                      <input
+                        className="settings-input"
+                        type="date"
+                        value={dueDate}
+                        onChange={(event) => setDueDate(event.target.value)}
+                        required={kind === "reminder"}
+                      />
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {formCopy.showCurrency || formCopy.showAmount ? (
+                <div className="recurring-add-modal__money-row">
+                  {formCopy.showCurrency ? (
+                    <label className="settings-field">
+                      <span className="sr-only">Currency</span>
+                      <CurrencySelector
+                        value={currency}
+                        onChange={setCurrency}
+                        options={currencyCatalogCodes}
+                        ariaLabel="Select commitment currency"
+                        className="settings-currency-field__selector recurring-currency-field__selector"
+                        buttonClassName="settings-currency-field__button recurring-currency-field__button"
+                        menuClassName="settings-currency-field__menu"
+                        optionClassName="settings-currency-field__option"
+                        menuAlignment="end"
                       />
                     </label>
                   ) : null}
@@ -1132,46 +1162,6 @@ export function CommitmentsPanel({
                         onChange={(event) => setAmount(event.target.value)}
                         placeholder={formCopy.amountPlaceholder ?? "2500.00"}
                         required={kind === "debt" || kind === "receivable"}
-                      />
-                    </label>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {formCopy.showCurrency || formCopy.showDueDate ? (
-                <div
-                  style={{
-                    display: "grid",
-                    gap: 12,
-                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  }}
-                >
-                  {formCopy.showCurrency ? (
-                    <label className="settings-field">
-                      <span className="sr-only">Currency</span>
-                      <CurrencySelector
-                        value={currency}
-                        onChange={setCurrency}
-                        options={currencyCatalogCodes}
-                        ariaLabel="Select commitment currency"
-                        className="settings-currency-field__selector"
-                        buttonClassName="settings-currency-field__button"
-                        menuClassName="settings-currency-field__menu"
-                        optionClassName="settings-currency-field__option"
-                        menuAlignment="end"
-                      />
-                    </label>
-                  ) : null}
-
-                  {formCopy.showDueDate ? (
-                    <label className="settings-field">
-                      <span>{formCopy.dueDateLabel ?? "Due date"}</span>
-                      <input
-                        className="settings-input"
-                        type="date"
-                        value={dueDate}
-                        onChange={(event) => setDueDate(event.target.value)}
-                        required={kind === "reminder"}
                       />
                     </label>
                   ) : null}

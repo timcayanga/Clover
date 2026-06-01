@@ -1136,9 +1136,60 @@ body.transactions-manual-open .shell-quick-add-button {
   justify-content: center;
 }
 
+.recurring-add-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(12px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.recurring-add-modal__card {
+  border-radius: 26px;
+}
+
+.recurring-modal-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 1;
+}
+
 .recurring-modal-close svg {
   width: 14px;
   height: 14px;
+}
+
+.recurring-add-modal__name-row,
+.recurring-add-modal__money-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.recurring-add-modal__money-row {
+  grid-template-columns: minmax(132px, 0.44fr) minmax(0, 1fr);
+}
+
+.recurring-currency-field__selector {
+  width: auto;
+  min-width: 132px;
+}
+
+.recurring-currency-field__selector .currency-selector__button {
+  width: auto;
+  min-height: 36px;
+  padding-inline: 10px;
+  border-radius: 999px;
+  justify-content: space-between;
+}
+
+.recurring-currency-field__selector .currency-selector__trigger-token,
+.recurring-currency-field__selector .currency-selector__trigger-all {
+  font-size: 0.78rem;
 }
 
 .transactions-page .transactions-footer {
