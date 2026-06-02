@@ -57,7 +57,7 @@ export function ImportUploadDock({
     safeFileTotal > 0
       ? fileName
         ? `File ${safeFileIndex} of ${safeFileTotal}`
-        : `${safeCompletedFiles} of ${safeFileTotal} files ready`
+        : `${safeCompletedFiles} of ${safeFileTotal} ${tone === "error" ? "files checked" : "files ready"}`
       : "Clover is getting things ready";
   const progressLabel =
     safeFileTotal > 0
@@ -70,10 +70,10 @@ export function ImportUploadDock({
   const progressCaption =
     safeFileTotal > 0
       ? isComplete
-        ? "files ready"
+        ? tone === "error" ? "files checked" : "files ready"
         : fileName
           ? "current file"
-          : "files ready"
+          : tone === "error" ? "files checked" : "files ready"
       : "import queue";
   const resultHeadline = isComplete ? formatImportResultHeadline(summary) : "";
   const importMilestones = buildImportResultChecklist(summary);
