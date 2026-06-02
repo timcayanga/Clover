@@ -6626,8 +6626,17 @@ export function ImportFilesModal({
   const completedFileCount = items.filter((item) => item.confirmationState === "confirmed").length;
   const activeProgressItem = activeItem ?? (busy ? items.find((item) => item.status === "pending") ?? null : null);
   const currentErrorItem = items.find((item) => item.status === "error") ?? null;
+  const isSettledForProgress = (item: QueuedFile) =>
+    item.confirmationState === "confirmed" ||
+    item.status === "done" ||
+    item.status === "error" ||
+    item.status === "needs_password" ||
+    hasVisibleImportData(item, localPreparseSummaryByItemIdRef.current.get(item.id));
+  const progressSettledFileCount = items.filter(isSettledForProgress).length;
+  const activeProgressContribution =
+    activeProgressItem && !isSettledForProgress(activeProgressItem) ? activeProgressItem.progress / 100 : 0;
   const overallProgress = items.length > 0
-    ? ((completedFileCount + (activeProgressItem ? activeProgressItem.progress / 100 : 0)) / items.length) * 100
+    ? ((progressSettledFileCount + activeProgressContribution) / items.length) * 100
     : 0;
   const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
   const showCompactProgress = busy || Boolean(activeItem) || hasCompletedBatch || Boolean(currentErrorItem);
@@ -6778,9 +6787,9 @@ export function ImportFilesModal({
       surface: importActivitySurfaceRef.current,
       status: nextStatus,
       fileName: activeProgressItem?.file.name ?? items[items.length - 1]?.file.name ?? null,
-      fileIndex: activeProgressItem ? items.findIndex((item) => item.id === activeProgressItem.id) + 1 : completedFileCount,
+      fileIndex: activeProgressItem ? items.findIndex((item) => item.id === activeProgressItem.id) + 1 : progressSettledFileCount,
       fileTotal: items.length,
-      completedFiles: completedFileCount,
+      completedFiles: progressSettledFileCount,
       progress: displayedOverallProgress,
       detail: nextDetail,
       summary: nextStatus === "done" ? previousSummary : null,
@@ -6803,7 +6812,7 @@ export function ImportFilesModal({
 
     lastImportActivityRef.current = nextSnapshot;
     setImportActivity(nextSnapshot);
-  }, [activeProgressItem, busy, completedFileCount, displayedOverallProgress, items, message, open, validationNotice, workspaceId]);
+  }, [activeProgressItem, busy, completedFileCount, displayedOverallProgress, items, message, open, progressSettledFileCount, validationNotice, workspaceId]);
   useEffect(() => {
     if (autoCloseCompletedBatchTimerRef.current) {
       window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
@@ -7363,8 +7372,8 @@ export function ImportFilesModal({
               : completedFileCount
         }
         fileTotal={items.length}
-        completedFiles={completedFileCount}
-        progress={currentErrorItem ? currentErrorItem.progress : displayedOverallProgress}
+        completedFiles={progressSettledFileCount}
+        progress={displayedOverallProgress}
         summary={compactProgressSummary}
         detail={
           currentErrorItem?.error ??
