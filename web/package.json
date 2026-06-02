@@ -19,6 +19,7 @@
     "qa:cimb-multi-account": "../node_modules/.bin/tsx scripts/cimb-multi-account-import-regression.ts",
     "qa:chinabank-deep": "../node_modules/.bin/tsx scripts/chinabank-deep-qa.ts",
     "qa:chinabank-process": "../node_modules/.bin/tsx scripts/chinabank-process-route-regression.ts",
+    "qa:ucpb-process": "../node_modules/.bin/tsx scripts/ucpb-process-route-regression.ts",
     "qa:eastwest-process": "../node_modules/.bin/tsx scripts/eastwest-process-route-regression.ts",
     "qa:training-signals": "../node_modules/.bin/tsx scripts/training-signal-dedupe.ts",
     "qa:training-signals-db": "../node_modules/.bin/tsx scripts/record-training-signal-regression.ts",
