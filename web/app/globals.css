@@ -19378,7 +19378,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .accounts-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(272px, 272px));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   gap: 14px;
 }
 
@@ -19392,6 +19392,10 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .accounts-card-grid--desktop {
   display: grid;
+}
+
+.accounts-card-grid--desktop .financial-account-card {
+  width: 100%;
 }
 
 .accounts-mobile-list--mobile {
