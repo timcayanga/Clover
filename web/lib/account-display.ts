@@ -49,6 +49,8 @@ export const formatUploadAccountDisplayName = (
   accountNumber?: string | null,
   type?: string | null
 ) => {
+  const safeName = sanitizeBankNameLabel(name) ?? null;
+  const safeInstitution = normalizeBankName(institution);
   const resolvedLabel = resolveBankLabel({
     name: name ?? null,
     institution: institution ?? null,
@@ -61,6 +63,15 @@ export const formatUploadAccountDisplayName = (
   }
 
   const accountSuffix = extractLastFourDigits(accountNumber) ?? extractLastFourDigits(name);
+  if (
+    safeName &&
+    safeInstitution === "UCPB" &&
+    !/^UCPB(?:\s+\d+)?$/i.test(safeName) &&
+    accountSuffix === "0000"
+  ) {
+    return safeName;
+  }
+
   if (!accountSuffix) {
     return resolvedLabel;
   }
