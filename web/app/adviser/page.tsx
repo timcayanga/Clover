@@ -1258,6 +1258,18 @@ async function AdviserPageContent() {
     .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
     .reduce((sum, account) => sum + (account.balance ?? 0), 0);
   const hasTransactionFlow = currentSummary.income > 0 || currentSummary.expense > 0;
+  const accountCoverageScore = clamp(
+    average([
+      toCountScore(workspaceAccounts.length, 6),
+      totalAccountBalance > 0 ? 80 : 40,
+      liquidBalance > 0 ? 78 : 35,
+    ])
+  );
+  const groundingMode = hasTransactionFlow
+    ? "transaction-backed"
+    : workspaceAccounts.length > 0
+      ? "account-backed"
+      : "history-backed";
   const moneyLeftAmount = hasTransactionFlow ? currentNet : spendableAccountBalance - liabilityAccountBalance;
   const upcomingPressureScore = clamp(
     average([
@@ -1278,6 +1290,7 @@ async function AdviserPageContent() {
     commitmentsDueSoon.length > 0 ? `${commitmentsDueSoon.length} commitments due soon` : null,
     openSplitBillCount > 0 ? `${formatCurrency(openSplitBillAmount)} in split bills` : null,
     hasTransactionFlow ? `baseline spend ${formatCurrency(baselineSpend)}` : null,
+    workspaceAccounts.length > 0 ? `${groundingMode} guidance` : null,
     workspaceAccounts.length > 0
       ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"}`
       : null,
@@ -1295,6 +1308,7 @@ async function AdviserPageContent() {
       toCountScore(transactionCount, 20),
       toCountScore(expenseTransactionCount, 15),
       toCountScore(workspaceAccounts.length, 6),
+      accountCoverageScore,
       historyDepthScore,
     ])
   );
@@ -1303,6 +1317,7 @@ async function AdviserPageContent() {
       toCountScore(expenseTransactionCount, 15),
       toCountScore(currentSummary.expenseCategories.size, 3),
       toCountScore(weekendExpenses.length, 8),
+      accountCoverageScore * 0.7,
       historyDepthScore,
     ])
   );
@@ -1451,6 +1466,7 @@ async function AdviserPageContent() {
   const cashflowPressureScore = clamp(
     average([
       liquidBalance < currentSpend * 0.3 ? 92 : 28,
+      accountPressureEstimate,
       recurringDueSoon.length > 0 ? 72 + recurringDueSoon.length * 4 : 20,
       plannedPaymentsDueSoon.length > 0 ? 72 + plannedPaymentsDueSoon.length * 4 : 18,
       commitmentsDueSoon.length > 0 ? 72 + commitmentsDueSoon.length * 4 : 18,
@@ -1494,7 +1510,14 @@ async function AdviserPageContent() {
   );
 
   const signalThemes: AdviserThemeScore[] = [
-    { key: "cashflow", score: cashflowPressureScore },
+    {
+      key: "cashflow",
+      score: average([
+        cashflowPressureScore,
+        accountPressureEstimate,
+        workspaceAccounts.length > 0 ? accountCoverageScore : 0,
+      ]),
+    },
     { key: "behavior", score: behaviorPatternScore },
     { key: "goals", score: goalPressureScore },
     { key: "investments", score: investmentSignalScore },
@@ -1566,6 +1589,15 @@ async function AdviserPageContent() {
       income: baselineIncome,
       savingsRate: baselineSavingsRate,
       historySpanDays,
+    },
+    grounding: {
+      mode: groundingMode,
+      accounts: workspaceAccounts.length,
+      coverageScore: accountCoverageScore,
+      liquidBalance,
+      spendableBalance: spendableAccountBalance,
+      liabilityBalance: liabilityAccountBalance,
+      concentrationShare: largestAccountShare,
     },
     thresholds: thresholdProfile,
     themes: signalThemes.map((theme) => ({

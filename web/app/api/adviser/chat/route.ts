@@ -1009,6 +1009,13 @@ export async function POST(request: Request) {
       return day === 0 || day === 6 ? sum + Math.abs(Number(transaction.amount)) : sum;
     }, 0);
     const weekendExpenseShare = currentSpend > 0 ? weekendExpenseTotal / currentSpend : 0;
+    const accountCoverageScore = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(average([workspace.accounts.length >= 5 ? 90 : (workspace.accounts.length / 5) * 100, workspace.accounts.length > 0 ? 75 : 35]))
+      )
+    );
     const historyDepthScore = Math.max(
       20,
       Math.min(
@@ -1023,11 +1030,11 @@ export async function POST(request: Request) {
     );
     const currentTransactionConfidence = Math.max(
       25,
-      Math.min(100, Math.round(average([currentWindowTransactions.length >= 12 ? 85 : 45, historyDepthScore, activeTransactions.length >= 8 ? 80 : 40])))
+      Math.min(100, Math.round(average([currentWindowTransactions.length >= 12 ? 85 : 45, historyDepthScore, activeTransactions.length >= 8 ? 80 : 40, accountCoverageScore])))
     );
     const currentPatternConfidence = Math.max(
       25,
-      Math.min(100, Math.round(average([monthlySeries.length >= 3 ? 88 : 42, trendMomentumScore, historyDepthScore])))
+      Math.min(100, Math.round(average([monthlySeries.length >= 3 ? 88 : 42, trendMomentumScore, historyDepthScore, accountCoverageScore * 0.7])))
     );
 
     const recurringDueSoon = recurringPatterns
@@ -1068,6 +1075,30 @@ export async function POST(request: Request) {
     const liquidBalance = workspace.accounts
       .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
       .reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
+    const totalAccountBalance = workspace.accounts.reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
+    const spendableAccountBalance = workspace.accounts
+      .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
+      .reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
+    const liabilityAccountBalance = workspace.accounts
+      .filter((account) => ["credit_card", "loan", "mortgage", "line_of_credit", "payable", "bnpl"].includes(account.type))
+      .reduce((sum, account) => sum + Math.abs(Number(account.balance ?? 0)), 0);
+    const largestAccountBalance = [...workspace.accounts].sort((left, right) => Number(right.balance ?? 0) - Number(left.balance ?? 0))[0] ?? null;
+    const largestAccountShare = totalAccountBalance > 0 && largestAccountBalance ? Math.abs(Number(largestAccountBalance.balance ?? 0)) / totalAccountBalance : 0;
+    const accountPressureEstimate = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(
+          average([
+            liabilityAccountBalance > 0 ? Math.min(100, (liabilityAccountBalance / Math.max(totalAccountBalance || 1, 1)) * 100) : 18,
+            spendableAccountBalance < totalAccountBalance * 0.3 ? 82 : 28,
+            largestAccountShare > 0.55 ? Math.min(100, 45 + largestAccountShare * 55) : 30,
+          ])
+        )
+      )
+    );
+    const hasTransactionFlow = currentSummary.income > 0 || currentSummary.expense > 0;
+    const groundingMode = hasTransactionFlow ? "transaction-backed" : workspace.accounts.length > 0 ? "account-backed" : "history-backed";
 
     const recurringAmountPressure = recurringDueSoon.reduce((sum, pattern) => sum + Number(pattern.amount ?? 0), 0);
     const commitmentAmountPressure = commitmentsDueSoon.reduce((sum, commitment) => sum + Number(commitment.amount ?? 0), 0);
@@ -1202,6 +1233,7 @@ export async function POST(request: Request) {
         key: "cashflow",
         score: average([
           themeMemoryScore(["cashflow", "recurring", "split-bills"]),
+          accountPressureEstimate,
           recurringAmountPressure > 0 || commitmentAmountPressure > 0 || splitBillSettlementPressure > 0 ? 88 : 34,
           currentSavingsRate !== null && currentSavingsRate < 0 ? 92 : 45,
         ]),
@@ -1249,6 +1281,7 @@ export async function POST(request: Request) {
           100,
           average([
             themeMemoryScore(["cashflow", "recurring", "split-bills"]),
+            accountPressureEstimate,
             goalValue && ["save_more", "pay_down_debt", "build_emergency_fund"].includes(goalValue) ? 85 : 45,
             currentSavingsRate !== null && currentSavingsRate < 0 ? 90 : 45,
           ])
@@ -1298,6 +1331,7 @@ export async function POST(request: Request) {
     const openSplitBillCount = openSplitBills.length;
     const cashflowPressureScore = forecastSignal?.score ?? average([
       currentSavingsRate !== null && currentSavingsRate < 0 ? 90 : 45,
+      accountPressureEstimate,
       recurringAmountPressure > 0 ? 72 : 35,
       splitBillSettlementPressure > 0 ? 72 : 35,
       liquidBalance < baselineSpend ? 70 : 35,
@@ -1333,7 +1367,7 @@ export async function POST(request: Request) {
       {
         label: "Cash flow pressure",
         score: cashflowPressureScore,
-        reason: `Liquid balance ${formatCurrency(liquidBalance, displayCurrency)} vs spend ${formatCurrency(currentSpend, displayCurrency)}; recurring due soon ${recurringDueSoon.length}; split bills open ${openSplitBillCount}.`,
+        reason: `Liquid balance ${formatCurrency(liquidBalance, displayCurrency)} vs spend ${formatCurrency(currentSpend, displayCurrency)}; recurring due soon ${recurringDueSoon.length}; split bills open ${openSplitBillCount}; account pressure ${Math.round(accountPressureEstimate)}/100.`,
       },
       {
         label: "Behavior pattern",
@@ -1389,6 +1423,7 @@ export async function POST(request: Request) {
 
     const summaryLines = [
       `Workspace: ${workspace.name}`,
+      `Data grounding: ${groundingMode}; accounts ${workspace.accounts.length}; coverage ${Math.round(accountCoverageScore)}/100; liquid ${formatCurrency(liquidBalance, displayCurrency)}; spendable ${formatCurrency(spendableAccountBalance, displayCurrency)}; liabilities ${formatCurrency(liabilityAccountBalance, displayCurrency)}; top balance share ${formatPercent(largestAccountShare * 100)}`,
       `${currentWindowLabel}: income ${formatCurrency(currentSummary.income)}, spend ${formatCurrency(currentSpend)}, net ${formatSignedCurrency(currentNet)}`,
       `${previousWindowLabel}: income ${formatCurrency(previousSummary.income)}, spend ${formatCurrency(previousSpend)}, net ${formatSignedCurrency(previousNet)}`,
       `${longTermWindowLabel}: avg income ${formatCurrency(longTermAverageIncome)}, avg spend ${formatCurrency(longTermAverageSpend)}, avg net ${formatSignedCurrency(longTermAverageNet)}`,
@@ -1410,6 +1445,7 @@ export async function POST(request: Request) {
       `Split bills open: ${openSplitBills.map((item) => `${item.title} (${formatCurrency(item.outstanding)})`).join("; ") || "none"}`,
       `Latest investment snapshot: ${latestInvestmentSnapshot ? `${formatCurrency(Number(latestInvestmentSnapshot.totalValue ?? 0), latestInvestmentSnapshot.currency)}${investmentDelta === null ? "" : `, change ${formatSignedCurrency(investmentDelta, latestInvestmentSnapshot.currency)}`}` : "none"}`,
       `Liquid balance: ${formatCurrency(liquidBalance, displayCurrency)}`,
+      `Account concentration: ${largestAccountBalance && largestAccountBalance.name ? `${largestAccountBalance.name} ${formatPercent(largestAccountShare * 100)}` : "none"}`,
       `Goal: ${goalValue ?? "none"} (${goalProgress.bandLabel})`,
     ].join("\n");
 
@@ -1417,6 +1453,7 @@ export async function POST(request: Request) {
       "You are Clover Adviser, a calm, specific, and trustworthy financial guide inside a personal finance app.",
       "Use the workspace context to answer the user's question clearly and directly.",
       "Prefer concrete data over generic advice.",
+      "If transactions are sparse, lean on account balances, recurring items, commitments, split bills, and long-term history before giving a weak answer.",
       "If you can, mention the exact source of the signal, the relevant period, and one practical next step.",
       "Do not pretend to be a financial advisor. Keep guidance educational and contextual.",
       "If the user's question asks for investment advice, stay cautious and avoid personalized investment recommendations.",
@@ -1429,6 +1466,9 @@ export async function POST(request: Request) {
     const latestQuestion = incomingMessages[incomingMessages.length - 1]?.content?.trim() || "your question";
     const fallbackReply = [
       `Based on your current data, ${topCategoryName ? `${topCategoryName} is the main spending driver` : "spending is fairly spread out"}${spendDelta !== null ? ` and spending is ${formatPercent(spendDelta)} vs baseline` : ""}.`,
+      workspace.accounts.length > 0
+        ? `You also have ${workspace.accounts.length} connected account${workspace.accounts.length === 1 ? "" : "s"}, with ${formatCurrency(spendableAccountBalance, displayCurrency)} spendable balance and ${formatCurrency(liabilityAccountBalance, displayCurrency)} in liability exposure.`
+        : null,
       recurringDueSoon.length > 0
         ? `You also have ${recurringDueSoon.length} recurring item${recurringDueSoon.length === 1 ? "" : "s"} coming up, so check those first if you want more room in cash flow.`
         : null,
@@ -1438,7 +1478,7 @@ export async function POST(request: Request) {
       latestInvestmentSnapshot
         ? `Your latest investment snapshot is available, so if your question is about investments, start there next.`
         : null,
-      `For "${latestQuestion}", the clearest first step is to open the relevant transactions or obligations and review the biggest driver shown above.`,
+      `For "${latestQuestion}", the clearest first step is to open the relevant transactions, accounts, or obligations and review the biggest driver shown above.`,
     ]
       .filter((line): line is string => Boolean(line))
       .join(" ");
