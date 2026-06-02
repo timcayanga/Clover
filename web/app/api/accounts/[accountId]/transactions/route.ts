@@ -90,6 +90,7 @@ const expandImportedAccountFilters = async (
       requestedAccount.type
     ),
     institution: canonicalInstitutionKey(requestedAccount.institution),
+    digits: normalizeDigits(requestedAccount.accountNumber),
     lastFour: getLastFourDigits(requestedAccount.accountNumber ?? requestedAccount.name),
     type: requestedAccount.type,
   };
@@ -100,9 +101,15 @@ const expandImportedAccountFilters = async (
       id: candidate.id,
       key: normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, candidate.type),
       institution: canonicalInstitutionKey(candidate.institution),
+      digits: normalizeDigits(candidate.accountNumber),
       lastFour: getLastFourDigits(candidate.accountNumber ?? candidate.name),
       type: candidate.type,
     };
+    const hasConflictingExplicitAccountNumbers = Boolean(
+      requestedDescriptor.digits &&
+        candidateDescriptor.digits &&
+        requestedDescriptor.digits !== candidateDescriptor.digits
+    );
 
     if (candidateDescriptor.id === requestedDescriptor.id) {
       expandedAccountIds.add(candidate.id);
@@ -121,6 +128,7 @@ const expandImportedAccountFilters = async (
       requestedDescriptor.lastFour &&
       candidateDescriptor.lastFour &&
       requestedDescriptor.lastFour === candidateDescriptor.lastFour &&
+      !hasConflictingExplicitAccountNumbers &&
       requestedDescriptor.type === candidateDescriptor.type
     ) {
       expandedAccountIds.add(candidate.id);
@@ -132,6 +140,7 @@ const expandImportedAccountFilters = async (
       candidateDescriptor.lastFour &&
       requestedDescriptor.lastFour === candidateDescriptor.lastFour &&
       requestedDescriptor.type === candidateDescriptor.type &&
+      !hasConflictingExplicitAccountNumbers &&
       (looksLikeImportedFileLabel(requestedDescriptor.institution) || looksLikeImportedFileLabel(candidateDescriptor.institution))
     ) {
       expandedAccountIds.add(candidate.id);
@@ -383,6 +392,7 @@ const findOrphanParsedImportIdsForAccount = async (account: {
 }) => {
   const accountDigits = normalizeDigits(account.accountNumber ?? account.name);
   const accountLastFour = accountDigits.length >= 4 ? accountDigits.slice(-4) : "";
+  const hasFullExplicitAccountNumber = normalizeDigits(account.accountNumber).length > 4;
   const institutionToken = normalizeParsedImportToken(account.institution ?? account.name)
     .replace(/\b(account|bank|checking|savings)\b/g, " ")
     .replace(/\s+/g, " ")
@@ -407,9 +417,14 @@ const findOrphanParsedImportIdsForAccount = async (account: {
       )
       AND (
         (${accountDigits} <> '' AND regexp_replace(COALESCE(pt."accountNumber", ''), '\\D', '', 'g') = ${accountDigits})
-        OR (${accountLastFour} <> '' AND right(regexp_replace(COALESCE(pt."accountNumber", ''), '\\D', '', 'g'), 4) = ${accountLastFour})
-        OR (${institutionToken} <> '' AND lower(COALESCE(pt."institution", '')) LIKE ${`%${institutionToken}%`})
-        OR (${nameToken} <> '' AND lower(COALESCE(pt."accountName", '')) LIKE ${`%${nameToken}%`})
+        OR (
+          ${!hasFullExplicitAccountNumber}
+          AND (
+            (${accountLastFour} <> '' AND right(regexp_replace(COALESCE(pt."accountNumber", ''), '\\D', '', 'g'), 4) = ${accountLastFour})
+            OR (${institutionToken} <> '' AND lower(COALESCE(pt."institution", '')) LIKE ${`%${institutionToken}%`})
+            OR (${nameToken} <> '' AND lower(COALESCE(pt."accountName", '')) LIKE ${`%${nameToken}%`})
+          )
+        )
       )
     GROUP BY pt."importFileId"
     HAVING COUNT(*) >= 2
