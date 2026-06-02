@@ -55,6 +55,14 @@ export const fetchJsonOnce = async <T>(params: FetchJsonOnceParams): Promise<Fet
       status: null,
       at: Date.now(),
     });
+    if (params.timeoutMs && params.timeoutMs > 0) {
+      return Promise.race([
+        existing as Promise<FetchJsonOnceResult<T>>,
+        new Promise<FetchJsonOnceResult<T>>((_, reject) => {
+          setTimeout(() => reject(new Error(`Timed out loading ${params.route}`)), params.timeoutMs ?? 0);
+        }),
+      ]);
+    }
     return existing as Promise<FetchJsonOnceResult<T>>;
   }
 

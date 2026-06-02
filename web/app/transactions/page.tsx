@@ -2277,7 +2277,7 @@ function TransactionsPageContent() {
   const addPhotoInputRef = useRef<HTMLInputElement>(null);
   const addPhotoLibraryInputRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
-  const initialWorkspaceId = urlSearchParams.get("workspaceId") || null;
+  const initialWorkspaceId = urlSearchParams.get("workspaceId") || readSelectedWorkspaceId();
   const initialCachedWorkspace = null;
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -2596,13 +2596,21 @@ function TransactionsPageContent() {
         key: "transactions:workspaces",
         route: "transactions.workspaces",
         input: "/api/workspaces",
+        timeoutMs: 5000,
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        throw new Error("Unable to load workspaces.");
+      }
       const items = Array.isArray(response.json?.workspaces) ? response.json.workspaces : [];
       setWorkspaces(items);
       setSelectedWorkspaceId((current) => {
         return chooseWorkspaceId(items, current);
       });
+    } catch {
+      const fallbackWorkspaceId = readSelectedWorkspaceId();
+      if (fallbackWorkspaceId) {
+        setSelectedWorkspaceId((current) => current || fallbackWorkspaceId);
+      }
     } finally {
       setHasLoadedWorkspaceList(true);
     }

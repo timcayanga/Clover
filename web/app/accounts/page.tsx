@@ -1103,7 +1103,7 @@ function AccountsPageContent() {
   const workspaceLoadSeqRef = useRef(0);
   const workspaceHydrationVersionRef = useRef(new Map<string, number>());
   const deletedAccountIdsRef = useRef(new Set<string>());
-  const initialWorkspaceId = null;
+  const initialWorkspaceId = typeof window === "undefined" ? "" : readSelectedWorkspaceId();
   const deletingAccountIdFromQuery = searchParams?.get("deletingAccountId");
   const deletingWorkspaceIdFromQuery = searchParams?.get("deletingWorkspaceId");
   const initialCachedWorkspace = initialWorkspaceId ? getCachedWorkspaceHydration(initialWorkspaceId) : null;
@@ -1392,23 +1392,33 @@ function AccountsPageContent() {
 
   const loadWorkspaces = async () => {
     setWorkspacesLoading(true);
-    const response = await fetchJsonOnce<{ workspaces?: Workspace[] }>({
-      key: "accounts:workspaces",
-      route: "accounts.workspaces",
-      input: "/api/workspaces",
-    });
-    if (!response.ok) {
-      setMessage("Unable to load workspaces.");
+    try {
+      const response = await fetchJsonOnce<{ workspaces?: Workspace[] }>({
+        key: "accounts:workspaces",
+        route: "accounts.workspaces",
+        input: "/api/workspaces",
+        timeoutMs: 5000,
+      });
+      if (!response.ok) {
+        throw new Error("Unable to load workspaces.");
+      }
+
+      const items = Array.isArray(response.json?.workspaces) ? response.json.workspaces : [];
+      setWorkspaces(items);
+      setSelectedWorkspaceId((current) => chooseWorkspaceId(items, current));
+    } catch {
+      const fallbackWorkspaceId = readSelectedWorkspaceId();
+      if (fallbackWorkspaceId) {
+        setSelectedWorkspaceId((current) => current || fallbackWorkspaceId);
+        setMessage("");
+      } else {
+        setMessage("Unable to load workspaces.");
+        setHasInitialWorkspaceDataLoaded(true);
+      }
+    } finally {
       setWorkspacesLoading(false);
       setAccountsLoading(false);
-      setHasInitialWorkspaceDataLoaded(true);
-      return;
     }
-
-    const items = Array.isArray(response.json?.workspaces) ? response.json.workspaces : [];
-    setWorkspaces(items);
-    setSelectedWorkspaceId((current) => chooseWorkspaceId(items, current));
-    setWorkspacesLoading(false);
   };
 
   const loadWorkspaceData = async (workspaceId: string, options?: { silent?: boolean; awaitHydration?: boolean }) => {
@@ -1439,6 +1449,7 @@ function AccountsPageContent() {
         workspaceId,
         detail: options?.awaitHydration ? "awaitHydration" : options?.silent ? "silent" : "foreground",
         input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&cleanupImportedAccounts=1`,
+        timeoutMs: options?.silent ? null : 6500,
       });
       if (workspaceLoadSeqRef.current !== loadSeq) {
         return;
@@ -1567,6 +1578,17 @@ function AccountsPageContent() {
       if (options?.awaitHydration) {
         await Promise.allSettled(backgroundTasks);
       }
+    } catch {
+      if (workspaceLoadSeqRef.current !== loadSeq) {
+        return;
+      }
+
+      const hydrated = hydrateWorkspaceFromCache(workspaceId);
+      if (!options?.silent) {
+        setMessage(hydrated ? "" : "Unable to load accounts for this workspace.");
+        setAccountsLoadFailed(!hydrated && accounts.length === 0);
+        setHasInitialWorkspaceDataLoaded(true);
+      }
     } finally {
       if (!options?.silent) {
         setAccountsLoading(false);
@@ -1681,13 +1703,16 @@ function AccountsPageContent() {
     }
     setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
 
-    setAccounts([]);
-    setAccountRules([]);
-    setTransactions([]);
-    setStatementCheckpoints([]);
+    const hydratedFromCache = hydrateWorkspaceFromCache(selectedWorkspaceId);
+    if (!hydratedFromCache && accounts.length === 0) {
+      setAccounts([]);
+      setAccountRules([]);
+      setTransactions([]);
+      setStatementCheckpoints([]);
+    }
     setAccountsLoading(true);
-    setHasInitialWorkspaceDataLoaded(false);
-    void loadWorkspaceData(selectedWorkspaceId);
+    setHasInitialWorkspaceDataLoaded(hydratedFromCache);
+    void loadWorkspaceData(selectedWorkspaceId, { silent: hydratedFromCache });
   }, [selectedWorkspaceId, workspacesLoading, workspaces.length]);
 
   useEffect(() => {
@@ -2127,13 +2152,14 @@ function AccountsPageContent() {
     const timeout = window.setTimeout(() => {
       setAccountsLoading(false);
       setWorkspacesLoading(false);
+      setAccountsLoadFailed(accounts.length === 0);
       setHasInitialWorkspaceDataLoaded(true);
     }, PAGE_LOADING_TIMEOUT_MS);
 
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [hasInitialWorkspaceDataLoaded]);
+  }, [accounts.length, hasInitialWorkspaceDataLoaded]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
