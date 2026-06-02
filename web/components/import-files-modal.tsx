@@ -1451,7 +1451,10 @@ const getImportVisibilityTimeoutMs = (fileCount: number) =>
 
 const isNoisyVisibilityBank = (fileName: string) => {
   const bank = normalizeBankName(fileName);
-  return ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bank);
+  return (
+    ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bank) ||
+    (bank === "UnionBank" && /(?:\bword\b|\bexcel\b|\btemplate\b|business_statement)/i.test(fileName))
+  );
 };
 
 const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
@@ -1616,6 +1619,57 @@ export function ImportFilesModal({
     }
 
     const previousSnapshot = lastImportActivityRef.current;
+    const liveItems = itemsRef.current;
+    const liveFileTotal = liveItems.length;
+    const snapshotFileTotal = Number(snapshot.fileTotal ?? 0);
+    const normalizedFileTotal = Math.max(snapshotFileTotal, liveFileTotal);
+    const liveSettledFileCount = liveItems.filter((item) =>
+      item.confirmationState === "confirmed" ||
+      item.status === "done" ||
+      item.status === "error" ||
+      item.status === "needs_password" ||
+      hasVisibleImportData(item, localPreparseSummaryByItemIdRef.current.get(item.id))
+    ).length;
+    const snapshotSettlesCurrentFile =
+      snapshot.status === "done" || snapshot.status === "error" || snapshot.status === "needs_password";
+    const snapshotFileName = snapshot.fileName?.trim() || null;
+    const snapshotItem =
+      snapshotFileName !== null
+        ? liveItems.find((item) => item.file.name === snapshotFileName)
+        : null;
+    const shouldCountSnapshotFile =
+      snapshotSettlesCurrentFile &&
+      snapshotItem !== null &&
+      !(
+        snapshotItem.confirmationState === "confirmed" ||
+        snapshotItem.status === "done" ||
+        snapshotItem.status === "error" ||
+        snapshotItem.status === "needs_password" ||
+        hasVisibleImportData(snapshotItem, localPreparseSummaryByItemIdRef.current.get(snapshotItem.id))
+      );
+    const normalizedCompletedFiles = Math.min(
+      normalizedFileTotal || Number.POSITIVE_INFINITY,
+      Math.max(Number(snapshot.completedFiles ?? 0), liveSettledFileCount + (shouldCountSnapshotFile ? 1 : 0))
+    );
+    const liveActiveItem =
+      liveItems.find((item) => item.status === "parsing" || item.status === "importing") ??
+      liveItems.find((item) => item.status === "pending") ??
+      null;
+    const liveActiveContribution =
+      liveActiveItem &&
+      !(
+        liveActiveItem.confirmationState === "confirmed" ||
+        liveActiveItem.status === "done" ||
+        liveActiveItem.status === "error" ||
+        liveActiveItem.status === "needs_password" ||
+        hasVisibleImportData(liveActiveItem, localPreparseSummaryByItemIdRef.current.get(liveActiveItem.id))
+      )
+        ? liveActiveItem.progress / 100
+        : 0;
+    const liveBatchProgress =
+      normalizedFileTotal > 0
+        ? Math.min(100, ((normalizedCompletedFiles + liveActiveContribution) / normalizedFileTotal) * 100)
+        : 0;
     const nextSnapshot: ImportActivitySnapshot = {
       workspaceId: snapshot.workspaceId ?? workspaceId,
       surface: snapshot.surface ?? importActivitySurfaceRef.current,
@@ -1629,9 +1683,9 @@ export function ImportFilesModal({
             : null,
       fileName: snapshot.fileName ?? null,
       fileIndex: Number(snapshot.fileIndex ?? 0),
-      fileTotal: Number(snapshot.fileTotal ?? 0),
-      completedFiles: Number(snapshot.completedFiles ?? 0),
-      progress: Number(snapshot.progress ?? 0),
+      fileTotal: normalizedFileTotal,
+      completedFiles: normalizedCompletedFiles,
+      progress: Math.max(Number(snapshot.progress ?? 0), liveBatchProgress),
       detail: snapshot.detail ?? "",
       summary: snapshot.summary ?? null,
       errorCode: snapshot.errorCode ?? null,

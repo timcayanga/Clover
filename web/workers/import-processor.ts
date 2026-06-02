@@ -4059,6 +4059,9 @@ export const processImportFileText = async (
     /^Account\s+\d{4}$/i.test(metadataForParse.accountName) ||
     /^(CUSTOMER NUMBER|ACCOUNT NUMBER)$/i.test(metadataForParse.accountName);
   const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"]);
+  const isLikelyLowQualityUnionBankStatement =
+    metadataForParse.institution === "UnionBank" &&
+    /\b(?:word|excel|template|business_statement)\b/i.test(String(importFile.fileName ?? ""));
   const hasStrongChinaBankDeterministicParse =
     importMode === "statement" &&
     !imageImport &&
@@ -4069,7 +4072,7 @@ export const processImportFileText = async (
     (metadataForParse.confidence ?? 0) >= 80;
   const prefersVisionFallbackForInstitution =
     typeof metadataForParse.institution === "string" &&
-    noisyVisionPreferredInstitutions.has(metadataForParse.institution) &&
+    (noisyVisionPreferredInstitutions.has(metadataForParse.institution) || isLikelyLowQualityUnionBankStatement) &&
     !hasStrongChinaBankDeterministicParse;
   const genericParseLooksSuspicious =
     (importFile.fileType === "application/pdf" || imageImport) &&
@@ -5802,7 +5805,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
 
   let parsedRows: Array<Record<string, unknown>> = [];
   const noisyBankName = normalizeBankName(String(importFile.fileName ?? ""));
-  const MAX_WAIT_MS = ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(noisyBankName) ? 60_000 : 8_000;
+  const isLikelyLowQualityUnionBankStatement =
+    noisyBankName === "UnionBank" && /\b(?:word|excel|template|business_statement)\b/i.test(String(importFile.fileName ?? ""));
+  const MAX_WAIT_MS =
+    ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(noisyBankName) || isLikelyLowQualityUnionBankStatement
+      ? 60_000
+      : 8_000;
   while (Date.now() - startedAt < MAX_WAIT_MS) {
     parsedRows = await fetchParsedTransactionRows(importFileId);
     if (parsedRows.length > 0) {

@@ -316,6 +316,18 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
     return 95;
   }
   if (leftLastFour && rightLastFour && leftLastFour !== rightLastFour) {
+    const leftDigits = String(left.accountNumber ?? "").replace(/\D/g, "");
+    const rightDigits = String(right.accountNumber ?? "").replace(/\D/g, "");
+    const isUnionBank = leftInstitution === "unionbank" && rightInstitution === "unionbank";
+    if (
+      isUnionBank &&
+      leftDigits.length >= 8 &&
+      rightDigits.length >= 8 &&
+      (leftDigits.startsWith(rightDigits) || rightDigits.startsWith(leftDigits))
+    ) {
+      return 88;
+    }
+
     return 0;
   }
 

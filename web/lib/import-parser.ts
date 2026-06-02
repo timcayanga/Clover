@@ -8904,9 +8904,76 @@ const parseBpiImportText = (text: string) => {
   };
 };
 
-const unionbankDatePattern = /^\d{2}\/\d{2}\/\d{2}$/;
-const unionbankMoneyPattern = /^PHP\s*[0-9][0-9,]*\.\d{2}$/i;
+const unionbankDatePattern = /^(?:\d{2}\/\d{2}\/\d{2,4}|\d{1,2}\s*[A-Za-z]{3}\s*\d{2,4}|[A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}[A-Za-z]{3}\s*\d{2,4})$/i;
+const unionbankMoneyPattern = /^(?:PHP|P|₱)?\s*[0-9][0-9,]*\.\d{2}$/i;
 const unionbankReferencePattern = /^[A-Z]{1,3}\d{4,}$/i;
+const unionbankLeadingDateTokenPattern = /^(?:\d{2}\/\d{2}\/\d{2,4}|\d{1,2}\s*[A-Za-z]{3}\s*\d{2,4}|[A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}[A-Za-z]{3}\s*\d{2,4})/i;
+
+const extractUnionBankLeadingDateToken = (value: string | null | undefined) => {
+  const normalized = normalizeWhitespace(value ?? "");
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.match(unionbankLeadingDateTokenPattern)?.[0] ?? null;
+};
+
+const parseUnionBankDateToken = (value: string | null | undefined) => {
+  const normalized = normalizeWhitespace(value ?? "");
+  if (!normalized) {
+    return null;
+  }
+
+  const corrected = normalized
+    .replace(/^(\d{1,2})([A-Za-z]{3})(\d{2,4})$/i, "$1 $2 $3")
+    .replace(/^(\d{1,2})([A-Za-z]{3})\s+(\d{2,4})$/i, "$1 $2 $3")
+    .replace(/^(\d{1,2})\s+([A-Za-z]{3})\s*(\d{2,4})$/i, "$1 $2 $3");
+
+  const parsed = parseDateValue(corrected);
+  if (parsed) {
+    return parsed;
+  }
+
+  return parseDateValue(normalized);
+};
+
+const extractUnionBankMoneyTokens = (value: string) =>
+  Array.from(value.matchAll(/(?:PHP|P|₱)?\s*[0-9][0-9,]*\.\d{2}/gi))
+    .map((match) => ({
+      text: normalizeWhitespace(match[0]),
+      amount: parseMoney(match[0].replace(/^(?:PHP|P|₱)\s*/i, "")),
+    }))
+    .filter((entry): entry is { text: string; amount: number } => typeof entry.amount === "number");
+
+const classifyUnionBankTransaction = (description: string) => {
+  const lower = description.toLowerCase();
+
+  if (/interest earned/.test(lower)) {
+    return { type: "income" as TransactionType, categoryName: "Income" };
+  }
+
+  if (/cash out|atm withdrawal|cash withdrawal|withdrawal/.test(lower)) {
+    return { type: "expense" as TransactionType, categoryName: "Cash & ATM" };
+  }
+
+  if (/online instapay fee|instapay fee|transfer fee|service charge|withholding tax|withheld tax|tax withheld|\bfee\b/.test(lower)) {
+    return { type: "expense" as TransactionType, categoryName: "Financial" };
+  }
+
+  if (/bills payment|transfer to|sent to|online fund transfer|xendit transfer|outgoing|instapay send|payment to/.test(lower)) {
+    return { type: "expense" as TransactionType, categoryName: "Transfers" };
+  }
+
+  if (/transfer from|received from|incoming credit|cash in|received credit|credit memo|inward payment|salary|payroll|refund/.test(lower)) {
+    return { type: "income" as TransactionType, categoryName: /cash in|cash deposit/.test(lower) ? "Cash & ATM" : "Transfers" };
+  }
+
+  if (/cash deposit|deposit/.test(lower)) {
+    return { type: "income" as TransactionType, categoryName: "Cash & ATM" };
+  }
+
+  return { type: "expense" as TransactionType, categoryName: guessCategoryName(description, "expense") };
+};
 
 const isUnionBankBoilerplateLine = (line: string) =>
   /^UNIONBANK\b/i.test(line) ||
@@ -9004,8 +9071,11 @@ const guessUnionBankCategoryName = (description: string, type: TransactionType) 
   if (/google\s+one/.test(lower)) return "Bills & Utilities";
   if (/discord\s+nitro|mlbb\s+\d+\s*di|mlbb\s+pass/.test(lower)) return "Entertainment";
   if (/foodpanda/.test(lower)) return "Food & Dining";
+  if (/cash out|atm withdrawal|cash withdrawal|withdrawal/.test(lower)) {
+    return "Cash & ATM";
+  }
   if (/bills payment/.test(lower)) return "Transfers";
-  if (/sent to|transfer to|transfer from|online fund transfer|xendit transfer|cash in|cash out|received credit/.test(lower)) {
+  if (/sent to|transfer to|transfer from|online fund transfer|xendit transfer|cash in|received credit|instapay send|payment to/.test(lower)) {
     return "Transfers";
   }
   if (/online instapay fee|instapay fee|transfer fee|service charge|withholding tax|withheld tax|tax withheld|\bfee\b/.test(lower)) {
@@ -9024,9 +9094,8 @@ const parseUnionBankTransactionSegment = (
   }
 
   const firstLine = normalizeWhitespace(segment[0] ?? "");
-  const dateTokenMatch = firstLine.match(/^\d{2}\/\d{2}\/\d{2}|^[A-Za-z]+\s+\d{1,2},\s+\d{4}/);
-  const dateToken = dateTokenMatch?.[0] ?? null;
-  const date = parseDateValue(dateToken ?? null);
+  const dateToken = extractUnionBankLeadingDateToken(firstLine);
+  const date = parseUnionBankDateToken(dateToken);
   if (!date || !dateToken) {
     return null;
   }
@@ -9036,21 +9105,21 @@ const parseUnionBankTransactionSegment = (
     ...segment.slice(1),
   ].filter((line) => line && !isUnionBankBoilerplateLine(line));
   const rowText = normalizeWhitespace(body.join(" "));
-  const moneyMatches = Array.from(rowText.matchAll(/PHP\s*[0-9][0-9,]*\.\d{2}/gi));
+  const moneyMatches = extractUnionBankMoneyTokens(rowText);
   if (moneyMatches.length === 0) {
     return null;
   }
 
-  const transactionAmountLine = moneyMatches[0][0];
-  const balanceLine = moneyMatches.length > 1 ? moneyMatches.at(-1)?.[0] ?? null : null;
-  const transactionAmount = parseMoney(transactionAmountLine?.replace(/^PHP\s*/i, "") ?? null);
+  const transactionAmountLine = moneyMatches[0]?.text ?? null;
+  const balanceLine = moneyMatches.length > 1 ? moneyMatches.at(-1)?.text ?? null : null;
+  const transactionAmount = moneyMatches[0]?.amount ?? null;
   if (transactionAmount === null) {
     return null;
   }
 
   const refIndex = body.findIndex((line) => unionbankReferencePattern.test(line));
   let descriptionSource = rowText
-    .replace(/PHP\s*[0-9][0-9,]*\.\d{2}/gi, " ")
+    .replace(/(?:PHP|P|₱)?\s*[0-9][0-9,]*\.\d{2}/gi, " ")
     .replace(refIndex >= 0 ? body[refIndex] : "", " ");
   descriptionSource = descriptionSource.replace(/Date\s+Check No\.?\s+Ref\.?\s+No\.?\s+Description\s+Debit\s+Credit\s+Balance/gi, " ");
   descriptionSource = descriptionSource.replace(/Date\s+Description\s+Amount/gi, " ");
@@ -9068,17 +9137,8 @@ const parseUnionBankTransactionSegment = (
     return null;
   }
 
-  const descriptionLower = description.toLowerCase();
-  let type: TransactionType = "expense";
-  if (/interest earned/.test(descriptionLower)) {
-    type = "income";
-  } else if (/not applicable|incoming credit|salary|payroll|cash in|received|credit memo/.test(descriptionLower)) {
-    type = "income";
-  } else if (/bills payment|transfer to|transfer from|sent to|received from|online fund transfer|xendit transfer/.test(descriptionLower)) {
-    type = "transfer";
-  } else if (/online instapay fee|instapay fee|transfer fee|service charge|withholding tax|withheld tax|tax withheld|\bfee\b/.test(descriptionLower)) {
-    type = "expense";
-  }
+  const classification = classifyUnionBankTransaction(description);
+  const type = classification.type;
 
   return {
     date: date.toISOString().slice(0, 10),
@@ -9086,7 +9146,7 @@ const parseUnionBankTransactionSegment = (
     merchantRaw: humanizeMerchantText(description),
     merchantClean: summarizeMerchantText(description, state.institution),
     description,
-    categoryName: guessUnionBankCategoryName(description, type),
+    categoryName: classification.categoryName ?? guessUnionBankCategoryName(description, type),
     accountName: state.accountName,
     institution: state.institution ?? undefined,
     type,
@@ -9118,7 +9178,7 @@ const parseUnionBankImportText = (text: string) => {
   let current: string[] = [];
 
   for (const line of lines) {
-    if (/^\d{2}\/\d{2}\/\d{2}\b|^[A-Za-z]+\s+\d{1,2},\s+\d{4}\b/.test(line)) {
+    if (extractUnionBankLeadingDateToken(line) !== null) {
       if (current.length > 0) {
         segments.push(current);
       }

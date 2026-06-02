@@ -132,6 +132,15 @@ const isLikelyLowQualityPnbStatementFile = (fileName: string, bankHint: string) 
   );
 };
 
+const isLikelyLowQualityUnionBankStatementFile = (fileName: string, bankHint: string) => {
+  if (bankHint !== "UnionBank") {
+    return false;
+  }
+
+  const normalized = fileName.toLowerCase();
+  return /\b(?:word|excel|template|business_statement)\b/i.test(normalized);
+};
+
 const buildEastWestSampleFallbackText = (fileName: string) => {
   const normalized = fileName.toLowerCase();
   const isKnownEastWestSample =
@@ -531,9 +540,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const likelyLowQualityPnbStatement =
         isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) &&
         isLikelyLowQualityPnbStatementFile(effectiveUploadFileName, bankHint);
+      const likelyLowQualityUnionBankStatement =
+        isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) &&
+        isLikelyLowQualityUnionBankStatementFile(effectiveUploadFileName, bankHint);
       const isNoisyPdfBank =
         isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) &&
-        ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bankHint);
+        (["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bankHint) || likelyLowQualityUnionBankStatement);
       const shouldAvoidPdfPreflight =
         isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) &&
         (isNoisyPdfBank || likelyLowQualityPnbStatement);

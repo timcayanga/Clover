@@ -2702,6 +2702,8 @@ export const buildStatementFingerprint = (
   documentFamily?: string | null
 ) => {
   const noisyOCRInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank", "PNB", "Philippine National Bank"]);
+  const isLikelyLowQualityUnionBankStatement =
+    metadata.institution === "UnionBank" && /\b(?:word|excel|template|business_statement)\b/i.test(`${fileName ?? ""} ${documentFamily ?? ""}`);
   const normalizedLines = text
     .split(/\r?\n/)
     .map((line) =>
@@ -2716,14 +2718,14 @@ export const buildStatementFingerprint = (
 
   const normalizedTextFingerprint = normalizedLines.join("\n");
   const fallbackFileIdentity = normalizedTextFingerprint ? "" : (fileName ?? "").toLowerCase();
-  const useMetadataOnlyFingerprint = metadata.institution ? noisyOCRInstitutions.has(metadata.institution) : false;
+  const useMetadataOnlyFingerprint = metadata.institution ? noisyOCRInstitutions.has(metadata.institution) && !isLikelyLowQualityUnionBankStatement : false;
   const stableFingerprintSource = [
     metadata.institution ?? "",
-    metadata.accountNumber ?? "",
+    isLikelyLowQualityUnionBankStatement ? "" : metadata.accountNumber ?? "",
     metadata.accountType ?? "",
     metadata.startDate ?? "",
     metadata.endDate ?? "",
-    metadata.endingBalance != null ? String(metadata.endingBalance) : "",
+    isLikelyLowQualityUnionBankStatement ? "" : metadata.endingBalance != null ? String(metadata.endingBalance) : "",
     (fileType ?? "").toLowerCase(),
     (documentFamily ?? "").toLowerCase(),
   ].join("|");
