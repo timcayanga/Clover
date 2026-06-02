@@ -6678,7 +6678,9 @@ export function ImportFilesModal({
         item.file,
         error instanceof Error ? error.message : `Unable to import ${item.file.name}.`
       );
-      closeImportAfterError(itemId, "process", item.file.name, processError);
+      const errorItem =
+        itemsRef.current.find((candidate) => processError.includes(`${candidate.file.name}:`)) ?? item;
+      closeImportAfterError(errorItem.id, "process", errorItem.file.name, processError);
       return { status: "error", importedRows: null, summary: null };
     }
   };
