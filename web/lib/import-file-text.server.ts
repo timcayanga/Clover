@@ -509,7 +509,6 @@ const shouldPreferPdfOcrFirst = (fileName?: string | null) => {
     lower.includes("landbank") ||
     lower.includes("land bank") ||
     lower.includes("eastwest") ||
-    lower.includes("ucpb") ||
     lower.includes("china bank") ||
     lower.includes("china-bank") ||
     lower.includes("chinabank") ||
@@ -526,7 +525,6 @@ const shouldAvoidPdfRenderForServerless = (fileName?: string | null) => {
     lower.includes("landbank") ||
     lower.includes("land bank") ||
     lower.includes("eastwest") ||
-    lower.includes("ucpb") ||
     lower.includes("china bank") ||
     lower.includes("china-bank") ||
     lower.includes("chinabank")

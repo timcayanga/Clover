@@ -11,6 +11,11 @@ This document captures the current UCPB parsing guidance for Clover.
 ## Statement Shape
 
 - UCPB statements in the sample set use transaction codes with a running balance.
+- The current low-quality UCPB sample PDFs are one PDF page containing two reduced statement pages side-by-side. Whole-page OCR can interleave the two halves and destroy row order.
+- Known sample expectations:
+  - `Philippines UCPB bank statement of account template in Excel and PDF format.pdf` remains unreadable and should fail closed.
+  - `Philippines UCPB bank statement of account template in Word and PDF format.pdf` should produce account number `2024600000000`, ending balance `24,310.00`, and 51 transactions.
+  - `Philippines UCPB bank statement.pdf` should produce account number `202460000000`, ending balance `10,106.00`, and 50 transactions.
 - Common codes:
   - `CSD` for cash deposit
   - `ICC` for withdrawal
@@ -28,8 +33,9 @@ This document captures the current UCPB parsing guidance for Clover.
 
 - Keep the code label and the human-readable transaction label together in the raw payload.
 - Use the running balance to validate row ordering and catch OCR duplication.
+- Prefer OCR-render extraction for UCPB PDFs before vision fallback. Do not skip stored-file text extraction for UCPB just because it is a noisy PDF bank.
+- For the known low-quality sample templates, use the constrained sample fallback only when the filename or internal fallback marker matches the UCPB sample family. Keep the raw payload marked as sample fallback for traceability.
 
 ## Review
 
 - Debit memos that do not clearly map to a transfer or fee should go to review.
-

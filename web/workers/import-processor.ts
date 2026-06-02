@@ -3860,7 +3860,7 @@ export const processImportFileText = async (
   const storageKey = String(importFile.storageKey ?? "");
   const noisyPdfBankByFileName =
     fileType === "application/pdf" &&
-    /landbank|land bank|eastwest|ucpb|chinabank|china bank/i.test(fileName);
+    /landbank|land bank|eastwest|chinabank|china bank/i.test(fileName);
 
   if (!noisyPdfBankByFileName && (imageImport || !text)) {
     if (!storageKey) {

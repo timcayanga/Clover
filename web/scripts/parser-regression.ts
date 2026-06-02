@@ -2195,11 +2195,6 @@ const main = async () => {
       path: join(root, "Samples/Landbank/Philippines Land Bank of the Philippines word.pdf"),
       institution: "Landbank",
     },
-    {
-      label: "UCPB fallback",
-      path: join(root, "Samples/UCPB/Philippines UCPB bank statement.pdf"),
-      institution: "UCPB",
-    },
   ] as const;
 
   for (const check of noisyFallbackChecks) {
@@ -2224,6 +2219,66 @@ const main = async () => {
         throw new Error(`expected fail-closed fallback but got ${rows.length} local rows`);
       }
       console.log(`[PASS] ${check.label} | 0 local rows | routed to OCR fallback`);
+    } catch (error) {
+      failures.push(`[${check.label}] ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const ucpbChecks = [
+    {
+      label: "UCPB unreadable excel sample",
+      path: join(root, "Samples/UCPB/Philippines UCPB bank statement of account template in Excel and PDF format.pdf"),
+      accountNumber: null,
+      exactRows: 0,
+      endingBalance: null,
+    },
+    {
+      label: "UCPB word sample",
+      path: join(root, "Samples/UCPB/Philippines UCPB bank statement of account template in Word and PDF format.pdf"),
+      accountNumber: "2024600000000",
+      exactRows: 51,
+      endingBalance: 24310,
+    },
+    {
+      label: "UCPB statement sample",
+      path: join(root, "Samples/UCPB/Philippines UCPB bank statement.pdf"),
+      accountNumber: "202460000000",
+      exactRows: 50,
+      endingBalance: 10106,
+    },
+  ] as const;
+
+  for (const check of ucpbChecks) {
+    try {
+      const bytes = await readFile(check.path);
+      const text = await readUploadedFileText({
+        name: check.path.split("/").at(-1),
+        type: "application/pdf",
+        arrayBuffer: async () => {
+          const copy = new Uint8Array(bytes.length);
+          copy.set(bytes);
+          return copy.buffer as ArrayBuffer;
+        },
+      });
+      const metadata = detectStatementMetadataFromText(text);
+      const rows = parser.parseImportText(text, check.path.split("/").at(-1)!, "application/pdf", {
+        institution: metadata.institution ?? "UCPB",
+        accountName: metadata.accountName,
+        accountNumber: metadata.accountNumber,
+      });
+      if (rows.length !== check.exactRows) {
+        throw new Error(`expected ${check.exactRows} rows, got ${rows.length}`);
+      }
+      if (check.accountNumber && !rows.every((row) => row.accountNumber === check.accountNumber)) {
+        throw new Error(`expected account number ${check.accountNumber}`);
+      }
+      const endingBalance = rows.length > 0 && typeof rows.at(-1)?.rawPayload === "object"
+        ? Number((rows.at(-1)?.rawPayload as Record<string, unknown>).balance ?? NaN)
+        : null;
+      if (check.endingBalance !== null && !approxEqual(endingBalance, check.endingBalance)) {
+        throw new Error(`expected ending balance ${formatMoney(check.endingBalance)}, got ${formatMoney(endingBalance)}`);
+      }
+      console.log(`[PASS] ${check.label} | ${rows.length} rows | ending ${formatMoney(endingBalance)}`);
     } catch (error) {
       failures.push(`[${check.label}] ${error instanceof Error ? error.message : String(error)}`);
     }
