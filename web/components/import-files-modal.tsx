@@ -1478,9 +1478,12 @@ const isNoisyVisibilityBank = (fileName: string) => {
   const bank = normalizeBankName(fileName);
   return (
     ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bank) ||
-    (bank === "UnionBank" && /(?:\bword\b|\bexcel\b|\btemplate\b|business_statement)/i.test(fileName))
+    (bank === "UnionBank" && /(?:word|excel|template|business_statement)/i.test(fileName))
   );
 };
+
+const isLikelyLowQualityUnionBankStatementFile = (fileName: string) =>
+  normalizeBankName(fileName) === "UnionBank" && /(?:word|excel|template|business_statement)/i.test(fileName);
 
 const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
   if (normalizeBankName(fileName) !== "PNB") {
@@ -3104,6 +3107,7 @@ export function ImportFilesModal({
         const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
         const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
         const visibleImportComplete = Boolean(payload.visibleImportComplete || confirmedTransactionsCount > 0);
+        const suppressUnionBankPreview = isLikelyLowQualityUnionBankStatementFile(summaryContext.fileName);
         const statusAccountSummaries = normalizeServerAccountSummaries(payload.accountSummaries);
         const primaryStatusAccountSummary =
           statusAccountSummaries.find((summary) => summary.accountId === latestResolvedAccountId) ??
@@ -3368,7 +3372,11 @@ export function ImportFilesModal({
             summary: null,
               errorMessage: null,
           });
-          if (!seededFallbackSummary && (parsedRowsCount > 0 || Boolean(processingIdentity?.accountName || processingIdentity?.institution))) {
+          if (
+            !suppressUnionBankPreview &&
+            !seededFallbackSummary &&
+            (parsedRowsCount > 0 || Boolean(processingIdentity?.accountName || processingIdentity?.institution))
+          ) {
             const persistedFallbackAccountId =
               accountId && !accountId.startsWith("optimistic-")
                 ? accountId
@@ -4120,29 +4128,52 @@ export function ImportFilesModal({
             true
           );
 
-          emitItemUpdate({
-            status: "done",
-            confirmationState: "confirmed",
-            progress: 100,
-            progressLabel: "Done",
-            targetAccountId: resolvedAccountId,
-          });
+          if (!suppressUnionBankPreview) {
+            emitItemUpdate({
+              status: "done",
+              confirmationState: "confirmed",
+              progress: 100,
+              progressLabel: "Done",
+              targetAccountId: resolvedAccountId,
+            });
 
-          seedImportedWorkspaceCaches(workspaceId, previewSummary);
-          await Promise.resolve(onImported(previewSummary));
-          emitImportActivity({
-            workspaceId,
-            surface: importActivitySurfaceRef.current,
-            status: "done",
-            fileName: summaryContext.fileName,
-            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
-            fileTotal: items.length,
-            completedFiles: completedFileCount + 1,
-            progress: 100,
-            detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
-            summary: previewSummary,
-            errorMessage: null,
-          });
+            seedImportedWorkspaceCaches(workspaceId, previewSummary);
+            await Promise.resolve(onImported(previewSummary));
+            emitImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "done",
+              fileName: summaryContext.fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount + 1,
+              progress: 100,
+              detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
+              summary: previewSummary,
+              errorMessage: null,
+            });
+          } else {
+            emitItemUpdate({
+              status: "importing",
+              confirmationState: "pending",
+              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
+              progressLabel: "Finalizing import",
+              targetAccountId: resolvedAccountId,
+            });
+            emitImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "active",
+              fileName: summaryContext.fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount,
+              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 90),
+              detail: "Clover is finalizing this UnionBank import.",
+              summary: null,
+              errorMessage: null,
+            });
+          }
 
           void confirmItemImport(
             itemId,
