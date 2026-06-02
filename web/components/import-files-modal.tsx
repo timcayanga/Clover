@@ -1633,12 +1633,24 @@ export function ImportFilesModal({
       hasVisibleImportData(item, localPreparseSummaryByItemIdRef.current.get(item.id))
     ).length;
     const snapshotSettlesCurrentFile =
-      snapshot.status === "done" || snapshot.status === "error" || snapshot.status === "needs_password";
+      snapshot.status === "done" || snapshot.status === "error";
     const snapshotFileName = snapshot.fileName?.trim() || null;
     const snapshotItem =
       snapshotFileName !== null
-        ? liveItems.find((item) => item.file.name === snapshotFileName)
+        ? liveItems.find((item) => item.file.name === snapshotFileName) ?? null
         : null;
+    const snapshotImportFileId =
+      typeof snapshot.importFileId === "string" && snapshot.importFileId.trim()
+        ? snapshot.importFileId.trim()
+        : null;
+    if (
+      snapshot.status === "active" &&
+      snapshotImportFileId &&
+      snapshotItem?.importFileId &&
+      snapshotItem.importFileId !== snapshotImportFileId
+    ) {
+      return;
+    }
     const shouldCountSnapshotFile =
       snapshotSettlesCurrentFile &&
       snapshotItem !== null &&
@@ -1677,8 +1689,8 @@ export function ImportFilesModal({
       surface: snapshot.surface ?? importActivitySurfaceRef.current,
       status: snapshot.status,
       importFileId:
-        typeof snapshot.importFileId === "string" && snapshot.importFileId.trim()
-          ? snapshot.importFileId.trim()
+        snapshotImportFileId
+          ? snapshotImportFileId
           : previousSnapshot?.workspaceId === (snapshot.workspaceId ?? workspaceId) &&
               previousSnapshot?.fileName === (snapshot.fileName ?? null)
             ? previousSnapshot.importFileId ?? null
