@@ -121,7 +121,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
     <span
       className={`accounts-brand-mark${shouldUseLightFallback ? " is-light-fallback" : ""}`}
       style={{
-        background: accountBrand.background,
+        background: accountBrand.logoBackground ?? accountBrand.background,
         color: accountBrand.foreground,
         boxShadow: `inset 0 0 0 1px ${accountBrand.accent}30`,
       }}

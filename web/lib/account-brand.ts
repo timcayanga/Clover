@@ -14,6 +14,7 @@ export type AccountBrand = {
   fallbackIconSrc: string;
   accent: string;
   background: string;
+  logoBackground?: string;
   foreground: string;
 };
 
@@ -179,6 +180,7 @@ const makeBrand = (params: {
   fallbackIconSrc: string;
   accent: string;
   background?: string;
+  logoBackground?: string;
   foreground?: string;
 }): AccountBrand => {
   const resolvedBackground =
@@ -192,6 +194,7 @@ const makeBrand = (params: {
     fallbackIconSrc: params.fallbackIconSrc,
     accent: params.accent,
     background: resolvedBackground,
+    logoBackground: params.logoBackground,
     foreground: resolvedForeground,
   };
 };
@@ -525,8 +528,9 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       logoSrcs: philippinesLogoWithVariants("ucpb"),
       fallbackIconSrc: bankIcon,
       accent: "#253C9B",
-      background: "linear-gradient(135deg, #ffffff 0%, #f8fbff 100%)",
-      foreground: "#17215F",
+      background: "linear-gradient(145deg, #17215F 0%, #253C9B 48%, #1EA7E1 100%)",
+      logoBackground: "linear-gradient(135deg, #ffffff 0%, #f8fbff 100%)",
+      foreground: "#f8fafc",
     }),
   },
   {
