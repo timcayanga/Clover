@@ -2564,7 +2564,8 @@ const resolveConfirmationAccount = async (params: {
     null;
 
   const inferredInstitution =
-    sanitizeBankNameLabel(typeof candidateRow?.institution === "string" ? candidateRow.institution : null);
+    sanitizeBankNameLabel(typeof candidateRow?.institution === "string" ? candidateRow.institution : null) ??
+    sanitizeBankNameLabel(normalizeBankName(String(params.importFile.fileName ?? "")));
   const inferredAccountName =
     sanitizeBankNameLabel(typeof candidateRow?.accountName === "string" ? candidateRow.accountName : null) ?? inferredInstitution;
   const inferredAccountNumber =

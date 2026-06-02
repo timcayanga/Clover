@@ -242,7 +242,14 @@ const isGenericImportedUploadAccount = (account: CachedRecord | ImportedAccountI
     normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "institution")) ||
     normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "name"));
   const name = normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "name"));
-  return Boolean(institution && (name === institution || name === `${institution} account` || !name));
+  const institutionWithSuffix = institution ? new RegExp(`^${institution.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s+\\d{4})?$`, "i") : null;
+  return Boolean(
+    institution &&
+      (name === institution ||
+        name === `${institution} account` ||
+        !name ||
+        (institutionWithSuffix ? institutionWithSuffix.test(name) : false))
+  );
 };
 
 const getImportedAccountInstitutionShadowKey = (account: CachedRecord | ImportedAccountIdentityLike) =>
@@ -281,11 +288,17 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
   const rightInstitution = canonicalImportedInstitutionKey(right.institution);
   const leftType = normalizeWhitespace(String(left.type ?? "")).toLowerCase();
   const rightType = normalizeWhitespace(String(right.type ?? "")).toLowerCase();
+  const leftAccountDigits = String(left.accountNumber ?? "").replace(/\D/g, "");
+  const rightAccountDigits = String(right.accountNumber ?? "").replace(/\D/g, "");
+  const hasExactAccountNumberMatch = Boolean(leftAccountDigits && rightAccountDigits && leftAccountDigits === rightAccountDigits);
   if (!leftInstitution || !rightInstitution || leftInstitution !== rightInstitution || !leftType || leftType !== rightType) {
     const leftLastFour = extractLastFourDigits(left.accountNumber ?? left.name);
     const rightLastFour = extractLastFourDigits(right.accountNumber ?? right.name);
     const leftExplicitLastFour = extractLastFourDigits(left.accountNumber);
     const rightExplicitLastFour = extractLastFourDigits(right.accountNumber);
+    if (hasExactAccountNumberMatch && leftType && rightType && leftType === rightType) {
+      return 99;
+    }
     const institutionMismatchIsFileNoise = looksLikeImportedFileLabel(left.institution) || looksLikeImportedFileLabel(right.institution);
     if (
       institutionMismatchIsFileNoise &&
@@ -306,6 +319,9 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
   const rightLastFour = extractLastFourDigits(right.accountNumber ?? right.name);
   const leftExplicitLastFour = extractLastFourDigits(left.accountNumber);
   const rightExplicitLastFour = extractLastFourDigits(right.accountNumber);
+  if (hasExactAccountNumberMatch && leftType && rightType && leftType === rightType) {
+    return 99;
+  }
   if ((leftExplicitLastFour && !rightExplicitLastFour) || (!leftExplicitLastFour && rightExplicitLastFour)) {
     return 0;
   }

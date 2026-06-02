@@ -299,7 +299,14 @@ const isGenericUploadedAccountForInstitution = (account: {
 
   const institution = normalizeImportIdentityText(account.institution) || normalizeImportIdentityText(account.name);
   const name = normalizeImportInstitution(account.name).toLowerCase();
-  return Boolean(institution && (name === institution || name === `${institution} account` || !name));
+  const institutionWithSuffix = institution ? new RegExp(`^${institution.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s+\\d{4})?$`, "i") : null;
+  return Boolean(
+    institution &&
+      (name === institution ||
+        name === `${institution} account` ||
+        !name ||
+        (institutionWithSuffix ? institutionWithSuffix.test(name) : false))
+  );
 };
 
 const repairParsedImportedAccounts = async (workspaceId: string, compatibleColumns: Set<string>) => {
