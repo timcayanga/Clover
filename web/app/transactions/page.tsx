@@ -2750,6 +2750,7 @@ function TransactionsPageContent() {
         workspaceId,
         detail: options?.background ? "background" : options?.append ? "append" : "foreground",
         input: `/api/transactions?${searchParams?.toString() ?? ""}`,
+        timeoutMs: options?.background ? null : 6500,
       });
       if (!response.ok) {
         throw new Error("Unable to load transactions.");
@@ -2939,10 +2940,19 @@ function TransactionsPageContent() {
       }
 
       if (!options?.background) {
-        setMessage("Unable to load transactions.");
-        setTransactionsLoadFailed(true);
+        const hadFallbackRows = transactionsRef.current.length > 0 || hydrateWorkspaceFromCache(workspaceId);
+        setMessage(hadFallbackRows ? "" : "Unable to load transactions.");
+        setTransactionsLoadFailed(!hadFallbackRows);
         setIsWorkspaceDataReady(true);
         setHasInitialTransactionsLoaded(true);
+        window.setTimeout(() => {
+          void loadTransactionsPage(workspaceId, {
+            background: true,
+            pageOverride: options?.pageOverride ?? transactionsPage,
+            pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
+            summaryMode: "light",
+          });
+        }, 3500);
       }
     }
   };

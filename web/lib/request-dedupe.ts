@@ -7,6 +7,7 @@ type FetchJsonOnceParams = {
   input: RequestInfo | URL;
   init?: RequestInit;
   detail?: string | null;
+  timeoutMs?: number | null;
 };
 
 type FetchJsonOnceResult<T> = {
@@ -68,10 +69,18 @@ export const fetchJsonOnce = async <T>(params: FetchJsonOnceParams): Promise<Fet
       at: Date.now(),
     });
 
+    const controller = params.timeoutMs && params.timeoutMs > 0 ? new AbortController() : null;
+    const timeout = controller
+      ? setTimeout(() => {
+          controller.abort();
+        }, params.timeoutMs ?? 0)
+      : null;
+
     try {
       const response = await fetch(params.input, {
         cache: "no-store",
         ...params.init,
+        signal: controller?.signal ?? params.init?.signal,
       });
       const json = (await response.json().catch(() => null)) as T | null;
       pushBreadcrumb({
@@ -100,6 +109,9 @@ export const fetchJsonOnce = async <T>(params: FetchJsonOnceParams): Promise<Fet
       });
       throw new Error(`Unable to load ${params.route}`);
     } finally {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
       inFlightJsonRequests.delete(params.key);
     }
   })();

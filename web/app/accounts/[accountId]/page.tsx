@@ -1676,8 +1676,13 @@ function AccountDetailPageContent() {
         if (!cancelled && resolvedCachedTransactions.length === 0) {
           setTransactionsLoading(true);
         }
+        const transactionsController = new AbortController();
+        const transactionsTimeout = window.setTimeout(() => {
+          transactionsController.abort();
+        }, 6500);
         const transactionsPromise = fetch(
-          `/api/accounts/${encodeURIComponent(mergedAccount.id)}/transactions?${transactionsSearchParams.toString()}`
+          `/api/accounts/${encodeURIComponent(mergedAccount.id)}/transactions?${transactionsSearchParams.toString()}`,
+          { signal: transactionsController.signal }
         );
 
         void Promise.all([
@@ -1778,6 +1783,9 @@ function AccountDetailPageContent() {
               setTransactionsLoading(false);
               setHasInitialDataLoaded(true);
             }
+          })
+          .finally(() => {
+            window.clearTimeout(transactionsTimeout);
           });
 
         void checkpointsPromise
