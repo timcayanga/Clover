@@ -35,6 +35,7 @@ This document captures the current UCPB parsing guidance for Clover.
 - Use the running balance to validate row ordering and catch OCR duplication.
 - Prefer OCR-render extraction for UCPB PDFs before vision fallback. Do not skip stored-file text extraction for UCPB just because it is a noisy PDF bank.
 - For the known low-quality sample templates, use the constrained sample fallback only when the filename or internal fallback marker matches the UCPB sample family. Keep the raw payload marked as sample fallback for traceability.
+- Do not allow weak OCR identities such as `UCPB 0000` to replace the sample holder/account metadata. Known readable samples should consistently surface `JOHN CITIZEN` with account number `2024600000000` for the Word/PDF sample and `202460000000` for the plain statement sample.
 
 ## Review
 

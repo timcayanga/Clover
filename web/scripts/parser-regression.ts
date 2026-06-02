@@ -2302,6 +2302,9 @@ const main = async () => {
       if (check.accountNumber && !rows.every((row) => row.accountNumber === check.accountNumber)) {
         throw new Error(`expected account number ${check.accountNumber}`);
       }
+      if (rows.length > 0 && !rows.every((row) => row.accountName === "JOHN CITIZEN")) {
+        throw new Error("expected UCPB rows to use canonical account name JOHN CITIZEN");
+      }
       const endingBalance = rows.length > 0 && typeof rows.at(-1)?.rawPayload === "object"
         ? Number((rows.at(-1)?.rawPayload as Record<string, unknown>).balance ?? NaN)
         : null;

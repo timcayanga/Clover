@@ -183,6 +183,7 @@ const main = async () => {
     assert.equal(summaries.length, 1, `${fileName} should return one UCPB account summary.`);
     const summary = summaries[0] as Record<string, unknown>;
     assert.equal(summary.institution, "UCPB", `${fileName} summary institution should match.`);
+    assert.equal(summary.accountName, "JOHN CITIZEN", `${fileName} summary account name should not use weak OCR identity.`);
     assert.equal(summary.accountNumber, check.expectedAccountNumber, `${fileName} summary account number should match.`);
     assert.equal(summary.rowsImported, check.expectedRows, `${fileName} summary should include expected rows.`);
     assertApprox(summary.balance, check.expectedEndingBalance, `${fileName} summary balance should match.`);
@@ -210,6 +211,7 @@ const main = async () => {
     assert.equal(importedTransactions.length, check.expectedRows, `${fileName} account transactions should include expected rows.`);
     assert.ok(importedTransactions.every((entry) => (entry as Record<string, unknown>).institution === "UCPB"), `${fileName} should carry UCPB institution.`);
     assert.ok(importedTransactions.every((entry) => (entry as Record<string, unknown>).accountNumber === check.expectedAccountNumber), `${fileName} should carry account number.`);
+    assert.ok(importedTransactions.every((entry) => (entry as Record<string, unknown>).accountName === "JOHN CITIZEN"), `${fileName} should carry canonical account name.`);
     assert.equal((importedTransactions[0] as Record<string, unknown>).date, "2021-12-01", `${fileName} first transaction date should match.`);
     assert.equal((importedTransactions.at(-1) as Record<string, unknown>).date, "2021-12-29", `${fileName} last transaction date should match.`);
     assertApprox(getRawPayloadBalance((importedTransactions.at(-1) as Record<string, unknown>).rawPayload), check.expectedEndingBalance, `${fileName} last transaction balance should match.`);

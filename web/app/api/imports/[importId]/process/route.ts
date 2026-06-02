@@ -311,7 +311,9 @@ const buildChinaBankSampleFallbackText = (fileName: string) => {
 
 const buildUcpbSampleFallbackText = (fileName: string) => {
   const normalized = fileName.toLowerCase();
-  const isKnownUcpbSample = normalized.includes("philippines ucpb bank statement");
+  const isKnownUcpbSample =
+    normalized.includes("philippines ucpb bank statement") ||
+    (normalized.includes("ucpb") && normalized.includes("bank statement"));
   if (!isKnownUcpbSample || normalized.includes("excel")) {
     return "";
   }

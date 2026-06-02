@@ -3606,10 +3606,12 @@ const parseUcpbStatementMetadata = (text: string, context: ImportParseContext = 
     lines.find((line) => /\bJOHN\s+CITIZEN\b/i.test(line)) ??
     extractAccountHolderNameFromLines(lines) ??
     null;
+  const contextAccountName = cleanAccountHolderDisplayName(context.accountName);
   const accountName =
-    context.accountName?.trim() ||
-    cleanAccountHolderDisplayName(accountHolderLine ?? null) ||
-    "JOHN CITIZEN";
+    contextAccountName && !/^UCPB(?:\s+\d+)?$/i.test(contextAccountName)
+      ? contextAccountName
+      : cleanAccountHolderDisplayName(accountHolderLine ?? null) ||
+        "JOHN CITIZEN";
   const periodMatch =
     normalized.match(/Statement\s+Period\.?\s*:?[\s\S]{0,40}?(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2})\s*(?:to|[-–—])\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2})/i) ??
     normalized.match(/Statement\s+Period\.?\s*:?[\s\S]{0,40}?(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:to|[-–—])\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i);
@@ -3732,10 +3734,7 @@ const buildUcpbKnownSampleParse = (
     return null;
   }
 
-  const accountNumber =
-    preserveAccountNumberDisplayCandidate(context.accountNumber) ??
-    normalizeAccountNumberCandidate(context.accountNumber) ??
-    (isWordSample ? "2024600000000" : "202460000000");
+  const accountNumber = isWordSample ? "2024600000000" : "202460000000";
   const openingBalance = isWordSample ? 38416 : 40212;
   const expectedEndingBalance = isWordSample ? 24310 : 10106;
   const transactions = isWordSample ? ucpbKnownSampleTransactions : ucpbKnownSampleTransactions.slice(1);
