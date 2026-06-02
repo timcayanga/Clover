@@ -2756,6 +2756,7 @@ export const buildStatementFingerprint = (
 
   const normalizedTextFingerprint = normalizedLines.join("\n");
   const fallbackFileIdentity = normalizedTextFingerprint ? "" : (fileName ?? "").toLowerCase();
+  const lowQualityUnionBankFileIdentity = isLikelyLowQualityUnionBankStatement ? (fileName ?? "").toLowerCase() : "";
   const useMetadataOnlyFingerprint = metadata.institution ? noisyOCRInstitutions.has(metadata.institution) && !isLikelyLowQualityUnionBankStatement : false;
   const stableFingerprintSource = [
     metadata.institution ?? "",
@@ -2773,7 +2774,7 @@ export const buildStatementFingerprint = (
     metadata.accountType ?? "",
     metadata.startDate ?? "",
     metadata.endDate ?? "",
-    fallbackFileIdentity,
+    lowQualityUnionBankFileIdentity || fallbackFileIdentity,
     (fileType ?? "").toLowerCase(),
     (documentFamily ?? "").toLowerCase(),
     normalizedTextFingerprint,
