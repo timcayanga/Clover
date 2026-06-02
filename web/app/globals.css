@@ -5088,7 +5088,7 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .reports-brief-grid--more {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .reports-brief-grid--more > .report-sankey-card {
@@ -6055,6 +6055,11 @@ body.transactions-manual-open .shell-quick-add-button {
   border-color: rgba(3, 168, 192, 0.18);
 }
 
+.report-ai-card--featured.report-sankey-card {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
 .report-ai-card--featured h3 {
   margin: 8px 0 10px;
   font-size: 30px;
@@ -6117,29 +6122,35 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .report-sankey__foot {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  display: none;
 }
 
-.report-sankey__chip {
+.report-sankey__legend {
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.report-sankey__legend-item {
+  display: inline-flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px 14px;
-  border-radius: 18px;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  background: rgba(255, 255, 255, 0.55);
-  box-shadow: var(--shadow-soft);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  text-decoration: none;
 }
 
-.report-sankey__chip strong {
+.report-sankey__legend-item strong {
   display: block;
   font-size: 13px;
   line-height: 1.3;
 }
 
-.report-sankey__chip span {
+.report-sankey__legend-item span {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4;
@@ -6151,6 +6162,12 @@ body.transactions-manual-open .shell-quick-add-button {
   margin-top: 3px;
   border-radius: 999px;
   flex: none;
+  border: 1px solid transparent;
+}
+
+.report-sankey__account-label,
+.report-sankey__target-label {
+  font-size: 12px;
 }
 
 .report-ai-card__actions {
@@ -6255,6 +6272,7 @@ body.transactions-manual-open .shell-quick-add-button {
   box-shadow: var(--shadow);
   display: grid;
   gap: 10px;
+  border-radius: 28px;
 }
 
 .reports-attention-card h4 {
@@ -6279,6 +6297,7 @@ body.transactions-manual-open .shell-quick-add-button {
     radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 30%),
     rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow);
+  border-radius: 28px;
 }
 
 .reports-decision-lens h4 {

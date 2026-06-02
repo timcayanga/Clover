@@ -20,6 +20,7 @@ import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format"
 import { recordAppError } from "@/lib/error-logs";
 import { InfoTip as ReportInfoTip } from "@/components/info-tip";
 import { InfoTooltip } from "@/components/info-tooltip";
+import { getCategoryIconTone } from "@/lib/category-icons";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 
@@ -104,51 +105,29 @@ const getReportTransactionCategoryName = (transaction: ReportTransaction) =>
 const getReportTransactionType = (transaction: ReportTransaction) =>
   coerceTransactionTypeFromCategoryName(getReportTransactionCategoryName(transaction), transaction.type, transaction.amount);
 
-type SankeyFlow = {
-  key: string;
-  label: string;
-  amount: number;
-  color: string;
-  detail: string;
-};
-
-const reportSankeyEssentialMatchers = [
-  "grocer",
-  "food",
-  "grocery",
-  "rent",
-  "mortgage",
-  "utility",
-  "electric",
-  "water",
-  "internet",
-  "phone",
-  "transport",
-  "fuel",
-  "gas",
-  "insurance",
-  "medical",
-  "health",
-  "tax",
-  "bill",
-  "school",
-  "education",
+const reportSankeyExcludedMerchantMatchers = [
+  "check clearing",
+  "cash clearing",
+  "cash deposit",
+  "cash withdrawal",
+  "finance charge",
+  "interest charge",
+  "bank fee",
 ];
+const reportSankeyExcludedCategoryNames = new Set(["income", "financial", "cash & atm"]);
 
-const reportSankeyDebtMatchers = ["loan", "debt", "credit", "amort", "installment", "repay", "card payment"];
-
-const classifyReportSankeyBucket = (categoryName: string) => {
-  const normalized = categoryName.toLowerCase();
-
-  if (reportSankeyDebtMatchers.some((matcher) => normalized.includes(matcher))) {
-    return "debt" as const;
+const isReportMerchantEligible = (transaction: ReportTransaction) => {
+  const categoryName = getReportTransactionCategoryName(transaction).trim().toLowerCase();
+  if (reportSankeyExcludedCategoryNames.has(categoryName)) {
+    return false;
   }
 
-  if (reportSankeyEssentialMatchers.some((matcher) => normalized.includes(matcher))) {
-    return "essentials" as const;
+  const merchantLabel = normalizeMerchant(transaction.merchantClean ?? transaction.merchantRaw);
+  if (!merchantLabel) {
+    return false;
   }
 
-  return "lifestyle" as const;
+  return !reportSankeyExcludedMerchantMatchers.some((matcher) => merchantLabel.includes(matcher));
 };
 
 type MonthBucket = {
@@ -535,6 +514,7 @@ async function ReportsStream({
       reportCurrentWindowTransactions.length === 0 && reportDisplayTransactions.length > 0
         ? "No activity in the selected range yet. Showing the latest available transactions instead."
         : null;
+    const reportHistoricalTransactions = reportAllTransactions.filter((transaction) => transaction.date < currentWindowStart);
 
     const currentSummary: WindowSummary = reportDisplayTransactions.reduce(
       (accumulator, transaction) => {
@@ -642,9 +622,7 @@ async function ReportsStream({
     const totalAccountBalance = Number(accountStatsSummary._sum?.balance ?? 0);
     const activeAccountCount = Number(accountStatsSummary._count?.balance ?? 0);
     const accountCount = Number(accountStatsSummary._count?.id ?? 0);
-    const uncategorizedTransactions = reportDisplayTransactions.filter(
-      (transaction) => !transaction.category?.name || !transaction.merchantClean
-    );
+    const uncategorizedTransactions = reportDisplayTransactions.filter((transaction) => !transaction.category?.name || !transaction.merchantClean);
 
     const duplicateGroups = new Map<string, (typeof reportDisplayTransactions)[number][]>();
     reportDisplayTransactions.forEach((transaction) => {
@@ -708,7 +686,197 @@ async function ReportsStream({
                   body: "Your current data looks tidy. You can still review spending and cash flow trends below.",
                   href: "/transactions",
               label: "Open transactions",
-            };
+                  };
+
+    const reportSankeyTransactions = reportDisplayTransactions.filter((transaction) => getReportTransactionType(transaction) !== "transfer");
+    const reportSankeyIncomeTransactions = reportSankeyTransactions.filter((transaction) => getReportTransactionType(transaction) === "income");
+    const reportSankeyExpenseTransactions = reportSankeyTransactions.filter((transaction) => getReportTransactionType(transaction) === "expense");
+    const reportSankeyAccountIncome = new Map<
+      string,
+      {
+        label: string;
+        amount: number;
+      }
+    >();
+    const reportSankeyAccountExpenseByCategory = new Map<
+      string,
+      Map<
+        string,
+        {
+          label: string;
+          amount: number;
+        }
+      >
+    >();
+    const reportSankeyCategoryTotals = new Map<
+      string,
+      {
+        label: string;
+        amount: number;
+      }
+    >();
+
+    reportSankeyIncomeTransactions.forEach((transaction) => {
+      const accountLabel = transaction.account.name?.trim().length > 0 ? transaction.account.name : "Account";
+      const key = normalizeMerchant(accountLabel);
+      const existing = reportSankeyAccountIncome.get(key) ?? { label: accountLabel, amount: 0 };
+      existing.amount += Math.abs(Number(transaction.amount));
+      reportSankeyAccountIncome.set(key, existing);
+    });
+
+    reportSankeyExpenseTransactions.forEach((transaction) => {
+      const accountLabel = transaction.account.name?.trim().length > 0 ? transaction.account.name : "Account";
+      const accountKey = normalizeMerchant(accountLabel);
+      const categoryLabel = getReportTransactionCategoryName(transaction);
+      const categoryKey = normalizeMerchant(categoryLabel);
+      const amount = Math.abs(Number(transaction.amount));
+      const accountExpenseMap = reportSankeyAccountExpenseByCategory.get(accountKey) ?? new Map();
+      const accountCategory = accountExpenseMap.get(categoryKey) ?? { label: categoryLabel, amount: 0 };
+      accountCategory.amount += amount;
+      accountExpenseMap.set(categoryKey, accountCategory);
+      reportSankeyAccountExpenseByCategory.set(accountKey, accountExpenseMap);
+
+      const categoryExisting = reportSankeyCategoryTotals.get(categoryKey) ?? { label: categoryLabel, amount: 0 };
+      categoryExisting.amount += amount;
+      reportSankeyCategoryTotals.set(categoryKey, categoryExisting);
+    });
+
+    const reportSankeyAccounts = Array.from(reportSankeyAccountIncome.values())
+      .map((account) => ({
+        ...account,
+        expenseAmount: Array.from(reportSankeyAccountExpenseByCategory.get(normalizeMerchant(account.label))?.values() ?? []).reduce(
+          (sum, category) => sum + category.amount,
+          0
+        ),
+      }))
+      .filter((account) => account.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+
+    const reportSankeyCategories = Array.from(reportSankeyCategoryTotals.values())
+      .filter((category) => category.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+
+    const reportSankeyCategoryColorByKey = new Map(
+      reportSankeyCategories.map((category) => [normalizeMerchant(category.label), getCategoryIconTone(category.label)])
+    );
+
+    const sankeyIncomeAmount = reportSankeyAccounts.reduce((sum, account) => sum + account.amount, 0);
+    const sankeyExpenseAmount = reportSankeyCategories.reduce((sum, category) => sum + category.amount, 0);
+    const sankeyScale = Math.max(0.0065, Math.min(0.02, 260 / Math.max(sankeyIncomeAmount, sankeyExpenseAmount, 1)));
+    const sankeyNodeMinHeight = 22;
+    const sankeyColumnGap = 18;
+    const sankeyLinkGap = 5;
+    const sankeyLabelBandHeight = 34;
+    const sankeyBarWidth = 26;
+    const sankeySourceWidth = sankeyIncomeAmount > 0 ? Math.max(sankeyIncomeAmount * sankeyScale, 110) : 110;
+    const sankeyAccountNodes = reportSankeyAccounts.map((account) => {
+      const incomeHeight = Math.max(account.amount * sankeyScale, sankeyNodeMinHeight);
+      const expenseHeight = Math.max(account.expenseAmount * sankeyScale, sankeyNodeMinHeight);
+      return {
+        ...account,
+        incomeHeight,
+        expenseHeight,
+        height: incomeHeight + sankeyLabelBandHeight + expenseHeight,
+      };
+    });
+    const sankeyCategoryNodes = reportSankeyCategories.map((category) => ({
+      ...category,
+      color: reportSankeyCategoryColorByKey.get(normalizeMerchant(category.label)) ?? getCategoryIconTone(category.label),
+      height: Math.max(category.amount * sankeyScale, sankeyNodeMinHeight),
+    }));
+    const sankeyAccountsColumnHeight = sankeyAccountNodes.reduce((sum, node, index) => sum + node.height + (index > 0 ? sankeyColumnGap : 0), 0);
+    const sankeyCategoriesColumnHeight = sankeyCategoryNodes.reduce((sum, node, index) => sum + node.height + (index > 0 ? sankeyColumnGap : 0), 0);
+    const sankeyChartHeight = Math.max(360, sankeyAccountsColumnHeight, sankeyCategoriesColumnHeight, sankeySourceWidth + 80);
+    const sankeyChartWidth = 980;
+    const sankeyIncomeX = 54;
+    const sankeyAccountX = 378;
+    const sankeyCategoryX = 742;
+    const sankeyIncomeColumnTop = (sankeyChartHeight - sankeySourceWidth) / 2;
+    const sankeyAccountsColumnTop = (sankeyChartHeight - sankeyAccountsColumnHeight) / 2;
+    const sankeyCategoriesColumnTop = (sankeyChartHeight - sankeyCategoriesColumnHeight) / 2;
+
+    let sankeyIncomeOffset = 0;
+    let sankeyAccountOffset = 0;
+    const sankeyAccountLayouts = sankeyAccountNodes.map((node) => {
+      const incomingHeight = Math.max(node.amount * sankeyScale, sankeyNodeMinHeight);
+      const outgoingHeight = Math.max(node.expenseAmount * sankeyScale, sankeyNodeMinHeight);
+      const y = sankeyAccountsColumnTop + sankeyAccountOffset;
+      const layout = {
+        ...node,
+        y,
+        incomingHeight,
+        outgoingHeight,
+        incomingTop: y,
+        outgoingTop: y + incomingHeight + sankeyLabelBandHeight,
+      };
+      sankeyAccountOffset += layout.height + sankeyColumnGap;
+      return layout;
+    });
+
+    let sankeyCategoryOffset = 0;
+    const sankeyCategoryLayouts = sankeyCategoryNodes.map((node) => {
+      const y = sankeyCategoriesColumnTop + sankeyCategoryOffset;
+      const layout = {
+        ...node,
+        y,
+      };
+      sankeyCategoryOffset += layout.height + sankeyColumnGap;
+      return layout;
+    });
+
+    const sankeyAccountLayoutByKey = new Map(sankeyAccountLayouts.map((account) => [normalizeMerchant(account.label), account]));
+    const sankeyCategoryLayoutByKey = new Map(sankeyCategoryLayouts.map((category) => [normalizeMerchant(category.label), category]));
+    const sankeyIncomeLinks = sankeyAccountLayouts.map((account) => {
+      const linkHeight = Math.max(account.amount * sankeyScale, sankeyNodeMinHeight);
+      const sourceY = sankeyIncomeColumnTop + sankeyIncomeOffset + linkHeight / 2;
+      const targetY = account.incomingTop + account.incomingHeight / 2;
+      sankeyIncomeOffset += linkHeight + sankeyLinkGap;
+      return {
+        key: account.label,
+        amount: account.amount,
+        sourceY,
+        targetY,
+        height: linkHeight,
+      };
+    });
+
+    const sankeyCategoryIncomingOffsets = new Map<string, number>();
+    const sankeyCategoryLinks = sankeyAccountLayouts.flatMap((account) => {
+      const accountExpenses = Array.from(reportSankeyAccountExpenseByCategory.get(normalizeMerchant(account.label))?.values() ?? []).filter(
+        (entry) => entry.amount > 0
+      );
+      let accountOutOffset = 0;
+      return accountExpenses.map((entry) => {
+        const linkHeight = Math.max(entry.amount * sankeyScale, sankeyNodeMinHeight * 0.9);
+        const sourceY = account.outgoingTop + accountOutOffset + linkHeight / 2;
+        const targetOffset = sankeyCategoryIncomingOffsets.get(normalizeMerchant(entry.label)) ?? 0;
+        const categoryLayout = sankeyCategoryLayoutByKey.get(normalizeMerchant(entry.label));
+        const targetY = (categoryLayout?.y ?? sankeyCategoriesColumnTop) + targetOffset + linkHeight / 2;
+        sankeyCategoryIncomingOffsets.set(normalizeMerchant(entry.label), targetOffset + linkHeight + sankeyLinkGap);
+        accountOutOffset += linkHeight + sankeyLinkGap;
+
+        return {
+          key: `${account.label}:${entry.label}`,
+          accountLabel: account.label,
+          categoryLabel: entry.label,
+          amount: entry.amount,
+          sourceY,
+          targetY,
+          height: linkHeight,
+          color: categoryLayout?.color ?? getCategoryIconTone(entry.label).borderColor,
+        };
+      });
+    });
+
+    const sankeyLegendCategories = reportSankeyCategories.map((category) => ({
+      ...category,
+      color: reportSankeyCategoryColorByKey.get(normalizeMerchant(category.label)) ?? getCategoryIconTone(category.label),
+    }));
+    const buildSankeyCurve = (startX: number, startY: number, endX: number, endY: number) => {
+      const controlX = startX + (endX - startX) * 0.45;
+      const controlX2 = startX + (endX - startX) * 0.55;
+      return `M ${startX.toFixed(1)} ${startY.toFixed(1)} C ${controlX.toFixed(1)} ${startY.toFixed(1)} ${controlX2.toFixed(1)} ${endY.toFixed(1)} ${endX.toFixed(1)} ${endY.toFixed(1)}`;
+    };
 
     const recurringMerchantHistory = new Map<
       string,
@@ -812,7 +980,23 @@ async function ReportsStream({
       displayCurrency
     );
 
-    const merchantSpend = new Map<
+    const reportRecentTransactions = reportCurrentWindowTransactions.length > 0 ? reportCurrentWindowTransactions : reportDisplayTransactions;
+    const reportRecentExpenseTransactions = reportRecentTransactions.filter(
+      (transaction) => getReportTransactionType(transaction) === "expense" && isReportMerchantEligible(transaction)
+    );
+    const reportHistoricalExpenseTransactions = reportHistoricalTransactions.filter(
+      (transaction) => getReportTransactionType(transaction) === "expense" && isReportMerchantEligible(transaction)
+    );
+
+    const recentMerchantSpend = new Map<
+      string,
+      {
+        label: string;
+        amount: number;
+        count: number;
+      }
+    >();
+    const historicalMerchantSpend = new Map<
       string,
       {
         label: string;
@@ -821,58 +1005,51 @@ async function ReportsStream({
       }
     >();
 
-    reportDisplayTransactions.forEach((transaction) => {
-      if (transaction.type !== "expense") {
-        return;
-      }
-
+    reportRecentExpenseTransactions.forEach((transaction) => {
       const label = transaction.merchantClean ?? transaction.merchantRaw;
       const key = normalizeMerchant(label);
-      const existing = merchantSpend.get(key) ?? { label, amount: 0, count: 0 };
+      const existing = recentMerchantSpend.get(key) ?? { label, amount: 0, count: 0 };
       existing.amount += Math.abs(Number(transaction.amount));
       existing.count += 1;
-      merchantSpend.set(key, existing);
+      recentMerchantSpend.set(key, existing);
     });
 
-    const previousMerchantSpend = new Map<
-      string,
-      {
-        label: string;
-        amount: number;
-        count: number;
-      }
-    >();
-
-    reportPreviousWindowTransactions.forEach((transaction) => {
-      if (transaction.type !== "expense") {
-        return;
-      }
-
+    reportHistoricalExpenseTransactions.forEach((transaction) => {
       const label = transaction.merchantClean ?? transaction.merchantRaw;
       const key = normalizeMerchant(label);
-      const existing = previousMerchantSpend.get(key) ?? { label, amount: 0, count: 0 };
+      const existing = historicalMerchantSpend.get(key) ?? { label, amount: 0, count: 0 };
       existing.amount += Math.abs(Number(transaction.amount));
       existing.count += 1;
-      previousMerchantSpend.set(key, existing);
+      historicalMerchantSpend.set(key, existing);
     });
 
-    const topMerchants = Array.from(merchantSpend.values()).sort((a, b) => b.amount - a.amount).slice(0, 5);
-    const merchantMovements = Array.from(merchantSpend.values())
+    const topMerchants = Array.from(recentMerchantSpend.values()).sort((a, b) => b.amount - a.amount).slice(0, 5);
+    const merchantMovements = Array.from(recentMerchantSpend.values())
       .map((merchant) => {
-        const previousMerchant = previousMerchantSpend.get(normalizeMerchant(merchant.label));
-        const previousAmount = previousMerchant?.amount ?? 0;
-        const delta = merchant.amount - previousAmount;
-        const deltaPercent = previousAmount > 0 ? (delta / previousAmount) * 100 : null;
+        const historicalMerchant = historicalMerchantSpend.get(normalizeMerchant(merchant.label));
+        const historicalAmount = historicalMerchant?.amount ?? 0;
+        const historicalCount = historicalMerchant?.count ?? 0;
+        const delta = merchant.amount - historicalAmount;
+        const deltaPercent = historicalAmount > 0 ? (delta / historicalAmount) * 100 : null;
+        const isNewMerchant = historicalCount === 0;
+        const isNotableNewMerchant =
+          isNewMerchant && (merchant.count >= 3 || merchant.amount >= Math.max(1500, currentSummary.expense * 0.08));
 
         return {
           ...merchant,
-          previousAmount,
+          previousAmount: historicalAmount,
           delta,
           deltaPercent,
+          isNewMerchant,
+          isNotableNewMerchant,
         };
       })
-      .filter((merchant) => merchant.delta > 0 || merchant.previousAmount === 0)
+      .filter((merchant) => merchant.isNotableNewMerchant || merchant.delta > 0)
       .sort((a, b) => {
+        if (a.isNotableNewMerchant !== b.isNotableNewMerchant) {
+          return a.isNotableNewMerchant ? -1 : 1;
+        }
+
         const deltaGap = b.delta - a.delta;
         if (deltaGap !== 0) {
           return deltaGap;
@@ -881,6 +1058,7 @@ async function ReportsStream({
         return b.count - a.count;
       })
       .slice(0, 3);
+    const leadingMerchantMovement = merchantMovements[0] ?? null;
     const currentMonthBucket = monthBuckets[monthBuckets.length - 1];
     const previousMonthBucket = monthBuckets[monthBuckets.length - 2] ?? monthBuckets[monthBuckets.length - 1];
     const monthlyNetChange = currentMonthBucket.net - previousMonthBucket.net;
@@ -902,93 +1080,14 @@ async function ReportsStream({
     const reportCashFlowPath = reportCashFlowPoints
       .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
       .join(" ");
-    const reportCategoryPalette = ["#0ea5c8", "#36b6e0", "#7dd3fc", "#14b8a6", "#f59e0b", "#8b5cf6"];
-    const reportCategorySegments = topCategories.map(([categoryName, amount], index) => ({
+    const reportCategorySegments = topCategories.map(([categoryName, amount]) => ({
       categoryName,
       amount,
       share: currentSpend > 0 ? amount / currentSpend : 0,
-      color: reportCategoryPalette[index % reportCategoryPalette.length],
+      color: getCategoryIconTone(categoryName),
     }));
     const currentTrackedCategorySpend = topCategories.reduce((sum, [, amount]) => sum + amount, 0);
     const currentOtherSpend = Math.max(currentSpend - currentTrackedCategorySpend, 0);
-    const sankeyBucketTotals = Array.from(currentSummary.expenseCategories.entries()).reduce(
-      (totals, [categoryName, amount]) => {
-        const bucket = classifyReportSankeyBucket(categoryName);
-
-        if (bucket === "debt") {
-          totals.debt += amount;
-        } else if (bucket === "essentials") {
-          totals.essentials += amount;
-        } else {
-          totals.lifestyle += amount;
-        }
-
-        return totals;
-      },
-      {
-        essentials: 0,
-        lifestyle: 0,
-        debt: 0,
-      }
-    );
-    const sankeyFlows: SankeyFlow[] = [
-      {
-        key: "essentials",
-        label: "Essentials",
-        amount: sankeyBucketTotals.essentials,
-        color: "#0ea5c8",
-        detail: "Needs and bills",
-      },
-      {
-        key: "lifestyle",
-        label: "Lifestyle",
-        amount: sankeyBucketTotals.lifestyle,
-        color: "#36b6e0",
-        detail: "Flex spending",
-      },
-      {
-        key: "debt",
-        label: "Debt",
-        amount: sankeyBucketTotals.debt,
-        color: "#f59e0b",
-        detail: "Repayments",
-      },
-      {
-        key: "saved",
-        label: currentNet >= 0 ? "Saved / investing" : "Over budget",
-        amount: Math.abs(currentNet),
-        color: currentNet >= 0 ? "#22c55e" : "#f97316",
-        detail: currentNet >= 0 ? "Future money" : "Spending outpaced income",
-      },
-    ].filter((flow) => flow.amount > 0);
-    const sankeyTotal = sankeyFlows.reduce((sum, flow) => sum + flow.amount, 0);
-    const sankeyChartWidth = 760;
-    const sankeyChartHeight = 300;
-    const sankeyNodeWidth = 24;
-    const sankeyNodeGap = 12;
-    const sankeySourceX = 70;
-    const sankeyTargetX = sankeyChartWidth - 70 - sankeyNodeWidth;
-    const sankeyStreamHeight = Math.max(sankeyChartHeight - 40, 140);
-    const sankeyScale = sankeyTotal > 0 ? (sankeyStreamHeight - sankeyNodeGap * Math.max(sankeyFlows.length - 1, 0)) / sankeyTotal : 0;
-    let sankeySourceOffset = 0;
-    let sankeyTargetOffset = 0;
-    const sankeyLayouts = sankeyFlows.map((flow) => {
-      const height = Math.max(flow.amount * sankeyScale, 10);
-      const sourceY = 20 + sankeySourceOffset;
-      const targetY = 20 + sankeyTargetOffset;
-      sankeySourceOffset += height + sankeyNodeGap;
-      sankeyTargetOffset += height + sankeyNodeGap;
-
-      return {
-        ...flow,
-        height,
-        sourceY,
-        targetY,
-        sourceMidY: sourceY + height / 2,
-        targetMidY: targetY + height / 2,
-        share: sankeyTotal > 0 ? flow.amount / sankeyTotal : 0,
-      };
-    });
     const recurringSavingsPotential = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) * 0.2;
     const topRecurringMerchant = recurringMerchants[0] ?? null;
     const averageRecurringSpend = recurringMerchants.length > 0
@@ -996,9 +1095,18 @@ async function ReportsStream({
       : 0;
     const topCategoryName = topCategories[0]?.[0] ?? null;
     const topCategoryAmount = topCategories[0]?.[1] ?? 0;
-    const previousTopCategoryAmount = topCategoryName ? previousSummary.expenseCategories.get(topCategoryName) ?? 0 : 0;
-    const topCategoryDelta = topCategoryAmount - previousTopCategoryAmount;
-    const topCategoryDeltaPercent = previousTopCategoryAmount > 0 ? (topCategoryDelta / previousTopCategoryAmount) * 100 : null;
+    const historicalTopCategoryAmount = topCategoryName
+      ? reportHistoricalTransactions.reduce((sum, transaction) => {
+          if (getReportTransactionType(transaction) !== "expense") {
+            return sum;
+          }
+
+          const categoryName = getReportTransactionCategoryName(transaction);
+          return categoryName === topCategoryName ? sum + Math.abs(Number(transaction.amount)) : sum;
+        }, 0)
+      : 0;
+    const topCategoryDelta = topCategoryAmount - historicalTopCategoryAmount;
+    const topCategoryDeltaPercent = historicalTopCategoryAmount > 0 ? (topCategoryDelta / historicalTopCategoryAmount) * 100 : null;
     const goalProgress = getGoalProgressSnapshot({
       goalKey: goalKey as GoalKey | null,
       targetAmount: goalTargetAmount,
@@ -1038,7 +1146,6 @@ async function ReportsStream({
           ? "The report is dependable, though a few review items still deserve attention."
           : "A few missing balances or review items are reducing signal quality.";
     const currentReviewCount = uncategorizedTransactions.length + possibleDuplicateGroups.length;
-    const leadingMerchantMovement = merchantMovements[0] ?? null;
     const reviewSummary =
       currentReviewCount > 0
         ? `${uncategorizedTransactions.length} uncategorized and ${possibleDuplicateGroups.length} duplicate set${possibleDuplicateGroups.length === 1 ? "" : "s"} are still open.`
@@ -1049,7 +1156,7 @@ async function ReportsStream({
           ? `${topCategoryName} changed by ${formatSignedCurrency(topCategoryDelta)}`
           : "No category shift yet",
         body: topCategoryName
-          ? previousTopCategoryAmount > 0
+          ? historicalTopCategoryAmount > 0
             ? `${formatPercent(topCategoryDeltaPercent ?? 0)} vs the prior ${rangeWindowText} · ${formatCurrency(topCategoryAmount)} this period`
             : `${formatCurrency(topCategoryAmount)} this period, with no prior baseline`
           : "Add more spending data to reveal the dominant category change.",
@@ -1164,7 +1271,7 @@ async function ReportsStream({
         detail:
           topCategoryName === null
             ? "No category leader yet"
-            : previousTopCategoryAmount > 0
+            : historicalTopCategoryAmount > 0
               ? `${formatPercent(topCategoryDeltaPercent ?? 0)} vs prior ${rangeWindowText}`
               : "No prior baseline",
         tone: topCategoryDelta >= 0 ? ("subtle" as const) : ("good" as const),
@@ -1427,12 +1534,12 @@ async function ReportsStream({
               <article className="report-ai-card report-ai-card--featured report-sankey-card glass">
                 <div className="report-card__head report-card__head--compact">
                   <div>
-                    <h4>Cash flow map</h4>
+                    <h4>🗺️ Cash flow map</h4>
                   </div>
-                  <ReportInfoTip label="A Sankey view of how income moves through essentials, lifestyle spending, debt, and what you keep." />
+                  <ReportInfoTip label="A Sankey view of how income flows into accounts and then into spending categories." />
                 </div>
 
-                {sankeyLayouts.length > 0 ? (
+                {sankeyIncomeLinks.length > 0 ? (
                   <>
                     <div className="report-sankey__chart-wrap">
                       <svg
@@ -1441,38 +1548,99 @@ async function ReportsStream({
                         role="img"
                         aria-label="Cash flow Sankey diagram"
                       >
-                        <rect
-                          x="70"
-                          y="20"
-                          width={sankeyNodeWidth}
-                          height={Math.max(sankeySourceOffset - sankeyNodeGap, sankeyStreamHeight)}
-                          rx="12"
-                          fill="rgba(3, 168, 192, 0.52)"
-                        />
-
-                        {sankeyLayouts.map((flow) => (
+                        {sankeyIncomeLinks.map((link, index) => (
                           <path
-                            key={flow.key}
-                            d={`M ${sankeySourceX + sankeyNodeWidth} ${flow.sourceMidY.toFixed(1)} C ${sankeySourceX + 140} ${flow.sourceMidY.toFixed(1)} ${sankeyTargetX - 140} ${flow.targetMidY.toFixed(1)} ${sankeyTargetX} ${flow.targetMidY.toFixed(1)}`}
+                            key={`${link.key}-income`}
+                            d={buildSankeyCurve(
+                              sankeyIncomeX + sankeyBarWidth,
+                              link.sourceY,
+                              sankeyAccountX,
+                              link.targetY
+                            )}
                             fill="none"
-                            stroke={flow.color}
-                            strokeWidth={Math.max(flow.height, 8)}
+                            stroke="rgba(3, 168, 192, 0.28)"
+                            strokeWidth={Math.max(link.height, 7)}
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            opacity="0.26"
+                            opacity={index === 0 ? 0.42 : 0.26}
                           />
                         ))}
 
-                        {sankeyLayouts.map((flow) => (
-                          <rect
-                            key={`${flow.key}-node`}
-                            x={sankeyTargetX}
-                            y={flow.targetY}
-                            width={sankeyNodeWidth}
-                            height={flow.height}
-                            rx="12"
-                            fill={flow.color}
+                        <rect
+                          x={sankeyIncomeX}
+                          y={sankeyIncomeColumnTop}
+                          width={sankeyBarWidth}
+                          height={sankeySourceWidth}
+                          rx="14"
+                          fill="rgba(3, 168, 192, 0.52)"
+                        />
+
+                        {sankeyAccountLayouts.map((account) => (
+                          <g key={account.label}>
+                            <rect
+                              x={sankeyAccountX}
+                              y={account.y}
+                              width={sankeyBarWidth}
+                              height={account.height}
+                              rx="14"
+                              fill="rgba(15, 118, 110, 0.34)"
+                              stroke="rgba(15, 118, 110, 0.18)"
+                            />
+                            <text x={sankeyAccountX + sankeyBarWidth + 12} y={account.y + 20} className="report-sankey__target-label report-sankey__account-label">
+                              <tspan x={sankeyAccountX + sankeyBarWidth + 12} className="report-sankey__target-title">
+                                {account.label}
+                              </tspan>
+                              <tspan x={sankeyAccountX + sankeyBarWidth + 12} dy="1.15em" className="report-sankey__target-value">
+                                {formatCurrency(account.amount)} received
+                              </tspan>
+                              <tspan x={sankeyAccountX + sankeyBarWidth + 12} dy="1.15em" className="report-sankey__target-detail">
+                                {formatCurrency(account.expenseAmount)} sent to categories
+                              </tspan>
+                            </text>
+                          </g>
+                        ))}
+
+                        {sankeyCategoryLinks.map((link) => (
+                          <path
+                            key={link.key}
+                            d={buildSankeyCurve(
+                              sankeyAccountX + sankeyBarWidth,
+                              link.sourceY,
+                              sankeyCategoryX,
+                              link.targetY
+                            )}
+                            fill="none"
+                            stroke={link.color}
+                            strokeWidth={Math.max(link.height, 7)}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            opacity="0.3"
                           />
+                        ))}
+
+                        {sankeyCategoryLayouts.map((category) => (
+                          <g key={category.label}>
+                            <rect
+                              x={sankeyCategoryX}
+                              y={category.y}
+                              width={sankeyBarWidth}
+                              height={category.height}
+                              rx="14"
+                              fill={category.color.backgroundColor}
+                              stroke={category.color.borderColor}
+                            />
+                            <text x={sankeyCategoryX + sankeyBarWidth + 12} y={category.y + 20} className="report-sankey__target-label">
+                              <tspan x={sankeyCategoryX + sankeyBarWidth + 12} className="report-sankey__target-title">
+                                {category.label}
+                              </tspan>
+                              <tspan x={sankeyCategoryX + sankeyBarWidth + 12} dy="1.15em" className="report-sankey__target-value">
+                                {formatCurrency(category.amount)}
+                              </tspan>
+                              <tspan x={sankeyCategoryX + sankeyBarWidth + 12} dy="1.15em" className="report-sankey__target-detail">
+                                {formatPercent(currentSpend > 0 ? (category.amount / currentSpend) * 100 : 0)}
+                              </tspan>
+                            </text>
+                          </g>
                         ))}
 
                         <text x={58} y={56} className="report-sankey__source-label">
@@ -1485,33 +1653,20 @@ async function ReportsStream({
                           {reportCurrentWindowTransactions.length > 0 ? selectedRangeLabel.toLowerCase() : "latest available activity"}
                         </text>
 
-                        {sankeyLayouts.map((flow) => (
-                          <text key={`${flow.key}-label`} x={sankeyTargetX + sankeyNodeWidth + 12} y={flow.targetMidY - 4} className="report-sankey__target-label">
-                            <tspan x={sankeyTargetX + sankeyNodeWidth + 12} className="report-sankey__target-title">
-                              {flow.label}
-                            </tspan>
-                            <tspan x={sankeyTargetX + sankeyNodeWidth + 12} dy="1.15em" className="report-sankey__target-value">
-                              {formatCurrency(flow.amount)} · {formatPercent(flow.share * 100)}
-                            </tspan>
-                            <tspan x={sankeyTargetX + sankeyNodeWidth + 12} dy="1.15em" className="report-sankey__target-detail">
-                              {flow.detail}
-                            </tspan>
-                          </text>
-                        ))}
                       </svg>
                     </div>
 
-                    <div className="report-sankey__foot">
-                      {sankeyLayouts.map((flow) => (
-                        <div key={`${flow.key}-chip`} className="report-sankey__chip">
-                          <span className="report-sankey__swatch" style={{ background: flow.color }} />
-                          <div>
-                            <strong>{flow.label}</strong>
-                            <span>
-                              {formatCurrency(flow.amount)} · {formatPercent(flow.share * 100)}
-                            </span>
-                          </div>
-                        </div>
+                    <div className="report-sankey__legend" aria-label="Transaction categories">
+                      {sankeyLegendCategories.map((category) => (
+                        <Link
+                          key={category.label}
+                          href={buildTransactionsHref({ category: category.label })}
+                          className="report-sankey__legend-item"
+                        >
+                          <span className="report-sankey__swatch" style={{ background: category.color.backgroundColor, borderColor: category.color.borderColor }} />
+                          <strong>{category.label}</strong>
+                          <span>{formatCurrency(category.amount)}</span>
+                        </Link>
                       ))}
                     </div>
                   </>
@@ -1527,7 +1682,7 @@ async function ReportsStream({
                 <article className="report-ai-card report-ai-card--compact glass">
                   <div className="report-card__head report-card__head--compact">
                     <div>
-                      <h4>Main drivers</h4>
+                      <h4>🧭 Main drivers</h4>
                     </div>
                     <ReportInfoTip label="The biggest reasons behind the shift." />
                   </div>
@@ -1545,7 +1700,7 @@ async function ReportsStream({
                 <article className="report-ai-card report-ai-card--compact glass">
                   <div className="report-card__head report-card__head--compact">
                     <div>
-                      <h4>Next step</h4>
+                      <h4>✨ Next Steps</h4>
                     </div>
                     <ReportInfoTip label="One easy action to take right now." />
                   </div>
@@ -1567,7 +1722,7 @@ async function ReportsStream({
             </section>
 
             <article className="reports-next glass">
-              <p className="eyebrow">Goal check</p>
+              <p className="eyebrow">🎯 Goal check</p>
               <h4>{goalNextStep.title}</h4>
               <p>{goalSummary}</p>
               <div className="reports-next__meta">
@@ -1588,7 +1743,7 @@ async function ReportsStream({
             <section className="reports-attention-strip">
               {attentionItems.map((item) => (
                 <article key={item.title} className="reports-attention-card glass">
-                  <span className="eyebrow">Watch list</span>
+                  <span className="eyebrow">👀 Watch list</span>
                   <h4>{item.title}</h4>
                   <p>{item.body}</p>
                   <Link className="pill-link pill-link--inline" href={item.href}>
@@ -1600,7 +1755,7 @@ async function ReportsStream({
 
             <article className="reports-decision-lens glass">
               <div>
-                <p className="eyebrow">Now</p>
+                <p className="eyebrow">⚡ Now</p>
                 <h4>{nextStep.title}</h4>
                 <p>{nextStep.body}</p>
               </div>
@@ -1645,7 +1800,13 @@ async function ReportsStream({
                           <span>{formatCurrency(segment.amount)}</span>
                         </div>
                         <div className="report-flow-map__bar" aria-hidden="true">
-                          <span style={{ width: `${Math.max(segment.share * 100, 8)}%`, background: segment.color }} />
+                          <span
+                            style={{
+                              width: `${Math.max(segment.share * 100, 8)}%`,
+                              background: segment.color.backgroundColor,
+                              borderColor: segment.color.borderColor,
+                            }}
+                          />
                         </div>
                         <strong className="report-flow-map__share">{formatPercent(segment.share * 100)}</strong>
                       </Link>
@@ -1702,7 +1863,7 @@ async function ReportsStream({
                               r="82"
                               className="report-donut__segment"
                               style={{
-                                stroke: segment.color,
+                                stroke: segment.color.borderColor,
                                 strokeDasharray: `${dashLength} ${circumference}`,
                                 strokeDashoffset: -offset,
                               }}
@@ -1731,7 +1892,10 @@ async function ReportsStream({
                         href={buildTransactionsHref({ category: segment.categoryName })}
                         className="report-donut__legend-item report-list__item--link"
                       >
-                        <span className="report-donut__swatch" style={{ background: segment.color }} />
+                        <span
+                          className="report-donut__swatch"
+                          style={{ background: segment.color.backgroundColor, borderColor: segment.color.borderColor }}
+                        />
                         <div className="report-donut__meta">
                           <strong>{segment.categoryName}</strong>
                           <span>
