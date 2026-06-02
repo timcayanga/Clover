@@ -1557,16 +1557,21 @@ const getImportVisibilityTimeoutMs = (fileCount: number) =>
   IMPORT_VISIBILITY_BASE_TIMEOUT_MS +
   Math.max(0, fileCount - 1) * IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS;
 
+const isLikelyLowQualityUnionBankStatementFilename = (fileName: string) => {
+  const lower = fileName.toLowerCase();
+  return /union\s*bank/i.test(lower) && /(?:word|excel|template|business_statement)/i.test(lower);
+};
+
 const isNoisyVisibilityBank = (fileName: string) => {
   const bank = normalizeBankName(fileName);
   return (
     ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bank) ||
-    (bank === "UnionBank" && /(?:word|excel|template|business_statement)/i.test(fileName))
+    bank === "UnionBank" && isLikelyLowQualityUnionBankStatementFilename(fileName)
   );
 };
 
 const isLikelyLowQualityUnionBankStatementFile = (fileName: string) =>
-  normalizeBankName(fileName) === "UnionBank" && /(?:word|excel|template|business_statement)/i.test(fileName);
+  normalizeBankName(fileName) === "UnionBank" || isLikelyLowQualityUnionBankStatementFilename(fileName);
 
 const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
   if (normalizeBankName(fileName) !== "PNB") {
