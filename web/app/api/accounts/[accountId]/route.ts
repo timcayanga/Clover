@@ -11,7 +11,7 @@ import { ACCOUNT_TYPES } from "@/lib/account-types";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { deleteAccountsAndImportArtifacts } from "@/lib/account-deletion";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
-import { normalizeBankName } from "@/lib/data-qa-banks";
+import { BANK_PRIORITY, normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
@@ -87,7 +87,18 @@ const normalizeAccountCurrency = (account: {
 
 const normalizeUploadBankName = (value?: string | null) => {
   const normalized = normalizeBankName(value ?? null);
-  return normalized !== "Unknown" ? normalized : null;
+  if (normalized === "Unknown") {
+    return null;
+  }
+
+  const normalizedKey = normalized.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const looksBankLike =
+    BANK_PRIORITY.some((bankName) => bankName.toLowerCase().replace(/[^a-z0-9]+/g, "") === normalizedKey) ||
+    /\b(bank|banking|bpi|bdo|rcbc|psbank|cimb|gcash|maya|gotyme|landbank|chinabank|eastwest|unionbank|security|aub|pnb|wise)\b/i.test(
+      normalized
+    );
+
+  return looksBankLike ? normalized : null;
 };
 
 const resolveUploadedAccountInstitution = (
