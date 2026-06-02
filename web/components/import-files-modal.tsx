@@ -4981,6 +4981,29 @@ export function ImportFilesModal({
       await sleep(500);
     }
 
+    const hasRecoverableFinalProgress = Boolean(
+      visibleImportComplete ||
+        parsedRowsCount > 0 ||
+        confirmedTransactionsCount > 0 ||
+        checkpointBalance ||
+        checkpointAccountId ||
+        processingIdentity?.accountName ||
+        processingIdentity?.accountNumber ||
+        canResume ||
+        telemetryPhase === "repair_needed" ||
+        latestResolvedAccountId
+    );
+
+    if (hasRecoverableFinalProgress) {
+      closeImportAsRecoverable(
+        itemId,
+        fileName,
+        "Clover parsed the file and is still finalizing the import.",
+        "Finalizing import"
+      );
+      return { completed: true, summary: null };
+    }
+
     closeImportAfterError(itemId, "monitor", fileName, "Timed out while Clover was still reading the document.");
     return { completed: false, summary: null };
   };
