@@ -21,7 +21,7 @@
     "jsdom": "^26.1.0"
   },
   "dependencies": {
-    "pdfjs-dist": "^5.6.205",
+    "pdfjs-dist": "^5.7.284",
     "xlsx": "^0.18.5"
   }
 }

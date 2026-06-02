@@ -1550,12 +1550,15 @@ const IMPORT_PROGRESS = {
 const MAX_IMPORT_FILES_PER_BATCH = 25;
 const IMPORT_VISIBILITY_BASE_TIMEOUT_MS = 30_000;
 const IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 15_000;
-const IMPORT_VISIBILITY_NOISY_BANK_TIMEOUT_MS = 5 * 60_000;
+const IMPORT_VISIBILITY_MAX_TIMEOUT_MS = 2 * 60_000;
 const IMPORT_BACKGROUND_HARD_STOP_MS = 10 * 60_000;
 
 const getImportVisibilityTimeoutMs = (fileCount: number) =>
-  IMPORT_VISIBILITY_BASE_TIMEOUT_MS +
-  Math.max(0, fileCount - 1) * IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS;
+  Math.min(
+    IMPORT_VISIBILITY_MAX_TIMEOUT_MS,
+    IMPORT_VISIBILITY_BASE_TIMEOUT_MS +
+      Math.max(0, fileCount - 1) * IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS
+  );
 
 const isLikelyLowQualityUnionBankStatementFilename = (fileName: string) => {
   const lower = fileName.toLowerCase();
@@ -1697,6 +1700,7 @@ export function ImportFilesModal({
   const [qaLoadingByItemId, setQaLoadingByItemId] = useState<Record<string, boolean>>({});
   const [qaErrorByItemId, setQaErrorByItemId] = useState<Record<string, string | null>>({});
   const [displayedOverallProgress, setDisplayedOverallProgress] = useState(0);
+  const [uploadPaused, setUploadPaused] = useState(false);
   const autoLoadedQaIdsRef = useRef(new Set<string>());
   const localPreparseStartedRef = useRef(new Set<string>());
   const localPreparseSummaryByItemIdRef = useRef(new Map<string, UploadInsightsSummary>());
@@ -1710,12 +1714,19 @@ export function ImportFilesModal({
   const autoCloseCompletedBatchTimerRef = useRef<number | null>(null);
   const visibilityDeadlineRef = useRef<number | null>(null);
   const visibilityHardStopTimerRef = useRef<number | null>(null);
+  const uploadPausedRef = useRef(false);
+  const uploadCancelRequestedRef = useRef(false);
+  const activeUploadAbortControllerRef = useRef<AbortController | null>(null);
   const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
 
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+
+  useEffect(() => {
+    uploadPausedRef.current = uploadPaused;
+  }, [uploadPaused]);
 
   const publishImportActivity = (
     snapshot:
@@ -1929,6 +1940,38 @@ export function ImportFilesModal({
     });
     setBusy(false);
     autoCloseAfterStartRef.current = false;
+  };
+
+  const markQueuedUploadsCanceled = (activeItemId?: string | null) => {
+    setItems((current) =>
+      current.map((item) => {
+        if (
+          item.confirmationState === "confirmed" ||
+          item.status === "done" ||
+          item.status === "error" ||
+          item.status === "needs_password"
+        ) {
+          return item;
+        }
+
+        return {
+          ...item,
+          status: "error",
+          error: activeItemId && item.id === activeItemId ? "Upload canceled." : "Upload canceled before it started.",
+          errorCode: null,
+          errorTitle: "Upload canceled",
+          errorNextSteps: null,
+          progress: item.progress,
+          progressLabel: "Canceled",
+        };
+      })
+    );
+  };
+
+  const waitForUploadResume = async () => {
+    while (uploadPausedRef.current && !uploadCancelRequestedRef.current) {
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+    }
   };
 
   const closeImportAsRecoverable = (
@@ -4802,6 +4845,20 @@ export function ImportFilesModal({
           .catch(() => null);
       }
     } catch (error) {
+      if (uploadCancelRequestedRef.current || options?.signal?.aborted) {
+        updateItem(itemId, {
+          status: "error",
+          confirmationState: "staged",
+          error: "Upload canceled.",
+          errorCode: null,
+          errorTitle: "Upload canceled",
+          errorNextSteps: null,
+          progress: item.progress,
+          progressLabel: "Canceled",
+        });
+        return { status: "error", importedRows: null, summary: null };
+      }
+
       if (isPasswordError(error)) {
         localPreparseStartedRef.current.delete(itemId);
       }
@@ -5225,7 +5282,7 @@ export function ImportFilesModal({
     return { completed: false, summary: null };
   };
 
-  const processFile = async (itemId: string): Promise<ImportProcessResult> => {
+  const processFile = async (itemId: string, options?: { signal?: AbortSignal | null }): Promise<ImportProcessResult> => {
     const item = items.find((entry) => entry.id === itemId);
     if (!item) return { status: "error", importedRows: null, summary: null };
     const guessedIdentity = guessStatementIdentity(item.file.name);
@@ -5356,17 +5413,18 @@ export function ImportFilesModal({
             fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
             fileTotal: items.length,
             completedFiles: completedFileCount,
-          progress: IMPORT_PROGRESS.preparing + progress * ((IMPORT_PROGRESS.uploading - IMPORT_PROGRESS.preparing) / 100),
-          detail: "Clover is uploading the file",
-          summary: null,
-          errorMessage: null,
-        });
+            progress: IMPORT_PROGRESS.preparing + progress * ((IMPORT_PROGRESS.uploading - IMPORT_PROGRESS.preparing) / 100),
+            detail: "Clover is uploading the file",
+            summary: null,
+            errorMessage: null,
+          });
           updateItem(itemId, {
             progress: IMPORT_PROGRESS.preparing + progress * ((IMPORT_PROGRESS.uploading - IMPORT_PROGRESS.preparing) / 100),
             progressLabel: "Uploading the file",
             status: "importing",
           });
-        }
+        },
+        { signal: options?.signal ?? null }
       ).finally(() => {
         processResponseSettled = true;
       });
@@ -6943,6 +7001,68 @@ export function ImportFilesModal({
   const canResumeImport = (item: QueuedFile) =>
     Boolean(item.importFileId && (item.confirmationState === "staged" || isResumableImportErrorCode(item.errorCode)));
 
+  const handleToggleUploadPause = () => {
+    if (!busy || currentErrorItem) {
+      return;
+    }
+
+    setUploadPaused((current) => {
+      const next = !current;
+      uploadPausedRef.current = next;
+      setMessage(next ? "Upload paused. Clover will continue when you resume." : "Upload resumed.");
+      publishImportActivity({
+        workspaceId,
+        surface: importActivitySurfaceRef.current,
+        status: "active",
+        fileName: activeProgressItem?.file.name ?? null,
+        fileIndex: activeProgressItem ? items.findIndex((item) => item.id === activeProgressItem.id) + 1 : completedFileCount,
+        fileTotal: items.length,
+        completedFiles: completedFileCount,
+        progress: displayedOverallProgress,
+        detail: next ? "Upload paused. Clover will continue when you resume." : "Upload resumed.",
+        summary: null,
+        errorMessage: null,
+      });
+      return next;
+    });
+  };
+
+  const handleCancelUpload = () => {
+    if (!busy && !items.some((item) => item.status === "pending" || item.status === "parsing" || item.status === "importing")) {
+      return;
+    }
+
+    uploadCancelRequestedRef.current = true;
+    setUploadPaused(false);
+    uploadPausedRef.current = false;
+    activeUploadAbortControllerRef.current?.abort();
+    activeUploadAbortControllerRef.current = null;
+    if (visibilityHardStopTimerRef.current) {
+      window.clearTimeout(visibilityHardStopTimerRef.current);
+      visibilityHardStopTimerRef.current = null;
+    }
+    visibilityDeadlineRef.current = null;
+    const activeId = activeProgressItem?.id ?? null;
+    markQueuedUploadsCanceled(activeId);
+    setBusy(false);
+    setMessage("Upload canceled.");
+    publishImportActivity({
+      workspaceId,
+      surface: importActivitySurfaceRef.current,
+      status: "error",
+      fileName: activeProgressItem?.file.name ?? items.find((item) => item.status === "pending")?.file.name ?? null,
+      fileIndex: activeProgressItem ? items.findIndex((item) => item.id === activeProgressItem.id) + 1 : completedFileCount,
+      fileTotal: items.length,
+      completedFiles: completedFileCount,
+      progress: displayedOverallProgress,
+      detail: "Upload canceled.",
+      summary: null,
+      errorMessage: "Upload canceled.",
+      errorTitle: "Upload canceled",
+      errorNextSteps: null,
+    });
+  };
+
   useEffect(() => {
     if (!showCompactProgress) {
       setDisplayedOverallProgress(0);
@@ -7132,14 +7252,13 @@ export function ImportFilesModal({
   const handleStartImport = async () => {
     if (busy) return;
 
+    uploadCancelRequestedRef.current = false;
+    setUploadPaused(false);
+    uploadPausedRef.current = false;
     setBusy(true);
     setValidationNotice(null);
     setMessage("Clover is lining up your files...");
-    const hasNoisyVisibilityBank = items.some((item) => isNoisyVisibilityBank(item.file.name));
-    const visibilityTimeoutMs = Math.max(
-      getImportVisibilityTimeoutMs(Math.max(1, items.length)),
-      hasNoisyVisibilityBank ? IMPORT_VISIBILITY_NOISY_BANK_TIMEOUT_MS : 0
-    );
+    const visibilityTimeoutMs = getImportVisibilityTimeoutMs(Math.max(1, items.length));
     visibilityDeadlineRef.current = Date.now() + visibilityTimeoutMs;
     if (visibilityHardStopTimerRef.current) {
       window.clearTimeout(visibilityHardStopTimerRef.current);
@@ -7170,6 +7289,36 @@ export function ImportFilesModal({
     const itemsToProcess = items.filter(
       (item) => item.confirmationState !== "confirmed" && item.status !== "needs_password"
     );
+
+    const processItemsSequentially = async (queue: QueuedFile[]) => {
+      const results: Array<{ itemId: string; result: ImportProcessResult }> = [];
+
+      for (const item of queue) {
+        await waitForUploadResume();
+        if (uploadCancelRequestedRef.current) {
+          break;
+        }
+
+        const controller = new AbortController();
+        activeUploadAbortControllerRef.current = controller;
+        try {
+          results.push({
+            itemId: item.id,
+            result: await processFile(item.id, { signal: controller.signal }),
+          });
+        } finally {
+          if (activeUploadAbortControllerRef.current === controller) {
+            activeUploadAbortControllerRef.current = null;
+          }
+        }
+
+        if (uploadCancelRequestedRef.current) {
+          break;
+        }
+      }
+
+      return results;
+    };
     const hasBrowserParsableStatements = itemsToProcess.some((item) => {
       const mode = item.importMode ?? "statement";
       const lowerName = item.file.name.toLowerCase();
@@ -7189,13 +7338,8 @@ export function ImportFilesModal({
       }
 
       const preUploadVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(3_000, 1_200 + items.length * 450));
-      if (preUploadVisibilityReady) {
-        const backgroundProcessPromises = itemsToProcess.map(async (item) => ({
-          itemId: item.id,
-          result: await processFile(item.id),
-        }));
-
-        void Promise.all(backgroundProcessPromises).finally(() => {
+      if (preUploadVisibilityReady && !uploadPausedRef.current && !uploadCancelRequestedRef.current) {
+        void processItemsSequentially(itemsToProcess).finally(() => {
           router.refresh();
         });
         setBusy(false);
@@ -7208,14 +7352,11 @@ export function ImportFilesModal({
       }
     }
 
-    const processPromises = itemsToProcess.map(async (item) => ({
-      itemId: item.id,
-      result: await processFile(item.id),
-    }));
+    const processResultsPromise = processItemsSequentially(itemsToProcess);
     const localVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
 
-    if (localVisibilityReady && itemsToProcess.length > 0) {
-      void Promise.all(processPromises).finally(() => {
+    if (localVisibilityReady && itemsToProcess.length > 0 && !uploadPausedRef.current && !uploadCancelRequestedRef.current) {
+      void processResultsPromise.finally(() => {
         router.refresh();
       });
       setBusy(false);
@@ -7227,7 +7368,19 @@ export function ImportFilesModal({
       return;
     }
 
-    const processResults = await Promise.all(processPromises);
+    const processResults = await processResultsPromise;
+
+    if (uploadCancelRequestedRef.current) {
+      setBusy(false);
+      setUploadPaused(false);
+      uploadPausedRef.current = false;
+      visibilityDeadlineRef.current = null;
+      if (visibilityHardStopTimerRef.current) {
+        window.clearTimeout(visibilityHardStopTimerRef.current);
+        visibilityHardStopTimerRef.current = null;
+      }
+      return;
+    }
 
     const postProcessVisibilityDeadline = visibilityDeadlineRef.current;
     if (postProcessVisibilityDeadline && Date.now() >= postProcessVisibilityDeadline) {
@@ -7669,6 +7822,10 @@ export function ImportFilesModal({
         errorCode={currentErrorItem?.errorCode ?? null}
         errorTitle={currentErrorItem?.errorTitle ?? null}
         errorNextSteps={currentErrorItem?.errorNextSteps ?? null}
+        paused={uploadPaused}
+        canControl={busy && !currentErrorItem}
+        onPauseToggle={handleToggleUploadPause}
+        onCancel={handleCancelUpload}
         phaseLabel={
           activeProgressItem
             ? friendlyImportPhaseLabel(activeProgressItem.progressLabel, activeProgressItem.file.name, activeProgressItem.importMode)
