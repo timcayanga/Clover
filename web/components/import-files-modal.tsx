@@ -5119,6 +5119,47 @@ export function ImportFilesModal({
 
     try {
       importFileId = item.importFileId ?? crypto.randomUUID();
+      if (itemImportMode === "statement" && isLikelyLowQualityPnbStatementFile(item.file.name)) {
+        const nextCompletedFiles = Math.min(items.length, completedFileCount + 1);
+        updateItem(itemId, {
+          status: "error",
+          confirmationState: "staged",
+          error: `${item.file.name}: Clover could not finish reading the statement. Unable to parse readable transactions from this low-quality PNB scan.`,
+          errorCode: "I-104",
+          errorTitle: "File not readable",
+          errorNextSteps: [
+            "Upload the original PDF when available, or use a clearer image with the account details and transaction table visible.",
+            "Try importing the file by itself so Clover can focus on that statement.",
+            "If Clover still cannot read it, add the account or transactions manually.",
+          ],
+          importFileId,
+          importedRows: 0,
+          progress: 100,
+          progressLabel: "File not readable",
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "error",
+          importFileId,
+          fileName: item.file.name,
+          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: nextCompletedFiles,
+          progress: (nextCompletedFiles / Math.max(items.length, 1)) * 100,
+          detail: "File not readable",
+          summary: null,
+          errorCode: "I-104",
+          errorMessage: `${item.file.name}: Clover could not finish reading the statement. Unable to parse readable transactions from this low-quality PNB scan.`,
+          errorTitle: "File not readable",
+          errorNextSteps: [
+            "Upload the original PDF when available, or use a clearer image with the account details and transaction table visible.",
+            "Try importing the file by itself so Clover can focus on that statement.",
+            "If Clover still cannot read it, add the account or transactions manually.",
+          ],
+        });
+        return { status: "error", importedRows: null, summary: null };
+      }
 
       capturePostHogClientEvent("import_started", {
         file_type: fileTypeLabel(item.file),
