@@ -2122,24 +2122,38 @@ const readParsedRowInstitution = (row: Record<string, unknown>, fallback?: strin
   fallback ??
   null;
 
-const accountGroupKeyForParsedRow = (row: Record<string, unknown>, fallbackInstitution?: string | null) => {
-  const accountNumber = readParsedRowAccountNumber(row);
+const accountGroupKeyForParsedRow = (
+  row: Record<string, unknown>,
+  params?: {
+    fallbackInstitution?: string | null;
+    fallbackAccountNumber?: string | null;
+    fallbackAccountName?: string | null;
+  }
+) => {
+  const accountNumber = readParsedRowAccountNumber(row) ?? params?.fallbackAccountNumber ?? null;
   if (accountNumber) {
     return `number:${accountNumber}`;
   }
 
-  const accountName = readParsedRowAccountName(row);
+  const accountName = readParsedRowAccountName(row) ?? params?.fallbackAccountName ?? null;
   if (accountName) {
-    return `name:${readParsedRowInstitution(row, fallbackInstitution) ?? "unknown"}:${accountName}`;
+    return `name:${readParsedRowInstitution(row, params?.fallbackInstitution) ?? "unknown"}:${accountName}`;
   }
 
   return "__default__";
 };
 
-const groupParsedRowsByAccount = (rows: Array<Record<string, unknown>>, fallbackInstitution?: string | null) => {
+const groupParsedRowsByAccount = (
+  rows: Array<Record<string, unknown>>,
+  params?: {
+    fallbackInstitution?: string | null;
+    fallbackAccountNumber?: string | null;
+    fallbackAccountName?: string | null;
+  }
+) => {
   const grouped = new Map<string, Array<Record<string, unknown>>>();
   for (const row of rows) {
-    const key = accountGroupKeyForParsedRow(row, fallbackInstitution);
+    const key = accountGroupKeyForParsedRow(row, params);
     const group = grouped.get(key) ?? [];
     group.push(row);
     grouped.set(key, group);
@@ -2336,7 +2350,13 @@ const ensureParsedAccountGroupsMaterialized = async (params: {
   }
 
   const fallbackInstitution = typeof params.metadata?.institution === "string" ? params.metadata.institution : null;
-  const groups = groupParsedRowsByAccount(params.rows, fallbackInstitution).filter((group) => group.key !== "__default__");
+  const fallbackAccountNumber = typeof params.metadata?.accountNumber === "string" ? params.metadata.accountNumber : null;
+  const fallbackAccountName = typeof params.metadata?.accountName === "string" ? params.metadata.accountName : null;
+  const groups = groupParsedRowsByAccount(params.rows, {
+    fallbackInstitution,
+    fallbackAccountNumber,
+    fallbackAccountName,
+  }).filter((group) => group.key !== "__default__");
   if (groups.length === 0) {
     return [];
   }
@@ -4113,7 +4133,7 @@ export const processImportFileText = async (
   const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"]);
   const isLikelyLowQualityUnionBankStatement =
     metadataForParse.institution === "UnionBank" &&
-    /\b(?:word|excel|template|business_statement)\b/i.test(String(importFile.fileName ?? ""));
+    /(?:word|excel|template|business_statement)/i.test(String(importFile.fileName ?? ""));
   const hasStrongChinaBankDeterministicParse =
     importMode === "statement" &&
     !imageImport &&
