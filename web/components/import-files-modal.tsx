@@ -479,6 +479,7 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
   const rowsImported = summaries.reduce((total, summary) => total + Number(summary.rowsImported ?? 0), 0);
   const incomeTotal = summaries.reduce((total, summary) => total + Number(summary.incomeTotal ?? 0), 0);
   const expenseTotal = summaries.reduce((total, summary) => total + Number(summary.expenseTotal ?? 0), 0);
+  const accountSummaries = dedupeAccountSummaries(summaries.flatMap((summary) => summary.accountSummaries ?? []));
 
   return {
     fileName: `${summaries.length} files`,
@@ -489,7 +490,7 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
     accountNumber: null,
     accountType: sameAccountType ? first.accountType : null,
     balance: null,
-    accountSummaries: summaries.flatMap((summary) => summary.accountSummaries ?? []),
+    accountSummaries,
     optimistic: summaries.some((summary) => summary.optimistic),
     optimisticAccountId: null,
     incomeTotal,
@@ -531,7 +532,7 @@ const normalizeServerAccountSummaries = (value: unknown): NonNullable<UploadInsi
     return [];
   }
 
-  return value
+  const summaries = value
     .map((entry) => {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
         return null;
@@ -557,6 +558,88 @@ const normalizeServerAccountSummaries = (value: unknown): NonNullable<UploadInsi
       };
     })
     .filter((entry): entry is NonNullable<UploadInsightsSummary["accountSummaries"]>[number] => entry !== null);
+
+  return dedupeAccountSummaries(summaries);
+};
+
+type UploadAccountSummary = NonNullable<UploadInsightsSummary["accountSummaries"]>[number];
+
+const getAccountSummaryIdentityKey = (summary: UploadAccountSummary) => {
+  const accountId = typeof summary.accountId === "string" && summary.accountId.trim() ? summary.accountId.trim() : null;
+  if (accountId) {
+    return `account:${accountId}`;
+  }
+
+  const accountNumber = typeof summary.accountNumber === "string" ? summary.accountNumber.replace(/\D/g, "").slice(-4) : "";
+  const accountName = typeof summary.accountName === "string" ? summary.accountName.trim().toLowerCase() : "";
+  const institution = typeof summary.institution === "string" ? summary.institution.trim().toLowerCase() : "";
+  const accountType = typeof summary.accountType === "string" ? summary.accountType.trim().toLowerCase() : "";
+
+  if (accountNumber || accountName || institution) {
+    return `summary:${institution}:${accountNumber}:${accountName}:${accountType}`;
+  }
+
+  return null;
+};
+
+const normalizeSummaryBalanceValue = (value: string | null | undefined) => {
+  const normalized = toBalanceString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const numeric = Number(normalized.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const mergeAccountSummaries = (existing: UploadAccountSummary, incoming: UploadAccountSummary): UploadAccountSummary => {
+  const existingBalanceValue = normalizeSummaryBalanceValue(existing.balance);
+  const incomingBalanceValue = normalizeSummaryBalanceValue(incoming.balance);
+  const existingIsMeaningful = existingBalanceValue !== null && existingBalanceValue !== 0;
+  const incomingIsMeaningful = incomingBalanceValue !== null && incomingBalanceValue !== 0;
+  const existingRows = Number(existing.rowsImported ?? 0);
+  const incomingRows = Number(incoming.rowsImported ?? 0);
+
+  const preferred =
+    incomingIsMeaningful && !existingIsMeaningful
+      ? incoming
+      : existingIsMeaningful && !incomingIsMeaningful
+        ? existing
+        : incomingRows > existingRows
+          ? incoming
+          : existing;
+
+  return {
+    ...preferred,
+    balance: pickStableBalance(existing.balance, incoming.balance),
+    rowsImported: Math.max(existingRows, incomingRows),
+  };
+};
+
+const dedupeAccountSummaries = (summaries: UploadAccountSummary[]) => {
+  const byKey = new Map<string, UploadAccountSummary>();
+  const keyOrder: string[] = [];
+
+  for (const summary of summaries) {
+    const key = getAccountSummaryIdentityKey(summary);
+    if (!key) {
+      const fallbackKey = `anon:${keyOrder.length}`;
+      keyOrder.push(fallbackKey);
+      byKey.set(fallbackKey, summary);
+      continue;
+    }
+
+    const existing = byKey.get(key);
+    if (!existing) {
+      keyOrder.push(key);
+      byKey.set(key, summary);
+      continue;
+    }
+
+    byKey.set(key, mergeAccountSummaries(existing, summary));
+  }
+
+  return keyOrder.map((key) => byKey.get(key)).filter((summary): summary is UploadAccountSummary => Boolean(summary));
 };
 
 const pickStableBalance = (...values: Array<unknown>) => {

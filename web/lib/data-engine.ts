@@ -530,16 +530,28 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Cash & ATM";
   }
 
-  if (/office\s*365|google\s+one/.test(lower) || /office365|googleone/.test(compact)) {
+  if (/office\s*365/.test(lower) || /office365/.test(compact)) {
     return "Business";
+  }
+
+  if (/google\s+one/.test(lower) || /googleone/.test(compact)) {
+    return "Subscriptions";
   }
 
   if (/shopee|puregold|price\s+club/.test(lower) || /shopee|puregold|priceclub/.test(compact)) {
     return "Shopping";
   }
 
-  if (/discord\s+nitro|mlbb\s+top\s+up|mlbbtopup|foodpanda\s+ph|foodpanda/.test(lower) || /discordnitro|mlbbtopup|foodpandaph/.test(compact)) {
-    return /foodpanda/.test(lower) || /foodpandaph/.test(compact) ? "Food & Dining" : "Shopping";
+  if (/discord\s+nitro/.test(lower) || /discordnitro/.test(compact)) {
+    return "Subscriptions";
+  }
+
+  if (/mlbb\s+top\s+up|mobile\s+legends|mlbbtopup/.test(lower) || /mlbbtopup|mobilelegends/.test(compact)) {
+    return "Entertainment";
+  }
+
+  if (/foodpanda\s+ph|foodpanda/.test(lower) || /foodpandaph/.test(compact)) {
+    return "Food & Dining";
   }
 
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) {
@@ -935,12 +947,17 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/service\s*charge|servicecharge|service\s*fee|bank\s*charge|bankcharge|svchg|finance\s+charges?|late\s+payment\s+fee|annual\s+fee/.test(lower)) return "Financial";
   if (/tax withheld|withheld tax|taxwithheld|withheldtax/.test(lower)) return "Financial";
   if (/gcash\s+cash\s+in|gcashcashin/.test(lower)) return "Transfers";
+  if (/discord\s+nitro|google\s+one/.test(lower) || /discordnitro|googleone/.test(compact)) return "Subscriptions";
+  if (/mlbb\s+top\s+up|mobile\s+legends|mlbbtopup/.test(lower) || /mlbbtopup|mobilelegends/.test(compact)) return "Entertainment";
   if (/interest\s+earned|interestearned|salary|payroll|income|deposit|cash\s*in\b|cashin\b|cash\/?check\s+deposit|received|credit memo/.test(lower)) return "Income";
   if (/interbankservicecharge|atmwithdrawalacquirerfee|financecharge|financecharges|latepaymentfee|annualfee/.test(compact)) return "Financial";
   if (/incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|systemdebit|systemcredit|miscellaneousdebit|investmentsweep/.test(compact)) return "Transfers";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
+  if (/discord\s+nitro/.test(lower) || /discordnitro/.test(compact)) return "Subscriptions";
+  if (/google\s+one/.test(lower) || /googleone/.test(compact)) return "Subscriptions";
+  if (/mlbb\s+top\s+up|mobile\s+legends|mlbbtopup/.test(lower) || /mlbbtopup|mobilelegends/.test(compact)) return "Entertainment";
   if (/bill|utilities|electric|water|internet|phone|subscription|openai|netflix|spotify/.test(lower)) return "Bills & Utilities";
   if (/travel|airbnb|hotel|airline|flight|tour|holiday/.test(lower)) return "Travel & Lifestyle";
   if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox/.test(lower))

@@ -28,8 +28,8 @@ const GENERIC_NORMALIZATION_GUIDANCE = [
   "Generic normalization guidance:",
   "- Keep raw_name separate from normalized_name and preserve the original statement text when it carries useful detail.",
   "- Normalize only when the merchant or code is clearly the same canonical entity.",
-  "- Use these canonical categories when they fit the row: Income, Transfers, Food & Dining, Transport, Housing, Bills & Utilities, Travel & Lifestyle, Entertainment, Shopping, Health & Wellness, Education, Gifts & Donations, Business, Financial, Cash & ATM, Opening Balance, Other.",
-  "- Common merchant/code normalizations include ATM WDL/ATMWD/W/D FR SAV/ET WDL/Cash Withdrawal/ATM Cash Withdrawal -> ATM Withdrawal; IBFT/Instapay/InstaPay/Interbank Fund Transfer/PESONet -> Bank Transfer; Cash Payment/Payment - Thank You/Card Payment -> Credit Card Payment; Service Charge/Finance Charge -> Service Charge or Finance Charge; Credit Interest -> Interest Earned.",
+  "- Use these canonical categories when they fit the row: Income, Transfers, Food & Dining, Transport, Housing, Bills & Utilities, Travel & Lifestyle, Entertainment, Shopping, Subscriptions, Health & Wellness, Education, Gifts & Donations, Business, Financial, Cash & ATM, Opening Balance, Other.",
+  "- Common merchant/code normalizations include ATM WDL/ATMWD/W/D FR SAV/ET WDL/Cash Withdrawal/ATM Cash Withdrawal -> ATM Withdrawal; IBFT/Instapay/InstaPay/Interbank Fund Transfer/PESONet -> Bank Transfer; Cash Payment/Payment - Thank You/Card Payment -> Credit Card Payment; Service Charge/Finance Charge -> Service Charge or Finance Charge; Credit Interest -> Interest Earned; Discord Nitro/Google One -> Subscriptions; MLBB Top Up -> Entertainment.",
   "- If a row is real but the category is ambiguous, prefer Other with lower confidence rather than guessing.",
 ].join(" ");
 
@@ -139,6 +139,7 @@ const ALLOWED_CATEGORIES = [
   "Housing",
   "Other",
   "Shopping",
+  "Subscriptions",
   "Transport",
   "Travel & Lifestyle",
   "Opening Balance",

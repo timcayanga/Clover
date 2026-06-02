@@ -97,6 +97,8 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/gcash\s+cash\s+in|gcashcashin/.test(lower)) return "Transfers";
   if (/salary|payroll|income|deposit|cash\s*(?:in|deposit)|credit memo/.test(lower)) return "Income";
   if (/refund|reversal|cashback|cash back|reward|rebate|interest/.test(lower)) return "Income";
+  if (/discord\s+nitro|google\s+one/.test(lower) || /discordnitro|googleone/.test(compact)) return "Subscriptions";
+  if (/mlbb\s+top\s+up|mobile\s+legends|mlbbtopup/.test(lower) || /mlbbtopup|mobilelegends/.test(compact)) return "Entertainment";
   if (/epsaten/.test(lower)) return type === "expense" ? "Cash & ATM" : "Income";
   if (/el\/?espay/.test(lower)) return type === "expense" || type === "transfer" ? "Transfers" : "Income";
   if (/payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";

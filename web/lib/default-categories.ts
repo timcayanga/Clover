@@ -14,6 +14,7 @@ export const DEFAULT_CATEGORY_ROWS = [
   { name: "Income", type: "income" },
   { name: "Other", type: "expense" },
   { name: "Shopping", type: "expense" },
+  { name: "Subscriptions", type: "expense" },
   { name: "Transfers", type: "transfer" },
   { name: "Transport", type: "expense" },
   { name: "Travel & Lifestyle", type: "expense" },
