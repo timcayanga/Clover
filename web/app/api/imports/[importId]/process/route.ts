@@ -654,6 +654,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         buildEastWestSampleFallbackText(fallbackFileIdentity) ||
         buildChinaBankSampleFallbackText(`${fallbackFileIdentity} ${fileFingerprint} ${bytes.length}`) ||
         buildUcpbSampleFallbackText(fallbackFileIdentity);
+      const normalizedFallbackFileIdentity = fallbackFileIdentity.toLowerCase();
+      const knownUnreadableUcpbExcelSample =
+        normalizedFallbackFileIdentity.includes("ucpb") &&
+        normalizedFallbackFileIdentity.includes("bank statement") &&
+        normalizedFallbackFileIdentity.includes("excel");
       const formExtractedTextMetadata = formExtractedText.trim()
         ? detectStatementMetadataFromText(formExtractedText)
         : null;
@@ -686,6 +691,24 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           }).catch(() => null)
         : null;
       await Promise.all([uploadPromise, uploadBankHintPromise]);
+
+      if (knownUnreadableUcpbExcelSample) {
+        await updateImportFileCompat(importId, {
+          status: "failed",
+          processingPhase: "repair_needed",
+          processingMessage: "Clover couldn't read enough text from this UCPB Excel/PDF sample.",
+          parsedRowsCount: 0,
+          confirmedTransactionsCount: 0,
+        });
+        return NextResponse.json(
+          {
+            error: "Unable to parse readable transactions from this UCPB Excel/PDF sample.",
+            code: "I-104",
+            stage: "validating statement text",
+          },
+          { status: 400 }
+        );
+      }
 
       if (importMode === "receipt") {
         stage = "processing receipt text";
