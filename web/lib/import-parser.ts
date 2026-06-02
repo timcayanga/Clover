@@ -979,18 +979,37 @@ const normalizeBpiText = (text: string) =>
 const compactWhitespace = (value: string) => normalizeWhitespace(value).replace(/\s+/g, "");
 
 const MAX_DECIMAL_AMOUNT = 9_999_999_999_999_999.99;
-const genericMoneyTokenPatternSource = "-?(?:PHP|P|₱)?\\s*(?:[0-9][0-9.]*\\.\\d{2}|[0-9][0-9,]*\\.\\d{2})";
+const genericCurrencyTokenPatternSource =
+  "(?:PHP|USD|EUR|GBP|SGD|JPY|HKD|THB|AUD|CAD|NZD|CHF|KRW|CNY|RMB|TWD|MYR|IDR|INR|BTC|ETH|USDT|USDC|SOL|XRP|ADA|BNB|DOGE|US\\$|S\\$|HK\\$|NT\\$|A\\$|C\\$|NZ\\$|₱|\\$|€|£|¥|₹|฿|₩|P)";
+const genericMoneyTokenPatternSource = `-?\\s*(?:${genericCurrencyTokenPatternSource})?\\s*(?:[0-9][0-9.,\\s]*[.,]\\d{2}|[0-9][0-9,]*\\.\\d{2})(?!\\d)`;
 const createGenericMoneyTokenPattern = () => new RegExp(genericMoneyTokenPatternSource, "gi");
 
 const parseMoney = (value?: string | null) => {
   if (!value) return null;
-  let cleaned = String(value).replace(/[^0-9,.-]/g, "");
+  let cleaned = String(value).replace(/\u00a0/g, " ").replace(/[^0-9,.\-\s]/g, "").replace(/\s+/g, "");
   if (!cleaned || cleaned === "-" || cleaned === "." || cleaned === "-.") {
     return null;
   }
 
   if (cleaned.includes(",") && cleaned.includes(".")) {
-    cleaned = cleaned.replace(/,/g, "");
+    const lastComma = cleaned.lastIndexOf(",");
+    const lastDot = cleaned.lastIndexOf(".");
+    if (lastComma > lastDot && /^\d{1,3}(?:\.\d{3})+,\d{2}$/.test(cleaned.replace(/^-/, ""))) {
+      cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+    } else if (lastDot > lastComma) {
+      cleaned = cleaned.replace(/,/g, "");
+    } else {
+      cleaned = cleaned.replace(/,/g, "");
+    }
+  } else if (cleaned.includes(",") && !cleaned.includes(".")) {
+    const unsigned = cleaned.replace(/^-/, "");
+    if (/^\d{1,3}(?:,\d{3})+$/.test(unsigned)) {
+      cleaned = cleaned.replace(/,/g, "");
+    } else if (/^\d+,\d{2}$/.test(unsigned)) {
+      cleaned = cleaned.replace(",", ".");
+    } else {
+      cleaned = cleaned.replace(/,/g, "");
+    }
   }
 
   if ((cleaned.match(/\./g) ?? []).length > 1) {
@@ -1166,14 +1185,25 @@ const detectStatementDatesFromText = (text: string) => {
   };
 
   const exactIsoRange =
-    text.match(/(?:^|\n)\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})(?=\s|$)/im) ??
-    text.match(/(?:STATEMENT\s*PERIOD|PERIOD\s*COVER(?:ED|AGE))\s*[:\-]?\s*FROM\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})/i) ??
-    text.match(/FOR\s+THE\s+PERIOD\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})/i) ??
-    text.match(/BAL\s+AS\s+OF\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i);
+    text.match(/(?:^|\n)\s*(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})(?=\s|$)/im) ??
+    text.match(/(?:STATEMENT\s*PERIOD|PERIOD\s*COVER(?:ED|AGE))\s*[:\-]?\s*FROM\s*(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})/i) ??
+    text.match(/FOR\s+THE\s+PERIOD\s*(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})/i) ??
+    text.match(/BAL\s+AS\s+OF\s+(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/i);
   if (exactIsoRange) {
     return {
       startDate: parseLooseDate(exactIsoRange[1]),
       endDate: parseLooseDate(exactIsoRange[2]),
+    };
+  }
+
+  const exactLocalNumericRange =
+    text.match(/(?:^|\n)\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})(?=\s|$)/im) ??
+    text.match(/(?:STATEMENT\s*PERIOD|PERIOD\s*COVER(?:ED|AGE))\s*[:\-]?\s*(?:FROM\s*)?(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/i) ??
+    text.match(/FOR\s+THE\s+PERIOD\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/i);
+  if (exactLocalNumericRange) {
+    return {
+      startDate: parseLooseDate(exactLocalNumericRange[1]),
+      endDate: parseLooseDate(exactLocalNumericRange[2]),
     };
   }
 
@@ -1230,6 +1260,39 @@ const extractStatementDateFromText = (text: string) => {
   return parseDateValue(statementMatch[1]);
 };
 
+const extractGenericLabeledBalance = (text: string, labelPattern: RegExp) => {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    labelPattern.lastIndex = 0;
+    if (!labelPattern.test(line)) {
+      continue;
+    }
+
+    const ownLineMatches = Array.from(line.matchAll(createGenericMoneyTokenPattern()));
+    const ownLineParsed = ownLineMatches
+      .map((match) => parseMoney(match[0] ?? null))
+      .filter((value): value is number => value !== null);
+    if (ownLineParsed.length > 0) {
+      return ownLineParsed.at(-1) ?? null;
+    }
+
+    const nextLineMatches = Array.from((lines[index + 1] ?? "").matchAll(createGenericMoneyTokenPattern()));
+    const nextLineParsed = nextLineMatches
+      .map((match) => parseMoney(match[0] ?? null))
+      .filter((value): value is number => value !== null);
+    if (nextLineParsed.length > 0) {
+      return nextLineParsed.at(-1) ?? null;
+    }
+  }
+
+  return null;
+};
+
 const detectBalanceFromText = (text: string) => {
   const compact = restoreGenericCompactLabels(normalizeWhitespace(text).replace(/\s+/g, ""));
   const dense = normalizeWhitespace(text).replace(/\s+/g, "").toUpperCase();
@@ -1248,6 +1311,7 @@ const detectBalanceFromText = (text: string) => {
     );
   const openingBalance =
     creditCardSummaryOpening ??
+    extractGenericLabeledBalance(text, /(?:beginning|opening|starting|previous)(?:\s+statement)?\s+balance/i) ??
     parseMoney(text.match(/(?:^|\n)\s*SAVINGS\s+([0-9][0-9,]*\.\d{2})\s+[0-9][0-9,]*\.\d{2}\s+[0-9][0-9,]*\.\d{2}\s+[0-9][0-9,]*\.\d{2}(?=\s|$)/im)?.[1] ?? null) ??
     parseMoney(
       text.match(
@@ -1263,6 +1327,7 @@ const detectBalanceFromText = (text: string) => {
     null;
   const endingBalance =
     fragmentedTransferClusterEndingBalance ??
+    extractGenericLabeledBalance(text, /(?:ending|closing|current|available|balance\s+this\s+statement)\s+balance|balance\s+this\s+statement/i) ??
     parseMoney(
       text.match(
         /ACCOUNT\s+STARTING\s+BALANCE[\s\S]{0,300}?(?:^|\n)\s*SAVINGS\s+[0-9][0-9,]*\.\d{2}\s+[0-9][0-9,]*\.\d{2}\s+[0-9][0-9,]*\.\d{2}\s+([0-9][0-9,]*\.\d{2})/im
@@ -5122,11 +5187,23 @@ const inferGenericStatementAmountMode = (lines: string[], firstDateIndex: number
   if (/debit\s+credit\s+(?:ending\s+)?balance/.test(headerText)) {
     return "debit-credit-balance" as GenericStatementAmountMode;
   }
+  if (/(?:money\s*out|paid\s*out|withdrawals?|debits?)\s+(?:money\s*in|paid\s*in|deposits?|credits?)\s+(?:running\s+|closing\s+|ending\s+)?balance/.test(headerText)) {
+    return "debit-credit-balance" as GenericStatementAmountMode;
+  }
+  if (/(?:money\s*in|paid\s*in|deposits?|credits?)\s+(?:money\s*out|paid\s*out|withdrawals?|debits?)\s+(?:running\s+|closing\s+|ending\s+)?balance/.test(headerText)) {
+    return "credit-debit-balance" as GenericStatementAmountMode;
+  }
   if (/(?:credit|deposits?)\s+(?:debit|withdrawals?)\s+(?:ending\s+)?balance/.test(headerText)) {
     return "credit-debit-balance" as GenericStatementAmountMode;
   }
   if (/(?:debit|withdrawals?)\s+(?:credit|deposits?)\s+(?:ending\s+)?balance/.test(headerText)) {
     return "debit-credit-balance" as GenericStatementAmountMode;
+  }
+  if (/(?:deposit|credit|paid\s*in|money\s*in)\s+(?:running\s+|closing\s+|ending\s+)?balance/.test(headerText)) {
+    return "credit-balance" as GenericStatementAmountMode;
+  }
+  if (/(?:withdrawal|debit|paid\s*out|money\s*out)\s+(?:running\s+|closing\s+|ending\s+)?balance/.test(headerText)) {
+    return "debit-balance" as GenericStatementAmountMode;
   }
   if (/(?:credit|deposits?)\s+balance/.test(headerText)) {
     return "credit-balance" as GenericStatementAmountMode;
@@ -9901,7 +9978,7 @@ const parseGoTymeImportText = (text: string, context: ImportParseContext = {}) =
 };
 
 const genericStatementDateStartPattern = new RegExp(
-  `^(?:-?\\s*\\d{2}[-/]\\d{2}(?:[-/]\\d{2,4})?|\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\b`,
+  `^(?:-?\\s*\\d{2}[-/.]\\d{2}(?:[-/.]\\d{2,4})?|\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{2}[-/.]\\d{2}[-/.]\\d{4}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\b`,
   "i"
 );
 
@@ -11264,7 +11341,7 @@ const parseGenericEastWestTemplateStatement = (
 const parseGenericStatementDateText = (value: string, yearHint?: number | null) => {
   const normalized = normalizeWhitespace(value).replace(/,\s*/g, " ").trim();
   if (yearHint) {
-    const monthDayNoYear = normalized.match(/^(\d{1,2})[-/](\d{1,2})$/);
+    const monthDayNoYear = normalized.match(/^(\d{1,2})[-/.](\d{1,2})$/);
     if (monthDayNoYear) {
       return parseDateValue(`${monthDayNoYear[1]}/${monthDayNoYear[2]}/${yearHint}`);
     }
@@ -11949,7 +12026,7 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
     .map((line) => {
       const match = line.match(
         new RegExp(
-          `^(?:-\\s*)?(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\b`,
+          `^(?:-\\s*)?(?<date>(?:\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{2}[-/.]\\d{2}[-/.]\\d{4}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{2}[-/.]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\b`,
           "i"
         )
       );
@@ -11975,7 +12052,7 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
       const parsedDate = (() => {
         const match = line.match(
           new RegExp(
-            `^(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{2,4}|\\d{1,2}[-/]\\d{1,2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\b`,
+            `^(?<date>(?:\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{2}[-/.]\\d{2}[-/.]\\d{2,4}|\\d{1,2}[-/.]\\d{1,2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\b`,
             "i"
           )
         );
@@ -12478,13 +12555,36 @@ const classifyGenericStatementTransaction = (description: string, credit: number
   const lower = description.toLowerCase();
   const compact = compactWhitespace(description).toLowerCase();
   const codeOnlyReference = /^\d{2}\s+[a-z0-9/_-]{6,}$/i.test(description);
+  const inferDirectionalType = (): TransactionType => {
+    if ((credit ?? 0) > 0 && (debit ?? 0) === 0) {
+      return "income";
+    }
+
+    if ((debit ?? 0) > 0 && (credit ?? 0) === 0) {
+      return "expense";
+    }
+
+    if ((explicitAmount ?? 0) < 0) {
+      return "expense";
+    }
+
+    if (/\b(?:outgoing|sent|send|paid\s*out|money\s*out|withdrawal|debit|dr\b|to\s+account|transfer\s+out)\b/i.test(description)) {
+      return "expense";
+    }
+
+    if (/\b(?:incoming|received|receive|paid\s*in|money\s*in|deposit|credit|cr\b|from\s+account|transfer\s+in)\b/i.test(description)) {
+      return "income";
+    }
+
+    return "expense";
+  };
 
   if (isStandaloneCashPaymentDescription(description)) {
     return { type: "expense" as TransactionType, categoryName: "Shopping" };
   }
 
   if (isStatementPaymentSettlementDescription(description)) {
-    return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+    return { type: inferDirectionalType(), categoryName: "Transfers" };
   }
 
   if (/interest|intrest|salary|payroll|refund|credit memo|cash in|received|recived|cash deposit|funds deposited|deposit\b/.test(lower)) {
@@ -12508,7 +12608,7 @@ const classifyGenericStatementTransaction = (description: string, credit: number
   }
 
   if (/^sent gcash to\b|^deposit to gsave\b|^withdraw from gsave\b/.test(lower)) {
-    return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+    return { type: inferDirectionalType(), categoryName: "Transfers" };
   }
 
   if (/^payment to\b/.test(lower)) {
@@ -12533,7 +12633,7 @@ const classifyGenericStatementTransaction = (description: string, credit: number
 
   if (/pob\s+ibft|ibft\b/.test(lower) || compact.includes("pobibft")) {
     return {
-      type: (explicitAmount ?? 0) < 0 ? ("expense" as TransactionType) : ("transfer" as TransactionType),
+      type: inferDirectionalType(),
       categoryName: "Transfers",
     };
   }
@@ -12547,7 +12647,7 @@ const classifyGenericStatementTransaction = (description: string, credit: number
   }
 
   if (/transfer|instapay|pesonet/.test(lower)) {
-    return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+    return { type: inferDirectionalType(), categoryName: "Transfers" };
   }
 
   if ((credit ?? 0) > 0 && (debit ?? 0) === 0) {
@@ -12768,7 +12868,7 @@ const splitGenericOverflowBlock = (
   const rowText = normalizeWhitespace(block.join(" ")).replace(/\u00a0/g, " ");
   const dateMatch = rowText.match(
     new RegExp(
-      `^(?:-\\s*)?(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))(?:\\s+(?<timeText>\\d{1,2}:\\d{2}(?::\\d{2})?\\s*(?:AM|PM)?))?\\s+(?<body>.+)$`,
+      `^(?:-\\s*)?(?<date>(?:\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{2}[-/.]\\d{2}[-/.]\\d{4}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{2}[-/.]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))(?:\\s+(?<timeText>\\d{1,2}:\\d{2}(?::\\d{2})?\\s*(?:AM|PM)?))?\\s+(?<body>.+)$`,
       "i"
     )
   );
@@ -12777,7 +12877,7 @@ const splitGenericOverflowBlock = (
   }
 
   const bodyWithoutPostedDate = dateMatch.groups.body.replace(
-    new RegExp(`^(?:${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{1,2}[-/]\\d{1,2}|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\s+`, "i"),
+    new RegExp(`^(?:${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{1,2}[-/.]\\d{1,2}|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\s+`, "i"),
     ""
   );
   const bodyWithoutTimePrefix = bodyWithoutPostedDate.replace(/^\d{3,6}\s+/, "").trim();
@@ -12878,7 +12978,7 @@ const parseGenericStatementTransactionBlock = (
     /^date\s+(?:and\s+time|details?|description|transaction)/i.test(rowText) ||
     /^posted\s+date/i.test(rowText) ||
     /^running\s+balance$/i.test(rowText) ||
-    /^\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+to\s+\d{4}[-/]\d{1,2}[-/]\d{1,2}\b/i.test(rowText) ||
+    /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\s+to\s+\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\b/i.test(rowText) ||
     isGenericStatementBoilerplateLine(rowText)
   ) {
     return null;
@@ -12886,7 +12986,7 @@ const parseGenericStatementTransactionBlock = (
 
   const dateMatch = rowText.match(
     new RegExp(
-      `^(?:-\\s*)?(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\s+(?<body>.+)$`,
+      `^(?:-\\s*)?(?<date>(?:\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{2}[-/.]\\d{2}[-/.]\\d{4}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{2}[-/.]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\s+(?<body>.+)$`,
       "i"
     )
   );
@@ -12904,14 +13004,14 @@ const parseGenericStatementTransactionBlock = (
     normalizeWhitespace(
       rowText.match(
         new RegExp(
-          `^(?:-\\s*)?(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\s+(\\d{1,2}:\\d{2}(?::\\d{2})?\\s*(?:AM|PM)?)\\b`,
+          `^(?:-\\s*)?(?:\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{2}[-/.]\\d{2}[-/.]\\d{4}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{2}[-/.]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\s+(\\d{1,2}:\\d{2}(?::\\d{2})?\\s*(?:AM|PM)?)\\b`,
           "i"
         )
       )?.[1] ?? ""
     );
 
   const bodyWithoutPostedDate = dateMatch.groups.body.replace(
-    new RegExp(`^(?:${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\s+`, "i"),
+    new RegExp(`^(?:${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\s+`, "i"),
     ""
   );
   const bodyWithoutTimePrefix = bodyWithoutPostedDate
@@ -13125,7 +13225,7 @@ const parseGenericStatementTransactionBlock = (
   let description = normalizeWhitespace(bodyWithoutTimePrefix.slice(0, descriptionEnd));
   description = description
     .replace(/\b(?:account|acct)\s+no\.?\s*[•.\s\d-]+/gi, "Account")
-    .replace(/^\d{1,2}[-/]\d{1,2}\s+/, "")
+    .replace(/^\d{1,2}[-/.]\d{1,2}\s+/, "")
     .replace(/\s+[0-9][0-9,]*\.\d{2}(?:[0-9,]*\.\d{2})+$/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
@@ -14237,7 +14337,7 @@ const parseGenericCreditCardText = (
     ? new Date(metadata.endDate).getUTCFullYear()
     : new Date().getUTCFullYear();
   const genericCardDatePattern =
-    `(?:${monthNamePattern}\\s+\\d{1,2}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{4}[-/]\\d{1,2}[-/]\\d{1,2})`;
+    `(?:${monthNamePattern}\\s+\\d{1,2}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2})`;
   const rowPattern = new RegExp(
     `^(?<date>${genericCardDatePattern})\\s+(?<posted>${genericCardDatePattern})\\s+(?<description>.+?)\\s*(?<amount>(?:-\\s*)?(?:PHP|P|₱)?\\s*[0-9][0-9,.-]*\\.\\d{2})$`,
     "i"
@@ -14452,7 +14552,7 @@ export const parseGenericBankStatementText = (
     const nextDateOnlyMatch =
       next?.match(
         new RegExp(
-          `^(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))$`,
+          `^(?<date>(?:\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{2}[-/.]\\d{2}[-/.]\\d{4}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{2}[-/.]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))$`,
           "i"
         )
       ) ?? null;
@@ -14487,7 +14587,7 @@ export const parseGenericBankStatementText = (
     const nextDateAndMoneyOnlyMatch =
       normalizedNextForCarry?.match(
         new RegExp(
-          `^(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\s+(?<body>(?:${genericMoneyTokenPatternSource}(?:\\s+${genericMoneyTokenPatternSource})*))$`,
+          `^(?<date>(?:\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{2}[-/.]\\d{2}[-/.]\\d{4}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{2}[-/.]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\s+(?<body>(?:${genericMoneyTokenPatternSource}(?:\\s+${genericMoneyTokenPatternSource})*))$`,
           "i"
         )
       ) ?? null;
@@ -14658,7 +14758,7 @@ export const parseGenericBankStatementText = (
     const nextDateAndMoneyOnlyMatch =
       normalizedNextFirstLine?.match(
         new RegExp(
-          `^(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\s+(?<body>(?:${genericMoneyTokenPatternSource}(?:\\s+${genericMoneyTokenPatternSource})*))$`,
+          `^(?<date>(?:\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{2}[-/.]\\d{2}[-/.]\\d{4}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{2}[-/.]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\s+(?<body>(?:${genericMoneyTokenPatternSource}(?:\\s+${genericMoneyTokenPatternSource})*))$`,
           "i"
         )
       ) ?? null;
@@ -14802,16 +14902,27 @@ export const parseGenericBankStatementText = (
     effectiveMetadata.endingBalance ??
     (typeof lastRawPayload?.balance === "number" ? lastRawPayload.balance : null) ??
     getTrailingBalanceFromParsedRows(normalizedRows);
-  const derivedOpeningBalance =
-    effectiveMetadata.openingBalance ??
-    (typeof firstRawPayload?.previousBalance === "number" ? firstRawPayload.previousBalance : null) ??
-    (typeof firstRowBalance === "number" && typeof firstRowAmount === "number"
+  const rowImpliedOpeningBalance =
+    typeof firstRowBalance === "number" && typeof firstRowAmount === "number"
       ? firstRow.type === "income"
         ? firstRowBalance - firstRowAmount
         : firstRow.type === "transfer" && /deposit|credit|cash in|received|branch over-the-counter/i.test(firstRow.description ?? "")
           ? firstRowBalance - firstRowAmount
           : firstRowBalance + firstRowAmount
-      : null);
+      : null;
+  const shouldPreferRowImpliedOpeningBalance =
+    effectiveMetadata.openingBalance !== null &&
+    rowImpliedOpeningBalance !== null &&
+    derivedEndingBalance !== null &&
+    approxMoney(effectiveMetadata.openingBalance, derivedEndingBalance) &&
+    !approxMoney(effectiveMetadata.openingBalance, rowImpliedOpeningBalance) &&
+    normalizedRows.length >= 2;
+  const derivedOpeningBalance =
+    shouldPreferRowImpliedOpeningBalance
+      ? rowImpliedOpeningBalance
+      : effectiveMetadata.openingBalance ??
+    (typeof firstRawPayload?.previousBalance === "number" ? firstRawPayload.previousBalance : null) ??
+    rowImpliedOpeningBalance;
 
   return {
     metadata: {
@@ -15473,10 +15584,18 @@ const parseDelimitedText = (text: string, delimiter: string, institution?: strin
 };
 
 const inferType = (record: Record<string, string>): TransactionType => {
-  const normalized = `${record.type ?? ""} ${record.category ?? ""} ${record.merchant ?? ""}`.toLowerCase();
-  if (normalized.includes("transfer")) return "transfer";
-  const amount = Number(String(record.amount ?? "0").replace(/[^0-9.-]/g, ""));
-  if (!Number.isFinite(amount)) return "expense";
+  const normalized = `${record.type ?? ""} ${record.category ?? ""} ${record.merchant ?? ""} ${record.description ?? ""}`.toLowerCase();
+  const credit = parseMoney(record.credit ?? record.deposit ?? record.money_in ?? record.paid_in ?? null);
+  const debit = parseMoney(record.debit ?? record.withdrawal ?? record.money_out ?? record.paid_out ?? null);
+  if (credit !== null && credit > 0 && (debit === null || debit === 0)) return "income";
+  if (debit !== null && debit > 0 && (credit === null || credit === 0)) return "expense";
+  if (normalized.includes("transfer")) {
+    if (/\b(?:out|sent|send|paid out|debit|withdrawal)\b/.test(normalized)) return "expense";
+    if (/\b(?:in|received|receive|paid in|credit|deposit)\b/.test(normalized)) return "income";
+    return "transfer";
+  }
+  const amount = parseMoney(record.amount ?? record.value ?? null);
+  if (amount === null) return "expense";
   return amount >= 0 ? "income" : "expense";
 };
 
@@ -15790,13 +15909,14 @@ export const parseImportText = (
 export const parseDateValue = (value?: string | null) => {
   if (!value) return null;
   const normalized = value.trim();
-  const iso = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const iso = normalized.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
   if (iso) {
     return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), 12, 0, 0));
   }
 
-  const slash = normalized.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  const slash = normalized.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
   if (slash) {
+    const separator = normalized.includes(".") ? "." : normalized.includes("/") ? "/" : "-";
     let first = Number(slash[1]);
     let second = Number(slash[2]);
     let year = Number(slash[3]);
@@ -15806,7 +15926,10 @@ export const parseDateValue = (value?: string | null) => {
 
     let month = first;
     let day = second;
-    if (first > 12 && second <= 12) {
+    if (separator === "." && second <= 12) {
+      month = second;
+      day = first;
+    } else if (first > 12 && second <= 12) {
       month = second;
       day = first;
     }
@@ -15820,12 +15943,5 @@ export const parseDateValue = (value?: string | null) => {
 };
 
 export const parseAmountValue = (value?: string | null) => {
-  if (!value) return null;
-  const cleaned = String(value).replace(/[^0-9.-]/g, "");
-  if (!cleaned || cleaned === "-" || cleaned === "." || cleaned === "-.") {
-    return null;
-  }
-
-  const parsed = Number(cleaned);
-  return Number.isFinite(parsed) && Math.abs(parsed) <= MAX_DECIMAL_AMOUNT ? parsed : null;
+  return parseMoney(value);
 };
