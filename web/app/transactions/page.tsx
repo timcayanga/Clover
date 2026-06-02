@@ -32,7 +32,7 @@ import {
 } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import type { AccountType } from "@/lib/domain-types";
-import { getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
+import { getAccountCardName, getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
 import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
@@ -158,7 +158,18 @@ const formatTransactionAccountName = (account: Account) => {
     return getAccountDisplayName(account);
   }
 
-  return appendAccountLastFour(getAccountDisplayName(account), account.accountNumber);
+  const accountLabel =
+    account.source === "upload"
+      ? getAccountCardName({
+          name: account.name,
+          institution: account.institution,
+          accountNumber: account.accountNumber,
+          type: account.type,
+          source: account.source,
+        })
+      : getAccountDisplayName(account);
+
+  return appendAccountLastFour(accountLabel, account.accountNumber);
 };
 
 const formatTransactionAccountDisplayName = (

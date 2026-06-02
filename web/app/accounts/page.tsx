@@ -555,6 +555,28 @@ const formatCardAccountNumber = (value: string | null | undefined) => {
   return cleaned;
 };
 
+const getMaskedAccountNumberCollisionKey = (account: Pick<Account, "accountNumber" | "institution" | "type">) => {
+  const digitsOnly = String(account.accountNumber ?? "").replace(/\D/g, "");
+  if (digitsOnly.length < 4) {
+    return null;
+  }
+
+  return [account.type, account.institution?.trim().toLowerCase() ?? "", digitsOnly.slice(-4)].join(":");
+};
+
+const formatDisambiguatedCardAccountNumber = (
+  value: string | null | undefined,
+  options?: { showDigitCount?: boolean }
+) => {
+  const masked = formatCardAccountNumber(value);
+  const digitsOnly = String(value ?? "").replace(/\D/g, "");
+  if (!masked || !options?.showDigitCount || digitsOnly.length <= 4) {
+    return masked;
+  }
+
+  return `${masked} · ${digitsOnly.length} digits`;
+};
+
 const getCurrencyCodes = (accounts: Array<{ currency: string }>) =>
   Array.from(new Set(accounts.map((account) => formatCurrencyCode(account.currency))));
 
@@ -1337,6 +1359,20 @@ function AccountsPageContent() {
       }),
     [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, statementCheckpoints, transactions]
   );
+
+  const collidingMaskedAccountNumberKeys = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const account of reconciledAccounts) {
+      const key = getMaskedAccountNumberCollisionKey(account);
+      if (!key) {
+        continue;
+      }
+
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    return new Set(Array.from(counts.entries()).filter(([, count]) => count > 1).map(([key]) => key));
+  }, [reconciledAccounts]);
 
   useEffect(() => {
     for (const account of reconciledAccounts) {
@@ -2637,7 +2673,9 @@ function AccountsPageContent() {
       type: getEffectiveAccountType(row),
     });
     const balanceValue = Math.abs(parseAmount(loadingContext.displayedBalance));
-    const accountCardNumber = formatCardAccountNumber(fallbackAccountNumber);
+    const accountCardNumber = formatDisambiguatedCardAccountNumber(fallbackAccountNumber, {
+      showDigitCount: collidingMaskedAccountNumberKeys.has(getMaskedAccountNumberCollisionKey(row) ?? ""),
+    });
 
     return (
       <FinancialAccountCard
