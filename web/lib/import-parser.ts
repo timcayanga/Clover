@@ -1,6 +1,6 @@
 import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
-import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
+import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 
 export type ImportedAccountType =
   | "bank"
@@ -8906,7 +8906,9 @@ const parseBpiImportText = (text: string) => {
 const unionbankDatePattern = /^(?:\d{2}\/\d{2}\/\d{2,4}|\d{1,2}\s*[A-Za-z]{3}\s*\d{2,4}|[A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}[A-Za-z]{3}\s*\d{2,4})$/i;
 const unionbankMoneyPattern = /^(?:PHP|P|₱)?\s*[0-9][0-9,]*\.\d{2}$/i;
 const unionbankReferencePattern = /^[A-Z]{1,3}\d{4,}$/i;
-const unionbankLeadingDateTokenPattern = /^(?:\d{2}\/\d{2}\/\d{2,4}|\d{1,2}\s*[A-Za-z]{3}\s*\d{2,4}|[A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}[A-Za-z]{3}\s*\d{2,4})/i;
+const unionbankDateTokenPattern = /(?:\d{2}\/\d{2}\/\d{2,4}|\d{1,2}\s*[A-Za-z]{3}\s*\d{2,4}|[A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}[A-Za-z]{3}\s*\d{2,4})/i;
+const unionbankDateTokenGlobalPattern = new RegExp(unionbankDateTokenPattern.source, "gi");
+const unionbankLeadingDateTokenPattern = new RegExp(`^${unionbankDateTokenPattern.source}`, "i");
 
 const extractUnionBankLeadingDateToken = (value: string | null | undefined) => {
   const normalized = normalizeWhitespace(value ?? "");
@@ -8915,6 +8917,15 @@ const extractUnionBankLeadingDateToken = (value: string | null | undefined) => {
   }
 
   return normalized.match(unionbankLeadingDateTokenPattern)?.[0] ?? null;
+};
+
+const extractUnionBankDateToken = (value: string | null | undefined) => {
+  const normalized = normalizeWhitespace(value ?? "");
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.match(unionbankDateTokenPattern)?.[0] ?? null;
 };
 
 const parseUnionBankDateToken = (value: string | null | undefined) => {
@@ -9092,16 +9103,22 @@ const parseUnionBankTransactionSegment = (
     return null;
   }
 
-  const firstLine = normalizeWhitespace(segment[0] ?? "");
-  const dateToken = extractUnionBankLeadingDateToken(firstLine);
+  const dateLineIndex = segment.findIndex((line) => extractUnionBankDateToken(line) !== null);
+  if (dateLineIndex < 0) {
+    return null;
+  }
+
+  const dateSourceLine = normalizeWhitespace(segment[dateLineIndex] ?? "");
+  const dateToken = extractUnionBankDateToken(dateSourceLine);
   const date = parseUnionBankDateToken(dateToken);
   if (!date || !dateToken) {
     return null;
   }
 
   const body = [
-    firstLine.slice(dateToken.length).trim(),
-    ...segment.slice(1),
+    dateSourceLine.replace(dateToken, " ").trim(),
+    ...segment.slice(0, dateLineIndex),
+    ...segment.slice(dateLineIndex + 1),
   ].filter((line) => line && !isUnionBankBoilerplateLine(line));
   const rowText = normalizeWhitespace(body.join(" "));
   const moneyMatches = extractUnionBankMoneyTokens(rowText);
@@ -9177,16 +9194,35 @@ const parseUnionBankImportText = (text: string) => {
   let current: string[] = [];
 
   for (const line of lines) {
-    if (extractUnionBankLeadingDateToken(line) !== null) {
+    const dateMatches = [...line.matchAll(unionbankDateTokenGlobalPattern)];
+    if (dateMatches.length === 0) {
       if (current.length > 0) {
-        segments.push(current);
+        current.push(line);
       }
-      current = [line];
       continue;
     }
 
-    if (current.length > 0) {
-      current.push(line);
+    const prefix = normalizeWhitespace(line.slice(0, dateMatches[0]?.index ?? 0));
+    if (prefix) {
+      if (current.length > 0) {
+        current.push(prefix);
+      } else {
+        current = [prefix];
+      }
+    }
+
+    for (let index = 0; index < dateMatches.length; index += 1) {
+      const match = dateMatches[index];
+      const start = match.index ?? 0;
+      const end = dateMatches[index + 1]?.index ?? line.length;
+      const chunk = normalizeWhitespace(line.slice(start, end));
+      if (!chunk) {
+        continue;
+      }
+      if (current.length > 0) {
+        segments.push(current);
+      }
+      current = [chunk];
     }
   }
 
@@ -15566,6 +15602,12 @@ export const parseImportText = (
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
   const institution = context.institution ?? null;
+  const isLikelyLowQualityUnionBankStatementFile =
+    normalizeBankName(fileName) === "UnionBank" &&
+    /(?:word|excel|template|business_statement)/i.test(fileName);
+  if (isLikelyLowQualityUnionBankStatementFile) {
+    return [];
+  }
   const isLandbankText = isLandbankStatementText(text);
   if (isLandbankText) {
     const landbankParsed = parseLandbankImportText(text, context);
@@ -15649,6 +15691,9 @@ export const parseImportText = (
 
   const unionbankParsed = parseUnionBankImportText(text);
   if (unionbankParsed && unionbankParsed.rows.length > 0) {
+    if (isLikelyLowQualityUnionBankStatementFile && unionbankParsed.rows.length > 8) {
+      return [];
+    }
     return unionbankParsed.rows;
   }
 

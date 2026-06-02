@@ -1068,6 +1068,8 @@ const buildBankInstructionJson = (params: {
         "UnionBank statements should keep the account label simple and preserve the trailing account digits when visible.",
         "If the statement shows a full account number, return it in account.account_number with all digits preserved. Use account.account_last4 only as a display fallback.",
         "UnionBank statement images usually place the account summary in the upper-right box and the transaction table below it. Capture the summary box first, then transcribe each row in table order with the Date, Description, Debit, Credit, and Balance columns preserved.",
+        "For noisy UnionBank word/excel/template PDFs, do not merge adjacent transactions into one row. Preserve each clearly visible date and amount pair as its own ledger entry, even when OCR splits the description across lines.",
+        "If the OCR is too damaged to read a row confidently, return only the rows you can support from visible evidence instead of inventing balances or combining lines.",
         "Do not drop rows that repeat similar descriptors such as ONLINE FUND TRANSFER or ONLINE INSTAPAYSEND; those are separate ledger entries when their amounts or balances differ.",
       ],
     };
