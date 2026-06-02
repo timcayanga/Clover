@@ -85,6 +85,7 @@ export function ReportsTopTabs() {
       tabs={availableSections.map((section) => ({
         key: section,
         label: reportsSectionLabels[section],
+        badge: section === "advanced" ? "Pro" : null,
       }))}
     />
   );

@@ -130,6 +130,15 @@ const isReportMerchantEligible = (transaction: ReportTransaction) => {
   return !reportSankeyExcludedMerchantMatchers.some((matcher) => merchantLabel.includes(matcher));
 };
 
+const isReportSpendingTransaction = (transaction: ReportTransaction) => {
+  if (getReportTransactionType(transaction) !== "expense") {
+    return false;
+  }
+
+  const categoryName = getReportTransactionCategoryName(transaction).trim().toLowerCase();
+  return !reportSankeyExcludedCategoryNames.has(categoryName);
+};
+
 type MonthBucket = {
   key: string;
   label: string;
@@ -688,9 +697,8 @@ async function ReportsStream({
               label: "Open transactions",
                   };
 
-    const reportSankeyTransactions = reportDisplayTransactions.filter((transaction) => getReportTransactionType(transaction) !== "transfer");
-    const reportSankeyIncomeTransactions = reportSankeyTransactions.filter((transaction) => getReportTransactionType(transaction) === "income");
-    const reportSankeyExpenseTransactions = reportSankeyTransactions.filter((transaction) => getReportTransactionType(transaction) === "expense");
+    const reportSankeyIncomeTransactions = reportDisplayTransactions.filter((transaction) => getReportTransactionType(transaction) === "income");
+    const reportSankeyExpenseTransactions = reportExpenseTransactions;
     const reportSankeyAccountIncome = new Map<
       string,
       {
@@ -762,7 +770,7 @@ async function ReportsStream({
 
     const sankeyIncomeAmount = reportSankeyAccounts.reduce((sum, account) => sum + account.amount, 0);
     const sankeyExpenseAmount = reportSankeyCategories.reduce((sum, category) => sum + category.amount, 0);
-    const sankeyScale = Math.max(0.0065, Math.min(0.02, 260 / Math.max(sankeyIncomeAmount, sankeyExpenseAmount, 1)));
+    const sankeyScale = Math.max(0.0045, Math.min(0.015, 220 / Math.max(sankeyIncomeAmount, sankeyExpenseAmount, 1)));
     const sankeyNodeMinHeight = 22;
     const sankeyColumnGap = 18;
     const sankeyLinkGap = 5;
@@ -784,16 +792,14 @@ async function ReportsStream({
       color: reportSankeyCategoryColorByKey.get(normalizeMerchant(category.label)) ?? getCategoryIconTone(category.label),
       height: Math.max(category.amount * sankeyScale, sankeyNodeMinHeight),
     }));
-    const sankeyAccountsColumnHeight = sankeyAccountNodes.reduce((sum, node, index) => sum + node.height + (index > 0 ? sankeyColumnGap : 0), 0);
-    const sankeyCategoriesColumnHeight = sankeyCategoryNodes.reduce((sum, node, index) => sum + node.height + (index > 0 ? sankeyColumnGap : 0), 0);
-    const sankeyChartHeight = Math.max(360, sankeyAccountsColumnHeight, sankeyCategoriesColumnHeight, sankeySourceWidth + 80);
+    const sankeyChartHeight = 268;
     const sankeyChartWidth = 980;
     const sankeyIncomeX = 54;
     const sankeyAccountX = 378;
     const sankeyCategoryX = 742;
     const sankeyIncomeColumnTop = (sankeyChartHeight - sankeySourceWidth) / 2;
-    const sankeyAccountsColumnTop = (sankeyChartHeight - sankeyAccountsColumnHeight) / 2;
-    const sankeyCategoriesColumnTop = (sankeyChartHeight - sankeyCategoriesColumnHeight) / 2;
+    const sankeyAccountsColumnTop = 16;
+    const sankeyCategoriesColumnTop = 16;
 
     let sankeyIncomeOffset = 0;
     let sankeyAccountOffset = 0;
@@ -980,6 +986,29 @@ async function ReportsStream({
       displayCurrency
     );
 
+    const reportExpenseTransactions = reportDisplayTransactions.filter(isReportSpendingTransaction);
+    const reportPreviousExpenseTransactions = reportPreviousWindowTransactions.filter(isReportSpendingTransaction);
+    const reportExpenseCategories = reportExpenseTransactions.reduce(
+      (totals, transaction) => {
+        const categoryName = getReportTransactionCategoryName(transaction);
+        totals.set(categoryName, (totals.get(categoryName) ?? 0) + Math.abs(Number(transaction.amount)));
+        return totals;
+      },
+      new Map<string, number>()
+    );
+    const reportPreviousExpenseCategories = reportPreviousExpenseTransactions.reduce(
+      (totals, transaction) => {
+        const categoryName = getReportTransactionCategoryName(transaction);
+        totals.set(categoryName, (totals.get(categoryName) ?? 0) + Math.abs(Number(transaction.amount)));
+        return totals;
+      },
+      new Map<string, number>()
+    );
+    const reportExpenseCategoryEntries = Array.from(reportExpenseCategories.entries()).sort((a, b) => b[1] - a[1]);
+    const reportExpenseTotal = reportExpenseCategoryEntries.reduce((sum, [, amount]) => sum + amount, 0);
+    const reportExpenseTopCategories = reportExpenseCategoryEntries.slice(0, 5);
+    const reportSpentTotal = reportExpenseTotal > 0 ? reportExpenseTotal : currentSpend;
+
     const reportRecentTransactions = reportCurrentWindowTransactions.length > 0 ? reportCurrentWindowTransactions : reportDisplayTransactions;
     const reportRecentExpenseTransactions = reportRecentTransactions.filter(
       (transaction) => getReportTransactionType(transaction) === "expense" && isReportMerchantEligible(transaction)
@@ -1080,14 +1109,14 @@ async function ReportsStream({
     const reportCashFlowPath = reportCashFlowPoints
       .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
       .join(" ");
-    const reportCategorySegments = topCategories.map(([categoryName, amount]) => ({
+    const reportCategorySegments = reportExpenseTopCategories.map(([categoryName, amount]) => ({
       categoryName,
       amount,
-      share: currentSpend > 0 ? amount / currentSpend : 0,
+      share: reportExpenseTotal > 0 ? amount / reportExpenseTotal : 0,
       color: getCategoryIconTone(categoryName),
     }));
-    const currentTrackedCategorySpend = topCategories.reduce((sum, [, amount]) => sum + amount, 0);
-    const currentOtherSpend = Math.max(currentSpend - currentTrackedCategorySpend, 0);
+    const currentTrackedCategorySpend = reportExpenseTopCategories.reduce((sum, [, amount]) => sum + amount, 0);
+    const currentOtherSpend = Math.max(reportExpenseTotal - currentTrackedCategorySpend, 0);
     const recurringSavingsPotential = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) * 0.2;
     const topRecurringMerchant = recurringMerchants[0] ?? null;
     const averageRecurringSpend = recurringMerchants.length > 0
@@ -1464,12 +1493,6 @@ async function ReportsStream({
               </article>
             </section>
 
-            {reportFallbackNotice ? (
-              <div className="reports-data-note glass">
-                <strong>{reportFallbackNotice}</strong>
-              </div>
-            ) : null}
-
             <section className="reports-grid reports-grid--primary reports-overview-visual">
               <article className="report-card glass report-card--wide">
                 <div className="report-card__head">
@@ -1521,6 +1544,11 @@ async function ReportsStream({
                       </div>
                     ))}
                   </div>
+                  {reportFallbackNotice ? (
+                    <div className="reports-data-note reports-data-note--inline">
+                      <strong>{reportFallbackNotice}</strong>
+                    </div>
+                  ) : null}
                 </div>
               </article>
             </section>
@@ -1739,30 +1767,6 @@ async function ReportsStream({
                 <span>{accountCount} account{accountCount === 1 ? "" : "s"}</span>
               </div>
             </article>
-
-            <section className="reports-attention-strip">
-              {attentionItems.map((item) => (
-                <article key={item.title} className="reports-attention-card glass">
-                  <span className="eyebrow">👀 Watch list</span>
-                  <h4>{item.title}</h4>
-                  <p>{item.body}</p>
-                  <Link className="pill-link pill-link--inline" href={item.href}>
-                    {item.label}
-                  </Link>
-                </article>
-              ))}
-            </section>
-
-            <article className="reports-decision-lens glass">
-              <div>
-                <p className="eyebrow">⚡ Now</p>
-                <h4>{nextStep.title}</h4>
-                <p>{nextStep.body}</p>
-              </div>
-              <Link className="button button-primary button-pill" href={nextStep.href}>
-                {nextStep.label}
-              </Link>
-            </article>
             </>
           </ReportsSectionPanel>
         ) : null}
@@ -1841,7 +1845,7 @@ async function ReportsStream({
                 <ReportInfoTip label="The biggest spending groups in this period." />
               </div>
               <div className="report-card__stat">
-                <strong>{formatCurrency(currentSpend)}</strong>
+                <strong>{formatCurrency(reportSpentTotal)}</strong>
               </div>
             </div>
 
@@ -1876,7 +1880,7 @@ async function ReportsStream({
                     : null}
                 </svg>
                 <div className="report-donut__center">
-                  <strong>{formatCurrency(currentSpend)}</strong>
+                  <strong>{formatCurrency(reportSpentTotal)}</strong>
                   <span>spent</span>
                 </div>
               </div>
@@ -1884,7 +1888,7 @@ async function ReportsStream({
               <div className="report-donut__legend">
                 {reportCategorySegments.length > 0 ? (
                   reportCategorySegments.map((segment) => {
-                    const previousAmount = previousSummary.expenseCategories.get(segment.categoryName) ?? 0;
+                    const previousAmount = reportPreviousExpenseCategories.get(segment.categoryName) ?? 0;
                     const delta = segment.amount - previousAmount;
                     return (
                       <Link
@@ -1931,7 +1935,47 @@ async function ReportsStream({
         </ReportsSectionPanel>
 
         <ReportsSectionPanel section="trends">
-        <section className="reports-grid reports-grid--free">
+        <section className="reports-grid reports-grid--trends">
+          <article className="report-card glass">
+            <div className="report-card__head">
+              <div className="report-card__head-title">
+                <h4>Month summary</h4>
+                <ReportInfoTip label="A quick look at this month versus the last one." />
+              </div>
+              <div className="report-card__stat">
+                <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
+              </div>
+            </div>
+
+            <div className="report-insight-grid">
+              <div className="report-insight">
+                <span>Gross inflow</span>
+                <strong>{formatCurrency(currentMonthBucket.income)}</strong>
+                <small>{currentMonthBucket.label}</small>
+              </div>
+              <div className="report-insight">
+                <span>Gross outflow</span>
+                <strong>{formatCurrency(currentMonthBucket.expense)}</strong>
+                <small>All tracked expenses</small>
+              </div>
+              <div className="report-insight">
+                <span>Net position</span>
+                <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
+                <small>Income minus spending</small>
+              </div>
+              <div className="report-insight">
+                <span>Month-over-month delta</span>
+                <strong className={monthlyNetChange >= 0 ? "positive" : "negative"}>{formatSignedCurrency(monthlyNetChange)}</strong>
+                <small>{previousMonthBucket.label} · {monthlyNetChange >= 0 ? "improving" : "softening"}</small>
+              </div>
+            </div>
+            <div className="report-subsection report-subsection--compact">
+              <Link className="pill-link pill-link--inline" href={buildTransactionsHref({ month: currentMonthBucket.key })}>
+                Open {currentMonthBucket.label}
+              </Link>
+            </div>
+          </article>
+
           <article className="report-card glass">
             <div className="report-card__head">
               <div className="report-card__head-title">
@@ -2009,11 +2053,11 @@ async function ReportsStream({
                     className="report-list__item report-list__item--link"
                   >
                     <div className="report-list__meta">
-                    <strong>{merchant.label}</strong>
-                    <span>
-                      {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
-                    </span>
-                  </div>
+                      <strong>{merchant.label}</strong>
+                      <span>
+                        {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
+                      </span>
+                    </div>
                     <div className="report-list__track" aria-hidden="true">
                       <span className="report-list__fill" style={{ width: `${Math.max((merchant.amount / currentSpend) * 100, 10)}%` }} />
                     </div>
@@ -2025,46 +2069,6 @@ async function ReportsStream({
                   copy="Add more activity and the biggest spenders will show up here."
                 />
               )}
-            </div>
-          </article>
-
-          <article className="report-card glass">
-            <div className="report-card__head">
-              <div className="report-card__head-title">
-                <h4>Month summary</h4>
-                <ReportInfoTip label="A quick look at this month versus the last one." />
-              </div>
-              <div className="report-card__stat">
-                <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
-              </div>
-            </div>
-
-            <div className="report-insight-grid">
-              <div className="report-insight">
-                <span>Gross inflow</span>
-                <strong>{formatCurrency(currentMonthBucket.income)}</strong>
-                <small>{currentMonthBucket.label}</small>
-              </div>
-              <div className="report-insight">
-                <span>Gross outflow</span>
-                <strong>{formatCurrency(currentMonthBucket.expense)}</strong>
-                <small>All tracked expenses</small>
-              </div>
-              <div className="report-insight">
-                <span>Net position</span>
-                <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
-                <small>Income minus spending</small>
-              </div>
-              <div className="report-insight">
-                <span>Month-over-month delta</span>
-                <strong className={monthlyNetChange >= 0 ? "positive" : "negative"}>{formatSignedCurrency(monthlyNetChange)}</strong>
-                <small>{previousMonthBucket.label} · {monthlyNetChange >= 0 ? "improving" : "softening"}</small>
-              </div>
-            </div>
-            <div className="report-subsection report-subsection--compact">
-              <Link className="pill-link pill-link--inline" href={buildTransactionsHref({ month: currentMonthBucket.key })}>
-                Open {currentMonthBucket.label}
-              </Link>
             </div>
           </article>
         </section>
