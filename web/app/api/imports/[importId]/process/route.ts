@@ -138,7 +138,7 @@ const isLikelyLowQualityUnionBankStatementFile = (fileName: string, bankHint: st
   }
 
   const normalized = fileName.toLowerCase();
-  return /\b(?:word|excel|template|business_statement)\b/i.test(normalized);
+  return /(?:word|excel|template|business_statement)/i.test(normalized);
 };
 
 const buildEastWestSampleFallbackText = (fileName: string) => {
@@ -606,34 +606,38 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         }
         const existingVisibleRows = await countTransactionsByImportFileCompat(importId).catch(() => 0);
         if (existingVisibleRows > 0) {
-          await updateImportFileCompat(importId, {
-            status: "done",
-            processingPhase: "complete",
-            processingMessage: "The file is already visible in Clover. Clover is cleaning up names and categories in the background.",
-            confirmedTransactionsCount: Math.max(Number(importFile.confirmedTransactionsCount ?? 0), existingVisibleRows),
-          }).catch(() => null);
-          const statusSnapshot = await loadImportStatusSnapshot(importId, {
-            importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-            promoteFailedVisibleImport: true,
-          });
-          return NextResponse.json({
-            ok: true,
-            queued: false,
-            processed: true,
-            importedRows: existingVisibleRows,
-            duplicate: false,
-            status: "done",
-            importFileId: importId,
-            metadata: null,
-            accountId: statusSnapshot?.importFile.accountId ?? importFile.accountId ?? null,
-            confirmedTransactionsCount: existingVisibleRows,
-            insightSummary: null,
-            accountBalance: null,
-            visibleImportComplete: true,
-            finalizationInBackground: true,
-            receiptDocument: statusSnapshot?.receiptDocument ?? null,
-            receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
-          });
+          const visibleImportBankHint = normalizeBankName(String(importFile.fileName ?? ""));
+          const shouldRepairVisibleImport = visibleImportBankHint === "Security Bank";
+          if (!shouldRepairVisibleImport) {
+            await updateImportFileCompat(importId, {
+              status: "done",
+              processingPhase: "complete",
+              processingMessage: "The file is already visible in Clover. Clover is cleaning up names and categories in the background.",
+              confirmedTransactionsCount: Math.max(Number(importFile.confirmedTransactionsCount ?? 0), existingVisibleRows),
+            }).catch(() => null);
+            const statusSnapshot = await loadImportStatusSnapshot(importId, {
+              importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+              promoteFailedVisibleImport: true,
+            });
+            return NextResponse.json({
+              ok: true,
+              queued: false,
+              processed: true,
+              importedRows: existingVisibleRows,
+              duplicate: false,
+              status: "done",
+              importFileId: importId,
+              metadata: null,
+              accountId: statusSnapshot?.importFile.accountId ?? importFile.accountId ?? null,
+              confirmedTransactionsCount: existingVisibleRows,
+              insightSummary: null,
+              accountBalance: null,
+              visibleImportComplete: true,
+              finalizationInBackground: true,
+              receiptDocument: statusSnapshot?.receiptDocument ?? null,
+              receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
+            });
+          }
         }
       }
 
@@ -1112,34 +1116,38 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       await assertWorkspaceAccess(userId, importFile.workspaceId as string);
       const existingVisibleRows = await countTransactionsByImportFileCompat(importId).catch(() => 0);
       if (existingVisibleRows > 0) {
-        await updateImportFileCompat(importId, {
-          status: "done",
-          processingPhase: "complete",
-          processingMessage: "The file is already visible in Clover. Clover is cleaning up names and categories in the background.",
-          confirmedTransactionsCount: Math.max(Number(importFile.confirmedTransactionsCount ?? 0), existingVisibleRows),
-        }).catch(() => null);
-        const statusSnapshot = await loadImportStatusSnapshot(importId, {
-          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-          promoteFailedVisibleImport: true,
-        });
-        return NextResponse.json({
-          ok: true,
-          queued: false,
-          processed: true,
-          importedRows: existingVisibleRows,
-          duplicate: false,
-          status: "done",
-          importFileId: importId,
-          metadata: null,
-          accountId: statusSnapshot?.importFile.accountId ?? importFile.accountId ?? null,
-          confirmedTransactionsCount: existingVisibleRows,
-          insightSummary: null,
-          accountBalance: null,
-          visibleImportComplete: true,
-          finalizationInBackground: true,
-          receiptDocument: statusSnapshot?.receiptDocument ?? null,
-          receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
-        });
+        const visibleImportBankHint = normalizeBankName(String(importFile.fileName ?? ""));
+        const shouldRepairVisibleImport = visibleImportBankHint === "Security Bank";
+        if (!shouldRepairVisibleImport) {
+          await updateImportFileCompat(importId, {
+            status: "done",
+            processingPhase: "complete",
+            processingMessage: "The file is already visible in Clover. Clover is cleaning up names and categories in the background.",
+            confirmedTransactionsCount: Math.max(Number(importFile.confirmedTransactionsCount ?? 0), existingVisibleRows),
+          }).catch(() => null);
+          const statusSnapshot = await loadImportStatusSnapshot(importId, {
+            importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+            promoteFailedVisibleImport: true,
+          });
+          return NextResponse.json({
+            ok: true,
+            queued: false,
+            processed: true,
+            importedRows: existingVisibleRows,
+            duplicate: false,
+            status: "done",
+            importFileId: importId,
+            metadata: null,
+            accountId: statusSnapshot?.importFile.accountId ?? importFile.accountId ?? null,
+            confirmedTransactionsCount: existingVisibleRows,
+            insightSummary: null,
+            accountBalance: null,
+            visibleImportComplete: true,
+            finalizationInBackground: true,
+            receiptDocument: statusSnapshot?.receiptDocument ?? null,
+            receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
+          });
+        }
       }
       stage = "reading json body";
       const body = await _request.json().catch(() => ({}));

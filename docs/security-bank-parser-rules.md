@@ -45,6 +45,7 @@ This document captures the Security Bank parsing rules learned from the syntheti
 - Low-quality Security Bank ATM/B2C ledgers should still surface the bank brand in the account label. If OCR yields a holder name instead of the bank name, prefer `Security Bank <last4>` for the account display.
 - Ignore the slogan `You deserve better.` when it appears as an extracted account name on low-quality statements. Treat it as placeholder text and fall back to `Security Bank <last4>`.
 - When a Security Bank upload already has the full account number, treat that exact account number as the strongest identity match even if an older placeholder account was saved with the user's name and no institution. That lets the imported account repair itself to the bank label instead of creating a second card.
+- Security Bank uploads should still be allowed to re-enter reconciliation when rows are already visible, because low-quality statements may need a second pass to repair the account label and balance from statement metadata.
 - OCR variants such as `ATRO ATM/B 2 C ACCOUNT` and `ATRC ATM/B 2 C ACCOUNT` should normalize the same way as the compact `ATM/B2C` forms.
 - `ATRO ATM/B2C ACCOUNT` should be treated as `Account Transfer Out` in the `Transfers` category, and `ATRC ATM/B2C ACCOUNT` should be treated as `Account Transfer In` in the `Transfers` category.
 
