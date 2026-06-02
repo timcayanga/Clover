@@ -425,6 +425,13 @@ export default function InvestmentsPage() {
   }, [searchQueryFromUrl]);
 
   useEffect(() => {
+    document.body.toggleAttribute("data-clover-page-modal", addOpen);
+    return () => {
+      document.body.removeAttribute("data-clover-page-modal");
+    };
+  }, [addOpen]);
+
+  useEffect(() => {
     setPortfolioCurrencyFilter("all");
   }, [selectedWorkspaceId]);
 
@@ -1006,7 +1013,7 @@ export default function InvestmentsPage() {
           </section>
         ) : selectedTab === "overview" ? (
           <>
-            <section className="accounts-overview-grid">
+            <section className="accounts-overview-grid investments-overview-grid">
               <article className="accounts-overview-card glass">
                 <div className="investments-metric__label">
                   <span>Current value</span>
@@ -1648,7 +1655,7 @@ export default function InvestmentsPage() {
       </div>
 
         {addOpen ? (
-          <div className="modal-backdrop" role="presentation" onClick={() => setAddOpen(false)}>
+          <div className="modal-backdrop modal-backdrop--investments-add" role="presentation" onClick={() => setAddOpen(false)}>
             <section
             className="modal-card modal-card--wide accounts-add-modal glass"
             role="dialog"
@@ -1693,31 +1700,34 @@ export default function InvestmentsPage() {
                     ))}
                   </select>
                 </label>
-                <label>
-                  Current value / balance
-                  <input
-                    value={manualBalance}
-                    onChange={(event) => setManualBalance(event.target.value)}
-                    inputMode="decimal"
-                    placeholder="0.00"
-                  />
-                  <span className="field-help">This is the current total value of the holding, not the amount you paid to buy it.</span>
-                </label>
-                <div className="accounts-form-currency-field">
-                  <span className="sr-only">Currency</span>
-                  <CurrencySelector
-                    value={manualCurrency}
-                    onChange={setManualCurrency}
-                    options={currencyCatalogCodes}
-                    ariaLabel="Select investment currency"
-                    className="accounts-form-currency-field__selector"
-                    buttonClassName="accounts-form-currency-field__button"
-                    menuClassName="accounts-form-currency-field__menu"
-                    optionClassName="accounts-form-currency-field__option"
-                    menuAlignment="end"
-                  />
-                  <span className="field-help">Use a fiat currency such as PHP or USD. Keep BTC, USDT, and similar codes in the asset field above.</span>
+                <div className="investments-add-modal__money-row">
+                  <div className="accounts-form-currency-field">
+                    <span className="sr-only">Currency</span>
+                    <CurrencySelector
+                      value={manualCurrency}
+                      onChange={setManualCurrency}
+                      options={currencyCatalogCodes}
+                      ariaLabel="Select investment currency"
+                      className="transactions-currency-filter investments-add-modal__currency-selector"
+                      buttonClassName="transactions-currency-filter__button transactions-toolbar-chip investments-add-modal__currency-button"
+                      menuClassName="transactions-currency-filter__menu"
+                      optionClassName="transactions-currency-filter__option"
+                      menuAlignment="end"
+                      showChevron={false}
+                    />
+                  </div>
+                  <label>
+                    Current value / balance
+                    <input
+                      value={manualBalance}
+                      onChange={(event) => setManualBalance(event.target.value)}
+                      inputMode="decimal"
+                      placeholder="0.00"
+                    />
+                    <span className="field-help">This is the current total value of the holding, not the amount you paid to buy it.</span>
+                  </label>
                 </div>
+                <span className="field-help">Use a fiat currency such as PHP or USD. Keep BTC, USDT, and similar codes in the asset field above.</span>
 
                 {manualInvestmentSubtype ? (
                   <div className="accounts-investment-fields">

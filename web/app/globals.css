@@ -15404,6 +15404,10 @@ input.transaction-inline-edit--amount::placeholder {
   z-index: 3000;
 }
 
+.modal-backdrop--investments-add {
+  z-index: 4200;
+}
+
 .modal-backdrop--import-fullscreen {
   position: fixed !important;
   inset: 0 !important;
@@ -15446,6 +15450,10 @@ body[data-clover-page-modal] .sidebar,
 body[data-clover-page-modal] .shell-quick-add-button {
   pointer-events: none;
   z-index: 0;
+}
+
+body[data-clover-page-modal] .shell-quick-add-popover {
+  display: none !important;
 }
 
 body[data-clover-page-modal] .modal-backdrop,
@@ -19008,6 +19016,13 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   width: max-content;
 }
 
+.investments-overview-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: center;
+  width: min(100%, 760px);
+  margin: 0 auto;
+}
+
 .accounts-form-currency-field,
 .settings-currency-field__selector,
 .transaction-drawer-form__currency {
@@ -21731,6 +21746,30 @@ button.accounts-detail__transaction-head-cell {
   color: var(--muted);
   font-size: 0.8rem;
   letter-spacing: 0.02em;
+}
+
+.investments-add-modal__money-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(132px, 0.42fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.investments-add-modal__currency-selector {
+  width: auto;
+  min-width: 132px;
+}
+
+.investments-add-modal__currency-selector .currency-selector__button {
+  width: auto;
+  min-height: 34px;
+  padding: 0 12px 0 10px;
+  border-radius: 999px;
+}
+
+.investments-add-modal__currency-selector .currency-selector__trigger-token,
+.investments-add-modal__currency-selector .currency-selector__trigger-all {
+  font-size: 0.72rem;
 }
 
 .accounts-detail__history-stack {
