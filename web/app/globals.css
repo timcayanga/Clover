@@ -18181,17 +18181,6 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
     display: none;
   }
 
-  .investments-page__add-button--compact {
-    width: auto;
-    min-width: 0;
-    padding-inline: 12px;
-    justify-content: center;
-  }
-
-  .investments-page__add-button--compact .investments-page__add-button-label {
-    display: inline;
-  }
-
   .investments-overview-hero {
     grid-template-columns: 1fr;
     align-items: start;

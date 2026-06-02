@@ -560,27 +560,7 @@ export default function InvestmentsPage() {
     return filtered.slice().sort(sorters[investmentSortKey]);
   }, [investmentAccounts, investmentSearch, investmentSortKey, investmentSubtypeFilter]);
 
-  const totals = useMemo(() => {
-    return visibleInvestmentAccounts.reduce(
-      (accumulator, account) => {
-        const currentValue = parseNullableAmount(account.balance);
-        const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
-        if (currentValue !== null) {
-          accumulator.currentValue += currentValue;
-        }
-        if (purchaseValue !== null) {
-          accumulator.purchaseValue += purchaseValue;
-        }
-        if (currentValue !== null && purchaseValue !== null) {
-          accumulator.gainLoss += currentValue - purchaseValue;
-        }
-        return accumulator;
-      },
-      { currentValue: 0, purchaseValue: 0, gainLoss: 0 }
-    );
-  }, [visibleInvestmentAccounts]);
-
-  const portfolioViewedAccounts = useMemo(
+  const selectedCurrencyInvestmentAccounts = useMemo(
     () =>
       portfolioCurrencyFilter === "all"
         ? visibleInvestmentAccounts
@@ -589,7 +569,7 @@ export default function InvestmentsPage() {
   );
 
   const portfolioTotals = useMemo(() => {
-    return portfolioViewedAccounts.reduce(
+    return selectedCurrencyInvestmentAccounts.reduce(
       (accumulator, account) => {
         const currentValue = parseNullableAmount(account.balance);
         const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
@@ -606,14 +586,16 @@ export default function InvestmentsPage() {
       },
       { currentValue: 0, purchaseValue: 0, gainLoss: 0 }
     );
-  }, [portfolioViewedAccounts]);
+  }, [selectedCurrencyInvestmentAccounts]);
 
-  const investmentGroups = useMemo<InvestmentGroup[]>(() => buildInvestmentGroups(visibleInvestmentAccounts), [visibleInvestmentAccounts]);
-  const portfolioGroups = useMemo<InvestmentGroup[]>(() => buildInvestmentGroups(portfolioViewedAccounts), [portfolioViewedAccounts]);
+  const selectedCurrencyCodes = useMemo(() => getCurrencyCodes(selectedCurrencyInvestmentAccounts), [selectedCurrencyInvestmentAccounts]);
+  const hasVisibleCurrencySelection = selectedCurrencyInvestmentAccounts.length > 0;
+
+  const investmentGroups = useMemo<InvestmentGroup[]>(() => buildInvestmentGroups(selectedCurrencyInvestmentAccounts), [selectedCurrencyInvestmentAccounts]);
 
   const portfolioTableRows = useMemo(
     () =>
-      portfolioViewedAccounts.map((account) => {
+      selectedCurrencyInvestmentAccounts.map((account) => {
         const currentValue = parseNullableAmount(account.balance);
         const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
         const gainLoss = currentValue === null || purchaseValue === null ? null : currentValue - purchaseValue;
@@ -627,7 +609,7 @@ export default function InvestmentsPage() {
           returnPercent,
         };
       }),
-    [portfolioViewedAccounts]
+    [selectedCurrencyInvestmentAccounts]
   );
 
   const portfolioAllocation = useMemo<InvestmentAllocationRow[]>(() => {
@@ -643,7 +625,7 @@ export default function InvestmentsPage() {
 
   const accountPerformance = useMemo(
     () =>
-      visibleInvestmentAccounts.map((account) => {
+      selectedCurrencyInvestmentAccounts.map((account) => {
         const currentValue = parseNullableAmount(account.balance) ?? 0;
         const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
         const gainLoss = purchaseValue === null ? null : currentValue - purchaseValue;
@@ -657,7 +639,7 @@ export default function InvestmentsPage() {
           returnPercent,
         };
       }),
-    [visibleInvestmentAccounts]
+    [selectedCurrencyInvestmentAccounts]
   );
 
   const topHoldings = useMemo(
@@ -720,9 +702,9 @@ export default function InvestmentsPage() {
   const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "analysis") && !canUseProTabs);
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
 
-  const renderAddInvestmentButton = (variant: "desktop" | "mobile") => (
+  const renderAddInvestmentButton = () => (
     <button
-      className={`button button-primary button-small investments-page__add-button${variant === "mobile" ? " investments-page__add-button--compact" : ""}`}
+      className="button button-primary button-small investments-page__add-button"
       type="button"
       onClick={() => setAddOpen(true)}
       disabled={!selectedWorkspaceId}
@@ -733,7 +715,7 @@ export default function InvestmentsPage() {
           <path d="M10 4v12M4 10h12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
         </svg>
       </span>
-      {variant === "desktop" ? <span className="investments-page__add-button-label">Add investment</span> : null}
+      <span className="investments-page__add-button-label">Add investment</span>
     </button>
   );
 
@@ -989,7 +971,26 @@ export default function InvestmentsPage() {
           }))}
         />
       }
-      actions={renderAddInvestmentButton("mobile")}
+      actions={
+        <>
+          <CurrencySelector
+            value={portfolioCurrencyFilter}
+            onChange={setPortfolioCurrencyFilter}
+            options={portfolioCurrencyOptions.filter((currency) => currency !== "all")}
+            includeAllOption
+            allLabel="All currencies"
+            ariaLabel="Select investment currency"
+            className="transactions-currency-filter investments-currency-filter"
+            buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip"
+            menuClassName="transactions-currency-filter__menu"
+            optionClassName="transactions-currency-filter__option"
+            compact
+            menuAlignment="end"
+            showChevron={false}
+          />
+          {renderAddInvestmentButton()}
+        </>
+      }
     >
       <div className="accounts-page animate-tab-panel" key={selectedTab}>
         {loading ? <p className="panel-muted">Loading investments...</p> : null}
@@ -1009,30 +1010,31 @@ export default function InvestmentsPage() {
               <article className="accounts-overview-card glass">
                 <div className="investments-metric__label">
                   <span>Current value</span>
-                  <InfoTip label="The total value of the visible investment holdings." />
+                  <InfoTip label="The total value of the visible investment holdings for the selected currency view." />
                 </div>
-                <strong>{formatInvestmentAggregate(totals.currentValue, investmentAccounts)}</strong>
+                <strong className="accounts-overview-card__amount">
+                  {hasVisibleCurrencySelection
+                    ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
+                    : "—"}
+                </strong>
               </article>
               <article className="accounts-overview-card glass">
                 <div className="investments-metric__label">
-                  <span>Purchase value</span>
-                  <InfoTip label="The combined cost basis of the visible holdings." />
+                  <span>P&amp;L</span>
+                  <InfoTip label="Gain or loss for the visible holdings in the selected currency view." />
                 </div>
-                <strong>{formatInvestmentAggregate(totals.purchaseValue, investmentAccounts)}</strong>
-              </article>
-              <article className="accounts-overview-card glass">
-                <div className="investments-metric__label">
-                  <span>Gain / loss</span>
-                  <InfoTip label="Current value minus purchase value for the visible holdings." />
+                <div style={{ display: "grid", gap: 4 }}>
+                  <strong className="accounts-overview-card__amount">
+                    {hasVisibleCurrencySelection
+                      ? formatInvestmentAggregate(portfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
+                      : "—"}
+                  </strong>
+                  <span className="panel-muted">
+                    {hasVisibleCurrencySelection && selectedCurrencyCodes.length === 1 && portfolioTotals.purchaseValue > 0
+                      ? percentFormatter.format(portfolioTotals.gainLoss / portfolioTotals.purchaseValue)
+                      : "—"}
+                  </span>
                 </div>
-                <strong>{formatInvestmentAggregate(totals.gainLoss, investmentAccounts)}</strong>
-              </article>
-              <article className="accounts-overview-card glass">
-                <div className="investments-metric__label">
-                  <span>Portfolio</span>
-                  <InfoTip label="The number of visible investment accounts." />
-                </div>
-                <strong>{visibleInvestmentAccounts.length}</strong>
               </article>
             </section>
 
@@ -1047,7 +1049,7 @@ export default function InvestmentsPage() {
                 </div>
                 <div className="investments-allocation__summary">
                   <span>Total value</span>
-                  <strong>{formatInvestmentAggregate(totals.currentValue, investmentAccounts)}</strong>
+                  <strong>{formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)}</strong>
                 </div>
               </div>
 
@@ -1127,23 +1129,6 @@ export default function InvestmentsPage() {
                   ))}
                 </select>
               </label>
-              <div className="investments-currency-filter">
-                <span className="sr-only">Currency view</span>
-                <CurrencySelector
-                  value={portfolioCurrencyFilter}
-                  onChange={setPortfolioCurrencyFilter}
-                  options={portfolioCurrencyOptions.filter((currency) => currency !== "all")}
-                  includeAllOption
-                  allLabel="All assets"
-                  ariaLabel="Select portfolio currency"
-                  className="investments-currency-filter__selector"
-                  buttonClassName="investments-currency-filter__button"
-                  menuClassName="investments-currency-filter__menu"
-                  optionClassName="investments-currency-filter__option"
-                  compact
-                  menuAlignment="end"
-                />
-              </div>
               <div className="investments-filters__actions">
                 <button
                   className="button button-secondary button-small"
@@ -1176,7 +1161,7 @@ export default function InvestmentsPage() {
                 </div>
                 <div className="investments-allocation__summary">
                   <span>Total value</span>
-                  <strong>{formatInvestmentAggregate(portfolioTotals.currentValue, portfolioViewedAccounts)}</strong>
+                  <strong>{formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)}</strong>
                 </div>
               </div>
 
@@ -1239,8 +1224,8 @@ export default function InvestmentsPage() {
             </section>
 
             <section className="accounts-sections" style={{ marginTop: 20 }}>
-              {portfolioGroups.length > 0 ? (
-                portfolioGroups.map((group) => (
+              {investmentGroups.length > 0 ? (
+                investmentGroups.map((group) => (
                   <article key={group.key} className="accounts-group glass">
                     <div className="accounts-group__head">
                       <div className="accounts-group__head-title">
@@ -1476,7 +1461,7 @@ export default function InvestmentsPage() {
                 </div>
                 <div className="investments-allocation__summary">
                   <span>Total value</span>
-                  <strong>{formatInvestmentAggregate(totals.currentValue, investmentAccounts)}</strong>
+                  <strong>{formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)}</strong>
                 </div>
               </div>
 
