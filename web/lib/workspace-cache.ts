@@ -278,12 +278,6 @@ const pruneGenericImportedAccountPlaceholders = <T extends CachedRecord>(account
 };
 
 const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, right: ImportedAccountIdentityLike) => {
-  const leftKey = normalizeImportedAccountKey(left.name, left.institution, left.accountNumber, left.type);
-  const rightKey = normalizeImportedAccountKey(right.name, right.institution, right.accountNumber, right.type);
-  if (leftKey === rightKey) {
-    return 100;
-  }
-
   const leftInstitution = canonicalImportedInstitutionKey(left.institution);
   const rightInstitution = canonicalImportedInstitutionKey(right.institution);
   const leftType = normalizeWhitespace(String(left.type ?? "")).toLowerCase();
@@ -291,6 +285,27 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
   const leftAccountDigits = String(left.accountNumber ?? "").replace(/\D/g, "");
   const rightAccountDigits = String(right.accountNumber ?? "").replace(/\D/g, "");
   const hasExactAccountNumberMatch = Boolean(leftAccountDigits && rightAccountDigits && leftAccountDigits === rightAccountDigits);
+  const hasConflictingExplicitAccountNumbers = Boolean(leftAccountDigits && rightAccountDigits && leftAccountDigits !== rightAccountDigits);
+  const canTreatConflictingAccountNumbersAsRelated =
+    hasConflictingExplicitAccountNumbers &&
+    leftInstitution === "unionbank" &&
+    rightInstitution === "unionbank" &&
+    leftType &&
+    rightType &&
+    leftType === rightType &&
+    leftAccountDigits.length >= 8 &&
+    rightAccountDigits.length >= 8 &&
+    (leftAccountDigits.startsWith(rightAccountDigits) || rightAccountDigits.startsWith(leftAccountDigits));
+  if (hasConflictingExplicitAccountNumbers && !canTreatConflictingAccountNumbersAsRelated) {
+    return 0;
+  }
+
+  const leftKey = normalizeImportedAccountKey(left.name, left.institution, left.accountNumber, left.type);
+  const rightKey = normalizeImportedAccountKey(right.name, right.institution, right.accountNumber, right.type);
+  if (leftKey === rightKey) {
+    return 100;
+  }
+
   if (!leftInstitution || !rightInstitution || leftInstitution !== rightInstitution || !leftType || leftType !== rightType) {
     const leftLastFour = extractLastFourDigits(left.accountNumber ?? left.name);
     const rightLastFour = extractLastFourDigits(right.accountNumber ?? right.name);
