@@ -73,8 +73,8 @@ export type ImportedWorkspaceTransaction = CachedRecord & {
   source?: string | null;
 };
 
-export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v4";
-export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v4";
+export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v5";
+export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v5";
 export const deletedAccountsWorkspaceCacheKey = "clover.accounts.deleted-account-ids.v1";
 export const deletingAccountsWorkspaceCacheKey = "clover.accounts.deleting-account-ids.v1";
 
@@ -175,6 +175,15 @@ const extractLastFourDigits = (value?: string | null) => {
   return digits.slice(-4);
 };
 
+const normalizeAccountNumberIdentityDigits = (value?: string | null) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (digits.length > 4) {
+    return digits;
+  }
+
+  return digits.length === 4 ? digits : null;
+};
+
 const normalizeImportedAccountNameStem = (value?: string | null) => {
   const normalized = normalizeWhitespace(String(value ?? ""));
   if (!normalized) {
@@ -200,7 +209,7 @@ export const normalizeImportedAccountKey = (
 ) =>
   normalizeMerchantText(
     `${institution ?? ""} ${
-      extractLastFourDigits(accountNumber) ??
+      normalizeAccountNumberIdentityDigits(accountNumber) ??
       extractLastFourDigits(accountName) ??
       normalizeWhitespace(String(accountName ?? ""))
     } ${normalizeWhitespace(String(accountType ?? ""))}`
@@ -518,7 +527,7 @@ const normalizeImportedTransactionAccountKey = (
 ) =>
   normalizeMerchantText(
     `${institution ?? ""} ${
-      extractLastFourDigits(accountNumber) ??
+      normalizeAccountNumberIdentityDigits(accountNumber) ??
       extractLastFourDigits(accountName) ??
       normalizeWhitespace(String(accountName ?? ""))
     }`
