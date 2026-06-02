@@ -1472,7 +1472,9 @@ const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
 };
 
 const shouldSkipClientStatementPreparse = (fileName: string) =>
-  isNoisyVisibilityBank(fileName) || isLikelyLowQualityPnbStatementFile(fileName);
+  isNoisyVisibilityBank(fileName) ||
+  normalizeBankName(fileName) === "PNB" ||
+  isLikelyLowQualityPnbStatementFile(fileName);
 
 const hasVisibleImportData = (
   item: QueuedFile,
