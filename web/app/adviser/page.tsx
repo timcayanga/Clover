@@ -635,7 +635,7 @@ const buildCategoryForecastSignals = (params: {
       ? {
           title: "Goal drift",
           summary: "Current momentum suggests the target may need a check-in soon.",
-          evidence: `Goal band ${params.goalProgressBand}; drift threshold ${params.thresholdProfile.goalDriftPercent}%`,
+          evidence: `Goal band ${params.goalProgressBand}; drift threshold ${Math.round(params.thresholdProfile.goalDriftPercent)}%`,
           tone: "warning",
           score: clamp(
             average([
@@ -1357,6 +1357,7 @@ async function AdviserPageContent() {
     ? clamp(average([toCountScore(openSplitBillCount, 3), openSplitBillAmount > 0 ? 100 : 0, historyDepthScore]))
     : 0;
   const currentGoalConfidence = goalLabel ? clamp(average([toCountScore(transactionCount, 20), goalProgress.bandLabel === "On track" ? 85 : 70, historyDepthScore])) : 0;
+  const goalProgressLabel = goalLabel ? goalProgress.bandLabel : "Set a Goal";
   const recurringAmountPressure =
     recurringDueSoon.reduce((sum, pattern) => sum + Number(pattern.amount ?? 0), 0) +
     plannedPaymentsDueSoon.reduce((sum, suggestion) => sum + Number(suggestion.amount ?? 0), 0);
@@ -1394,7 +1395,7 @@ async function AdviserPageContent() {
     incomeDelta,
     latestInvestmentSnapshot,
     investmentDelta,
-    goalProgressBand: goalProgress.bandLabel,
+    goalProgressBand: goalProgressLabel,
     thresholdProfile,
   });
   const forecastSignal = categoryForecastSignals[0] ?? buildForecastSignal(
@@ -1814,7 +1815,7 @@ async function AdviserPageContent() {
         ? {
             id: "account_snapshot",
             title: "Connected accounts",
-            summary: `${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? "" : "s"} are connected in this workspace.`,
+            summary: `${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? " is" : "s are"} connected in this workspace.`,
             evidence:
               totalAccountBalance > 0
                 ? `${formatCurrency(totalAccountBalance)} tracked across ${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? "" : "s"}`

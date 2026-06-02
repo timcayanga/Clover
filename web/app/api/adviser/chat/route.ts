@@ -557,7 +557,7 @@ const buildCategoryForecastSignals = (params: {
       ? {
           title: "Goal drift",
           summary: "Current momentum suggests the target may need a check-in soon.",
-          evidence: `Goal band ${params.goalProgressBand}; drift threshold ${params.thresholdProfile.goalDriftPercent}%`,
+          evidence: `Goal band ${params.goalProgressBand}; drift threshold ${Math.round(params.thresholdProfile.goalDriftPercent)}%`,
           score: clamp(
             average([
               params.goalProgressBand === "On track" ? 45 : 82,
@@ -1011,6 +1011,7 @@ export async function POST(request: Request) {
       displayCurrency
     );
     const goalLabel = goalValue ? goalValue.replace(/_/g, " ") : null;
+    const goalProgressLabel = goalLabel ? goalProgress.bandLabel : "Set a Goal";
 
     const topCategories = Array.from(currentSummary.expenseCategories.entries())
       .sort((left, right) => right[1] - left[1])
@@ -1156,7 +1157,7 @@ export async function POST(request: Request) {
       incomeDelta,
       latestInvestmentSnapshot,
       investmentDelta,
-      goalProgressBand: goalProgress.bandLabel,
+      goalProgressBand: goalProgressLabel,
       thresholdProfile,
     });
     const forecastSignal = categoryForecastSignals[0] ?? buildForecastSignal(
