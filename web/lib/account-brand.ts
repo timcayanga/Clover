@@ -524,8 +524,9 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       label: "UCPB",
       logoSrcs: philippinesLogoWithVariants("ucpb"),
       fallbackIconSrc: bankIcon,
-      accent: "#00703C",
-      background: "linear-gradient(135deg, rgba(0, 112, 60, 0.16), rgba(0, 112, 60, 0.06))",
+      accent: "#253C9B",
+      background: "linear-gradient(135deg, #ffffff 0%, #f8fbff 100%)",
+      foreground: "#17215F",
     }),
   },
   {
