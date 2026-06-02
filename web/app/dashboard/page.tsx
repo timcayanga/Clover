@@ -38,10 +38,6 @@ const relativeTimeFormatter = new Intl.RelativeTimeFormat("en-PH", {
   numeric: "auto",
 });
 
-const weekdayFormatter = new Intl.DateTimeFormat("en-PH", {
-  weekday: "short",
-});
-
 type DashboardTransaction = {
   id: string;
   date: Date;
@@ -79,15 +75,6 @@ type WindowSummary = {
   net: number;
   transactions: number;
   activeDays: number;
-};
-
-type DailyActivityPoint = {
-  key: string;
-  label: string;
-  count: number;
-  income: number;
-  expense: number;
-  net: number;
 };
 
 type HomeAdviserItem = {
@@ -143,45 +130,6 @@ const summarizeWindow = (transactions: DashboardTransaction[], label: string): W
     transactions: transactions.length,
     activeDays: new Set(transactions.map((transaction) => toIsoDay(transaction.date))).size,
   };
-};
-
-const buildDailyActivitySeries = (transactions: DashboardTransaction[], days: number) => {
-  const today = new Date();
-  const series: DailyActivityPoint[] = [];
-  const pointByKey = new Map<string, DailyActivityPoint>();
-
-  for (let offset = days - 1; offset >= 0; offset -= 1) {
-    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offset);
-    const point: DailyActivityPoint = {
-      key: toIsoDay(date),
-      label: weekdayFormatter.format(date),
-      count: 0,
-      income: 0,
-      expense: 0,
-      net: 0,
-    };
-
-    series.push(point);
-    pointByKey.set(point.key, point);
-  }
-
-  transactions.forEach((transaction) => {
-    const point = pointByKey.get(toIsoDay(transaction.date));
-    if (!point) {
-      return;
-    }
-
-    const amount = Math.abs(toAmount(transaction.amount));
-    point.count += 1;
-    if (transaction.type === "income") {
-      point.income += amount;
-    } else if (transaction.type === "expense") {
-      point.expense += amount;
-    }
-    point.net = point.income - point.expense;
-  });
-
-  return series;
 };
 
 const summarizeTransactions = (transactions: DashboardTransaction[]): AggregatedTransactionTotals => {
@@ -612,14 +560,8 @@ async function DashboardStream({
   );
   const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
   const weeklySummary = comparePeriods(currentSevenDayTransactions, previousSevenDayTransactions);
+  const weeklyWindowSummary = summarizeWindow(currentSevenDayTransactions, "This week");
   const monthSummary = summarizeWindow(currentThirtyDayTransactions, "This month");
-  const activitySeries = buildDailyActivitySeries(currentThirtyDayTransactions, 7);
-  const peakActivityDay = activitySeries.reduce<DailyActivityPoint | null>((peak, point) => {
-    if (!peak || point.count > peak.count || (point.count === peak.count && point.key > peak.key)) {
-      return point;
-    }
-    return peak;
-  }, null);
   const currentSavingsRate = currentSummary.current.income > 0 ? currentSummary.net / currentSummary.current.income : null;
   const previousNet = currentSummary.previous.income - currentSummary.previous.expense;
   const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
@@ -777,11 +719,16 @@ async function DashboardStream({
   const goalHeroHeading = goalKey ? "Goal progress" : "Set a goal to track your progress";
   const goalHeroActionLabel = goalKey ? "Adjust goal" : "Set a goal";
   const goalEditorMonthlyIncome = currentSummary.current.income > 0 ? currentSummary.current.income : null;
-  const maxActivityCount = Math.max(...activitySeries.map((point) => point.count), 1);
-  const activitySummaryLabel =
-    peakActivityDay && peakActivityDay.count > 0
-      ? `${peakActivityDay.label} was busiest with ${peakActivityDay.count} transaction${peakActivityDay.count === 1 ? "" : "s"}`
-      : "No daily activity yet";
+  const weeklyReportTone = weeklySummary.net >= 0 ? "positive" : "warning";
+  const monthlyReportTone = currentSummary.net >= 0 ? "positive" : "warning";
+  const weeklyReportCaption =
+    weeklySummary.previous.expense > 0
+      ? `Spending ${weeklySpendMovement}.`
+      : `${weeklyWindowSummary.transactions} transaction${weeklyWindowSummary.transactions === 1 ? "" : "s"} this week.`;
+  const monthlyReportCaption =
+    spendDelta === 0
+      ? `${monthSummary.transactions} transaction${monthSummary.transactions === 1 ? "" : "s"} this month.`
+      : `Spending is ${spendDelta >= 0 ? "up" : "down"} ${formatCurrency(Math.abs(spendDelta), displayCurrency)} vs last month.`;
   return (
     <>
       <PostHogPersonProperties
@@ -871,127 +818,159 @@ async function DashboardStream({
           </article>
         ) : null}
 
-        <div className="dashboard-home__story-row">
-          <article className="dashboard-home__activity-card glass">
-            <div className="dashboard-home__summary-card-head">
+        <div className="dashboard-home__snapshot-grid" aria-label="Week and month snapshot">
+          <article className={`dashboard-home__report-card dashboard-home__report-card--${weeklyReportTone} glass`}>
+            <div className="dashboard-home__report-card-head">
               <div>
-                <p className="eyebrow">Activity</p>
-                <h4>Transactions per day</h4>
+                <p className="eyebrow">Weekly Report</p>
+                <h4>{formatSignedCurrency(weeklySummary.net, displayCurrency)}</h4>
               </div>
-              <span className="dashboard-visual-pill">{activitySummaryLabel}</span>
+              <span className="dashboard-visual-pill">{weeklyWindowSummary.activeDays} active day{weeklyWindowSummary.activeDays === 1 ? "" : "s"}</span>
             </div>
-            <div className="dashboard-home__activity-chart" aria-label="Transactions per day over the last seven days">
-              {activitySeries.map((point) => {
-                const height = Math.max((point.count / maxActivityCount) * 100, point.count > 0 ? 16 : 6);
-                return (
-                  <div key={point.key} className="dashboard-home__activity-bar">
-                    <span className="dashboard-home__activity-bar-count">{point.count > 0 ? point.count : ""}</span>
-                    <div className="dashboard-home__activity-bar-track" aria-hidden="true">
-                      <div className="dashboard-home__activity-bar-fill" style={{ height: `${height}%` }} />
-                    </div>
-                    <span className="dashboard-home__activity-bar-label">{point.label}</span>
-                  </div>
-                );
-              })}
+            <p>{weeklyReportCaption}</p>
+            <div className="dashboard-home__report-metrics" aria-label="Weekly report metrics">
+              <span>
+                <small>Income</small>
+                <strong>{formatCurrency(weeklySummary.current.income, displayCurrency)}</strong>
+              </span>
+              <span>
+                <small>Spent</small>
+                <strong>{formatCurrency(weeklySummary.current.expense, displayCurrency)}</strong>
+              </span>
+              <span>
+                <small>Transactions</small>
+                <strong>{weeklyWindowSummary.transactions}</strong>
+              </span>
             </div>
+            <Link className="dashboard-home__report-link" href="/reports">
+              Open reports
+            </Link>
           </article>
 
-          <div className="dashboard-home__hero-side">
-            {budgetOverview.activeBudgetCount > 0 ? (
-              <div className="dashboard-home__goal-card dashboard-home__budget-card">
-                <div className="dashboard-home__goal-card-head">
-                  <p className="eyebrow">Budget watch</p>
+          <article className={`dashboard-home__report-card dashboard-home__report-card--${monthlyReportTone} glass`}>
+            <div className="dashboard-home__report-card-head">
+              <div>
+                <p className="eyebrow">Monthly Report</p>
+                <h4>{formatSignedCurrency(currentSummary.net, displayCurrency)}</h4>
+              </div>
+              <span className="dashboard-visual-pill">{monthSummary.activeDays} active day{monthSummary.activeDays === 1 ? "" : "s"}</span>
+            </div>
+            <p>{monthlyReportCaption}</p>
+            <div className="dashboard-home__report-metrics" aria-label="Monthly report metrics">
+              <span>
+                <small>Income</small>
+                <strong>{formatCurrency(monthSummary.income, displayCurrency)}</strong>
+              </span>
+              <span>
+                <small>Spent</small>
+                <strong>{formatCurrency(monthSummary.expense, displayCurrency)}</strong>
+              </span>
+              <span>
+                <small>Transactions</small>
+                <strong>{monthSummary.transactions}</strong>
+              </span>
+            </div>
+            <Link className="dashboard-home__report-link" href="/reports">
+              Open reports
+            </Link>
+          </article>
+        </div>
+
+        <div className="dashboard-home__snapshot-grid dashboard-home__snapshot-grid--lower">
+          {budgetOverview.activeBudgetCount > 0 ? (
+            <div className="dashboard-home__goal-card dashboard-home__budget-card">
+              <div className="dashboard-home__goal-card-head">
+                <p className="eyebrow">Budget watch</p>
+              </div>
+              <div className="dashboard-home__goal-card-body">
+                <div
+                  className="dashboard-home__ring dashboard-home__ring--compact"
+                  style={{
+                    background: `conic-gradient(var(--accent) 0 ${Math.min(budgetOverview.totalProgressPercent, 100)}%, rgba(15, 23, 42, 0.08) ${Math.min(
+                      budgetOverview.totalProgressPercent,
+                      100
+                    )}% 100%)`,
+                  }}
+                >
+                  <div className="dashboard-home__ring-inner">
+                    <strong>{budgetOverview.alerts.length > 0 ? `${Math.round(budgetOverview.alerts[0].progressPercent)}%` : `${Math.round(budgetOverview.totalProgressPercent)}%`}</strong>
+                  </div>
                 </div>
-                <div className="dashboard-home__goal-card-body">
-                  <div
-                    className="dashboard-home__ring dashboard-home__ring--compact"
-                    style={{
-                      background: `conic-gradient(var(--accent) 0 ${Math.min(budgetOverview.totalProgressPercent, 100)}%, rgba(15, 23, 42, 0.08) ${Math.min(
-                        budgetOverview.totalProgressPercent,
-                        100
-                      )}% 100%)`,
-                    }}
-                  >
-                    <div className="dashboard-home__ring-inner">
-                      <strong>{budgetOverview.alerts.length > 0 ? `${Math.round(budgetOverview.alerts[0].progressPercent)}%` : `${Math.round(budgetOverview.totalProgressPercent)}%`}</strong>
-                    </div>
-                  </div>
-                  <div className="dashboard-home__goal-card-copy">
-                    <strong>{budgetOverview.alerts[0]?.name ?? "All budgets calm"}</strong>
-                    <small>
-                      {budgetOverview.alerts.length > 0
-                        ? `${budgetOverview.alerts.length} alert${budgetOverview.alerts.length === 1 ? "" : "s"} active`
-                        : `${budgetOverview.activeBudgetCount} budget${budgetOverview.activeBudgetCount === 1 ? "" : "s"} active`}
-                    </small>
-                  </div>
+                <div className="dashboard-home__goal-card-copy">
+                  <strong>{budgetOverview.alerts[0]?.name ?? "All budgets calm"}</strong>
+                  <small>
+                    {budgetOverview.alerts.length > 0
+                      ? `${budgetOverview.alerts.length} alert${budgetOverview.alerts.length === 1 ? "" : "s"} active`
+                      : `${budgetOverview.activeBudgetCount} budget${budgetOverview.activeBudgetCount === 1 ? "" : "s"} active`}
+                  </small>
                 </div>
               </div>
-            ) : (
-              <div className="dashboard-home__goal-card dashboard-home__budget-card dashboard-home__goal-card--empty">
-                <p className="eyebrow">Budget watch</p>
-                <strong>Set a budget to keep spending visible.</strong>
-                <Link className="button button-secondary button-small" href="/budgeting">
-                  Create budget
+            </div>
+          ) : (
+            <div className="dashboard-home__goal-card dashboard-home__budget-card dashboard-home__goal-card--empty">
+              <p className="eyebrow">Budget watch</p>
+              <strong>Set a budget to keep spending visible.</strong>
+              <Link className="button button-secondary button-small" href="/budgeting">
+                Create budget
+              </Link>
+            </div>
+          )}
+          {shouldShowStarterCard ? (
+            <div className="dashboard-home__starter-card">
+              <p className="eyebrow">Get started</p>
+              <strong>Upload files to unlock your dashboard.</strong>
+              <p>Bring in a statement and Clover will populate balance, movement, and goal progress in one place.</p>
+              <div className="dashboard-home__starter-actions">
+                <DashboardImportTrigger className="button button-primary button-small">
+                  Upload files
+                </DashboardImportTrigger>
+                <Link className="button button-secondary button-small" href="/accounts">
+                  Add an account
                 </Link>
               </div>
-            )}
-            {shouldShowStarterCard ? (
-              <div className="dashboard-home__starter-card">
-                <p className="eyebrow">Get started</p>
-                <strong>Upload files to unlock your dashboard.</strong>
-                <p>Bring in a statement and Clover will populate balance, movement, and goal progress in one place.</p>
-                <div className="dashboard-home__starter-actions">
-                  <DashboardImportTrigger className="button button-primary button-small">
-                    Upload files
-                  </DashboardImportTrigger>
-                  <Link className="button button-secondary button-small" href="/accounts">
-                    Add an account
-                  </Link>
-                </div>
-              </div>
-            ) : goalKey ? (
-              <div className="dashboard-home__goal-card">
-                <div className="dashboard-home__goal-card-head">
-                  <p className="eyebrow">Track progress</p>
-                </div>
-                <div className="dashboard-home__goal-card-body">
-                  <div
-                    className="dashboard-home__ring dashboard-home__ring--compact"
-                    style={{
-                      background: `conic-gradient(var(--accent) 0 ${goalProgressPercent}%, rgba(15, 23, 42, 0.08) ${goalProgressPercent}% 100%)`,
-                    }}
-                  >
-                    <div className="dashboard-home__ring-inner">
-                      <strong>{goalProgress.progressPercent === null ? "Set" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
-                    </div>
-                  </div>
-                  <div className="dashboard-home__goal-card-copy">
-                    <strong>{goalSummaryLabel}</strong>
-                    <small>{goalProgressLabel} complete</small>
-                    <small>{goalProgressNudge}</small>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="dashboard-home__goal-card dashboard-home__goal-card--empty">
+            </div>
+          ) : goalKey ? (
+            <div className="dashboard-home__goal-card">
+              <div className="dashboard-home__goal-card-head">
                 <p className="eyebrow">Track progress</p>
-                <strong>{goalHeroHeading}</strong>
-                <GoalsEditorModal
-                  compact
-                  triggerLabel={goalHeroActionLabel}
-                  triggerClassName="button button-secondary button-small"
-                  goals={GOAL_OPTIONS}
-                  currentGoal={goalKey}
-                  currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
-                  currentGoalPlan={currentGoalPlan}
-                  monthlyIncome={goalEditorMonthlyIncome}
-                  suggestedTargetAmount={monthSummary.expense > 0 ? monthSummary.expense : null}
-                  beginnerMode={user.financialExperience === "beginner"}
-                  currency={displayCurrency}
-                />
               </div>
-            )}
-          </div>
+              <div className="dashboard-home__goal-card-body">
+                <div
+                  className="dashboard-home__ring dashboard-home__ring--compact"
+                  style={{
+                    background: `conic-gradient(var(--accent) 0 ${goalProgressPercent}%, rgba(15, 23, 42, 0.08) ${goalProgressPercent}% 100%)`,
+                  }}
+                >
+                  <div className="dashboard-home__ring-inner">
+                    <strong>{goalProgress.progressPercent === null ? "Set" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
+                  </div>
+                </div>
+                <div className="dashboard-home__goal-card-copy">
+                  <strong>{goalSummaryLabel}</strong>
+                  <small>{goalProgressLabel} complete</small>
+                  <small>{goalProgressNudge}</small>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="dashboard-home__goal-card dashboard-home__goal-card--empty">
+              <p className="eyebrow">Track progress</p>
+              <strong>{goalHeroHeading}</strong>
+              <GoalsEditorModal
+                compact
+                triggerLabel={goalHeroActionLabel}
+                triggerClassName="button button-secondary button-small"
+                goals={GOAL_OPTIONS}
+                currentGoal={goalKey}
+                currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
+                currentGoalPlan={currentGoalPlan}
+                monthlyIncome={goalEditorMonthlyIncome}
+                suggestedTargetAmount={monthSummary.expense > 0 ? monthSummary.expense : null}
+                beginnerMode={user.financialExperience === "beginner"}
+                currency={displayCurrency}
+              />
+            </div>
+          )}
         </div>
 
       </section>
