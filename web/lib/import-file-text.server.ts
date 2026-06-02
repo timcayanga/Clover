@@ -512,6 +512,7 @@ const shouldPreferPdfOcrFirst = (fileName?: string | null) => {
     lower.includes("china bank") ||
     lower.includes("china-bank") ||
     lower.includes("chinabank") ||
+    (/union[\s_-]*bank/i.test(lower) && (lower.includes("word") || lower.includes("excel") || lower.includes("template") || lower.includes("business_statement"))) ||
     lower.includes("bank cert") ||
     lower.includes("bank-cert") ||
     lower.includes("bankstatementandbankcert") ||
@@ -536,6 +537,7 @@ const shouldUseAggressivePdfOcrProfile = (fileName?: string | null) => {
   return (
     lower.includes("bank cert") ||
     lower.includes("bank-cert") ||
+    (/union[\s_-]*bank/i.test(lower) && (lower.includes("word") || lower.includes("excel") || lower.includes("template") || lower.includes("business_statement"))) ||
     lower.includes("statement of account") ||
     lower.includes("statementofaccount") ||
     lower.includes("soa") ||

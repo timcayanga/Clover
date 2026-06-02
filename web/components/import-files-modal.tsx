@@ -1559,19 +1559,21 @@ const getImportVisibilityTimeoutMs = (fileCount: number) =>
 
 const isLikelyLowQualityUnionBankStatementFilename = (fileName: string) => {
   const lower = fileName.toLowerCase();
-  return /union\s*bank/i.test(lower) && /(?:word|excel|template|business_statement)/i.test(lower);
+  return /union[\s_-]*bank/i.test(lower) && /(?:word|excel|template|business_statement)/i.test(lower);
 };
 
+const isExplicitLowQualityUnionBankStatementFilename = (fileName: string) =>
+  /union[\s_-]*bank/i.test(fileName.toLowerCase()) && /(?:word|excel|template|business_statement)/i.test(fileName.toLowerCase());
+
 const isNoisyVisibilityBank = (fileName: string) => {
-  const bank = normalizeBankName(fileName);
   return (
-    ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bank) ||
-    bank === "UnionBank" && isLikelyLowQualityUnionBankStatementFilename(fileName)
+    ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(normalizeBankName(fileName)) ||
+    isLikelyLowQualityUnionBankStatementFilename(fileName)
   );
 };
 
 const isLikelyLowQualityUnionBankStatementFile = (fileName: string) =>
-  normalizeBankName(fileName) === "UnionBank" || isLikelyLowQualityUnionBankStatementFilename(fileName);
+  isLikelyLowQualityUnionBankStatementFilename(fileName) || normalizeBankName(fileName) === "UnionBank";
 
 const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
   if (normalizeBankName(fileName) !== "PNB") {
@@ -1589,6 +1591,7 @@ const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
 
 const shouldSkipClientStatementPreparse = (fileName: string) =>
   isNoisyVisibilityBank(fileName) ||
+  isExplicitLowQualityUnionBankStatementFilename(fileName) ||
   isLikelyLowQualityPnbStatementFile(fileName);
 
 const hasVisibleImportData = (
@@ -5312,7 +5315,6 @@ export function ImportFilesModal({
       const shouldSkipLocalStatementPreparse =
         itemImportMode === "statement" &&
         (lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv")) &&
-        inferredBankName !== "Unknown" &&
         shouldSkipClientStatementPreparse(item.file.name);
       let extractedTextForUpload = localPreparseTextByItemIdRef.current.get(itemId);
       if (

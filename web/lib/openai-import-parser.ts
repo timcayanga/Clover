@@ -10,6 +10,26 @@ import { summarizeMerchantText } from "@/lib/merchant-labels";
 
 const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v1";
 const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v1";
+const OPENAI_IMPORT_IMAGE_MODEL_FALLBACK = "gpt-4.1";
+const OPENAI_IMPORT_TEXT_MODEL_FALLBACK = "gpt-4.1";
+const OPENAI_IMPORT_PDF_MODEL_FALLBACK = "gpt-4o";
+
+const resolveOpenAIImportModel = (value: string | undefined, fallback: string, label: string) => {
+  const model = value?.trim();
+  if (!model) {
+    return fallback;
+  }
+
+  if (/^gpt-image(?:-\d+)?$/i.test(model) || /gpt-image/i.test(model)) {
+    console.warn(`Ignoring unsupported OpenAI import ${label}`, {
+      model,
+      fallback,
+    });
+    return fallback;
+  }
+
+  return model;
+};
 
 const GENERIC_PARSER_GUIDANCE = [
   "Generic parser guidance:",
@@ -1519,10 +1539,21 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   const pageImageLimit =
     params.text.trim().length === 0 ? 8 : params.importMode === "receipt" ? 4 : isNoisyVisionInstitution ? 8 : 2;
   const pageImagesToSend = pageImagesInput.slice(0, Math.min(pageImageLimit, pageImagesInput.length));
-  const textModel = (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL?.trim() || "gpt-4.1";
-  const imageModel =
-    (env as { OPENAI_IMPORT_PARSER_IMAGE_MODEL?: string }).OPENAI_IMPORT_PARSER_IMAGE_MODEL?.trim() || "gpt-4.1";
-  const pdfModel = (env as { OPENAI_IMPORT_PARSER_PDF_MODEL?: string }).OPENAI_IMPORT_PARSER_PDF_MODEL?.trim() || "gpt-4o";
+  const textModel = resolveOpenAIImportModel(
+    (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL,
+    OPENAI_IMPORT_TEXT_MODEL_FALLBACK,
+    "text model",
+  );
+  const imageModel = resolveOpenAIImportModel(
+    (env as { OPENAI_IMPORT_PARSER_IMAGE_MODEL?: string }).OPENAI_IMPORT_PARSER_IMAGE_MODEL,
+    OPENAI_IMPORT_IMAGE_MODEL_FALLBACK,
+    "image model",
+  );
+  const pdfModel = resolveOpenAIImportModel(
+    (env as { OPENAI_IMPORT_PARSER_PDF_MODEL?: string }).OPENAI_IMPORT_PARSER_PDF_MODEL,
+    OPENAI_IMPORT_PDF_MODEL_FALLBACK,
+    "pdf model",
+  );
   const model = pdfFileDataBase64 ? pdfModel : pageImagesToSend.length > 0 ? imageModel : textModel;
   const buildUserContent = (pageImages: Array<{ page: number; dataUrl: string }>) => {
     const userContent: Array<Record<string, unknown>> = [{ type: "input_text", text: userPrompt }];
@@ -1889,8 +1920,11 @@ export const transcribeImportImagesWithOpenAI = async (params: {
     importMode: params.importMode ?? null,
   });
 
-  const imageModel =
-    (env as { OPENAI_IMPORT_PARSER_IMAGE_MODEL?: string }).OPENAI_IMPORT_PARSER_IMAGE_MODEL?.trim() || "gpt-4.1";
+  const imageModel = resolveOpenAIImportModel(
+    (env as { OPENAI_IMPORT_PARSER_IMAGE_MODEL?: string }).OPENAI_IMPORT_PARSER_IMAGE_MODEL,
+    OPENAI_IMPORT_IMAGE_MODEL_FALLBACK,
+    "image transcription model",
+  );
   const pageImagesToSend = params.pageImages.slice(0, params.importMode === "statement" ? 6 : 4);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120_000);
