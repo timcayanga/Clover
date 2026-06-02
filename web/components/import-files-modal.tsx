@@ -6708,9 +6708,20 @@ export function ImportFilesModal({
   const overallProgress = items.length > 0
     ? ((progressSettledFileCount + activeProgressContribution) / items.length) * 100
     : 0;
+  const activitySnapshotForDisplay =
+    lastImportActivityRef.current?.workspaceId === workspaceId &&
+    lastImportActivityRef.current.fileTotal === items.length
+      ? lastImportActivityRef.current
+      : null;
+  const activityCompletedFileCount = Math.min(
+    items.length,
+    Math.max(0, Number(activitySnapshotForDisplay?.completedFiles ?? 0))
+  );
+  const displayedCompletedFileCount = Math.max(progressSettledFileCount, activityCompletedFileCount);
+  const activityProgressFloor = Math.max(0, Math.min(100, Number(activitySnapshotForDisplay?.progress ?? 0)));
   const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
   const showCompactProgress = busy || Boolean(activeItem) || hasCompletedBatch || Boolean(currentErrorItem);
-  const targetDisplayProgress = showCompactProgress ? overallProgress : 0;
+  const targetDisplayProgress = showCompactProgress ? Math.max(overallProgress, activityProgressFloor) : 0;
   const shouldLockPageInteraction =
     open && !backgroundOnly && !launchInBackground && (Boolean(activePasswordItem) || !showCompactProgress);
   const hasImportIssue = items.some((item) => item.status === "error" || item.status === "needs_password") || Boolean(validationNotice);
@@ -6857,10 +6868,15 @@ export function ImportFilesModal({
       surface: importActivitySurfaceRef.current,
       status: nextStatus,
       fileName: activeProgressItem?.file.name ?? items[items.length - 1]?.file.name ?? null,
-      fileIndex: activeProgressItem ? items.findIndex((item) => item.id === activeProgressItem.id) + 1 : progressSettledFileCount,
+      fileIndex: activeProgressItem
+        ? Math.max(
+            items.findIndex((item) => item.id === activeProgressItem.id) + 1,
+            Number(activitySnapshotForDisplay?.fileIndex ?? 0)
+          )
+        : displayedCompletedFileCount,
       fileTotal: items.length,
-      completedFiles: progressSettledFileCount,
-      progress: displayedOverallProgress,
+      completedFiles: displayedCompletedFileCount,
+      progress: Math.max(displayedOverallProgress, activityProgressFloor),
       detail: nextDetail,
       summary: nextStatus === "done" ? previousSummary : null,
       errorCode: activeErrorItem?.errorCode ?? (validationNotice ? lastImportActivityRef.current?.errorCode ?? null : null),
@@ -6882,7 +6898,7 @@ export function ImportFilesModal({
 
     lastImportActivityRef.current = nextSnapshot;
     setImportActivity(nextSnapshot);
-  }, [activeProgressItem, busy, completedFileCount, displayedOverallProgress, items, message, open, progressSettledFileCount, validationNotice, workspaceId]);
+  }, [activeProgressItem, activityProgressFloor, activitySnapshotForDisplay, busy, completedFileCount, displayedCompletedFileCount, displayedOverallProgress, items, message, open, progressSettledFileCount, validationNotice, workspaceId]);
   useEffect(() => {
     if (autoCloseCompletedBatchTimerRef.current) {
       window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
@@ -7433,20 +7449,26 @@ export function ImportFilesModal({
       <ImportUploadDock
         open
         tone={currentErrorItem ? "error" : "default"}
-        fileName={currentErrorItem?.file.name ?? activeProgressItem?.file.name ?? null}
+        fileName={currentErrorItem?.file.name ?? activitySnapshotForDisplay?.fileName ?? activeProgressItem?.file.name ?? null}
         fileIndex={
           currentErrorItem
             ? items.findIndex((item) => item.id === currentErrorItem.id) + 1
             : activeProgressItem
-              ? items.findIndex((item) => item.id === activeProgressItem.id) + 1
-              : completedFileCount
+              ? Math.max(
+                  items.findIndex((item) => item.id === activeProgressItem.id) + 1,
+                  Number(activitySnapshotForDisplay?.fileIndex ?? 0)
+                )
+              : displayedCompletedFileCount
         }
         fileTotal={items.length}
-        completedFiles={progressSettledFileCount}
-        progress={displayedOverallProgress}
+        completedFiles={displayedCompletedFileCount}
+        progress={Math.max(displayedOverallProgress, activityProgressFloor)}
         summary={compactProgressSummary}
         detail={
           currentErrorItem?.error ??
+          (activityProgressFloor > displayedOverallProgress && activitySnapshotForDisplay?.detail
+            ? activitySnapshotForDisplay.detail
+            : null) ??
           ((!activeProgressItem && hasCompletedBatch && message)
             ? message
             : friendlyImportProgressLabel(
