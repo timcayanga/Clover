@@ -14,6 +14,7 @@
     "db:seed": "../node_modules/.bin/tsx prisma/seed.ts",
     "qa:parsers": "../node_modules/.bin/tsx scripts/parser-regression.ts",
     "qa:imports": "../node_modules/.bin/tsx scripts/import-smoke-regression.ts",
+    "qa:generic-parser-hardening": "../node_modules/.bin/tsx scripts/generic-parser-hardening-regression.ts",
     "qa:bpi-enrichment": "../node_modules/.bin/tsx scripts/bpi-four-file-enrichment-regression.ts",
     "qa:bpi-import-worker-enrichment": "../node_modules/.bin/tsx scripts/bpi-import-worker-enrichment-regression.ts",
     "qa:cimb-multi-account": "../node_modules/.bin/tsx scripts/cimb-multi-account-import-regression.ts",

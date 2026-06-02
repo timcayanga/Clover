@@ -59,6 +59,11 @@ export type ImportParseContext = {
   accountNumber?: string | null;
 };
 
+type GenericParserOptions = {
+  institutionAwareNormalization?: boolean;
+  splitAccountSections?: boolean;
+};
+
 const delimiterForFile = (fileType: string, fileName: string) => {
   const lower = `${fileType} ${fileName}`.toLowerCase();
   return ",";
@@ -10037,6 +10042,216 @@ const isGenericStatementBoilerplateLine = (line: string) => {
   );
 };
 
+const clampGenericConfidence = (value: number) => Math.max(20, Math.min(98, Math.round(value)));
+
+const assessGenericOcrQuality = (text: string) => {
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+  const sampleLines = lines.slice(0, Math.min(lines.length, 160));
+  const textSample = sampleLines.join("\n");
+  const totalCharacters = textSample.length || 1;
+  const replacementCharacters = (textSample.match(/[�□]/g) ?? []).length;
+  const alphaNumericCharacters = (textSample.match(/[A-Za-z0-9]/g) ?? []).length;
+  const noisySymbolCharacters = (textSample.match(/[~`|_^={}\[\]<>\\]/g) ?? []).length;
+  const characterSpacedLines = sampleLines.filter((line) => looksCharacterSpacedGenericLine(line)).length;
+  const dateLikeLines = sampleLines.filter((line) => genericStatementDateStartPattern.test(line)).length;
+  const moneyLikeLines = sampleLines.filter((line) => createGenericMoneyTokenPattern().test(line)).length;
+  const reasons: string[] = [];
+  let score = 100;
+
+  if (replacementCharacters / totalCharacters > 0.01) {
+    score -= 22;
+    reasons.push("OCR contains replacement characters.");
+  }
+
+  if (alphaNumericCharacters / totalCharacters < 0.55) {
+    score -= 18;
+    reasons.push("OCR text has a low alphanumeric ratio.");
+  }
+
+  if (noisySymbolCharacters / totalCharacters > 0.04) {
+    score -= 12;
+    reasons.push("OCR text contains many table/symbol artifacts.");
+  }
+
+  if (sampleLines.length > 0 && characterSpacedLines / sampleLines.length > 0.12) {
+    score -= 12;
+    reasons.push("OCR has character-spaced lines that may indicate scan distortion.");
+  }
+
+  if (dateLikeLines < 2) {
+    score -= 16;
+    reasons.push("Few transaction-like date lines were detected.");
+  }
+
+  if (moneyLikeLines < 2) {
+    score -= 16;
+    reasons.push("Few monetary values were detected.");
+  }
+
+  return {
+    score: clampGenericConfidence(score),
+    reasons,
+    metrics: {
+      lineCount: lines.length,
+      dateLikeLines,
+      moneyLikeLines,
+      characterSpacedLines,
+      replacementCharacters,
+    },
+  };
+};
+
+const assessGenericTableShape = (lines: string[], firstDateIndex: number, amountMode: GenericStatementAmountMode | null) => {
+  const transactionLines = lines
+    .slice(Math.max(0, firstDateIndex))
+    .filter((line) => genericStatementDateStartPattern.test(line) && !isGenericStatementBoilerplateLine(line));
+  const rowsWithAmounts = transactionLines.filter((line) => (line.match(createGenericMoneyTokenPattern()) ?? []).length >= 1);
+  const rowsWithTwoAmounts = transactionLines.filter((line) => (line.match(createGenericMoneyTokenPattern()) ?? []).length >= 2);
+  const rowsWithDescriptions = transactionLines.filter((line) => /[A-Za-z]{3,}/.test(line));
+  const reasons: string[] = [];
+  let score = 50;
+
+  if (amountMode) {
+    score += 20;
+  } else {
+    reasons.push("No clear debit/credit/balance column order was detected.");
+  }
+
+  if (transactionLines.length >= 3) {
+    score += 12;
+  } else {
+    reasons.push("Only a small number of dated transaction rows were detected.");
+  }
+
+  if (transactionLines.length > 0 && rowsWithAmounts.length / transactionLines.length >= 0.8) {
+    score += 10;
+  } else {
+    reasons.push("Some dated rows are missing recognizable amounts.");
+  }
+
+  if (transactionLines.length > 0 && rowsWithTwoAmounts.length / transactionLines.length >= 0.5) {
+    score += 8;
+  } else {
+    reasons.push("Running-balance or debit/credit columns are incomplete.");
+  }
+
+  if (transactionLines.length > 0 && rowsWithDescriptions.length / transactionLines.length >= 0.8) {
+    score += 5;
+  } else {
+    reasons.push("Some rows have weak transaction descriptions.");
+  }
+
+  return {
+    score: clampGenericConfidence(score),
+    reasons,
+    metrics: {
+      transactionLines: transactionLines.length,
+      rowsWithAmounts: rowsWithAmounts.length,
+      rowsWithTwoAmounts: rowsWithTwoAmounts.length,
+      amountMode,
+    },
+  };
+};
+
+const assessGenericReconciliation = (
+  rows: ParsedImportRow[],
+  openingBalance: number | null,
+  endingBalance: number | null
+) => {
+  const reasons: string[] = [];
+  let score = 82;
+  let computedBalance = typeof openingBalance === "number" ? openingBalance : null;
+  let runningBalanceComparisons = 0;
+  let runningBalanceMismatches = 0;
+  let unknownDirections = 0;
+
+  for (const row of rows) {
+    const amount = parseMoney(row.amount ?? null);
+    if (amount === null) {
+      continue;
+    }
+
+    const description = row.description ?? row.merchantRaw ?? row.merchantClean ?? "";
+    const rawPayload = row.rawPayload && typeof row.rawPayload === "object" ? row.rawPayload : null;
+    const rowBalance =
+      typeof rawPayload?.balance === "number"
+        ? rawPayload.balance
+        : parseMoney(typeof rawPayload?.balanceText === "string" ? rawPayload.balanceText : null);
+    const direction =
+      row.type === "income"
+        ? 1
+        : row.type === "expense"
+          ? -1
+          : /(?:deposit|credit|cash\s*in|inward|incoming|received|interest)/i.test(description)
+            ? 1
+            : /(?:withdraw|debit|payment|fee|tax|outward|outgoing|sent|cash\s*out)/i.test(description)
+              ? -1
+              : 0;
+
+    if (direction === 0) {
+      unknownDirections += 1;
+    } else if (computedBalance !== null) {
+      computedBalance += direction * amount;
+    }
+
+    if (computedBalance !== null && rowBalance !== null) {
+      runningBalanceComparisons += 1;
+      if (!approxMoney(computedBalance, rowBalance, 1)) {
+        runningBalanceMismatches += 1;
+      }
+      computedBalance = rowBalance;
+    } else if (rowBalance !== null) {
+      computedBalance = rowBalance;
+    }
+  }
+
+  const endingDiff =
+    computedBalance !== null && endingBalance !== null ? Math.abs(Math.round((computedBalance - endingBalance) * 100) / 100) : null;
+
+  if (runningBalanceComparisons >= 2) {
+    const mismatchRatio = runningBalanceMismatches / runningBalanceComparisons;
+    if (mismatchRatio === 0) {
+      score += 12;
+    } else if (mismatchRatio <= 0.25) {
+      score -= 10;
+      reasons.push("Some running balances do not match row amounts.");
+    } else {
+      score -= 26;
+      reasons.push("Many running balances do not reconcile with row amounts.");
+    }
+  } else if (endingBalance !== null && computedBalance !== null) {
+    if (endingDiff !== null && endingDiff <= 1) {
+      score += 8;
+    } else {
+      score -= 18;
+      reasons.push("Computed row totals do not match the ending balance.");
+    }
+  } else {
+    score -= 8;
+    reasons.push("No opening/running balance was available for reconciliation.");
+  }
+
+  if (rows.length > 0 && unknownDirections / rows.length > 0.35) {
+    score -= 12;
+    reasons.push("Several rows have ambiguous income/expense direction.");
+  }
+
+  return {
+    score: clampGenericConfidence(score),
+    reasons,
+    metrics: {
+      runningBalanceComparisons,
+      runningBalanceMismatches,
+      unknownDirections,
+      endingDiff,
+    },
+  };
+};
+
 const isGenericBankStatementText = (text: string) => {
   const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
   const compactSignal = compactWhitespace(compactGenericSignalText(text));
@@ -10061,6 +10276,56 @@ const isGenericBankStatementText = (text: string) => {
     ((compactSignal.match(/\b(?:\d{2}[A-Z]{3}\d{2}|\d{2}[A-Z]{3}\d{4}|[A-Z]{3}\d{2}[A-Z]{2})\b/g) ?? []).length >= 3);
 
   return hasTopMetadata && (hasTransactionShell || hasDatedActivityHint);
+};
+
+const splitGenericAccountStatementSections = (text: string) => {
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+  const accountAnchors = lines
+    .map((line, index) => {
+      const accountNumber =
+        preserveAccountNumberDisplayCandidate(
+          line.match(/\b(?:account\s*(?:no\.?|number|#)|acct\s*(?:no\.?|number|#)|a\/c\s*(?:no\.?|number|#))\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d|\*+[\d*]{4,}))/i)?.[1] ??
+            null
+        ) ?? normalizeAccountNumberCandidate(line.match(/\b(?:account\s*(?:no\.?|number|#)|acct\s*(?:no\.?|number|#)|a\/c\s*(?:no\.?|number|#))\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1] ?? null);
+      return accountNumber ? { index, accountNumber } : null;
+    })
+    .filter((entry): entry is { index: number; accountNumber: string } => Boolean(entry));
+
+  const uniqueAccountNumbers = Array.from(new Set(accountAnchors.map((entry) => entry.accountNumber.replace(/\D/g, ""))));
+  if (uniqueAccountNumbers.length < 2) {
+    return [];
+  }
+
+  const headerPrefix = lines.slice(0, accountAnchors[0]?.index ?? 0).filter((line) =>
+    /(?:statement|period|currency|bank|account\s+summary|customer|client|name)/i.test(line)
+  );
+  const sections: Array<{ text: string; accountNumber: string }> = [];
+  for (let index = 0; index < accountAnchors.length; index += 1) {
+    const anchor = accountAnchors[index];
+    const nextAnchor = accountAnchors[index + 1] ?? null;
+    if (!anchor) {
+      continue;
+    }
+
+    const sectionLines = lines.slice(anchor.index, nextAnchor ? nextAnchor.index : lines.length);
+    const hasDatedRows = sectionLines.some((line) => genericStatementDateStartPattern.test(line));
+    const hasMoneyRows = sectionLines.some((line) => createGenericMoneyTokenPattern().test(line));
+    if (!hasDatedRows || !hasMoneyRows) {
+      continue;
+    }
+
+    sections.push({
+      accountNumber: anchor.accountNumber,
+      text: [...headerPrefix, ...sectionLines].join("\n"),
+    });
+  }
+
+  const sectionAccounts = new Set(sections.map((section) => section.accountNumber.replace(/\D/g, "")));
+  return sectionAccounts.size >= 2 ? sections : [];
 };
 
 const normalizeGenericDigitalSavingsInstitution = (value: string | null | undefined) => {
@@ -12959,6 +13224,7 @@ const parseGenericStatementTransactionBlock = (
   block: string[],
   state: {
     accountName: string;
+    accountNumber?: string | null;
     institution: string | null;
     yearHint: number | null;
     startDate: Date | null;
@@ -13267,6 +13533,7 @@ const parseGenericStatementTransactionBlock = (
     description,
     categoryName,
     accountName: state.accountName,
+    accountNumber: state.accountNumber ?? undefined,
     institution: state.institution ?? undefined,
     type,
     confidence: 82,
@@ -14442,8 +14709,8 @@ const parseGenericCreditCardText = (
 export const parseGenericBankStatementText = (
   text: string,
   context: ImportParseContext = {},
-  options: { institutionAwareNormalization?: boolean } = {}
-) => {
+  options: GenericParserOptions = {}
+): { metadata: DetectedStatementMetadata; rows: ParsedImportRow[] } | null => {
   const chinaBankParsed = parseChinaBankImportText(text, context);
   if (chinaBankParsed) {
     return chinaBankParsed;
@@ -14496,6 +14763,54 @@ export const parseGenericBankStatementText = (
   }
 
   const genericText = normalizeGenericOcrText(text);
+  const ocrQuality = assessGenericOcrQuality(genericText);
+  if (options.splitAccountSections !== false) {
+    const accountSections = splitGenericAccountStatementSections(genericText);
+    if (accountSections.length >= 2) {
+      const parsedSections: Array<{ metadata: DetectedStatementMetadata; rows: ParsedImportRow[] }> = accountSections
+        .map((section) =>
+          parseGenericBankStatementText(
+            section.text,
+            {
+              ...context,
+              accountNumber: section.accountNumber,
+            },
+            {
+              ...options,
+              splitAccountSections: false,
+            }
+          )
+        )
+        .filter((parsed): parsed is { metadata: DetectedStatementMetadata; rows: ParsedImportRow[] } => Boolean(parsed && parsed.rows.length > 0));
+      if (parsedSections.length >= 2) {
+        const rows = parsedSections.flatMap((parsed) =>
+          parsed.rows.map((row) => ({
+            ...row,
+            accountNumber: row.accountNumber ?? parsed.metadata.accountNumber ?? undefined,
+            accountName: row.accountName ?? parsed.metadata.accountName ?? undefined,
+            institution: row.institution ?? parsed.metadata.institution ?? undefined,
+          }))
+        );
+        const firstMetadata = parsedSections[0]!.metadata;
+        const finalMetadata = parsedSections.at(-1)!.metadata;
+        return {
+          metadata: {
+            ...firstMetadata,
+            accountNumber: null,
+            accountName: firstMetadata.institution ?? context.institution ?? "Multiple Accounts",
+            openingBalance: null,
+            endingBalance:
+              parsedSections.reduce((total, parsed) => total + (typeof parsed.metadata.endingBalance === "number" ? parsed.metadata.endingBalance : 0), 0) ||
+              finalMetadata.endingBalance,
+            startDate: parsedSections.map((parsed) => parsed.metadata.startDate).filter(Boolean).sort()[0] ?? firstMetadata.startDate,
+            endDate: parsedSections.map((parsed) => parsed.metadata.endDate).filter(Boolean).sort().at(-1) ?? finalMetadata.endDate,
+            confidence: Math.min(95, Math.max(...parsedSections.map((parsed) => parsed.metadata.confidence ?? 0))),
+          },
+          rows,
+        };
+      }
+    }
+  }
   const metadata = parseGenericStatementMetadata(genericText, context);
   const repeatedStatementSummary = extractLatestRepeatedStatementSummary(text);
   if (!metadata) {
@@ -14691,6 +15006,7 @@ export const parseGenericBankStatementText = (
     return { metadata, rows: [] };
   }
   const amountMode = inferGenericStatementAmountMode(lines, firstDateIndex);
+  const tableQuality = assessGenericTableShape(lines, firstDateIndex, amountMode);
 
   const blocks: string[][] = [];
   let current: string[] = [];
@@ -14795,6 +15111,7 @@ export const parseGenericBankStatementText = (
           yearHint,
           startDate: metadata.startDate ? new Date(metadata.startDate) : null,
           endDate: metadata.endDate ? new Date(metadata.endDate) : null,
+          accountNumber: metadata.accountNumber,
           amountMode,
           previousBalance,
         },
@@ -14923,6 +15240,43 @@ export const parseGenericBankStatementText = (
       : effectiveMetadata.openingBalance ??
     (typeof firstRawPayload?.previousBalance === "number" ? firstRawPayload.previousBalance : null) ??
     rowImpliedOpeningBalance;
+  const reconciliationQuality = assessGenericReconciliation(normalizedRows, derivedOpeningBalance, derivedEndingBalance);
+  const genericQualityScore = Math.min(
+    ocrQuality.score,
+    tableQuality.score,
+    reconciliationQuality.score,
+    Math.min(100, effectiveMetadata.confidence + 4)
+  );
+  const genericReviewReasons = Array.from(
+    new Set([...ocrQuality.reasons, ...tableQuality.reasons, ...reconciliationQuality.reasons])
+  );
+  const genericQualityPayload = {
+    ocr: ocrQuality,
+    table: tableQuality,
+    reconciliation: reconciliationQuality,
+    score: genericQualityScore,
+    reviewReasons: genericReviewReasons,
+  };
+  const rowsWithGenericQuality = normalizedRows.map((row) => {
+    const existingRawPayload = row.rawPayload && typeof row.rawPayload === "object" ? row.rawPayload : {};
+    const adjustedConfidence = Math.min(row.confidence ?? genericQualityScore, genericQualityScore);
+    const adjustedParserConfidence = Math.min(row.parserConfidence ?? adjustedConfidence, adjustedConfidence);
+    const adjustedCategoryConfidence =
+      row.categoryName?.trim().toLowerCase() === "other"
+        ? Math.min(row.categoryConfidence ?? adjustedConfidence, adjustedConfidence, 55)
+        : Math.min(row.categoryConfidence ?? adjustedConfidence, adjustedConfidence);
+    return {
+      ...row,
+      confidence: adjustedConfidence,
+      parserConfidence: adjustedParserConfidence,
+      categoryConfidence: adjustedCategoryConfidence,
+      rawPayload: {
+        ...existingRawPayload,
+        genericQuality: genericQualityPayload,
+        genericReviewReasons,
+      },
+    };
+  });
 
   return {
     metadata: {
@@ -14931,9 +15285,9 @@ export const parseGenericBankStatementText = (
       endDate: shouldPreferRowRange ? rowEndDate?.toISOString() ?? null : effectiveMetadata.endDate,
       openingBalance: derivedOpeningBalance,
       endingBalance: derivedEndingBalance,
-      confidence: Math.min(100, effectiveMetadata.confidence + 4),
+      confidence: genericQualityScore,
     },
-    rows: normalizedRows,
+    rows: rowsWithGenericQuality,
   };
 };
 

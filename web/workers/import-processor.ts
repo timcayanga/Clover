@@ -90,12 +90,24 @@ type ImportInsightSummary = {
 };
 
 type ImportInsightSourceRow = {
+  date?: unknown;
   amount?: unknown;
+  currency?: unknown;
   type?: unknown;
   merchantRaw?: unknown;
   merchantClean?: unknown;
   description?: unknown;
   categoryName?: unknown;
+  categoryConfidence?: unknown;
+  categoryReason?: unknown;
+  confidence?: unknown;
+  parserConfidence?: unknown;
+  accountMatchConfidence?: unknown;
+  duplicateConfidence?: unknown;
+  transferConfidence?: unknown;
+  statementFingerprint?: unknown;
+  normalizedPayload?: unknown;
+  learnedRuleIdsApplied?: unknown;
   rawPayload?: unknown;
 };
 
@@ -493,13 +505,17 @@ const inferParserRowConfidence = (params: {
   categoryConfidence?: unknown;
   statementConfidence?: unknown;
   categoryName?: string | null;
+  rawPayload?: unknown;
 }) => {
   const confidence = normalizeImportConfidenceScore(params.confidence);
   const parserConfidence = normalizeImportConfidenceScore(params.parserConfidence);
   const categoryConfidence = normalizeImportConfidenceScore(params.categoryConfidence);
   const statementConfidence = normalizeImportConfidenceScore(params.statementConfidence);
   const hasConcreteCategory = Boolean(params.categoryName?.trim()) && params.categoryName?.trim().toLowerCase() !== "other";
-  const deterministicFallback = hasConcreteCategory ? Math.min(95, Math.max(90, statementConfidence || 90)) : 0;
+  const rawPayload = params.rawPayload && typeof params.rawPayload === "object" ? (params.rawPayload as Record<string, unknown>) : null;
+  const genericReviewReasons = rawPayload?.genericReviewReasons;
+  const hasGenericReviewReasons = Array.isArray(genericReviewReasons) && genericReviewReasons.length > 0;
+  const deterministicFallback = hasConcreteCategory && !hasGenericReviewReasons ? Math.min(95, Math.max(90, statementConfidence || 90)) : 0;
 
   return Math.max(confidence, parserConfidence, categoryConfidence, deterministicFallback);
 };
@@ -3583,6 +3599,7 @@ export const processImportEnrichmentJobs = async (options: {
             categoryConfidence: row.categoryConfidence,
             statementConfidence,
             categoryName,
+            rawPayload: (row as { rawPayload?: unknown }).rawPayload,
           });
           const categoryConfidence = Math.max(normalizeImportConfidenceScore(row.categoryConfidence), rowConfidence);
           const parserConfidence = Math.max(normalizeImportConfidenceScore(row.parserConfidence), normalizeImportConfidenceScore(row.confidence), statementConfidence);
@@ -6611,6 +6628,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       categoryConfidence: row.categoryConfidence,
       statementConfidence,
       categoryName: parsedCategoryName,
+      rawPayload: (row as { rawPayload?: unknown }).rawPayload,
     });
     const rowParserConfidence = Math.max(normalizeImportConfidenceScore(row.parserConfidence), normalizeImportConfidenceScore(row.confidence), normalizeImportConfidenceScore(statementConfidence));
     const rowCategoryConfidence = Math.max(normalizeImportConfidenceScore(row.categoryConfidence), rowConfidence);
