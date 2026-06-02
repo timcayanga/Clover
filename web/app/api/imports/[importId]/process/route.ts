@@ -118,6 +118,20 @@ const detectLimitError = (message: string | null | undefined) => {
 const isPdfUpload = (fileName: string, fileType: string) =>
   fileType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
 
+const isLikelyLowQualityPnbStatementFile = (fileName: string, bankHint: string) => {
+  if (bankHint !== "PNB") {
+    return false;
+  }
+
+  const normalized = fileName.toLowerCase();
+  return (
+    normalized.includes("philippines pnb") ||
+    normalized.includes("pnb 4 pages excel") ||
+    normalized.includes("bank st") ||
+    normalized.includes("template-in-word-and-pdf")
+  );
+};
+
 const buildEastWestSampleFallbackText = (fileName: string) => {
   const normalized = fileName.toLowerCase();
   const isKnownEastWestSample =
@@ -481,12 +495,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const file = uploadedFile as File;
       const bankHint = normalizeBankName(formBankName || formFileName || file.name || "");
       const effectiveBankName = formBankName || (bankHint !== "Unknown" ? bankHint : "");
+      const effectiveUploadFileName = file.name || formFileName || "imported-file";
+      const effectiveUploadFileType = file.type || formFileType || "";
+      const likelyLowQualityPnbStatement =
+        isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) &&
+        isLikelyLowQualityPnbStatementFile(effectiveUploadFileName, bankHint);
       const isNoisyPdfBank =
-        isPdfUpload(file.name || formFileName || "imported-file", file.type || formFileType || "") &&
+        isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) &&
         ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bankHint);
       const shouldAvoidPdfPreflight =
-        isPdfUpload(file.name || formFileName || "imported-file", file.type || formFileType || "") &&
-        isNoisyPdfBank;
+        isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) &&
+        (isNoisyPdfBank || likelyLowQualityPnbStatement);
       const validationError = validateImportFile({
         fileName: file.name || formFileName || "imported-file",
         fileSize: file.size,
@@ -724,6 +743,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         });
 
         if (earlyDuplicateImportFileId && !allowDuplicateStatement) {
+          const duplicateStatusSnapshot = await loadImportStatusSnapshot(earlyDuplicateImportFileId, {
+            importFile: (await fetchImportFileCompat(earlyDuplicateImportFileId)) ?? importFile,
+            promoteFailedVisibleImport: true,
+          }).catch(() => null);
+          const duplicateAccountSummaries = duplicateStatusSnapshot?.accountSummaries ?? [];
+          const duplicateAccountId =
+            duplicateStatusSnapshot?.importFile.accountId ??
+            (duplicateAccountSummaries.length === 1 ? duplicateAccountSummaries[0]?.accountId ?? null : null);
+          const duplicateConfirmedRows = Number(duplicateStatusSnapshot?.confirmedTransactionsCount ?? 0);
+          const duplicateVisibleImportComplete = Boolean(
+            duplicateStatusSnapshot?.visibleImportComplete ||
+              duplicateConfirmedRows > 0 ||
+              duplicateAccountSummaries.length > 0
+          );
+
           await updateImportFileCompat(importId, {
             status: "done",
             processingPhase: "complete",
@@ -739,15 +773,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             status: "done",
             importFileId: importId,
             metadata: cachedDocTextInfo.cacheRecord.metadata,
-            accountId: null,
-            accountSummaries: [],
-            confirmedTransactionsCount: 0,
+            accountId: duplicateAccountId,
+            accountSummaries: duplicateAccountSummaries,
+            confirmedTransactionsCount: duplicateConfirmedRows,
             insightSummary: null,
             accountBalance: null,
-            visibleImportComplete: false,
+            visibleImportComplete: duplicateVisibleImportComplete,
             finalizationInBackground: false,
             receiptDocument: null,
             receiptTransaction: null,
+            duplicateOfImportFileId: earlyDuplicateImportFileId,
           });
         }
       }

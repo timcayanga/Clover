@@ -1454,6 +1454,23 @@ const isNoisyVisibilityBank = (fileName: string) => {
   return ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bank);
 };
 
+const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
+  if (normalizeBankName(fileName) !== "PNB") {
+    return false;
+  }
+
+  const normalized = fileName.toLowerCase();
+  return (
+    normalized.includes("philippines pnb") ||
+    normalized.includes("pnb 4 pages excel") ||
+    normalized.includes("bank st") ||
+    normalized.includes("template-in-word-and-pdf")
+  );
+};
+
+const shouldSkipClientStatementPreparse = (fileName: string) =>
+  isNoisyVisibilityBank(fileName) || isLikelyLowQualityPnbStatementFile(fileName);
+
 const hasVisibleImportData = (
   item: QueuedFile,
   summary: UploadInsightsSummary | null | undefined
@@ -2072,7 +2089,7 @@ export function ImportFilesModal({
         continue;
       }
 
-      if (isNoisyVisibilityBank(item.file.name)) {
+      if (shouldSkipClientStatementPreparse(item.file.name)) {
         continue;
       }
 
@@ -4421,7 +4438,7 @@ export function ImportFilesModal({
       return;
     }
 
-    if (isNoisyVisibilityBank(item.file.name)) {
+    if (shouldSkipClientStatementPreparse(item.file.name)) {
       return;
     }
 
@@ -5018,7 +5035,7 @@ export function ImportFilesModal({
         itemImportMode === "statement" &&
         (lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv")) &&
         inferredBankName !== "Unknown" &&
-        ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(inferredBankName);
+        shouldSkipClientStatementPreparse(item.file.name);
       let extractedTextForUpload = localPreparseTextByItemIdRef.current.get(itemId);
       if (
         !shouldSkipLocalStatementPreparse &&
@@ -5358,17 +5375,105 @@ export function ImportFilesModal({
           statement_institution: statementIdentity?.institution ?? guessedIdentity?.institution ?? null,
           duplicate_status: true,
         });
+        const duplicateAccountSummaries = normalizeServerAccountSummaries(processPayload?.accountSummaries);
+        const duplicateAccountId =
+          typeof processPayload?.accountId === "string" && processPayload.accountId.trim()
+            ? processPayload.accountId.trim()
+            : duplicateAccountSummaries.length === 1
+              ? duplicateAccountSummaries[0]?.accountId ?? null
+              : null;
+        const duplicateAccountSummary =
+          duplicateAccountSummaries.find((summary) => summary.accountId === duplicateAccountId) ??
+          duplicateAccountSummaries[0] ??
+          null;
+        const duplicateRowsImported = Number(processPayload?.confirmedTransactionsCount ?? processPayload?.imported ?? 0) || 0;
+        const duplicateSummary =
+          duplicateAccountSummary || duplicateAccountId
+            ? ({
+                fileName: item.file.name,
+                rowsImported: Math.max(duplicateRowsImported, duplicateAccountSummary?.rowsImported ?? 0),
+                accountId: duplicateAccountId,
+                accountName:
+                  duplicateAccountSummary?.accountName ??
+                  statementIdentity?.accountName ??
+                  guessedIdentity?.accountName ??
+                  item.file.name,
+                institution:
+                  duplicateAccountSummary?.institution ??
+                  statementIdentity?.institution ??
+                  guessedIdentity?.institution ??
+                  null,
+                accountNumber:
+                  duplicateAccountSummary?.accountNumber ??
+                  statementIdentity?.accountNumber ??
+                  guessedIdentity?.accountNumber ??
+                  null,
+                accountType:
+                  duplicateAccountSummary?.accountType ??
+                  statementIdentity?.accountType ??
+                  inferAccountTypeFromStatement(
+                    duplicateAccountSummary?.institution ?? statementIdentity?.institution ?? guessedIdentity?.institution ?? null,
+                    duplicateAccountSummary?.accountName ?? statementIdentity?.accountName ?? guessedIdentity?.accountName ?? item.file.name,
+                    "bank"
+                  ),
+                balance: duplicateAccountSummary?.balance ?? null,
+                accountSummaries: duplicateAccountSummaries.length > 0 ? duplicateAccountSummaries : undefined,
+                optimisticAccountId: null,
+                previewTransactions: duplicateAccountId
+                  ? getKnownPreviewTransactions({
+                      workspaceId,
+                      accountId: duplicateAccountId,
+                      optimisticAccountId: item.optimisticAccountId ?? null,
+                      accountName:
+                        duplicateAccountSummary?.accountName ??
+                        statementIdentity?.accountName ??
+                        guessedIdentity?.accountName ??
+                        item.file.name,
+                      institution:
+                        duplicateAccountSummary?.institution ??
+                        statementIdentity?.institution ??
+                        guessedIdentity?.institution ??
+                        null,
+                      accountNumber:
+                        duplicateAccountSummary?.accountNumber ??
+                        statementIdentity?.accountNumber ??
+                        guessedIdentity?.accountNumber ??
+                        null,
+                      accountType:
+                        duplicateAccountSummary?.accountType ??
+                        statementIdentity?.accountType ??
+                        inferAccountTypeFromStatement(
+                          duplicateAccountSummary?.institution ?? statementIdentity?.institution ?? guessedIdentity?.institution ?? null,
+                          duplicateAccountSummary?.accountName ?? statementIdentity?.accountName ?? guessedIdentity?.accountName ?? item.file.name,
+                          "bank"
+                        ),
+                    })
+                  : [],
+                incomeTotal: 0,
+                expenseTotal: 0,
+                netTotal: 0,
+                topCategoryName: null,
+                topCategoryAmount: null,
+                topCategoryShare: null,
+                topMerchantName: null,
+                topMerchantCount: null,
+              } satisfies UploadInsightsSummary)
+            : null;
         const duplicateMessage = formatDuplicateImportMessage(item.file.name, guessedIdentity?.accountName ?? null);
         updateItem(itemId, {
           status: "done",
           confirmationState: "confirmed",
           error: null,
           importFileId,
-          targetAccountId: null,
-          importedRows: 0,
+          targetAccountId: duplicateAccountId,
+          importedRows: Math.max(duplicateRowsImported, duplicateAccountSummary?.rowsImported ?? 0),
           progress: 100,
           progressLabel: "Already imported in this workspace",
         });
+        if (duplicateSummary) {
+          seedImportedWorkspaceCaches(workspaceId, duplicateSummary);
+          await Promise.resolve(onImported(duplicateSummary));
+        }
         publishImportActivity({
           workspaceId,
           surface: importActivitySurfaceRef.current,
@@ -5379,12 +5484,12 @@ export function ImportFilesModal({
           completedFiles: completedFileCount + 1,
           progress: 100,
           detail: duplicateMessage,
-          summary: null,
+          summary: duplicateSummary,
           errorMessage: null,
         });
         setMessage(duplicateMessage);
         router.refresh();
-        return { status: "done", importedRows: 0, summary: null };
+        return { status: "done", importedRows: duplicateSummary?.rowsImported ?? 0, summary: duplicateSummary };
       }
 
       capturePostHogClientEvent("import_parsed_successfully", {
@@ -5872,6 +5977,75 @@ export function ImportFilesModal({
             status: "done",
             importedRows: queuedVisibleRows,
             summary: queuedVisibleSummary,
+          };
+        }
+
+        if (isLikelyLowQualityPnbStatementFile(item.file.name) && !hasStatementIdentity && visibleRows === 0) {
+          updateItem(itemId, {
+            status: "error",
+            confirmationState: "staged",
+            error:
+              "Clover queued this low-quality PNB scan for background reading, but it could not show reliable account details yet.",
+            errorCode: "I-104",
+            errorTitle: "File needs a clearer scan",
+            errorNextSteps: [
+              "Upload the original PDF when available, or use a clearer image with the account details and transaction table visible.",
+              "Import this file by itself if you want Clover to keep trying in the background.",
+              "If Clover still cannot read it, add the account or transactions manually.",
+            ],
+            importFileId,
+            importedRows: 0,
+            progress: IMPORT_PROGRESS.finalizing,
+            progressLabel: "Review needed",
+          });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "error",
+            fileName: item.file.name,
+            fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: IMPORT_PROGRESS.finalizing,
+            detail: "Clover could not show reliable rows from this low-quality PNB scan yet.",
+            summary: null,
+            errorMessage: "Clover needs a clearer scan before it can import this file reliably.",
+            errorTitle: "File needs a clearer scan",
+            errorNextSteps: [
+              "Upload the original PDF when available, or use a clearer image with the account details and transaction table visible.",
+              "Import this file by itself if you want Clover to keep trying in the background.",
+              "If Clover still cannot read it, add the account or transactions manually.",
+            ],
+          });
+          void monitorQueuedImportAndConfirm(
+            itemId,
+            importFileId,
+            optimisticAccountId,
+            {
+              fileName: item.file.name,
+              fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+              guessedAccountName: guessedIdentity?.accountName ?? null,
+              guessedInstitution: guessedIdentity?.institution ?? null,
+              guessedAccountNumber: null,
+              guessedAccountType: guessedIdentity
+                ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+                : null,
+              accountName: statementIdentity?.accountName ?? null,
+              institution: statementIdentity?.institution ?? null,
+              accountNumber: statementIdentity?.accountNumber ?? null,
+              accountType: statementIdentity?.accountType ?? null,
+              optimisticAccountId: hasStatementIdentity ? optimisticAccountId : canUseOptimisticGuess ? item.optimisticAccountId : null,
+              initialBalance: null,
+              password: item.password.trim() || undefined,
+              previewTransactions,
+            },
+            { backgroundOnly: true }
+          ).finally(() => router.refresh());
+
+          return {
+            status: "staged",
+            importedRows: 0,
+            summary: null,
           };
         }
 
@@ -6692,12 +6866,16 @@ export function ImportFilesModal({
     const hasBrowserParsableStatements = itemsToProcess.some((item) => {
       const mode = item.importMode ?? "statement";
       const lowerName = item.file.name.toLowerCase();
-      return mode === "statement" && (lowerName.endsWith(".pdf") || lowerName.endsWith(".csv")) && !isNoisyVisibilityBank(item.file.name);
+      return (
+        mode === "statement" &&
+        (lowerName.endsWith(".pdf") || lowerName.endsWith(".csv")) &&
+        !shouldSkipClientStatementPreparse(item.file.name)
+      );
     });
 
     if (hasBrowserParsableStatements) {
       for (const item of itemsToProcess) {
-        if (isNoisyVisibilityBank(item.file.name)) {
+        if (shouldSkipClientStatementPreparse(item.file.name)) {
           continue;
         }
         void preparsePendingItemLocally(item.id);
