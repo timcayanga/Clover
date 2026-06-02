@@ -29045,18 +29045,7 @@ button.accounts-detail__transaction-head-cell {
   padding: 32px 20px;
   overflow: hidden;
   isolation: isolate;
-}
-
-.clover-loading-screen::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 240px 72px at 50% calc(50% - 18px), rgba(15, 23, 42, 0.13), rgba(3, 168, 192, 0.08) 40%, transparent 72%),
-    radial-gradient(circle at 50% 45%, rgba(236, 253, 245, 0.74), transparent 28%),
-    radial-gradient(circle at 42% 58%, rgba(0, 223, 255, 0.08), transparent 26%);
+  background: transparent;
 }
 
 .clover-loading-screen__card {
@@ -29069,6 +29058,7 @@ button.accounts-detail__transaction-head-cell {
   padding: 0;
   overflow: visible;
   text-align: center;
+  background: transparent;
 }
 
 .clover-loading-screen__logo {
@@ -29078,6 +29068,7 @@ button.accounts-detail__transaction-head-cell {
   display: grid;
   place-items: center;
   overflow: visible;
+  background: transparent;
 }
 
 .clover-loading-screen__mark {
