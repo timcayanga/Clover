@@ -102,7 +102,7 @@ type RankedAdviserPrompt = AdviserPrompt & {
 };
 
 type AdviserAuditMetadata = {
-  kind?: "card" | "prompt";
+  kind?: "card" | "prompt" | "chat";
   group?: string;
   itemId?: string;
   label?: string;
@@ -521,6 +521,7 @@ const buildThresholdProfile = (params: {
   currentSpend: number;
   currentIncome: number;
   currentSavingsRate: number | null;
+  accountCoverageScore: number;
   recurringAmountPressure: number;
   commitmentAmountPressure: number;
   splitBillSettlementPressure: number;
@@ -531,17 +532,18 @@ const buildThresholdProfile = (params: {
   investmentDelta: number | null;
 }) => {
   const recurringBase = params.recurringAmountPressure + params.commitmentAmountPressure;
+  const coverageSensitivity = (params.accountCoverageScore - 50) / 50;
   const cashBuffer = average([
     params.baselineSpend * 0.75,
     params.currentSpend * 0.5,
     recurringBase + params.splitBillSettlementPressure * 0.75,
     params.currentIncome > 0 ? params.currentIncome * 0.3 : params.baselineIncome * 0.3,
-  ]);
-  const spendSpikePercent = clamp(9 + (params.historyDepthScore < 50 ? 4 : 1) + (params.weekendExpenseShare > 0.3 ? 3 : 0), 8, 24);
-  const incomeDropPercent = clamp(8 + (params.historyDepthScore < 40 ? 3 : 0), 6, 20);
-  const concentrationShare = clamp(params.topCategoryShare > 0.4 ? 0.42 : 0.35, 0.28, 0.55);
+  ]) + Math.max(0, coverageSensitivity) * params.baselineSpend * 0.04;
+  const spendSpikePercent = clamp(9 + (params.historyDepthScore < 50 ? 4 : 1) + (params.weekendExpenseShare > 0.3 ? 3 : 0) - coverageSensitivity * 2, 7, 24);
+  const incomeDropPercent = clamp(8 + (params.historyDepthScore < 40 ? 3 : 0) - coverageSensitivity * 1.5, 6, 20);
+  const concentrationShare = clamp((params.topCategoryShare > 0.4 ? 0.42 : 0.35) - coverageSensitivity * 0.04, 0.26, 0.58);
   const investmentSwingPercent = clamp(params.latestInvestmentSnapshot ? 8 + (params.investmentDelta !== null && Math.abs(params.investmentDelta) > 0 ? 2 : 0) : 18, 6, 20);
-  const goalDriftPercent = clamp(params.currentSavingsRate !== null && params.currentSavingsRate < 0 ? 6 : 12, 6, 18);
+  const goalDriftPercent = clamp((params.currentSavingsRate !== null && params.currentSavingsRate < 0 ? 6 : 12) - coverageSensitivity, 6, 18);
 
   return {
     cashBuffer,
@@ -1044,7 +1046,7 @@ async function AdviserPageContent() {
     where: {
       workspaceId: resolvedWorkspace.id,
       action: {
-        in: ["adviser.card_opened", "adviser.prompt_clicked"],
+        in: ["adviser.card_opened", "adviser.prompt_clicked", "adviser.chat_asked"],
       },
     },
     orderBy: { createdAt: "desc" },
@@ -1078,6 +1080,8 @@ async function AdviserPageContent() {
   const adviserMemoryByItem = new Map<string, AdviserMemoryStats>();
   const adviserOutcomeByGroup = new Map<string, AdviserMemoryStats>();
   const adviserOutcomeByItem = new Map<string, AdviserMemoryStats>();
+  const directCompletionGroups = new Set<string>();
+  const directCompletionItems = new Set<string>();
 
   for (const interaction of adviserInteractions) {
     const metadata = interaction.metadata as AdviserAuditMetadata | null;
@@ -1090,6 +1094,22 @@ async function AdviserPageContent() {
 
     if (itemId) {
       updateMemoryStats(adviserMemoryByItem, itemId, interaction.createdAt);
+    }
+  }
+
+  for (const completion of adviserCompletionLogs) {
+    const metadata = completion.metadata as AdviserAuditMetadata | null;
+    const group = metadata?.group?.trim() || "";
+    const itemId = metadata?.itemId?.trim() || completion.entityId?.trim() || "";
+
+    if (group) {
+      recordOutcomeStats(adviserOutcomeByGroup, group, completion.createdAt);
+      directCompletionGroups.add(group);
+    }
+
+    if (itemId) {
+      recordOutcomeStats(adviserOutcomeByItem, itemId, completion.createdAt);
+      directCompletionItems.add(itemId);
     }
   }
 
@@ -1348,6 +1368,7 @@ async function AdviserPageContent() {
     currentSpend,
     currentIncome: currentSummary.income,
     currentSavingsRate,
+    accountCoverageScore,
     recurringAmountPressure,
     commitmentAmountPressure,
     splitBillSettlementPressure,
@@ -1445,11 +1466,11 @@ async function AdviserPageContent() {
     );
 
     if (followedThrough) {
-      if (group) {
+      if (group && !directCompletionGroups.has(group)) {
         recordOutcomeStats(adviserOutcomeByGroup, group, interaction.createdAt);
       }
 
-      if (itemId) {
+      if (itemId && !directCompletionItems.has(itemId)) {
         recordOutcomeStats(adviserOutcomeByItem, itemId, interaction.createdAt);
       }
     }
@@ -1583,6 +1604,17 @@ async function AdviserPageContent() {
     goalLabel,
     uncategorizedTransactions.length
   );
+  const adviserNarrative = [
+    dominantTheme ? `${dominantTheme.key} is the primary theme` : "No dominant theme identified yet",
+    secondaryTheme ? `${secondaryTheme.key} is the next strongest signal` : "No secondary theme identified",
+    forecastSignal ? `${forecastSignal.title.toLowerCase()} points to ${forecastSignal.summary.toLowerCase()}` : null,
+    anomalySignal ? `${anomalySignal.title.toLowerCase()} shows ${anomalySignal.summary.toLowerCase()}` : null,
+    workspaceAccounts.length > 0
+      ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"} and ${formatCurrency(accountPressureEstimate)} estimated account pressure are feeding the guidance`
+      : null,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(" · ");
   const adviserExplainability = {
     baseline: {
       spend: baselineSpend,
@@ -1600,6 +1632,7 @@ async function AdviserPageContent() {
       concentrationShare: largestAccountShare,
     },
     thresholds: thresholdProfile,
+    narrative: adviserNarrative,
     themes: signalThemes.map((theme) => ({
       key: theme.key,
       score: theme.score,

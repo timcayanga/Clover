@@ -13,6 +13,17 @@ export type AdviserActionCompletionPayload = {
   pathname?: string | null;
 };
 
+export type AdviserChatQuestionPayload = {
+  workspaceId: string;
+  actorUserId: string;
+  group: AdviserCompletionGroup;
+  itemId: string;
+  label: string;
+  sourceAction: string;
+  href?: string | null;
+  pathname?: string | null;
+};
+
 export const recordAdviserActionCompletion = async (payload: AdviserActionCompletionPayload) => {
   await prisma.auditLog.create({
     data: {
@@ -23,6 +34,27 @@ export const recordAdviserActionCompletion = async (payload: AdviserActionComple
       entityId: payload.itemId,
       metadata: {
         kind: "completion",
+        group: payload.group,
+        itemId: payload.itemId,
+        label: payload.label,
+        sourceAction: payload.sourceAction,
+        href: payload.href ?? null,
+        pathname: payload.pathname ?? null,
+      },
+    },
+  });
+};
+
+export const recordAdviserChatQuestion = async (payload: AdviserChatQuestionPayload) => {
+  await prisma.auditLog.create({
+    data: {
+      workspaceId: payload.workspaceId,
+      actorUserId: payload.actorUserId,
+      action: "adviser.chat_asked",
+      entity: "AdviserChat",
+      entityId: payload.itemId,
+      metadata: {
+        kind: "chat",
         group: payload.group,
         itemId: payload.itemId,
         label: payload.label,

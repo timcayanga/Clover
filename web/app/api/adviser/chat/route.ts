@@ -11,6 +11,7 @@ import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format"
 import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { recordAdviserChatQuestion } from "@/lib/adviser-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ type AdviserMemoryStats = {
 };
 
 type AdviserAuditMetadata = {
-  kind?: "card" | "prompt";
+  kind?: "card" | "prompt" | "chat";
   group?: string;
   itemId?: string;
   label?: string;
@@ -445,6 +446,7 @@ const buildThresholdProfile = (params: {
   currentSpend: number;
   currentIncome: number;
   currentSavingsRate: number | null;
+  accountCoverageScore: number;
   recurringAmountPressure: number;
   commitmentAmountPressure: number;
   splitBillSettlementPressure: number;
@@ -455,17 +457,18 @@ const buildThresholdProfile = (params: {
   investmentDelta: number | null;
 }) => {
   const recurringBase = params.recurringAmountPressure + params.commitmentAmountPressure;
+  const coverageSensitivity = (params.accountCoverageScore - 50) / 50;
   const cashBuffer = average([
     params.baselineSpend * 0.75,
     params.currentSpend * 0.5,
     recurringBase + params.splitBillSettlementPressure * 0.75,
     params.currentIncome > 0 ? params.currentIncome * 0.3 : params.baselineIncome * 0.3,
-  ]);
-  const spendSpikePercent = clamp(9 + (params.historyDepthScore < 50 ? 4 : 1) + (params.weekendExpenseShare > 0.3 ? 3 : 0));
-  const incomeDropPercent = clamp(8 + (params.historyDepthScore < 40 ? 3 : 0), 6, 20);
-  const concentrationShare = clamp(params.topCategoryShare > 0.4 ? 0.42 : 0.35, 0.28, 0.55);
+  ]) + Math.max(0, coverageSensitivity) * params.baselineSpend * 0.04;
+  const spendSpikePercent = clamp(9 + (params.historyDepthScore < 50 ? 4 : 1) + (params.weekendExpenseShare > 0.3 ? 3 : 0) - coverageSensitivity * 2, 7, 24);
+  const incomeDropPercent = clamp(8 + (params.historyDepthScore < 40 ? 3 : 0) - coverageSensitivity * 1.5, 6, 20);
+  const concentrationShare = clamp((params.topCategoryShare > 0.4 ? 0.42 : 0.35) - coverageSensitivity * 0.04, 0.26, 0.58);
   const investmentSwingPercent = clamp(params.latestInvestmentSnapshot ? 8 + (params.investmentDelta !== null && Math.abs(params.investmentDelta) > 0 ? 2 : 0) : 18, 6, 20);
-  const goalDriftPercent = clamp(params.currentSavingsRate !== null && params.currentSavingsRate < 0 ? 6 : 12, 6, 18);
+  const goalDriftPercent = clamp((params.currentSavingsRate !== null && params.currentSavingsRate < 0 ? 6 : 12) - coverageSensitivity, 6, 18);
 
   return {
     cashBuffer,
@@ -852,7 +855,7 @@ export async function POST(request: Request) {
       where: {
         workspaceId: workspace.id,
         action: {
-          in: ["adviser.card_opened", "adviser.prompt_clicked"],
+          in: ["adviser.card_opened", "adviser.prompt_clicked", "adviser.chat_asked"],
         },
       },
       orderBy: { createdAt: "desc" },
@@ -886,6 +889,8 @@ export async function POST(request: Request) {
     const adviserMemoryByItem = new Map<string, AdviserMemoryStats>();
     const adviserOutcomeByGroup = new Map<string, AdviserMemoryStats>();
     const adviserOutcomeByItem = new Map<string, AdviserMemoryStats>();
+    const directCompletionGroups = new Set<string>();
+    const directCompletionItems = new Set<string>();
 
     for (const interaction of adviserInteractions) {
       const metadata = interaction.metadata as AdviserAuditMetadata | null;
@@ -899,6 +904,22 @@ export async function POST(request: Request) {
     if (itemId) {
       updateMemoryStats(adviserMemoryByItem, itemId, interaction.createdAt);
     }
+    }
+
+    for (const completion of adviserCompletionLogs) {
+      const metadata = completion.metadata as AdviserAuditMetadata | null;
+      const group = metadata?.group?.trim() || "";
+      const itemId = metadata?.itemId?.trim() || completion.entityId?.trim() || "";
+
+      if (group) {
+        recordOutcomeStats(adviserOutcomeByGroup, group, completion.createdAt);
+        directCompletionGroups.add(group);
+      }
+
+      if (itemId) {
+        recordOutcomeStats(adviserOutcomeByItem, itemId, completion.createdAt);
+        directCompletionItems.add(itemId);
+      }
     }
 
     const allTransactions = allTransactionsQuery as Array<{
@@ -1109,6 +1130,7 @@ export async function POST(request: Request) {
       currentSpend,
       currentIncome: currentSummary.income,
       currentSavingsRate,
+      accountCoverageScore,
       recurringAmountPressure,
       commitmentAmountPressure,
       splitBillSettlementPressure,
@@ -1206,11 +1228,11 @@ export async function POST(request: Request) {
       );
 
       if (followedThrough) {
-        if (group) {
+        if (group && !directCompletionGroups.has(group)) {
           recordOutcomeStats(adviserOutcomeByGroup, group, interaction.createdAt);
         }
 
-        if (itemId) {
+        if (itemId && !directCompletionItems.has(itemId)) {
           recordOutcomeStats(adviserOutcomeByItem, itemId, interaction.createdAt);
         }
       }
@@ -1327,6 +1349,17 @@ export async function POST(request: Request) {
       goalLabel,
       uncategorizedTransactions.length
     );
+    const adviserNarrative = [
+      dominantTheme ? `${dominantTheme.key} is the primary theme` : "No dominant theme identified yet",
+      secondaryTheme ? `${secondaryTheme.key} is the next strongest signal` : "No secondary theme identified",
+      forecastSignal ? `${forecastSignal.title.toLowerCase()} points to ${forecastSignal.summary.toLowerCase()}` : null,
+      anomalySignal ? `${anomalySignal.title.toLowerCase()} shows ${anomalySignal.summary.toLowerCase()}` : null,
+      workspace.accounts.length > 0
+        ? `${workspace.accounts.length} connected account${workspace.accounts.length === 1 ? "" : "s"} and ${formatCurrency(accountPressureEstimate)} estimated account pressure are feeding the guidance`
+        : null,
+    ]
+      .filter((value): value is string => Boolean(value))
+      .join(" · ");
     const signalThemes = themeScores;
     const openSplitBillCount = openSplitBills.length;
     const cashflowPressureScore = forecastSignal?.score ?? average([
@@ -1413,7 +1446,10 @@ export async function POST(request: Request) {
       .slice(0, 2)
       .map((theme) => `${theme.key}:${Math.round(theme.score)}${theme.key === dominantTheme?.key ? " (primary)" : ""}`)
       .join(" • ");
-    const totalAdviserClicks = Array.from(adviserMemoryByGroup.values()).reduce((sum, stats) => sum + stats.count, 0);
+    const totalAdviserClicks = adviserInteractions.filter((interaction) => {
+      const metadata = interaction.metadata as AdviserAuditMetadata | null;
+      return metadata?.kind !== "chat";
+    }).length;
     const totalAdviserOutcomes = Array.from(adviserOutcomeByGroup.values()).reduce((sum, stats) => sum + stats.outcomes, 0);
     const adviserFollowThroughRate = totalAdviserClicks > 0 ? (totalAdviserOutcomes / totalAdviserClicks) * 100 : 0;
 
@@ -1434,6 +1470,7 @@ export async function POST(request: Request) {
       `Adviser memory: ${adviserInteractions.length} interactions, ${adviserCompletionLogs.length} completion actions, follow-through rate ${formatPercent(adviserFollowThroughRate)}, cleanup affinity ${Math.round(userPreferenceAffinity.cleanup)}, cashflow affinity ${Math.round(userPreferenceAffinity.cashflow)}`,
       `Preference profile: cashflow ${Math.round(userPreferenceAffinity.cashflow)}, behavior ${Math.round(userPreferenceAffinity.behavior)}, goals ${Math.round(userPreferenceAffinity.goals)}, investments ${Math.round(userPreferenceAffinity.investments)}, cleanup ${Math.round(userPreferenceAffinity.cleanup)}`,
       `Financial persona: ${financialPersona.label} - ${financialPersona.summary}`,
+      `Narrative: ${adviserNarrative}`,
       `Thresholds: cash buffer ${formatCurrency(thresholdProfile.cashBuffer)}, spend spike ${Math.round(thresholdProfile.spendSpikePercent)}%, income drop ${Math.round(thresholdProfile.incomeDropPercent)}%, concentration ${Math.round(thresholdProfile.concentrationShare * 100)}%`,
       `Forecast: ${forecastSignal ? `${forecastSignal.title} (${Math.round(forecastSignal.score)})` : "none"}; anomaly: ${anomalySignal ? `${anomalySignal.title} (${Math.round(anomalySignal.score)})` : "none"}`,
       `Forecast categories: ${categoryForecastSignals.map((signal) => `${signal.title} (${Math.round(signal.score)})`).join(" | ") || "none"}`,
@@ -1464,6 +1501,30 @@ export async function POST(request: Request) {
     ].join("\n");
 
     const latestQuestion = incomingMessages[incomingMessages.length - 1]?.content?.trim() || "your question";
+    const latestQuestionLower = latestQuestion.toLowerCase();
+    const inferredQuestionTheme = (
+      /goal|target|track|progress|save more|emergency fund|drift/.test(latestQuestionLower)
+        ? "goals"
+        : /invest|portfolio|dividend|gain|loss|snapshot|stock/.test(latestQuestionLower)
+          ? "investments"
+          : /uncategorized|cleanup|categor|merchant|transaction|spend|weekend|pattern|why/.test(latestQuestionLower)
+            ? "behavior"
+            : /bill|recurr|due|loan|balance|cash flow|budget|owe|payment|pressure|account/.test(latestQuestionLower)
+              ? "cashflow"
+              : null
+    ) ?? dominantTheme?.key ?? "cashflow";
+    const questionSignature = `chat:${latestQuestionLower.replace(/[^a-z0-9]+/g, " ").trim().slice(0, 80) || "question"}`;
+    await recordAdviserChatQuestion({
+      workspaceId: workspace.id,
+      actorUserId: user.id,
+      group: inferredQuestionTheme,
+      itemId: questionSignature,
+      label: latestQuestion.slice(0, 120),
+      sourceAction: "adviser_chat",
+      href: "/adviser",
+      pathname: "/adviser",
+    }).catch(() => null);
+
     const fallbackReply = [
       `Based on your current data, ${topCategoryName ? `${topCategoryName} is the main spending driver` : "spending is fairly spread out"}${spendDelta !== null ? ` and spending is ${formatPercent(spendDelta)} vs baseline` : ""}.`,
       workspace.accounts.length > 0
