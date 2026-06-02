@@ -694,8 +694,31 @@ async function ReportsStream({
                   title: "No urgent clean-up items",
                   body: "Your current data looks tidy. You can still review spending and cash flow trends below.",
                   href: "/transactions",
-              label: "Open transactions",
+                  label: "Open transactions",
                   };
+
+    const reportExpenseTransactions = reportDisplayTransactions.filter(isReportSpendingTransaction);
+    const reportPreviousExpenseTransactions = reportPreviousWindowTransactions.filter(isReportSpendingTransaction);
+    const reportExpenseCategories = reportExpenseTransactions.reduce(
+      (totals, transaction) => {
+        const categoryName = getReportTransactionCategoryName(transaction);
+        totals.set(categoryName, (totals.get(categoryName) ?? 0) + Math.abs(Number(transaction.amount)));
+        return totals;
+      },
+      new Map<string, number>()
+    );
+    const reportPreviousExpenseCategories = reportPreviousExpenseTransactions.reduce(
+      (totals, transaction) => {
+        const categoryName = getReportTransactionCategoryName(transaction);
+        totals.set(categoryName, (totals.get(categoryName) ?? 0) + Math.abs(Number(transaction.amount)));
+        return totals;
+      },
+      new Map<string, number>()
+    );
+    const reportExpenseCategoryEntries = Array.from(reportExpenseCategories.entries()).sort((a, b) => b[1] - a[1]);
+    const reportExpenseTotal = reportExpenseCategoryEntries.reduce((sum, [, amount]) => sum + amount, 0);
+    const reportExpenseTopCategories = reportExpenseCategoryEntries.slice(0, 5);
+    const reportSpentTotal = reportExpenseTotal > 0 ? reportExpenseTotal : currentSpend;
 
     const reportSankeyIncomeTransactions = reportDisplayTransactions.filter((transaction) => getReportTransactionType(transaction) === "income");
     const reportSankeyExpenseTransactions = reportExpenseTransactions;
@@ -985,29 +1008,6 @@ async function ReportsStream({
       currentSummary.income > 0 ? currentSummary.income : null,
       displayCurrency
     );
-
-    const reportExpenseTransactions = reportDisplayTransactions.filter(isReportSpendingTransaction);
-    const reportPreviousExpenseTransactions = reportPreviousWindowTransactions.filter(isReportSpendingTransaction);
-    const reportExpenseCategories = reportExpenseTransactions.reduce(
-      (totals, transaction) => {
-        const categoryName = getReportTransactionCategoryName(transaction);
-        totals.set(categoryName, (totals.get(categoryName) ?? 0) + Math.abs(Number(transaction.amount)));
-        return totals;
-      },
-      new Map<string, number>()
-    );
-    const reportPreviousExpenseCategories = reportPreviousExpenseTransactions.reduce(
-      (totals, transaction) => {
-        const categoryName = getReportTransactionCategoryName(transaction);
-        totals.set(categoryName, (totals.get(categoryName) ?? 0) + Math.abs(Number(transaction.amount)));
-        return totals;
-      },
-      new Map<string, number>()
-    );
-    const reportExpenseCategoryEntries = Array.from(reportExpenseCategories.entries()).sort((a, b) => b[1] - a[1]);
-    const reportExpenseTotal = reportExpenseCategoryEntries.reduce((sum, [, amount]) => sum + amount, 0);
-    const reportExpenseTopCategories = reportExpenseCategoryEntries.slice(0, 5);
-    const reportSpentTotal = reportExpenseTotal > 0 ? reportExpenseTotal : currentSpend;
 
     const reportRecentTransactions = reportCurrentWindowTransactions.length > 0 ? reportCurrentWindowTransactions : reportDisplayTransactions;
     const reportRecentExpenseTransactions = reportRecentTransactions.filter(
