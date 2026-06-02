@@ -539,9 +539,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const effectiveBankName = formBankName || (bankHint !== "Unknown" ? bankHint : "");
       const effectiveUploadFileName = file.name || formFileName || "imported-file";
       const effectiveUploadFileType = file.type || formFileType || "";
+      const isPnbPdfUpload = isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) && bankHint === "PNB";
       const likelyLowQualityPnbStatement =
-        isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) &&
-        isLikelyLowQualityPnbStatementFile(effectiveUploadFileName, bankHint);
+        isPnbPdfUpload && isLikelyLowQualityPnbStatementFile(effectiveUploadFileName, bankHint);
       const likelyLowQualityUnionBankStatement =
         isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) &&
         isLikelyLowQualityUnionBankStatementFile(effectiveUploadFileName, bankHint);
@@ -703,6 +703,24 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return NextResponse.json(
           {
             error: "Unable to parse readable transactions from this UCPB Excel/PDF sample.",
+            code: "I-104",
+            stage: "validating statement text",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (likelyLowQualityPnbStatement) {
+        await updateImportFileCompat(importId, {
+          status: "failed",
+          processingPhase: "repair_needed",
+          processingMessage: "Clover couldn't read enough reliable text from this low-quality PNB scan.",
+          parsedRowsCount: 0,
+          confirmedTransactionsCount: 0,
+        });
+        return NextResponse.json(
+          {
+            error: "Unable to parse readable transactions from this low-quality PNB scan.",
             code: "I-104",
             stage: "validating statement text",
           },
@@ -924,7 +942,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         !shouldProcessKnownStatementInline &&
         !(hasExtractedText && parsedMetadataConfidence >= 80) &&
         !canReuseCachedParseSnapshot &&
-        !isNoisyPdfBank;
+        !isNoisyPdfBank &&
+        !isPnbPdfUpload;
 
       if (shouldQueuePdfImmediately) {
         if (!localDev) {
@@ -983,9 +1002,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       const shouldProcessInlinePdf =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
-        (forceInlineProcessing || shouldProcessKnownStatementInline || isNoisyPdfBank) &&
-        (hasExtractedText || canReuseCachedParseSnapshot || isNoisyPdfBank) &&
-        (parsedMetadataConfidence >= 80 || shouldProcessKnownStatementInline || isNoisyPdfBank);
+        (forceInlineProcessing || shouldProcessKnownStatementInline || isNoisyPdfBank || isPnbPdfUpload) &&
+        (hasExtractedText || canReuseCachedParseSnapshot || isNoisyPdfBank || isPnbPdfUpload) &&
+        (parsedMetadataConfidence >= 80 || shouldProcessKnownStatementInline || isNoisyPdfBank || isPnbPdfUpload);
       const shouldProcessInline =
         (!shouldQueueDocumentUpload &&
           !isPdfUpload(effectiveFileName, effectiveFileType) &&
@@ -1015,6 +1034,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           qaSource: "import_processing",
           allowDuplicateStatement,
           importMode,
+          pdfJsBaseUrl,
           statementMetadataOverride: effectiveBankName
             ? {
                 institution: effectiveBankName,
