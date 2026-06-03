@@ -15910,19 +15910,29 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
 
     const amountInfo = parseWiseMobileAmountLine(line);
     if (amountInfo) {
+      const pendingRawPayload =
+        pendingRow?.rawPayload && typeof pendingRow.rawPayload === "object" && !Array.isArray(pendingRow.rawPayload)
+          ? (pendingRow.rawPayload as Record<string, unknown>)
+          : null;
+      const pendingAmountLineIndex =
+        typeof pendingRawPayload?.sourceAmountLineIndex === "number" ? pendingRawPayload.sourceAmountLineIndex : null;
       if (
         pendingRow &&
-        pendingRow.currency !== "PHP" &&
-        amountInfo.currency === "PHP" &&
-        !line.trim().startsWith("+") &&
-        !line.trim().startsWith("-")
+        pendingAmountLineIndex !== null &&
+        lineIndex - pendingAmountLineIndex === 1 &&
+        amountInfo.sign === null
       ) {
         pendingRow.rawPayload = {
-          ...(pendingRow.rawPayload ?? {}),
-          convertedAmount: amountInfo.amount,
-          convertedCurrency: amountInfo.currency,
-          convertedAmountText: line,
+          ...pendingRawPayload,
+          merchantAmount: parseMoney(String(pendingRow.amount ?? "")),
+          merchantCurrency: pendingRow.currency ?? null,
+          merchantAmountText: pendingRawPayload?.amountText ?? null,
+          accountAmount: amountInfo.amount,
+          accountCurrency: amountInfo.currency,
+          accountAmountText: line,
         };
+        pendingRow.amount = Math.abs(amountInfo.amount).toFixed(2);
+        pendingRow.currency = amountInfo.currency;
         continue;
       }
 
@@ -15966,6 +15976,7 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
           bank: "Wise",
           kind: "wise_mobile_screenshot_transaction",
           amountText: line,
+          sourceAmountLineIndex: lineIndex,
           status,
           source: "wise_mobile_screenshot",
         },

@@ -1118,7 +1118,8 @@ const buildBankInstructionJson = (params: {
       institution: "Wise",
       notes: [
         "Wise mobile transaction-history screenshots may not show an account number or ending balance. Use account.display_name = Wise, account.institution_name = Wise, account.account_type = wallet, and keep account_number null when it is not visible.",
-        "The first amount line on a row is the transaction amount and currency. A second PHP line under a foreign-currency transaction is the converted PHP equivalent; preserve it in notes or parser evidence but do not replace the original amount/currency.",
+        "If a Wise row has one amount, that amount is in one of the user's Wise account currencies and should be the transaction amount/currency.",
+        "If a Wise row has two amounts, the bold/larger first amount is the merchant/spend currency, while the smaller second amount is the user's Wise account currency and the actual account amount. Use the second amount/currency as the transaction amount, and preserve the first amount/currency in notes or parser evidence.",
         "Rows with a plus sign, Added, Received, or Refunded are incoming/refund movements. Rows without a plus sign are outgoing spend unless the visible status says Sent or transfer-like.",
         "Rows such as Card checked with 0 USD are verification rows; include only if clearly visible and mark review_required true.",
         "Do not require an account number for a Wise screenshot if transaction rows are visible.",
@@ -1369,7 +1370,7 @@ const buildOpenAIInputPayload = (params: {
           "This is a scanned statement, screenshot, or image-heavy file. The text layer may be empty or incomplete.",
           "Read the page images directly and extract the visible financial details for the selected document family.",
           "If the document is a statement, extract every transaction row from the visible statement pages and anchor the final balance from the last page footer when present.",
-          "If the image is a Wise mobile transaction-history screenshot, treat it as a wallet statement even when no account number or ending balance is visible. Use Wise as the institution and preserve each row's visible currency.",
+          "If the image is a Wise mobile transaction-history screenshot, treat it as a wallet statement even when no account number or ending balance is visible. For rows with two amounts, use the smaller second account-currency amount as the transaction amount and preserve the bold first merchant-currency amount as supporting evidence.",
           "If the document is a portfolio or account-detail page that shows holdings or positions, extract those into holdings instead of transaction rows.",
           "If the document is a receipt, portfolio screen, account detail screen, or notes screenshot, keep the transaction array empty unless the page clearly shows true ledger rows.",
           "Use the account number and balance shown in the page image, not any earlier summary-like number unless it is the final ending balance.",
@@ -1422,7 +1423,7 @@ const buildImageTranscriptionInputPayload = (params: {
     "- Do not summarize, normalize, or guess missing text.",
     "- Include page markers like [PAGE 1], [PAGE 2], etc. when multiple images are provided.",
     "- If the image is clearly a receipt, portfolio screen, account-detail screen, notes screenshot, or transaction-history screenshot, say so in document_type.",
-    "- Wise mobile transaction-history screenshots are statement-like wallet histories; preserve date groupings, merchant names, statuses such as Added/Refunded/Sent, plus signs, original currencies, and PHP converted amounts.",
+    "- Wise mobile transaction-history screenshots are statement-like wallet histories; preserve date groupings, merchant names, statuses such as Added/Refunded/Sent, plus signs, bold merchant-currency amounts, and smaller account-currency amounts.",
     "- Keep the transcript compact but complete enough for the downstream parser to read it back into rows or receipt details.",
     "",
     ...(params.importMode === "receipt"

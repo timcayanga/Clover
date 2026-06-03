@@ -15,13 +15,13 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 - Wise mobile history screens commonly show controls such as `Search`, `Includes hidden`, `Type`, `Currency`, and `Direction`.
 - Rows are grouped by date headers such as `Apr 13, 2026`.
 - Rows can include a merchant/payee, an optional status such as `Added`, `Refunded`, `Sent`, or `Card checked`, then a visible amount.
-- Multi-currency rows may show the original transaction amount first and a PHP converted equivalent below it.
+- Multi-currency rows may show a bold/larger merchant-currency amount first and a smaller account-currency amount below it.
 
 ## Transaction Rules
 
-- Preserve the original visible amount and currency as the transaction amount.
-- Preserve the PHP converted equivalent in raw payload/notes when it appears below a foreign-currency amount.
-- Do not replace foreign-currency amounts with the PHP converted equivalent.
+- If a row has one amount, use that amount/currency as the Clover transaction amount because it is one of the user's Wise account currencies.
+- If a row has two amounts, use the smaller second amount/currency as the Clover transaction amount because it is the actual amount spent from the user's Wise account.
+- Preserve the bold/larger first merchant-currency amount in raw payload/notes when it appears above the account-currency amount.
 - Rows with `+`, `Added`, `Received`, or `Refunded` are incoming/refund movements.
 - Rows without `+` are outgoing spend unless the status or merchant clearly indicates a transfer.
 - `To PHP Added` and similar wallet funding/conversion rows are `Transfers`.
