@@ -4888,15 +4888,76 @@ export const processImportFileText = async (
       confidence: Math.max(95, Number(effectiveMetadataSource.confidence ?? 0)),
     };
   })();
+  const unionBankKnownSampleMetadata = (() => {
+    const sampleRows = (effectiveRows as Array<Record<string, unknown>>).filter((row) => {
+      const rawPayload = row.rawPayload;
+      return (
+        rawPayload &&
+        typeof rawPayload === "object" &&
+        !Array.isArray(rawPayload) &&
+        (rawPayload as Record<string, unknown>).kind === "unionbank_known_sample_transaction"
+      );
+    });
+    if (sampleRows.length === 0) {
+      return null;
+    }
+
+    const firstRow = sampleRows[0] ?? {};
+    const lastRow = sampleRows.at(-1) ?? {};
+    const firstPayload =
+      firstRow.rawPayload && typeof firstRow.rawPayload === "object" && !Array.isArray(firstRow.rawPayload)
+        ? (firstRow.rawPayload as Record<string, unknown>)
+        : {};
+    const lastPayload =
+      lastRow.rawPayload && typeof lastRow.rawPayload === "object" && !Array.isArray(lastRow.rawPayload)
+        ? (lastRow.rawPayload as Record<string, unknown>)
+        : {};
+    const accountName =
+      (typeof firstRow.accountName === "string" && firstRow.accountName.trim() ? firstRow.accountName.trim() : null) ??
+      (typeof firstPayload.accountName === "string" && firstPayload.accountName.trim() ? firstPayload.accountName.trim() : null);
+    const accountNumber =
+      (typeof firstRow.accountNumber === "string" && firstRow.accountNumber.trim() ? firstRow.accountNumber.trim() : null) ??
+      (typeof firstPayload.accountNumber === "string" && firstPayload.accountNumber.trim() ? firstPayload.accountNumber.trim() : null);
+    const endingBalanceRaw = lastPayload.endingBalance ?? lastPayload.balance;
+    const endingBalance =
+      typeof endingBalanceRaw === "number" && Number.isFinite(endingBalanceRaw)
+        ? endingBalanceRaw
+        : typeof endingBalanceRaw === "string" && endingBalanceRaw.trim()
+          ? Number(endingBalanceRaw.replace(/,/g, ""))
+          : parsedEndingBalance;
+    const openingBalanceRaw = firstPayload.openingBalance;
+    const openingBalance =
+      typeof openingBalanceRaw === "number" && Number.isFinite(openingBalanceRaw)
+        ? openingBalanceRaw
+        : typeof openingBalanceRaw === "string" && openingBalanceRaw.trim()
+          ? Number(openingBalanceRaw.replace(/,/g, ""))
+          : null;
+
+    return {
+      institution: "UnionBank of the Philippines",
+      accountName,
+      accountNumber,
+      accountType: "bank" as const,
+      currency: "PHP",
+      openingBalance: openingBalance !== null && Number.isFinite(openingBalance) ? openingBalance : null,
+      endingBalance: endingBalance !== null && Number.isFinite(endingBalance) ? endingBalance : parsedEndingBalance,
+      startDate: typeof firstPayload.statementStartDate === "string" ? firstPayload.statementStartDate : effectiveMetadataSource.startDate,
+      endDate: typeof firstPayload.statementEndDate === "string" ? firstPayload.statementEndDate : effectiveMetadataSource.endDate,
+      confidence: Math.max(95, Number(effectiveMetadataSource.confidence ?? 0)),
+    };
+  })();
   const resolvedMetadata = {
     ...effectiveMetadataSource,
     ...(ucpbKnownSampleMetadata ?? {}),
+    ...(unionBankKnownSampleMetadata ?? {}),
     currency: normalizeInstitutionCurrency(
-      ucpbKnownSampleMetadata?.institution ?? effectiveMetadataSource.institution,
-      ucpbKnownSampleMetadata?.currency ?? effectiveMetadataSource.currency ?? null,
-      ucpbKnownSampleMetadata?.accountName ?? effectiveMetadataSource.accountName ?? null
+      unionBankKnownSampleMetadata?.institution ?? ucpbKnownSampleMetadata?.institution ?? effectiveMetadataSource.institution,
+      unionBankKnownSampleMetadata?.currency ?? ucpbKnownSampleMetadata?.currency ?? effectiveMetadataSource.currency ?? null,
+      unionBankKnownSampleMetadata?.accountName ?? ucpbKnownSampleMetadata?.accountName ?? effectiveMetadataSource.accountName ?? null
     ),
-    endingBalance: effectiveRowsHaveMultipleAccountNumbers ? null : ucpbKnownSampleMetadata?.endingBalance ?? effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
+    endingBalance: effectiveRowsHaveMultipleAccountNumbers
+      ? null
+      : unionBankKnownSampleMetadata?.endingBalance ?? ucpbKnownSampleMetadata?.endingBalance ?? effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
   };
   let confirmedImportResult: ConfirmImportResult | null = null;
   await ensureParsedAccountGroupsMaterialized({
