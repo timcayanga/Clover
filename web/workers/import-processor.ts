@@ -66,7 +66,7 @@ import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
-import { mergeCheckpointSourceMetadata } from "@/lib/import-workflow";
+import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
 import { findBestImportedAccountMatch, matchesImportedAccountIdentity, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
   claimNextImportEnrichmentJob,
@@ -93,6 +93,7 @@ type ImportInsightSourceRow = {
   date?: unknown;
   amount?: unknown;
   currency?: unknown;
+  institution?: unknown;
   type?: unknown;
   merchantRaw?: unknown;
   merchantClean?: unknown;
@@ -875,14 +876,6 @@ const isLikelyLowQualityPnbStatementFile = (fileName: string, bankName?: string 
     normalizedFileName.includes("bank st") ||
     normalizedFileName.includes("template-in-word-and-pdf")
   );
-};
-
-const readCheckpointImportMode = (sourceMetadata: unknown): ImportImageMode | null => {
-  if (!isRecord(sourceMetadata)) {
-    return null;
-  }
-
-  return normalizeImportImageMode(sourceMetadata.importMode);
 };
 
 const readCheckpointAccountType = (sourceMetadata: unknown): string | null => {
@@ -2301,7 +2294,7 @@ const hasMultipleWiseWalletAccountNames = (
   new Set(
     normalizeWiseWalletParsedRows(rows, metadata)
       .map((row) => readParsedRowAccountName(row))
-      .filter((value): value is string => /^Wise\s+[A-Z]{3}$/.test(value))
+      .filter((value): value is string => typeof value === "string" && /^Wise\s+[A-Z]{3}$/.test(value))
   ).size > 1;
 
 const getImportAccountBalanceFromParsedRows = (rows: EnrichedParsedImportRow[]) => {
@@ -4454,6 +4447,13 @@ export const processImportFileText = async (
   let openAiMetadata: typeof metadataForParse | null = null;
   const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
   if (!canUseFastImageParse) {
+    if (importMode === "receipt") {
+      await updateImportFileCompat(importFileId, {
+        status: "processing",
+        processingPhase: "reading_receipt_vision",
+        processingMessage: "Reading receipt image...",
+      }).catch(() => null);
+    }
     openAiParsed = await parseImportTextWithOpenAIFallback({
       text: textForParse,
       fileName,
@@ -4558,7 +4558,7 @@ export const processImportFileText = async (
         })()
       : null;
 
-  const imageTranscriptRequiresRetry = Boolean(imageImport && pageImages?.length && !canUseFastImageParse);
+  const imageTranscriptRequiresRetry = Boolean(imageImport && pageImages?.length && !canUseFastImageParse && importMode !== "receipt");
   const openAiParseIsUsableWiseScreenshot =
     imageImport &&
     importMode === "statement" &&
@@ -6257,6 +6257,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     !Array.isArray(statementCheckpointRecord.sourceMetadata)
       ? (statementCheckpointRecord.sourceMetadata as Record<string, unknown>)
       : null;
+  const checkpointBankName = readCheckpointBankName(statementCheckpointRecord?.sourceMetadata);
   parsedRows = normalizeWiseWalletParsedRows(parsedRows, {
     institution: typeof statementMetadata?.institution === "string" ? statementMetadata.institution : null,
     accountType: typeof statementMetadata?.accountType === "string" ? statementMetadata.accountType : null,

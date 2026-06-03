@@ -1,3 +1,5 @@
+import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
+
 export type ImportWorkflowStage =
   | "queued"
   | "uploading"
@@ -20,6 +22,7 @@ const normalizeStage = (value?: string | null): ImportWorkflowStage | null => {
     case "reading_statement":
     case "reading_account":
     case "reading_account_details":
+    case "reading_receipt_vision":
       return "reading_account_details";
     case "auto_rerunning":
     case "matching_transactions":
@@ -63,6 +66,15 @@ export const readCheckpointWorkflowStage = (sourceMetadata: unknown): ImportWork
           : null;
 
   return normalizeStage(candidate);
+};
+
+export const readCheckpointImportMode = (sourceMetadata: unknown): ImportImageMode | null => {
+  if (!sourceMetadata || typeof sourceMetadata !== "object" || Array.isArray(sourceMetadata)) {
+    return null;
+  }
+
+  const metadata = sourceMetadata as Record<string, unknown>;
+  return normalizeImportImageMode(metadata.importMode);
 };
 
 export const mergeCheckpointSourceMetadata = (

@@ -1,6 +1,6 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { fetchImportFileCompat } from "@/lib/data-engine";
+import { fetchImportFileCompat, updateImportFileCompat } from "@/lib/data-engine";
 import {
   completeImportEnrichmentJob,
   MAX_IMPORT_ENRICHMENT_ATTEMPTS,
@@ -8,11 +8,14 @@ import {
   upsertImportEnrichmentJob,
 } from "@/lib/import-enrichment-jobs";
 import { loadImportStatusSnapshot } from "@/lib/import-status-snapshot";
+import { readCheckpointImportMode } from "@/lib/import-workflow";
 import { prisma } from "@/lib/prisma";
 import { processImportEnrichmentJobs } from "@/workers/import-processor";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+const STALE_RECEIPT_PROCESSING_MS = 3 * 60 * 1000;
 
 export async function GET(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   try {
@@ -36,6 +39,43 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 
     if (!snapshot) {
       return NextResponse.json({ error: "Import not found" }, { status: 404 });
+    }
+
+    const importMode = readCheckpointImportMode(snapshot.statementCheckpoint?.sourceMetadata);
+    const updatedAtMs = new Date(snapshot.importFile.updatedAt).getTime();
+    const receiptHasVisibleData =
+      Boolean(snapshot.receiptDocument) ||
+      Boolean(snapshot.receiptTransaction) ||
+      snapshot.confirmedTransactionsCount > 0 ||
+      snapshot.parsedRowsCount > 0;
+    const staleReceiptProcessing =
+      importMode === "receipt" &&
+      snapshot.importFile.status === "processing" &&
+      !receiptHasVisibleData &&
+      Number.isFinite(updatedAtMs) &&
+      Date.now() - updatedAtMs > STALE_RECEIPT_PROCESSING_MS;
+
+    if (staleReceiptProcessing) {
+      await updateImportFileCompat(importId, {
+        status: "failed",
+        processingPhase: "repair_needed",
+        processingMessage: "Clover couldn't finish reading this receipt. Please retry or use a clearer photo.",
+        parsedRowsCount: 0,
+        confirmedTransactionsCount: 0,
+      });
+      const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
+        importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+        promoteFailedVisibleImport: true,
+      });
+      if (refreshedSnapshot) {
+        return NextResponse.json({
+          ...refreshedSnapshot,
+          receiptSelfHeal: {
+            reason: "stale_receipt_processing",
+            staleAfterSeconds: Math.round(STALE_RECEIPT_PROCESSING_MS / 1000),
+          },
+        });
+      }
     }
 
     const shouldSelfHealEnrichment =

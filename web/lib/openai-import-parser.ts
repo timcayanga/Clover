@@ -1557,10 +1557,11 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   });
 
   const pageImagesInput = params.pageImages ?? [];
+  const isReceiptMode = params.importMode === "receipt";
   const pdfFileDataBase64 =
     params.fileDataBase64 && String(params.fileType ?? "").toLowerCase().includes("pdf") ? params.fileDataBase64 : null;
   const pageImageLimit =
-    params.text.trim().length === 0 ? 8 : params.importMode === "receipt" ? 4 : isNoisyVisionInstitution ? 8 : 2;
+    isReceiptMode ? 2 : params.text.trim().length === 0 ? 8 : isNoisyVisionInstitution ? 8 : 2;
   const pageImagesToSend = pageImagesInput.slice(0, Math.min(pageImageLimit, pageImagesInput.length));
   const textModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL,
@@ -1610,8 +1611,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         body: JSON.stringify({
           model: selectedModel,
           temperature: 0,
-          max_output_tokens:
-            pdfFileDataBase64
+          max_output_tokens: isReceiptMode
+            ? 2_500
+            : pdfFileDataBase64
               ? 6_000
               : pageImages.length > 0
                 ? params.text.trim().length === 0
@@ -1660,7 +1662,18 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   };
 
   try {
-    const primaryTimeoutMs = model === imageModel ? (params.text.trim().length === 0 ? 120_000 : 60_000) : pdfFileDataBase64 ? 120_000 : 45_000;
+    const primaryTimeoutMs = isReceiptMode
+      ? model === imageModel
+        ? 35_000
+        : 25_000
+      : model === imageModel
+        ? params.text.trim().length === 0
+          ? 120_000
+          : 60_000
+        : pdfFileDataBase64
+          ? 120_000
+          : 45_000;
+    const retryTimeoutMs = isReceiptMode ? 20_000 : params.text.trim().length === 0 ? 60_000 : 45_000;
     let response = await callOpenAI(model, pageImagesToSend, primaryTimeoutMs);
 
     if (!response || !response.ok) {
@@ -1687,7 +1700,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             imageCount: pageImagesToSend.length,
           });
         }
-        response = await callOpenAI(textModel, pageImagesToSend.slice(0, 1), params.text.trim().length === 0 ? 60_000 : 45_000);
+        response = await callOpenAI(textModel, pageImagesToSend.slice(0, 1), retryTimeoutMs);
       }
 
       if (!response || !response.ok) {
