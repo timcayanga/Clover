@@ -4343,7 +4343,9 @@ export const processImportFileText = async (
     imageImport &&
     importMode === "statement" &&
     /wise/i.test([metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName].filter(Boolean).join(" "));
+  let wiseImageTranscriptAttempted = false;
   if (isWiseImageStatement && parsedRows.length === 0 && pageImages?.length) {
+    wiseImageTranscriptAttempted = true;
     await updateImportFileCompat(importFileId, {
       status: "processing",
       processingPhase: "identifying_transactions",
@@ -4360,6 +4362,7 @@ export const processImportFileText = async (
       },
       pageImages,
       importMode,
+      timeoutMs: 45_000,
     });
     if (transcript?.transcript.trim()) {
       const transcriptText = normalizeStatementImageOcrText(transcript.transcript);
@@ -4458,6 +4461,7 @@ export const processImportFileText = async (
     !canReuseCachedStatementParse &&
     !hasReliableDeterministicStatementParse &&
     !imageStatementParseLooksUsable &&
+    !wiseImageTranscriptAttempted &&
     (!text.trim() ||
       parsedRows.length === 0 ||
       prefersVisionFallbackForInstitution ||
@@ -7050,10 +7054,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const rowCategoryConfidence = Math.max(normalizeImportConfidenceScore(row.categoryConfidence), rowConfidence);
     const rowAccountMatchConfidence = typeof row.accountMatchConfidence === "number" ? row.accountMatchConfidence : 100;
     const rowDuplicateConfidence = typeof row.duplicateConfidence === "number" ? row.duplicateConfidence : 0;
-    const categoryCoercedType = coerceTransactionTypeFromCategoryName(
-      parsedCategoryName,
-      (rowType ?? "expense") as "income" | "expense" | "transfer"
-    );
+    const categoryCoercedType =
+      rowType && rowType !== "transfer" && shouldPreserveParserTransferDirection(row)
+        ? rowType
+        : coerceTransactionTypeFromCategoryName(
+            parsedCategoryName,
+            (rowType ?? "expense") as "income" | "expense" | "transfer"
+          );
     const canonicalType = resolveTransferTypeAgainstWorkspaceAccounts({
       row: {
         amount: row.amount,
