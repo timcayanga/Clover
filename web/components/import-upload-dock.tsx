@@ -112,6 +112,11 @@ export function ImportUploadDock({
             {tone === "error" && errorCode ? <p className="import-upload-dock__phase">Import code {errorCode}</p> : null}
           </div>
           <div className="import-upload-dock__header-actions">
+            {onClose ? (
+              <button className="import-upload-dock__close" type="button" onClick={onClose} aria-label="Close import progress">
+                ×
+              </button>
+            ) : null}
             {canControl && onPauseToggle ? (
               <button
                 className="import-upload-dock__close"
@@ -125,11 +130,6 @@ export function ImportUploadDock({
             {canControl && onCancel ? (
               <button className="import-upload-dock__close" type="button" onClick={onCancel} aria-label="Cancel upload">
                 ⏹
-              </button>
-            ) : null}
-            {onClose ? (
-              <button className="import-upload-dock__close" type="button" onClick={onClose} aria-label="Close import progress">
-                ×
               </button>
             ) : null}
           </div>
