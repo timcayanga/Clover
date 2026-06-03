@@ -6746,6 +6746,24 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       status: "staged",
     };
   }
+  const parsedRowsLookWise = parsedRows.some((row) => {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    return /wise/i.test(
+      [
+        row.institution,
+        row.accountName,
+        rawPayload?.institutionRaw,
+        rawPayload?.bank,
+        rawPayload?.source,
+        rawPayload?.kind,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+  });
   const parsedStatementFingerprints = Array.from(
     new Set(
       parsedRows
@@ -7095,7 +7113,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       },
     });
     const wiseScreenshotOverlapDedupeEnabled =
-      /wise/i.test(String(baseStatementMetadata.institution ?? checkpointBankName ?? "")) &&
+      (parsedRowsLookWise || /wise/i.test(String(baseStatementMetadata.institution ?? checkpointBankName ?? ""))) &&
       extractWiseScreenshotSequenceNumber(importFile.fileName) !== null;
     const existingWiseScreenshotOverlapTransactions = wiseScreenshotOverlapDedupeEnabled
       ? await tx.transaction.findMany({
