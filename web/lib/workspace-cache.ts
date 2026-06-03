@@ -286,6 +286,39 @@ const pruneGenericImportedAccountPlaceholders = <T extends CachedRecord>(account
   });
 };
 
+const isOrphanImportedAccountPlaceholder = (account: CachedRecord) => {
+  if (typeof account.id === "string" && account.id.startsWith("optimistic-")) {
+    return false;
+  }
+
+  if (readImportedAccountText(account, "source") !== "upload") {
+    return false;
+  }
+
+  if (readImportedAccountText(account, "institution") || !hasImportedAccountNumber(account.accountNumber)) {
+    return false;
+  }
+
+  const transactionCount = Number(account.transactionCount ?? 0);
+  if (Number.isFinite(transactionCount) && transactionCount > 0) {
+    return false;
+  }
+
+  if (typeof account.importFileId === "string" && account.importFileId.trim()) {
+    return false;
+  }
+
+  const balanceText = String(account.balance ?? "").trim();
+  const numericBalance = balanceText ? Number(balanceText.replace(/[^0-9.-]/g, "")) : 0;
+  return !balanceText || !Number.isFinite(numericBalance) || numericBalance === 0;
+};
+
+const pruneOrphanImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) =>
+  accounts.filter((account) => !isOrphanImportedAccountPlaceholder(account));
+
+const pruneImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) =>
+  pruneOrphanImportedAccountPlaceholders(pruneGenericImportedAccountPlaceholders(accounts));
+
 const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, right: ImportedAccountIdentityLike) => {
   const leftInstitution = canonicalImportedInstitutionKey(left.institution);
   const rightInstitution = canonicalImportedInstitutionKey(right.institution);
@@ -1020,7 +1053,7 @@ const filterAccountsWorkspaceSnapshot = (
   if (deletedIds.size === 0) {
     return {
       ...snapshot,
-      accounts: Array.isArray(snapshot.accounts) ? pruneGenericImportedAccountPlaceholders(snapshot.accounts) : [],
+      accounts: Array.isArray(snapshot.accounts) ? pruneImportedAccountPlaceholders(snapshot.accounts) : [],
     };
   }
 
@@ -1032,7 +1065,7 @@ const filterAccountsWorkspaceSnapshot = (
 
   return {
     ...snapshot,
-    accounts: pruneGenericImportedAccountPlaceholders(visibleAccounts),
+    accounts: pruneImportedAccountPlaceholders(visibleAccounts),
     accountRules: snapshot.accountRules.filter((entry) => !relationMatches(entry)),
     transactions: Array.isArray(snapshot.transactions)
       ? snapshot.transactions.filter((entry) => !relationMatches(entry))
@@ -1052,7 +1085,7 @@ const filterTransactionsWorkspaceSnapshot = (
   if (deletedIds.size === 0) {
     return {
       ...snapshot,
-      accounts: Array.isArray(snapshot.accounts) ? pruneGenericImportedAccountPlaceholders(snapshot.accounts) : [],
+      accounts: Array.isArray(snapshot.accounts) ? pruneImportedAccountPlaceholders(snapshot.accounts) : [],
     };
   }
 
@@ -1064,7 +1097,7 @@ const filterTransactionsWorkspaceSnapshot = (
 
   return {
     ...snapshot,
-    accounts: pruneGenericImportedAccountPlaceholders(visibleAccounts),
+    accounts: pruneImportedAccountPlaceholders(visibleAccounts),
     categories: Array.isArray(snapshot.categories) ? snapshot.categories : [],
     transactions: Array.isArray(snapshot.transactions)
       ? snapshot.transactions.filter((entry) => !relationMatches(entry))
@@ -1437,7 +1470,7 @@ export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account:
   const nextAccountsSnapshot: AccountsWorkspaceCacheSnapshot = {
     workspaceId,
     updatedAt: Date.now(),
-    accounts: pruneGenericImportedAccountPlaceholders(mergeImportedAccount(accountsCache?.snapshots[workspaceId]?.accounts ?? [], account)),
+    accounts: pruneImportedAccountPlaceholders(mergeImportedAccount(accountsCache?.snapshots[workspaceId]?.accounts ?? [], account)),
     accountRules: accountsCache?.snapshots[workspaceId]?.accountRules ?? [],
     transactions: accountsCache?.snapshots[workspaceId]?.transactions ?? [],
     statementCheckpoints: accountsCache?.snapshots[workspaceId]?.statementCheckpoints ?? [],
@@ -1448,7 +1481,7 @@ export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account:
   const nextTransactionsSnapshot: TransactionsWorkspaceCacheSnapshot = {
     workspaceId,
     updatedAt: Date.now(),
-    accounts: pruneGenericImportedAccountPlaceholders(mergeImportedAccount(transactionsCache?.snapshots[workspaceId]?.accounts ?? [], account)),
+    accounts: pruneImportedAccountPlaceholders(mergeImportedAccount(transactionsCache?.snapshots[workspaceId]?.accounts ?? [], account)),
     categories: transactionsCache?.snapshots[workspaceId]?.categories ?? [],
     transactions: transactionsCache?.snapshots[workspaceId]?.transactions ?? [],
     imports: transactionsCache?.snapshots[workspaceId]?.imports ?? [],
