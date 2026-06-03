@@ -19420,6 +19420,12 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   width: 100%;
 }
 
+@media (min-width: 981px) {
+  .accounts-card-grid.accounts-card-grid--desktop {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .accounts-mobile-list--mobile {
   display: none;
 }
