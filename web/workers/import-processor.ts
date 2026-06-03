@@ -4080,7 +4080,10 @@ export const processImportFileText = async (
       endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
     }
   );
-  const metadataOverride = options.statementMetadataOverride ?? {};
+  const metadataOverride = {
+    ...(checkpointBankName ? { institution: checkpointBankName } : {}),
+    ...(options.statementMetadataOverride ?? {}),
+  };
   const metadataForParse = {
     ...mergedMetadata,
     ...Object.fromEntries(Object.entries(metadataOverride).filter(([, value]) => value !== undefined)),
