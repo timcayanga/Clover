@@ -24,7 +24,7 @@ import { countWorkspaceOwnerImportFilesThisMonth } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { summarizeErrorForLog } from "@/lib/security-logging";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { prisma } from "@/lib/prisma";
@@ -598,6 +598,68 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     };
 
+    const processReceiptAfterResponse = async (bankName?: string | null) => {
+      stage = "scheduling receipt processing";
+      await updateImportFileCompat(importId, {
+        status: "processing",
+        processingPhase: "reading_receipt_vision",
+        processingMessage: "Reading receipt image...",
+      });
+
+      after(async () => {
+        try {
+          const { processImportFileText } = await import("@/workers/import-processor");
+          await processImportFileText(importId, {
+            password,
+            actorUserId: userId,
+            qaSource: "import_processing",
+            allowDuplicateStatement,
+            importMode: "receipt",
+            pdfJsBaseUrl,
+            statementMetadataOverride: bankName
+              ? {
+                  institution: bankName,
+                }
+              : null,
+          });
+        } catch (error) {
+          console.error("Receipt import post-response processing failed", {
+            importId,
+            error: summarizeErrorForLog(error),
+          });
+          const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
+          if (savedTransactionsCount > 0) {
+            await updateImportFileCompat(importId, {
+              status: "done",
+              processingPhase: "complete",
+              processingMessage: "Receipt is visible. Clover is cleaning up details in the background.",
+              confirmedTransactionsCount: savedTransactionsCount,
+            }).catch(() => null);
+            return;
+          }
+          await updateImportFileCompat(importId, {
+            status: "failed",
+            processingPhase: "repair_needed",
+            processingMessage: "Clover couldn't finish reading this receipt. Please retry or use a clearer photo.",
+            parsedRowsCount: 0,
+            confirmedTransactionsCount: 0,
+          }).catch(() => null);
+        }
+      });
+
+      queued = true;
+      return NextResponse.json({
+        ok: true,
+        queued,
+        processed: false,
+        importedRows: 0,
+        duplicate: false,
+        status: "queued",
+        importFileId: importId,
+        metadata: null,
+      });
+    };
+
     if (isMultipart) {
       stage = "reading multipart form";
       const formData = await _request.formData();
@@ -830,7 +892,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       if (importMode === "receipt" && !forceInlineProcessing) {
-        return queueBackgroundProcessing(effectiveBankName || null);
+        return processReceiptAfterResponse(effectiveBankName || null);
       }
 
       let metadata: Record<string, unknown> | null = null;
