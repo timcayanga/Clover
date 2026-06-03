@@ -2028,19 +2028,34 @@ function AccountDetailPageContent() {
     ? formatCardAccountNumber(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null)
     : "";
   const latestCheckpointMetadata = latestCheckpoint?.sourceMetadata as Record<string, unknown> | null | undefined;
+  const relatedTransactionInstitution =
+    transactions.find((transaction) => {
+      if (transaction.accountId === account?.id) {
+        return typeof transaction.institution === "string" && transaction.institution.trim().length > 0;
+      }
+
+      return (
+        account !== null &&
+        normalizeImportedAccountKey(transaction.accountName, transaction.institution, transaction.accountNumber, account.type) ===
+          normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) &&
+        typeof transaction.institution === "string" &&
+        transaction.institution.trim().length > 0
+      );
+    })?.institution?.trim() ?? null;
   const checkpointInstitution =
     typeof latestCheckpointMetadata?.institution === "string"
       ? latestCheckpointMetadata.institution
       : typeof latestCheckpointMetadata?.uploadBankHint === "string"
         ? latestCheckpointMetadata.uploadBankHint
         : null;
+  const resolvedBankLabel = checkpointInstitution ?? relatedTransactionInstitution ?? account?.institution ?? null;
   const checkpointAccountName =
     typeof latestCheckpointMetadata?.accountName === "string" ? latestCheckpointMetadata.accountName : null;
   const accountCardName = account
-    ? checkpointInstitution
+    ? resolvedBankLabel
       ? formatUploadAccountDisplayName(
           checkpointAccountName ?? account.name,
-          checkpointInstitution,
+          resolvedBankLabel,
           account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null,
           account.type
         )
@@ -2053,7 +2068,7 @@ function AccountDetailPageContent() {
         )
       : getAccountCardName({
           name: account.type === "investment" ? accountEditDraft.name || account.name : accountEditDraft.name || account.name,
-          institution: account.institution ?? checkpointInstitution,
+          institution: account.institution ?? resolvedBankLabel,
           accountNumber: account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null,
           type: account.type,
           source: account.source,

@@ -2672,21 +2672,29 @@ function AccountsPageContent() {
     const latestCheckpointMetadata = latestCheckpoint?.sourceMetadata as Record<string, unknown> | null | undefined;
     const fallbackAccountNumber =
       row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
+    const relatedTransactionInstitution = transactions.find((transaction) => {
+      if (!transactionMatchesAccount(transaction, row)) {
+        return false;
+      }
+
+      return typeof transaction.institution === "string" && transaction.institution.trim().length > 0;
+    })?.institution?.trim() ?? null;
     const checkpointInstitution =
       typeof latestCheckpointMetadata?.institution === "string"
         ? latestCheckpointMetadata.institution
         : typeof latestCheckpointMetadata?.uploadBankHint === "string"
           ? latestCheckpointMetadata.uploadBankHint
         : null;
+    const resolvedBankLabel = checkpointInstitution ?? relatedTransactionInstitution ?? row.institution ?? null;
     const checkpointAccountName =
       typeof latestCheckpointMetadata?.accountName === "string"
         ? latestCheckpointMetadata.accountName
         : null;
     const accountCardName =
-      checkpointInstitution
+      resolvedBankLabel
         ? formatUploadAccountDisplayName(
             checkpointAccountName ?? row.name,
-            checkpointInstitution,
+            resolvedBankLabel,
             fallbackAccountNumber,
             row.type
           )
@@ -2694,13 +2702,13 @@ function AccountsPageContent() {
         ? formatUploadAccountDisplayName(row.name, row.institution, null, row.type)
         : getAccountCardName({
             name: row.name,
-            institution: row.institution ?? checkpointInstitution,
+            institution: row.institution ?? resolvedBankLabel,
             accountNumber: fallbackAccountNumber,
             type: row.type,
             source: row.source,
           });
     const accountBrand = getAccountBrand({
-      institution: row.institution ?? checkpointInstitution,
+      institution: row.institution ?? resolvedBankLabel,
       name: accountCardName,
       type: getEffectiveAccountType(row),
     });
