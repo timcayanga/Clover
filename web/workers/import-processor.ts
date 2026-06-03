@@ -819,6 +819,72 @@ const resolveWorkspaceCashAccountId = async (workspaceId: string, currency = "PH
 const countRowsWithParseableDates = (rows: Array<{ date?: string | null }>) =>
   rows.reduce((count, row) => (parseDateValue(row.date ?? null) ? count + 1 : count), 0);
 
+const countRowsWithParseableAmounts = (rows: Array<{ amount?: unknown }>) =>
+  rows.reduce((count, row) => {
+    const amountText =
+      typeof row.amount === "number"
+        ? String(row.amount)
+        : typeof row.amount === "string"
+          ? row.amount
+          : null;
+    return parseAmountValue(amountText) !== null ? count + 1 : count;
+  }, 0);
+
+const imageStatementRowsLookUsable = (
+  rows: Array<Record<string, unknown>>,
+  metadata: { institution?: unknown; accountName?: unknown; accountNumber?: unknown; confidence?: unknown },
+  options: {
+    parsedRowsWithDates: number;
+    parsedDateCoverage: number;
+    parsedRowsHaveMultipleAccountNumbers: boolean;
+    suspiciousDateCoverage: boolean;
+    prefersVisionFallbackForInstitution: boolean;
+  }
+) => {
+  if (rows.length < 3 || options.suspiciousDateCoverage) {
+    return false;
+  }
+
+  const amountCoverage = rows.length > 0 ? countRowsWithParseableAmounts(rows) / rows.length : 0;
+  if (options.parsedRowsWithDates < 2 || options.parsedDateCoverage < 0.6 || amountCoverage < 0.8) {
+    return false;
+  }
+
+  const knownInstitution =
+    typeof metadata.institution === "string" &&
+    metadata.institution.trim() &&
+    metadata.institution.trim() !== "Unknown";
+  if (!knownInstitution) {
+    return false;
+  }
+
+  const hasAccountSignal =
+    (typeof metadata.accountNumber === "string" && metadata.accountNumber.trim()) ||
+    (typeof metadata.accountName === "string" && metadata.accountName.trim()) ||
+    options.parsedRowsHaveMultipleAccountNumbers ||
+    rows.some((row) => typeof row.accountName === "string" && row.accountName.trim()) ||
+    rows.some((row) => {
+      const rawPayload = row.rawPayload;
+      return (
+        rawPayload &&
+        typeof rawPayload === "object" &&
+        !Array.isArray(rawPayload) &&
+        typeof (rawPayload as Record<string, unknown>).accountName === "string" &&
+        String((rawPayload as Record<string, unknown>).accountName).trim()
+      );
+    });
+
+  if (!hasAccountSignal) {
+    return false;
+  }
+
+  if (options.prefersVisionFallbackForInstitution && rows.length < 6) {
+    return false;
+  }
+
+  return true;
+};
+
 const isTruthyEnvValue = (value?: string | null) => {
   if (!value) {
     return false;
@@ -4366,6 +4432,16 @@ export const processImportFileText = async (
     (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && parsedRowsWithDates === 0
       ? true
       : (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 10 && parsedDateCoverage < 0.25;
+  const imageStatementParseLooksUsable =
+    imageImport &&
+    importMode === "statement" &&
+    imageStatementRowsLookUsable(parsedRows as Array<Record<string, unknown>>, metadataForParse, {
+      parsedRowsWithDates,
+      parsedDateCoverage,
+      parsedRowsHaveMultipleAccountNumbers,
+      suspiciousDateCoverage,
+      prefersVisionFallbackForInstitution,
+    });
   const hasReliableDeterministicStatementParse =
     hasKnownUnionBankSampleRows ||
     (importMode === "statement" &&
@@ -4381,6 +4457,7 @@ export const processImportFileText = async (
     (importFile.fileType === "application/pdf" || imageImport) &&
     !canReuseCachedStatementParse &&
     !hasReliableDeterministicStatementParse &&
+    !imageStatementParseLooksUsable &&
     (!text.trim() ||
       parsedRows.length === 0 ||
       prefersVisionFallbackForInstitution ||
@@ -4390,6 +4467,14 @@ export const processImportFileText = async (
       genericParseLooksSuspicious ||
       gcashSuspiciouslySparse ||
       suspiciousDateCoverage);
+  if (imageStatementParseLooksUsable) {
+    console.info("[import-performance] using fast screenshot statement parse", {
+      importFileId,
+      institution: metadataForParse.institution ?? null,
+      rowCount: parsedRows.length,
+      dateCoverage: Number(parsedDateCoverage.toFixed(3)),
+    });
+  }
   const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
   const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
   const receiptPreviewLooksLikeReceipt =
@@ -4403,6 +4488,7 @@ export const processImportFileText = async (
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
     hasReliableDeterministicStatementParse ||
+    imageStatementParseLooksUsable ||
     (imageImport &&
     ((importMode === "receipt" && receiptPreviewLooksLikeReceipt) ||
       (parsedRows.length > 0 &&
@@ -4903,6 +4989,7 @@ export const processImportFileText = async (
     usedVisionFallback: Boolean(pageImages?.length),
     usedOpenAiFallback: Boolean(useOpenAiParse),
     usedDeterministicParser: !useOpenAiParse,
+    usedFastScreenshotParse: imageStatementParseLooksUsable,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const documentImportAccountId =
