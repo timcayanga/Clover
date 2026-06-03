@@ -4974,6 +4974,38 @@ export const processImportFileText = async (
     }
   }
 
+  if (!isDocumentImport && imageImport && rows.length === 0) {
+    const stalledInstitution = resolvedMetadata.institution ?? checkpointBankName ?? null;
+    await updateImportFileCompat(importFileId, {
+      status: "failed",
+      processingPhase: "repair_needed",
+      processingMessage: stalledInstitution && /wise/i.test(stalledInstitution)
+        ? "Clover recognized this as Wise, but could not read enough visible transaction rows from the screenshot."
+        : "Clover could not read enough visible transaction rows from this screenshot.",
+      parsedRowsCount: 0,
+      confirmedTransactionsCount: 0,
+    });
+    emitImportProcessingEvent("import_processing_stalled", {
+      processing_status: "failed",
+      processing_phase: "repair_needed",
+      reason: "image_statement_no_rows",
+      institution: stalledInstitution,
+      error_code: "I-104",
+    });
+
+    return {
+      imported: 0,
+      duplicate: false,
+      metadata: resolvedMetadata,
+      accountId: null,
+      accountSummaries: [],
+      confirmedTransactionsCount: 0,
+      insightSummary: undefined,
+      accountBalance: null,
+      status: "error",
+    };
+  }
+
   if (!isDocumentImport) {
     try {
       await updateImportFileCompat(importFileId, {
