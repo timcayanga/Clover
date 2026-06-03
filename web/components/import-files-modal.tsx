@@ -1398,7 +1398,7 @@ const inferImportModeForFile = (file: File, defaultMode: ImportImageMode): Impor
     return "statement";
   }
 
-  return "receipt";
+  return defaultMode;
 };
 
 const resolveStatementIdentityFromMetadata = (metadata: unknown) => {
@@ -5051,7 +5051,11 @@ export function ImportFilesModal({
   ): Promise<{ completed: boolean; summary: UploadInsightsSummary | null }> => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     const startedAt = Date.now();
-    const MAX_WAIT_MS = importMode === "receipt" ? 120_000 : 20_000;
+    const MAX_WAIT_MS = importMode === "receipt" ? 120_000 : importMode === "statement" ? 120_000 : 20_000;
+    const timeoutDurationLabel =
+      MAX_WAIT_MS >= 60_000
+        ? `${Math.round(MAX_WAIT_MS / 60_000)} minute${Math.round(MAX_WAIT_MS / 60_000) === 1 ? "" : "s"}`
+        : `${Math.round(MAX_WAIT_MS / 1000)} seconds`;
     const deliverSummary = options?.deliverSummary ?? true;
     const progressLabel =
       importMode === "receipt"
@@ -5259,7 +5263,7 @@ export function ImportFilesModal({
             return { completed: true, summary: null };
           }
 
-          const timeoutMessage = "Timed out after 2 minutes while Clover was still reading the document.";
+          const timeoutMessage = `Timed out after ${timeoutDurationLabel} while Clover was still reading the document.`;
           closeImportAfterError(itemId, "monitor", fileName, timeoutMessage);
           return { completed: false, summary: null };
         }
@@ -5336,7 +5340,7 @@ export function ImportFilesModal({
           return { completed: true, summary: null };
         }
 
-        const timeoutMessage = "Timed out after 2 minutes while Clover was still reading the document.";
+        const timeoutMessage = `Timed out after ${timeoutDurationLabel} while Clover was still reading the document.`;
         closeImportAfterError(itemId, "monitor", fileName, timeoutMessage);
         return { completed: false, summary: null };
       }
