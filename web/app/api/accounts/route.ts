@@ -382,6 +382,15 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
       })
       .filter((entry): entry is [string, (typeof existingAccounts)[number]] => Boolean(entry))
   );
+  const accountByLastFour = new Map(
+    existingAccounts
+      .map((account) => {
+        const number = normalizeImportAccountNumber(account.accountNumber ?? null);
+        const lastFour = number ? number.slice(-4) : null;
+        return lastFour ? [lastFour, account] as const : null;
+      })
+      .filter((entry): entry is [string, (typeof existingAccounts)[number]] => Boolean(entry))
+  );
   type RepairGroupRow = (typeof parsedRows)[number];
   type RepairGroup = {
     accountNumber: string;
@@ -427,6 +436,7 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
     let account =
       (groupIdentityKey ? accountByNumber.get(groupIdentityKey) ?? null : null) ??
       accountByPlainNumber.get(normalizeImportAccountNumber(group.accountNumber) ?? "") ??
+      accountByLastFour.get((normalizeImportAccountNumber(group.accountNumber) ?? "").slice(-4)) ??
       null;
     const resolvedInstitution = resolveUploadedAccountInstitution(account?.institution ?? null, null, group.institution);
     const accountName = formatUploadAccountDisplayName(
@@ -875,10 +885,28 @@ export async function GET(request: Request) {
           typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
           checkpointNumber
         );
+        const checkpointBankLabel =
+          typeof sourceMetadata?.institution === "string"
+            ? sourceMetadata.institution
+            : typeof sourceMetadata?.uploadBankHint === "string"
+              ? sourceMetadata.uploadBankHint
+              : null;
+        const accountDigits = String(account.accountNumber ?? "").replace(/\D/g, "");
+        const checkpointDigits = String(checkpointNumber ?? "").replace(/\D/g, "");
+        const accountLastFour = accountDigits.slice(-4);
+        const checkpointLastFour = checkpointDigits.slice(-4);
+        const matchesByDigits =
+          Boolean(accountDigits && checkpointDigits && accountDigits === checkpointDigits) ||
+          Boolean(
+            checkpointBankLabel &&
+              accountLastFour.length === 4 &&
+              checkpointLastFour.length === 4 &&
+              accountLastFour === checkpointLastFour
+          );
         const matchesAccount =
           checkpoint.accountId === account.id ||
           (accountKey !== "" && checkpointKey === accountKey) ||
-          Boolean(accountNumber && checkpointNumber && accountNumber === checkpointNumber);
+          matchesByDigits;
 
         if (!matchesAccount) {
           continue;

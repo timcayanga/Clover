@@ -218,6 +218,26 @@ const normalizeAccountKey = (accountName?: string | null, institution?: string |
     .replace(/\s+/g, " ")
     .trim();
 
+const accountNumbersMayMatch = (left?: string | null, right?: string | null, requireExactMatch = false) => {
+  const leftDigits = String(left ?? "").replace(/\D/g, "");
+  const rightDigits = String(right ?? "").replace(/\D/g, "");
+  if (!leftDigits || !rightDigits) {
+    return false;
+  }
+
+  if (leftDigits === rightDigits) {
+    return true;
+  }
+
+  if (requireExactMatch) {
+    return false;
+  }
+
+  const leftLastFour = leftDigits.slice(-4);
+  const rightLastFour = rightDigits.slice(-4);
+  return leftLastFour.length === 4 && rightLastFour.length === 4 && leftLastFour === rightLastFour;
+};
+
 export async function GET(_request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
     const userId = await resolveAccountRouteUserId();
@@ -266,12 +286,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
           typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null
         );
         const checkpointNumber = typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null;
-        const accountDigits = String(accountNumber ?? "").replace(/\D/g, "");
-        const checkpointDigits = String(checkpointNumber ?? "").replace(/\D/g, "");
         const matchesAccount =
           checkpoint.accountId === accountId ||
           (accountKey !== "" && checkpointKey === accountKey) ||
-          Boolean(accountDigits && checkpointDigits && accountDigits === checkpointDigits);
+          accountNumbersMayMatch(accountNumber, checkpointNumber);
 
         if (!matchesAccount) {
           continue;

@@ -128,6 +128,26 @@ type Transaction = {
 const normalizeLooseImportedValue = (value: string | null | undefined) =>
   String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
+const accountNumbersMayMatch = (left?: string | null, right?: string | null, requireExactMatch = false) => {
+  const leftDigits = String(left ?? "").replace(/\D/g, "");
+  const rightDigits = String(right ?? "").replace(/\D/g, "");
+  if (!leftDigits || !rightDigits) {
+    return false;
+  }
+
+  if (leftDigits === rightDigits) {
+    return true;
+  }
+
+  if (requireExactMatch) {
+    return false;
+  }
+
+  const leftLastFour = leftDigits.slice(-4);
+  const rightLastFour = rightDigits.slice(-4);
+  return leftLastFour.length === 4 && rightLastFour.length === 4 && leftLastFour === rightLastFour;
+};
+
 const uploadSummaryMatchesAccount = (
   summary: NonNullable<ReturnType<typeof getCompletedImportActivitySummary>>,
   account: Account
@@ -1832,15 +1852,29 @@ function AccountDetailPageContent() {
         return true;
       }
 
+      const sourceMetadata =
+        checkpoint.sourceMetadata &&
+        typeof checkpoint.sourceMetadata === "object" &&
+        !Array.isArray(checkpoint.sourceMetadata)
+          ? (checkpoint.sourceMetadata as Record<string, unknown>)
+          : null;
       const checkpointKey = normalizeImportedAccountKey(
-        typeof checkpoint.sourceMetadata?.accountName === "string" ? checkpoint.sourceMetadata.accountName : null,
-        typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null,
-        typeof checkpoint.sourceMetadata?.accountNumber === "string" ? checkpoint.sourceMetadata.accountNumber : null,
-        typeof (checkpoint.sourceMetadata as Record<string, unknown> | null | undefined)?.accountType === "string"
-          ? ((checkpoint.sourceMetadata as Record<string, unknown>).accountType as string)
-          : null
+        typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+        typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+        typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null,
+        typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null
       );
-      return checkpointKey === accountCheckpointKey;
+      const checkpointNumber =
+        typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null;
+      const checkpointBankHint =
+        typeof sourceMetadata?.uploadBankHint === "string" ? sourceMetadata.uploadBankHint : null;
+      const checkpointInstitution =
+        typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null;
+      return (
+        checkpointKey === accountCheckpointKey ||
+        accountNumbersMayMatch(account?.accountNumber ?? null, checkpointNumber) ||
+        (Boolean(checkpointInstitution || checkpointBankHint) && accountNumbersMayMatch(account?.accountNumber ?? null, checkpointNumber))
+      );
     });
 
     return matchingCheckpoints.sort((left, right) => {

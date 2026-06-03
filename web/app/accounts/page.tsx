@@ -884,6 +884,30 @@ const getLastFourDigits = (value?: string | null) => {
   return digits.length >= 4 ? digits.slice(-4) : null;
 };
 
+const accountNumbersMayMatch = (
+  left?: string | null,
+  right?: string | null,
+  requireExactMatch = false
+) => {
+  const leftDigits = String(left ?? "").replace(/\D/g, "");
+  const rightDigits = String(right ?? "").replace(/\D/g, "");
+  if (!leftDigits || !rightDigits) {
+    return false;
+  }
+
+  if (leftDigits === rightDigits) {
+    return true;
+  }
+
+  if (requireExactMatch) {
+    return false;
+  }
+
+  const leftLastFour = leftDigits.slice(-4);
+  const rightLastFour = rightDigits.slice(-4);
+  return leftLastFour.length === 4 && rightLastFour.length === 4 && leftLastFour === rightLastFour;
+};
+
 const mergeStatementCheckpoints = (current: StatementCheckpoint[], next: StatementCheckpoint[]) => {
   if (next.length === 0) {
     return current;
@@ -917,7 +941,6 @@ const getLatestCheckpointForAccount = (
   let latestCheckpoint: StatementCheckpoint | null = null;
   let latestTime = -1;
   const identityKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
-  const accountDigits = String(account.accountNumber ?? "").replace(/\D/g, "");
 
   for (const checkpoint of statementCheckpoints) {
     const sourceMetadata = checkpoint.sourceMetadata as Record<string, unknown> | null | undefined;
@@ -931,11 +954,10 @@ const getLatestCheckpointForAccount = (
       typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null;
     const checkpointLastFour = getLastFourDigits(checkpointAccountNumber);
     const accountLastFour = getLastFourDigits(account.accountNumber ?? account.name);
-    const checkpointDigits = String(checkpointAccountNumber ?? "").replace(/\D/g, "");
     const matchesAccount =
       checkpoint.accountId === account.id ||
       (getCheckpointIdentityKey(checkpoint) !== "" && getCheckpointIdentityKey(checkpoint) === identityKey) ||
-      Boolean(accountDigits && checkpointDigits && accountDigits === checkpointDigits) ||
+      accountNumbersMayMatch(account.accountNumber ?? null, checkpointAccountNumber) ||
       Boolean(
         checkpointInstitution &&
           account.institution &&
