@@ -577,6 +577,18 @@ const formatDisambiguatedCardAccountNumber = (
   return `${masked} · ${digitsOnly.length} digits`;
 };
 
+const removeDuplicateCardAccountSuffix = (name: string, accountNumber: string | null | undefined) => {
+  const lastFour = String(accountNumber ?? "").replace(/\D/g, "").slice(-4);
+  if (!lastFour) {
+    return name;
+  }
+
+  const cleanedName = name.trim();
+  const suffixPattern = new RegExp(`(?:\\s|[-–—_])*(?:[•*xX]{2,}\\s*)?${lastFour}$`);
+  const withoutSuffix = cleanedName.replace(suffixPattern, "").trim();
+  return withoutSuffix || cleanedName;
+};
+
 const getCurrencyCodes = (accounts: Array<{ currency: string }>) =>
   Array.from(new Set(accounts.map((account) => formatCurrencyCode(account.currency))));
 
@@ -2712,7 +2724,7 @@ function AccountsPageContent() {
       typeof latestCheckpointMetadata?.accountName === "string"
         ? latestCheckpointMetadata.accountName
         : null;
-    const accountCardName =
+    const rawAccountCardName =
       resolvedBankLabel
         ? formatUploadAccountDisplayName(
             checkpointAccountName ?? row.name,
@@ -2731,13 +2743,16 @@ function AccountsPageContent() {
           });
     const accountBrand = getAccountBrand({
       institution: row.institution ?? resolvedBankLabel,
-      name: accountCardName,
+      name: rawAccountCardName,
       type: getEffectiveAccountType(row),
     });
     const balanceValue = Math.abs(parseAmount(loadingContext.displayedBalance));
     const accountCardNumber = formatDisambiguatedCardAccountNumber(fallbackAccountNumber, {
       showDigitCount: collidingMaskedAccountNumberKeys.has(getMaskedAccountNumberCollisionKey(row) ?? ""),
     });
+    const accountCardName = accountCardNumber
+      ? removeDuplicateCardAccountSuffix(rawAccountCardName, fallbackAccountNumber)
+      : rawAccountCardName;
 
     return (
       <FinancialAccountCard
