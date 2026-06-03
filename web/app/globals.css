@@ -1028,6 +1028,10 @@ body.transactions-manual-open .shell-quick-add-button {
   text-align: left;
 }
 
+.shell-quick-add-popover__item--mobile-only {
+  display: none;
+}
+
 .shell-quick-add-popover__item strong {
   font-size: 14px;
   letter-spacing: -0.02em;
@@ -3381,6 +3385,10 @@ body.transactions-manual-open .shell-quick-add-button {
     right: 12px;
     bottom: calc(86px + env(safe-area-inset-bottom));
     min-width: 0;
+  }
+
+  .shell-quick-add-popover__item--mobile-only {
+    display: grid;
   }
 
   .more-page__sections {

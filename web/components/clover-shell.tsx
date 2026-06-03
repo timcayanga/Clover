@@ -1726,7 +1726,7 @@ export function CloverShell({
             <span>Open the manual transaction field.</span>
           </button>
           <button
-            className="shell-quick-add-popover__item"
+            className="shell-quick-add-popover__item shell-quick-add-popover__item--mobile-only"
             type="button"
             role="menuitem"
             onClick={() => {
@@ -1738,7 +1738,7 @@ export function CloverShell({
             <span>Use your camera for a receipt or statement.</span>
           </button>
           <button
-            className="shell-quick-add-popover__item"
+            className="shell-quick-add-popover__item shell-quick-add-popover__item--mobile-only"
             type="button"
             role="menuitem"
             onClick={() => {
