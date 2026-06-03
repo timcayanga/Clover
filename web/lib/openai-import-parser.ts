@@ -1929,6 +1929,7 @@ export const transcribeImportImagesWithOpenAI = async (params: {
   detectedMetadata: DetectedStatementMetadata | null;
   pageImages: Array<{ page: number; dataUrl: string }>;
   importMode?: ImportMode | null;
+  timeoutMs?: number | null;
 }): Promise<{
   documentType: "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
   transcript: string;
@@ -1965,7 +1966,7 @@ export const transcribeImportImagesWithOpenAI = async (params: {
   );
   const pageImagesToSend = params.pageImages.slice(0, params.importMode === "statement" ? 6 : 4);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120_000);
+  const timeout = setTimeout(() => controller.abort(), Math.max(10_000, params.timeoutMs ?? 120_000));
 
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
