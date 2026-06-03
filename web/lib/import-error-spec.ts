@@ -89,7 +89,7 @@ const SPEC_BY_STAGE: Record<
     category: "Parsing",
     httpClass: "500 server-side error",
     title: "Parsing issue",
-    message: "Clover could not finish reading the statement.",
+    message: "Clover could not finish reading the file.",
     nextSteps: [
       "Click Resume import if Clover shows it, or upload the original file again.",
       "If Clover still stalls, add the missing transactions manually in Transactions.",

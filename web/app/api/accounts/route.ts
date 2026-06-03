@@ -309,6 +309,23 @@ const isGenericUploadedAccountForInstitution = (account: {
   );
 };
 
+const looksLikeReceiptImageFilenameAccount = (account: {
+  name: string;
+  accountNumber?: string | null;
+  source: string;
+}) => {
+  if (account.source !== "upload") {
+    return false;
+  }
+
+  const combined = `${account.name ?? ""} ${account.accountNumber ?? ""}`.trim();
+  return (
+    /\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)(?:\s|$)/i.test(combined) ||
+    /^img[_-]?\d+(?:\.(?:jpe?g|png|webp))?(?:\s|$)/i.test(combined) ||
+    /^\d{4}-\d{2}-\d{2}\s+\d{2}\.\d{2}\.\d{2}(?:\.(?:jpe?g|png|webp))?(?:\s|$)/i.test(combined)
+  );
+};
+
 const repairParsedImportedAccounts = async (workspaceId: string, compatibleColumns: Set<string>) => {
   if (!compatibleColumns.has("accountNumber") || !(await hasCompatibleTable("ParsedTransaction"))) {
     return;
@@ -807,10 +824,13 @@ export async function GET(request: Request) {
     const visibleAccounts = accounts.filter(
       (account) => {
         const institutionKey = importedAccountInstitutionKey(account);
-        return !(
-          institutionKey &&
-          numberedInstitutionKeys.has(institutionKey) &&
-          isGenericUploadedAccountForInstitution(account)
+        return (
+          !looksLikeReceiptImageFilenameAccount(account) &&
+          !(
+            institutionKey &&
+            numberedInstitutionKeys.has(institutionKey) &&
+            isGenericUploadedAccountForInstitution(account)
+          )
         );
       }
     );

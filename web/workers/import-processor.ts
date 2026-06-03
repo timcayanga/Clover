@@ -5057,8 +5057,16 @@ export const processImportFileText = async (
     usedFastScreenshotParse: imageStatementParseLooksUsable,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
+  const receiptDocumentCashAccountId =
+    importMode === "receipt"
+      ? await resolveWorkspaceCashAccountId(String(importFile.workspaceId), resolvedMetadata.currency ?? "PHP")
+      : null;
   const documentImportAccountId =
-    importMode === "receipt" || receiptPreviewLooksLikeReceipt ? importFile.account?.id ?? resolvedReceiptAccountId : importFile.account?.id ?? null;
+    importMode === "receipt"
+      ? receiptDocumentCashAccountId
+      : receiptPreviewLooksLikeReceipt
+        ? importFile.account?.id ?? resolvedReceiptAccountId
+        : importFile.account?.id ?? null;
   const documentImportExtractedPayload = {
     metadata: resolvedMetadata,
     rowCount: rows.length,
@@ -5100,9 +5108,9 @@ export const processImportFileText = async (
             : importMode === "notes"
               ? "notes"
               : "statement",
-    institution: resolvedMetadata.institution ?? null,
-    accountName: resolvedMetadata.accountName ?? null,
-    accountNumber: resolvedMetadata.accountNumber ?? null,
+    institution: importMode === "receipt" ? null : resolvedMetadata.institution ?? null,
+    accountName: importMode === "receipt" ? "Cash" : resolvedMetadata.accountName ?? null,
+    accountNumber: importMode === "receipt" ? null : resolvedMetadata.accountNumber ?? null,
     currency: resolvedMetadata.currency ?? null,
     pageCount: pageImages?.length ?? 0,
     confidence: resolvedMetadata.confidence ?? 0,

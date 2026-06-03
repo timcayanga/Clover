@@ -43,13 +43,15 @@ const upsertUploadBankHint = async (params: {
   importFileId: string;
   workspaceId: string;
   bankName?: string | null;
+  importMode?: ReturnType<typeof normalizeImportImageMode> | null;
   trainingMode?: "bank_context" | "generic_parser";
 }) => {
   const bankName = normalizeBankName(params.bankName ?? "");
   const hasBankName = Boolean(bankName && bankName !== "Unknown");
   const isGenericParserTraining = params.trainingMode === "generic_parser";
+  const hasImportMode = Boolean(params.importMode);
 
-  if (!hasBankName && !isGenericParserTraining) {
+  if (!hasBankName && !isGenericParserTraining && !hasImportMode) {
     return;
   }
 
@@ -64,7 +66,13 @@ const upsertUploadBankHint = async (params: {
           uploadBankHint: bankName,
         }
       : {}),
-    uploadHintSource: isGenericParserTraining ? "admin_data_qa_generic_json_upload" : "admin_data_qa_bank_upload",
+    ...(params.importMode ? { importMode: params.importMode } : {}),
+    workflowStage: "uploading",
+    uploadHintSource: isGenericParserTraining
+      ? "admin_data_qa_generic_json_upload"
+      : hasBankName
+        ? "admin_data_qa_bank_upload"
+        : "image_import_mode",
     trainingMode: params.trainingMode ?? (hasBankName ? "bank_context" : undefined),
     genericParserTraining: isGenericParserTraining || undefined,
   } as Prisma.InputJsonValue;
@@ -170,6 +178,7 @@ export async function POST(request: Request) {
       importFileId: String(importFile.id),
       workspaceId: payload.workspaceId,
       bankName: payload.bankName ?? null,
+      importMode,
       trainingMode: payload.trainingMode,
     });
 
