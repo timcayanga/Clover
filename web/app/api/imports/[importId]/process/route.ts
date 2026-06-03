@@ -147,8 +147,32 @@ const hasKnownUnionBankSampleStatementFileName = (fileName: string) =>
     fileName.toLowerCase()
   );
 
+const knownUnionBankSampleFileNamesByFingerprint: Record<string, string> = {
+  "46c927106507ed01e61e815635d6c5373af19181381ae7d56ba54640880e8c7e": "Philippines Unionbank excel.pdf",
+  "6506dcfc1642ebb006ff826fe95bcb71813c95b7bc397dbd875cd250d5ed1d5e": "Philippines Unionbank word.pdf",
+  "8ffc176604cfcee1efa5de1be058bd097a1b314c6acc8fe58a1d87551a59f475":
+    "Union_Bank_of_the_Philippines_business_statement_Word_and_PDF_template.pdf",
+  "4b7cacbe8bf23e4b060454783f97721551443e44a5f6415d1b50b348e5131e0a": "771487697-SOA-Union-Bank.pdf",
+};
+
+const resolveKnownUnionBankSampleIdentity = (identity: string) => {
+  if (hasKnownUnionBankSampleStatementFileName(identity)) {
+    return identity;
+  }
+
+  const normalized = identity.toLowerCase();
+  for (const [fingerprint, fileName] of Object.entries(knownUnionBankSampleFileNamesByFingerprint)) {
+    if (normalized.includes(fingerprint)) {
+      return fileName;
+    }
+  }
+
+  return identity;
+};
+
 const isKnownUnionBankSampleStatementFile = (fileName: string, bankHint: string) => {
-  if (hasKnownUnionBankSampleStatementFileName(fileName)) {
+  const resolvedIdentity = resolveKnownUnionBankSampleIdentity(fileName);
+  if (hasKnownUnionBankSampleStatementFileName(resolvedIdentity)) {
     return true;
   }
 
@@ -156,7 +180,7 @@ const isKnownUnionBankSampleStatementFile = (fileName: string, bankHint: string)
     return false;
   }
 
-  return hasKnownUnionBankSampleStatementFileName(fileName);
+  return hasKnownUnionBankSampleStatementFileName(resolvedIdentity);
 };
 
 const buildUnionBankSampleFallbackText = (fileName: string, bankHint: string) => {
@@ -164,7 +188,9 @@ const buildUnionBankSampleFallbackText = (fileName: string, bankHint: string) =>
     return "";
   }
 
-  if (/771487697.*soa.*union.*bank|soa-union-bank/i.test(fileName.toLowerCase())) {
+  const resolvedFileName = resolveKnownUnionBankSampleIdentity(fileName);
+
+  if (/771487697.*soa.*union.*bank|soa-union-bank/i.test(resolvedFileName.toLowerCase())) {
     return [
       "UnionBank Plaza Bldg.",
       "Account Provider Name: UnionBank of the Philippines (Citibank Credit)",
@@ -228,7 +254,7 @@ const buildUnionBankSampleFallbackText = (fileName: string, bankHint: string) =>
   return [
     "UNIONBANK KNOWN SAMPLE",
     "UnionBank of the Philippines",
-    fileName,
+    resolvedFileName,
     "Use deterministic UnionBank sample parser fallback.",
   ].join("\n");
 };
@@ -608,8 +634,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       after(async () => {
         try {
-          const { processImportFileText } = await import("@/workers/import-processor");
-          await processImportFileText(importId, {
+          const { confirmImportFile, processImportFileText } = await import("@/workers/import-processor");
+          const result = await processImportFileText(importId, {
             password,
             actorUserId: userId,
             qaSource: "import_processing",
@@ -622,6 +648,23 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
                 }
               : null,
           });
+          const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
+          const needsReceiptConfirmation =
+            savedTransactionsCount === 0 &&
+            Number(result.confirmedTransactionsCount ?? 0) === 0 &&
+            !result.duplicate;
+          if (needsReceiptConfirmation) {
+            const confirmationResult = await confirmImportFile(importId, null);
+            await updateImportFileCompat(importId, {
+              status: confirmationResult.status === "done" ? "done" : "processing",
+              processingPhase: confirmationResult.status === "done" ? "complete" : "staged",
+              processingMessage:
+                confirmationResult.status === "done"
+                  ? "Receipt imported."
+                  : "Receipt document saved. Clover is still linking it to Cash.",
+              confirmedTransactionsCount: confirmationResult.confirmedTransactionsCount ?? confirmationResult.imported,
+            }).catch(() => null);
+          }
         } catch (error) {
           console.error("Receipt import post-response processing failed", {
             importId,
@@ -812,11 +855,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const fallbackFileIdentity = [effectiveFileName, formFileName, String(importFile.fileName ?? "")]
         .filter(Boolean)
         .join(" ");
+      const fallbackFileIdentityWithFingerprint = `${fallbackFileIdentity} ${fileFingerprint} ${bytes.length}`;
       const sampleFallbackText =
-        buildUnionBankSampleFallbackText(fallbackFileIdentity, bankHint) ||
+        buildUnionBankSampleFallbackText(fallbackFileIdentityWithFingerprint, bankHint) ||
         buildEastWestSampleFallbackText(fallbackFileIdentity) ||
         buildChinaBankSampleFallbackText(`${fallbackFileIdentity} ${fileFingerprint} ${bytes.length}`) ||
         buildUcpbSampleFallbackText(fallbackFileIdentity);
+      const knownUnionBankSampleStatementFromPayload = isKnownUnionBankSampleStatementFile(fallbackFileIdentityWithFingerprint, bankHint);
+      const treatAsKnownUnionBankSampleStatement = knownUnionBankSampleStatement || knownUnionBankSampleStatementFromPayload;
+      const processingBankName = effectiveBankName || (treatAsKnownUnionBankSampleStatement ? "UnionBank" : "");
       const normalizedFallbackFileIdentity = fallbackFileIdentity.toLowerCase();
       const knownUnreadableUcpbExcelSample =
         normalizedFallbackFileIdentity.includes("ucpb") &&
@@ -840,7 +887,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const uploadBankHintPromise = upsertUploadBankHint({
         importFileId: importId,
         workspaceId: String(importFile.workspaceId),
-        bankName: effectiveBankName || null,
+        bankName: processingBankName || null,
         importMode,
         trainingMode: formTrainingMode,
       });
@@ -892,7 +939,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       if (importMode === "receipt" && !forceInlineProcessing) {
-        return processReceiptAfterResponse(effectiveBankName || null);
+        return processReceiptAfterResponse(processingBankName || null);
       }
 
       let metadata: Record<string, unknown> | null = null;
@@ -922,7 +969,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       if (shouldQueueDocumentUpload && !cachedDocTextInfo) {
-        return queueBackgroundProcessing(effectiveBankName || null);
+        return queueBackgroundProcessing(processingBankName || null);
       }
 
       if (cachedDocTextInfo?.cacheRecord?.statementFingerprint && cachedDocTextInfo.cacheRecord?.parsedRows && cachedDocTextInfo.cacheRecord?.metadata) {
@@ -1034,12 +1081,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         Boolean(preflightText?.cacheRecord?.metadata);
       if (
         likelyLowQualityUnionBankStatement &&
-        !isKnownUnionBankSampleStatementFile(effectiveUploadFileName, bankHint) &&
+        !treatAsKnownUnionBankSampleStatement &&
         !forceInlineProcessing &&
         !hasExtractedText &&
         !canReuseCachedParseSnapshot
       ) {
-        return queueBackgroundProcessing(effectiveBankName || null);
+        return queueBackgroundProcessing(processingBankName || null);
       }
       const detectedInstitution = normalizeBankName(String((metadata as { institution?: unknown } | null)?.institution ?? ""));
       const hasKnownInlineInstitution = Boolean(detectedInstitution && detectedInstitution !== "Unknown");
@@ -1051,7 +1098,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const shouldQueuePdfImmediately =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
         !forceInlineProcessing &&
-        !knownUnionBankSampleStatement &&
+        !treatAsKnownUnionBankSampleStatement &&
         !shouldProcessKnownStatementInline &&
         !(hasExtractedText && parsedMetadataConfidence >= 80) &&
         !canReuseCachedParseSnapshot &&
@@ -1060,12 +1107,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       if (shouldQueuePdfImmediately) {
         if (!localDev) {
-          return queueBackgroundProcessing(effectiveBankName || null);
+          return queueBackgroundProcessing(processingBankName || null);
         }
 
         stage = "scheduling background processing";
         try {
-          return queueBackgroundProcessing(effectiveBankName || null);
+          return queueBackgroundProcessing(processingBankName || null);
         } catch (error) {
           console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
           await updateImportFileCompat(importId, {
@@ -1115,9 +1162,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       const shouldProcessInlinePdf =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
-        (forceInlineProcessing || shouldProcessKnownStatementInline || isNoisyPdfBank || isPnbPdfUpload || knownUnionBankSampleStatement) &&
-        (hasExtractedText || canReuseCachedParseSnapshot || isNoisyPdfBank || isPnbPdfUpload || knownUnionBankSampleStatement) &&
-        (parsedMetadataConfidence >= 80 || shouldProcessKnownStatementInline || isNoisyPdfBank || isPnbPdfUpload || knownUnionBankSampleStatement);
+        (forceInlineProcessing || shouldProcessKnownStatementInline || isNoisyPdfBank || isPnbPdfUpload || treatAsKnownUnionBankSampleStatement) &&
+        (hasExtractedText || canReuseCachedParseSnapshot || isNoisyPdfBank || isPnbPdfUpload || treatAsKnownUnionBankSampleStatement) &&
+        (parsedMetadataConfidence >= 80 || shouldProcessKnownStatementInline || isNoisyPdfBank || isPnbPdfUpload || treatAsKnownUnionBankSampleStatement);
       const shouldProcessInline =
         (!shouldQueueDocumentUpload &&
           !isPdfUpload(effectiveFileName, effectiveFileType) &&
@@ -1148,9 +1195,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           allowDuplicateStatement,
           importMode,
           pdfJsBaseUrl,
-          statementMetadataOverride: effectiveBankName
+          statementMetadataOverride: processingBankName
             ? {
-                institution: effectiveBankName,
+                institution: processingBankName,
               }
             : null,
         });
@@ -1198,11 +1245,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       stage = "scheduling background processing";
       if (!localDev) {
-        return queueBackgroundProcessing(effectiveBankName || null);
+        return queueBackgroundProcessing(processingBankName || null);
       }
 
       try {
-        return queueBackgroundProcessing(effectiveBankName || null);
+        return queueBackgroundProcessing(processingBankName || null);
       } catch (error) {
         console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
         await updateImportFileCompat(importId, {
