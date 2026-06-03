@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { hasCompatibleTable } from "@/lib/data-engine";
-import { deleteAccountsAndImportArtifacts, deleteOrphanedWorkspaceTransactions } from "@/lib/account-deletion";
+import { deleteAccountsAndImportArtifacts, deleteOrphanedWorkspaceTransactions, deleteWorkspaceTransactions } from "@/lib/account-deletion";
 
 export const dynamic = "force-dynamic";
 
@@ -35,17 +35,15 @@ export async function DELETE(request: Request) {
 
     if (scope === "transactions") {
       const result = await prisma.$transaction(async (tx) => {
-        const deletedTransactions = await tx.transaction.deleteMany({
-          where: {
-            workspaceId,
-            date: { lt: cutoff },
-          },
+        const deletedTransactionCount = await deleteWorkspaceTransactions(tx, {
+          workspaceId,
+          date: { lt: cutoff },
         });
         const deletedOrphanedTransactions = await deleteOrphanedWorkspaceTransactions(tx, workspaceId);
 
         return {
-          deleted: deletedTransactions.count + deletedOrphanedTransactions,
-          deletedTransactions: deletedTransactions.count,
+          deleted: deletedTransactionCount + deletedOrphanedTransactions,
+          deletedTransactions: deletedTransactionCount,
           deletedOrphanedTransactions,
         };
       });
@@ -92,7 +90,11 @@ export async function DELETE(request: Request) {
     });
 
     return NextResponse.json({ deleted: deletionResult.accountsDeleted, deletedTransactions: deletionResult.transactionsDeleted });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    console.error("[settings-data-delete]", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unable to delete data." },
+      { status: 400 }
+    );
   }
 }

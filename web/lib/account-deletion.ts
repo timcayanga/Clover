@@ -13,23 +13,67 @@ type DeleteAccountArtifactsResult = {
 
 const inList = (values: string[]) => ({ in: values });
 
+export const deleteWorkspaceTransactions = async (tx: any, where: Record<string, unknown>) => {
+  const transactions = await tx.transaction.findMany({
+    where,
+    select: { id: true },
+  });
+  const transactionIds = transactions.map((transaction: { id: string }) => transaction.id);
+
+  if (transactionIds.length === 0) {
+    return 0;
+  }
+
+  const transactionIdFilter = inList(transactionIds);
+
+  await tx.financialCommitment.updateMany({
+    where: { transactionId: transactionIdFilter },
+    data: { transactionId: null },
+  });
+  await tx.receiptDocument.updateMany({
+    where: { transactionId: transactionIdFilter },
+    data: { transactionId: null },
+  });
+  await tx.splitBill.updateMany({
+    where: { transactionId: transactionIdFilter },
+    data: { transactionId: null },
+  });
+  await tx.trainingSignal.updateMany({
+    where: { transactionId: transactionIdFilter },
+    data: { transactionId: null },
+  });
+  await tx.dataQaFinding.updateMany({
+    where: { transactionId: transactionIdFilter },
+    data: { transactionId: null },
+  });
+
+  const deletedTransactions = await tx.transaction.deleteMany({
+    where: { id: transactionIdFilter },
+  });
+
+  return deletedTransactions.count;
+};
+
 export const deleteOrphanedWorkspaceTransactions = async (tx: any, workspaceId: string) => {
   if (!workspaceId) {
     return 0;
   }
 
-  const deletedRows = await tx.$queryRaw<Array<{ id: string }>>`
-    DELETE FROM "Transaction" t
+  const orphanedTransactions = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT t."id"
+    FROM "Transaction" t
     WHERE t."workspaceId" = ${workspaceId}
       AND NOT EXISTS (
         SELECT 1
         FROM "Account" a
         WHERE a."id" = t."accountId"
       )
-    RETURNING t."id"
   `;
 
-  return deletedRows.length;
+  return deleteWorkspaceTransactions(tx, {
+    workspaceId,
+    id: inList(orphanedTransactions.map((transaction) => transaction.id)),
+  });
 };
 
 export const deleteAccountsAndImportArtifacts = async (
@@ -142,18 +186,16 @@ export const deleteAccountsAndImportArtifacts = async (
       ? { workspaceId, id: inList(relatedImportFileIds()) }
       : importFileWhere;
 
-  const deletedTransactions = includeWorkspaceImportArtifacts
-    ? await tx.transaction.deleteMany({
-        where: { workspaceId },
+  const deletedTransactionCount = includeWorkspaceImportArtifacts
+    ? await deleteWorkspaceTransactions(tx, {
+        workspaceId,
       })
-    : await tx.transaction.deleteMany({
-        where: {
-          workspaceId,
-          OR: [
-            { accountId: accountIdFilter },
-            ...(relatedImportFileIds().length > 0 ? [{ importFileId: inList(relatedImportFileIds()) }] : []),
-          ],
-        },
+    : await deleteWorkspaceTransactions(tx, {
+        workspaceId,
+        OR: [
+          { accountId: accountIdFilter },
+          ...(relatedImportFileIds().length > 0 ? [{ importFileId: inList(relatedImportFileIds()) }] : []),
+        ],
       });
 
   await tx.financialCommitment.deleteMany({
@@ -241,6 +283,6 @@ export const deleteAccountsAndImportArtifacts = async (
 
   return {
     accountsDeleted: deletedAccounts.count,
-    transactionsDeleted: deletedTransactions.count + deletedOrphanedTransactions,
+    transactionsDeleted: deletedTransactionCount + deletedOrphanedTransactions,
   };
 };

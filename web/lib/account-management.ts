@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
+import { deleteWorkspaceTransactions } from "@/lib/account-deletion";
 
 export const wipeLocalUserData = async (
   clerkUserId: string,
@@ -24,10 +25,8 @@ export const wipeLocalUserData = async (
     const workspaceIds = workspaces.map((workspace: { id: string }) => workspace.id);
 
     if (workspaceIds.length > 0) {
-      await tx.transaction.deleteMany({
-        where: {
-          workspaceId: { in: workspaceIds },
-        },
+      await deleteWorkspaceTransactions(tx, {
+        workspaceId: { in: workspaceIds },
       });
     }
 
