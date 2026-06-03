@@ -514,7 +514,10 @@ const inferParserRowConfidence = (params: {
   const hasConcreteCategory = Boolean(params.categoryName?.trim()) && params.categoryName?.trim().toLowerCase() !== "other";
   const rawPayload = params.rawPayload && typeof params.rawPayload === "object" ? (params.rawPayload as Record<string, unknown>) : null;
   const genericReviewReasons = rawPayload?.genericReviewReasons;
-  const hasGenericReviewReasons = Array.isArray(genericReviewReasons) && genericReviewReasons.length > 0;
+  const genericReviewReasonDetails = rawPayload?.genericReviewReasonDetails;
+  const hasGenericReviewReasons =
+    (Array.isArray(genericReviewReasons) && genericReviewReasons.length > 0) ||
+    (Array.isArray(genericReviewReasonDetails) && genericReviewReasonDetails.length > 0);
   const deterministicFallback = hasConcreteCategory && !hasGenericReviewReasons ? Math.min(95, Math.max(90, statementConfidence || 90)) : 0;
 
   return Math.max(confidence, parserConfidence, categoryConfidence, deterministicFallback);

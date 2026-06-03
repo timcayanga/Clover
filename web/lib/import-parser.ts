@@ -160,7 +160,7 @@ export const inferAccountTypeFromStatement = (
     return "bank";
   }
 
-  if (/(gcash|maya|wallet)/.test(normalized)) {
+  if (/(gcash|maya|wise|wallet)/.test(normalized)) {
     return "wallet";
   }
 
@@ -984,14 +984,18 @@ const normalizeBpiText = (text: string) =>
 const compactWhitespace = (value: string) => normalizeWhitespace(value).replace(/\s+/g, "");
 
 const MAX_DECIMAL_AMOUNT = 9_999_999_999_999_999.99;
+const genericKnownCurrencyTokenPatternSource =
+  "(?:AED|AFN|ALL|AMD|ANG|AOA|ARS|AUD|AWG|AZN|BAM|BBD|BDT|BGN|BHD|BIF|BMD|BND|BOB|BRL|BSD|BTN|BWP|BYN|BZD|CAD|CDF|CHF|CLP|CNY|COP|CRC|CVE|CZK|DJF|DKK|DOP|DZD|EGP|ERN|ETB|EUR|FJD|GBP|GEL|GHS|GMD|GNF|GTQ|GYD|HKD|HNL|HUF|IDR|ILS|INR|ISK|JMD|JOD|JPY|KES|KGS|KHR|KMF|KRW|KWD|KZT|LAK|LBP|LKR|LRD|LSL|LYD|MAD|MDL|MGA|MKD|MMK|MNT|MOP|MRU|MUR|MVR|MWK|MXN|MYR|MZN|NAD|NGN|NIO|NOK|NPR|NZD|OMR|PAB|PEN|PGK|PHP|PKR|PLN|QAR|RON|RSD|RUB|RWF|SAR|SCR|SEK|SGD|SLE|SOS|SRD|STN|SYP|SZL|THB|TJS|TMT|TND|TRY|TTD|TWD|TZS|UAH|UGX|USD|USDT|USDC|UYU|UZS|VND|WST|XAF|XOF|XPF|YER|ZAR|ZMW|BTC|ETH|SOL|XRP|ADA|BNB|DOGE|RMB|US\\$|S\\$|HK\\$|NT\\$|A\\$|C\\$|NZ\\$|₱|\\$|€|£|¥|₹|฿|₩|P)";
 const genericCurrencyTokenPatternSource =
-  "(?:PHP|USD|EUR|GBP|SGD|JPY|HKD|THB|AUD|CAD|NZD|CHF|KRW|CNY|RMB|TWD|MYR|IDR|INR|BTC|ETH|USDT|USDC|SOL|XRP|ADA|BNB|DOGE|US\\$|S\\$|HK\\$|NT\\$|A\\$|C\\$|NZ\\$|₱|\\$|€|£|¥|₹|฿|₩|P)";
-const genericMoneyTokenPatternSource = `-?\\s*(?:${genericCurrencyTokenPatternSource})?\\s*(?:[0-9][0-9.,\\s]*[.,]\\d{2}|[0-9][0-9,]*\\.\\d{2})(?!\\d)`;
+  genericKnownCurrencyTokenPatternSource;
+const genericMoneyTokenPatternSource = `(?:\\(?-?\\s*(?:${genericKnownCurrencyTokenPatternSource})?\\s*(?:[0-9][0-9.,\\s]*[.,]\\d{2}|[0-9][0-9,]*\\.\\d{2})\\)?|\\(?-?\\s*(?:${genericCurrencyTokenPatternSource})\\s*[0-9][0-9,.\\s]*\\)?)(?![\\d.,])`;
 const createGenericMoneyTokenPattern = () => new RegExp(genericMoneyTokenPatternSource, "gi");
 
 const parseMoney = (value?: string | null) => {
   if (!value) return null;
-  let cleaned = String(value).replace(/\u00a0/g, " ").replace(/[^0-9,.\-\s]/g, "").replace(/\s+/g, "");
+  const rawValue = String(value);
+  const isParenthesizedNegative = /^\s*\([^)]*[0-9][^)]*\)\s*$/.test(rawValue);
+  let cleaned = rawValue.replace(/\u00a0/g, " ").replace(/[^0-9,.\-\s]/g, "").replace(/\s+/g, "");
   if (!cleaned || cleaned === "-" || cleaned === "." || cleaned === "-.") {
     return null;
   }
@@ -1035,7 +1039,7 @@ const parseMoney = (value?: string | null) => {
     return null;
   }
 
-  return parsed;
+  return isParenthesizedNegative && parsed > 0 ? -parsed : parsed;
 };
 
 const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
@@ -10044,6 +10048,18 @@ const isGenericStatementBoilerplateLine = (line: string) => {
 
 const clampGenericConfidence = (value: number) => Math.max(20, Math.min(98, Math.round(value)));
 
+type GenericReviewReasonDetail = {
+  code: string;
+  message: string;
+  severity: "info" | "warning" | "error";
+};
+
+const genericReviewReasonDetail = (
+  code: string,
+  message: string,
+  severity: GenericReviewReasonDetail["severity"] = "warning"
+): GenericReviewReasonDetail => ({ code, message, severity });
+
 const assessGenericOcrQuality = (text: string) => {
   const lines = text
     .replace(/\u00a0/g, " ")
@@ -10060,41 +10076,49 @@ const assessGenericOcrQuality = (text: string) => {
   const dateLikeLines = sampleLines.filter((line) => genericStatementDateStartPattern.test(line)).length;
   const moneyLikeLines = sampleLines.filter((line) => createGenericMoneyTokenPattern().test(line)).length;
   const reasons: string[] = [];
+  const details: GenericReviewReasonDetail[] = [];
   let score = 100;
 
   if (replacementCharacters / totalCharacters > 0.01) {
     score -= 22;
     reasons.push("OCR contains replacement characters.");
+    details.push(genericReviewReasonDetail("ocr_replacement_characters", "OCR contains replacement characters."));
   }
 
   if (alphaNumericCharacters / totalCharacters < 0.55) {
     score -= 18;
     reasons.push("OCR text has a low alphanumeric ratio.");
+    details.push(genericReviewReasonDetail("ocr_low_alphanumeric_ratio", "OCR text has a low alphanumeric ratio."));
   }
 
   if (noisySymbolCharacters / totalCharacters > 0.04) {
     score -= 12;
     reasons.push("OCR text contains many table/symbol artifacts.");
+    details.push(genericReviewReasonDetail("ocr_symbol_artifacts", "OCR text contains many table/symbol artifacts."));
   }
 
   if (sampleLines.length > 0 && characterSpacedLines / sampleLines.length > 0.12) {
     score -= 12;
     reasons.push("OCR has character-spaced lines that may indicate scan distortion.");
+    details.push(genericReviewReasonDetail("ocr_character_spaced_lines", "OCR has character-spaced lines that may indicate scan distortion."));
   }
 
   if (dateLikeLines < 2) {
     score -= 16;
     reasons.push("Few transaction-like date lines were detected.");
+    details.push(genericReviewReasonDetail("ocr_few_transaction_dates", "Few transaction-like date lines were detected."));
   }
 
   if (moneyLikeLines < 2) {
     score -= 16;
     reasons.push("Few monetary values were detected.");
+    details.push(genericReviewReasonDetail("ocr_few_money_values", "Few monetary values were detected."));
   }
 
   return {
     score: clampGenericConfidence(score),
     reasons,
+    details,
     metrics: {
       lineCount: lines.length,
       dateLikeLines,
@@ -10113,41 +10137,48 @@ const assessGenericTableShape = (lines: string[], firstDateIndex: number, amount
   const rowsWithTwoAmounts = transactionLines.filter((line) => (line.match(createGenericMoneyTokenPattern()) ?? []).length >= 2);
   const rowsWithDescriptions = transactionLines.filter((line) => /[A-Za-z]{3,}/.test(line));
   const reasons: string[] = [];
+  const details: GenericReviewReasonDetail[] = [];
   let score = 50;
 
   if (amountMode) {
     score += 20;
   } else {
     reasons.push("No clear debit/credit/balance column order was detected.");
+    details.push(genericReviewReasonDetail("table_unknown_amount_columns", "No clear debit/credit/balance column order was detected."));
   }
 
   if (transactionLines.length >= 3) {
     score += 12;
   } else {
     reasons.push("Only a small number of dated transaction rows were detected.");
+    details.push(genericReviewReasonDetail("table_few_dated_rows", "Only a small number of dated transaction rows were detected."));
   }
 
   if (transactionLines.length > 0 && rowsWithAmounts.length / transactionLines.length >= 0.8) {
     score += 10;
   } else {
     reasons.push("Some dated rows are missing recognizable amounts.");
+    details.push(genericReviewReasonDetail("table_rows_missing_amounts", "Some dated rows are missing recognizable amounts."));
   }
 
   if (transactionLines.length > 0 && rowsWithTwoAmounts.length / transactionLines.length >= 0.5) {
     score += 8;
   } else {
     reasons.push("Running-balance or debit/credit columns are incomplete.");
+    details.push(genericReviewReasonDetail("table_incomplete_balance_columns", "Running-balance or debit/credit columns are incomplete."));
   }
 
   if (transactionLines.length > 0 && rowsWithDescriptions.length / transactionLines.length >= 0.8) {
     score += 5;
   } else {
     reasons.push("Some rows have weak transaction descriptions.");
+    details.push(genericReviewReasonDetail("table_weak_descriptions", "Some rows have weak transaction descriptions."));
   }
 
   return {
     score: clampGenericConfidence(score),
     reasons,
+    details,
     metrics: {
       transactionLines: transactionLines.length,
       rowsWithAmounts: rowsWithAmounts.length,
@@ -10163,6 +10194,7 @@ const assessGenericReconciliation = (
   endingBalance: number | null
 ) => {
   const reasons: string[] = [];
+  const details: GenericReviewReasonDetail[] = [];
   let score = 82;
   let computedBalance = typeof openingBalance === "number" ? openingBalance : null;
   let runningBalanceComparisons = 0;
@@ -10219,9 +10251,11 @@ const assessGenericReconciliation = (
     } else if (mismatchRatio <= 0.25) {
       score -= 10;
       reasons.push("Some running balances do not match row amounts.");
+      details.push(genericReviewReasonDetail("reconciliation_some_balance_mismatches", "Some running balances do not match row amounts."));
     } else {
       score -= 26;
       reasons.push("Many running balances do not reconcile with row amounts.");
+      details.push(genericReviewReasonDetail("reconciliation_many_balance_mismatches", "Many running balances do not reconcile with row amounts.", "error"));
     }
   } else if (endingBalance !== null && computedBalance !== null) {
     if (endingDiff !== null && endingDiff <= 1) {
@@ -10229,20 +10263,24 @@ const assessGenericReconciliation = (
     } else {
       score -= 18;
       reasons.push("Computed row totals do not match the ending balance.");
+      details.push(genericReviewReasonDetail("reconciliation_ending_balance_mismatch", "Computed row totals do not match the ending balance.", "error"));
     }
   } else {
     score -= 8;
     reasons.push("No opening/running balance was available for reconciliation.");
+    details.push(genericReviewReasonDetail("reconciliation_missing_balance_anchor", "No opening/running balance was available for reconciliation.", "info"));
   }
 
   if (rows.length > 0 && unknownDirections / rows.length > 0.35) {
     score -= 12;
     reasons.push("Several rows have ambiguous income/expense direction.");
+    details.push(genericReviewReasonDetail("reconciliation_ambiguous_directions", "Several rows have ambiguous income/expense direction."));
   }
 
   return {
     score: clampGenericConfidence(score),
     reasons,
+    details,
     metrics: {
       runningBalanceComparisons,
       runningBalanceMismatches,
@@ -15250,12 +15288,20 @@ export const parseGenericBankStatementText = (
   const genericReviewReasons = Array.from(
     new Set([...ocrQuality.reasons, ...tableQuality.reasons, ...reconciliationQuality.reasons])
   );
+  const genericReviewReasonDetails = [
+    ...ocrQuality.details,
+    ...tableQuality.details,
+    ...reconciliationQuality.details,
+  ].filter(
+    (detail, index, allDetails) => allDetails.findIndex((candidate) => candidate.code === detail.code) === index
+  );
   const genericQualityPayload = {
     ocr: ocrQuality,
     table: tableQuality,
     reconciliation: reconciliationQuality,
     score: genericQualityScore,
     reviewReasons: genericReviewReasons,
+    reviewReasonDetails: genericReviewReasonDetails,
   };
   const rowsWithGenericQuality = normalizedRows.map((row) => {
     const existingRawPayload = row.rawPayload && typeof row.rawPayload === "object" ? row.rawPayload : {};
@@ -15274,6 +15320,7 @@ export const parseGenericBankStatementText = (
         ...existingRawPayload,
         genericQuality: genericQualityPayload,
         genericReviewReasons,
+        genericReviewReasonDetails,
       },
     };
   });
@@ -15297,6 +15344,11 @@ export const parseImportTextGenericOnly = (
   fileType: string,
   context: ImportParseContext = {}
 ) => {
+  const wiseMobileParsed = parseWiseMobileScreenshotImportText(text, context);
+  if (wiseMobileParsed) {
+    return wiseMobileParsed.rows;
+  }
+
   const chinaBankParsed = parseChinaBankImportText(text, context);
   if (chinaBankParsed) {
     return chinaBankParsed.rows;
@@ -15734,7 +15786,225 @@ const parseMayaSavingsImportText = (text: string, context: ImportParseContext = 
   };
 };
 
+const wiseMobileDatePattern = /^(?:[A-Z]|\d{0,2}\s*)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}$/i;
+const wiseMobileAmountPattern =
+  /^([+−-]?\s*)?([0-9][0-9,]*(?:\.\d{1,2})?|0)\s+(AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/i;
+const wiseMobileStatusPattern = /^(?:Added|Refunded|Sent|Received|Card checked|Cancelled|Canceled|Failed|Withdrawn)$/i;
+
+const normalizeWiseMobileDateText = (line: string) =>
+  normalizeWhitespace(line)
+    .replace(/^[^A-Za-z]*(?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b)/i, "")
+    .replace(/\bSept\b/i, "Sep");
+
+const parseWiseMobileAmountLine = (line: string) => {
+  const match = normalizeWhitespace(line).replace(/\u2212/g, "-").match(wiseMobileAmountPattern);
+  if (!match) {
+    return null;
+  }
+
+  const signText = (match[1] ?? "").replace(/\s+/g, "");
+  const amount = parseMoney(match[2]);
+  const currency = normalizeCurrencyCode(match[3]);
+  if (amount === null || !currency) {
+    return null;
+  }
+
+  return {
+    amount,
+    currency,
+    sign: signText.startsWith("+") ? "credit" : signText.startsWith("-") || signText.startsWith("−") ? "debit" : null,
+  };
+};
+
+const isWiseMobileUiLine = (line: string) =>
+  /^(?:Search\.{0,3}|Includes hidden|Type|Currency|Direction|Status|Filter|Back|All|Cards?|Home|Activity|Transactions?)$/i.test(line) ||
+  /^\d{1,2}:\d{2}$/.test(line) ||
+  /^(?:Wi-?Fi|Battery|Signal)$/i.test(line);
+
+const looksLikeWiseMobileScreenshotText = (text: string) => {
+  const lines = splitStatementLines(text);
+  const uiScore =
+    Number(lines.some((line) => /^Includes hidden$/i.test(line))) +
+    Number(lines.some((line) => /^Currency$/i.test(line))) +
+    Number(lines.some((line) => /^Direction$/i.test(line))) +
+    Number(lines.some((line) => /^Search/i.test(line)));
+  const amountCurrencies = new Set(
+    lines
+      .map((line) => parseWiseMobileAmountLine(line)?.currency ?? null)
+      .filter((currency): currency is string => Boolean(currency))
+  );
+  const hasWiseActivityLanguage = lines.some((line) => wiseMobileStatusPattern.test(line)) || /\bTo\s+PHP\b/i.test(text);
+  return uiScore >= 2 && amountCurrencies.size >= 1 && hasWiseActivityLanguage;
+};
+
+const parseWiseMobileScreenshotMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
+  if (!looksLikeWiseMobileScreenshotText(text) && !/\bWise\b/i.test(`${context.institution ?? ""} ${context.accountName ?? ""} ${text}`)) {
+    return null;
+  }
+
+  const dates = splitStatementLines(text)
+    .map((line) => (wiseMobileDatePattern.test(line) ? parseDateValue(normalizeWiseMobileDateText(line)) : null))
+    .filter((date): date is Date => Boolean(date));
+  const sortedDates = dates.sort((left, right) => left.getTime() - right.getTime());
+
+  return {
+    institution: "Wise",
+    accountNumber: context.accountNumber ?? null,
+    accountName: context.accountName ?? "Wise",
+    accountType: "wallet",
+    currency: "PHP",
+    openingBalance: null,
+    endingBalance: null,
+    startDate: sortedDates[0]?.toISOString().slice(0, 10) ?? null,
+    endDate: sortedDates.at(-1)?.toISOString().slice(0, 10) ?? null,
+    confidence: 82,
+  };
+};
+
+const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseContext = {}) => {
+  const metadata = parseWiseMobileScreenshotMetadata(text, context);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = splitStatementLines(text)
+    .map((line) => normalizeWhitespace(line).replace(/\u2212/g, "-"))
+    .filter((line) => line && !isWiseMobileUiLine(line));
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+  let currentDate: string | null = null;
+  let pendingRow: ParsedImportRow | null = null;
+
+  const flushPending = () => {
+    if (!pendingRow?.date || !pendingRow.amount || !pendingRow.merchantRaw) {
+      pendingRow = null;
+      return;
+    }
+
+    const key = [
+      pendingRow.date,
+      pendingRow.merchantRaw.toLowerCase(),
+      pendingRow.amount,
+      pendingRow.currency ?? "",
+      pendingRow.description ?? "",
+    ].join("|");
+    if (!seen.has(key)) {
+      seen.add(key);
+      rows.push(pendingRow);
+    }
+    pendingRow = null;
+  };
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const rawLine = lines[lineIndex] ?? "";
+    const line = normalizeWhitespace(rawLine);
+    if (wiseMobileDatePattern.test(line)) {
+      flushPending();
+      currentDate = parseDateValue(normalizeWiseMobileDateText(line))?.toISOString().slice(0, 10) ?? null;
+      continue;
+    }
+
+    if (!currentDate) {
+      continue;
+    }
+
+    const amountInfo = parseWiseMobileAmountLine(line);
+    if (amountInfo) {
+      if (
+        pendingRow &&
+        pendingRow.currency !== "PHP" &&
+        amountInfo.currency === "PHP" &&
+        !line.trim().startsWith("+") &&
+        !line.trim().startsWith("-")
+      ) {
+        pendingRow.rawPayload = {
+          ...(pendingRow.rawPayload ?? {}),
+          convertedAmount: amountInfo.amount,
+          convertedCurrency: amountInfo.currency,
+          convertedAmountText: line,
+        };
+        continue;
+      }
+
+      flushPending();
+      const recentText = lines.slice(Math.max(0, lineIndex - 3), lineIndex);
+      const status = [...recentText].reverse().find((candidate) => wiseMobileStatusPattern.test(candidate)) ?? null;
+      const merchant =
+        [...recentText]
+          .reverse()
+          .find((candidate) => !wiseMobileStatusPattern.test(candidate) && !wiseMobileAmountPattern.test(candidate) && !wiseMobileDatePattern.test(candidate)) ??
+        "Wise transaction";
+      const type: TransactionType =
+        amountInfo.sign === "credit" || /^(?:Added|Refunded|Received)$/i.test(status ?? "")
+          ? "income"
+          : /^(?:Sent)$/i.test(status ?? "")
+            ? "transfer"
+            : "expense";
+      const categoryName =
+        /^(?:Added|Sent|Received)$/i.test(status ?? "") || /^To\s+[A-Z]{3}$/i.test(merchant)
+          ? "Transfers"
+          : /refund/i.test(status ?? "")
+            ? "Income"
+            : guessCategoryName(`${merchant} ${status ?? ""}`, type);
+
+      pendingRow = {
+        date: currentDate,
+        amount: Math.abs(amountInfo.amount).toFixed(2),
+        currency: amountInfo.currency,
+        merchantRaw: humanizeMerchantText(merchant),
+        merchantClean: summarizeMerchantText(merchant, "Wise"),
+        description: normalizeWhitespace([merchant, status].filter(Boolean).join(" - ")),
+        categoryName,
+        accountName: metadata.accountName ?? "Wise",
+        accountNumber: metadata.accountNumber ?? undefined,
+        institution: "Wise",
+        type,
+        confidence: status || amountInfo.sign ? 88 : 82,
+        parserConfidence: 86,
+        categoryConfidence: 80,
+        rawPayload: {
+          bank: "Wise",
+          kind: "wise_mobile_screenshot_transaction",
+          amountText: line,
+          status,
+          source: "wise_mobile_screenshot",
+        },
+      };
+    }
+  }
+
+  flushPending();
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return {
+    metadata: {
+      ...metadata,
+      startDate:
+        rows
+          .map((row) => row.date)
+          .filter((date): date is string => Boolean(date))
+          .sort()[0] ?? metadata.startDate,
+      endDate:
+        rows
+          .map((row) => row.date)
+          .filter((date): date is string => Boolean(date))
+          .sort()
+          .at(-1) ?? metadata.endDate,
+      confidence: Math.max(metadata.confidence, 86),
+    },
+    rows,
+  };
+};
+
 export const detectStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const wiseMobileMetadata = parseWiseMobileScreenshotMetadata(text);
+  if (wiseMobileMetadata) {
+    return withDetectedCurrency(wiseMobileMetadata, text);
+  }
+
   const gcashMetadata = gcashStatementMetadata(text);
   if (gcashMetadata) {
     return withDetectedCurrency(gcashMetadata, text);
@@ -16190,6 +16460,11 @@ export const parseImportText = (
   const gotymeParsed = parseGoTymeImportText(text, context);
   if (gotymeParsed && gotymeParsed.rows.length > 0) {
     return gotymeParsed.rows;
+  }
+
+  const wiseMobileParsed = parseWiseMobileScreenshotImportText(text, context);
+  if (wiseMobileParsed && wiseMobileParsed.rows.length > 0) {
+    return wiseMobileParsed.rows;
   }
 
   const bdoParsed = parseBdoSavingsImportText(text);

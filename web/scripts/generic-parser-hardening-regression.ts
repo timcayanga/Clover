@@ -61,6 +61,62 @@ Ending Balance EUR 11.200,50
   assert.equal(findRow(parsedInternational.rows, /SEPA Transfer In/i).categoryName, "Transfers");
   assert.equal(findRow(parsedInternational.rows, /SEPA Transfer In/i).type, "income");
   assert.equal(findRow(parsedInternational.rows, /Card Purchase/i).type, "expense");
+
+  const zeroDecimalCurrencyStatement = `
+Tokyo Example Bank
+Statement Period: 2026-02-01 to 2026-02-28
+Account Number: 77778888
+Opening Balance JPY 0
+Date Details Money In Money Out Balance
+2026-02-01 Salary JPY 150000 JPY 0 JPY 150000
+2026-02-03 ATM Withdrawal JPY 0 JPY 10000 JPY 140000
+Ending Balance JPY 140000
+`;
+
+  const parsedZeroDecimal = parseGenericBankStatementText(zeroDecimalCurrencyStatement, { institution: "Tokyo Example Bank" });
+  assert.ok(parsedZeroDecimal, "Expected zero-decimal currency statement to parse.");
+  assert.equal(parsedZeroDecimal.metadata.openingBalance, 0);
+  assert.equal(parsedZeroDecimal.metadata.endingBalance, 140000);
+  assert.equal(findRow(parsedZeroDecimal.rows, /Salary/i).amount, "150000.00");
+  assert.equal(findRow(parsedZeroDecimal.rows, /ATM Withdrawal/i).type, "expense");
+
+  const parenthesizedDebitStatement = `
+Northwind Credit Union
+Statement Period: 03/01/2026 - 03/31/2026
+Account Number: 55556666
+Opening Balance USD 1,000.00
+Date Description Amount Balance
+03/05/2026 Grocery Market (USD 50.00) USD 950.00
+03/06/2026 Payroll USD 500.00 USD 1,450.00
+Ending Balance USD 1,450.00
+`;
+
+  const parsedParenthesized = parseGenericBankStatementText(parenthesizedDebitStatement, { institution: "Northwind Credit Union" });
+  assert.ok(parsedParenthesized, "Expected parenthesized debit statement to parse.");
+  assert.equal(findRow(parsedParenthesized.rows, /Grocery Market/i).type, "expense");
+  assert.equal(findRow(parsedParenthesized.rows, /Grocery Market/i).amount, "50.00");
+  assert.equal(findRow(parsedParenthesized.rows, /Payroll/i).type, "income");
+
+  const weakOcrStatement = `
+Noisy Sample Bank
+Statement Period: 04/01/2026 - 04/30/2026
+Account Number: 99990000
+Date Description Amount
+04/01/2026 POS Purchase 10.00
+04/02/2026 Transfer Out 20.00
+`;
+
+  const parsedWeakOcr = parseGenericBankStatementText(weakOcrStatement, { institution: "Noisy Sample Bank" });
+  assert.ok(parsedWeakOcr, "Expected weak OCR-style statement to parse enough for review.");
+  assert.equal(parsedWeakOcr.rows.length, 2);
+  const reviewDetails = parsedWeakOcr.rows.flatMap((row) => {
+    const rawPayload = row.rawPayload ?? {};
+    return Array.isArray(rawPayload.genericReviewReasonDetails) ? rawPayload.genericReviewReasonDetails : [];
+  });
+  assert.ok(
+    reviewDetails.some((detail) => typeof detail === "object" && detail !== null && "code" in detail),
+    "Expected coded generic review reasons for weak OCR/table shape."
+  );
 };
 
 assertGenericParserHardening();
