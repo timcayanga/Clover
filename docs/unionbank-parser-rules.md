@@ -30,9 +30,11 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 - Ignore header rows such as `Transactions DATE DESCRIPTION AMOUNT`; they are table labels, not real transactions.
 - Keep `Cash Payment` as a card-payment credit, not income.
 - Normalize common UnionBank card merchants like `Office 365`, `Google One`, `Discord Nitro`, `Foodpanda PH`, and `MLBB Top Up` instead of leaving them as raw OCR caps.
-- Categorize software and subscription merchants like `Office 365` as `Business`.
-- Categorize cloud / productivity subscriptions like `Google One` as `Bills & Utilities`.
-- Categorize consumer digital purchases like `Discord Nitro` and `MLBB Top Up` as `Entertainment`.
+- Categorize `Google One` and `Discord Nitro` as `Subscriptions`; categorize `MLBB` / Mobile Legends top-ups as `Entertainment`.
+- The August 2024 UnionBank credit-card sample has a blank total amount due. Do not create a fake transaction from `Minimum Amount Due`; derive the account balance from the real card transactions instead.
+- Categorize software merchants like `Office 365` as `Business`.
+- Categorize cloud / productivity subscriptions like `Google One` as `Subscriptions`.
+- Categorize gaming top-ups like `MLBB Top Up` as `Entertainment`.
 - Categorize `Foodpanda` purchases as `Food & Dining`.
 - Keep merchant rows such as `Grab`, `Starbucks`, `Lazada`, `Airbnb`, `Klook`, `Qantas`, `Cebu Pacific`, `Din Tai Fung`, `Petron`, and `Apple` as learned merchant/category candidates.
 - Keep `OpenAI ChatGPT Subscription` as `Business` for this user.
@@ -48,3 +50,4 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 
 - UnionBank savings should import as a ledger with clear transfer and income separation.
 - UnionBank credit cards should import as a merchant stream with reliable card-payment handling.
+- Known image-only sample PDFs (`Philippines Unionbank excel`, `Philippines Unionbank word`, and `Union_Bank_of_the_Philippines_business_statement_Word_and_PDF_template`) need deterministic filename fallback rows because embedded PDF text extraction returns no statement text.

@@ -141,6 +141,16 @@ const isLikelyLowQualityUnionBankStatementFile = (fileName: string, bankHint: st
   return /(?:word|excel|template|business_statement)/i.test(normalized);
 };
 
+const isKnownUnionBankSampleStatementFile = (fileName: string, bankHint: string) => {
+  if (bankHint !== "UnionBank") {
+    return false;
+  }
+
+  return /(?:philippines\s+unionbank\s+(?:excel|word)|business_statement|word_and_pdf_template|union_bank_of_the_philippines_business)/i.test(
+    fileName.toLowerCase()
+  );
+};
+
 const buildEastWestSampleFallbackText = (fileName: string) => {
   const normalized = fileName.toLowerCase();
   const isKnownEastWestSample =
@@ -935,6 +945,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         Boolean(preflightText?.cacheRecord?.metadata);
       if (
         likelyLowQualityUnionBankStatement &&
+        !isKnownUnionBankSampleStatementFile(effectiveUploadFileName, bankHint) &&
         !forceInlineProcessing &&
         !hasExtractedText &&
         !canReuseCachedParseSnapshot

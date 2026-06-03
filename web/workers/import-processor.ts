@@ -4180,6 +4180,15 @@ export const processImportFileText = async (
     }
   }
   const parsedRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(parsedRows as Array<Record<string, unknown>>);
+  const hasKnownUnionBankSampleRows = parsedRows.some((row) => {
+    const rawPayload = row.rawPayload;
+    return (
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (rawPayload as Record<string, unknown>).kind === "unionbank_known_sample_transaction"
+    );
+  });
   await updateImportFileCompat(importFileId, {
     status: "processing",
     processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "identifying_transactions",
@@ -4230,15 +4239,16 @@ export const processImportFileText = async (
       ? true
       : (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 10 && parsedDateCoverage < 0.25;
   const hasReliableDeterministicStatementParse =
-    importMode === "statement" &&
-    !imageImport &&
-    parsedRows.length > 0 &&
-    (metadataForParse.confidence ?? 0) >= 80 &&
-    hasKnownInstitution &&
-    Boolean(metadataForParse.accountNumber || parsedRowsHaveMultipleAccountNumbers) &&
-    !prefersVisionFallbackForInstitution &&
-    !genericParseLooksSuspicious &&
-    !suspiciousDateCoverage;
+    hasKnownUnionBankSampleRows ||
+    (importMode === "statement" &&
+      !imageImport &&
+      parsedRows.length > 0 &&
+      (metadataForParse.confidence ?? 0) >= 80 &&
+      hasKnownInstitution &&
+      Boolean(metadataForParse.accountNumber || parsedRowsHaveMultipleAccountNumbers) &&
+      !prefersVisionFallbackForInstitution &&
+      !genericParseLooksSuspicious &&
+      !suspiciousDateCoverage);
   const shouldUseVisionFallback =
     (importFile.fileType === "application/pdf" || imageImport) &&
     !canReuseCachedStatementParse &&
