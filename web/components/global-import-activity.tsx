@@ -201,7 +201,7 @@ export function GlobalImportActivity() {
     };
   }, [activity]);
 
-  if (!activity || !shouldShowOnCurrentPath || (activity.surface === "modal" && (pageModalActive || importModalVisible))) {
+  if (!activity || !shouldShowOnCurrentPath || pageModalActive || importModalVisible) {
     return null;
   }
 
