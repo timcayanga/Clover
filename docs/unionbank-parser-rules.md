@@ -31,6 +31,7 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 - Keep `Cash Payment` as a card-payment credit, not income.
 - Normalize common UnionBank card merchants like `Office 365`, `Google One`, `Discord Nitro`, `Foodpanda PH`, and `MLBB Top Up` instead of leaving them as raw OCR caps.
 - Categorize `Google One` and `Discord Nitro` as `Subscriptions`; categorize `MLBB` / Mobile Legends top-ups as `Entertainment`.
+- Categorize `Google Play` purchases as `Entertainment`.
 - The August 2024 UnionBank credit-card sample has a blank total amount due. Do not create a fake transaction from `Minimum Amount Due`; derive the account balance from the real card transactions instead.
 - Categorize software merchants like `Office 365` as `Business`.
 - Categorize cloud / productivity subscriptions like `Google One` as `Subscriptions`.
@@ -49,5 +50,6 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 ## Expected Outcome
 
 - UnionBank savings should import as a ledger with clear transfer and income separation.
+- External UnionBank transfer-like rows can keep the `Transfers` category, but their transaction type should stay `income` or `expense` unless Clover can match both sides to user-owned accounts.
 - UnionBank credit cards should import as a merchant stream with reliable card-payment handling.
 - Known image-only sample PDFs (`Philippines Unionbank excel`, `Philippines Unionbank word`, and `Union_Bank_of_the_Philippines_business_statement_Word_and_PDF_template`) need deterministic filename fallback rows because embedded PDF text extraction returns no statement text.

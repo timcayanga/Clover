@@ -98,6 +98,7 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/finance\s*charge|financecharge/.test(lower) || /financecharge/.test(compact)) return "Financial";
   if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) return "Transfers";
   if (/expressnet|megalinkw?|\/drw\b|cash\s*(?:withdrawal|out)|atm\b|automated\s+teller|cash\s+advance/.test(lower)) return "Cash & ATM";
+  if (/google\s+play|googleplay/.test(lower) || /googleplay/.test(compact)) return "Entertainment";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
   if (/gcash\s+cash\s+in|gcashcashin/.test(lower)) return "Transfers";
   if (/salary|payroll|income|deposit|cash\s*(?:in|deposit)|credit memo/.test(lower)) return "Income";

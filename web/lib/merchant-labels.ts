@@ -225,6 +225,10 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Google One",
     },
     {
+      patterns: [/google\s+play/i],
+      replacement: "Google Play",
+    },
+    {
       patterns: [/discord\s+nitro/i],
       replacement: "Discord Nitro",
     },

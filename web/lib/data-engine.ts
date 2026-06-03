@@ -534,6 +534,10 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Business";
   }
 
+  if (/google\s+play/.test(lower) || /googleplay/.test(compact)) {
+    return "Entertainment";
+  }
+
   if (/google\s+one/.test(lower) || /googleone/.test(compact)) {
     return "Subscriptions";
   }
@@ -942,6 +946,7 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   const override = getHardcodedCategoryOverride(description);
   if (override) return override;
   if (/deposit to gsave|withdraw from gsave|seamoney credit|maribank credit/.test(lower)) return "Financial";
+  if (/google\s+play|googleplay/.test(lower) || /googleplay/.test(compact)) return "Entertainment";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking|wa\s+(?:cr|db)|et\s+(?:cr|db)\s+ibft|st\s+(?:cm|dm)\s+gen|mo\s+dm/.test(lower)) return "Transfers";
   if (/expressnet|megalink|withdrawal|atm\b|cash withdrawal|cash out|atmwdl|atm withdrawal|et\s+wdl/.test(lower)) return "Cash & ATM";
   if (/service\s*charge|servicecharge|service\s*fee|bank\s*charge|bankcharge|svchg|finance\s+charges?|late\s+payment\s+fee|annual\s+fee/.test(lower)) return "Financial";

@@ -270,11 +270,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
           checkpoint.accountId === accountId ||
           (accountKey !== "" && checkpointKey === accountKey) ||
           Boolean(
-            accountNumber &&
+            account.source === "upload" &&
+              accountNumber &&
               checkpointNumber &&
-              extractLastFourDigits(accountNumber) === extractLastFourDigits(checkpointNumber) &&
-              normalizeWhitespace(String(sourceMetadata?.institution ?? account.institution ?? "")).toLowerCase() ===
-                normalizeWhitespace(String(account.institution ?? "")).toLowerCase()
+              normalizeImportAccountNumber(accountNumber) === normalizeImportAccountNumber(checkpointNumber)
           );
 
         if (!matchesAccount) {

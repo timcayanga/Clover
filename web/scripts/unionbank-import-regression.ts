@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { parseImportText } from "@/lib/import-parser";
+import { guessCategoryName, parseImportText } from "@/lib/import-parser";
 
 const unionBankCardText = `
 UnionBank Plaza Bldg.,
@@ -71,6 +71,7 @@ assert.equal(cardRows.filter((row) => row.merchantClean === "MLBB Top Up").lengt
 assert.equal(cardRows.find((row) => row.merchantClean === "Google One")?.categoryName, "Subscriptions");
 assert.equal(cardRows.find((row) => row.merchantClean === "Discord Nitro")?.categoryName, "Subscriptions");
 assert.equal(cardRows.at(-1)?.rawPayload?.balance, 9644);
+assert.equal(guessCategoryName("GOOGLE PLAY", "expense"), "Entertainment");
 
 const knownImageOnlySamples = [
   {
@@ -98,6 +99,18 @@ for (const sample of knownImageOnlySamples) {
   assert.equal(rows.length, sample.rows, `${sample.fileName} should parse from known image-only fallback.`);
   assert.equal(rows[0]?.accountNumber, sample.accountNumber, `${sample.fileName} account number should be stable.`);
   assert.equal(rows.at(-1)?.rawPayload?.balance, sample.endingBalance, `${sample.fileName} ending balance should be stable.`);
+  if (/philippines\s+unionbank/i.test(sample.fileName)) {
+    assert.equal(
+      rows.find((row) => /instapaysend/i.test(String(row.merchantRaw ?? row.description ?? "")))?.type,
+      "expense",
+      `${sample.fileName} outgoing InstaPay rows should remain expenses.`
+    );
+    assert.equal(
+      rows.find((row) => /fund transfer/i.test(String(row.merchantRaw ?? row.description ?? "")))?.type,
+      "income",
+      `${sample.fileName} incoming fund-transfer rows should remain income.`
+    );
+  }
 }
 
 console.log("[PASS] UnionBank statement parser handles card and known image-only samples.");

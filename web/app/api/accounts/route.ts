@@ -723,17 +723,21 @@ export async function GET(request: Request) {
           checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
             ? (checkpoint.sourceMetadata as Record<string, unknown>)
             : null;
+        const checkpointNumber =
+          typeof sourceMetadata?.accountNumber === "string" && sourceMetadata.accountNumber.trim()
+            ? sourceMetadata.accountNumber.trim()
+            : null;
         const checkpointKey = normalizeAccountIdentityKey(
           typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
           typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
-          typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null
+          checkpointNumber
+        );
+        const checkpointTime = Math.max(
+          checkpoint.statementEndDate?.getTime() ?? 0,
+          checkpoint.createdAt.getTime()
         );
         if (checkpointKey) {
           const currentByKey = latestByAccountKey.get(checkpointKey);
-          const checkpointTime = Math.max(
-            checkpoint.statementEndDate?.getTime() ?? 0,
-            checkpoint.createdAt.getTime()
-          );
           const currentTimeByKey = currentByKey
             ? Math.max(
                 currentByKey.statementEndDate?.getTime() ?? 0,
@@ -746,24 +750,18 @@ export async function GET(request: Request) {
           }
         }
 
-        if (!checkpoint.accountId) {
-          continue;
-        }
+        if (checkpoint.accountId) {
+          const current = latestByAccountId.get(checkpoint.accountId);
+          const currentTime = current
+            ? Math.max(
+                current.statementEndDate?.getTime() ?? 0,
+                current.createdAt.getTime()
+              )
+            : -1;
 
-        const current = latestByAccountId.get(checkpoint.accountId);
-        const checkpointTime = Math.max(
-          readCheckpointDateTime(checkpoint.statementEndDate),
-          readCheckpointDateTime(checkpoint.createdAt)
-        );
-        const currentTime = current
-          ? Math.max(
-              current.statementEndDate?.getTime() ?? 0,
-              current.createdAt.getTime()
-            )
-          : -1;
-
-        if (!current || checkpointTime >= currentTime) {
-          latestByAccountId.set(checkpoint.accountId, checkpoint);
+          if (!current || checkpointTime >= currentTime) {
+            latestByAccountId.set(checkpoint.accountId, checkpoint);
+          }
         }
       }
 
@@ -829,24 +827,28 @@ export async function GET(request: Request) {
       let latestCheckpoint: (typeof statementCheckpoints)[number] | null = null;
       let latestTime = -1;
       const accountKey = normalizeAccountIdentityKey(account.name, account.institution, account.accountNumber ?? null);
+      const accountNumber = normalizeImportAccountNumber(account.accountNumber ?? null);
 
       for (const checkpoint of statementCheckpoints) {
         const sourceMetadata =
           checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
             ? (checkpoint.sourceMetadata as Record<string, unknown>)
             : null;
+        const checkpointNumber =
+          typeof sourceMetadata?.accountNumber === "string" ? normalizeImportAccountNumber(sourceMetadata.accountNumber) : null;
         const checkpointKey = normalizeAccountIdentityKey(
           typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
           typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
-          typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null
+          checkpointNumber
         );
         const matchesAccount =
           checkpoint.accountId === account.id ||
           (accountKey !== "" && checkpointKey === accountKey) ||
           Boolean(
-            typeof sourceMetadata?.accountNumber === "string" &&
-              account.accountNumber &&
-              normalizeImportAccountNumber(sourceMetadata.accountNumber) === normalizeImportAccountNumber(account.accountNumber)
+            account.source === "upload" &&
+              accountNumber &&
+              checkpointNumber &&
+              accountNumber === checkpointNumber
           );
 
         if (!matchesAccount) {
@@ -894,8 +896,8 @@ export async function GET(request: Request) {
         typeof latestCheckpoint.sourceMetadata === "object" &&
         !Array.isArray(latestCheckpoint.sourceMetadata) &&
         typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber === "string"
-        ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber).trim()
-        : null;
+          ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber).trim()
+          : null;
       const checkpointBalance =
         latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
           ? latestCheckpoint.endingBalance.toString()
@@ -906,7 +908,7 @@ export async function GET(request: Request) {
       const effectiveSource =
         account.source === "upload"
           ? "upload"
-          : latestCheckpoint && uploadedInstitution && effectiveAccountNumber
+          : latestCheckpoint && effectiveInstitution && effectiveAccountNumber
             ? "upload"
             : account.source;
       const effectiveAccountName =
