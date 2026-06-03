@@ -357,6 +357,14 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
       .map((account) => [importedAccountIdentityKey(account.institution, account.accountNumber), account] as const)
       .filter((entry): entry is [string, (typeof existingAccounts)[number]] => Boolean(entry[0]))
   );
+  const accountByPlainNumber = new Map(
+    existingAccounts
+      .map((account) => {
+        const number = normalizeImportAccountNumber(account.accountNumber ?? null);
+        return number ? [number, account] as const : null;
+      })
+      .filter((entry): entry is [string, (typeof existingAccounts)[number]] => Boolean(entry))
+  );
   const groups = new Map<
     string,
     {
@@ -400,7 +408,10 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
   for (const group of groups.values()) {
     const accountType = "bank" as const;
     const groupIdentityKey = importedAccountIdentityKey(group.institution, group.accountNumber);
-    let account = groupIdentityKey ? accountByNumber.get(groupIdentityKey) ?? null : null;
+    let account =
+      (groupIdentityKey ? accountByNumber.get(groupIdentityKey) ?? null : null) ??
+      accountByPlainNumber.get(normalizeImportAccountNumber(group.accountNumber) ?? "") ??
+      null;
     const resolvedInstitution = resolveUploadedAccountInstitution(account?.institution ?? null, null, group.institution);
     const accountName = formatUploadAccountDisplayName(
       group.accountName ?? group.institution ?? "Imported account",
