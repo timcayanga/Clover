@@ -16209,6 +16209,12 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
       pendingRow.amount,
       pendingRow.currency ?? "",
       pendingRow.description ?? "",
+      pendingRow.rawPayload &&
+      typeof pendingRow.rawPayload === "object" &&
+      !Array.isArray(pendingRow.rawPayload) &&
+      typeof (pendingRow.rawPayload as Record<string, unknown>).sourceAmountLineIndex === "number"
+        ? String((pendingRow.rawPayload as Record<string, unknown>).sourceAmountLineIndex)
+        : "",
     ].join("|");
     if (!seen.has(key)) {
       seen.add(key);
