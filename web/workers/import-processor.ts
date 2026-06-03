@@ -2479,6 +2479,50 @@ const readWiseWalletCurrencyFromRow = (row: Record<string, unknown>) => {
   );
 };
 
+const wiseVisibleDateHeaderPattern =
+  /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b/i;
+
+const readWiseVisibleDateFromRowEvidence = (row: Record<string, unknown>) => {
+  if (row.date instanceof Date || (typeof row.date === "string" && parseDateValue(row.date))) {
+    return null;
+  }
+
+  const rawPayload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const parserEvidence =
+    rawPayload?.parserEvidence && typeof rawPayload.parserEvidence === "object" && !Array.isArray(rawPayload.parserEvidence)
+      ? (rawPayload.parserEvidence as Record<string, unknown>)
+      : null;
+  const evidenceCandidates = [
+    rawPayload?.sourceLine,
+    parserEvidence?.source_text,
+    parserEvidence?.sourceText,
+  ];
+
+  for (const candidate of evidenceCandidates) {
+    if (typeof candidate !== "string") {
+      continue;
+    }
+
+    const firstLine = candidate
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0);
+    if (!firstLine || !wiseVisibleDateHeaderPattern.test(firstLine)) {
+      continue;
+    }
+
+    const parsedDate = parseDateValue(firstLine.replace(/\bSept\b/i, "Sep"));
+    if (parsedDate) {
+      return parsedDate.toISOString().slice(0, 10);
+    }
+  }
+
+  return null;
+};
+
 const normalizeWiseWalletParsedRows = (
   rows: Array<Record<string, unknown>>,
   metadata?: { institution?: string | null; accountType?: string | null } | null
@@ -2504,6 +2548,7 @@ const normalizeWiseWalletParsedRows = (
     }
 
     const accountName = `Wise ${currency}`;
+    const visibleDate = readWiseVisibleDateFromRowEvidence(row);
     const rawPayload =
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
         ? {
@@ -2518,6 +2563,7 @@ const normalizeWiseWalletParsedRows = (
 
     return {
       ...row,
+      ...(visibleDate ? { date: visibleDate } : {}),
       institution: "Wise",
       accountName,
       rawPayload,

@@ -32,6 +32,8 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 - `To PHP Added` and similar wallet funding/conversion rows are `Transfers`.
 - `Card checked` / zero-amount verification rows should be excluded or routed to review; they should not become confirmed spending.
 - Rows without a visible/parseable date should not become visible Clover transactions with today's date. Keep them in parsed/audit data or exclude them until a date can be established.
+- If a structured vision fallback extracts a Wise row with `date: null` but its parser evidence/source line begins with a visible Wise date header, recover that date before confirmation.
+- Do not recover dates from evidence that only says a row was shown above or near a date header; scroll-continuation rows without their own visible date should remain audit-only/review-only unless another uploaded screenshot clearly supplies the date.
 - Preserve visibly repeated identical Wise rows as separate transactions. Only deduplicate OCR duplicates when they come from the same visible source line.
 
 ## Categorization
