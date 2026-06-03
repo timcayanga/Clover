@@ -2522,6 +2522,7 @@ const resolveConfirmationAccount = async (params: {
       institution?: string | null;
       accountNumber?: string | null;
       type?: AccountType | null;
+      source?: string | null;
       currency?: string | null;
       balance?: number | null;
       creditLimit?: number | null;
@@ -2548,6 +2549,9 @@ const resolveConfirmationAccount = async (params: {
     }
     if (next.type && next.type !== account.type) {
       data.type = next.type;
+    }
+    if (typeof next.source === "string" && next.source.trim() && next.source !== account.source) {
+      data.source = next.source.trim();
     }
     if (next.currency && next.currency !== account.currency && account.source !== "manual") {
       data.currency = next.currency;
@@ -2739,6 +2743,7 @@ const resolveConfirmationAccount = async (params: {
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
       type: inferredAccountType,
+      source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
       creditLimit: inferredCreditLimit,
@@ -2758,6 +2763,7 @@ const resolveConfirmationAccount = async (params: {
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
       type: "credit_card",
+      source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
       creditLimit: inferredCreditLimit,
@@ -2773,6 +2779,7 @@ const resolveConfirmationAccount = async (params: {
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
       type: accountIdentityType,
+      source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
       creditLimit: inferredCreditLimit,
@@ -2796,6 +2803,7 @@ const resolveConfirmationAccount = async (params: {
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
       type: accountIdentityType,
+      source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
       creditLimit: inferredCreditLimit,

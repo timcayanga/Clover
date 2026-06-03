@@ -333,13 +333,20 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
         ? latestCheckpoint.endingBalance.toString()
         : null;
     const effectiveAccountNumber = account.accountNumber ?? latestCheckpointAccountNumber ?? null;
-    const effectiveInstitution =
-      resolveUploadedAccountInstitution(account.institution, latestCheckpointBankHint, latestCheckpointInstitution) ??
-      account.institution ??
-      latestCheckpointInstitution ??
-      null;
-    const effectiveAccountName =
+    const uploadedInstitution = resolveUploadedAccountInstitution(
+      account.institution,
+      latestCheckpointBankHint,
+      latestCheckpointInstitution
+    );
+    const effectiveInstitution = uploadedInstitution ?? account.institution ?? latestCheckpointInstitution ?? null;
+    const effectiveSource =
       account.source === "upload"
+        ? "upload"
+        : latestCheckpoint && uploadedInstitution && effectiveAccountNumber
+          ? "upload"
+          : account.source;
+    const effectiveAccountName =
+      effectiveSource === "upload"
         ? formatUploadAccountDisplayName(
             latestCheckpointAccountName ?? account.name,
             effectiveInstitution,
@@ -352,6 +359,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
     return NextResponse.json({
       account: serializeAccount({
         ...account,
+        source: effectiveSource,
         name: effectiveAccountName,
         institution: effectiveInstitution,
         accountNumber: effectiveAccountNumber,

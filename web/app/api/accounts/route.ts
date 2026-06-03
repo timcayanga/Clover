@@ -901,13 +901,16 @@ export async function GET(request: Request) {
           ? latestCheckpoint.endingBalance.toString()
           : null;
       const effectiveAccountNumber = account.accountNumber ?? checkpointAccountNumber ?? null;
-      const effectiveInstitution =
-        resolveUploadedAccountInstitution(account.institution, checkpointBankHint, checkpointInstitution) ??
-        account.institution ??
-        checkpointInstitution ??
-        null;
-      const effectiveAccountName =
+      const uploadedInstitution = resolveUploadedAccountInstitution(account.institution, checkpointBankHint, checkpointInstitution);
+      const effectiveInstitution = uploadedInstitution ?? account.institution ?? checkpointInstitution ?? null;
+      const effectiveSource =
         account.source === "upload"
+          ? "upload"
+          : latestCheckpoint && uploadedInstitution && effectiveAccountNumber
+            ? "upload"
+            : account.source;
+      const effectiveAccountName =
+        effectiveSource === "upload"
           ? formatUploadAccountDisplayName(
               checkpointAccountName ?? account.name,
               effectiveInstitution,
@@ -918,6 +921,7 @@ export async function GET(request: Request) {
 
       return {
         ...account,
+        source: effectiveSource,
         name: effectiveAccountName,
         institution: effectiveInstitution,
         accountNumber: effectiveAccountNumber,
