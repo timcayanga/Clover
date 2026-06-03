@@ -4323,6 +4323,8 @@ export const processImportFileText = async (
   let text = options.text ?? "";
   const imageImport = isImageImportFile(fileType, fileName);
   const isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
+  const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
+  const trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
   let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
@@ -4331,7 +4333,7 @@ export const processImportFileText = async (
     fileType === "application/pdf" &&
     /landbank|land bank|eastwest|chinabank|china bank/i.test(fileName);
 
-  if (!noisyPdfBankByFileName && (imageImport || !text)) {
+  if (!trainedReceiptDetails && !noisyPdfBankByFileName && (imageImport || !text)) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
@@ -4374,7 +4376,7 @@ export const processImportFileText = async (
     Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) &&
     Boolean(textCacheInfo?.cacheRecord?.metadata);
 
-  if (imageImport && !canReuseCachedStatementParse) {
+  if (imageImport && !trainedReceiptDetails && !canReuseCachedStatementParse) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
@@ -4391,8 +4393,6 @@ export const processImportFileText = async (
   }
 
   const textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
-  const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
-  const trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
   const cachedParseRecord = canReuseCachedStatementParse ? textCacheInfo?.cacheRecord ?? null : null;
   const metadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
     ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
