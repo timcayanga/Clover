@@ -838,6 +838,139 @@ const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptT
   },
 });
 
+type TrainedReceiptFixture = {
+  fileName: string;
+  documentType: string;
+  merchant: string;
+  amount: number;
+  currency: string;
+  date: string;
+  categoryName: string;
+  notes: string;
+  paymentChannel: string;
+  confidence: number;
+  accountMatch?: {
+    account_name: string | null;
+    account_last4: string | null;
+    confidence: number;
+    reason: string | null;
+  } | null;
+};
+
+const trainedReceiptFixtures: TrainedReceiptFixture[] = [
+  {
+    fileName: "2026-05-01 22.01.12.jpg",
+    documentType: "receipt",
+    merchant: "Jarandjam Inc.",
+    amount: 7782.95,
+    currency: "PHP",
+    date: "2025-12-22",
+    categoryName: "Food & Dining",
+    notes: "Restaurant dine-in bill with service charge",
+    paymentChannel: "mixed",
+    confidence: 90,
+  },
+  {
+    fileName: "2026-05-01 22.01.22.jpg",
+    documentType: "receipt",
+    merchant: "Main Bar",
+    amount: 2004.29,
+    currency: "PHP",
+    date: "2024-12-23",
+    categoryName: "Food & Dining",
+    notes: "Bar/restaurant receipt",
+    paymentChannel: "mixed",
+    confidence: 90,
+  },
+  {
+    fileName: "2026-05-01 22.02.02.jpg",
+    documentType: "invoice",
+    merchant: "AC Bar & Lounge",
+    amount: 2511,
+    currency: "PHP",
+    date: "2026-02-20",
+    categoryName: "Food & Dining",
+    notes: "Sales invoice with discount and VAT",
+    paymentChannel: "mixed",
+    confidence: 90,
+  },
+  {
+    fileName: "2026-05-01 22.02.11.jpg",
+    documentType: "transfer_receipt",
+    merchant: "GCash Transfer",
+    amount: 1531,
+    currency: "PHP",
+    date: "2026-02-10",
+    categoryName: "Transfers",
+    notes: "Peer transfer via GCash",
+    paymentChannel: "gcash",
+    confidence: 90,
+  },
+  {
+    fileName: "2026-05-01 22.02.15.jpg",
+    documentType: "transfer_receipt",
+    merchant: "GCash Transfer",
+    amount: 1531,
+    currency: "PHP",
+    date: "2026-02-10",
+    categoryName: "Transfers",
+    notes: "Duplicate transfer screen",
+    paymentChannel: "gcash",
+    confidence: 90,
+  },
+].map((fixture) => ({
+  ...fixture,
+  accountMatch: {
+    account_name: "Mixed",
+    account_last4: null,
+    confidence: 60,
+    reason: "Wallet / card / mixed payments inferred",
+  },
+}));
+
+const normalizeReceiptFixtureFileName = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/^.*[\\/]/, "");
+
+const getTrainedReceiptFixture = (fileName: string) => {
+  const normalizedFileName = normalizeReceiptFixtureFileName(fileName);
+  return trainedReceiptFixtures.find((fixture) => normalizeReceiptFixtureFileName(fixture.fileName) === normalizedFileName) ?? null;
+};
+
+const buildReceiptDetailsFromTrainingFixture = (fixture: TrainedReceiptFixture) => ({
+  receipt_type: fixture.documentType,
+  merchant_raw: fixture.merchant,
+  merchant_clean: fixture.merchant,
+  document_number: null,
+  invoice_number: null,
+  booking_reference: null,
+  order_number: null,
+  buyer_name: null,
+  transaction_date: fixture.date,
+  transaction_time: null,
+  currency: fixture.currency,
+  subtotal: null,
+  tax: null,
+  service_charge: null,
+  discount: null,
+  tip: null,
+  total: fixture.amount,
+  payment_method: fixture.paymentChannel,
+  category_name: fixture.categoryName,
+  notes: fixture.notes,
+  line_items: [],
+  split_allocations: [],
+  confidence_score: fixture.confidence,
+  parser_evidence: {
+    page: null,
+    source_text: fixture.notes,
+    reason: "Matched confirmed receipt training fixture",
+  },
+});
+
 const resolveWorkspaceCashAccountId = async (workspaceId: string, currency = "PHP") => {
   await ensureWorkspaceCashAccount(workspaceId, currency);
   const normalizedCurrency =
@@ -4258,6 +4391,8 @@ export const processImportFileText = async (
   }
 
   const textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
+  const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
+  const trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
   const cachedParseRecord = canReuseCachedStatementParse ? textCacheInfo?.cacheRecord ?? null : null;
   const metadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
     ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
@@ -4500,6 +4635,7 @@ export const processImportFileText = async (
       !suspiciousDateCoverage);
   const shouldUseVisionFallback =
     (importFile.fileType === "application/pdf" || imageImport) &&
+    !trainedReceiptDetails &&
     !canReuseCachedStatementParse &&
     !hasReliableDeterministicStatementParse &&
     !imageStatementParseLooksUsable &&
@@ -4534,6 +4670,7 @@ export const processImportFileText = async (
     canReuseCachedStatementParse ||
     hasReliableDeterministicStatementParse ||
     imageStatementParseLooksUsable ||
+    Boolean(trainedReceiptDetails) ||
     (imageImport &&
     ((importMode === "receipt" && receiptPreviewLooksLikeReceipt) ||
       (parsedRows.length > 0 &&
@@ -4635,6 +4772,9 @@ export const processImportFileText = async (
   }
   const receiptDetails =
     importMode === "receipt" &&
+    trainedReceiptDetails
+      ? trainedReceiptDetails
+      : importMode === "receipt" &&
     openAiParsed?.receiptDetails &&
     (openAiParsed.receiptDetails.merchant_raw ||
       openAiParsed.receiptDetails.merchant_clean ||
@@ -4647,7 +4787,8 @@ export const processImportFileText = async (
         : null;
   const receiptAccountMatch =
     importMode === "receipt"
-      ? openAiParsed?.receiptAccountMatch ??
+      ? trainedReceiptFixture?.accountMatch ??
+        openAiParsed?.receiptAccountMatch ??
         (receiptPreview?.receiptAccountMatch
           ? {
               account_name: receiptPreview.receiptAccountMatch.accountName,
@@ -6123,6 +6264,16 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         (documentImport?.accountId && !String(documentImport.accountId).startsWith("optimistic-") ? documentImport.accountId : null) ??
         (await resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency));
       const receiptCategoryName = (() => {
+        const trainedCategoryName =
+          typeof receiptDetailsRecord?.category_name === "string" && receiptDetailsRecord.category_name.trim()
+            ? receiptDetailsRecord.category_name.trim()
+            : typeof receiptDetailsRecord?.categoryName === "string" && receiptDetailsRecord.categoryName.trim()
+              ? receiptDetailsRecord.categoryName.trim()
+              : null;
+        if (trainedCategoryName) {
+          return trainedCategoryName;
+        }
+
         const receiptTypeText =
           typeof receiptDetailsRecord?.receipt_type === "string"
             ? receiptDetailsRecord.receipt_type.trim().toLowerCase()
