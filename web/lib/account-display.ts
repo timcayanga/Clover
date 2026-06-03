@@ -6,6 +6,7 @@ type AccountDisplayInput = {
   name?: string | null;
   institution?: string | null;
   accountNumber?: string | null;
+  currency?: string | null;
   type?: string | null;
   source?: string | null;
 };
@@ -38,7 +39,9 @@ const getWiseWalletDisplayName = (input: AccountDisplayInput) => {
     return null;
   }
 
-  const walletCurrency = safeName?.match(/^Wise\s+([A-Z]{3})$/i)?.[1]?.toUpperCase() ?? null;
+  const walletCurrency =
+    safeName?.match(/^Wise\s+([A-Z]{3})$/i)?.[1]?.toUpperCase() ??
+    (/^Wise$/i.test(safeName ?? "") ? input.currency?.match(/^[A-Z]{3}$/i)?.[0]?.toUpperCase() : null);
   return walletCurrency ? `Wise ${walletCurrency}` : null;
 };
 
@@ -113,6 +116,11 @@ export const formatUploadAccountDisplayName = (
 
 export const getAccountDisplayName = (account: AccountDisplayInput) => {
   if (account.source === "upload") {
+    const wiseWalletName = getWiseWalletDisplayName(account);
+    if (wiseWalletName) {
+      return wiseWalletName;
+    }
+
     return formatUploadAccountDisplayName(account.name, account.institution, account.accountNumber, account.type);
   }
 
