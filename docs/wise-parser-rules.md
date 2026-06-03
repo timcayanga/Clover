@@ -11,6 +11,7 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 - Wise users may have multiple currency wallets (for example PHP, GBP, USD, CAD) with different underlying account numbers.
 - Screenshots usually do not expose those account numbers, so Clover should infer distinct Wise wallet accounts by account-impact currency.
 - Account display should be `Wise <CURRENCY>` when the wallet currency can be inferred, such as `Wise PHP` or `Wise GBP`.
+- Do not collapse inferred wallet display names back to the generic `Wise` brand label when no account number is present.
 
 ## Screenshot Recognition
 

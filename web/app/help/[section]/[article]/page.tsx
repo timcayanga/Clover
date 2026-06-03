@@ -16,15 +16,6 @@ type HelpArticlePageProps = {
   }>;
 };
 
-export function generateStaticParams() {
-  return Array.from(helpSectionMap.values()).flatMap((section) =>
-    section.articles.map((article) => ({
-      section: section.slug,
-      article: article.slug,
-    }))
-  );
-}
-
 export async function generateMetadata({ params }: HelpArticlePageProps): Promise<Metadata> {
   const resolvedParams = await params;
   const section = helpSectionMap.get(resolvedParams.section);

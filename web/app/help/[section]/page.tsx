@@ -15,10 +15,6 @@ type HelpSectionPageProps = {
   }>;
 };
 
-export function generateStaticParams() {
-  return Array.from(helpSectionMap.keys()).map((section) => ({ section }));
-}
-
 export async function generateMetadata({ params }: HelpSectionPageProps): Promise<Metadata> {
   const resolvedParams = await params;
   const section = helpSectionMap.get(resolvedParams.section);

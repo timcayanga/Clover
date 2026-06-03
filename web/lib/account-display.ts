@@ -25,7 +25,29 @@ const extractLastFourDigits = (value?: string | null) => {
   return digits.slice(-4);
 };
 
+const getWiseWalletDisplayName = (input: AccountDisplayInput) => {
+  const safeName = sanitizeBankNameLabel(input.name) ?? null;
+  const identity = `${input.institution ?? ""} ${safeName ?? ""}`.trim();
+
+  if (!/\bwise\b/i.test(identity)) {
+    return null;
+  }
+
+  const accountSuffix = extractLastFourDigits(input.accountNumber) ?? extractLastFourDigits(safeName);
+  if (accountSuffix) {
+    return null;
+  }
+
+  const walletCurrency = safeName?.match(/^Wise\s+([A-Z]{3})$/i)?.[1]?.toUpperCase() ?? null;
+  return walletCurrency ? `Wise ${walletCurrency}` : null;
+};
+
 const resolveBankLabel = (input: AccountDisplayInput) => {
+  const wiseWalletName = getWiseWalletDisplayName(input);
+  if (wiseWalletName) {
+    return wiseWalletName;
+  }
+
   const normalizedInstitution = normalizeBankName(input.institution);
   const safeInstitution =
     normalizedInstitution !== "Unknown" ? normalizedInstitution : sanitizeBankNameLabel(input.institution) ?? null;
@@ -50,6 +72,7 @@ export const formatUploadAccountDisplayName = (
   type?: string | null
 ) => {
   const safeName = sanitizeBankNameLabel(name) ?? null;
+  const wiseWalletName = getWiseWalletDisplayName({ name, institution, accountNumber, type });
   const safeInstitution = normalizeBankName(institution);
   const resolvedLabel = resolveBankLabel({
     name: name ?? null,
@@ -60,6 +83,10 @@ export const formatUploadAccountDisplayName = (
 
   if (type === "cash" || resolvedLabel.toLowerCase() === "cash") {
     return "Cash";
+  }
+
+  if (wiseWalletName) {
+    return wiseWalletName;
   }
 
   const accountSuffix = extractLastFourDigits(accountNumber) ?? extractLastFourDigits(name);
