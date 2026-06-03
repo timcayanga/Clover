@@ -37,6 +37,7 @@ const GENERIC_PARSER_GUIDANCE = [
   "- Preserve raw transaction text and only normalize names/categories when the statement layout makes the meaning clear.",
   "- If the statement looks like a bank, wallet, credit card, loan, or certificate-style account but no bank-specific rule exists, still extract the rows conservatively.",
   "- Keep account number, opening balance, ending balance, payment due date, and amount due when visible.",
+  "- Preserve each transaction's visible currency separately from the account currency when the source is multi-currency.",
   "- Reject page headers, footers, legal text, reward banners, and summary noise as transactions.",
   "- Lower confidence when the OCR is blurry or when a balance cannot be reconciled cleanly.",
   "- When OCR is character-spaced or fragmented, reconstruct the intended words first, then extract metadata and rows conservatively.",
@@ -176,6 +177,7 @@ type OpenAIExtractedTransaction = {
   raw_name: string;
   normalized_name: string | null;
   amount: number;
+  currency: string | null;
   type: "Debit" | "Credit";
   movement_type: AllowedMovementType;
   category: AllowedCategory;
@@ -435,6 +437,7 @@ const importedStatementSchema = z.object({
         raw_name: z.string(),
         normalized_name: z.string().nullable().optional().default(null),
         amount: z.number(),
+        currency: z.string().nullable().optional().default(null),
         type: z.enum(["Debit", "Credit"]),
         movement_type: z.enum(ALLOWED_MOVEMENT_TYPES),
         category: z.enum(ALLOWED_CATEGORIES),
@@ -730,6 +733,7 @@ const openAIJsonSchema = {
           raw_name: { type: "string" },
           normalized_name: { type: ["string", "null"] },
           amount: { type: "number" },
+          currency: { type: ["string", "null"] },
           type: { type: "string", enum: ["Debit", "Credit"] },
           movement_type: { type: "string", enum: ALLOWED_MOVEMENT_TYPES },
           category: { type: "string", enum: ALLOWED_CATEGORIES },
@@ -755,6 +759,7 @@ const openAIJsonSchema = {
           "raw_name",
           "normalized_name",
           "amount",
+          "currency",
           "type",
           "movement_type",
           "category",
@@ -1107,6 +1112,20 @@ const buildBankInstructionJson = (params: {
     };
   }
 
+  if (/wise/.test(normalized)) {
+    return {
+      ...base,
+      institution: "Wise",
+      notes: [
+        "Wise mobile transaction-history screenshots may not show an account number or ending balance. Use account.display_name = Wise, account.institution_name = Wise, account.account_type = wallet, and keep account_number null when it is not visible.",
+        "The first amount line on a row is the transaction amount and currency. A second PHP line under a foreign-currency transaction is the converted PHP equivalent; preserve it in notes or parser evidence but do not replace the original amount/currency.",
+        "Rows with a plus sign, Added, Received, or Refunded are incoming/refund movements. Rows without a plus sign are outgoing spend unless the visible status says Sent or transfer-like.",
+        "Rows such as Card checked with 0 USD are verification rows; include only if clearly visible and mark review_required true.",
+        "Do not require an account number for a Wise screenshot if transaction rows are visible.",
+      ],
+    };
+  }
+
   return {
     ...base,
     institution: params.institution ?? null,
@@ -1350,6 +1369,7 @@ const buildOpenAIInputPayload = (params: {
           "This is a scanned statement, screenshot, or image-heavy file. The text layer may be empty or incomplete.",
           "Read the page images directly and extract the visible financial details for the selected document family.",
           "If the document is a statement, extract every transaction row from the visible statement pages and anchor the final balance from the last page footer when present.",
+          "If the image is a Wise mobile transaction-history screenshot, treat it as a wallet statement even when no account number or ending balance is visible. Use Wise as the institution and preserve each row's visible currency.",
           "If the document is a portfolio or account-detail page that shows holdings or positions, extract those into holdings instead of transaction rows.",
           "If the document is a receipt, portfolio screen, account detail screen, or notes screenshot, keep the transaction array empty unless the page clearly shows true ledger rows.",
           "Use the account number and balance shown in the page image, not any earlier summary-like number unless it is the final ending balance.",
@@ -1402,6 +1422,7 @@ const buildImageTranscriptionInputPayload = (params: {
     "- Do not summarize, normalize, or guess missing text.",
     "- Include page markers like [PAGE 1], [PAGE 2], etc. when multiple images are provided.",
     "- If the image is clearly a receipt, portfolio screen, account-detail screen, notes screenshot, or transaction-history screenshot, say so in document_type.",
+    "- Wise mobile transaction-history screenshots are statement-like wallet histories; preserve date groupings, merchant names, statuses such as Added/Refunded/Sent, plus signs, original currencies, and PHP converted amounts.",
     "- Keep the transcript compact but complete enough for the downstream parser to read it back into rows or receipt details.",
     "",
     ...(params.importMode === "receipt"
@@ -1426,6 +1447,7 @@ const buildImageTranscriptionInputPayload = (params: {
       ? [
           "The source is a bank statement. If it spans multiple pages, continue across the pages instead of stopping after the first visible balance box.",
           "Capture every visible transaction row, the account number, and the final ending balance from the last page footer or summary line when present.",
+          "For mobile wallet transaction-history screenshots such as Wise, capture visible rows even when the screen has no account number or final balance.",
         ]
       : []),
     ...(params.fileDataBase64 && String(params.fileType ?? "").toLowerCase().includes("pdf")
@@ -1822,6 +1844,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       return {
         date: row.date ?? undefined,
         amount: amount.toFixed(2),
+        currency: row.currency?.trim().toUpperCase() || metadata.currency || undefined,
         merchantRaw: rawName,
         merchantClean,
         description: description || rawName,
@@ -1842,6 +1865,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           sourceLine: row.parser_evidence.source_text ?? null,
           parserEvidence: row.parser_evidence,
           normalizedName: row.normalized_name ?? null,
+          currency: row.currency ?? null,
           movementType,
           category,
           reviewRequired,

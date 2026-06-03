@@ -4358,9 +4358,24 @@ export const processImportFileText = async (
       : null;
 
   const imageTranscriptRequiresRetry = Boolean(imageImport && pageImages?.length && !canUseFastImageParse);
+  const openAiParseIsUsableWiseScreenshot =
+    imageImport &&
+    importMode === "statement" &&
+    Boolean(openAiParsed?.rows.length) &&
+    /wise/i.test(
+      [
+        openAiMetadata?.institution,
+        openAiMetadata?.accountName,
+        ...(openAiParsed?.rows ?? []).slice(0, 5).flatMap((row) => [row.institution, row.accountName]),
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
   const openAiResultLooksSparse =
     !openAiParsed ||
-    (importMode === "statement" && (openAiParsed.rows.length === 0 || !openAiMetadata?.accountNumber)) ||
+    (importMode === "statement" &&
+      !openAiParseIsUsableWiseScreenshot &&
+      (openAiParsed.rows.length === 0 || !openAiMetadata?.accountNumber)) ||
     (importMode === "receipt" &&
       (!openAiParsed.receiptDetails ||
         (openAiReceiptValidation !== null && openAiReceiptValidation.score < 3) ||
