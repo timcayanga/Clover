@@ -2027,10 +2027,15 @@ function AccountDetailPageContent() {
   const accountCardNumber = account
     ? formatCardAccountNumber(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null)
     : "";
+  const latestCheckpointMetadata = latestCheckpoint?.sourceMetadata as Record<string, unknown> | null | undefined;
   const checkpointInstitution =
-    typeof latestCheckpoint?.sourceMetadata?.institution === "string" ? latestCheckpoint.sourceMetadata.institution : null;
+    typeof latestCheckpointMetadata?.institution === "string"
+      ? latestCheckpointMetadata.institution
+      : typeof latestCheckpointMetadata?.uploadBankHint === "string"
+        ? latestCheckpointMetadata.uploadBankHint
+        : null;
   const checkpointAccountName =
-    typeof latestCheckpoint?.sourceMetadata?.accountName === "string" ? latestCheckpoint.sourceMetadata.accountName : null;
+    typeof latestCheckpointMetadata?.accountName === "string" ? latestCheckpointMetadata.accountName : null;
   const accountCardName = account
     ? checkpointInstitution
       ? formatUploadAccountDisplayName(

@@ -861,9 +861,15 @@ const getCheckpointIdentityKey = (checkpoint: StatementCheckpoint) =>
   (() => {
     const sourceMetadata = checkpoint.sourceMetadata as Record<string, unknown> | null | undefined;
     const accountType = typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null;
+    const checkpointInstitution =
+      typeof sourceMetadata?.institution === "string"
+        ? sourceMetadata.institution
+        : typeof sourceMetadata?.uploadBankHint === "string"
+          ? sourceMetadata.uploadBankHint
+          : null;
     return normalizeImportedAccountKey(
       typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
-      typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+      checkpointInstitution,
       typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null,
       accountType
     );
@@ -914,10 +920,15 @@ const getLatestCheckpointForAccount = (
   const accountDigits = String(account.accountNumber ?? "").replace(/\D/g, "");
 
   for (const checkpoint of statementCheckpoints) {
+    const sourceMetadata = checkpoint.sourceMetadata as Record<string, unknown> | null | undefined;
     const checkpointInstitution =
-      typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null;
+      typeof sourceMetadata?.institution === "string"
+        ? sourceMetadata.institution
+        : typeof sourceMetadata?.uploadBankHint === "string"
+          ? sourceMetadata.uploadBankHint
+          : null;
     const checkpointAccountNumber =
-      typeof checkpoint.sourceMetadata?.accountNumber === "string" ? checkpoint.sourceMetadata.accountNumber : null;
+      typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null;
     const checkpointLastFour = getLastFourDigits(checkpointAccountNumber);
     const accountLastFour = getLastFourDigits(account.accountNumber ?? account.name);
     const checkpointDigits = String(checkpointAccountNumber ?? "").replace(/\D/g, "");
@@ -2658,15 +2669,18 @@ function AccountsPageContent() {
     const isDeleting = deletingAccountIdsSet.has(row.id);
     const loadingContext = getUploadAccountLoadingContext(row);
     const latestCheckpoint = loadingContext.latestCheckpoint;
+    const latestCheckpointMetadata = latestCheckpoint?.sourceMetadata as Record<string, unknown> | null | undefined;
     const fallbackAccountNumber =
       row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
     const checkpointInstitution =
-      typeof latestCheckpoint?.sourceMetadata?.institution === "string"
-        ? latestCheckpoint.sourceMetadata.institution
+      typeof latestCheckpointMetadata?.institution === "string"
+        ? latestCheckpointMetadata.institution
+        : typeof latestCheckpointMetadata?.uploadBankHint === "string"
+          ? latestCheckpointMetadata.uploadBankHint
         : null;
     const checkpointAccountName =
-      typeof latestCheckpoint?.sourceMetadata?.accountName === "string"
-        ? latestCheckpoint.sourceMetadata.accountName
+      typeof latestCheckpointMetadata?.accountName === "string"
+        ? latestCheckpointMetadata.accountName
         : null;
     const accountCardName =
       checkpointInstitution
