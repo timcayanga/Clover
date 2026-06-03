@@ -323,6 +323,33 @@ const extractLastFourDigits = (value?: string | null) => {
   return digits.slice(-4);
 };
 
+const isSecurityBankStatementFileName = (fileName?: string | null) =>
+  normalizeBankName(fileName ?? "") === "Security Bank" || /\bsecurity[\s_-]*bank\b/i.test(String(fileName ?? ""));
+
+const canonicalizeSecurityBankUploadIdentity = (params: {
+  fileName?: string | null;
+  accountName?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+}) => {
+  const normalizedInstitution = normalizeBankName(params.institution ?? params.fileName ?? null);
+  if (normalizedInstitution !== "Security Bank" && !isSecurityBankStatementFileName(params.fileName)) {
+    return {
+      accountName: params.accountName ?? null,
+      institution: params.institution ?? null,
+      accountNumber: params.accountNumber ?? null,
+    };
+  }
+
+  const accountNumber = params.accountNumber ?? null;
+  const lastFour = extractLastFourDigits(accountNumber) ?? extractLastFourDigits(params.accountName ?? null);
+  return {
+    accountName: lastFour ? `Security Bank ${lastFour}` : params.accountName ?? "Security Bank",
+    institution: "Security Bank",
+    accountNumber,
+  };
+};
+
 const accountRuleKey = (name: string, institution: string | null) =>
   `${(institution ?? "").trim().toLowerCase()}::${extractLastFourDigits(name) ?? name.trim().toLowerCase()}`;
 
@@ -440,28 +467,37 @@ const buildOptimisticUploadSummary = (
   previewTransactions: UploadInsightsSummary["previewTransactions"] = [],
   accountNumber: string | null = null,
   showBalanceEvenIfEmpty = false
-): UploadInsightsSummary => ({
-  fileName,
-  rowsImported: importedRows,
-  accountId,
-  accountName,
-  institution,
-  accountNumber,
-  accountType,
-  balance: showBalanceEvenIfEmpty || importedRows > 0 ? balance : null,
-  accountSummaries: undefined,
-  optimistic: true,
-  optimisticAccountId,
-  incomeTotal: 0,
-  expenseTotal: 0,
-  netTotal: 0,
-  topCategoryName: null,
-  topCategoryAmount: null,
-  topCategoryShare: null,
-  topMerchantName: null,
-  topMerchantCount: null,
-  previewTransactions,
-});
+): UploadInsightsSummary => {
+  const canonicalIdentity = canonicalizeSecurityBankUploadIdentity({
+    fileName,
+    accountName,
+    institution,
+    accountNumber,
+  });
+
+  return {
+    fileName,
+    rowsImported: importedRows,
+    accountId,
+    accountName: canonicalIdentity.accountName,
+    institution: canonicalIdentity.institution,
+    accountNumber: canonicalIdentity.accountNumber,
+    accountType,
+    balance: showBalanceEvenIfEmpty || importedRows > 0 ? balance : null,
+    accountSummaries: undefined,
+    optimistic: true,
+    optimisticAccountId,
+    incomeTotal: 0,
+    expenseTotal: 0,
+    netTotal: 0,
+    topCategoryName: null,
+    topCategoryAmount: null,
+    topCategoryShare: null,
+    topMerchantName: null,
+    topMerchantCount: null,
+    previewTransactions,
+  };
+};
 
 const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): UploadInsightsSummary | null => {
   if (summaries.length === 0) {
@@ -1364,6 +1400,10 @@ const guessStatementIdentity = (fileName: string) => {
 
   if (lowerName.includes("unionbank") || lowerName.includes("union bank")) {
     return { accountName: "UnionBank", institution: "UnionBank", accountNumber: null };
+  }
+
+  if (isSecurityBankStatementFileName(fileName)) {
+    return { accountName: "Security Bank", institution: "Security Bank", accountNumber: null };
   }
 
   if (lowerName.includes("bpi")) {
