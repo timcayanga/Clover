@@ -16138,6 +16138,11 @@ const formatWiseWalletAccountName = (currency?: string | null) => {
   return normalizedCurrency ? `Wise ${normalizedCurrency}` : "Wise";
 };
 
+const isWiseLikelyMerchantSpendCurrency = (currency?: string | null) => {
+  const normalizedCurrency = normalizeCurrencyCode(currency);
+  return Boolean(normalizedCurrency && !/^(?:PHP|GBP|USD|CAD)$/.test(normalizedCurrency));
+};
+
 const isWiseMobileUiLine = (line: string) =>
   /^(?:Search\.{0,3}|Includes hidden|Type|Currency|Direction|Status|Filter|Back|All|Cards?|Home|Activity|Transactions?)$/i.test(line) ||
   /^\d{1,2}:\d{2}$/.test(line) ||
@@ -16203,6 +16208,15 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
       return;
     }
 
+    const pendingRawPayload =
+      pendingRow.rawPayload && typeof pendingRow.rawPayload === "object" && !Array.isArray(pendingRow.rawPayload)
+        ? (pendingRow.rawPayload as Record<string, unknown>)
+        : null;
+    if (pendingRawPayload?.requiresAccountAmount === true && pendingRawPayload.accountAmount === undefined) {
+      pendingRow = null;
+      return;
+    }
+
     const key = [
       pendingRow.date,
       pendingRow.merchantRaw.toLowerCase(),
@@ -16259,6 +16273,7 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
           accountCurrency: amountInfo.currency,
           accountName: formatWiseWalletAccountName(amountInfo.currency),
           accountAmountText: line,
+          requiresAccountAmount: false,
         };
         pendingRow.amount = Math.abs(amountInfo.amount).toFixed(2);
         pendingRow.currency = amountInfo.currency;
@@ -16286,6 +16301,11 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
           : /refund/i.test(status ?? "")
             ? "Income"
             : guessCategoryName(`${merchant} ${status ?? ""}`, type);
+      const requiresAccountAmount =
+        amountInfo.sign === null &&
+        !status &&
+        type === "expense" &&
+        isWiseLikelyMerchantSpendCurrency(amountInfo.currency);
 
       pendingRow = {
         date: currentDate,
@@ -16311,6 +16331,7 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
           source: "wise_mobile_screenshot",
           accountName: formatWiseWalletAccountName(amountInfo.currency),
           accountCurrency: amountInfo.currency,
+          requiresAccountAmount,
         },
       };
     }

@@ -27,6 +27,7 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 - If a row has two amounts, use the smaller second amount/currency as the Clover transaction amount because it is the actual amount spent from the user's Wise account.
 - Preserve the bold/larger first merchant-currency amount in raw payload/notes when it appears above the account-currency amount.
 - Use the transaction/account-impact currency to choose the Wise wallet account. One-amount `43.54 GBP` rows belong to `Wise GBP`; two-amount `13,920 HKD` / `107,920.33 PHP` rows belong to `Wise PHP`.
+- Do not create a new Wise wallet account from a merchant-currency-only outgoing spend row when the account-impact amount is missing or cut off. For example, an isolated `11.50 AUD` spend line without the smaller PHP account amount should be skipped/review-only rather than creating `Wise AUD`.
 - Rows with `+`, `Added`, `Received`, or `Refunded` are incoming/refund movements.
 - Rows without `+` are outgoing spend unless the status or merchant clearly indicates a transfer.
 - `To PHP Added` and similar wallet funding/conversion rows are `Transfers`.

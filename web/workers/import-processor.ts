@@ -2465,6 +2465,11 @@ const normalizeWiseWalletCurrencyCode = (value: unknown) => {
   return /^(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/.test(normalized) ? normalized : null;
 };
 
+const isWiseLikelyMerchantSpendCurrency = (value: unknown) => {
+  const currency = normalizeWiseWalletCurrencyCode(value);
+  return Boolean(currency && !/^(?:PHP|GBP|USD|CAD)$/.test(currency));
+};
+
 const readWiseWalletCurrencyFromRow = (row: Record<string, unknown>) => {
   const rawPayload = row.rawPayload;
   const payload =
@@ -2540,6 +2545,35 @@ const normalizeWiseWalletParsedRows = (
     const rowLooksWise = metadataLooksWise || /wise/i.test(String(row.institution ?? readParsedRowPayloadText(row, "institutionRaw") ?? ""));
     if (!rowLooksWise) {
       return row;
+    }
+
+    const rawPayloadBeforeNormalization =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    const rowType = typeof row.type === "string" ? row.type.toLowerCase() : "";
+    const status = typeof rawPayloadBeforeNormalization?.status === "string" ? rawPayloadBeforeNormalization.status : "";
+    const explicitAccountCurrency = normalizeWiseWalletCurrencyCode(rawPayloadBeforeNormalization?.accountCurrency);
+    const hasExplicitAccountAmount =
+      rawPayloadBeforeNormalization?.accountAmount !== undefined ||
+      rawPayloadBeforeNormalization?.accountAmountText !== undefined ||
+      Boolean(explicitAccountCurrency && !isWiseLikelyMerchantSpendCurrency(explicitAccountCurrency));
+    const merchantCurrencyOnlySpend =
+      !hasExplicitAccountAmount &&
+      rowType === "expense" &&
+      !status &&
+      isWiseLikelyMerchantSpendCurrency(row.currency);
+    if (merchantCurrencyOnlySpend) {
+      return {
+        ...row,
+        institution: "Wise",
+        accountName: "Wise",
+        rawPayload: {
+          ...(rawPayloadBeforeNormalization ?? {}),
+          wiseAmbiguousAccountCurrency: true,
+          ambiguousReason: "Wise merchant-currency spend row is missing the account-currency amount.",
+        },
+      };
     }
 
     const currency = readWiseWalletCurrencyFromRow(row);
@@ -6663,6 +6697,33 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     institution: typeof statementMetadata?.institution === "string" ? statementMetadata.institution : null,
     accountType: typeof statementMetadata?.accountType === "string" ? statementMetadata.accountType : null,
   });
+  parsedRows = parsedRows.filter((row) => {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    if (rawPayload?.wiseAmbiguousAccountCurrency === true) {
+      console.warn("[import-confirmation] skipped ambiguous Wise screenshot merchant-currency row", {
+        importFileId,
+        merchant: typeof row.merchantClean === "string" ? row.merchantClean : row.merchantRaw,
+        currency: row.currency,
+      });
+      return false;
+    }
+    return true;
+  });
+  if (parsedRows.length === 0) {
+    return {
+      imported: 0,
+      duplicate: false,
+      metadata: detectStatementMetadataFromText(""),
+      accountId: accountId ?? null,
+      confirmedTransactionsCount: 0,
+      insightSummary: null,
+      accountBalance: null,
+      status: "staged",
+    };
+  }
   const parsedStatementFingerprints = Array.from(
     new Set(
       parsedRows
