@@ -3281,6 +3281,7 @@ export function ImportFilesModal({
       }
     };
     let seededFallbackSummary = false;
+    let queuedResumeAttempted = false;
     const startedAt = Date.now();
     const requiresVisibleRows = shouldRequireVisibleRowsForImport(summaryContext.fileName);
     const MAX_WAIT_MS = backgroundOnly ? IMPORT_BACKGROUND_HARD_STOP_MS : requiresVisibleRows ? 75_000 : 180_000;
@@ -3500,6 +3501,45 @@ export function ImportFilesModal({
         }
 
         if (!visibleImportComplete) {
+          const shouldAutoResumeQueuedImport =
+            !backgroundOnly &&
+            !queuedResumeAttempted &&
+            canResume &&
+            (processingPhase === "queued_retry" || telemetryPhase === "queued") &&
+            parsedRowsCount === 0 &&
+            confirmedTransactionsCount === 0 &&
+            Date.now() - startedAt >= 5_000;
+
+          if (shouldAutoResumeQueuedImport) {
+            queuedResumeAttempted = true;
+            emitItemUpdate({
+              status: "importing",
+              confirmationState: "pending",
+              progress: Math.max(IMPORT_PROGRESS.parsing, IMPORT_PROGRESS.uploading),
+              progressLabel: "Starting import",
+              targetAccountId: latestResolvedAccountId ?? accountId,
+            });
+            emitImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "active",
+              fileName: summaryContext.fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount,
+              progress: Math.max(IMPORT_PROGRESS.parsing, IMPORT_PROGRESS.uploading),
+              detail: "Clover is starting this import directly because the background queue has not picked it up yet.",
+              summary: null,
+              errorMessage: null,
+            });
+            await fetch(`/api/imports/${importFileId}/resume`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+            }).catch(() => null);
+            await sleep(300);
+            continue;
+          }
+
           const waitingProgress = Math.max(
             IMPORT_PROGRESS.uploading,
             Math.min(

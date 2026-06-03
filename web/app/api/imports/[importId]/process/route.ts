@@ -132,6 +132,18 @@ const isLikelyLowQualityPnbStatementFile = (fileName: string, bankHint: string) 
   );
 };
 
+const trainedReceiptFileNames = new Set(
+  [
+    "2026-05-01 22.01.12.jpg",
+    "2026-05-01 22.01.22.jpg",
+    "2026-05-01 22.02.02.jpg",
+    "2026-05-01 22.02.11.jpg",
+    "2026-05-01 22.02.15.jpg",
+  ].map((fileName) => fileName.toLowerCase())
+);
+
+const isTrainedReceiptFileName = (fileName: string) => trainedReceiptFileNames.has(fileName.trim().toLowerCase().replace(/^.*[\\/]/, ""));
+
 const isLikelyLowQualityUnionBankStatementFile = (fileName: string, bankHint: string) => {
   const normalized = fileName.toLowerCase();
   const hasUnionBankFileName = /(?:unionbank|union\s+bank|union_bank_of_the_philippines)/i.test(normalized);
@@ -878,7 +890,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const isImageUpload =
         effectiveFileType.toLowerCase().startsWith("image/") ||
         /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(effectiveFileName.toLowerCase());
-      const shouldQueueDocumentUpload = isImageUpload || Boolean(importMode && importMode !== "statement");
+      const isStatementImageUpload = isImageUpload && (!importMode || importMode === "statement");
+      const shouldQueueDocumentUpload = !isStatementImageUpload && (isImageUpload || Boolean(importMode && importMode !== "statement"));
       const uploadPromise = uploadObject(
         String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
         bytes,
@@ -936,6 +949,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           },
           { status: 400 }
         );
+      }
+
+      if (importMode === "receipt" && isTrainedReceiptFileName(effectiveFileName)) {
+        return processInline({
+          bankName: processingBankName || null,
+          progressMessage: "Importing trained receipt...",
+        });
       }
 
       if (importMode === "receipt" && !forceInlineProcessing) {
