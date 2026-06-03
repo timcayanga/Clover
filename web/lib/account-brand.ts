@@ -366,8 +366,9 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       label: "Wise",
       logoSrcs: philippinesLogoWithVariants("wise"),
       fallbackIconSrc: walletIcon,
-      accent: "#00C389",
-      background: "linear-gradient(135deg, rgba(0, 195, 137, 0.16), rgba(0, 195, 137, 0.06))",
+      accent: "#9FE870",
+      background: "linear-gradient(145deg, #9FE870 0%, #86DF57 48%, #6FCE44 100%)",
+      foreground: "#0b1f08",
     }),
   },
   {
