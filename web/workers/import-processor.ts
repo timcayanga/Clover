@@ -303,6 +303,45 @@ const shouldPreserveParserTransferDirection = (
   );
 };
 
+const resolveUnionBankExternalTransferDirection = (
+  row: ImportInsightSourceRow,
+  parsedRow?: ImportInsightSourceRow | null
+): TransactionType | null => {
+  if (!shouldPreserveParserTransferDirection(row, parsedRow)) {
+    return null;
+  }
+
+  const rawPayload = parsedRow?.rawPayload ?? row.rawPayload;
+  const rawPayloadRecord =
+    rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+      ? (rawPayload as Record<string, unknown>)
+      : null;
+  const sourceText = [
+    parsedRow?.merchantRaw,
+    parsedRow?.merchantClean,
+    parsedRow?.description,
+    row.merchantRaw,
+    row.merchantClean,
+    row.description,
+    row.categoryName,
+    parsedRow?.categoryName,
+    stringifyTransferPayload(rawPayloadRecord),
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+
+  if (/\b(?:online\s+instapay\s*send|instapaysend|outward\s+fast\s+payments?)\b/i.test(sourceText)) {
+    return "expense";
+  }
+
+  if (/\b(?:online\s+fund\s+transfer|fund\s+transfer|inward\s+payments?)\b/i.test(sourceText)) {
+    return "income";
+  }
+
+  const parserType = parsedRow?.type ?? row.type;
+  return parserType === "income" || parserType === "expense" ? parserType : inferExternalTransferDirection(row);
+};
+
 const resolveTransferTypeAgainstWorkspaceAccounts = (params: {
   row: ImportInsightSourceRow;
   candidateType: TransactionType;
@@ -3571,7 +3610,8 @@ const strengthenEnrichmentRowForAttempt = (
     (!rowCategory || rowCategory.toLowerCase() === "other");
   const categoryName = shouldUseGuessedCategory ? guessedCategory : row.categoryName;
   const parserDirection =
-    parsedRow?.type === "income" || parsedRow?.type === "expense" ? parsedRow.type : null;
+    resolveUnionBankExternalTransferDirection(row, parsedRow) ??
+    (parsedRow?.type === "income" || parsedRow?.type === "expense" ? parsedRow.type : null);
   const type =
     parserDirection && shouldPreserveParserTransferDirection(row, parsedRow)
       ? parserDirection
@@ -3779,10 +3819,12 @@ export const processImportEnrichmentJobs = async (options: {
             row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
           const categoryName =
             (typeof row.categoryName === "string" && row.categoryName.trim()) || defaultCategoryForType(rowType);
+          const unionBankDirection = resolveUnionBankExternalTransferDirection(row, parsedRow);
           const canonicalType =
-            parsedRowType && parsedRowType !== "transfer" && shouldPreserveParserTransferDirection(row, parsedRow)
+            unionBankDirection ??
+            (parsedRowType && parsedRowType !== "transfer" && shouldPreserveParserTransferDirection(row, parsedRow)
               ? parsedRowType
-              : coerceTransactionTypeFromCategoryName(categoryName, rowType);
+              : coerceTransactionTypeFromCategoryName(categoryName, rowType));
           let categoryId = categoryByName.get(categoryName.toLowerCase());
           if (!categoryId) {
             const created = await prisma.category.create({
@@ -7063,12 +7105,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const rowAccountMatchConfidence = typeof row.accountMatchConfidence === "number" ? row.accountMatchConfidence : 100;
     const rowDuplicateConfidence = typeof row.duplicateConfidence === "number" ? row.duplicateConfidence : 0;
     const categoryCoercedType =
-      rowType && rowType !== "transfer" && shouldPreserveParserTransferDirection(row)
+      resolveUnionBankExternalTransferDirection(row) ??
+      (rowType && rowType !== "transfer" && shouldPreserveParserTransferDirection(row)
         ? rowType
         : coerceTransactionTypeFromCategoryName(
             parsedCategoryName,
             (rowType ?? "expense") as "income" | "expense" | "transfer"
-          );
+          ));
     const canonicalType = resolveTransferTypeAgainstWorkspaceAccounts({
       row: {
         amount: row.amount,
