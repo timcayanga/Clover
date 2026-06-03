@@ -16,6 +16,17 @@ const isFileDrag = (event: DragEvent) => {
   return types.includes("Files");
 };
 
+const isImportModalActive = () => {
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  return (
+    document.body.hasAttribute("data-clover-import-modal-visible") ||
+    document.body.hasAttribute("data-clover-import-modal-open")
+  );
+};
+
 export function PageFileDropZone({
   enabled = true,
   title = "Drop files anywhere",
@@ -58,6 +69,10 @@ export function PageFileDropZone({
     let dragDepth = 0;
 
     const handleDragEnter = (event: DragEvent) => {
+      if (isImportModalActive()) {
+        return;
+      }
+
       if (!isFileDrag(event)) {
         return;
       }
@@ -68,6 +83,10 @@ export function PageFileDropZone({
     };
 
     const handleDragOver = (event: DragEvent) => {
+      if (isImportModalActive()) {
+        return;
+      }
+
       if (!isFileDrag(event)) {
         return;
       }
@@ -77,6 +96,12 @@ export function PageFileDropZone({
     };
 
     const handleDragLeave = (event: DragEvent) => {
+      if (isImportModalActive()) {
+        dragDepth = 0;
+        setDragging(false);
+        return;
+      }
+
       if (!isFileDrag(event)) {
         return;
       }
@@ -89,6 +114,12 @@ export function PageFileDropZone({
     };
 
     const handleDrop = (event: DragEvent) => {
+      if (isImportModalActive()) {
+        dragDepth = 0;
+        setDragging(false);
+        return;
+      }
+
       if (!isFileDrag(event)) {
         return;
       }
