@@ -6204,7 +6204,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       statementMetadata: {
         ...baseStatementMetadata,
         accountName: readRowAccountName(firstGroupRow) ?? baseStatementMetadata.accountName,
-        institution: readRowInstitution(firstGroupRow),
+        institution: readRowInstitution(firstGroupRow) ?? baseStatementMetadata.institution ?? checkpointBankName ?? null,
         accountNumber: readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
         endingBalance: groupEndingBalance ?? baseStatementMetadata.endingBalance,
       },
