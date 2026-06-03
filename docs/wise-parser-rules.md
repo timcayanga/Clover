@@ -36,6 +36,8 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 - If a structured vision fallback extracts a Wise row with `date: null` but its parser evidence/source line begins with a visible Wise date header, recover that date before confirmation.
 - Do not recover dates from evidence that only says a row was shown above or near a date header; scroll-continuation rows without their own visible date should remain audit-only/review-only unless another uploaded screenshot clearly supplies the date.
 - Preserve visibly repeated identical Wise rows as separate transactions. Only deduplicate OCR duplicates when they come from the same visible source line.
+- When multiple Wise screenshots are uploaded from the same scroll sequence, deduplicate overlap rows across the same or adjacent `IMG_*` files by wallet account, date, merchant, amount, and currency.
+- Do not use the cross-screenshot overlap rule for non-adjacent files or for non-Wise institutions.
 
 ## Categorization
 

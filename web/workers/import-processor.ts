@@ -443,6 +443,7 @@ const buildConfirmedTransactionDedupeKey = (params: {
 };
 
 const buildConfirmedTransactionContentKey = (params: {
+  accountId?: unknown;
   date: unknown;
   amount: unknown;
   currency: unknown;
@@ -467,11 +468,32 @@ const buildConfirmedTransactionContentKey = (params: {
     normalizeTransactionDedupeText(params.description);
 
   return [
+    typeof params.accountId === "string" && params.accountId.trim() ? params.accountId.trim() : "",
     date,
     amount === null ? "" : amount.toFixed(2),
     normalizeTransactionDedupeText(params.currency || "PHP").toUpperCase(),
     merchant,
   ].join("|");
+};
+
+const extractWiseScreenshotSequenceNumber = (fileName: unknown) => {
+  if (typeof fileName !== "string") {
+    return null;
+  }
+
+  const match = fileName.match(/\bIMG[_ -]?(\d{3,6})\b/i);
+  if (!match) {
+    return null;
+  }
+
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+};
+
+const sourceFilesLookLikeAdjacentScreenshots = (leftFileName: unknown, rightFileName: unknown) => {
+  const leftSequence = extractWiseScreenshotSequenceNumber(leftFileName);
+  const rightSequence = extractWiseScreenshotSequenceNumber(rightFileName);
+  return leftSequence !== null && rightSequence !== null && Math.abs(leftSequence - rightSequence) <= 1;
 };
 
 type ProcessImportResult = {
@@ -7072,6 +7094,42 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         reviewStatus: true,
       },
     });
+    const wiseScreenshotOverlapDedupeEnabled =
+      /wise/i.test(String(baseStatementMetadata.institution ?? checkpointBankName ?? "")) &&
+      extractWiseScreenshotSequenceNumber(importFile.fileName) !== null;
+    const existingWiseScreenshotOverlapTransactions = wiseScreenshotOverlapDedupeEnabled
+      ? await tx.transaction.findMany({
+          where: {
+            deletedAt: null,
+            workspaceId: String(importFile.workspaceId),
+            accountId: { in: matchingAccountIdsForImport },
+            reviewStatus: { notIn: ["rejected", "duplicate_skipped"] },
+            importFile: {
+              fileName: {
+                contains: "IMG_",
+              },
+            },
+          },
+          select: {
+            id: true,
+            accountId: true,
+            rawPayload: true,
+            date: true,
+            amount: true,
+            currency: true,
+            type: true,
+            merchantRaw: true,
+            merchantClean: true,
+            description: true,
+            reviewStatus: true,
+            importFile: {
+              select: {
+                fileName: true,
+              },
+            },
+          },
+        })
+      : [];
     const existingImportTransactionBySourceIndex = new Map<string, (typeof existingImportTransactions)[number]>();
     const existingImportTransactionByStatementSourceIndex = new Map<string, (typeof existingImportTransactions)[number]>();
     const existingImportTransactionsByDedupeKey = new Map<string, Array<(typeof existingImportTransactions)[number]>>();
@@ -7097,6 +7155,15 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       const bucket = existingImportTransactionsByDedupeKey.get(dedupeKey) ?? [];
       bucket.push(transaction);
       existingImportTransactionsByDedupeKey.set(dedupeKey, bucket);
+    }
+    const existingWiseScreenshotOverlapCounts = new Map<string, number>();
+    for (const transaction of existingWiseScreenshotOverlapTransactions) {
+      if (!sourceFilesLookLikeAdjacentScreenshots(importFile.fileName, transaction.importFile?.fileName)) {
+        continue;
+      }
+
+      const key = buildConfirmedTransactionContentKey(transaction);
+      existingWiseScreenshotOverlapCounts.set(key, (existingWiseScreenshotOverlapCounts.get(key) ?? 0) + 1);
     }
     const retainedExistingImportTransactionIds = new Set<string>();
     let retainedExistingImportTransactionsCount = 0;
@@ -7342,6 +7409,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     existingDedupeCounts.set(key, (existingDedupeCounts.get(key) ?? 0) + 1);
   }
   const currentDedupeCounts = new Map<string, number>();
+  const currentWiseScreenshotOverlapCounts = new Map<string, number>();
 
   for (const [index, originalRow] of parsedRows.entries()) {
     const row = normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
@@ -7594,6 +7662,19 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     if ((existingDedupeCounts.get(dedupeKey) ?? 0) >= currentOccurrence) {
       duplicateSkippedTransactionsCount += 1;
       continue;
+    }
+
+    if (wiseScreenshotOverlapDedupeEnabled) {
+      const wiseOverlapKey = buildConfirmedTransactionContentKey({
+        ...insertRow,
+        accountId: rowResolvedAccountId,
+      });
+      const currentWiseOverlapOccurrence = (currentWiseScreenshotOverlapCounts.get(wiseOverlapKey) ?? 0) + 1;
+      currentWiseScreenshotOverlapCounts.set(wiseOverlapKey, currentWiseOverlapOccurrence);
+      if ((existingWiseScreenshotOverlapCounts.get(wiseOverlapKey) ?? 0) >= currentWiseOverlapOccurrence) {
+        duplicateSkippedTransactionsCount += 1;
+        continue;
+      }
     }
 
     preparedTransactions.push({
