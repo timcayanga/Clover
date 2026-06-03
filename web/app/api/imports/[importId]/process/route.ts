@@ -933,6 +933,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         Boolean(preflightText?.cacheRecord?.parsedRows) &&
         Boolean(preflightText?.cacheRecord?.statementFingerprint) &&
         Boolean(preflightText?.cacheRecord?.metadata);
+      if (
+        likelyLowQualityUnionBankStatement &&
+        !forceInlineProcessing &&
+        !hasExtractedText &&
+        !canReuseCachedParseSnapshot
+      ) {
+        return queueBackgroundProcessing(effectiveBankName || null);
+      }
       const detectedInstitution = normalizeBankName(String((metadata as { institution?: unknown } | null)?.institution ?? ""));
       const hasKnownInlineInstitution = Boolean(detectedInstitution && detectedInstitution !== "Unknown");
       const shouldProcessKnownStatementInline =

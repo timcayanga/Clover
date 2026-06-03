@@ -1578,6 +1578,26 @@ const isNoisyVisibilityBank = (fileName: string) => {
 const isLikelyLowQualityUnionBankStatementFile = (fileName: string) =>
   isLikelyLowQualityUnionBankStatementFilename(fileName) || normalizeBankName(fileName) === "UnionBank";
 
+const shouldRequireVisibleRowsForImport = (fileName: string) =>
+  normalizeBankName(fileName) === "UnionBank" || isLikelyLowQualityUnionBankStatementFilename(fileName);
+
+const importSummaryHasVisibleRows = (summary: UploadInsightsSummary | null | undefined) => {
+  const rowsImported = Number(summary?.rowsImported ?? 0);
+  const previewRows = Array.isArray(summary?.previewTransactions) ? summary.previewTransactions.length : 0;
+  return Math.max(rowsImported, previewRows) > 0 && Boolean(summary?.accountId);
+};
+
+const shouldPublishImportSummary = (
+  fileName: string,
+  summary: UploadInsightsSummary | null | undefined
+) => {
+  if (!summary) {
+    return false;
+  }
+
+  return !shouldRequireVisibleRowsForImport(fileName) || importSummaryHasVisibleRows(summary);
+};
+
 const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
   if (normalizeBankName(fileName) !== "PNB") {
     return false;
@@ -1614,6 +1634,10 @@ const hasVisibleImportData = (
     Boolean(summary?.accountId) &&
     Boolean(summary?.accountName || summary?.accountNumber || summary?.balance);
   const itemHasRows = item.importedRows !== null && item.importedRows > 0 && Boolean(item.targetAccountId);
+
+  if (shouldRequireVisibleRowsForImport(item.file.name)) {
+    return itemHasRows || localHasRows;
+  }
 
   return itemHasRows || localHasRows || localHasAccountDetails;
 };
@@ -3219,7 +3243,8 @@ export function ImportFilesModal({
     };
     let seededFallbackSummary = false;
     const startedAt = Date.now();
-    const MAX_WAIT_MS = backgroundOnly ? IMPORT_BACKGROUND_HARD_STOP_MS : 180_000;
+    const requiresVisibleRows = shouldRequireVisibleRowsForImport(summaryContext.fileName);
+    const MAX_WAIT_MS = backgroundOnly ? IMPORT_BACKGROUND_HARD_STOP_MS : requiresVisibleRows ? 75_000 : 180_000;
     let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
@@ -3240,7 +3265,9 @@ export function ImportFilesModal({
         const importFile = payload.importFile;
         const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
         const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
-        const visibleImportComplete = Boolean(payload.visibleImportComplete || confirmedTransactionsCount > 0);
+        const visibleImportComplete = requiresVisibleRows
+          ? parsedRowsCount > 0 || confirmedTransactionsCount > 0
+          : Boolean(payload.visibleImportComplete || confirmedTransactionsCount > 0);
         const suppressUnionBankPreview = isLikelyLowQualityUnionBankStatementFile(summaryContext.fileName);
         const statusAccountSummaries = normalizeServerAccountSummaries(payload.accountSummaries);
         const primaryStatusAccountSummary =
@@ -3345,6 +3372,8 @@ export function ImportFilesModal({
             processingIdentity?.accountName ||
             processingIdentity?.accountNumber
         );
+        const hasRowBackedVisibility = parsedRowsCount > 0 || confirmedTransactionsCount > 0 || visibleImportComplete;
+        const visibleProgressSignal = requiresVisibleRows ? hasRowBackedVisibility : hasVisibleImportDataSignal;
 
         if (processingPhase === "account_match_needs_confirmation") {
           closeImportAfterError(
@@ -3383,7 +3412,7 @@ export function ImportFilesModal({
         }
 
         if (importFile?.status === "failed" && parsedRowsCount === 0 && confirmedTransactionsCount === 0) {
-          if (hasVisibleImportDataSignal) {
+          if (visibleProgressSignal) {
             emitImportRecoverable(
               summaryContext.fileName,
               "Account details are visible. Clover will keep cleaning up names and categories in the background.",
@@ -3410,12 +3439,33 @@ export function ImportFilesModal({
           return;
         }
 
+        if (Date.now() - startedAt >= MAX_WAIT_MS) {
+          const hasRecoverableProgress =
+            parsedRowsCount > 0 ||
+            confirmedTransactionsCount > 0 ||
+            (!requiresVisibleRows && Boolean(latestResolvedAccountId || checkpointAccountId));
+          if (hasRecoverableProgress) {
+            emitImportRecoverable(
+              summaryContext.fileName,
+              "Clover is still working on this import in the background. Rows are not visible yet, so this upload has been moved out of the active modal.",
+              "Still processing"
+            );
+          } else {
+            emitImportError(
+              "background",
+              summaryContext.fileName,
+              processingMessage ?? "Clover could not show reliable rows from this statement in time."
+            );
+          }
+          return;
+        }
+
         if (!visibleImportComplete) {
           const waitingProgress = Math.max(
             IMPORT_PROGRESS.uploading,
             Math.min(
               90,
-              parsedRowsCount > 0 || hasVisibleImportDataSignal
+              parsedRowsCount > 0 || visibleProgressSignal
                 ? IMPORT_PROGRESS.loadingAccount
                 : processingPhase === "identifying_transactions"
                   ? IMPORT_PROGRESS.parsing
@@ -3425,7 +3475,7 @@ export function ImportFilesModal({
           const waitingLabel =
             telemetryLabel ??
             processingMessage ??
-            (parsedRowsCount > 0 || hasVisibleImportDataSignal
+            (parsedRowsCount > 0 || visibleProgressSignal
               ? "Saving visible rows"
               : processingPhase === "identifying_transactions"
                 ? "Reading transactions"
@@ -3447,7 +3497,7 @@ export function ImportFilesModal({
             completedFiles: completedFileCount,
             progress: waitingProgress,
             detail: getTelemetryDetail(
-              parsedRowsCount > 0 || hasVisibleImportDataSignal
+              parsedRowsCount > 0 || visibleProgressSignal
                 ? "Clover is saving the account and transactions so they stay visible."
                 : getProgressDetail(
                     {
@@ -3464,7 +3514,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(parsedRowsCount > 0 || hasVisibleImportDataSignal ? 250 : 200);
+          await sleep(parsedRowsCount > 0 || visibleProgressSignal ? 250 : 200);
           continue;
         }
 
@@ -4845,7 +4895,7 @@ export function ImportFilesModal({
           .catch(() => null);
       }
     } catch (error) {
-      if (uploadCancelRequestedRef.current || options?.signal?.aborted) {
+      if (uploadCancelRequestedRef.current) {
         updateItem(itemId, {
           status: "error",
           confirmationState: "staged",
@@ -5255,18 +5305,7 @@ export function ImportFilesModal({
       await sleep(500);
     }
 
-    const hasRecoverableFinalProgress = Boolean(
-      visibleImportComplete ||
-        parsedRowsCount > 0 ||
-        confirmedTransactionsCount > 0 ||
-        checkpointBalance ||
-        checkpointAccountId ||
-        processingIdentity?.accountName ||
-        processingIdentity?.accountNumber ||
-        canResume ||
-        telemetryPhase === "repair_needed" ||
-        latestResolvedAccountId
-    );
+    const hasRecoverableFinalProgress = Boolean(importFileId);
 
     if (hasRecoverableFinalProgress) {
       closeImportAsRecoverable(
@@ -6204,7 +6243,10 @@ export function ImportFilesModal({
             } satisfies UploadInsightsSummary)
           : null;
         const localPreparseSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
-        const queuedVisibleSummary = optimisticSummary ?? localPreparseSummary;
+        const rawQueuedVisibleSummary = optimisticSummary ?? localPreparseSummary;
+        const queuedVisibleSummary = shouldPublishImportSummary(item.file.name, rawQueuedVisibleSummary)
+          ? rawQueuedVisibleSummary
+          : null;
         const queuedVisibleRows = Math.max(visibleRows, queuedVisibleSummary?.rowsImported ?? 0);
         updateItem(itemId, {
           importFileId,
@@ -6536,9 +6578,13 @@ export function ImportFilesModal({
         errorMessage: null,
       });
 
-      if (optimisticPreviewSummary) {
-        seedImportedWorkspaceCaches(workspaceId, optimisticPreviewSummary);
-        await Promise.resolve(onImported(optimisticPreviewSummary));
+      const publishableOptimisticPreviewSummary = shouldPublishImportSummary(item.file.name, optimisticPreviewSummary)
+        ? optimisticPreviewSummary
+        : null;
+
+      if (publishableOptimisticPreviewSummary) {
+        seedImportedWorkspaceCaches(workspaceId, publishableOptimisticPreviewSummary);
+        await Promise.resolve(onImported(publishableOptimisticPreviewSummary));
       }
 
       if (targetAccountId) {
@@ -6608,7 +6654,7 @@ export function ImportFilesModal({
           completedFiles: completedFileCount + 1,
           progress: 100,
           detail: "All set",
-          summary: optimisticPreviewSummary,
+          summary: publishableOptimisticPreviewSummary,
           errorMessage: null,
         });
       } else {
@@ -6651,7 +6697,7 @@ export function ImportFilesModal({
           completedFiles: completedFileCount + 1,
           progress: 100,
           detail: "All set",
-          summary: optimisticPreviewSummary,
+          summary: publishableOptimisticPreviewSummary,
           errorMessage: null,
         });
       }
@@ -6659,7 +6705,7 @@ export function ImportFilesModal({
         return {
           status: "done",
           importedRows: Number(processPayload?.imported ?? 0) || null,
-          summary: optimisticPreviewSummary,
+          summary: publishableOptimisticPreviewSummary,
         };
     } catch (error) {
       if (isPasswordError(error)) {
@@ -6821,9 +6867,9 @@ export function ImportFilesModal({
           optimistic: false,
         };
 
-        seedImportedWorkspaceCaches(workspaceId, finalizedRecoveredSummary);
-        await Promise.resolve(onImported(finalizedRecoveredSummary));
         if (recoveredRowsCount > 0) {
+          seedImportedWorkspaceCaches(workspaceId, finalizedRecoveredSummary);
+          await Promise.resolve(onImported(finalizedRecoveredSummary));
           updateItem(itemId, {
             status: "done",
             confirmationState: "confirmed",
@@ -7173,6 +7219,7 @@ export function ImportFilesModal({
       lastImportActivityRef.current?.summary ??
       (hasCompletedBatchNow ? buildVisibleImportSummary(items) : null);
     const nextSnapshot: ImportActivitySnapshot = {
+      importFileId: activeProgressItem?.importFileId ?? lastImportActivityRef.current?.importFileId ?? null,
       workspaceId,
       surface: importActivitySurfaceRef.current,
       status: nextStatus,
