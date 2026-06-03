@@ -4080,8 +4080,19 @@ export const processImportFileText = async (
       endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
     }
   );
+  const checkpointMetadataOverride = checkpointBankName
+    ? {
+        institution: checkpointBankName,
+        ...(/wise/i.test(checkpointBankName)
+          ? {
+              accountName: "Wise",
+              accountType: "wallet",
+            }
+          : {}),
+      }
+    : {};
   const metadataOverride = {
-    ...(checkpointBankName ? { institution: checkpointBankName } : {}),
+    ...checkpointMetadataOverride,
     ...(options.statementMetadataOverride ?? {}),
   };
   const metadataForParse = {
@@ -4125,7 +4136,41 @@ export const processImportFileText = async (
           accountName: metadataForParse.accountName,
           accountNumber: metadataForParse.accountNumber,
         });
-  const parsedRows = parsedRowsAfterFallback.length > 0 ? parsedRowsAfterFallback : parsedRowsInitial;
+  let parsedRows = parsedRowsAfterFallback.length > 0 ? parsedRowsAfterFallback : parsedRowsInitial;
+  const isWiseImageStatement =
+    imageImport &&
+    importMode === "statement" &&
+    /wise/i.test([metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName].filter(Boolean).join(" "));
+  if (isWiseImageStatement && parsedRows.length === 0 && pageImages?.length) {
+    await updateImportFileCompat(importFileId, {
+      status: "processing",
+      processingPhase: "identifying_transactions",
+      processingMessage: "Reading Wise screenshot transactions...",
+    });
+    const transcript = await transcribeImportImagesWithOpenAI({
+      fileName,
+      fileType,
+      detectedMetadata: {
+        ...metadataForParse,
+        institution: "Wise",
+        accountName: metadataForParse.accountName ?? "Wise",
+        accountType: "wallet",
+      },
+      pageImages,
+      importMode,
+    });
+    if (transcript?.transcript.trim()) {
+      const transcriptText = normalizeStatementImageOcrText(transcript.transcript);
+      const transcriptRows = parseImportText(transcriptText, fileName, fileType, {
+        institution: "Wise",
+        accountName: metadataForParse.accountName ?? "Wise",
+        accountNumber: metadataForParse.accountNumber,
+      });
+      if (transcriptRows.length > 0) {
+        parsedRows = transcriptRows;
+      }
+    }
+  }
   const parsedRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(parsedRows as Array<Record<string, unknown>>);
   await updateImportFileCompat(importFileId, {
     status: "processing",
