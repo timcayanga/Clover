@@ -514,6 +514,7 @@ const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplica
     duplicateConfidence: (duplicateCounts.get(signature) ?? 0) > 1 ? 70 : transaction.duplicateConfidence,
     merchantRaw: transaction.merchantRaw,
     merchantClean: transaction.merchantClean,
+    rawPayload: transaction.rawPayload,
   });
 
   return warningReasons[0] ?? null;

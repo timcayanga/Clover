@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { parseGenericBankStatementText, type ParsedImportRow } from "@/lib/import-parser";
+import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 
 const findRow = (rows: ParsedImportRow[], description: RegExp) => {
   const row = rows.find((candidate) => description.test(candidate.description ?? candidate.merchantRaw ?? ""));
@@ -117,6 +118,19 @@ Date Description Amount
     reviewDetails.some((detail) => typeof detail === "object" && detail !== null && "code" in detail),
     "Expected coded generic review reasons for weak OCR/table shape."
   );
+  const displayedWeakReasons = getTransactionReviewReasons({
+    reviewStatus: "pending_review",
+    categoryName: parsedWeakOcr.rows[0]?.categoryName ?? null,
+    parserConfidence: parsedWeakOcr.rows[0]?.parserConfidence ?? null,
+    categoryConfidence: parsedWeakOcr.rows[0]?.categoryConfidence ?? null,
+    merchantRaw: parsedWeakOcr.rows[0]?.merchantRaw ?? null,
+    merchantClean: parsedWeakOcr.rows[0]?.merchantClean ?? null,
+    rawPayload: parsedWeakOcr.rows[0]?.rawPayload,
+  });
+  assert.ok(
+    displayedWeakReasons.some((reason) => /balance|column|amount|OCR|transaction/i.test(reason)),
+    "Expected generic parser review details to surface through transaction review reasons."
+  );
   assert.ok(
     parsedWeakOcr.rows.every((row) => (row.confidence ?? 100) < 70),
     "Expected weak amount-only generic rows to stay below auto-confirm confidence."
@@ -173,6 +187,19 @@ Ending Balance 1,500.00
         detail.code === "transfer_counterparty_unverified"
     ),
     "Expected ambiguous generic transfer to include a counterparty review reason."
+  );
+  const displayedAmbiguousReasons = getTransactionReviewReasons({
+    reviewStatus: "pending_review",
+    categoryName: ambiguousTransfer.categoryName ?? null,
+    parserConfidence: ambiguousTransfer.parserConfidence ?? null,
+    categoryConfidence: ambiguousTransfer.categoryConfidence ?? null,
+    merchantRaw: ambiguousTransfer.merchantRaw ?? null,
+    merchantClean: ambiguousTransfer.merchantClean ?? null,
+    rawPayload: ambiguousTransfer.rawPayload,
+  });
+  assert.ok(
+    displayedAmbiguousReasons.includes("Transfer counterparty could not be verified as another Clover account."),
+    "Expected generic transfer counterparty reason to be visible in review display reasons."
   );
 
   const repeatedDateOcrStatement = `

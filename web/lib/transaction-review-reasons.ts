@@ -10,6 +10,7 @@ type TransactionReviewReasonInput = {
   duplicateConfidence?: number | null;
   merchantRaw?: string | null;
   merchantClean?: string | null;
+  rawPayload?: unknown;
 };
 
 const normalizeConfidenceScore = (value: number | null | undefined) => {
@@ -35,6 +36,28 @@ const isMerchantUnidentified = (merchantClean?: string | null, merchantRaw?: str
 };
 
 const REVIEW_THRESHOLD = 70;
+
+const getGenericImportReviewReasons = (rawPayload: unknown) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return [];
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const detailReasons = Array.isArray(payload.genericReviewReasonDetails)
+    ? payload.genericReviewReasonDetails
+        .map((detail) =>
+          detail && typeof detail === "object" && !Array.isArray(detail) && typeof (detail as Record<string, unknown>).message === "string"
+            ? ((detail as Record<string, unknown>).message as string).trim()
+            : null
+        )
+        .filter((value): value is string => Boolean(value))
+    : [];
+  const fallbackReasons = Array.isArray(payload.genericReviewReasons)
+    ? payload.genericReviewReasons.filter((value): value is string => typeof value === "string" && Boolean(value.trim())).map((value) => value.trim())
+    : [];
+
+  return Array.from(new Set([...detailReasons, ...fallbackReasons]));
+};
 
 export const getTransactionReviewReasons = (transaction: TransactionReviewReasonInput) => {
   if (isResolvedReviewStatus(transaction.reviewStatus)) {
@@ -83,6 +106,10 @@ export const getTransactionReviewReasons = (transaction: TransactionReviewReason
 
   if (isMerchantUnidentified(transaction.merchantClean, transaction.merchantRaw)) {
     reasons.add("Could not identify merchant");
+  }
+
+  for (const reason of getGenericImportReviewReasons(transaction.rawPayload)) {
+    reasons.add(reason);
   }
 
   return Array.from(reasons);
