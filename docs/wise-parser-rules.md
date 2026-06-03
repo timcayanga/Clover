@@ -8,7 +8,9 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 - Treat Wise as a multi-currency wallet, not a conventional bank statement.
 - Wise screenshots may not show an account number, statement period, opening balance, or ending balance.
 - A missing account number is acceptable when visible transaction rows can be extracted.
-- Account display should be `Wise` unless a more specific visible wallet/account label is present.
+- Wise users may have multiple currency wallets (for example PHP, GBP, USD, CAD) with different underlying account numbers.
+- Screenshots usually do not expose those account numbers, so Clover should infer distinct Wise wallet accounts by account-impact currency.
+- Account display should be `Wise <CURRENCY>` when the wallet currency can be inferred, such as `Wise PHP` or `Wise GBP`.
 
 ## Screenshot Recognition
 
@@ -22,6 +24,7 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 - If a row has one amount, use that amount/currency as the Clover transaction amount because it is one of the user's Wise account currencies.
 - If a row has two amounts, use the smaller second amount/currency as the Clover transaction amount because it is the actual amount spent from the user's Wise account.
 - Preserve the bold/larger first merchant-currency amount in raw payload/notes when it appears above the account-currency amount.
+- Use the transaction/account-impact currency to choose the Wise wallet account. One-amount `43.54 GBP` rows belong to `Wise GBP`; two-amount `13,920 HKD` / `107,920.33 PHP` rows belong to `Wise PHP`.
 - Rows with `+`, `Added`, `Received`, or `Refunded` are incoming/refund movements.
 - Rows without `+` are outgoing spend unless the status or merchant clearly indicates a transfer.
 - `To PHP Added` and similar wallet funding/conversion rows are `Transfers`.
@@ -45,6 +48,6 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 
 ## Expected Outcome
 
-- Uploading Wise screenshots should create or reuse a `Wise` wallet account.
+- Uploading Wise screenshots should create or reuse separate wallet accounts such as `Wise PHP`, `Wise GBP`, `Wise USD`, and `Wise CAD` when those account-impact currencies appear.
 - Transactions should appear in Clover with their original currencies preserved.
 - The import modal should complete once visible rows are saved, even without account number or balance metadata.

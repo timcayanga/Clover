@@ -261,6 +261,47 @@ const inferExternalTransferDirection = (row: ImportInsightSourceRow): Transactio
   return "expense";
 };
 
+const shouldPreserveParserTransferDirection = (
+  row: ImportInsightSourceRow,
+  parsedRow?: ImportInsightSourceRow | null
+) => {
+  const parserType = parsedRow?.type ?? row.type;
+  if (parserType !== "income" && parserType !== "expense") {
+    return false;
+  }
+
+  const rawPayload = parsedRow?.rawPayload ?? row.rawPayload;
+  const rawPayloadRecord =
+    rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+      ? (rawPayload as Record<string, unknown>)
+      : null;
+  const sourceText = [
+    parsedRow?.merchantRaw,
+    parsedRow?.merchantClean,
+    parsedRow?.description,
+    row.merchantRaw,
+    row.merchantClean,
+    row.description,
+    row.categoryName,
+    parsedRow?.categoryName,
+    rawPayloadRecord?.bank,
+    rawPayloadRecord?.source,
+    rawPayloadRecord?.kind,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+  const normalizedBank = normalizeBankName(sourceText);
+
+  if (normalizedBank !== "UnionBank" && rawPayloadRecord?.bank !== "UnionBank") {
+    return false;
+  }
+
+  return (
+    rawPayloadRecord?.kind === "unionbank_known_sample_transaction" ||
+    /\b(?:online\s+instapay\s*send|instapaysend|outward\s+fast\s+payments?|online\s+fund\s+transfer|inward\s+payments?)\b/i.test(sourceText)
+  );
+};
+
 const resolveTransferTypeAgainstWorkspaceAccounts = (params: {
   row: ImportInsightSourceRow;
   candidateType: TransactionType;
@@ -2184,6 +2225,85 @@ const groupParsedRowsByAccount = (
 const hasMultipleParsedAccountNumbers = (rows: Array<Record<string, unknown>>) =>
   new Set(rows.map(readParsedRowAccountNumber).filter((value): value is string => Boolean(value))).size > 1;
 
+const normalizeWiseWalletCurrencyCode = (value: unknown) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toUpperCase();
+  return /^(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/.test(normalized) ? normalized : null;
+};
+
+const readWiseWalletCurrencyFromRow = (row: Record<string, unknown>) => {
+  const rawPayload = row.rawPayload;
+  const payload =
+    rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+      ? (rawPayload as Record<string, unknown>)
+      : null;
+
+  return (
+    normalizeWiseWalletCurrencyCode(payload?.accountCurrency) ??
+    normalizeWiseWalletCurrencyCode(row.currency) ??
+    normalizeWiseWalletCurrencyCode(payload?.currency)
+  );
+};
+
+const normalizeWiseWalletParsedRows = (
+  rows: Array<Record<string, unknown>>,
+  metadata?: { institution?: string | null; accountType?: string | null } | null
+) => {
+  const metadataLooksWise = /wise/i.test(String(metadata?.institution ?? ""));
+  if (!metadataLooksWise && !rows.some((row) => /wise/i.test(String(row.institution ?? readParsedRowPayloadText(row, "institutionRaw") ?? "")))) {
+    return rows;
+  }
+
+  return rows.map((row) => {
+    if (readParsedRowAccountNumber(row)) {
+      return row;
+    }
+
+    const rowLooksWise = metadataLooksWise || /wise/i.test(String(row.institution ?? readParsedRowPayloadText(row, "institutionRaw") ?? ""));
+    if (!rowLooksWise) {
+      return row;
+    }
+
+    const currency = readWiseWalletCurrencyFromRow(row);
+    if (!currency) {
+      return row;
+    }
+
+    const accountName = `Wise ${currency}`;
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? {
+            ...(row.rawPayload as Record<string, unknown>),
+            accountName,
+            accountCurrency: currency,
+          }
+        : {
+            accountName,
+            accountCurrency: currency,
+          };
+
+    return {
+      ...row,
+      institution: "Wise",
+      accountName,
+      rawPayload,
+    };
+  });
+};
+
+const hasMultipleWiseWalletAccountNames = (
+  rows: Array<Record<string, unknown>>,
+  metadata?: { institution?: string | null; accountType?: string | null } | null
+) =>
+  new Set(
+    normalizeWiseWalletParsedRows(rows, metadata)
+      .map((row) => readParsedRowAccountName(row))
+      .filter((value): value is string => /^Wise\s+[A-Z]{3}$/.test(value))
+  ).size > 1;
+
 const getImportAccountBalanceFromParsedRows = (rows: EnrichedParsedImportRow[]) => {
   const hasCimbRows = rows.some((row) => {
     const rawPayload = row.rawPayload;
@@ -3391,7 +3511,14 @@ const strengthenEnrichmentRowForAttempt = (
     guessedCategory !== "Other" &&
     (!rowCategory || rowCategory.toLowerCase() === "other");
   const categoryName = shouldUseGuessedCategory ? guessedCategory : row.categoryName;
-  const type = categoryName ? coerceTransactionTypeFromCategoryName(categoryName, fallbackType) : fallbackType;
+  const parserDirection =
+    parsedRow?.type === "income" || parsedRow?.type === "expense" ? parsedRow.type : null;
+  const type =
+    parserDirection && shouldPreserveParserTransferDirection(row, parsedRow)
+      ? parserDirection
+      : categoryName
+        ? coerceTransactionTypeFromCategoryName(categoryName, fallbackType)
+        : fallbackType;
   const merchantClean =
     typeof row.merchantClean === "string" && row.merchantClean.trim()
       ? row.merchantClean.trim()
@@ -3585,10 +3712,18 @@ export const processImportEnrichmentJobs = async (options: {
           }
           usedTransactionIds.add(transaction.id);
 
-          const rowType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
+          const parsedRowType =
+            parsedRow?.type === "income" || parsedRow?.type === "expense" || parsedRow?.type === "transfer"
+              ? parsedRow.type
+              : null;
+          const rowType =
+            row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
           const categoryName =
             (typeof row.categoryName === "string" && row.categoryName.trim()) || defaultCategoryForType(rowType);
-          const canonicalType = coerceTransactionTypeFromCategoryName(categoryName, rowType);
+          const canonicalType =
+            parsedRowType && parsedRowType !== "transfer" && shouldPreserveParserTransferDirection(row, parsedRow)
+              ? parsedRowType
+              : coerceTransactionTypeFromCategoryName(categoryName, rowType);
           let categoryId = categoryByName.get(categoryName.toLowerCase());
           if (!categoryId) {
             const created = await prisma.category.create({
@@ -4605,8 +4740,11 @@ export const processImportFileText = async (
       (openAiMetadata
         ? (openAiMetadata?.confidence ?? 0) >= (metadataForParse.confidence ?? 0)
         : parsedRows.length === 0));
-  const effectiveRows = useOpenAiParse && openAiParsed ? openAiParsed.rows : parsedRows;
   const effectiveMetadataSource = useOpenAiParse && openAiMetadata ? openAiMetadata : metadataForParse;
+  const effectiveRows = normalizeWiseWalletParsedRows(
+    (useOpenAiParse && openAiParsed ? openAiParsed.rows : parsedRows) as Array<Record<string, unknown>>,
+    effectiveMetadataSource
+  ) as typeof parsedRows;
   const effectiveRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(effectiveRows as Array<Record<string, unknown>>);
   const parsedEndingBalance = getTrailingBalanceFromParsedRows(effectiveRows);
   const ucpbKnownSampleMetadata = (() => {
@@ -6119,6 +6257,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     !Array.isArray(statementCheckpointRecord.sourceMetadata)
       ? (statementCheckpointRecord.sourceMetadata as Record<string, unknown>)
       : null;
+  parsedRows = normalizeWiseWalletParsedRows(parsedRows, {
+    institution: typeof statementMetadata?.institution === "string" ? statementMetadata.institution : null,
+    accountType: typeof statementMetadata?.accountType === "string" ? statementMetadata.accountType : null,
+  });
   const parsedStatementFingerprints = Array.from(
     new Set(
       parsedRows
@@ -6190,9 +6332,14 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     parsedRowsByAccount.set(key, group);
   }
   const parsedAccountGroups = Array.from(parsedRowsByAccount.entries()).map(([key, rows]) => ({ key, rows }));
+  const hasMultipleWiseWalletAccountGroups = hasMultipleWiseWalletAccountNames(parsedRows as Array<Record<string, unknown>>, {
+    institution: typeof statementMetadata?.institution === "string" ? statementMetadata.institution : null,
+    accountType: typeof statementMetadata?.accountType === "string" ? statementMetadata.accountType : null,
+  });
   const multiAccountImport =
-    parsedAccountGroups.filter((group) => group.key !== "__default__").length > 1 &&
-    parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))));
+    (parsedAccountGroups.filter((group) => group.key !== "__default__").length > 1 &&
+      parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))))) ||
+    hasMultipleWiseWalletAccountGroups;
   const accountByGroupKey = new Map<string, Awaited<ReturnType<typeof resolveConfirmationAccount>>>();
   let resolvedAccountSequence = 0;
   for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
@@ -6206,6 +6353,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         accountName: readRowAccountName(firstGroupRow) ?? baseStatementMetadata.accountName,
         institution: readRowInstitution(firstGroupRow) ?? baseStatementMetadata.institution ?? checkpointBankName ?? null,
         accountNumber: readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
+        currency:
+          typeof firstGroupRow.currency === "string" && firstGroupRow.currency.trim()
+            ? firstGroupRow.currency.trim().toUpperCase()
+            : baseStatementMetadata.currency,
         endingBalance: groupEndingBalance ?? baseStatementMetadata.endingBalance,
       },
       parsedRows: groupRows,

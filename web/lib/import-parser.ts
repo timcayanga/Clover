@@ -16133,6 +16133,11 @@ const parseWiseMobileAmountLine = (line: string) => {
   };
 };
 
+const formatWiseWalletAccountName = (currency?: string | null) => {
+  const normalizedCurrency = normalizeCurrencyCode(currency);
+  return normalizedCurrency ? `Wise ${normalizedCurrency}` : "Wise";
+};
+
 const isWiseMobileUiLine = (line: string) =>
   /^(?:Search\.{0,3}|Includes hidden|Type|Currency|Direction|Status|Filter|Back|All|Cards?|Home|Activity|Transactions?)$/i.test(line) ||
   /^\d{1,2}:\d{2}$/.test(line) ||
@@ -16246,10 +16251,12 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
           merchantAmountText: pendingRawPayload?.amountText ?? null,
           accountAmount: amountInfo.amount,
           accountCurrency: amountInfo.currency,
+          accountName: formatWiseWalletAccountName(amountInfo.currency),
           accountAmountText: line,
         };
         pendingRow.amount = Math.abs(amountInfo.amount).toFixed(2);
         pendingRow.currency = amountInfo.currency;
+        pendingRow.accountName = formatWiseWalletAccountName(amountInfo.currency);
         continue;
       }
 
@@ -16282,7 +16289,7 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
         merchantClean: summarizeMerchantText(merchant, "Wise"),
         description: normalizeWhitespace([merchant, status].filter(Boolean).join(" - ")),
         categoryName,
-        accountName: metadata.accountName ?? "Wise",
+        accountName: formatWiseWalletAccountName(amountInfo.currency),
         accountNumber: metadata.accountNumber ?? undefined,
         institution: "Wise",
         type,
@@ -16296,6 +16303,8 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
           sourceAmountLineIndex: lineIndex,
           status,
           source: "wise_mobile_screenshot",
+          accountName: formatWiseWalletAccountName(amountInfo.currency),
+          accountCurrency: amountInfo.currency,
         },
       };
     }
