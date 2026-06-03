@@ -7212,6 +7212,18 @@ export function ImportFilesModal({
   }, [shouldLockPageInteraction]);
 
   useEffect(() => {
+    if (typeof document === "undefined" || shouldLockPageInteraction) {
+      return;
+    }
+
+    const body = document.body;
+    if (open && (backgroundOnly || launchInBackground || showCompactProgress)) {
+      delete body.dataset.cloverImportModalLocks;
+      delete body.dataset.cloverImportModalOpen;
+    }
+  }, [backgroundOnly, launchInBackground, open, shouldLockPageInteraction, showCompactProgress]);
+
+  useEffect(() => {
     if (typeof document === "undefined" || !open || backgroundOnly || launchInBackground) {
       return;
     }

@@ -96,6 +96,7 @@ export function PageFileDropZone({
       event.preventDefault();
       dragDepth = 0;
       setDragging(false);
+      delete document.body.dataset.cloverDropActive;
       const files = Array.from(event.dataTransfer?.files ?? []);
       if (files.length > 0) {
         onFilesDropped(files);
