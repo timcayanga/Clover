@@ -53,3 +53,4 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 - Uploading Wise screenshots should create or reuse separate wallet accounts such as `Wise PHP`, `Wise GBP`, `Wise USD`, and `Wise CAD` when those account-impact currencies appear.
 - Transactions should appear in Clover with their original currencies preserved.
 - The import modal should complete once visible rows are saved, even without account number or balance metadata.
+- If the first Wise screenshot OCR/transcription pass returns no rows or times out, Clover should still run one bounded structured vision fallback before returning `I-104`.

@@ -1491,6 +1491,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   fileDataBase64?: string | null;
   preferPrimary?: boolean;
   importMode?: ImportMode | null;
+  pageImageLimit?: number | null;
+  timeoutMs?: number | null;
+  retryTimeoutMs?: number | null;
 }): Promise<
   | {
       metadata: DetectedStatementMetadata;
@@ -1561,7 +1564,15 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   const pdfFileDataBase64 =
     params.fileDataBase64 && String(params.fileType ?? "").toLowerCase().includes("pdf") ? params.fileDataBase64 : null;
   const pageImageLimit =
-    isReceiptMode ? 2 : params.text.trim().length === 0 ? 8 : isNoisyVisionInstitution ? 8 : 2;
+    typeof params.pageImageLimit === "number" && Number.isFinite(params.pageImageLimit)
+      ? Math.max(1, Math.floor(params.pageImageLimit))
+      : isReceiptMode
+        ? 2
+        : params.text.trim().length === 0
+          ? 8
+          : isNoisyVisionInstitution
+            ? 8
+            : 2;
   const pageImagesToSend = pageImagesInput.slice(0, Math.min(pageImageLimit, pageImagesInput.length));
   const textModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL,
@@ -1662,18 +1673,28 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   };
 
   try {
-    const primaryTimeoutMs = isReceiptMode
-      ? model === imageModel
-        ? 35_000
-        : 25_000
-      : model === imageModel
-        ? params.text.trim().length === 0
-          ? 120_000
-          : 60_000
-        : pdfFileDataBase64
-          ? 120_000
-          : 45_000;
-    const retryTimeoutMs = isReceiptMode ? 20_000 : params.text.trim().length === 0 ? 60_000 : 45_000;
+    const primaryTimeoutMs =
+      typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
+        ? Math.max(10_000, Math.floor(params.timeoutMs))
+        : isReceiptMode
+          ? model === imageModel
+            ? 35_000
+            : 25_000
+          : model === imageModel
+            ? params.text.trim().length === 0
+              ? 120_000
+              : 60_000
+            : pdfFileDataBase64
+              ? 120_000
+              : 45_000;
+    const retryTimeoutMs =
+      typeof params.retryTimeoutMs === "number" && Number.isFinite(params.retryTimeoutMs)
+        ? Math.max(10_000, Math.floor(params.retryTimeoutMs))
+        : isReceiptMode
+          ? 20_000
+          : params.text.trim().length === 0
+            ? 60_000
+            : 45_000;
     let response = await callOpenAI(model, pageImagesToSend, primaryTimeoutMs);
 
     if (!response || !response.ok) {

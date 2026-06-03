@@ -4503,7 +4503,6 @@ export const processImportFileText = async (
     !canReuseCachedStatementParse &&
     !hasReliableDeterministicStatementParse &&
     !imageStatementParseLooksUsable &&
-    !wiseImageTranscriptAttempted &&
     (!text.trim() ||
       parsedRows.length === 0 ||
       prefersVisionFallbackForInstitution ||
@@ -4596,6 +4595,9 @@ export const processImportFileText = async (
       fileDataBase64: pdfFileDataBase64,
       preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
       importMode,
+      pageImageLimit: isWiseImageStatement ? 1 : null,
+      timeoutMs: isWiseImageStatement ? 60_000 : null,
+      retryTimeoutMs: isWiseImageStatement ? 20_000 : null,
     });
 
     openAiMetadata = openAiParsed
