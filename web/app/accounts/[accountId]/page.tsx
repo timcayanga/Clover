@@ -2027,8 +2027,19 @@ function AccountDetailPageContent() {
   const accountCardNumber = account
     ? formatCardAccountNumber(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null)
     : "";
+  const checkpointInstitution =
+    typeof latestCheckpoint?.sourceMetadata?.institution === "string" ? latestCheckpoint.sourceMetadata.institution : null;
+  const checkpointAccountName =
+    typeof latestCheckpoint?.sourceMetadata?.accountName === "string" ? latestCheckpoint.sourceMetadata.accountName : null;
   const accountCardName = account
-    ? account.source === "upload" && !(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber)
+    ? checkpointInstitution
+      ? formatUploadAccountDisplayName(
+          checkpointAccountName ?? account.name,
+          checkpointInstitution,
+          account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null,
+          account.type
+        )
+      : account.source === "upload" && !(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber)
       ? formatUploadAccountDisplayName(
           accountEditDraft.name || account.name,
           account.institution,
@@ -2037,7 +2048,7 @@ function AccountDetailPageContent() {
         )
       : getAccountCardName({
           name: account.type === "investment" ? accountEditDraft.name || account.name : accountEditDraft.name || account.name,
-          institution: account.institution,
+          institution: account.institution ?? checkpointInstitution,
           accountNumber: account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null,
           type: account.type,
           source: account.source,

@@ -911,6 +911,7 @@ const getLatestCheckpointForAccount = (
   let latestCheckpoint: StatementCheckpoint | null = null;
   let latestTime = -1;
   const identityKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+  const accountDigits = String(account.accountNumber ?? "").replace(/\D/g, "");
 
   for (const checkpoint of statementCheckpoints) {
     const checkpointInstitution =
@@ -919,9 +920,11 @@ const getLatestCheckpointForAccount = (
       typeof checkpoint.sourceMetadata?.accountNumber === "string" ? checkpoint.sourceMetadata.accountNumber : null;
     const checkpointLastFour = getLastFourDigits(checkpointAccountNumber);
     const accountLastFour = getLastFourDigits(account.accountNumber ?? account.name);
+    const checkpointDigits = String(checkpointAccountNumber ?? "").replace(/\D/g, "");
     const matchesAccount =
       checkpoint.accountId === account.id ||
       (getCheckpointIdentityKey(checkpoint) !== "" && getCheckpointIdentityKey(checkpoint) === identityKey) ||
+      Boolean(accountDigits && checkpointDigits && accountDigits === checkpointDigits) ||
       Boolean(
         checkpointInstitution &&
           account.institution &&
@@ -2657,18 +2660,33 @@ function AccountsPageContent() {
     const latestCheckpoint = loadingContext.latestCheckpoint;
     const fallbackAccountNumber =
       row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
+    const checkpointInstitution =
+      typeof latestCheckpoint?.sourceMetadata?.institution === "string"
+        ? latestCheckpoint.sourceMetadata.institution
+        : null;
+    const checkpointAccountName =
+      typeof latestCheckpoint?.sourceMetadata?.accountName === "string"
+        ? latestCheckpoint.sourceMetadata.accountName
+        : null;
     const accountCardName =
-      row.source === "upload" && !fallbackAccountNumber
+      checkpointInstitution
+        ? formatUploadAccountDisplayName(
+            checkpointAccountName ?? row.name,
+            checkpointInstitution,
+            fallbackAccountNumber,
+            row.type
+          )
+        : row.source === "upload" && !fallbackAccountNumber
         ? formatUploadAccountDisplayName(row.name, row.institution, null, row.type)
         : getAccountCardName({
             name: row.name,
-            institution: row.institution,
+            institution: row.institution ?? checkpointInstitution,
             accountNumber: fallbackAccountNumber,
             type: row.type,
             source: row.source,
           });
     const accountBrand = getAccountBrand({
-      institution: row.institution,
+      institution: row.institution ?? checkpointInstitution,
       name: accountCardName,
       type: getEffectiveAccountType(row),
     });
