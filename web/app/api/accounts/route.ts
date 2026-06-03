@@ -857,7 +857,13 @@ export async function GET(request: Request) {
         })
         .filter((value): value is string => Boolean(value))
     );
-    const isOrphanUploadedAccountPlaceholder = (account: (typeof accounts)[number]) => {
+    const isOrphanUploadedAccountPlaceholder = (account: {
+      id: string;
+      source: string;
+      institution?: string | null;
+      accountNumber?: string | null;
+      balance?: { toString: () => string } | string | number | null;
+    }) => {
       if (account.source !== "upload" || account.institution || !normalizeImportAccountNumber(account.accountNumber ?? null)) {
         return false;
       }
@@ -1023,9 +1029,12 @@ export async function GET(request: Request) {
         balance: checkpointBalance ?? account.balance,
       };
     });
+    const responseAccounts = accountsWithCheckpointBackfill.filter(
+      (account) => !isOrphanUploadedAccountPlaceholder(account)
+    );
 
     return NextResponse.json({
-      accounts: accountsWithCheckpointBackfill.map((account) =>
+      accounts: responseAccounts.map((account) =>
         serializeAccount({
           ...account,
           transactionCount: transactionCountByAccountId.get(account.id) ?? 0,
