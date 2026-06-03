@@ -12,6 +12,15 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+const isImageImportFile = (fileType?: unknown, fileName?: unknown) => {
+  const normalizedFileType = String(fileType ?? "").toLowerCase();
+  const normalizedFileName = String(fileName ?? "").toLowerCase();
+  return (
+    normalizedFileType.startsWith("image/") ||
+    /\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(normalizedFileName)
+  );
+};
+
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   try {
     const { importId } = await params;
@@ -241,7 +250,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     }
 
-    if (!localDev) {
+    const shouldQueueResume =
+      localDev ||
+      (isImageImportFile(importFile.fileType, importFile.fileName) && !hasCheckpointedRows && confirmedTransactionsCount === 0);
+
+    if (!shouldQueueResume) {
       return processInline("processed_inline");
     }
 
@@ -252,7 +265,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       processingCurrentScore: null,
     });
 
-    await ensureImportProcessingWorker();
+    if (localDev) {
+      await ensureImportProcessingWorker();
+    }
     await enqueueImportProcessing({
       importFileId: importId,
       actorUserId: userId,
