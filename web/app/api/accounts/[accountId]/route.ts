@@ -266,15 +266,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
           typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null
         );
         const checkpointNumber = typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null;
+        const accountDigits = String(accountNumber ?? "").replace(/\D/g, "");
+        const checkpointDigits = String(checkpointNumber ?? "").replace(/\D/g, "");
         const matchesAccount =
           checkpoint.accountId === accountId ||
           (accountKey !== "" && checkpointKey === accountKey) ||
-          Boolean(
-            account.source === "upload" &&
-              accountNumber &&
-              checkpointNumber &&
-              normalizeImportAccountNumber(accountNumber) === normalizeImportAccountNumber(checkpointNumber)
-          );
+          Boolean(accountDigits && checkpointDigits && accountDigits === checkpointDigits);
 
         if (!matchesAccount) {
           continue;

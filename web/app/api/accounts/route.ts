@@ -365,17 +365,16 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
       })
       .filter((entry): entry is [string, (typeof existingAccounts)[number]] => Boolean(entry))
   );
-  const groups = new Map<
-    string,
-    {
-      accountNumber: string;
-      accountName: string | null;
-      institution: string | null;
-      currency: string | null;
-      balance: string | null;
-      rows: typeof parsedRows;
-    }
-  >();
+  type RepairGroupRow = (typeof parsedRows)[number];
+  type RepairGroup = {
+    accountNumber: string;
+    accountName: string | null;
+    institution: string | null;
+    currency: string | null;
+    balance: string | null;
+    rows: RepairGroupRow[];
+  };
+  const groups = new Map<string, RepairGroup>();
 
   for (const row of repairRows) {
     const accountNumber =
@@ -387,7 +386,7 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
 
     const institution = normalizeImportInstitution(row.institution ?? readImportedJsonText(row.rawPayload, "institution"));
     const key = `${institution.toLowerCase() || "unknown"}:${accountNumber}`;
-    const group =
+    const group: RepairGroup =
       groups.get(key) ??
       {
         accountNumber,
@@ -447,13 +446,17 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
       if (groupIdentityKey) {
         accountByNumber.set(groupIdentityKey, account);
       }
-    } else if (account.source === "upload") {
+    } else if (
+      account.accountNumber &&
+      normalizeImportAccountNumber(account.accountNumber) === normalizeImportAccountNumber(group.accountNumber)
+    ) {
       await prisma.account.update({
         where: { id: account.id },
         data: {
-          name: account.name || accountName,
-          institution: resolveUploadedAccountInstitution(account.institution, null, group.institution) ?? account.institution ?? group.institution,
-          currency: account.currency ?? currency,
+          name: accountName,
+          institution: resolvedInstitution ?? group.institution,
+          currency,
+          source: "upload",
           ...(group.balance !== null ? { balance: group.balance } : {}),
         },
       }).catch(() => null);
@@ -855,12 +858,7 @@ export async function GET(request: Request) {
         const matchesAccount =
           checkpoint.accountId === account.id ||
           (accountKey !== "" && checkpointKey === accountKey) ||
-          Boolean(
-            account.source === "upload" &&
-              accountNumber &&
-              checkpointNumber &&
-              accountNumber === checkpointNumber
-          );
+          Boolean(accountNumber && checkpointNumber && accountNumber === checkpointNumber);
 
         if (!matchesAccount) {
           continue;
