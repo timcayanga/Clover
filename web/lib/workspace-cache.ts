@@ -706,7 +706,7 @@ const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: Impor
       typeof entry.accountNumber === "string" ? entry.accountNumber : null,
       typeof entry.type === "string" ? entry.type : null
     );
-    return idsToReplace.has(id) || entryKey === accountKey;
+    return idsToReplace.has(id) || entryKey === accountKey || matchesImportedAccountIdentity(entry, account);
   });
 
   if (matchIndex < 0) {
