@@ -5,7 +5,13 @@ import { usePathname } from "next/navigation";
 import { ImportErrorToast } from "@/components/import-error-toast";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { UploadInsightsToast } from "@/components/upload-insights-toast";
-import { clearImportActivity, readImportActivity, subscribeImportActivity, type ImportActivitySnapshot } from "@/lib/import-activity";
+import {
+  clearImportActivity,
+  readImportActivity,
+  setImportActivity,
+  subscribeImportActivity,
+  type ImportActivitySnapshot,
+} from "@/lib/import-activity";
 import { getImportErrorNextSteps, getImportErrorSpecForCode } from "@/lib/import-error-spec";
 
 const isCompletedSummary = (activity: ImportActivitySnapshot | null) =>
@@ -49,6 +55,7 @@ const canShowImportActivityOnPath = (pathname: string | null) => {
 };
 
 const dismissedImportActivityStorageKey = "clover.import.activity.dismissed.v1";
+const staleActiveImportTimeoutMs = 2 * 60 * 1000;
 
 const getDismissKey = (activity: ImportActivitySnapshot | null) => {
   if (!activity) {
@@ -195,6 +202,39 @@ export function GlobalImportActivity() {
       clearImportActivity();
       setActivity(null);
     }, 1500);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [activity]);
+
+  useEffect(() => {
+    if (!activity || activity.status !== "active") {
+      return;
+    }
+
+    const remainingMs = Math.max(0, staleActiveImportTimeoutMs - (Date.now() - activity.updatedAt));
+    const timeout = window.setTimeout(() => {
+      const current = readImportActivity();
+      if (!current || current.status !== "active" || current.updatedAt !== activity.updatedAt) {
+        return;
+      }
+
+      const timedOutSnapshot: ImportActivitySnapshot = {
+        ...current,
+        status: "error",
+        progress: Math.min(Math.max(current.progress, 0), 99),
+        detail: "Import timed out",
+        errorCode: "I-107",
+        errorTitle: "Import timed out",
+        errorMessage:
+          "Clover could not finish reading this file in time. Try uploading the original statement again, or add the missing details manually.",
+        errorNextSteps: getImportErrorNextSteps("I-107"),
+        updatedAt: Date.now(),
+      };
+      setImportActivity(timedOutSnapshot);
+      setActivity(timedOutSnapshot);
+    }, remainingMs);
 
     return () => {
       window.clearTimeout(timeout);

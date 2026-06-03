@@ -1740,6 +1740,7 @@ export function ImportFilesModal({
   const visibilityHardStopTimerRef = useRef<number | null>(null);
   const uploadPausedRef = useRef(false);
   const uploadCancelRequestedRef = useRef(false);
+  const primaryVisibilityCompletedRef = useRef(false);
   const activeUploadAbortControllerRef = useRef<AbortController | null>(null);
   const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
@@ -1770,6 +1771,10 @@ export function ImportFilesModal({
     if (!snapshot) {
       lastImportActivityRef.current = null;
       clearImportActivity();
+      return;
+    }
+
+    if (primaryVisibilityCompletedRef.current) {
       return;
     }
 
@@ -2128,6 +2133,7 @@ export function ImportFilesModal({
       if (autoCloseCompletedBatchTimerRef.current) {
         window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
       }
+      primaryVisibilityCompletedRef.current = true;
       autoCloseCompletedBatchTimerRef.current = window.setTimeout(() => {
         autoCloseCompletedBatchTimerRef.current = null;
         clearImportActivity();
@@ -2173,6 +2179,30 @@ export function ImportFilesModal({
       .filter((item) => item.confirmationState !== "confirmed")
       .every(hasPrimaryDataForItem);
   };
+
+  useEffect(() => {
+    if (!open || primaryVisibilityCompletedRef.current) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      const deadline = visibilityDeadlineRef.current;
+      if (!deadline || Date.now() < deadline || primaryVisibilityCompletedRef.current) {
+        return;
+      }
+
+      const hasUnsettledItem = itemsRef.current.some(
+        (item) => item.status === "pending" || item.status === "parsing" || item.status === "importing"
+      );
+      if (hasUnsettledItem || busy) {
+        hardStopVisibleImportModal("deadline");
+      }
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [busy, open]);
 
   const buildVisibleImportSummary = (currentItems: QueuedFile[] = itemsRef.current) => {
     const summaries = currentItems
@@ -2294,6 +2324,11 @@ export function ImportFilesModal({
     return () => {
       importActivitySurfaceRef.current = "background";
       const snapshot = lastImportActivityRef.current;
+      if (primaryVisibilityCompletedRef.current) {
+        clearImportActivity();
+        lastImportActivityRef.current = null;
+        return;
+      }
       if (!snapshot) {
         clearImportActivity();
         return;
@@ -2642,6 +2677,10 @@ export function ImportFilesModal({
           return [...current, ...additions];
         });
       });
+
+    if (additions.length > 0) {
+      primaryVisibilityCompletedRef.current = false;
+    }
 
     if (nextFiles.length > 0) {
       autoStartRef.current = true;
@@ -7201,6 +7240,10 @@ export function ImportFilesModal({
       return;
     }
 
+    if (primaryVisibilityCompletedRef.current) {
+      return;
+    }
+
     if (items.length === 0) {
       if (!busy) {
         clearImportActivity();
@@ -7299,6 +7342,7 @@ export function ImportFilesModal({
   const handleStartImport = async () => {
     if (busy) return;
 
+    primaryVisibilityCompletedRef.current = false;
     uploadCancelRequestedRef.current = false;
     setUploadPaused(false);
     uploadPausedRef.current = false;
