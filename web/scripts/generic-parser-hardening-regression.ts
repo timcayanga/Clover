@@ -117,6 +117,63 @@ Date Description Amount
     reviewDetails.some((detail) => typeof detail === "object" && detail !== null && "code" in detail),
     "Expected coded generic review reasons for weak OCR/table shape."
   );
+  assert.ok(
+    parsedWeakOcr.rows.every((row) => (row.confidence ?? 100) < 70),
+    "Expected weak amount-only generic rows to stay below auto-confirm confidence."
+  );
+
+  const splitLineOcrStatement = `
+Scan Recovery Bank
+Statement Period: 05/01/2026 - 05/31/2026
+Account Number: 1234567890
+Opening Balance 1,000.00
+Date Description Debit Credit Balance
+05/01/2026
+Cash Deposit
+0.00 250.00
+1,250.00
+05/02/2026
+ATM Withdrawal
+100.00 0.00
+1,150.00
+Ending Balance 1,150.00
+`;
+
+  const parsedSplitLine = parseGenericBankStatementText(splitLineOcrStatement, { institution: "Scan Recovery Bank" });
+  assert.ok(parsedSplitLine, "Expected split-line OCR statement to parse.");
+  assert.equal(parsedSplitLine.rows.length, 2, "Expected split date/description/amount lines to stitch into rows.");
+  assert.equal(findRow(parsedSplitLine.rows, /Cash Deposit/i).type, "income");
+  assert.equal(findRow(parsedSplitLine.rows, /ATM Withdrawal/i).type, "expense");
+  assert.equal(parsedSplitLine.metadata.endingBalance, 1150);
+
+  const ambiguousTransferStatement = `
+Review First Bank
+Statement Period: 06/01/2026 - 06/30/2026
+Account Number: 33334444
+Opening Balance 2,000.00
+Date Description Amount Balance
+06/03/2026 Payment to Bank 500.00 1,500.00
+Ending Balance 1,500.00
+`;
+
+  const parsedAmbiguousTransfer = parseGenericBankStatementText(ambiguousTransferStatement, { institution: "Review First Bank" });
+  assert.ok(parsedAmbiguousTransfer, "Expected ambiguous transfer statement to parse.");
+  const ambiguousTransfer = findRow(parsedAmbiguousTransfer.rows, /Payment to Bank/i);
+  assert.equal(ambiguousTransfer.type, "transfer");
+  assert.ok((ambiguousTransfer.confidence ?? 100) < 70, "Expected ambiguous transfer row to stay below auto-confirm confidence.");
+  const ambiguousDetails = Array.isArray(ambiguousTransfer.rawPayload?.genericReviewReasonDetails)
+    ? ambiguousTransfer.rawPayload.genericReviewReasonDetails
+    : [];
+  assert.ok(
+    ambiguousDetails.some(
+      (detail) =>
+        typeof detail === "object" &&
+        detail !== null &&
+        "code" in detail &&
+        detail.code === "transfer_counterparty_unverified"
+    ),
+    "Expected ambiguous generic transfer to include a counterparty review reason."
+  );
 };
 
 assertGenericParserHardening();

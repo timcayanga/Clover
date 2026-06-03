@@ -863,6 +863,35 @@ const stitchGenericOcrLines = (lines: string[]) => {
         continue;
       }
 
+      if (
+        genericStatementDateStartPattern.test(current) &&
+        !createGenericMoneyTokenPattern().test(current) &&
+        /[A-Za-z]{2,}/.test(next) &&
+        !genericStatementDateStartPattern.test(next) &&
+        !isGenericStatementBoilerplateLine(next)
+      ) {
+        const next2 = normalizeWhitespace(lines[index + 2] ?? "");
+        const next3 = normalizeWhitespace(lines[index + 3] ?? "");
+        const next2MoneyMatches = next2.match(createGenericMoneyTokenPattern()) ?? [];
+        const next3MoneyMatches = next3.match(createGenericMoneyTokenPattern()) ?? [];
+        const next2IsMoneyOnly =
+          next2MoneyMatches.length > 0 &&
+          normalizeWhitespace(next2MoneyMatches.join(" ")) === normalizeWhitespace(compactGenericMoneySpacing(next2));
+        const next3IsMoneyOnly =
+          next3MoneyMatches.length > 0 &&
+          normalizeWhitespace(next3MoneyMatches.join(" ")) === normalizeWhitespace(compactGenericMoneySpacing(next3));
+
+        if (next2IsMoneyOnly || next3IsMoneyOnly) {
+          const amountPieces = [
+            next2IsMoneyOnly ? compactGenericMoneySpacing(next2) : null,
+            next3IsMoneyOnly ? compactGenericMoneySpacing(next3) : null,
+          ].filter(Boolean);
+          current = normalizeWhitespace(`${current} ${next} ${amountPieces.join(" ")}`);
+          index += 1 + (next2IsMoneyOnly ? 1 : 0) + (next3IsMoneyOnly ? 1 : 0);
+          continue;
+        }
+      }
+
       break;
     }
 
@@ -10266,9 +10295,9 @@ const assessGenericReconciliation = (
       details.push(genericReviewReasonDetail("reconciliation_ending_balance_mismatch", "Computed row totals do not match the ending balance.", "error"));
     }
   } else {
-    score -= 8;
+    score -= 16;
     reasons.push("No opening/running balance was available for reconciliation.");
-    details.push(genericReviewReasonDetail("reconciliation_missing_balance_anchor", "No opening/running balance was available for reconciliation.", "info"));
+    details.push(genericReviewReasonDetail("reconciliation_missing_balance_anchor", "No opening/running balance was available for reconciliation."));
   }
 
   if (rows.length > 0 && unknownDirections / rows.length > 0.35) {
@@ -10288,6 +10317,35 @@ const assessGenericReconciliation = (
       endingDiff,
     },
   };
+};
+
+const getGenericRowReviewReasonDetails = (row: ParsedImportRow): GenericReviewReasonDetail[] => {
+  const description = normalizeWhitespace(row.description ?? row.merchantRaw ?? row.merchantClean ?? "");
+  const details: GenericReviewReasonDetail[] = [];
+
+  if (
+    row.categoryName?.trim().toLowerCase() === "transfers" &&
+    row.type === "transfer" &&
+    !/\b(?:own|internal|between|same\s+owner|account\s+ending|from\s+account|to\s+account|gsave|wallet)\b/i.test(description)
+  ) {
+    details.push(
+      genericReviewReasonDetail(
+        "transfer_counterparty_unverified",
+        "Transfer counterparty could not be verified as another Clover account."
+      )
+    );
+  }
+
+  if (/^\d{2}\s+[A-Z0-9/_-]{6,}$/i.test(description)) {
+    details.push(
+      genericReviewReasonDetail(
+        "row_code_only_description",
+        "Transaction description appears to be a code/reference rather than a merchant name."
+      )
+    );
+  }
+
+  return details;
 };
 
 const isGenericBankStatementText = (text: string) => {
@@ -15305,7 +15363,14 @@ export const parseGenericBankStatementText = (
   };
   const rowsWithGenericQuality = normalizedRows.map((row) => {
     const existingRawPayload = row.rawPayload && typeof row.rawPayload === "object" ? row.rawPayload : {};
-    const adjustedConfidence = Math.min(row.confidence ?? genericQualityScore, genericQualityScore);
+    const rowReviewReasonDetails = getGenericRowReviewReasonDetails(row);
+    const rowReviewReasons = rowReviewReasonDetails.map((detail) => detail.message);
+    const combinedReviewReasons = Array.from(new Set([...genericReviewReasons, ...rowReviewReasons]));
+    const combinedReviewReasonDetails = [...genericReviewReasonDetails, ...rowReviewReasonDetails].filter(
+      (detail, index, allDetails) => allDetails.findIndex((candidate) => candidate.code === detail.code) === index
+    );
+    const rowQualityScore = rowReviewReasonDetails.length > 0 ? Math.min(genericQualityScore, 68) : genericQualityScore;
+    const adjustedConfidence = Math.min(row.confidence ?? rowQualityScore, rowQualityScore);
     const adjustedParserConfidence = Math.min(row.parserConfidence ?? adjustedConfidence, adjustedConfidence);
     const adjustedCategoryConfidence =
       row.categoryName?.trim().toLowerCase() === "other"
@@ -15319,8 +15384,8 @@ export const parseGenericBankStatementText = (
       rawPayload: {
         ...existingRawPayload,
         genericQuality: genericQualityPayload,
-        genericReviewReasons,
-        genericReviewReasonDetails,
+        genericReviewReasons: combinedReviewReasons,
+        genericReviewReasonDetails: combinedReviewReasonDetails,
       },
     };
   });
