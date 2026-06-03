@@ -824,6 +824,58 @@ export async function GET(request: Request) {
         sourceMetadata: checkpoint.sourceMetadata ?? null,
       }));
     })();
+    const accountIds = accounts.map((account) => account.id);
+    const transactionCounts = accountIds.length
+      ? await prisma.transaction.groupBy({
+          by: ["accountId"],
+          where: {
+            workspaceId,
+            accountId: { in: accountIds },
+            deletedAt: null,
+          },
+          _count: { _all: true },
+        })
+      : [];
+    const transactionCountByAccountId = new Map(
+      transactionCounts
+        .filter((row) => row.accountId)
+        .map((row) => [row.accountId as string, row._count._all])
+    );
+    const checkpointAccountIds = new Set(
+      statementCheckpoints
+        .map((checkpoint) => checkpoint.accountId)
+        .filter((accountId): accountId is string => typeof accountId === "string" && accountId.trim().length > 0)
+    );
+    const checkpointAccountNumbers = new Set(
+      statementCheckpoints
+        .map((checkpoint) => {
+          const sourceMetadata =
+            checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+              ? (checkpoint.sourceMetadata as Record<string, unknown>)
+              : null;
+          return typeof sourceMetadata?.accountNumber === "string" ? normalizeImportAccountNumber(sourceMetadata.accountNumber) : null;
+        })
+        .filter((value): value is string => Boolean(value))
+    );
+    const isOrphanUploadedAccountPlaceholder = (account: (typeof accounts)[number]) => {
+      if (account.source !== "upload" || account.institution || !normalizeImportAccountNumber(account.accountNumber ?? null)) {
+        return false;
+      }
+
+      const transactionCount = transactionCountByAccountId.get(account.id) ?? 0;
+      if (transactionCount > 0 || checkpointAccountIds.has(account.id)) {
+        return false;
+      }
+
+      const accountNumber = normalizeImportAccountNumber(account.accountNumber ?? null);
+      if (accountNumber && checkpointAccountNumbers.has(accountNumber)) {
+        return false;
+      }
+
+      const balance = account.balance?.toString().trim() ?? "";
+      const numericBalance = balance ? Number(balance.replace(/[^0-9.-]/g, "")) : 0;
+      return !balance || !Number.isFinite(numericBalance) || numericBalance === 0;
+    };
 
     const numberedInstitutionKeys = new Set(
       accounts
@@ -836,6 +888,7 @@ export async function GET(request: Request) {
         const institutionKey = importedAccountInstitutionKey(account);
         return (
           !looksLikeReceiptImageFilenameAccount(account) &&
+          !isOrphanUploadedAccountPlaceholder(account) &&
           !(
             institutionKey &&
             numberedInstitutionKeys.has(institutionKey) &&
@@ -843,23 +896,6 @@ export async function GET(request: Request) {
           )
         );
       }
-    );
-    const visibleAccountIds = visibleAccounts.map((account) => account.id);
-    const transactionCounts = visibleAccountIds.length
-      ? await prisma.transaction.groupBy({
-          by: ["accountId"],
-          where: {
-            workspaceId,
-            accountId: { in: visibleAccountIds },
-            deletedAt: null,
-          },
-          _count: { _all: true },
-        })
-      : [];
-    const transactionCountByAccountId = new Map(
-      transactionCounts
-        .filter((row) => row.accountId)
-        .map((row) => [row.accountId as string, row._count._all])
     );
     const latestCheckpointForAccount = (account: {
       id: string;
