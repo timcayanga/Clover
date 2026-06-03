@@ -13486,6 +13486,40 @@ const splitGenericOverflowBlock = (
   return [block];
 };
 
+const splitGenericSameDateContinuationBlock = (block: string[]) => {
+  if (block.length < 2) {
+    return [block];
+  }
+
+  const firstLine = normalizeWhitespace(block[0] ?? "");
+  const firstDateMatch = firstLine.match(
+    new RegExp(
+      `^(?:-\\s*)?(?<date>(?:\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{2}[-/.]\\d{2}[-/.]\\d{4}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{2}[-/.]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\b(?<rest>.*)$`,
+      "i"
+    )
+  );
+  if (!firstDateMatch?.groups?.date) {
+    return [block];
+  }
+
+  const inheritedDate = firstDateMatch.groups.date;
+  const firstRest = normalizeWhitespace(firstDateMatch.groups.rest ?? "");
+  const candidateLines = [firstRest, ...block.slice(1).map((line) => normalizeWhitespace(line))].filter(Boolean);
+  const transactionLikeLines = candidateLines.filter((line) => {
+    if (genericStatementDateStartPattern.test(line) || isGenericStatementBoilerplateLine(line)) {
+      return false;
+    }
+    const moneyMatches = line.match(createGenericMoneyTokenPattern()) ?? [];
+    return moneyMatches.length >= 1 && /[A-Za-z]{2,}/.test(line);
+  });
+
+  if (transactionLikeLines.length < 2 || transactionLikeLines.length !== candidateLines.length) {
+    return [block];
+  }
+
+  return transactionLikeLines.map((line) => [normalizeWhitespace(`${inheritedDate} ${line}`)]);
+};
+
 const parseGenericStatementTransactionBlock = (
   block: string[],
   state: {
@@ -15367,32 +15401,35 @@ export const parseGenericBankStatementText = (
   let previousBalance = metadata.openingBalance ?? null;
   const rows: ParsedImportRow[] = [];
   for (const block of blocks) {
-    const expandedBlocks = splitGenericOverflowBlock(block, previousBalance);
-    for (const expandedBlock of expandedBlocks) {
-      const parsed = parseGenericStatementTransactionBlock(
-        expandedBlock,
-        {
-          accountName: metadata.accountName ?? metadata.institution ?? "Account",
-          institution: metadata.institution,
-          yearHint,
-          startDate: metadata.startDate ? new Date(metadata.startDate) : null,
-          endDate: metadata.endDate ? new Date(metadata.endDate) : null,
-          accountNumber: metadata.accountNumber,
-          amountMode,
-          previousBalance,
-        },
-        options
-      );
-      if (!parsed) {
-        continue;
-      }
+    const sameDateBlocks = splitGenericSameDateContinuationBlock(block);
+    for (const sameDateBlock of sameDateBlocks) {
+      const expandedBlocks = splitGenericOverflowBlock(sameDateBlock, previousBalance);
+      for (const expandedBlock of expandedBlocks) {
+        const parsed = parseGenericStatementTransactionBlock(
+          expandedBlock,
+          {
+            accountName: metadata.accountName ?? metadata.institution ?? "Account",
+            institution: metadata.institution,
+            yearHint,
+            startDate: metadata.startDate ? new Date(metadata.startDate) : null,
+            endDate: metadata.endDate ? new Date(metadata.endDate) : null,
+            accountNumber: metadata.accountNumber,
+            amountMode,
+            previousBalance,
+          },
+          options
+        );
+        if (!parsed) {
+          continue;
+        }
 
-      rows.push(parsed);
-      const nextBalance = parseMoney(
-        typeof parsed.rawPayload === "object" && parsed.rawPayload !== null ? (parsed.rawPayload.balanceText as string | null | undefined) : null
-      );
-      if (nextBalance !== null) {
-        previousBalance = nextBalance;
+        rows.push(parsed);
+        const nextBalance = parseMoney(
+          typeof parsed.rawPayload === "object" && parsed.rawPayload !== null ? (parsed.rawPayload.balanceText as string | null | undefined) : null
+        );
+        if (nextBalance !== null) {
+          previousBalance = nextBalance;
+        }
       }
     }
   }

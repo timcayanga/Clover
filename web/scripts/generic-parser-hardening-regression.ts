@@ -174,6 +174,25 @@ Ending Balance 1,500.00
     ),
     "Expected ambiguous generic transfer to include a counterparty review reason."
   );
+
+  const repeatedDateOcrStatement = `
+Repeated Date Bank
+Statement Period: 07/01/2026 - 07/31/2026
+Account Number: 22223333
+Opening Balance 1,000.00
+Date Description Debit Credit Balance
+07/05/2026
+POS Purchase 100.00 0.00 900.00
+Cash Deposit 0.00 200.00 1,100.00
+Ending Balance 1,100.00
+`;
+
+  const parsedRepeatedDate = parseGenericBankStatementText(repeatedDateOcrStatement, { institution: "Repeated Date Bank" });
+  assert.ok(parsedRepeatedDate, "Expected repeated-date OCR statement to parse.");
+  assert.equal(parsedRepeatedDate.rows.length, 2, "Expected same-date continuation lines to split into separate transactions.");
+  assert.equal(findRow(parsedRepeatedDate.rows, /POS Purchase/i).type, "expense");
+  assert.equal(findRow(parsedRepeatedDate.rows, /Cash Deposit/i).type, "income");
+  assert.equal(parsedRepeatedDate.metadata.endingBalance, 1100);
 };
 
 assertGenericParserHardening();
