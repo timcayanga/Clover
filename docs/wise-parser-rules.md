@@ -26,6 +26,7 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 - Rows without `+` are outgoing spend unless the status or merchant clearly indicates a transfer.
 - `To PHP Added` and similar wallet funding/conversion rows are `Transfers`.
 - `Card checked` / zero-amount verification rows should be excluded or routed to review; they should not become confirmed spending.
+- Rows without a visible/parseable date should not become visible Clover transactions with today's date. Keep them in parsed/audit data or exclude them until a date can be established.
 - Deduplicate overlapping screenshot rows by date, merchant, amount, currency, and status.
 
 ## Categorization

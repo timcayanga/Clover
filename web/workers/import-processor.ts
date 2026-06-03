@@ -6780,8 +6780,29 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         !Array.isArray(row.rawPayload) &&
         (row.rawPayload as Record<string, unknown>).kind === "opening_balance"
     );
+    const parsedTransactionDate =
+      (row.date instanceof Date && !Number.isNaN(row.date.getTime())
+        ? row.date
+        : parseDateValue(typeof row.date === "string" ? row.date : null)) ?? null;
+    const rowRawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    const isWiseUndatedStatementRow =
+      !parsedTransactionDate &&
+      /wise/i.test(String(statementInstitution ?? row.institution ?? rowRawPayload?.institutionRaw ?? "")) &&
+      String(rowRawPayload?.documentType ?? rowRawPayload?.importMode ?? "").toLowerCase().includes("statement");
 
     if (rowIsOpeningBalance) {
+      continue;
+    }
+
+    if (isWiseUndatedStatementRow) {
+      console.warn("[import-confirmation] skipped undated Wise screenshot row", {
+        importFileId,
+        sourceRowIndex: index + 1,
+        merchant: typeof row.merchantClean === "string" ? row.merchantClean : row.merchantRaw,
+      });
       continue;
     }
 
@@ -6851,9 +6872,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
       date:
-        (row.date instanceof Date && !Number.isNaN(row.date.getTime())
-          ? row.date
-          : parseDateValue(typeof row.date === "string" ? row.date : null)) ?? new Date(),
+        parsedTransactionDate ?? new Date(),
       amount: parseAmountValue(coerceAmountToString(row.amount)) ?? 0,
       currency:
         normalizeInstitutionCurrency(
