@@ -481,7 +481,7 @@ const extractWiseScreenshotSequenceNumber = (fileName: unknown) => {
     return null;
   }
 
-  const match = fileName.match(/\bIMG[_ -]?(\d{3,6})\b/i);
+  const match = fileName.match(/(?:^|[^A-Za-z0-9])IMG[_ -]?(\d{3,6})(?=[^0-9]|$)/i);
   if (!match) {
     return null;
   }
