@@ -13385,6 +13385,37 @@ const recoverMergedOcrAmountFromText = (amountText: string, targetAmount: number
   return null;
 };
 
+const getGenericAmountDirectionMarker = (body: string, match: RegExpMatchArray | undefined) => {
+  if (!match) {
+    return null;
+  }
+
+  const start = match.index ?? -1;
+  if (start < 0) {
+    return null;
+  }
+
+  const end = start + match[0].length;
+  const before = body.slice(Math.max(0, start - 32), start);
+  const after = body.slice(end, Math.min(body.length, end + 32));
+
+  if (
+    /(?:^|\b)(?:dr|debit|withdrawal|withdrawn|money\s*out|paid\s*out|out)\s*$/i.test(before) ||
+    /^\s*(?:-|dr|debit|withdrawal|withdrawn|out)\b/i.test(after)
+  ) {
+    return "debit" as const;
+  }
+
+  if (
+    /(?:^|\b)(?:cr|credit|deposit|deposited|money\s*in|paid\s*in|in)\s*$/i.test(before) ||
+    /^\s*(?:\+|cr|credit|deposit|deposited|in)\b/i.test(after)
+  ) {
+    return "credit" as const;
+  }
+
+  return null;
+};
+
 const genericLiteralAmountCuePattern =
   /\b(?:payroll|w\/d|withdrawal|service charge|interest withheld|interest pay|funds deposited|deposit|atm charges?|atmwd|cw|cd)\b/i;
 
@@ -13778,6 +13809,18 @@ const parseGenericStatementTransactionBlock = (
     }
   }
 
+  const explicitAmountDirectionMarker =
+    explicitAmount !== null && amountMatchIndex !== null
+      ? getGenericAmountDirectionMarker(bodyWithoutTimePrefix, moneyMatches[amountMatchIndex])
+      : null;
+  if (explicitAmount !== null && explicitAmountDirectionMarker === "debit") {
+    debit = Math.abs(explicitAmount);
+    credit = null;
+  } else if (explicitAmount !== null && explicitAmountDirectionMarker === "credit") {
+    credit = Math.abs(explicitAmount);
+    debit = null;
+  }
+
   const firstMatchedMoneyIndex =
     amountMatchIndex !== null || balanceMatchIndex !== null
       ? Math.min(
@@ -13850,6 +13893,7 @@ const parseGenericStatementTransactionBlock = (
           : moneyMatches.length === 2
             ? moneyMatches[0]?.[0] ?? null
             : null,
+      amountDirectionMarker: explicitAmountDirectionMarker,
       balanceText:
         balance !== null
           ? balanceMatchIndex !== null

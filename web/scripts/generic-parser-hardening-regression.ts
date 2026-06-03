@@ -98,6 +98,24 @@ Ending Balance USD 1,450.00
   assert.equal(findRow(parsedParenthesized.rows, /Grocery Market/i).amount, "50.00");
   assert.equal(findRow(parsedParenthesized.rows, /Payroll/i).type, "income");
 
+  const debitCreditMarkerStatement = `
+Marker First Bank
+Statement Period: 03/01/2026 - 03/31/2026
+Account Number: 10101010
+Opening Balance USD 1,000.00
+Date Description Amount Balance
+03/08/2026 Card Purchase USD 25.00 DR USD 975.00
+03/09/2026 Payroll USD 100.00 CR USD 1,075.00
+Ending Balance USD 1,075.00
+`;
+
+  const parsedDebitCreditMarkers = parseGenericBankStatementText(debitCreditMarkerStatement, { institution: "Marker First Bank" });
+  assert.ok(parsedDebitCreditMarkers, "Expected generic statement with DR/CR amount markers to parse.");
+  assert.equal(findRow(parsedDebitCreditMarkers.rows, /Card Purchase/i).type, "expense");
+  assert.equal(findRow(parsedDebitCreditMarkers.rows, /Payroll/i).type, "income");
+  assert.equal(findRow(parsedDebitCreditMarkers.rows, /Card Purchase/i).amount, "25.00");
+  assert.equal(findRow(parsedDebitCreditMarkers.rows, /Payroll/i).amount, "100.00");
+
   const weakOcrStatement = `
 Noisy Sample Bank
 Statement Period: 04/01/2026 - 04/30/2026
