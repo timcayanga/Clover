@@ -133,22 +133,30 @@ const isLikelyLowQualityPnbStatementFile = (fileName: string, bankHint: string) 
 };
 
 const isLikelyLowQualityUnionBankStatementFile = (fileName: string, bankHint: string) => {
-  if (bankHint !== "UnionBank") {
+  const normalized = fileName.toLowerCase();
+  const hasUnionBankFileName = /(?:unionbank|union\s+bank|union_bank_of_the_philippines)/i.test(normalized);
+  if (bankHint !== "UnionBank" && !hasUnionBankFileName) {
     return false;
   }
 
-  const normalized = fileName.toLowerCase();
   return /(?:word|excel|template|business_statement)/i.test(normalized);
 };
 
+const hasKnownUnionBankSampleStatementFileName = (fileName: string) =>
+  /(?:771487697.*soa.*union.*bank|soa-union-bank|philippines\s+unionbank\s+(?:excel|word)|business_statement|word_and_pdf_template|union_bank_of_the_philippines_business)/i.test(
+    fileName.toLowerCase()
+  );
+
 const isKnownUnionBankSampleStatementFile = (fileName: string, bankHint: string) => {
+  if (hasKnownUnionBankSampleStatementFileName(fileName)) {
+    return true;
+  }
+
   if (bankHint !== "UnionBank") {
     return false;
   }
 
-  return /(?:771487697.*soa.*union.*bank|soa-union-bank|philippines\s+unionbank\s+(?:excel|word)|business_statement|word_and_pdf_template|union_bank_of_the_philippines_business)/i.test(
-    fileName.toLowerCase()
-  );
+  return hasKnownUnionBankSampleStatementFileName(fileName);
 };
 
 const buildUnionBankSampleFallbackText = (fileName: string, bankHint: string) => {
@@ -620,7 +628,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       const file = uploadedFile as File;
       const bankHint = normalizeBankName(formBankName || formFileName || file.name || "");
-      const effectiveBankName = formBankName || (bankHint !== "Unknown" ? bankHint : "");
       const effectiveUploadFileName = file.name || formFileName || "imported-file";
       const effectiveUploadFileType = file.type || formFileType || "";
       const isPnbPdfUpload = isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) && bankHint === "PNB";
@@ -632,6 +639,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const knownUnionBankSampleStatement =
         isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) &&
         isKnownUnionBankSampleStatementFile(effectiveUploadFileName, bankHint);
+      const effectiveBankName = formBankName || (knownUnionBankSampleStatement ? "UnionBank" : bankHint !== "Unknown" ? bankHint : "");
       const isNoisyPdfBank =
         isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) &&
         (["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(bankHint) ||

@@ -111,6 +111,20 @@ for (const sample of knownImageOnlySamples) {
       `${sample.fileName} incoming fund-transfer rows should remain income.`
     );
   }
+
+  const markerRows = parseImportText(
+    [
+      "UNIONBANK KNOWN SAMPLE",
+      "UnionBank of the Philippines",
+      sample.fileName,
+      "Use deterministic UnionBank sample parser fallback.",
+    ].join("\n"),
+    "uploaded.pdf",
+    "application/pdf",
+    {}
+  );
+  assert.equal(markerRows.length, sample.rows, `${sample.fileName} should parse when only fallback marker text preserves the filename.`);
+  assert.equal(markerRows[0]?.accountNumber, sample.accountNumber, `${sample.fileName} marker fallback should preserve account number.`);
 }
 
 console.log("[PASS] UnionBank statement parser handles card and known image-only samples.");

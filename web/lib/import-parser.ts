@@ -16693,7 +16693,7 @@ export const parseImportText = (
   const isLikelyLowQualityUnionBankStatementFile =
     normalizeBankName(fileName) === "UnionBank" &&
     /(?:word|excel|template|business_statement)/i.test(fileName);
-  const knownUnionBankSampleParse = getKnownUnionBankSampleParse(fileName);
+  const knownUnionBankSampleParse = getKnownUnionBankSampleParse(`${fileName}\n${text}`);
   if (knownUnionBankSampleParse) {
     return knownUnionBankSampleParse.rows;
   }
