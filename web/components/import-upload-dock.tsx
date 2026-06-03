@@ -18,6 +18,10 @@ type ImportUploadDockProps = {
   errorCode?: string | null;
   errorTitle?: string | null;
   errorNextSteps?: string[] | null;
+  paused?: boolean;
+  canControl?: boolean;
+  onPauseToggle?: () => void;
+  onCancel?: () => void;
   onClose?: () => void;
 };
 
@@ -37,6 +41,10 @@ export function ImportUploadDock({
   errorCode = null,
   errorTitle = null,
   errorNextSteps = null,
+  paused = false,
+  canControl = false,
+  onPauseToggle,
+  onCancel,
   onClose,
 }: ImportUploadDockProps) {
   if (!open) {
@@ -104,6 +112,21 @@ export function ImportUploadDock({
             {tone === "error" && errorCode ? <p className="import-upload-dock__phase">Import code {errorCode}</p> : null}
           </div>
           <div className="import-upload-dock__header-actions">
+            {canControl && onPauseToggle ? (
+              <button
+                className="import-upload-dock__close"
+                type="button"
+                onClick={onPauseToggle}
+                aria-label={paused ? "Resume upload" : "Pause upload"}
+              >
+                {paused ? "▶" : "⏸"}
+              </button>
+            ) : null}
+            {canControl && onCancel ? (
+              <button className="import-upload-dock__close" type="button" onClick={onCancel} aria-label="Cancel upload">
+                ⏹
+              </button>
+            ) : null}
             {onClose ? (
               <button className="import-upload-dock__close" type="button" onClick={onClose} aria-label="Close import progress">
                 ×

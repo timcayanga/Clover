@@ -4,11 +4,14 @@ export const postFileWithProgress = (
   url: string,
   file: File,
   fields: Record<string, string | undefined> = {},
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  options?: { signal?: AbortSignal | null }
 ) =>
   new Promise<Response>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
+    const abortSignal = options?.signal ?? null;
+    let settled = false;
 
     formData.append("file", file);
     for (const [key, value] of Object.entries(fields)) {
@@ -19,6 +22,19 @@ export const postFileWithProgress = (
 
     xhr.open("POST", url, true);
 
+    const abortUpload = () => {
+      if (settled) {
+        return;
+      }
+      xhr.abort();
+    };
+
+    if (abortSignal?.aborted) {
+      reject(new Error("File upload was canceled."));
+      return;
+    }
+    abortSignal?.addEventListener("abort", abortUpload, { once: true });
+
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable || !onProgress) {
         return;
@@ -28,6 +44,8 @@ export const postFileWithProgress = (
     };
 
     xhr.onload = () => {
+      settled = true;
+      abortSignal?.removeEventListener("abort", abortUpload);
       const response = new Response(xhr.responseText, {
         status: xhr.status,
         statusText: xhr.statusText,
@@ -38,7 +56,15 @@ export const postFileWithProgress = (
       resolve(response);
     };
 
-    xhr.onerror = () => reject(new Error("Unable to upload the file."));
-    xhr.onabort = () => reject(new Error("File upload was canceled."));
+    xhr.onerror = () => {
+      settled = true;
+      abortSignal?.removeEventListener("abort", abortUpload);
+      reject(new Error("Unable to upload the file."));
+    };
+    xhr.onabort = () => {
+      settled = true;
+      abortSignal?.removeEventListener("abort", abortUpload);
+      reject(new Error("File upload was canceled."));
+    };
     xhr.send(formData);
   });
