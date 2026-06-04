@@ -5267,6 +5267,7 @@ export function ImportFilesModal({
               })
             : null;
         const receiptSummary =
+          receiptTransactionSummary ??
           (payload.receiptDocument
             ? buildReceiptSummaryFromReceiptDocument({
                 fileName,
@@ -5276,7 +5277,8 @@ export function ImportFilesModal({
                 accountType: (accountOption?.type as UploadAccountType) ?? null,
                 previewAccountName: accountOption?.name ?? null,
               })
-            : receiptTransactionSummary) ?? localReceiptSummary;
+            : null) ??
+          localReceiptSummary;
 
         if (receiptSummary && (importStatus === "done" || confirmedTransactionsCount > 0)) {
           updateItem(itemId, {
@@ -5795,21 +5797,21 @@ export function ImportFilesModal({
             }
 
             const inlineReceiptSummary =
-              processPayload?.receiptDocument
-                ? buildReceiptSummaryFromReceiptDocument({
+              processPayload?.receiptTransaction
+                ? buildReceiptSummaryFromReceiptTransaction({
                     fileName: item.file.name,
                     importFileId,
-                    receiptDocument: processPayload.receiptDocument,
-                    accountId: typeof processPayload.accountId === "string" ? processPayload.accountId : null,
+                    receiptTransaction: processPayload.receiptTransaction,
                     accountType: null,
-                    previewAccountName: null,
                   })
-                : processPayload?.receiptTransaction
-                  ? buildReceiptSummaryFromReceiptTransaction({
+                : processPayload?.receiptDocument
+                  ? buildReceiptSummaryFromReceiptDocument({
                       fileName: item.file.name,
                       importFileId,
-                      receiptTransaction: processPayload.receiptTransaction,
+                      receiptDocument: processPayload.receiptDocument,
+                      accountId: typeof processPayload.accountId === "string" ? processPayload.accountId : null,
                       accountType: null,
+                      previewAccountName: null,
                     })
                   : null;
 
