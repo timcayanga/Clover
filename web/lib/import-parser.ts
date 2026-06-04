@@ -1652,10 +1652,10 @@ const securityBankLowQualityKnownLedgers: SecurityBankLowQualityKnownLedger[] = 
       { date: "2025-01-05", description: "INSTAPAY FEE - DR", amount: 25, balance: 7580.25, reference: "INS_FEE_32364C6F", type: "expense", categoryName: "Financial" },
       { date: "2025-01-10", description: "INSTAPAY FEE - DR", amount: 25, balance: 7555.25, reference: "INS_FEE_6C71C41C", type: "expense", categoryName: "Financial" },
       { date: "2025-01-15", description: "DPAC DGBanker Credit", amount: 16745.66, balance: 24300.91, type: "income", categoryName: "Income" },
-      { date: "2025-01-15", description: "ATRO ATM/B2C ACCOUNT", amount: 10000, balance: 14300.91, reference: "C94_452_150350", type: "transfer", categoryName: "Transfers" },
+      { date: "2025-01-15", description: "ATRO ATM/B2C ACCOUNT", amount: 10000, balance: 14300.91, reference: "C94_452_150350", type: "expense", categoryName: "Transfers" },
       { date: "2025-01-17", description: "INSTAPAY FEE - DR", amount: 25, balance: 14275.91, reference: "INS_FEE_8FEDD8EE", type: "expense", categoryName: "Financial" },
       { date: "2025-01-20", description: "DPAC DGBanker Credit", amount: 18799.35, balance: 33075.26, type: "income", categoryName: "Income" },
-      { date: "2025-01-22", description: "ATRO ATM/B2C ACCOUNT", amount: 15000, balance: 18075.26, reference: "C94_452_184687", type: "transfer", categoryName: "Transfers" },
+      { date: "2025-01-22", description: "ATRO ATM/B2C ACCOUNT", amount: 15000, balance: 18075.26, reference: "C94_452_184687", type: "expense", categoryName: "Transfers" },
     ],
   },
   {
@@ -1671,10 +1671,10 @@ const securityBankLowQualityKnownLedgers: SecurityBankLowQualityKnownLedger[] = 
       { date: "2025-06-25", description: "INSTAPAY FEE - DR", amount: 25, balance: 7580.25, reference: "INS_FEE_32364C6F", type: "expense", categoryName: "Financial" },
       { date: "2025-06-27", description: "INSTAPAY FEE - DR", amount: 25, balance: 7555.25, reference: "INS_FEE_6C71C41C", type: "expense", categoryName: "Financial" },
       { date: "2025-07-07", description: "DPAC DGBanker Credit", amount: 16745.66, balance: 24300.91, type: "income", categoryName: "Income" },
-      { date: "2025-07-07", description: "ATRO ATM/B2C ACCOUNT", amount: 10000, balance: 14300.91, reference: "C94_452_150350", type: "transfer", categoryName: "Transfers" },
+      { date: "2025-07-07", description: "ATRO ATM/B2C ACCOUNT", amount: 10000, balance: 14300.91, reference: "C94_452_150350", type: "expense", categoryName: "Transfers" },
       { date: "2025-07-13", description: "INSTAPAY FEE - DR", amount: 25, balance: 14275.91, reference: "INS_FEE_8FEDD8EE", type: "expense", categoryName: "Financial" },
       { date: "2025-07-20", description: "DPAC DGBanker Credit", amount: 18799.35, balance: 33075.26, type: "income", categoryName: "Income" },
-      { date: "2025-07-28", description: "ATRO ATM/B2C ACCOUNT", amount: 15000, balance: 18075.26, reference: "C94_452_184687", type: "transfer", categoryName: "Transfers" },
+      { date: "2025-07-28", description: "ATRO ATM/B2C ACCOUNT", amount: 15000, balance: 18075.26, reference: "C94_452_184687", type: "expense", categoryName: "Transfers" },
     ],
   },
 ];
@@ -1825,7 +1825,11 @@ const parseSecurityBankSavingsImportText = (text: string) => {
     const inferredType: TransactionType =
       /fee|charge|instapay\s+fee|bank charge|withheld tax/i.test(description)
         ? "expense"
-        : /ibft|transfer|tfr/i.test(description)
+        : /atro\s+atm\/b\s*2?\s*c|atro\s+atm\/b2c/i.test(description)
+          ? "expense"
+          : /atrc\s+atm\/b\s*2?\s*c|atrc\s+atm\/b2c/i.test(description)
+          ? "income"
+          : /ibft|transfer|tfr/i.test(description)
           ? "transfer"
           : /atm\/b2c|atm withdrawal|atwd|atro|atrc|cash withdrawal/i.test(description)
           ? "transfer"
@@ -14503,6 +14507,8 @@ const reconstructGenericSecurityBankAtmLedger = (
       continue;
     }
 
+    const transferDirectionType: TransactionType =
+      /^ATRO\b/i.test(activeDescription) ? "expense" : /^ATRC\b/i.test(activeDescription) ? "income" : "transfer";
     rows.push({
       date: activeDate,
       amount: amount.toFixed(2),
@@ -14512,7 +14518,7 @@ const reconstructGenericSecurityBankAtmLedger = (
       categoryName: "Transfers",
       accountName,
       institution,
-      type: "transfer",
+      type: transferDirectionType,
       confidence: 82,
       rawPayload: {
         bank: metadata.institution ?? "Unknown",
