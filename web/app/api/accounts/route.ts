@@ -192,17 +192,24 @@ const normalizeImportIdentityText = (value?: string | null) =>
     .replace(/\s+\d{4}$/, "")
     .trim();
 
+const canonicalImportInstitutionKey = (value?: string | null) =>
+  normalizeImportIdentityText(value)
+    .replace(/\bunion\s*bank(?:\s+of\s+the\s+philippines)?\b/g, "unionbank")
+    .replace(/\bchina\s+bank\b/g, "chinabank")
+    .replace(/\bmetro\s+bank\b/g, "metrobank")
+    .replace(/\bphilippine\s+national\s+bank\b/g, "pnb");
+
 const importedAccountInstitutionKey = (account: {
   name?: string | null;
   institution?: string | null;
   accountNumber?: string | null;
 }) => {
-  const institution = normalizeImportIdentityText(account.institution);
+  const institution = canonicalImportInstitutionKey(account.institution);
   if (institution) {
     return institution;
   }
 
-  const name = normalizeImportIdentityText(account.name);
+  const name = canonicalImportInstitutionKey(account.name);
   return name || null;
 };
 
@@ -218,7 +225,7 @@ const resolveUploadedAccountInstitution = (
 
 const importedAccountIdentityKey = (institution?: string | null, accountNumber?: string | null) => {
   const normalizedAccountNumber = normalizeImportAccountNumber(accountNumber);
-  return normalizedAccountNumber ? `${normalizeImportInstitution(institution).toLowerCase()}:${normalizedAccountNumber}` : null;
+  return normalizedAccountNumber ? `${canonicalImportInstitutionKey(institution)}:${normalizedAccountNumber}` : null;
 };
 
 const readImportedJsonNumber = (value: unknown): number | null => {
@@ -297,7 +304,7 @@ const isGenericUploadedAccountForInstitution = (account: {
     return false;
   }
 
-  const institution = normalizeImportIdentityText(account.institution) || normalizeImportIdentityText(account.name);
+  const institution = canonicalImportInstitutionKey(account.institution) || canonicalImportInstitutionKey(account.name);
   const name = normalizeImportInstitution(account.name).toLowerCase();
   const institutionWithSuffix = institution ? new RegExp(`^${institution.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s+\\d{4})?$`, "i") : null;
   return Boolean(
@@ -859,12 +866,13 @@ export async function GET(request: Request) {
     );
     const isOrphanUploadedAccountPlaceholder = (account: {
       id: string;
+      name: string;
       source: string;
       institution?: string | null;
       accountNumber?: string | null;
       balance?: { toString: () => string } | string | number | null;
     }) => {
-      if (account.source !== "upload" || account.institution || !normalizeImportAccountNumber(account.accountNumber ?? null)) {
+      if (account.source !== "upload") {
         return false;
       }
 
@@ -874,6 +882,14 @@ export async function GET(request: Request) {
       }
 
       const accountNumber = normalizeImportAccountNumber(account.accountNumber ?? null);
+      if (!accountNumber) {
+        return isGenericUploadedAccountForInstitution(account) || !account.institution;
+      }
+
+      if (account.institution) {
+        return false;
+      }
+
       if (accountNumber && checkpointAccountNumbers.has(accountNumber)) {
         return false;
       }
