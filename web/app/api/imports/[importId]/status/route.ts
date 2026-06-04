@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 const STALE_RECEIPT_PROCESSING_MS = 3 * 60 * 1000;
 const STALE_STATEMENT_IMAGE_QUEUE_MS = 15 * 1000;
 const STALE_STATEMENT_IMAGE_READING_MS = 45 * 1000;
+const STALE_STATEMENT_IMAGE_RECONCILING_MS = 30 * 1000;
 
 const isImageImportFile = (fileName?: string | null, fileType?: string | null) =>
   String(fileType ?? "").toLowerCase().startsWith("image/") ||
@@ -117,6 +118,75 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           statementSelfHeal: {
             reason: "stale_statement_image_queue",
             staleAfterSeconds: Math.round(STALE_STATEMENT_IMAGE_QUEUE_MS / 1000),
+          },
+        });
+      }
+    }
+
+    const staleStatementImageReconciling =
+      importMode === "statement" &&
+      snapshot.importFile.status === "processing" &&
+      snapshot.importFile.processingPhase === "reconciling" &&
+      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      snapshot.confirmedTransactionsCount === 0 &&
+      snapshot.parsedRowsCount > 0 &&
+      Number.isFinite(updatedAtMs) &&
+      Date.now() - updatedAtMs > STALE_STATEMENT_IMAGE_RECONCILING_MS;
+
+    if (staleStatementImageReconciling) {
+      await updateImportFileCompat(importId, {
+        status: "processing",
+        processingPhase: "reconciling",
+        processingMessage: "Saving screenshot transactions...",
+      });
+      after(async () => {
+        try {
+          const { confirmImportFile } = await import("@/workers/import-processor");
+          const result = await confirmImportFile(importId, null);
+          if (result.status === "done") {
+            await updateImportFileCompat(importId, {
+              status: "done",
+              processingPhase: "complete",
+              processingMessage: "Screenshot transactions imported.",
+              confirmedTransactionsCount: result.confirmedTransactionsCount ?? result.imported,
+            }).catch(() => null);
+          }
+        } catch {
+          const refreshedRows = await prisma.transaction
+            .count({
+              where: {
+                deletedAt: null,
+                OR: [
+                  { importFileId: importId },
+                  {
+                    rawPayload: {
+                      path: ["sourceImportFileId"],
+                      equals: importId,
+                    },
+                  },
+                ],
+              },
+            })
+            .catch(() => 0);
+          if (refreshedRows === 0) {
+            await updateImportFileCompat(importId, {
+              status: "failed",
+              processingPhase: "repair_needed",
+              processingMessage: "Clover read rows from this screenshot, but could not save them yet. Please retry the import.",
+            }).catch(() => null);
+          }
+        }
+      });
+      const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
+        importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+        promoteFailedVisibleImport: true,
+      });
+      if (refreshedSnapshot) {
+        return NextResponse.json({
+          ...refreshedSnapshot,
+          statementSelfHeal: {
+            reason: "stale_statement_image_reconciling",
+            staleAfterSeconds: Math.round(STALE_STATEMENT_IMAGE_RECONCILING_MS / 1000),
           },
         });
       }

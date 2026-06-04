@@ -2506,6 +2506,125 @@ const readWiseWalletCurrencyFromRow = (row: Record<string, unknown>) => {
   );
 };
 
+const wiseEvidenceAmountPattern =
+  /([+−-]?\s*)?([0-9][0-9,]*(?:\.\d{1,2})?|0)\s+(AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)\b/gi;
+
+const readWiseEvidenceText = (row: Record<string, unknown>) => {
+  const rawPayload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const parserEvidence =
+    rawPayload?.parserEvidence && typeof rawPayload.parserEvidence === "object" && !Array.isArray(rawPayload.parserEvidence)
+      ? (rawPayload.parserEvidence as Record<string, unknown>)
+      : null;
+
+  return [
+    rawPayload?.sourceLine,
+    parserEvidence?.source_text,
+    parserEvidence?.sourceText,
+    rawPayload?.notes,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join("\n");
+};
+
+const parseWiseEvidenceAmounts = (row: Record<string, unknown>) => {
+  const text = readWiseEvidenceText(row);
+  if (!text) {
+    return [];
+  }
+
+  return Array.from(text.matchAll(wiseEvidenceAmountPattern))
+    .map((match) => {
+      const amount = parseAmountValue(match[2] ?? "");
+      const currency = normalizeWiseWalletCurrencyCode(match[3]);
+      if (amount === null || !currency) {
+        return null;
+      }
+
+      const sign = (match[1] ?? "").replace(/\s+/g, "");
+      return {
+        amount: Math.abs(amount),
+        currency,
+        sign: sign.startsWith("+") ? "credit" : sign.startsWith("-") || sign.startsWith("−") ? "debit" : null,
+        text: match[0],
+      };
+    })
+    .filter((value): value is { amount: number; currency: string; sign: "credit" | "debit" | null; text: string } => Boolean(value));
+};
+
+const readWiseAccountImpactAmount = (row: Record<string, unknown>) => {
+  const rawPayload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const explicitCurrency = normalizeWiseWalletCurrencyCode(rawPayload?.accountCurrency);
+  const explicitAmount = parseAmountValue(rawPayload?.accountAmount ?? rawPayload?.accountAmountText ?? null);
+  if (explicitCurrency && explicitAmount !== null) {
+    return {
+      amount: Math.abs(explicitAmount),
+      currency: explicitCurrency,
+      text: typeof rawPayload?.accountAmountText === "string" ? rawPayload.accountAmountText : null,
+      inferredFromEvidence: false,
+    };
+  }
+
+  const evidenceAmounts = parseWiseEvidenceAmounts(row);
+  if (evidenceAmounts.length >= 2) {
+    const accountAmount = evidenceAmounts.at(-1);
+    return accountAmount
+      ? {
+          amount: accountAmount.amount,
+          currency: accountAmount.currency,
+          text: accountAmount.text,
+          inferredFromEvidence: true,
+        }
+      : null;
+  }
+
+  const onlyAmount = evidenceAmounts[0] ?? null;
+  return onlyAmount
+    ? {
+        amount: onlyAmount.amount,
+        currency: onlyAmount.currency,
+        text: onlyAmount.text,
+        inferredFromEvidence: true,
+      }
+    : null;
+};
+
+const rowLooksLikeWiseWalletScreenshot = (
+  row: Record<string, unknown>,
+  metadataLooksWise: boolean
+) => {
+  if (metadataLooksWise || /wise/i.test(String(row.institution ?? readParsedRowPayloadText(row, "institutionRaw") ?? ""))) {
+    return true;
+  }
+
+  const rawPayload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const evidenceText = readWiseEvidenceText(row);
+  const statementType = String(rawPayload?.statementType ?? "").toLowerCase();
+  const importMode = String(rawPayload?.importMode ?? "").toLowerCase();
+  const documentType = String(rawPayload?.documentType ?? "").toLowerCase();
+  const movementType = String(rawPayload?.movementType ?? "").toLowerCase();
+  const amountCurrencies = new Set(parseWiseEvidenceAmounts(row).map((amount) => amount.currency));
+  const hasWiseMobileLanguage =
+    /\b(?:Added|Refunded|Received|Sent|To\s+[A-Z]{3})\b/i.test(evidenceText) ||
+    /^(?:transfer|refund|real_spend)$/i.test(movementType);
+
+  return (
+    statementType === "wallet_statement" &&
+    importMode === "statement" &&
+    documentType === "statement" &&
+    amountCurrencies.size > 0 &&
+    hasWiseMobileLanguage
+  );
+};
+
 const wiseVisibleDateHeaderPattern =
   /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b/i;
 
@@ -2555,7 +2674,7 @@ const normalizeWiseWalletParsedRows = (
   metadata?: { institution?: string | null; accountType?: string | null } | null
 ) => {
   const metadataLooksWise = /wise/i.test(String(metadata?.institution ?? ""));
-  if (!metadataLooksWise && !rows.some((row) => /wise/i.test(String(row.institution ?? readParsedRowPayloadText(row, "institutionRaw") ?? "")))) {
+  if (!metadataLooksWise && !rows.some((row) => rowLooksLikeWiseWalletScreenshot(row, metadataLooksWise))) {
     return rows;
   }
 
@@ -2564,7 +2683,7 @@ const normalizeWiseWalletParsedRows = (
       return row;
     }
 
-    const rowLooksWise = metadataLooksWise || /wise/i.test(String(row.institution ?? readParsedRowPayloadText(row, "institutionRaw") ?? ""));
+    const rowLooksWise = rowLooksLikeWiseWalletScreenshot(row, metadataLooksWise);
     if (!rowLooksWise) {
       return row;
     }
@@ -2575,10 +2694,13 @@ const normalizeWiseWalletParsedRows = (
         : null;
     const rowType = typeof row.type === "string" ? row.type.toLowerCase() : "";
     const status = typeof rawPayloadBeforeNormalization?.status === "string" ? rawPayloadBeforeNormalization.status : "";
-    const explicitAccountCurrency = normalizeWiseWalletCurrencyCode(rawPayloadBeforeNormalization?.accountCurrency);
+    const accountImpactAmount = readWiseAccountImpactAmount(row);
+    const explicitAccountCurrency =
+      normalizeWiseWalletCurrencyCode(rawPayloadBeforeNormalization?.accountCurrency) ?? accountImpactAmount?.currency ?? null;
     const hasExplicitAccountAmount =
       rawPayloadBeforeNormalization?.accountAmount !== undefined ||
       rawPayloadBeforeNormalization?.accountAmountText !== undefined ||
+      accountImpactAmount !== null ||
       Boolean(explicitAccountCurrency && !isWiseLikelyMerchantSpendCurrency(explicitAccountCurrency));
     const merchantCurrencyOnlySpend =
       !hasExplicitAccountAmount &&
@@ -2598,7 +2720,7 @@ const normalizeWiseWalletParsedRows = (
       };
     }
 
-    const currency = readWiseWalletCurrencyFromRow(row);
+    const currency = accountImpactAmount?.currency ?? readWiseWalletCurrencyFromRow(row);
     if (!currency) {
       return row;
     }
@@ -2611,15 +2733,30 @@ const normalizeWiseWalletParsedRows = (
             ...(row.rawPayload as Record<string, unknown>),
             accountName,
             accountCurrency: currency,
+            ...(accountImpactAmount
+              ? {
+                  accountAmount: accountImpactAmount.amount,
+                  accountAmountText: accountImpactAmount.text,
+                  wiseAccountImpactInferredFromEvidence: accountImpactAmount.inferredFromEvidence,
+                }
+              : {}),
           }
         : {
             accountName,
             accountCurrency: currency,
+            ...(accountImpactAmount
+              ? {
+                  accountAmount: accountImpactAmount.amount,
+                  accountAmountText: accountImpactAmount.text,
+                  wiseAccountImpactInferredFromEvidence: accountImpactAmount.inferredFromEvidence,
+                }
+              : {}),
           };
 
     return {
       ...row,
       ...(visibleDate ? { date: visibleDate } : {}),
+      ...(accountImpactAmount ? { amount: accountImpactAmount.amount.toFixed(2), currency } : {}),
       institution: "Wise",
       accountName,
       rawPayload,
