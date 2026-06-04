@@ -2583,8 +2583,16 @@ const readWiseAccountImpactAmount = (row: Record<string, unknown>) => {
     row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
       ? (row.rawPayload as Record<string, unknown>)
       : null;
-  const explicitCurrency = normalizeWiseWalletCurrencyCode(rawPayload?.accountCurrency);
-  const explicitAmount = parseAmountValue(rawPayload?.accountAmount ?? rawPayload?.accountAmountText ?? null);
+  const explicitCurrency = normalizeWiseWalletCurrencyCode(
+    typeof rawPayload?.accountCurrency === "string" ? rawPayload.accountCurrency : null
+  );
+  const explicitAmount = parseAmountValue(
+    typeof rawPayload?.accountAmount === "string" || typeof rawPayload?.accountAmount === "number"
+      ? String(rawPayload.accountAmount)
+      : typeof rawPayload?.accountAmountText === "string"
+        ? rawPayload.accountAmountText
+        : null
+  );
   if (explicitCurrency && explicitAmount !== null) {
     return {
       amount: Math.abs(explicitAmount),
@@ -3796,6 +3804,87 @@ const getImportSourceStatementFingerprint = (rawPayload: Prisma.JsonValue | null
     : null;
 };
 
+const getMobileScreenshotPayloadKind = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const kind = typeof payload.kind === "string" ? payload.kind.trim() : "";
+  const source = typeof payload.source === "string" ? payload.source.trim() : "";
+  if (kind === "gcash_mobile_screenshot_transaction" || source === "gcash_mobile_screenshot") {
+    return "gcash";
+  }
+  if (kind === "maya_mobile_screenshot_known_transaction" || source === "maya_mobile_screenshot") {
+    return "maya";
+  }
+
+  return null;
+};
+
+const getMobileScreenshotTimeText = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return "";
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  for (const key of ["timeText", "transactionTime", "time"]) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) {
+      return normalizeTransactionDedupeText(value);
+    }
+  }
+
+  return "";
+};
+
+const buildMobileScreenshotContentKey = (transaction: {
+  accountId?: unknown;
+  date: unknown;
+  amount: unknown;
+  currency: unknown;
+  type: unknown;
+  merchantRaw: unknown;
+  merchantClean: unknown;
+  description: unknown;
+  rawPayload?: Prisma.JsonValue | null;
+}) => {
+  const screenshotKind = getMobileScreenshotPayloadKind(transaction.rawPayload);
+  if (!screenshotKind) {
+    return "";
+  }
+
+  const date =
+    transaction.date instanceof Date && !Number.isNaN(transaction.date.getTime())
+      ? transaction.date.toISOString().slice(0, 10)
+      : normalizeTransactionDedupeText(transaction.date).slice(0, 10);
+  const amount = parseAmountValue(
+    typeof transaction.amount === "number" || typeof transaction.amount === "string"
+      ? String(transaction.amount)
+      : transaction.amount && typeof transaction.amount === "object" && "toString" in transaction.amount
+        ? String((transaction.amount as { toString?: () => string }).toString?.() ?? "")
+        : null
+  );
+  const merchant =
+    normalizeTransactionDedupeText(transaction.merchantRaw) ||
+    normalizeTransactionDedupeText(transaction.merchantClean) ||
+    normalizeTransactionDedupeText(transaction.description);
+  if (amount === null || !merchant) {
+    return "";
+  }
+
+  return [
+    screenshotKind,
+    typeof transaction.accountId === "string" && transaction.accountId.trim() ? transaction.accountId.trim() : "",
+    date,
+    amount.toFixed(2),
+    normalizeTransactionDedupeText(transaction.currency || "PHP").toUpperCase(),
+    normalizeTransactionDedupeText(transaction.type),
+    merchant,
+    getMobileScreenshotTimeText(transaction.rawPayload),
+  ].join("|");
+};
+
 const buildAccountScopedSourceRowKey = (accountId: unknown, sourceRowIndex: unknown) => {
   const normalizedAccountId = typeof accountId === "string" && accountId.trim() ? accountId.trim() : "";
   const normalizedSourceRowIndex =
@@ -4689,11 +4778,28 @@ export const processImportFileText = async (
   const textHasMultipleCimbAccountSections = extractCimbGSaveAccountNumbersFromText(text).length > 1;
   const cachedParsePreservesMultiAccountIdentity =
     !textHasMultipleCimbAccountSections || hasMultipleParsedAccountNumbers(cachedParsedRows);
+  const freshImageMetadataForCacheGate =
+    imageImport && importMode === "statement"
+      ? detectStatementMetadataFromText(normalizeStatementImageOcrText(text))
+      : null;
+  const cachedMetadataForCacheGate =
+    textCacheInfo?.cacheRecord?.metadata &&
+    typeof textCacheInfo.cacheRecord.metadata === "object" &&
+    !Array.isArray(textCacheInfo.cacheRecord.metadata)
+      ? (textCacheInfo.cacheRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
+      : null;
+  const freshMobileScreenshotInstitution =
+    freshImageMetadataForCacheGate?.institution === "GCash" || freshImageMetadataForCacheGate?.institution === "Maya"
+      ? freshImageMetadataForCacheGate.institution
+      : null;
+  const cachedParsePreservesMobileScreenshotIdentity =
+    !freshMobileScreenshotInstitution || cachedMetadataForCacheGate?.institution === freshMobileScreenshotInstitution;
   const canReuseCachedStatementParse =
     importMode === "statement" &&
     Boolean(textCacheInfo?.cacheHit) &&
     cachedParsedRows.length > 0 &&
     cachedParsePreservesMultiAccountIdentity &&
+    cachedParsePreservesMobileScreenshotIdentity &&
     Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) &&
     Boolean(textCacheInfo?.cacheRecord?.metadata);
 
@@ -7361,21 +7467,46 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         reviewStatus: true,
       },
     });
-    const wiseScreenshotOverlapDedupeEnabled =
-      (parsedRowsLookWise || /wise/i.test(String(baseStatementMetadata.institution ?? checkpointBankName ?? ""))) &&
-      extractWiseScreenshotSequenceNumber(importFile.fileName) !== null;
-    const existingWiseScreenshotOverlapTransactions = wiseScreenshotOverlapDedupeEnabled
+    const mobileScreenshotOverlapDedupeEnabled = parsedRows.some((row) =>
+      getMobileScreenshotPayloadKind(
+        row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+          ? (row.rawPayload as Prisma.JsonValue)
+          : null
+      )
+    );
+    const existingMobileScreenshotOverlapTransactions = mobileScreenshotOverlapDedupeEnabled
       ? await tx.transaction.findMany({
           where: {
             deletedAt: null,
             workspaceId: String(importFile.workspaceId),
             accountId: { in: matchingAccountIdsForImport },
             reviewStatus: { notIn: ["rejected", "duplicate_skipped"] },
-            importFile: {
-              fileName: {
-                contains: "IMG_",
+            OR: [
+              {
+                rawPayload: {
+                  path: ["kind"],
+                  equals: "gcash_mobile_screenshot_transaction",
+                },
               },
-            },
+              {
+                rawPayload: {
+                  path: ["kind"],
+                  equals: "maya_mobile_screenshot_known_transaction",
+                },
+              },
+              {
+                rawPayload: {
+                  path: ["source"],
+                  equals: "gcash_mobile_screenshot",
+                },
+              },
+              {
+                rawPayload: {
+                  path: ["source"],
+                  equals: "maya_mobile_screenshot",
+                },
+              },
+            ],
           },
           select: {
             id: true,
@@ -7389,11 +7520,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             merchantClean: true,
             description: true,
             reviewStatus: true,
-            importFile: {
-              select: {
-                fileName: true,
-              },
-            },
           },
         })
       : [];
@@ -7423,14 +7549,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       bucket.push(transaction);
       existingImportTransactionsByDedupeKey.set(dedupeKey, bucket);
     }
-    const existingWiseScreenshotOverlapCounts = new Map<string, number>();
-    for (const transaction of existingWiseScreenshotOverlapTransactions) {
-      if (!sourceFilesLookLikeAdjacentScreenshots(importFile.fileName, transaction.importFile?.fileName)) {
+    const existingMobileScreenshotOverlapCounts = new Map<string, number>();
+    for (const transaction of existingMobileScreenshotOverlapTransactions) {
+      const key = buildMobileScreenshotContentKey(transaction);
+      if (!key) {
         continue;
       }
-
-      const key = buildConfirmedTransactionContentKey(transaction);
-      existingWiseScreenshotOverlapCounts.set(key, (existingWiseScreenshotOverlapCounts.get(key) ?? 0) + 1);
+      existingMobileScreenshotOverlapCounts.set(key, (existingMobileScreenshotOverlapCounts.get(key) ?? 0) + 1);
     }
     const retainedExistingImportTransactionIds = new Set<string>();
     let retainedExistingImportTransactionsCount = 0;
@@ -7676,7 +7801,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     existingDedupeCounts.set(key, (existingDedupeCounts.get(key) ?? 0) + 1);
   }
   const currentDedupeCounts = new Map<string, number>();
-  const currentWiseScreenshotOverlapCounts = new Map<string, number>();
+  const currentMobileScreenshotOverlapCounts = new Map<string, number>();
 
   for (const [index, originalRow] of parsedRows.entries()) {
     const row = normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
@@ -7931,14 +8056,25 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       continue;
     }
 
-    if (wiseScreenshotOverlapDedupeEnabled) {
-      const wiseOverlapKey = buildConfirmedTransactionContentKey({
-        ...insertRow,
+    if (mobileScreenshotOverlapDedupeEnabled) {
+      const mobileScreenshotOverlapKey = buildMobileScreenshotContentKey({
         accountId: rowResolvedAccountId,
+        date: insertRow.date,
+        amount: insertRow.amount,
+        currency: insertRow.currency,
+        type: insertRow.type,
+        merchantRaw: insertRow.merchantRaw,
+        merchantClean: insertRow.merchantClean,
+        description: insertRow.description,
+        rawPayload: insertRow.rawPayload as Prisma.JsonValue | null,
       });
-      const currentWiseOverlapOccurrence = (currentWiseScreenshotOverlapCounts.get(wiseOverlapKey) ?? 0) + 1;
-      currentWiseScreenshotOverlapCounts.set(wiseOverlapKey, currentWiseOverlapOccurrence);
-      if ((existingWiseScreenshotOverlapCounts.get(wiseOverlapKey) ?? 0) >= currentWiseOverlapOccurrence) {
+      const currentMobileScreenshotOverlapOccurrence =
+        (currentMobileScreenshotOverlapCounts.get(mobileScreenshotOverlapKey) ?? 0) + 1;
+      currentMobileScreenshotOverlapCounts.set(mobileScreenshotOverlapKey, currentMobileScreenshotOverlapOccurrence);
+      if (
+        mobileScreenshotOverlapKey &&
+        (existingMobileScreenshotOverlapCounts.get(mobileScreenshotOverlapKey) ?? 0) >= currentMobileScreenshotOverlapOccurrence
+      ) {
         duplicateSkippedTransactionsCount += 1;
         continue;
       }

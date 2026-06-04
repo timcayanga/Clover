@@ -12,6 +12,7 @@ This document captures the Maya parsing rules learned from the synthetic trainin
 
 - Treat Maya Wallet as a wallet account, not a bank account.
 - Treat black Maya mobile app transaction screenshots as Maya Wallet imports even when no account number is visible. Use account name `Maya Wallet`, leave `accountNumber` empty, and keep this path separate from Maya Savings and Maya Credit statements.
+- Overlapping Maya mobile screenshots may show the same visible transaction more than once. Dedupe screenshot rows by wallet identity, date, visible time when available, signed direction/type, amount, currency, and merchant text rather than by screenshot filename or row number.
 - If OCR drops the date chips on a Maya screenshot, only use deterministic recovery for known training screenshots with a strict visible-row fingerprint; otherwise let the image/vision fallback inspect the screenshot instead of inventing dates.
 - Use `period_start` and `period_end` when the statement does not provide a single statement date.
 - Preserve timestamps when present.

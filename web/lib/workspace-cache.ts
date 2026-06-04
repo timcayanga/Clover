@@ -641,7 +641,105 @@ const getTransactionAccountIdentityKey = (entry: CachedRecord | ImportedWorkspac
   return normalizeImportedTransactionAccountKey(accountName, institution, accountNumber);
 };
 
+const getMobileScreenshotPayloadKind = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
+  const rawPayload = entry.rawPayload;
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const kind = typeof payload.kind === "string" ? payload.kind.trim() : "";
+  const source = typeof payload.source === "string" ? payload.source.trim() : "";
+  if (kind === "gcash_mobile_screenshot_transaction" || source === "gcash_mobile_screenshot") {
+    return "gcash";
+  }
+  if (kind === "maya_mobile_screenshot_known_transaction" || source === "maya_mobile_screenshot") {
+    return "maya";
+  }
+
+  return null;
+};
+
+const getMobileScreenshotTimeText = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
+  const rawPayload = entry.rawPayload;
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return "";
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  for (const key of ["timeText", "transactionTime", "time"]) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) {
+      return normalizeMerchantText(value);
+    }
+  }
+
+  return "";
+};
+
+const parseCachedAmountValue = (value: unknown) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const normalized = String(value).replace(/[^0-9.-]/g, "");
+  if (!normalized || normalized === "-" || normalized === ".") {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getCachedTransactionDateKey = (value: unknown) => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  const text = normalizeWhitespace(String(value ?? ""));
+  const isoMatch = text.match(/\b\d{4}-\d{2}-\d{2}\b/);
+  if (isoMatch) {
+    return isoMatch[0];
+  }
+
+  const parsed = text ? new Date(text) : null;
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : text.slice(0, 10);
+};
+
+const getMobileScreenshotTransactionSignature = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
+  const screenshotKind = getMobileScreenshotPayloadKind(entry);
+  if (!screenshotKind) {
+    return "";
+  }
+
+  const amount = parseCachedAmountValue(entry.amount);
+  const merchant =
+    normalizeMerchantText(typeof entry.merchantRaw === "string" ? entry.merchantRaw : null) ||
+    normalizeMerchantText(typeof entry.merchantClean === "string" ? entry.merchantClean : null) ||
+    normalizeMerchantText(typeof entry.description === "string" ? entry.description : null);
+  if (amount === null || !merchant) {
+    return "";
+  }
+
+  return [
+    "mobile-screenshot",
+    screenshotKind,
+    getTransactionAccountIdentityKey(entry),
+    getCachedTransactionDateKey(entry.date),
+    amount.toFixed(2),
+    normalizeMerchantText(String(entry.currency ?? "PHP")).toUpperCase(),
+    normalizeMerchantText(String(entry.type ?? "")),
+    merchant,
+    getMobileScreenshotTimeText(entry),
+  ].join("|");
+};
+
 const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
+  const screenshotSignature = getMobileScreenshotTransactionSignature(entry);
+  if (screenshotSignature) {
+    return screenshotSignature;
+  }
+
   const importFileId = getImportedTransactionImportFileId(entry);
   const sourceRowIndex = getImportedTransactionSourceRowIndex(entry);
   const statementFingerprint = getImportedTransactionStatementFingerprint(entry);

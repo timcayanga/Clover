@@ -13,6 +13,7 @@ This document captures the GCash parsing rules learned from the training bundles
 
 - Treat GCash as a wallet account, not a bank account.
 - Treat blue GCash mobile app `Transaction History` screenshots as GCash wallet imports even when no phone/account number is visible. Use account name `GCash`, leave `accountNumber` empty, and parse only visible rows from the screenshot.
+- Overlapping mobile screenshots may show the same visible transaction more than once. Dedupe screenshot rows by wallet identity, date, visible time when available, signed direction/type, amount, currency, and merchant text rather than by screenshot filename or row number.
 - GCash screenshot rows may use relative sections like `Today` and `Yesterday`; resolve them from the visible `As of <date>` header.
 - In mobile screenshots, signed `Send Money` rows should use the sign for direction (`+` income, `-` expense) while staying in the `Transfers` category.
 - When a screenshot clearly shows a GCash sub-product, create or update the matching child account instead of collapsing everything into one GCash bucket:
