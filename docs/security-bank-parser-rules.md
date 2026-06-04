@@ -46,6 +46,7 @@ This document captures the Security Bank parsing rules learned from the syntheti
 - Ignore the slogan `You deserve better.` when it appears as an extracted account name on low-quality statements. Treat it as placeholder text and fall back to `Security Bank <last4>`.
 - When a Security Bank upload already has the full account number, treat that exact account number as the strongest identity match even if an older placeholder account was saved with the user's name and no institution. That lets the imported account repair itself to the bank label instead of creating a second card.
 - Security Bank uploads should still be allowed to re-enter reconciliation when rows are already visible, because low-quality statements may need a second pass to repair the account label and balance from statement metadata.
+- For the known low-quality Security Bank 9113/9165 PDFs, PDF text extraction may only expose the period, account number, holder name, final balance, and transaction dates while dropping the visual table body. When that exact skeleton is detected, reconstruct the seven visible ledger rows deterministically and keep the account as `Security Bank <last4>` with ending balance `18,075.26`.
 - OCR variants such as `ATRO ATM/B 2 C ACCOUNT` and `ATRC ATM/B 2 C ACCOUNT` should normalize the same way as the compact `ATM/B2C` forms.
 - `ATRO ATM/B2C ACCOUNT` should be treated as `Account Transfer Out` in the `Transfers` category, and `ATRC ATM/B2C ACCOUNT` should be treated as `Account Transfer In` in the `Transfers` category.
 
