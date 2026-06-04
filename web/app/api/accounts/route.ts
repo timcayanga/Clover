@@ -871,6 +871,7 @@ export async function GET(request: Request) {
       institution?: string | null;
       accountNumber?: string | null;
       balance?: { toString: () => string } | string | number | null;
+      type?: string | null;
     }) => {
       if (account.source !== "upload") {
         return false;
@@ -898,6 +899,23 @@ export async function GET(request: Request) {
       const numericBalance = balance ? Number(balance.replace(/[^0-9.-]/g, "")) : 0;
       return !balance || !Number.isFinite(numericBalance) || numericBalance === 0;
     };
+    const isTransientUploadedAccountPlaceholder = (account: {
+      id: string;
+      source: string;
+      type?: string | null;
+      accountNumber?: string | null;
+    }) => {
+      if (account.source !== "upload" || normalizeImportAccountNumber(account.accountNumber ?? null)) {
+        return false;
+      }
+
+      const transactionCount = transactionCountByAccountId.get(account.id) ?? 0;
+      if (transactionCount > 0 || checkpointAccountIds.has(account.id)) {
+        return false;
+      }
+
+      return account.type === "bank" || account.type === "credit_card" || account.type === "line_of_credit";
+    };
 
     const numberedInstitutionKeys = new Set(
       accounts
@@ -911,6 +929,7 @@ export async function GET(request: Request) {
         return (
           !looksLikeReceiptImageFilenameAccount(account) &&
           !isOrphanUploadedAccountPlaceholder(account) &&
+          !isTransientUploadedAccountPlaceholder(account) &&
           !(
             institutionKey &&
             numberedInstitutionKeys.has(institutionKey) &&

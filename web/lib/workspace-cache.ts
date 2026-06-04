@@ -249,9 +249,9 @@ const isGenericImportedUploadAccount = (account: CachedRecord | ImportedAccountI
   }
 
   const institution =
-    normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "institution")) ||
-    normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "name"));
-  const name = normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "name"));
+    canonicalImportedInstitutionKey(readImportedAccountText(account, "institution")) ||
+    canonicalImportedInstitutionKey(readImportedAccountText(account, "name"));
+  const name = canonicalImportedInstitutionKey(readImportedAccountText(account, "name"));
   const institutionWithSuffix = institution ? new RegExp(`^${institution.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s+\\d{4})?$`, "i") : null;
   return Boolean(
     institution &&
@@ -263,8 +263,26 @@ const isGenericImportedUploadAccount = (account: CachedRecord | ImportedAccountI
 };
 
 const getImportedAccountInstitutionShadowKey = (account: CachedRecord | ImportedAccountIdentityLike) =>
-  normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "institution")) ||
-  normalizeImportedAccountInstitutionKey(readImportedAccountText(account, "name"));
+  canonicalImportedInstitutionKey(readImportedAccountText(account, "institution")) ||
+  canonicalImportedInstitutionKey(readImportedAccountText(account, "name"));
+
+const isTransientImportedAccountPlaceholder = (account: CachedRecord) => {
+  if (typeof account.id === "string" && account.id.startsWith("optimistic-")) {
+    return false;
+  }
+
+  if (readImportedAccountText(account, "source") !== "upload" || hasImportedAccountNumber(account.accountNumber)) {
+    return false;
+  }
+
+  const transactionCount = Number(account.transactionCount ?? 0);
+  if (Number.isFinite(transactionCount) && transactionCount > 0) {
+    return false;
+  }
+
+  const type = normalizeWhitespace(String(account.type ?? "")).toLowerCase();
+  return type === "bank" || type === "credit_card" || type === "line_of_credit";
+};
 
 const pruneGenericImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) => {
   const institutionsWithNumberedUploadAccounts = new Set(
@@ -315,9 +333,9 @@ const isOrphanImportedAccountPlaceholder = (account: CachedRecord) => {
 };
 
 const pruneOrphanImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) =>
-  accounts.filter((account) => !isOrphanImportedAccountPlaceholder(account));
+  accounts.filter((account) => !isOrphanImportedAccountPlaceholder(account) && !isTransientImportedAccountPlaceholder(account));
 
-const pruneImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) =>
+export const pruneImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) =>
   pruneOrphanImportedAccountPlaceholders(pruneGenericImportedAccountPlaceholders(accounts));
 
 const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, right: ImportedAccountIdentityLike) => {

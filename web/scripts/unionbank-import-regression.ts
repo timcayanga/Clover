@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { guessCategoryName, parseImportText } from "@/lib/import-parser";
-import { matchesImportedAccountIdentity } from "@/lib/workspace-cache";
+import { matchesImportedAccountIdentity, pruneImportedAccountPlaceholders } from "@/lib/workspace-cache";
 
 const unionBankCardText = `
 UnionBank Plaza Bldg.,
@@ -164,6 +164,44 @@ assert.equal(
   ),
   true,
   "UnionBank full account numbers can still match last-four optimistic placeholders."
+);
+
+const prunedUnionBankPlaceholders = pruneImportedAccountPlaceholders([
+  {
+    id: "blank-business-placeholder",
+    name: "UnionBank of the Philippines",
+    institution: "UnionBank of the Philippines",
+    accountNumber: null,
+    type: "bank",
+    source: "upload",
+    balance: "32604.11",
+    transactionCount: 0,
+  },
+  {
+    id: "business-6789",
+    name: "UnionBank 6789",
+    institution: "UnionBank",
+    accountNumber: "123456789",
+    type: "bank",
+    source: "upload",
+    balance: "32604.11",
+    transactionCount: 8,
+  },
+  {
+    id: "card-3912",
+    name: "UnionBank 3912",
+    institution: "UnionBank",
+    accountNumber: "1056827763912",
+    type: "credit_card",
+    source: "upload",
+    balance: "9295",
+    transactionCount: 13,
+  },
+]);
+assert.deepEqual(
+  prunedUnionBankPlaceholders.map((account) => account.id),
+  ["business-6789", "card-3912"],
+  "UnionBank account cache should hide no-account-number uploaded placeholders while canonical accounts settle."
 );
 
 console.log("[PASS] UnionBank statement parser handles card and known image-only samples.");

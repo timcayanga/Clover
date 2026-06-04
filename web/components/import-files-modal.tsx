@@ -1669,6 +1669,18 @@ const importSummaryHasVisibleRows = (summary: UploadInsightsSummary | null | und
   return Math.max(rowsImported, previewRows) > 0 && Boolean(summary?.accountId);
 };
 
+const importSummaryHasAccountNumber = (summary: UploadInsightsSummary | null | undefined) => {
+  if (typeof summary?.accountNumber === "string" && summary.accountNumber.replace(/\D/g, "").length >= 4) {
+    return true;
+  }
+
+  return Boolean(
+    summary?.accountSummaries?.some(
+      (account) => typeof account.accountNumber === "string" && account.accountNumber.replace(/\D/g, "").length >= 4
+    )
+  );
+};
+
 const shouldPublishImportSummary = (
   fileName: string,
   summary: UploadInsightsSummary | null | undefined
@@ -1678,6 +1690,10 @@ const shouldPublishImportSummary = (
   }
 
   if (isFilenameOnlyScreenshotSummary(fileName, summary)) {
+    return false;
+  }
+
+  if ((normalizeBankName(fileName) === "UnionBank" || isLikelyLowQualityUnionBankStatementFilename(fileName)) && !importSummaryHasAccountNumber(summary)) {
     return false;
   }
 
