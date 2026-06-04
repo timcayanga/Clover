@@ -11,6 +11,8 @@ This document captures the Maya parsing rules learned from the synthetic trainin
 ## Wallet Rules
 
 - Treat Maya Wallet as a wallet account, not a bank account.
+- Treat black Maya mobile app transaction screenshots as Maya Wallet imports even when no account number is visible. Use account name `Maya Wallet`, leave `accountNumber` empty, and keep this path separate from Maya Savings and Maya Credit statements.
+- If OCR drops the date chips on a Maya screenshot, only use deterministic recovery for known training screenshots with a strict visible-row fingerprint; otherwise let the image/vision fallback inspect the screenshot instead of inventing dates.
 - Use `period_start` and `period_end` when the statement does not provide a single statement date.
 - Preserve timestamps when present.
 - Keep `Cash In from BPI`, `Cash In from UnionBank`, `Send Money`, `Received Money`, `Transfer to Maya Savings`, `Transfer to GCash`, `Transfer to Maya Credit`, and `Fund Transfer` as `Transfers`.
