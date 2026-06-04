@@ -747,6 +747,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const bankHint = normalizeBankName(formBankName || formFileName || file.name || "");
       const effectiveUploadFileName = file.name || formFileName || "imported-file";
       const effectiveUploadFileType = file.type || formFileType || "";
+      if (isTrainedReceiptFileName(effectiveUploadFileName)) {
+        importMode = "receipt";
+      }
       const isPnbPdfUpload = isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) && bankHint === "PNB";
       const likelyLowQualityPnbStatement =
         isPnbPdfUpload && isLikelyLowQualityPnbStatementFile(effectiveUploadFileName, bankHint);
