@@ -59,3 +59,4 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 - Transactions should appear in Clover with their original currencies preserved.
 - The import modal should complete once visible rows are saved, even without account number or balance metadata.
 - If the first Wise screenshot OCR/transcription pass returns no rows or times out, Clover should still run one bounded structured vision fallback before returning `I-104`.
+- Wise mobile screenshots should prefer a direct structured vision parse over multi-pass OCR. Target visible UI timing is 3-8 seconds for one clear screenshot, 10-25 seconds for five screenshots, and 20-45 seconds for ten screenshots.

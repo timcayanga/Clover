@@ -1574,6 +1574,10 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             ? 8
             : 2;
   const pageImagesToSend = pageImagesInput.slice(0, Math.min(pageImageLimit, pageImagesInput.length));
+  const isImageStatementMode =
+    (params.importMode ?? "statement") === "statement" &&
+    pageImagesToSend.length > 0 &&
+    !pdfFileDataBase64;
   const textModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL,
     OPENAI_IMPORT_TEXT_MODEL_FALLBACK,
@@ -1626,6 +1630,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             ? 2_500
             : pdfFileDataBase64
               ? 6_000
+              : isImageStatementMode
+                ? 3_500
               : pageImages.length > 0
                 ? params.text.trim().length === 0
                   ? 6_000

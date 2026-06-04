@@ -4633,6 +4633,12 @@ export const processImportFileText = async (
   const isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
   const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
   const trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
+  const shouldPreferDirectImageStatementVision =
+    imageImport &&
+    importMode === "statement" &&
+    !trainedReceiptDetails &&
+    !String(options.text ?? "").trim() &&
+    !options.textCacheInfo;
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
   let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
@@ -4641,7 +4647,7 @@ export const processImportFileText = async (
     fileType === "application/pdf" &&
     /landbank|land bank|eastwest|chinabank|china bank/i.test(fileName);
 
-  if (!trainedReceiptDetails && !noisyPdfBankByFileName && (imageImport || !text)) {
+  if (!shouldPreferDirectImageStatementVision && !trainedReceiptDetails && !noisyPdfBankByFileName && (imageImport || !text)) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
@@ -5040,9 +5046,9 @@ export const processImportFileText = async (
       fileDataBase64: pdfFileDataBase64,
       preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
       importMode,
-      pageImageLimit: isWiseImageStatement ? 1 : null,
-      timeoutMs: isWiseImageStatement ? 60_000 : null,
-      retryTimeoutMs: isWiseImageStatement ? 20_000 : null,
+      pageImageLimit: imageImport && importMode === "statement" ? 1 : isWiseImageStatement ? 1 : null,
+      timeoutMs: imageImport && importMode === "statement" ? 35_000 : isWiseImageStatement ? 60_000 : null,
+      retryTimeoutMs: imageImport && importMode === "statement" ? 15_000 : isWiseImageStatement ? 20_000 : null,
     });
 
     openAiMetadata = openAiParsed
@@ -5141,7 +5147,13 @@ export const processImportFileText = async (
         })()
       : null;
 
-  const imageTranscriptRequiresRetry = Boolean(imageImport && pageImages?.length && !canUseFastImageParse && importMode !== "receipt");
+  const imageTranscriptRequiresRetry = Boolean(
+    imageImport &&
+    pageImages?.length &&
+    !canUseFastImageParse &&
+    importMode !== "receipt" &&
+    !shouldPreferDirectImageStatementVision
+  );
   const openAiParseIsUsableWiseScreenshot =
     imageImport &&
     importMode === "statement" &&

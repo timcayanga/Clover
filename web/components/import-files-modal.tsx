@@ -1796,7 +1796,7 @@ export function ImportFilesModal({
   const uploadPausedRef = useRef(false);
   const uploadCancelRequestedRef = useRef(false);
   const primaryVisibilityCompletedRef = useRef(false);
-  const activeUploadAbortControllerRef = useRef<AbortController | null>(null);
+  const activeUploadAbortControllersRef = useRef<Set<AbortController>>(new Set());
   const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
 
@@ -7219,8 +7219,10 @@ export function ImportFilesModal({
     uploadCancelRequestedRef.current = true;
     setUploadPaused(false);
     uploadPausedRef.current = false;
-    activeUploadAbortControllerRef.current?.abort();
-    activeUploadAbortControllerRef.current = null;
+    for (const controller of activeUploadAbortControllersRef.current) {
+      controller.abort();
+    }
+    activeUploadAbortControllersRef.current.clear();
     if (visibilityHardStopTimerRef.current) {
       window.clearTimeout(visibilityHardStopTimerRef.current);
       visibilityHardStopTimerRef.current = null;
@@ -7502,16 +7504,14 @@ export function ImportFilesModal({
         }
 
         const controller = new AbortController();
-        activeUploadAbortControllerRef.current = controller;
+        activeUploadAbortControllersRef.current.add(controller);
         try {
           results.push({
             itemId: item.id,
             result: await processFile(item.id, { signal: controller.signal }),
           });
         } finally {
-          if (activeUploadAbortControllerRef.current === controller) {
-            activeUploadAbortControllerRef.current = null;
-          }
+          activeUploadAbortControllersRef.current.delete(controller);
         }
 
         if (uploadCancelRequestedRef.current) {
@@ -7519,6 +7519,46 @@ export function ImportFilesModal({
         }
       }
 
+      return results;
+    };
+    const isStatementImageBatchItem = (item: QueuedFile) =>
+      (item.importMode ?? "statement") === "statement" && isImageImportFile(item.file);
+    const processItemsForBatch = async (queue: QueuedFile[]) => {
+      if (queue.length <= 1 || !queue.every(isStatementImageBatchItem)) {
+        return processItemsSequentially(queue);
+      }
+
+      const results: Array<{ itemId: string; result: ImportProcessResult }> = [];
+      let nextIndex = 0;
+      const workerCount = Math.min(3, queue.length);
+
+      const runWorker = async () => {
+        while (!uploadCancelRequestedRef.current) {
+          const item = queue[nextIndex];
+          nextIndex += 1;
+          if (!item) {
+            return;
+          }
+
+          await waitForUploadResume();
+          if (uploadCancelRequestedRef.current) {
+            return;
+          }
+
+          const controller = new AbortController();
+          activeUploadAbortControllersRef.current.add(controller);
+          try {
+            results.push({
+              itemId: item.id,
+              result: await processFile(item.id, { signal: controller.signal }),
+            });
+          } finally {
+            activeUploadAbortControllersRef.current.delete(controller);
+          }
+        }
+      };
+
+      await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
       return results;
     };
     const hasBrowserParsableStatements = itemsToProcess.some((item) => {
@@ -7548,7 +7588,7 @@ export function ImportFilesModal({
         !uploadPausedRef.current &&
         !uploadCancelRequestedRef.current
       ) {
-        void processItemsSequentially(itemsToProcess).finally(() => {
+        void processItemsForBatch(itemsToProcess).finally(() => {
           router.refresh();
         });
         setBusy(false);
@@ -7561,7 +7601,7 @@ export function ImportFilesModal({
       }
     }
 
-    const processResultsPromise = processItemsSequentially(itemsToProcess);
+    const processResultsPromise = processItemsForBatch(itemsToProcess);
     const localVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
 
     if (
