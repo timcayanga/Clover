@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { guessCategoryName, parseImportText } from "@/lib/import-parser";
+import { matchesImportedAccountIdentity } from "@/lib/workspace-cache";
 
 const unionBankCardText = `
 UnionBank Plaza Bldg.,
@@ -126,5 +127,43 @@ for (const sample of knownImageOnlySamples) {
   assert.equal(markerRows.length, sample.rows, `${sample.fileName} should parse when only fallback marker text preserves the filename.`);
   assert.equal(markerRows[0]?.accountNumber, sample.accountNumber, `${sample.fileName} marker fallback should preserve account number.`);
 }
+
+assert.equal(
+  matchesImportedAccountIdentity(
+    {
+      name: "UnionBank 1235",
+      institution: "UnionBank of the Philippines",
+      accountNumber: "1093551235",
+      type: "bank",
+    },
+    {
+      name: "UnionBank 3597",
+      institution: "UnionBank of the Philippines",
+      accountNumber: "109355123597",
+      type: "bank",
+    }
+  ),
+  false,
+  "UnionBank sample bank accounts with explicit different account numbers must not merge."
+);
+
+assert.equal(
+  matchesImportedAccountIdentity(
+    {
+      name: "UnionBank 3912",
+      institution: "UnionBank",
+      accountNumber: "3912",
+      type: "credit_card",
+    },
+    {
+      name: "UnionBank 3912",
+      institution: "UnionBank of the Philippines",
+      accountNumber: "1056827763912",
+      type: "credit_card",
+    }
+  ),
+  true,
+  "UnionBank full account numbers can still match last-four optimistic placeholders."
+);
 
 console.log("[PASS] UnionBank statement parser handles card and known image-only samples.");

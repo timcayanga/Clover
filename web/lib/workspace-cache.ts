@@ -231,6 +231,7 @@ const looksLikeImportedFileLabel = (value?: string | null) => {
 
 const canonicalImportedInstitutionKey = (value?: string | null) =>
   normalizeImportedAccountInstitutionKey(value)
+    .replace(/\bunion\s*bank(?:\s+of\s+the\s+philippines)?\b/g, "unionbank")
     .replace(/\bchina\s+bank\b/g, "chinabank")
     .replace(/\bmetro\s+bank\b/g, "metrobank")
     .replace(/\bphilippine\s+national\s+bank\b/g, "pnb");
@@ -335,9 +336,8 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
     leftType &&
     rightType &&
     leftType === rightType &&
-    leftAccountDigits.length >= 8 &&
-    rightAccountDigits.length >= 8 &&
-    (leftAccountDigits.startsWith(rightAccountDigits) || rightAccountDigits.startsWith(leftAccountDigits));
+    (leftAccountDigits.length <= 4 || rightAccountDigits.length <= 4) &&
+    (leftAccountDigits.endsWith(rightAccountDigits) || rightAccountDigits.endsWith(leftAccountDigits));
   if (hasConflictingExplicitAccountNumbers && !canTreatConflictingAccountNumbersAsRelated) {
     return 0;
   }
@@ -394,9 +394,8 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
     const isUnionBank = leftInstitution === "unionbank" && rightInstitution === "unionbank";
     if (
       isUnionBank &&
-      leftDigits.length >= 8 &&
-      rightDigits.length >= 8 &&
-      (leftDigits.startsWith(rightDigits) || rightDigits.startsWith(leftDigits))
+      (leftDigits.length <= 4 || rightDigits.length <= 4) &&
+      (leftDigits.endsWith(rightDigits) || rightDigits.endsWith(leftDigits))
     ) {
       return 88;
     }
