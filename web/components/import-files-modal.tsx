@@ -1623,6 +1623,11 @@ const isLikelyLowQualityUnionBankStatementFilename = (fileName: string) => {
 const isExplicitLowQualityUnionBankStatementFilename = (fileName: string) =>
   /union[\s_-]*bank/i.test(fileName.toLowerCase()) && /(?:word|excel|template|business_statement)/i.test(fileName.toLowerCase());
 
+const isKnownUnionBankSampleStatementFilename = (fileName: string) =>
+  /(?:771487697.*soa.*union.*bank|soa-union-bank|philippines\s+unionbank\s+(?:excel|word)|business_statement|word_and_pdf_template|union_bank_of_the_philippines_business)/i.test(
+    fileName.toLowerCase()
+  );
+
 const isNoisyVisibilityBank = (fileName: string) => {
   return (
     ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(normalizeBankName(fileName)) ||
@@ -1668,8 +1673,8 @@ const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
 };
 
 const shouldSkipClientStatementPreparse = (fileName: string) =>
-  isNoisyVisibilityBank(fileName) ||
-  isExplicitLowQualityUnionBankStatementFilename(fileName) ||
+  (isNoisyVisibilityBank(fileName) && !isKnownUnionBankSampleStatementFilename(fileName)) ||
+  (isExplicitLowQualityUnionBankStatementFilename(fileName) && !isKnownUnionBankSampleStatementFilename(fileName)) ||
   isLikelyLowQualityPnbStatementFile(fileName);
 
 const hasVisibleImportData = (
