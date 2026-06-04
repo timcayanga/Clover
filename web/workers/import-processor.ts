@@ -2435,6 +2435,23 @@ const readParsedRowInstitution = (row: Record<string, unknown>, fallback?: strin
   fallback ??
   null;
 
+const readParsedRowAccountCurrency = (row: Record<string, unknown>) =>
+  normalizeWiseWalletCurrencyCode(readParsedRowPayloadText(row, "accountCurrency")) ??
+  normalizeWiseWalletCurrencyCode(typeof row.currency === "string" ? row.currency : null);
+
+const parsedRowLooksWiseAccount = (row: Record<string, unknown>, fallbackInstitution?: string | null) =>
+  /wise/i.test(
+    [
+      readParsedRowInstitution(row, fallbackInstitution),
+      readParsedRowAccountName(row),
+      readParsedRowPayloadText(row, "institutionRaw"),
+      readParsedRowPayloadText(row, "bank"),
+      readParsedRowPayloadText(row, "source"),
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
 const accountGroupKeyForParsedRow = (
   row: Record<string, unknown>,
   params?: {
@@ -2446,6 +2463,13 @@ const accountGroupKeyForParsedRow = (
   const accountNumber = readParsedRowAccountNumber(row) ?? params?.fallbackAccountNumber ?? null;
   if (accountNumber) {
     return `number:${accountNumber}`;
+  }
+
+  const wiseCurrency = parsedRowLooksWiseAccount(row, params?.fallbackInstitution)
+    ? readParsedRowAccountCurrency(row)
+    : null;
+  if (wiseCurrency) {
+    return `wise:${wiseCurrency}`;
   }
 
   const accountName = readParsedRowAccountName(row) ?? params?.fallbackAccountName ?? null;
@@ -2611,15 +2635,21 @@ const rowLooksLikeWiseWalletScreenshot = (
   const importMode = String(rawPayload?.importMode ?? "").toLowerCase();
   const documentType = String(rawPayload?.documentType ?? "").toLowerCase();
   const movementType = String(rawPayload?.movementType ?? "").toLowerCase();
+  const warnings = Array.isArray((rawPayload?.qualityChecks as Record<string, unknown> | undefined)?.warnings)
+    ? ((rawPayload?.qualityChecks as Record<string, unknown>).warnings as unknown[])
+        .filter((value): value is string => typeof value === "string")
+        .join(" ")
+    : "";
   const amountCurrencies = new Set(parseWiseEvidenceAmounts(row).map((amount) => amount.currency));
   const hasWiseMobileLanguage =
     /\b(?:Added|Refunded|Received|Sent|To\s+[A-Z]{3})\b/i.test(evidenceText) ||
-    /^(?:transfer|refund|real_spend)$/i.test(movementType);
+    /^(?:transfer|refund|real_spend)$/i.test(movementType) ||
+    /\b(?:app transaction list screenshot|wallet\/app transaction history|multi-currency rows)\b/i.test(warnings);
 
   return (
-    statementType === "wallet_statement" &&
     importMode === "statement" &&
     documentType === "statement" &&
+    (statementType === "wallet_statement" || statementType === "bank" || statementType === "") &&
     amountCurrencies.size > 0 &&
     hasWiseMobileLanguage
   );
@@ -2725,7 +2755,7 @@ const normalizeWiseWalletParsedRows = (
       return row;
     }
 
-    const accountName = `Wise ${currency}`;
+    const accountName = "Wise";
     const visibleDate = readWiseVisibleDateFromRowEvidence(row);
     const rawPayload =
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
@@ -2770,8 +2800,8 @@ const hasMultipleWiseWalletAccountNames = (
 ) =>
   new Set(
     normalizeWiseWalletParsedRows(rows, metadata)
-      .map((row) => readParsedRowAccountName(row))
-      .filter((value): value is string => typeof value === "string" && /^Wise\s+[A-Z]{3}$/.test(value))
+      .map((row) => readParsedRowAccountCurrency(row))
+      .filter((value): value is string => typeof value === "string" && value.length > 0)
   ).size > 1;
 
 const getImportAccountBalanceFromParsedRows = (rows: EnrichedParsedImportRow[]) => {
@@ -3291,6 +3321,20 @@ const resolveConfirmationAccount = async (params: {
       accountNumber: inferredAccountNumber,
       type: accountIdentityType,
     });
+  const accountHasNoAccountNumber = (account: (typeof workspaceAccounts)[number]) =>
+    !String(account.accountNumber ?? "").replace(/\D/g, "");
+  const isWiseWalletImport =
+    accountIdentityType === "wallet" &&
+    !hasInferredAccountNumber &&
+    Boolean(inferredCurrency) &&
+    /wise/i.test(`${inferredInstitution ?? ""} ${inferredAccountName ?? ""}`);
+  const wiseWalletAccountMatchesCurrency = (account: (typeof workspaceAccounts)[number]) =>
+    isWiseWalletImport &&
+    account.source === "upload" &&
+    account.type === "wallet" &&
+    accountHasNoAccountNumber(account) &&
+    normalizeInstitutionCurrency("Wise", account.currency ?? null, account.name ?? null) === inferredCurrency &&
+    /wise/i.test(`${account.institution ?? ""} ${account.name ?? ""}`);
   const accountNumberDigits = (value: string | null | undefined) => String(value ?? "").replace(/\D/g, "");
   const legacyMayaCreditAccount =
     inferredAccountType === "credit_card" && inferredInstitution && inferredAccountNumber
@@ -3312,21 +3356,26 @@ const resolveConfirmationAccount = async (params: {
     : null;
   if (directAccount) {
     const canonicalIdentityAccount =
-      workspaceAccounts
-        .filter((account) => account.id !== directAccount.id)
-        .filter(accountMatchesImportIdentity)
-        .sort(sortImportedAccountsByFreshness)[0] ??
-      (hasInferredAccountNumber
-        ? null
-        : findBestImportedAccountMatch(
-            workspaceAccounts.filter((account) => account.id !== directAccount.id),
-            {
-              name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
-              institution: inferredInstitution,
-              accountNumber: inferredAccountNumber,
-              type: accountIdentityType,
-            }
-          ));
+      (isWiseWalletImport
+        ? workspaceAccounts
+            .filter((account) => account.id !== directAccount.id)
+            .filter(wiseWalletAccountMatchesCurrency)
+            .sort(sortImportedAccountsByFreshness)[0] ?? null
+        : workspaceAccounts
+            .filter((account) => account.id !== directAccount.id)
+            .filter(accountMatchesImportIdentity)
+            .sort(sortImportedAccountsByFreshness)[0] ??
+          (hasInferredAccountNumber
+            ? null
+            : findBestImportedAccountMatch(
+                workspaceAccounts.filter((account) => account.id !== directAccount.id),
+                {
+                  name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
+                  institution: inferredInstitution,
+                  accountNumber: inferredAccountNumber,
+                  type: accountIdentityType,
+                }
+              )));
     const accountToUpdate = canonicalIdentityAccount ?? directAccount;
     const updatedAccount = await updateAccountIdentity(accountToUpdate, {
       name: inferredAccountName,
@@ -3343,10 +3392,30 @@ const resolveConfirmationAccount = async (params: {
     return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
+  const existingWiseWalletByCurrency =
+    isWiseWalletImport ? workspaceAccounts.filter(wiseWalletAccountMatchesCurrency).sort(sortImportedAccountsByFreshness)[0] ?? null : null;
+  if (existingWiseWalletByCurrency) {
+    const updatedAccount = await updateAccountIdentity(existingWiseWalletByCurrency, {
+      name: inferredAccountName,
+      institution: inferredInstitution,
+      accountNumber: null,
+      type: accountIdentityType,
+      source: "upload",
+      currency: inferredCurrency,
+      balance: inferredBalance,
+      creditLimit: inferredCreditLimit,
+    });
+
+    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
+  }
+
   const existingByKey =
-    workspaceAccounts
-      .filter(accountMatchesImportIdentity)
-      .sort(sortImportedAccountsByFreshness)[0] ?? null;
+    isWiseWalletImport
+      ? null
+      : workspaceAccounts
+          .filter(accountMatchesImportIdentity)
+          .sort(sortImportedAccountsByFreshness)[0] ?? null;
   if (!existingByKey && legacyMayaCreditAccount) {
     const updatedAccount = await updateAccountIdentity(legacyMayaCreditAccount, {
       name: inferredAccountName,
@@ -3379,7 +3448,7 @@ const resolveConfirmationAccount = async (params: {
     return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
-  const existingByIdentity = hasInferredAccountNumber
+  const existingByIdentity = hasInferredAccountNumber || isWiseWalletImport
     ? null
     : findBestImportedAccountMatch(workspaceAccounts, {
         name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
@@ -6950,10 +7019,30 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   const readRowInstitution = (row: Record<string, unknown>) =>
     (typeof row.institution === "string" && row.institution.trim() ? row.institution.trim() : null) ??
     baseStatementMetadata.institution;
+  const readRowAccountCurrency = (row: Record<string, unknown>) =>
+    normalizeWiseWalletCurrencyCode(readRowPayloadText(row, "accountCurrency")) ??
+    normalizeWiseWalletCurrencyCode(typeof row.currency === "string" ? row.currency : null);
+  const rowLooksWiseAccount = (row: Record<string, unknown>) =>
+    /wise/i.test(
+      [
+        readRowInstitution(row),
+        readRowAccountName(row),
+        readRowPayloadText(row, "institutionRaw"),
+        readRowPayloadText(row, "bank"),
+        readRowPayloadText(row, "source"),
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
   const accountGroupKeyForRow = (row: Record<string, unknown>) => {
     const accountNumber = readRowAccountNumber(row);
     if (accountNumber) {
       return `number:${accountNumber}`;
+    }
+
+    const wiseCurrency = rowLooksWiseAccount(row) ? readRowAccountCurrency(row) : null;
+    if (wiseCurrency) {
+      return `wise:${wiseCurrency}`;
     }
 
     const accountName = readRowAccountName(row);
@@ -6986,6 +7075,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const firstGroupRow = group.rows[0] ?? {};
     const groupRows = group.rows as EnrichedParsedImportRow[];
     const groupEndingBalance = getImportAccountBalanceFromParsedRows(groupRows);
+    const groupCurrency = readRowAccountCurrency(firstGroupRow);
     const groupAccount = await resolveConfirmationAccount({
       importFile,
       statementMetadata: {
@@ -6994,9 +7084,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         institution: readRowInstitution(firstGroupRow) ?? baseStatementMetadata.institution ?? checkpointBankName ?? null,
         accountNumber: readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
         currency:
-          typeof firstGroupRow.currency === "string" && firstGroupRow.currency.trim()
+          groupCurrency ??
+          (typeof firstGroupRow.currency === "string" && firstGroupRow.currency.trim()
             ? firstGroupRow.currency.trim().toUpperCase()
-            : baseStatementMetadata.currency,
+            : baseStatementMetadata.currency),
         endingBalance: groupEndingBalance ?? baseStatementMetadata.endingBalance,
       },
       parsedRows: groupRows,

@@ -19,6 +19,7 @@ const STALE_RECEIPT_PROCESSING_MS = 3 * 60 * 1000;
 const STALE_STATEMENT_IMAGE_QUEUE_MS = 15 * 1000;
 const STALE_STATEMENT_IMAGE_READING_MS = 45 * 1000;
 const STALE_STATEMENT_IMAGE_RECONCILING_MS = 30 * 1000;
+const STALE_STATEMENT_IMAGE_EMPTY_DONE_MS = 15 * 1000;
 
 const isImageImportFile = (fileName?: string | null, fileType?: string | null) =>
   String(fileType ?? "").toLowerCase().startsWith("image/") ||
@@ -118,6 +119,56 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           statementSelfHeal: {
             reason: "stale_statement_image_queue",
             staleAfterSeconds: Math.round(STALE_STATEMENT_IMAGE_QUEUE_MS / 1000),
+          },
+        });
+      }
+    }
+
+    const staleStatementImageEmptyDone =
+      importMode === "statement" &&
+      (snapshot.importFile.status === "done" || snapshot.importFile.status === "failed") &&
+      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      snapshot.confirmedTransactionsCount === 0 &&
+      snapshot.parsedRowsCount === 0 &&
+      Number.isFinite(updatedAtMs) &&
+      statementImageProcessingAgeMs > STALE_STATEMENT_IMAGE_EMPTY_DONE_MS;
+
+    if (staleStatementImageEmptyDone) {
+      await updateImportFileCompat(importId, {
+        status: "processing",
+        processingPhase: "reading_account_details",
+        processingMessage: "Retrying screenshot import...",
+      });
+      after(async () => {
+        try {
+          const { getConfiguredPdfJsBaseUrl } = await import("@/lib/import-file-text.server");
+          const { processImportFileText } = await import("@/workers/import-processor");
+          await processImportFileText(importId, {
+            actorUserId: userId,
+            qaSource: "import_processing",
+            importMode: "statement",
+            pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
+          });
+        } catch {
+          await updateImportFileCompat(importId, {
+            status: "failed",
+            processingPhase: "repair_needed",
+            processingMessage: "Clover couldn't finish reading this screenshot. Please retry the upload.",
+            parsedRowsCount: 0,
+            confirmedTransactionsCount: 0,
+          }).catch(() => null);
+        }
+      });
+      const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
+        importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+        promoteFailedVisibleImport: true,
+      });
+      if (refreshedSnapshot) {
+        return NextResponse.json({
+          ...refreshedSnapshot,
+          statementSelfHeal: {
+            reason: "stale_statement_image_empty_done",
+            staleAfterSeconds: Math.round(STALE_STATEMENT_IMAGE_EMPTY_DONE_MS / 1000),
           },
         });
       }
