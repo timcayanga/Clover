@@ -117,7 +117,7 @@ const sidebarSearchPages: Array<{
     title: "Accounts",
     href: "/accounts",
     icon: "accounts",
-    detail: "Banks, cash, and investments.",
+    detail: "Banks, cash, and linked accounts.",
     terms: ["accounts", "account", "banks", "bank", "wallet", "cash"],
   },
   {
@@ -135,14 +135,6 @@ const sidebarSearchPages: Array<{
     icon: "recurring",
     detail: "Upcoming payments, reminders, and repeating costs.",
     terms: ["recurring", "scheduled", "upcoming", "payments", "bills", "reminders", "loans"],
-  },
-  {
-    key: "investments",
-    title: "Investments",
-    href: "/investments",
-    icon: "investments",
-    detail: "Track holdings and market tickers.",
-    terms: ["investments", "investment", "ticker", "tickers", "stock", "stocks", "fund", "bonds"],
   },
   {
     key: "split-bill",
@@ -167,22 +159,6 @@ const sidebarSearchPages: Array<{
     icon: "adviser",
     detail: "Proactive guidance and coaching.",
     terms: ["adviser", "advice", "analysis", "trend", "goal", "coach"],
-  },
-  {
-    key: "goals",
-    title: "Goals",
-    href: "/goals",
-    icon: "goals",
-    detail: "Save, pay down debt, or track milestones.",
-    terms: ["goals", "goal", "savings", "save", "debt", "milestone"],
-  },
-  {
-    key: "budgeting",
-    title: "Budgeting",
-    href: "/budgeting",
-    icon: "budgeting",
-    detail: "Spending limits, scope, and threshold warnings.",
-    terms: ["budget", "budgeting", "limit", "limits", "threshold", "caps", "guardrail"],
   },
   {
     key: "settings",
@@ -625,7 +601,7 @@ export function CloverShell({
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account";
   const profileImage = user?.imageUrl ?? null;
   const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
-  const isMoreActive = active === "more" || active === "budgeting" || pathname?.startsWith("/more") || pathname?.startsWith("/budgeting");
+  const isMoreActive = active === "more" || pathname?.startsWith("/more");
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
   const isMoreMenuOpen = openMenu === "more";
@@ -775,7 +751,7 @@ export function CloverShell({
   }, [pathname]);
 
   useEffect(() => {
-    const prefetchTargets = ["/home", "/accounts", "/transactions", "/reports", "/adviser", "/goals", "/more", "/settings", "/help"];
+    const prefetchTargets = ["/home", "/accounts", "/transactions", "/reports", "/adviser", "/more", "/settings", "/help"];
 
     for (const href of prefetchTargets) {
       if (pathname === href) {
@@ -1455,17 +1431,6 @@ export function CloverShell({
                         Split Bills
                       </button>
                       <button
-                        className={`sidebar-nav__submenu-link${active === "investments" || pathname?.startsWith("/investments") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/investments")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="investments" />
-                        </span>
-                        Investments
-                      </button>
-                      <button
                         className={`sidebar-nav__submenu-link${active === "reports" || pathname?.startsWith("/reports") ? " is-active" : ""}`}
                         type="button"
                         role="menuitem"
@@ -1475,28 +1440,6 @@ export function CloverShell({
                           <MenuIcon name="reports" />
                         </span>
                         Reports
-                      </button>
-                      <button
-                        className={`sidebar-nav__submenu-link${active === "goals" || pathname?.startsWith("/goals") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/goals")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="goals" />
-                        </span>
-                        Goals
-                      </button>
-                      <button
-                        className={`sidebar-nav__submenu-link${active === "budgeting" || pathname?.startsWith("/budgeting") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/budgeting")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="budgeting" />
-                        </span>
-                        Budgeting
                       </button>
                       <button
                         className={`sidebar-nav__submenu-link${pathname?.startsWith("/help") ? " is-active" : ""}`}

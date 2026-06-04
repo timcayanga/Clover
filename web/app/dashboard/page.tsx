@@ -8,8 +8,6 @@ import { CloverShell } from "@/components/clover-shell";
 import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
-import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
-import { GOAL_OPTIONS, normalizeGoalPlan } from "@/lib/goals";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { isLiabilityAccountType, isSpendableAccountType } from "@/lib/account-types";
@@ -17,9 +15,7 @@ import { RouteSplash } from "@/components/route-splash";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardTopActions } from "@/components/dashboard-top-actions";
 import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
-import { GoalsEditor as GoalsEditorModal } from "@/components/goals-editor-modal";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
-import { loadBudgetWorkspaceData } from "@/lib/budgeting-data";
 import { buildRecurringTransactionSummaries } from "@/lib/recurring";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 
@@ -110,8 +106,6 @@ const formatCurrency = (value: number, currency?: string | null) => formatCurren
 
 const formatSignedCurrency = (value: number, currency?: string | null) =>
   `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
-
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const toIsoDay = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -570,24 +564,6 @@ async function DashboardStream({
     (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70
   );
   const reviewAttentionCount = reviewAttentionTransactions.length;
-  const goalKey = user.primaryGoal as GoalKey | null;
-  const goalTargetAmount = user.goalTargetAmount !== null ? Number(user.goalTargetAmount) : null;
-  const currentGoalPlan = normalizeGoalPlan(user.goalPlan, goalKey, goalTargetAmount);
-  const goalProgress = getGoalProgressSnapshot({
-    goalKey,
-    targetAmount: goalTargetAmount,
-    currentNet: currentSummary.net,
-    currentSpend: currentSummary.current.expense,
-    monthlyIncome: currentSummary.current.income > 0 ? currentSummary.current.income : null,
-    currentSavingsRate,
-    previousSavingsRate,
-    spendDelta,
-    recurringShare: 0,
-  }, displayCurrency);
-  const budgetData = await loadBudgetWorkspaceData(workspaceSummary.id, now);
-  const budgetOverview = budgetData.overview;
-  const budgetHeroAlert = budgetOverview.alerts[0] ?? null;
-  const goalProgressPercent = clamp(goalProgress.progressPercent ?? 0, 0, 100);
   const daysSinceLastImport = latestImport
     ? Math.max(0, Math.floor((now.getTime() - latestImport.uploadedAt.getTime()) / 86400000))
     : null;
@@ -691,16 +667,6 @@ async function DashboardStream({
       : null,
   ];
   const insightItems = insightCandidates.filter((item): item is HomeAdviserItem => Boolean(item)).slice(0, 3);
-  const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
-  const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
-  const goalProgressNudge =
-    goalProgress.progressPercent === null
-      ? "Set a target so Clover can keep the next step visible."
-      : goalProgress.achieved
-        ? "Goal reached for this period. Keep the habit steady."
-        : goalProgress.remainingAmount !== null
-          ? `${formatCurrency(goalProgress.remainingAmount)} to go. ${goalProgress.nextAction}`
-          : goalProgress.nextAction;
   const totalBalanceLabel = formatCurrency(savingsTotal, displayCurrency);
   const balanceHighlights = [
     {
@@ -716,9 +682,6 @@ async function DashboardStream({
       trend: currentSummary.expenseDelta,
     },
   ];
-  const goalHeroHeading = goalKey ? "Goal progress" : "Set a goal to track your progress";
-  const goalHeroActionLabel = goalKey ? "Adjust goal" : "Set a goal";
-  const goalEditorMonthlyIncome = currentSummary.current.income > 0 ? currentSummary.current.income : null;
   const weeklyReportTone = weeklySummary.net >= 0 ? "positive" : "warning";
   const monthlyReportTone = currentSummary.net >= 0 ? "positive" : "warning";
   const weeklyReportCaption =
@@ -733,16 +696,15 @@ async function DashboardStream({
     <>
       <PostHogPersonProperties
         distinctId={user.clerkUserId}
-          properties={{
-            workspace_name: workspaceSummary.name,
-            account_count: workspaceSummary._count.accounts,
-            cash_account_count: cashAccountCount,
-            tracked_balance_total: Number(savingsTotal.toFixed(2)),
-            tracked_balance_currency: displayCurrency,
-            transaction_count: workspaceSummary._count.transactions,
-            import_count: workspaceSummary._count.importFiles,
-            review_attention_count: reviewAttentionCount,
-          goal: goalKey ?? null,
+        properties={{
+          workspace_name: workspaceSummary.name,
+          account_count: workspaceSummary._count.accounts,
+          cash_account_count: cashAccountCount,
+          tracked_balance_total: Number(savingsTotal.toFixed(2)),
+          tracked_balance_currency: displayCurrency,
+          transaction_count: workspaceSummary._count.transactions,
+          import_count: workspaceSummary._count.importFiles,
+          review_attention_count: reviewAttentionCount,
           financial_experience: user.financialExperience,
           last_import_at: latestImport?.uploadedAt.toISOString() ?? null,
           days_since_last_import: daysSinceLastImport,
@@ -877,49 +839,47 @@ async function DashboardStream({
         </div>
 
         <div className="dashboard-home__snapshot-grid dashboard-home__snapshot-grid--lower">
-          {budgetOverview.activeBudgetCount > 0 ? (
-            <div className="dashboard-home__goal-card dashboard-home__budget-card">
-              <div className="dashboard-home__goal-card-head">
-                <p className="eyebrow">Budget watch</p>
-              </div>
-              <div className="dashboard-home__goal-card-body">
-                <div
-                  className="dashboard-home__ring dashboard-home__ring--compact"
-                  style={{
-                    background: `conic-gradient(var(--accent) 0 ${Math.min(budgetOverview.totalProgressPercent, 100)}%, rgba(15, 23, 42, 0.08) ${Math.min(
-                      budgetOverview.totalProgressPercent,
-                      100
-                    )}% 100%)`,
-                  }}
-                >
-                  <div className="dashboard-home__ring-inner">
-                    <strong>{budgetOverview.alerts.length > 0 ? `${Math.round(budgetOverview.alerts[0].progressPercent)}%` : `${Math.round(budgetOverview.totalProgressPercent)}%`}</strong>
-                  </div>
-                </div>
-                <div className="dashboard-home__goal-card-copy">
-                  <strong>{budgetOverview.alerts[0]?.name ?? "All budgets calm"}</strong>
-                  <small>
-                    {budgetOverview.alerts.length > 0
-                      ? `${budgetOverview.alerts.length} alert${budgetOverview.alerts.length === 1 ? "" : "s"} active`
-                      : `${budgetOverview.activeBudgetCount} budget${budgetOverview.activeBudgetCount === 1 ? "" : "s"} active`}
-                  </small>
+          <div className="dashboard-home__goal-card dashboard-home__recurring-card">
+            <div className="dashboard-home__goal-card-head">
+              <p className="eyebrow">Recurring watch</p>
+            </div>
+            <div className="dashboard-home__goal-card-body">
+              <div
+                className="dashboard-home__ring dashboard-home__ring--compact"
+                style={{
+                  background: `conic-gradient(var(--accent) 0 ${Math.min(
+                    recurringCandidate ? recurringCandidate.confidence * 0.9 : plannedPaymentsDueSoon.length > 0 ? plannedPaymentsDueSoon.length * 30 : 18,
+                    100
+                  )}%, rgba(15, 23, 42, 0.08) ${Math.min(
+                    recurringCandidate ? recurringCandidate.confidence * 0.9 : plannedPaymentsDueSoon.length > 0 ? plannedPaymentsDueSoon.length * 30 : 18,
+                    100
+                  )}% 100%)`,
+                }}
+              >
+                <div className="dashboard-home__ring-inner">
+                  <strong>{recurringCandidate ? `${recurringCandidate.count}x` : `${plannedPaymentsDueSoon.length}`}</strong>
                 </div>
               </div>
+              <div className="dashboard-home__goal-card-copy">
+                <strong>{recurringCandidate?.name ?? "Repeat bills surface here"}</strong>
+                <small>
+                  {recurringCandidate
+                    ? `${recurringCandidate.count} recent hit${recurringCandidate.count === 1 ? "" : "s"} found`
+                    : plannedPaymentsDueSoon.length > 0
+                      ? `${plannedPaymentsDueSoon.length} planned payment${plannedPaymentsDueSoon.length === 1 ? "" : "s"} due soon`
+                      : "Clover will surface repeat costs and upcoming payments here."}
+                </small>
+              </div>
             </div>
-          ) : (
-            <div className="dashboard-home__goal-card dashboard-home__budget-card dashboard-home__goal-card--empty">
-              <p className="eyebrow">Budget watch</p>
-              <strong>Set a budget to keep spending visible.</strong>
-              <Link className="button button-secondary button-small" href="/budgeting">
-                Create budget
-              </Link>
-            </div>
-          )}
+            <Link className="button button-secondary button-small" href="/recurring">
+              Open recurring
+            </Link>
+          </div>
           {shouldShowStarterCard ? (
             <div className="dashboard-home__starter-card">
               <p className="eyebrow">Get started</p>
               <strong>Upload files to unlock your dashboard.</strong>
-              <p>Bring in a statement and Clover will populate balance, movement, and goal progress in one place.</p>
+              <p>Bring in a statement and Clover will populate balance, movement, and recurring patterns in one place.</p>
               <div className="dashboard-home__starter-actions">
                 <DashboardImportTrigger className="button button-primary button-small">
                   Upload files
@@ -929,46 +889,37 @@ async function DashboardStream({
                 </Link>
               </div>
             </div>
-          ) : goalKey ? (
-            <div className="dashboard-home__goal-card">
+          ) : (
+            <div className="dashboard-home__goal-card dashboard-home__review-card">
               <div className="dashboard-home__goal-card-head">
-                <p className="eyebrow">Track progress</p>
+                <p className="eyebrow">Review queue</p>
               </div>
               <div className="dashboard-home__goal-card-body">
                 <div
                   className="dashboard-home__ring dashboard-home__ring--compact"
                   style={{
-                    background: `conic-gradient(var(--accent) 0 ${goalProgressPercent}%, rgba(15, 23, 42, 0.08) ${goalProgressPercent}% 100%)`,
+                    background: `conic-gradient(var(--accent) 0 ${Math.min(reviewAttentionCount * 12, 100)}%, rgba(15, 23, 42, 0.08) ${Math.min(
+                      reviewAttentionCount * 12,
+                      100
+                    )}% 100%)`,
                   }}
                 >
                   <div className="dashboard-home__ring-inner">
-                    <strong>{goalProgress.progressPercent === null ? "Set" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
+                    <strong>{reviewAttentionCount > 0 ? `${reviewAttentionCount}` : "0"}</strong>
                   </div>
                 </div>
                 <div className="dashboard-home__goal-card-copy">
-                  <strong>{goalSummaryLabel}</strong>
-                  <small>{goalProgressLabel} complete</small>
-                  <small>{goalProgressNudge}</small>
+                  <strong>{reviewAttentionCount > 0 ? `${reviewAttentionCount} transactions need review` : "Transactions look tidy"}</strong>
+                  <small>
+                    {reviewAttentionCount > 0
+                      ? "Low-confidence rows and uncategorized items are ready for cleanup."
+                      : "Clover is keeping the transaction list clean and ready for reports."}
+                  </small>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="dashboard-home__goal-card dashboard-home__goal-card--empty">
-              <p className="eyebrow">Track progress</p>
-              <strong>{goalHeroHeading}</strong>
-              <GoalsEditorModal
-                compact
-                triggerLabel={goalHeroActionLabel}
-                triggerClassName="button button-secondary button-small"
-                goals={GOAL_OPTIONS}
-                currentGoal={goalKey}
-                currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
-                currentGoalPlan={currentGoalPlan}
-                monthlyIncome={goalEditorMonthlyIncome}
-                suggestedTargetAmount={monthSummary.expense > 0 ? monthSummary.expense : null}
-                beginnerMode={user.financialExperience === "beginner"}
-                currency={displayCurrency}
-              />
+              <Link className="button button-secondary button-small" href={reviewAttentionCount > 0 ? "/review" : "/transactions"}>
+                {reviewAttentionCount > 0 ? "Open review" : "Open transactions"}
+              </Link>
             </div>
           )}
         </div>
