@@ -4627,6 +4627,41 @@ export const processImportFileText = async (
       ...properties,
     }).catch(() => null);
   };
+  const confirmImportFileWithRetry = async (reason: string): Promise<ConfirmImportResult> => {
+    try {
+      return await confirmImportFile(importFileId, null);
+    } catch (firstError) {
+      const parsedRowsReady = await prisma.parsedTransaction.count({ where: { importFileId } }).catch(() => 0);
+      const shouldRetry = parsedRowsReady > 0;
+      if (!shouldRetry) {
+        throw firstError;
+      }
+
+      console.warn("[import-confirmation] retrying parsed-row confirmation after save failure", {
+        importFileId,
+        reason,
+        parsedRowsReady,
+        error: firstError,
+      });
+      await updateImportFileCompat(importFileId, {
+        status: "processing",
+        processingPhase: "reconciling",
+        processingMessage: "Clover parsed the rows and is retrying the final save.",
+      }).catch(() => null);
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      try {
+        return await confirmImportFile(importFileId, null);
+      } catch (secondError) {
+        console.warn("[import-confirmation] confirmation retry failed", {
+          importFileId,
+          reason,
+          parsedRowsReady,
+          error: secondError,
+        });
+        throw secondError;
+      }
+    }
+  };
 
   if (!importFile) {
     throw new Error("Import file not found");
@@ -5992,7 +6027,7 @@ export const processImportFileText = async (
         processingPhase: "reconciling",
         processingMessage: "Clover is matching the visible rows to the account.",
       });
-      confirmedImportResult = await confirmImportFile(importFileId, null);
+      confirmedImportResult = await confirmImportFileWithRetry("fast_image_statement");
       if (confirmedImportResult.status === "staged") {
         await updateImportFileCompat(importFileId, {
           status: "processing",
@@ -6256,7 +6291,7 @@ export const processImportFileText = async (
     const shouldMarkDone = isDocumentImport ? Boolean(documentImportRecord) : qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET || canFinalizeWithWarnings;
     if (shouldMarkDone) {
       try {
-        confirmedImportResult = await confirmImportFile(importFileId, null);
+        confirmedImportResult = await confirmImportFileWithRetry("qa_finalize");
         if (confirmedImportResult.status === "staged") {
           await updateImportFileCompat(importFileId, {
             status: "processing",
