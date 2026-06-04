@@ -7526,10 +7526,13 @@ export function ImportFilesModal({
 
       return results;
     };
-    const isStatementImageBatchItem = (item: QueuedFile) =>
-      (item.importMode ?? "statement") === "statement" && isImageImportFile(item.file);
+    const getBatchImportMode = (item: QueuedFile) => inferImportModeForFile(item.file, item.importMode ?? "statement");
+    const isFastImageBatchItem = (item: QueuedFile) => {
+      const mode = getBatchImportMode(item);
+      return isImageImportFile(item.file) && (mode === "statement" || mode === "receipt");
+    };
     const processItemsForBatch = async (queue: QueuedFile[]) => {
-      if (queue.length <= 1 || !queue.every(isStatementImageBatchItem)) {
+      if (queue.length <= 1 || !queue.every(isFastImageBatchItem)) {
         return processItemsSequentially(queue);
       }
 
