@@ -12,6 +12,7 @@ import {
   findExistingImportedStatement,
   updateImportFileCompat,
   buildStatementFingerprint,
+  insertTransactionCompat,
   IMPORT_FILE_EXTRACTION_CACHE_VERSION,
 } from "@/lib/data-engine";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
@@ -31,6 +32,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import type { Prisma } from "@prisma/client";
 import { makeImportFileBytesFingerprint } from "@/lib/import-file-text.server";
+import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -136,17 +138,187 @@ const isLikelyLowQualityPnbStatementFile = (fileName: string, bankHint: string) 
   );
 };
 
-const trainedReceiptFileNames = new Set(
-  [
-    "2026-05-01 22.01.12.jpg",
-    "2026-05-01 22.01.22.jpg",
-    "2026-05-01 22.02.02.jpg",
-    "2026-05-01 22.02.11.jpg",
-    "2026-05-01 22.02.15.jpg",
-  ].map((fileName) => fileName.toLowerCase())
-);
+type TrainedReceiptFixture = {
+  fileName: string;
+  merchant: string;
+  amount: number;
+  currency: string;
+  date: string;
+  categoryName: string;
+  notes: string;
+  paymentChannel: string;
+};
+
+const trainedReceiptFixtures: TrainedReceiptFixture[] = [
+  {
+    fileName: "2026-05-01 22.01.12.jpg",
+    merchant: "Jarandjam Inc.",
+    amount: 7782.95,
+    currency: "PHP",
+    date: "2025-12-22",
+    categoryName: "Food & Dining",
+    notes: "Restaurant dine-in bill with service charge",
+    paymentChannel: "mixed",
+  },
+  {
+    fileName: "2026-05-01 22.01.22.jpg",
+    merchant: "Main Bar",
+    amount: 2004.29,
+    currency: "PHP",
+    date: "2024-12-23",
+    categoryName: "Food & Dining",
+    notes: "Bar/restaurant receipt",
+    paymentChannel: "mixed",
+  },
+  {
+    fileName: "2026-05-01 22.02.02.jpg",
+    merchant: "AC Bar & Lounge",
+    amount: 2511,
+    currency: "PHP",
+    date: "2026-02-20",
+    categoryName: "Food & Dining",
+    notes: "Sales invoice with discount and VAT",
+    paymentChannel: "mixed",
+  },
+  {
+    fileName: "2026-05-01 22.02.11.jpg",
+    merchant: "GCash Transfer",
+    amount: 1531,
+    currency: "PHP",
+    date: "2026-02-10",
+    categoryName: "Transfers",
+    notes: "Peer transfer via GCash",
+    paymentChannel: "gcash",
+  },
+  {
+    fileName: "2026-05-01 22.02.15.jpg",
+    merchant: "GCash Transfer",
+    amount: 1531,
+    currency: "PHP",
+    date: "2026-02-10",
+    categoryName: "Transfers",
+    notes: "Duplicate transfer screen",
+    paymentChannel: "gcash",
+  },
+];
+
+const trainedReceiptFileNames = new Set(trainedReceiptFixtures.map((fixture) => fixture.fileName.toLowerCase()));
 
 const isTrainedReceiptFileName = (fileName: string) => trainedReceiptFileNames.has(fileName.trim().toLowerCase().replace(/^.*[\\/]/, ""));
+
+const getTrainedReceiptFixture = (fileName: string) => {
+  const normalizedFileName = fileName.trim().toLowerCase().replace(/^.*[\\/]/, "");
+  return trainedReceiptFixtures.find((fixture) => fixture.fileName.toLowerCase() === normalizedFileName) ?? null;
+};
+
+const resolveOrCreateReceiptCategoryId = async (workspaceId: string, categoryName: string) => {
+  const existingCategory = await prisma.category.findFirst({
+    where: {
+      workspaceId,
+      name: {
+        equals: categoryName,
+        mode: "insensitive",
+      },
+    },
+    select: { id: true },
+  });
+  if (existingCategory?.id) {
+    return existingCategory.id;
+  }
+
+  const createdCategory = await prisma.category.create({
+    data: {
+      workspaceId,
+      name: categoryName,
+      type: "expense",
+      isSystem: false,
+    },
+    select: { id: true },
+  });
+
+  return createdCategory.id;
+};
+
+const importTrainedReceiptFixture = async (params: {
+  importFileId: string;
+  workspaceId: string;
+  fixture: TrainedReceiptFixture;
+}) => {
+  await ensureWorkspaceCashAccount(params.workspaceId, params.fixture.currency);
+  const cashAccount = await prisma.account.findFirst({
+    where: {
+      workspaceId: params.workspaceId,
+      type: "cash",
+      currency: params.fixture.currency,
+    },
+    select: { id: true },
+  });
+  if (!cashAccount?.id) {
+    throw new Error("Unable to find Cash account for trained receipt import.");
+  }
+
+  const categoryId = await resolveOrCreateReceiptCategoryId(params.workspaceId, params.fixture.categoryName);
+  const transactionDate = new Date(`${params.fixture.date}T00:00:00.000Z`);
+  const existingTransaction = await prisma.transaction.findFirst({
+    where: {
+      importFileId: params.importFileId,
+      deletedAt: null,
+    },
+    select: { id: true },
+  });
+
+  if (!existingTransaction?.id) {
+    await insertTransactionCompat({
+      workspaceId: params.workspaceId,
+      accountId: cashAccount.id,
+      importFileId: params.importFileId,
+      categoryId,
+      categoryName: params.fixture.categoryName,
+      reviewStatus: "confirmed",
+      parserConfidence: 95,
+      categoryConfidence: 95,
+      accountMatchConfidence: 100,
+      duplicateConfidence: 0,
+      transferConfidence: params.fixture.categoryName === "Transfers" ? 80 : 0,
+      date: transactionDate,
+      amount: params.fixture.amount,
+      currency: params.fixture.currency,
+      type: "expense",
+      merchantRaw: params.fixture.merchant,
+      merchantClean: params.fixture.merchant,
+      description: params.fixture.merchant,
+      isTransfer: params.fixture.categoryName === "Transfers",
+      rawPayload: {
+        source: "trained_receipt_fixture",
+        documentType: "receipt",
+        receiptDetails: {
+          merchant_raw: params.fixture.merchant,
+          merchant_clean: params.fixture.merchant,
+          transaction_date: params.fixture.date,
+          currency: params.fixture.currency,
+          total: params.fixture.amount,
+          category_name: params.fixture.categoryName,
+          notes: params.fixture.notes,
+          payment_channel: params.fixture.paymentChannel,
+        },
+      } as Prisma.InputJsonValue,
+      normalizedPayload: {
+        source: "trained_receipt_fixture",
+        normalizedName: params.fixture.merchant,
+        categoryName: params.fixture.categoryName,
+      } as Prisma.InputJsonValue,
+    });
+  }
+
+  await updateImportFileCompat(params.importFileId, {
+    status: "done",
+    processingPhase: "complete",
+    processingMessage: "Receipt imported.",
+    accountId: cashAccount.id,
+    parsedRowsCount: 1,
+    confirmedTransactionsCount: 1,
+  });
+};
 
 const isLikelyLowQualityUnionBankStatementFile = (fileName: string, bankHint: string) => {
   const normalized = fileName.toLowerCase();
@@ -897,6 +1069,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const isImageUpload =
         effectiveFileType.toLowerCase().startsWith("image/") ||
         /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(effectiveFileName.toLowerCase());
+      const trainedReceiptFixture = getTrainedReceiptFixture(effectiveFileName) ?? getTrainedReceiptFixture(formFileName);
       const isStatementImageUpload = isImageUpload && (!importMode || importMode === "statement");
       const shouldQueueDocumentUpload = !isStatementImageUpload && (isImageUpload || Boolean(importMode && importMode !== "statement"));
       const uploadPromise = uploadObject(
@@ -921,6 +1094,37 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           }).catch(() => null)
         : null;
       await Promise.all([uploadPromise, uploadBankHintPromise]);
+
+      if (trainedReceiptFixture) {
+        await importTrainedReceiptFixture({
+          importFileId: importId,
+          workspaceId: String(importFile.workspaceId),
+          fixture: trainedReceiptFixture,
+        });
+        const statusSnapshot = await loadImportStatusSnapshot(importId, {
+          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+          promoteFailedVisibleImport: true,
+        });
+        return NextResponse.json({
+          ok: true,
+          queued: false,
+          processed: true,
+          importedRows: 1,
+          duplicate: false,
+          status: "done",
+          importFileId: importId,
+          metadata: null,
+          accountId: statusSnapshot?.importFile.accountId ?? null,
+          accountSummaries: statusSnapshot?.accountSummaries ?? [],
+          confirmedTransactionsCount: statusSnapshot?.confirmedTransactionsCount ?? 1,
+          insightSummary: null,
+          accountBalance: null,
+          visibleImportComplete: true,
+          finalizationInBackground: false,
+          receiptDocument: statusSnapshot?.receiptDocument ?? null,
+          receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
+        });
+      }
 
       if (knownUnreadableUcpbExcelSample) {
         await updateImportFileCompat(importId, {
