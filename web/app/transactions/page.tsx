@@ -2340,6 +2340,7 @@ function TransactionsPageContent() {
   const [addMenuPortalStyle, setAddMenuPortalStyle] = useState<React.CSSProperties | null>(null);
   const [selectionMenuOpen, setSelectionMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [importSessionId, setImportSessionId] = useState(0);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
@@ -3384,6 +3385,7 @@ function TransactionsPageContent() {
       setPendingImportSummary(null);
       closeToolbarMenus();
       setImportBackgroundOnly(shouldLaunchInBackground);
+      setImportSessionId((current) => current + 1);
       setImportSeedFiles(files && files.length > 0 ? files : null);
       setImportOpen(true);
     });
@@ -8559,6 +8561,7 @@ function TransactionsPageContent() {
       ) : null}
 
       <ImportFilesModal
+        key={importSessionId}
         open={importOpen}
         workspaceId={selectedWorkspaceId}
         accounts={accounts}
