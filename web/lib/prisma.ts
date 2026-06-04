@@ -1,11 +1,29 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { loadEnvConfig } from "@next/env";
+import { existsSync } from "fs";
+import path from "path";
 import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
   prismaPool?: Pool;
 };
+
+const loadLocalDatabaseEnv = () => {
+  if (process.env.DATABASE_URL?.trim() || process.env.DIRECT_URL?.trim()) {
+    return;
+  }
+
+  const cwd = process.cwd();
+  const candidateProjectDirs = [cwd, path.join(cwd, "web")];
+  const projectDir = candidateProjectDirs.find((dir) => existsSync(path.join(dir, "next.config.mjs")));
+  if (projectDir) {
+    loadEnvConfig(projectDir);
+  }
+};
+
+loadLocalDatabaseEnv();
 
 const resolveDatabaseUrl = () => {
   const configuredUrl = process.env.DATABASE_URL?.trim() || process.env.DIRECT_URL?.trim();
