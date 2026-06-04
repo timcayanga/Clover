@@ -7531,6 +7531,8 @@ export function ImportFilesModal({
       );
     });
 
+    const canContinueBatchInBackground = itemsToProcess.length <= 1;
+
     if (hasBrowserParsableStatements) {
       for (const item of itemsToProcess) {
         if (shouldSkipClientStatementPreparse(item.file.name)) {
@@ -7540,7 +7542,12 @@ export function ImportFilesModal({
       }
 
       const preUploadVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(3_000, 1_200 + items.length * 450));
-      if (preUploadVisibilityReady && !uploadPausedRef.current && !uploadCancelRequestedRef.current) {
+      if (
+        canContinueBatchInBackground &&
+        preUploadVisibilityReady &&
+        !uploadPausedRef.current &&
+        !uploadCancelRequestedRef.current
+      ) {
         void processItemsSequentially(itemsToProcess).finally(() => {
           router.refresh();
         });
@@ -7557,7 +7564,13 @@ export function ImportFilesModal({
     const processResultsPromise = processItemsSequentially(itemsToProcess);
     const localVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
 
-    if (localVisibilityReady && itemsToProcess.length > 0 && !uploadPausedRef.current && !uploadCancelRequestedRef.current) {
+    if (
+      canContinueBatchInBackground &&
+      localVisibilityReady &&
+      itemsToProcess.length > 0 &&
+      !uploadPausedRef.current &&
+      !uploadCancelRequestedRef.current
+    ) {
       void processResultsPromise.finally(() => {
         router.refresh();
       });

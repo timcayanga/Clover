@@ -5,7 +5,7 @@ export const postFileWithProgress = (
   file: File,
   fields: Record<string, string | undefined> = {},
   onProgress?: (progress: number) => void,
-  options?: { signal?: AbortSignal | null }
+  options?: { signal?: AbortSignal | null; timeoutMs?: number }
 ) =>
   new Promise<Response>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -21,6 +21,7 @@ export const postFileWithProgress = (
     }
 
     xhr.open("POST", url, true);
+    xhr.timeout = options?.timeoutMs ?? 90_000;
 
     const abortUpload = () => {
       if (settled) {
@@ -60,6 +61,11 @@ export const postFileWithProgress = (
       settled = true;
       abortSignal?.removeEventListener("abort", abortUpload);
       reject(new Error("Unable to upload the file."));
+    };
+    xhr.ontimeout = () => {
+      settled = true;
+      abortSignal?.removeEventListener("abort", abortUpload);
+      reject(new Error("Timed out while uploading the file."));
     };
     xhr.onabort = () => {
       settled = true;
