@@ -5470,7 +5470,7 @@ export function ImportFilesModal({
     const guessedIdentity = guessStatementIdentity(item.file.name);
     const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName && guessedIdentity.accountNumber);
     const itemImportMode = inferImportModeForFile(item.file, item.importMode ?? "statement");
-    const isDocumentImport = itemImportMode !== "statement" || isImageImportFile(item.file);
+    const isDocumentImport = itemImportMode !== "statement";
     let importFileId: string | null = null;
 
     if (!workspaceId) {

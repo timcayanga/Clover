@@ -2644,12 +2644,19 @@ const rowLooksLikeWiseWalletScreenshot = (
   const hasWiseMobileLanguage =
     /\b(?:Added|Refunded|Received|Sent|To\s+[A-Z]{3})\b/i.test(evidenceText) ||
     /^(?:transfer|refund|real_spend)$/i.test(movementType) ||
-    /\b(?:app transaction list screenshot|wallet\/app transaction history|multi-currency rows)\b/i.test(warnings);
+    /\b(?:mobile wallet|app transaction list screenshot|wallet\/app transaction (?:history|list)|transaction-history screenshot|multi-currency rows)\b/i.test(warnings);
+  const isSupportedWiseStatementType = [
+    "",
+    "bank",
+    "transaction_history",
+    "wallet_statement",
+    "wallet_transaction_history",
+  ].includes(statementType);
 
   return (
     importMode === "statement" &&
     documentType === "statement" &&
-    (statementType === "wallet_statement" || statementType === "bank" || statementType === "") &&
+    isSupportedWiseStatementType &&
     amountCurrencies.size > 0 &&
     hasWiseMobileLanguage
   );
@@ -4544,7 +4551,7 @@ export const processImportFileText = async (
         },
       }).catch(() => null)
     : null;
-  const importMode = readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? options.importMode ?? "statement";
+  const importMode = options.importMode ?? readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? "statement";
   const isDocumentImportMode =
     importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes";
   const previouslyVisibleRows = isDocumentImportMode ? 0 : await countTransactionsByImportFileCompat(importFileId).catch(() => 0);
@@ -7088,13 +7095,15 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const groupRows = group.rows as EnrichedParsedImportRow[];
     const groupEndingBalance = getImportAccountBalanceFromParsedRows(groupRows);
     const groupCurrency = readRowAccountCurrency(firstGroupRow);
+    const groupLooksWiseAccount = rowLooksWiseAccount(firstGroupRow);
     const groupAccount = await resolveConfirmationAccount({
       importFile,
       statementMetadata: {
         ...baseStatementMetadata,
-        accountName: readRowAccountName(firstGroupRow) ?? baseStatementMetadata.accountName,
-        institution: readRowInstitution(firstGroupRow) ?? baseStatementMetadata.institution ?? checkpointBankName ?? null,
-        accountNumber: readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
+        accountName: groupLooksWiseAccount ? "Wise" : readRowAccountName(firstGroupRow) ?? baseStatementMetadata.accountName,
+        institution: groupLooksWiseAccount ? "Wise" : readRowInstitution(firstGroupRow) ?? baseStatementMetadata.institution ?? checkpointBankName ?? null,
+        accountNumber: groupLooksWiseAccount ? null : readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
+        accountType: groupLooksWiseAccount ? "wallet" : baseStatementMetadata.accountType,
         currency:
           groupCurrency ??
           (typeof firstGroupRow.currency === "string" && firstGroupRow.currency.trim()

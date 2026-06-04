@@ -24,7 +24,7 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 ## Transaction Rules
 
 - If a row has one amount, use that amount/currency as the Clover transaction amount because it is one of the user's Wise account currencies.
-- If a row has two amounts, use the smaller second amount/currency as the Clover transaction amount because it is the actual amount spent from the user's Wise account.
+- If a row has two amounts, use the second/lower smaller-font amount/currency as the Clover transaction amount because it is the actual amount spent from the user's Wise account. This means `20.95 AUD` / `804.31 PHP` should import as `804.31 PHP`, even though PHP is numerically larger.
 - Preserve the bold/larger first merchant-currency amount in raw payload/notes when it appears above the account-currency amount.
 - Use the transaction/account-impact currency to choose the underlying Wise wallet account. One-amount `43.54 GBP` rows belong to the inferred GBP Wise wallet; two-amount `13,920 HKD` / `107,920.33 PHP` rows belong to the inferred PHP Wise wallet.
 - Do not create a new Wise wallet account from a merchant-currency-only outgoing spend row when the account-impact amount is missing or cut off. For example, an isolated `11.50 AUD` spend line without the smaller PHP account amount should be skipped/review-only rather than creating an AUD Wise wallet.

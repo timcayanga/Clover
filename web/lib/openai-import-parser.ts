@@ -1370,7 +1370,7 @@ const buildOpenAIInputPayload = (params: {
           "This is a scanned statement, screenshot, or image-heavy file. The text layer may be empty or incomplete.",
           "Read the page images directly and extract the visible financial details for the selected document family.",
           "If the document is a statement, extract every transaction row from the visible statement pages and anchor the final balance from the last page footer when present.",
-          "If the image is a Wise mobile transaction-history screenshot, treat it as a wallet statement even when no account number or ending balance is visible. For rows with two amounts, use the smaller second account-currency amount as the transaction amount and preserve the bold first merchant-currency amount as supporting evidence.",
+          "If the image is a Wise mobile transaction-history screenshot, treat it as a wallet statement even when no account number or ending balance is visible. For rows with two amounts, use the second/lower smaller-font account-currency amount as the transaction amount, even when it is numerically larger than the bold merchant-currency amount. Preserve the bold first merchant-currency amount as supporting evidence.",
           "If the document is a portfolio or account-detail page that shows holdings or positions, extract those into holdings instead of transaction rows.",
           "If the document is a receipt, portfolio screen, account detail screen, or notes screenshot, keep the transaction array empty unless the page clearly shows true ledger rows.",
           "Use the account number and balance shown in the page image, not any earlier summary-like number unless it is the final ending balance.",
