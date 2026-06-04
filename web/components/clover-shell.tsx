@@ -1657,16 +1657,15 @@ export function CloverShell({
       {isQuickAddOpen ? (
         <div className="shell-quick-add-popover glass" ref={quickAddPopoverRef} role="menu" aria-label="Quick add">
           <button
-            className="shell-quick-add-popover__item"
+            className="shell-quick-add-popover__item shell-quick-add-popover__item--mobile-only"
             type="button"
             role="menuitem"
             onClick={() => {
               setIsQuickAddOpen(false);
-              setQuickAddModal("transaction");
+              openQuickAddPhotoLibrary();
             }}
           >
-            <strong>Add Manually</strong>
-            <span>Open the manual transaction field.</span>
+            <strong>🖼️ Photos</strong>
           </button>
           <button
             className="shell-quick-add-popover__item shell-quick-add-popover__item--mobile-only"
@@ -1677,23 +1676,10 @@ export function CloverShell({
               openQuickAddCamera();
             }}
           >
-            <strong>Take Photo</strong>
-            <span>Use your camera for a receipt or statement.</span>
+            <strong>📷 Camera</strong>
           </button>
           <button
-            className="shell-quick-add-popover__item shell-quick-add-popover__item--mobile-only"
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setIsQuickAddOpen(false);
-              openQuickAddPhotoLibrary();
-            }}
-          >
-            <strong>Choose Photo</strong>
-            <span>Select an existing receipt or statement image.</span>
-          </button>
-          <button
-            className="shell-quick-add-popover__item"
+            className="shell-quick-add-popover__item shell-quick-add-popover__item--primary"
             type="button"
             role="menuitem"
             onClick={() => {
@@ -1701,8 +1687,21 @@ export function CloverShell({
               openQuickAddFilePicker();
             }}
           >
-            <strong>Upload File</strong>
-            <span>Upload statements, CSVs, and screenshots.</span>
+            <strong>
+              <span className="shell-quick-add-popover__label-desktop">📁 Upload</span>
+              <span className="shell-quick-add-popover__label-mobile">📁 Files</span>
+            </strong>
+          </button>
+          <button
+            className="shell-quick-add-popover__item"
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setIsQuickAddOpen(false);
+              setQuickAddModal("transaction");
+            }}
+          >
+            <strong>✍️ Add Manually</strong>
           </button>
         </div>
       ) : null}

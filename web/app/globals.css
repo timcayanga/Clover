@@ -1026,9 +1026,34 @@ body.transactions-manual-open .shell-quick-add-button {
   background: transparent;
   color: var(--text);
   text-align: left;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.shell-quick-add-popover__item:hover,
+.shell-quick-add-popover__item:focus-visible {
+  background: rgba(3, 168, 192, 0.08);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.shell-quick-add-popover__item--primary {
+  background: var(--brand-gradient);
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(3, 168, 192, 0.18);
+}
+
+.shell-quick-add-popover__item--primary:hover,
+.shell-quick-add-popover__item--primary:focus-visible {
+  background: var(--brand-gradient-alt);
+  color: #fff;
 }
 
 .shell-quick-add-popover__item--mobile-only {
+  display: none;
+}
+
+.shell-quick-add-popover__label-mobile {
   display: none;
 }
 
@@ -3389,6 +3414,20 @@ body.transactions-manual-open .shell-quick-add-button {
 
   .shell-quick-add-popover__item--mobile-only {
     display: grid;
+  }
+
+  .shell-quick-add-popover__item--primary {
+    background: transparent;
+    color: var(--text);
+    box-shadow: none;
+  }
+
+  .shell-quick-add-popover__label-desktop {
+    display: none;
+  }
+
+  .shell-quick-add-popover__label-mobile {
+    display: inline;
   }
 
   .more-page__sections {
