@@ -2115,7 +2115,22 @@ export const readImportedFileImageDataUrls = async (params: { storageKey: string
     return [];
   }
 
-  const bytes = await downloadImportObject(params.storageKey);
+  let bytes: Awaited<ReturnType<typeof downloadImportObject>> | null = null;
+  let lastDownloadError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      bytes = await downloadImportObject(params.storageKey);
+      break;
+    } catch (error) {
+      lastDownloadError = error;
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+      }
+    }
+  }
+  if (!bytes) {
+    throw lastDownloadError instanceof Error ? lastDownloadError : new Error("Unable to read imported image file.");
+  }
   const fileFingerprint = makeImportFileBytesFingerprint(bytes);
   const cacheKey = ["image-data", fileFingerprint, lowerName].join(":");
   const cachedDataUrls = importedFileImageDataUrlCache.get(cacheKey);

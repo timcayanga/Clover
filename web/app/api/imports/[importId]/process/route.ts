@@ -118,6 +118,10 @@ const detectLimitError = (message: string | null | undefined) => {
 const isPdfUpload = (fileName: string, fileType: string) =>
   fileType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
 
+const isImageUploadFile = (fileName: string, fileType: string) =>
+  fileType.toLowerCase().startsWith("image/") ||
+  /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(fileName.toLowerCase());
+
 const isLikelyLowQualityPnbStatementFile = (fileName: string, bankHint: string) => {
   if (bankHint !== "PNB") {
     return false;
@@ -1454,6 +1458,62 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           confirmedTransactionsCount: 0,
         }).catch(() => null);
       } else {
+        const failedImportFile = await fetchImportFileCompat(importId).catch(() => null);
+        const failedFileName = String(failedImportFile?.fileName ?? "");
+        const failedFileType = String(failedImportFile?.fileType ?? "");
+        let failedImportMode: ImportImageMode | null = null;
+        if (await hasCompatibleTable("AccountStatementCheckpoint").catch(() => false)) {
+          const checkpoint = await prisma.accountStatementCheckpoint.findUnique({
+            where: { importFileId: importId },
+            select: { sourceMetadata: true },
+          }).catch(() => null);
+          const sourceMetadata =
+            checkpoint?.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+              ? (checkpoint.sourceMetadata as Record<string, unknown>)
+              : null;
+          failedImportMode = normalizeImportImageMode(sourceMetadata?.importMode);
+        }
+        const failedImageStatement =
+          failedImportFile &&
+          isImageUploadFile(failedFileName, failedFileType) &&
+          (!failedImportMode || failedImportMode === "statement");
+        if (failedImageStatement) {
+          try {
+            if (await isLocalDevHost().catch(() => false)) {
+              await ensureImportProcessingWorker();
+            }
+            await updateImportFileCompat(importId, {
+              status: "processing",
+              processingPhase: "queued_retry",
+              processingMessage: "Clover hit a temporary image-reading issue and queued another pass.",
+              parsedRowsCount: 0,
+              confirmedTransactionsCount: 0,
+            });
+            await enqueueImportProcessing({
+              importFileId: importId,
+              actorUserId: null,
+              allowDuplicateStatement: false,
+              importMode: failedImportMode ?? "statement",
+              pdfJsBaseUrl: new URL(_request.url).origin,
+            });
+            return NextResponse.json({
+              ok: true,
+              queued: true,
+              processed: false,
+              importedRows: 0,
+              duplicate: false,
+              status: "queued",
+              importFileId: importId,
+              metadata: null,
+              retryReason: "inline_image_processing_failed",
+            });
+          } catch (queueError) {
+            console.error("Image import retry queue failed", {
+              importId,
+              error: summarizeErrorForLog(queueError),
+            });
+          }
+        }
         await updateImportFileCompat(importId, {
           status: "failed",
           processingPhase: null,
