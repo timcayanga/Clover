@@ -8,6 +8,7 @@ import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
+import { DashboardManualTransactionModal } from "@/components/dashboard-top-actions";
 import { FinancialAccountCard } from "@/components/financial-account-card";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
 import { formatUploadAccountDisplayName, getAccountCardName, getAccountDisplayName } from "@/lib/account-display";
@@ -1176,6 +1177,7 @@ function AccountDetailPageContent() {
   const [accountIdentityEditorOpen, setAccountIdentityEditorOpen] = useState(false);
   const [accountEditSaveState, setAccountEditSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [balanceEditorOpen, setBalanceEditorOpen] = useState(false);
+  const [cashQuickAddOpen, setCashQuickAddOpen] = useState(false);
   const [balanceDraft, setBalanceDraft] = useState("");
   const [balanceSaveState, setBalanceSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [creditLimitDraft, setCreditLimitDraft] = useState("");
@@ -3831,6 +3833,16 @@ function AccountDetailPageContent() {
                 }
               />
 
+              {account.type === "cash" ? (
+                <button
+                  className="button button-secondary button-small accounts-detail__cash-add-button"
+                  type="button"
+                  onClick={() => setCashQuickAddOpen(true)}
+                >
+                  Add cash
+                </button>
+              ) : null}
+
               <button
                 className={`icon-button accounts-detail__favorite-toggle${account.favorite ? " is-active" : ""}`}
                 type="button"
@@ -5196,6 +5208,18 @@ function AccountDetailPageContent() {
             </button>
           </div>
         )}
+
+        {cashQuickAddOpen && account?.workspaceId ? (
+          <div className="modal-backdrop" role="presentation" onClick={() => setCashQuickAddOpen(false)}>
+            <DashboardManualTransactionModal
+              workspaceId={account.workspaceId}
+              accounts={[account]}
+              initialAccountId={account.id}
+              initialType="credit"
+              onClose={() => setCashQuickAddOpen(false)}
+            />
+          </div>
+        ) : null}
       </section>
     </CloverShell>
   );

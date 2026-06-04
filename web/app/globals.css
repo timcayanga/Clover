@@ -16433,7 +16433,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .transactions-manual-row--money {
-  grid-template-columns: minmax(72px, 88px) minmax(0, 1.2fr);
+  grid-template-columns: minmax(60px, 72px) minmax(0, 1fr);
 }
 
 .transactions-manual-inline-row {
@@ -16709,7 +16709,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .transactions-manual-money-row {
   display: grid;
-  grid-template-columns: minmax(78px, 94px) minmax(0, 1fr);
+  grid-template-columns: minmax(60px, 72px) minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -17045,10 +17045,6 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   width: auto;
 }
 
-.transactions-manual-money-row {
-  grid-template-columns: minmax(66px, 78px) minmax(0, 1.35fr);
-}
-
 .manual-form-actions--closed .transactions-manual-more {
   align-self: center;
 }
@@ -17335,14 +17331,22 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .transactions-manual-picker__category-icon {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   flex: 0 0 auto;
 }
 
+.transactions-manual-picker__category-icon .category-brand-mark,
+.transactions-manual-picker__category-icon .transaction-category-icon {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px;
+  border-radius: 8px !important;
+}
+
 .transactions-manual-picker__category-icon img {
-  width: 14px;
-  height: 14px;
+  width: 11px;
+  height: 11px;
 }
 
 .category-brand-mark .category-brand-mark__glyph-layer {
@@ -17383,16 +17387,16 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .transactions-manual-picker__brand .accounts-brand-mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
 }
 
 .transactions-manual-picker__brand .accounts-brand-mark__logo,
 .transactions-manual-picker__brand .accounts-brand-mark__fallback,
 .transactions-manual-picker__brand .accounts-brand-mark__logo-fallback {
-  width: 14px;
-  height: 14px;
+  width: 11px;
+  height: 11px;
 }
 
 .transactions-manual-picker__brand .accounts-brand-mark__logo {
@@ -20328,6 +20332,13 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   color: #d39b00;
   border-color: rgba(211, 155, 0, 0.32);
   background: rgba(255, 248, 225, 0.96);
+}
+
+.accounts-detail__cash-add-button {
+  align-self: center;
+  width: fit-content;
+  min-height: 34px;
+  padding-inline: 14px;
 }
 
 @media (min-width: 768px) {

@@ -63,23 +63,47 @@ const normalizeName = (value: string | null | undefined) => value?.trim().toLowe
 const getOtherCategoryId = (categories: DashboardCategory[]) =>
   categories.find((category) => normalizeName(category.name) === "other")?.id ?? "";
 
+const getManualAccountOptionKey = (account: DashboardTopActionsProps["accounts"][number]) => {
+  if (account.type === "cash" || normalizeName(account.name) === "cash") {
+    return `cash:${formatCurrencyCode(account.currency || "PHP")}`;
+  }
+
+  return account.id;
+};
+
+const getManualAccountOptionLabel = (
+  account: DashboardTopActionsProps["accounts"][number],
+  cashCurrencyCount: number
+) => {
+  if (account.type === "cash" && cashCurrencyCount > 1) {
+    return `Cash ${formatCurrencyCode(account.currency || "PHP")}`;
+  }
+
+  return getAccountDisplayName(account);
+};
+
 export function DashboardManualTransactionModal({
   workspaceId,
   accounts,
+  initialAccountId,
+  initialType = "debit",
   onClose,
 }: DashboardTopActionsProps & {
+  initialAccountId?: string;
+  initialType?: ManualFormState["type"];
   onClose: () => void;
 }) {
   const router = useRouter();
+  const initialAccount = accounts.find((account) => account.id === initialAccountId) ?? accounts[0] ?? null;
   const [categories, setCategories] = useState<DashboardCategory[]>([]);
   const [form, setForm] = useState<ManualFormState>(() => ({
-    accountId: accounts[0]?.id ?? "",
+    accountId: initialAccount?.id ?? "",
     amount: "",
-    currency: formatCurrencyCode(accounts[0]?.currency ?? "PHP"),
+    currency: formatCurrencyCode(initialAccount?.currency ?? "PHP"),
     date: formatToday(),
     merchantRaw: "",
     categoryId: "",
-    type: "debit",
+    type: initialType,
     description: "",
     receiptLineItems: [],
   }));
@@ -228,6 +252,24 @@ export function DashboardManualTransactionModal({
     () => Array.from(new Set(accounts.map((account) => formatCurrencyCode(account.currency)).filter(Boolean))),
     [accounts]
   );
+  const manualAccountOptions = useMemo(() => {
+    const cashCurrencyCount = new Set(
+      accounts
+        .filter((account) => account.type === "cash" || normalizeName(account.name) === "cash")
+        .map((account) => formatCurrencyCode(account.currency || "PHP"))
+    ).size;
+    const seenKeys = new Set<string>();
+
+    return accounts.flatMap((account) => {
+      const key = getManualAccountOptionKey(account);
+      if (seenKeys.has(key)) {
+        return [];
+      }
+
+      seenKeys.add(key);
+      return [{ account, label: getManualAccountOptionLabel(account, cashCurrencyCount) }];
+    });
+  }, [accounts]);
   const otherCategoryId = getOtherCategoryId(categories);
   const previewLabel = formatCurrencyAmount(Number(form.amount || 0), form.currency || selectedAccount?.currency || "PHP");
 
@@ -244,9 +286,15 @@ export function DashboardManualTransactionModal({
   };
 
   const ensureDefaultAccount = async () => {
-    const existingCashAccount = accounts.find(
-      (account) => normalizeName(account.type) === "cash" || normalizeName(account.name) === "cash"
-    );
+    const existingCashAccount =
+      accounts.find(
+        (account) =>
+          (normalizeName(account.type) === "cash" || normalizeName(account.name) === "cash") &&
+          formatCurrencyCode(account.currency || "PHP") === "PHP"
+      ) ??
+      accounts.find(
+        (account) => normalizeName(account.type) === "cash" || normalizeName(account.name) === "cash"
+      );
     if (existingCashAccount) {
       return existingCashAccount.id;
     }
@@ -439,9 +487,6 @@ export function DashboardManualTransactionModal({
             </div>
 
             <div className="transactions-manual-row transactions-manual-row--money">
-              <span className="transactions-manual-row-icon transactions-manual-row-icon--account" aria-hidden="true">
-                <AccountBrandMark accountBrand={selectedAccountBrand} label={selectedAccount ? getAccountDisplayName(selectedAccount) : "Cash"} />
-              </span>
               <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__currency">
                 <span className="transactions-manual-field__label">Currency</span>
                 <CurrencySelector
@@ -470,47 +515,52 @@ export function DashboardManualTransactionModal({
               </label>
             </div>
 
-            <div className="transactions-manual-field transactions-manual-field--embedded-label">
-              <span className="transactions-manual-field__label">Account</span>
-              <div className="transactions-manual-picker">
-                <div className="transactions-manual-picker__control">
-                  <button
-                    type="button"
-                    className="transactions-manual-picker__button transactions-manual-picker__button--plain"
-                    aria-expanded={accountMenuOpen}
-                    onClick={() => {
-                      setCategoryMenuOpen(false);
-                      setAccountMenuOpen((current) => !current);
-                    }}
-                  >
-                    <span className="transactions-manual-picker__text">{selectedAccount ? getAccountDisplayName(selectedAccount) : "Cash"}</span>
-                    <span className="transactions-manual-picker__chevron" aria-hidden="true">
-                      ▾
-                    </span>
-                  </button>
-                  {accountMenuOpen ? (
-                    <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose account">
-                      {accounts.map((account) => (
-                        <button
-                          key={account.id}
-                          type="button"
-                          className={`transactions-manual-picker__option ${account.id === form.accountId ? "is-selected" : ""}`}
-                          onClick={() => {
-                            setForm((current) => ({ ...current, accountId: account.id, currency: formatCurrencyCode(account.currency) }));
-                            setAccountMenuOpen(false);
-                          }}
-                        >
-                          <span className="transactions-manual-picker__brand" aria-hidden="true">
-                            <AccountBrandMark accountBrand={getAccountBrand(account)} label={getAccountDisplayName(account)} />
-                          </span>
-                          <span className="transactions-manual-picker__option-text">
-                            <strong>{getAccountDisplayName(account)}</strong>
-                            <span>{account.institution ?? account.type}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
+            <div className="transactions-manual-inline-row transactions-manual-inline-row--account">
+              <span className="transactions-manual-inline-row__icon transactions-manual-inline-row__icon--account" aria-hidden="true">
+                <AccountBrandMark accountBrand={selectedAccountBrand} label={selectedAccount ? getAccountDisplayName(selectedAccount) : "Cash"} />
+              </span>
+              <div className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
+                <span className="transactions-manual-field__label">Account</span>
+                <div className="transactions-manual-picker">
+                  <div className="transactions-manual-picker__control">
+                    <button
+                      type="button"
+                      className="transactions-manual-picker__button transactions-manual-picker__button--plain"
+                      aria-expanded={accountMenuOpen}
+                      onClick={() => {
+                        setCategoryMenuOpen(false);
+                        setAccountMenuOpen((current) => !current);
+                      }}
+                    >
+                      <span className="transactions-manual-picker__text">{selectedAccount ? getAccountDisplayName(selectedAccount) : "Cash"}</span>
+                      <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                        ▾
+                      </span>
+                    </button>
+                    {accountMenuOpen ? (
+                      <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose account">
+                        {manualAccountOptions.map(({ account, label }) => (
+                          <button
+                            key={account.id}
+                            type="button"
+                            className={`transactions-manual-picker__option ${account.id === form.accountId ? "is-selected" : ""}`}
+                            onClick={() => {
+                              setForm((current) => ({ ...current, accountId: account.id, currency: formatCurrencyCode(account.currency) }));
+                              setAccountMenuOpen(false);
+                            }}
+                          >
+                            <span className="transactions-manual-picker__brand" aria-hidden="true">
+                              <AccountBrandMark accountBrand={getAccountBrand(account)} label={label} />
+                            </span>
+                            <span className="transactions-manual-picker__option-text">
+                              <strong>{label}</strong>
+                              <span>{account.institution ?? account.type}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>

@@ -1130,6 +1130,10 @@ export async function POST(request: Request) {
       existingAccounts.find((account) => account.type === type && normalizeAccountRuleKey(account.name, account.institution) === candidateKey) ??
       existingAccounts.find((account) => account.type === type && account.name === name && account.institution === institution) ??
       null;
+    const existingCashAccount =
+      type === "cash"
+        ? existingAccounts.find((account) => account.type === "cash" && normalizeAccountCurrency(account) === normalizedCurrency) ?? null
+        : null;
     const hasInitialPurchaseHistory =
       type === "investment" &&
       investmentPurchaseDate !== null &&
@@ -1196,6 +1200,12 @@ export async function POST(request: Request) {
         }
       });
     };
+
+    if (existingCashAccount) {
+      return NextResponse.json({
+        account: serializeAccount(existingCashAccount),
+      });
+    }
 
     if (existingAccount) {
       if (normalizedCurrency) {

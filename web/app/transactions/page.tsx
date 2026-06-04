@@ -172,6 +172,38 @@ const formatTransactionAccountName = (account: Account) => {
   return appendAccountLastFour(accountLabel, account.accountNumber);
 };
 
+const getTransactionAccountFilterKey = (account: Account) => {
+  if (account.type === "cash") {
+    return `cash:${formatCurrencyCode(account.currency || "PHP")}`;
+  }
+
+  return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+};
+
+const buildTransactionAccountFilterOptions = (accounts: Account[]) => {
+  const cashCurrencies = new Set(
+    accounts.filter((account) => account.type === "cash").map((account) => formatCurrencyCode(account.currency || "PHP"))
+  );
+  const seenKeys = new Set<string>();
+
+  return accounts.flatMap((account) => {
+    const key = getTransactionAccountFilterKey(account);
+    if (seenKeys.has(key)) {
+      return [];
+    }
+
+    seenKeys.add(key);
+    const isCash = account.type === "cash";
+    const currency = formatCurrencyCode(account.currency || "PHP");
+    return [
+      {
+        value: account.id,
+        label: isCash && cashCurrencies.size > 1 ? `Cash ${currency}` : formatTransactionAccountName(account),
+      },
+    ];
+  });
+};
+
 const formatTransactionAccountDisplayName = (
   transaction: { accountName?: string | null; institution?: string | null; accountNumber?: string | null },
   account?: Account | null
@@ -2557,10 +2589,35 @@ function TransactionsPageContent() {
   const accountKeyById = useMemo(
     () =>
       new Map(
-        accounts.map((account) => [account.id, normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)] as const)
+        accounts.map((account) => [account.id, getTransactionAccountFilterKey(account)] as const)
       ),
     [accounts]
   );
+  const accountFilterOptions = useMemo(() => buildTransactionAccountFilterOptions(accounts), [accounts]);
+  const manualAccountOptions = useMemo(() => {
+    const cashCurrencyCount = new Set(
+      accounts.filter((account) => account.type === "cash").map((account) => formatCurrencyCode(account.currency || "PHP"))
+    ).size;
+    const seenKeys = new Set<string>();
+
+    return accounts.flatMap((account) => {
+      const key = getTransactionAccountFilterKey(account);
+      if (seenKeys.has(key)) {
+        return [];
+      }
+
+      seenKeys.add(key);
+      return [
+        {
+          account,
+          label:
+            account.type === "cash" && cashCurrencyCount > 1
+              ? `Cash ${formatCurrencyCode(account.currency || "PHP")}`
+              : getAccountDisplayName(account),
+        },
+      ];
+    });
+  }, [accounts]);
   const manualSelectedAccount = useMemo(
     () => accounts.find((account) => account.id === manualForm.accountId) ?? null,
     [accounts, manualForm.accountId]
@@ -2594,7 +2651,7 @@ function TransactionsPageContent() {
     }
 
     return accounts
-      .filter((account) => selectedKeys.has(normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)))
+      .filter((account) => selectedKeys.has(getTransactionAccountFilterKey(account)))
       .map((account) => account.id);
   }, [accountFilters, accountKeyById, accounts]);
   const categoryNameById = useMemo(
@@ -6332,10 +6389,7 @@ function TransactionsPageContent() {
           </div>
           <MultiSelectFilterGroup
             label="Accounts"
-            options={accounts.map((account) => ({
-              value: account.id,
-              label: formatTransactionAccountName(account),
-            }))}
+            options={accountFilterOptions}
             selected={accountFilters}
             onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))}
             onClear={() => setAccountFilters([])}
@@ -6734,10 +6788,7 @@ function TransactionsPageContent() {
                 />
                 <MultiSelectFilterGroup
                   label="Accounts"
-                  options={accounts.map((account) => ({
-                    value: account.id,
-                    label: formatTransactionAccountName(account),
-                  }))}
+                  options={accountFilterOptions}
                   selected={accountFilters}
                   onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))}
                   onClear={() => setAccountFilters([])}
@@ -7808,8 +7859,8 @@ function TransactionsPageContent() {
                         </button>
                         {manualAccountMenuOpen ? (
                           <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose account">
-                            {accounts.map((account) => {
-                              const accountDisplayName = getAccountDisplayName(account);
+                            {manualAccountOptions.map(({ account, label: accountDisplayName }) => {
+                              const accountOptionBrand = accountBrandById.get(account.id) ?? getAccountBrand(account);
 
                               return (
                                 <button
@@ -7819,12 +7870,20 @@ function TransactionsPageContent() {
                                     account.id === manualForm.accountId ? "is-selected" : ""
                                   }`}
                                   onClick={() => {
-                                    setManualForm((current) => ({ ...current, accountId: account.id }));
+                                    setManualForm((current) => ({
+                                      ...current,
+                                      accountId: account.id,
+                                      currency: formatCurrencyCode(account.currency || current.currency || "PHP"),
+                                    }));
                                     setManualAccountMenuOpen(false);
                                   }}
                                 >
+                                  <span className="transactions-manual-picker__brand" aria-hidden="true">
+                                    <AccountBrandMark accountBrand={accountOptionBrand} label={accountDisplayName} />
+                                  </span>
                                   <span className="transactions-manual-picker__option-text">
                                     <strong>{accountDisplayName}</strong>
+                                    <span>{account.institution ?? account.type}</span>
                                   </span>
                                 </button>
                               );
@@ -7878,8 +7937,12 @@ function TransactionsPageContent() {
                                   setManualCategoryMenuOpen(false);
                                 }}
                               >
+                                <span className="transactions-manual-picker__category-icon" aria-hidden="true">
+                                  <CategoryBrandMark categoryName={category.name} size="100%" radius={10} />
+                                </span>
                                 <span className="transactions-manual-picker__option-text">
                                   <strong>{category.name}</strong>
+                                  <span>{category.type}</span>
                                 </span>
                               </button>
                             ))}
