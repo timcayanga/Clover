@@ -724,7 +724,6 @@ const getMobileScreenshotTransactionSignature = (entry: CachedRecord | ImportedW
   return [
     "mobile-screenshot",
     screenshotKind,
-    getTransactionAccountIdentityKey(entry),
     getCachedTransactionDateKey(entry.date),
     amount.toFixed(2),
     normalizeMerchantText(String(entry.currency ?? "PHP")).toUpperCase(),

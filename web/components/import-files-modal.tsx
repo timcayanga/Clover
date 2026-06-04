@@ -705,6 +705,9 @@ const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
   if (!accountId || !summary.accountName) {
     return null;
   }
+  if (isFilenameOnlyScreenshotSummary(summary.fileName, summary)) {
+    return null;
+  }
 
   const normalizedAccountName = formatUploadAccountDisplayName(
     summary.accountName,
@@ -738,44 +741,43 @@ const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
 
 const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsightsSummary) => {
   const importedAccount = buildImportedWorkspaceAccount(summary);
-  if (!importedAccount) {
-    return;
+  if (importedAccount) {
+    const currentAccount = getCachedAccountsWorkspace(workspaceId)?.accounts.find((entry) => {
+      const entryId = typeof entry.id === "string" ? entry.id : "";
+      const optimisticId = typeof (entry as { optimisticAccountId?: string | null }).optimisticAccountId === "string"
+        ? (entry as { optimisticAccountId?: string | null }).optimisticAccountId
+        : "";
+      const entryName = typeof entry.name === "string" ? normalizeStatementAccountName(entry.name, typeof entry.institution === "string" ? entry.institution : null) : "";
+      const importedName = formatUploadAccountDisplayName(
+        summary.accountName ?? "",
+        summary.institution ?? null,
+        summary.accountNumber ?? null,
+        summary.accountType ?? null
+      );
+      const entryInstitution = typeof entry.institution === "string" ? entry.institution : null;
+      const entryAccountNumber = typeof (entry as { accountNumber?: unknown }).accountNumber === "string" ? (entry as { accountNumber?: string }).accountNumber : null;
+      return (
+        entryId === importedAccount.id ||
+        optimisticId === importedAccount.id ||
+        importedAccountIdentityKey(entryName, entryInstitution, entryAccountNumber) ===
+          importedAccountIdentityKey(importedName, summary.institution ?? null, summary.accountNumber ?? null)
+      );
+    });
+
+    if (!importedAccount.accountNumber && typeof currentAccount?.accountNumber === "string" && currentAccount.accountNumber.trim()) {
+      importedAccount.accountNumber = currentAccount.accountNumber.trim();
+    }
+    const currentBalance = typeof currentAccount?.balance === "string" ? currentAccount.balance.trim() : "";
+    const importedBalance = typeof importedAccount.balance === "string" ? importedAccount.balance.trim() : "";
+    const importedIsZeroish = importedBalance !== "" && Number(importedBalance) === 0;
+    const currentIsNonZero = currentBalance !== "" && Number(currentBalance) !== 0;
+    if ((!importedBalance || importedIsZeroish) && currentIsNonZero) {
+      importedAccount.balance = currentBalance;
+    }
+
+    syncImportedWorkspaceAccountCaches(workspaceId, importedAccount);
   }
 
-  const currentAccount = getCachedAccountsWorkspace(workspaceId)?.accounts.find((entry) => {
-    const entryId = typeof entry.id === "string" ? entry.id : "";
-    const optimisticId = typeof (entry as { optimisticAccountId?: string | null }).optimisticAccountId === "string"
-      ? (entry as { optimisticAccountId?: string | null }).optimisticAccountId
-      : "";
-    const entryName = typeof entry.name === "string" ? normalizeStatementAccountName(entry.name, typeof entry.institution === "string" ? entry.institution : null) : "";
-    const importedName = formatUploadAccountDisplayName(
-      summary.accountName ?? "",
-      summary.institution ?? null,
-      summary.accountNumber ?? null,
-      summary.accountType ?? null
-    );
-    const entryInstitution = typeof entry.institution === "string" ? entry.institution : null;
-    const entryAccountNumber = typeof (entry as { accountNumber?: unknown }).accountNumber === "string" ? (entry as { accountNumber?: string }).accountNumber : null;
-    return (
-      entryId === importedAccount.id ||
-      optimisticId === importedAccount.id ||
-      importedAccountIdentityKey(entryName, entryInstitution, entryAccountNumber) ===
-        importedAccountIdentityKey(importedName, summary.institution ?? null, summary.accountNumber ?? null)
-    );
-  });
-
-  if (!importedAccount.accountNumber && typeof currentAccount?.accountNumber === "string" && currentAccount.accountNumber.trim()) {
-    importedAccount.accountNumber = currentAccount.accountNumber.trim();
-  }
-  const currentBalance = typeof currentAccount?.balance === "string" ? currentAccount.balance.trim() : "";
-  const importedBalance = typeof importedAccount.balance === "string" ? importedAccount.balance.trim() : "";
-  const importedIsZeroish = importedBalance !== "" && Number(importedBalance) === 0;
-  const currentIsNonZero = currentBalance !== "" && Number(currentBalance) !== 0;
-  if ((!importedBalance || importedIsZeroish) && currentIsNonZero) {
-    importedAccount.balance = currentBalance;
-  }
-
-  syncImportedWorkspaceAccountCaches(workspaceId, importedAccount);
   if (Array.isArray(summary.previewTransactions) && summary.previewTransactions.length > 0) {
     syncImportedWorkspaceTransactionCaches(workspaceId, summary.previewTransactions);
   }
@@ -1495,6 +1497,26 @@ const deriveFallbackAccountNameFromFileName = (fileName: string) => {
   return stem || "Imported statement";
 };
 
+const isGenericMobileScreenshotFileName = (fileName: string) => {
+  const normalized = fileName.trim().replace(/^.*[\\/]/, "").toLowerCase();
+  return /^(?:img|screenshot|screen\s*shot|photo|image)[_\s-]?\d{3,8}(?:\s*\(\d+\))?\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(normalized);
+};
+
+const isFilenameOnlyScreenshotSummary = (
+  fileName: string,
+  summary: UploadInsightsSummary | null | undefined
+) => {
+  if (!summary || !isGenericMobileScreenshotFileName(fileName)) {
+    return false;
+  }
+
+  const fallbackName = deriveFallbackAccountNameFromFileName(fileName).trim().toLowerCase();
+  const accountName = String(summary.accountName ?? "").trim().toLowerCase();
+  const institution = String(summary.institution ?? "").trim();
+  const accountNumber = String(summary.accountNumber ?? "").trim();
+  return Boolean(accountName && accountName === fallbackName && !institution && !accountNumber);
+};
+
 const hasStatementSuffix = (name?: string | null) => /\b\d{4}\b/.test(name ?? "");
 
 const isGenericSameInstitutionAccount = (account: AccountOption, institution: string | null) => {
@@ -1652,6 +1674,10 @@ const shouldPublishImportSummary = (
   summary: UploadInsightsSummary | null | undefined
 ) => {
   if (!summary) {
+    return false;
+  }
+
+  if (isFilenameOnlyScreenshotSummary(fileName, summary)) {
     return false;
   }
 
@@ -3344,6 +3370,7 @@ export function ImportFilesModal({
     let queuedResumeAttempted = false;
     const startedAt = Date.now();
     const requiresVisibleRows = shouldRequireVisibleRowsForImport(summaryContext.fileName);
+    const allowFilenameFallbackIdentity = !isGenericMobileScreenshotFileName(summaryContext.fileName);
     const MAX_WAIT_MS = backgroundOnly ? IMPORT_BACKGROUND_HARD_STOP_MS : requiresVisibleRows ? 75_000 : 180_000;
     let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
     for (let attempt = 0; attempt < 120; attempt += 1) {
@@ -3698,7 +3725,8 @@ export function ImportFilesModal({
           if (
             !suppressUnionBankPreview &&
             !seededFallbackSummary &&
-            (parsedRowsCount > 0 || Boolean(processingIdentity?.accountName || processingIdentity?.institution))
+            (parsedRowsCount > 0 || Boolean(processingIdentity?.accountName || processingIdentity?.institution)) &&
+            (allowFilenameFallbackIdentity || Boolean(processingIdentity?.accountName || processingIdentity?.institution))
           ) {
             const persistedFallbackAccountId =
               accountId && !accountId.startsWith("optimistic-")
@@ -3882,7 +3910,9 @@ export function ImportFilesModal({
             );
           if (!hasFinalizedAccountId) {
             const fallbackAccountName =
-              processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName;
+              processingIdentity?.accountName ??
+              summaryContext.accountName ??
+              (allowFilenameFallbackIdentity ? summaryContext.fallbackAccountName : null);
             const fallbackInstitution = processingIdentity?.institution ?? summaryContext.institution ?? null;
             const fallbackAccountNumber = processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null;
             if (fallbackAccountName || fallbackInstitution || fallbackAccountNumber) {
@@ -4197,7 +4227,8 @@ export function ImportFilesModal({
             !hasParseableAccountIdentity &&
             parsedRowsCount === 0;
 
-          const shouldUseFallbackIdentity = !resolvedIdentity.accountName && !resolvedIdentity.institution && attempt >= 4;
+          const shouldUseFallbackIdentity =
+            allowFilenameFallbackIdentity && !resolvedIdentity.accountName && !resolvedIdentity.institution && attempt >= 4;
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution && !shouldUseFallbackIdentity) {
             const previewResponse = await fetch(`/api/imports/${importFileId}/preview`);
             if (previewResponse.ok) {

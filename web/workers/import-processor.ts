@@ -3875,7 +3875,6 @@ const buildMobileScreenshotContentKey = (transaction: {
 
   return [
     screenshotKind,
-    typeof transaction.accountId === "string" && transaction.accountId.trim() ? transaction.accountId.trim() : "",
     date,
     amount.toFixed(2),
     normalizeTransactionDedupeText(transaction.currency || "PHP").toUpperCase(),
