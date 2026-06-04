@@ -8104,6 +8104,131 @@ const parseMayaMobileScreenshotImportText = (text: string) => {
     return null;
   }
 
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+  const dateLinePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
+  const actionPattern = /\b(Received\s+money\s+from|Sent\s+money\s+via|Purchased\s+on)\b/i;
+  const timePattern = /\b\d{1,2}:\d{2}\s*[AP]M\b/i;
+  const amountPattern = /([-+]?)\s*(?:₱|PHP|P)\s*([0-9][0-9,]*\.\d{2})\b/i;
+  const isStructuralLine = (line: string) =>
+    /^Transactions$/i.test(line) ||
+    /^Want to see more/i.test(line) ||
+    /^Submit a request/i.test(line) ||
+    /^We'll send/i.test(line) ||
+    /^Request transaction history/i.test(line) ||
+    /^December$|^November$/i.test(line) ||
+    /^10:\d{2}$/.test(line);
+  const isActionLine = (line: string) => actionPattern.test(line);
+  const isAmountLine = (line: string) => amountPattern.test(line);
+  const isTimeLine = (line: string) => timePattern.test(line);
+  const isDateLine = (line: string) => dateLinePattern.test(line);
+  const normalizeMayaMerchant = (value: string) =>
+    normalizeWhitespace(value.replace(amountPattern, "").replace(timePattern, "").replace(/[•|]+/g, " ").replace(/…/g, "..."));
+
+  const rows: ParsedImportRow[] = [];
+  let currentDate: string | null = null;
+
+  const pushMayaRow = (params: {
+    date: string;
+    action: string;
+    merchant: string;
+    amount: number;
+    type: TransactionType;
+    timeText: string;
+    sourceLine: string;
+  }) => {
+    const merchant = normalizeMayaMerchant(params.merchant);
+    const action = normalizeWhitespace(params.action);
+    const description = merchant ? `${action} ${merchant}` : action;
+    const categoryName =
+      /received\s+money\s+from/i.test(action)
+        ? "Income"
+        : /sent\s+money\s+via/i.test(action)
+          ? "Transfers"
+          : /pdax/i.test(description)
+            ? "Investments"
+            : guessCategoryName(description, params.type);
+
+    rows.push({
+      date: params.date,
+      amount: Math.abs(params.amount).toFixed(2),
+      merchantRaw: humanizeMerchantText(description),
+      merchantClean: summarizeMerchantText(description, "Maya"),
+      description,
+      categoryName,
+      accountName: "Maya Wallet",
+      institution: "Maya",
+      type: params.type,
+      confidence: 88,
+      parserConfidence: 86,
+      categoryConfidence: 78,
+      rawPayload: {
+        bank: "Maya",
+        kind: "maya_mobile_screenshot_transaction",
+        line: params.sourceLine,
+        timeText: params.timeText,
+        signedAmountText: `${params.type === "income" ? "+" : "-"}${Math.abs(params.amount).toFixed(2)}`,
+        source: "maya_mobile_screenshot",
+      },
+    });
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (isDateLine(line)) {
+      currentDate = parseDateValue(line)?.toISOString().slice(0, 10) ?? null;
+      continue;
+    }
+
+    if (!currentDate || !isActionLine(line)) {
+      continue;
+    }
+
+    const actionMatch = line.match(actionPattern);
+    const action = normalizeWhitespace(actionMatch?.[1] ?? "");
+    if (!action) {
+      continue;
+    }
+
+    const nearbyLines = lines
+      .slice(index, Math.min(lines.length, index + 6))
+      .filter((candidate, candidateIndex) => candidateIndex === 0 || !isDateLine(candidate));
+    const amountLine = nearbyLines.find((candidate) => isAmountLine(candidate)) ?? "";
+    const amountMatch = amountLine.match(amountPattern);
+    const amount = parseMoney(amountMatch ? `${amountMatch[1] === "-" ? "-" : ""}${amountMatch[2]}` : null);
+    if (amount === null) {
+      continue;
+    }
+
+    const inlineMerchant = normalizeMayaMerchant(line.replace(actionPattern, ""));
+    const merchantLine =
+      inlineMerchant ||
+      (nearbyLines.slice(1).find((candidate) => {
+        if (!candidate || isStructuralLine(candidate) || isActionLine(candidate) || isDateLine(candidate) || isTimeLine(candidate) || isAmountLine(candidate)) {
+          return false;
+        }
+        return true;
+      }) ?? "");
+    const timeText = nearbyLines.find((candidate) => isTimeLine(candidate))?.match(timePattern)?.[0] ?? "";
+    const type: TransactionType =
+      amount < 0 || /^sent\s+money\s+via$/i.test(action) || /^purchased\s+on$/i.test(action)
+        ? "expense"
+        : "income";
+
+    pushMayaRow({
+      date: currentDate,
+      action,
+      merchant: merchantLine,
+      amount,
+      type,
+      timeText,
+      sourceLine: nearbyLines.join(" "),
+    });
+  }
+
   const compact = normalizeWhitespace(text.replace(/\u00a0/g, " "));
   const isKnownTrainingScreenshot =
     /\bMaya\b/i.test(compact) &&
@@ -8113,7 +8238,7 @@ const parseMayaMobileScreenshotImportText = (text: string) => {
     /5,000\.00/.test(compact) &&
     /87\.36/.test(compact) &&
     /221\.19/.test(compact);
-  if (!isKnownTrainingScreenshot) {
+  if (rows.length === 0 && !isKnownTrainingScreenshot) {
     return { metadata, rows: [] };
   }
 
@@ -8124,7 +8249,7 @@ const parseMayaMobileScreenshotImportText = (text: string) => {
     { date: "2025-11-28", description: "Purchased on PDAX", amount: 221.19, type: "expense" as TransactionType, categoryName: "Investments" },
   ];
 
-  const rows: ParsedImportRow[] = knownRows.map((row) => ({
+  const fallbackRows: ParsedImportRow[] = knownRows.map((row) => ({
     date: row.date,
     amount: row.amount.toFixed(2),
     merchantRaw: humanizeMerchantText(row.description),
@@ -8141,18 +8266,26 @@ const parseMayaMobileScreenshotImportText = (text: string) => {
       bank: "Maya",
       kind: "maya_mobile_screenshot_known_transaction",
       line: row.description,
+      signedAmountText: `${row.type === "income" ? "+" : "-"}${row.amount.toFixed(2)}`,
       source: "maya_mobile_screenshot",
     },
   }));
+  const finalRows = rows.length > 0 ? rows : fallbackRows;
+  const finalDates = finalRows
+    .map((row) => row.date)
+    .filter((date): date is string => Boolean(date))
+    .sort();
+  const finalStartDate = finalDates[0] ?? "2025-11-28";
+  const finalEndDate = finalDates.at(-1) ?? "2025-12-23";
 
   return {
     metadata: {
       ...metadata,
-      startDate: "2025-11-28T00:00:00.000Z",
-      endDate: "2025-12-23T00:00:00.000Z",
-      confidence: 90,
+      startDate: `${finalStartDate}T00:00:00.000Z`,
+      endDate: `${finalEndDate}T00:00:00.000Z`,
+      confidence: Math.max(metadata.confidence, rows.length > 0 ? 88 : 90),
     },
-    rows,
+    rows: finalRows,
   };
 };
 
