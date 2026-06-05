@@ -21842,30 +21842,10 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-data-shell {
-  gap: 24px;
   padding: 24px;
   background:
     radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 32%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 250, 251, 0.92));
-}
-
-.settings-data-shell__header {
-  display: grid;
-  gap: 8px;
-}
-
-.settings-data-shell__eyebrow {
-  font-size: 11px;
-  line-height: 1;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(3, 168, 192, 0.85);
-}
-
-.settings-data-shell__header h5 {
-  font-size: clamp(1.25rem, 2vw, 1.5rem);
-  line-height: 1.1;
-  letter-spacing: -0.04em;
 }
 
 .settings-data-shell__grid {
@@ -21893,25 +21873,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-data-zone__header {
-  display: grid;
-  gap: 8px;
-}
-
-.settings-data-zone__badge {
-  width: fit-content;
-  padding: 7px 11px;
-  border-radius: 999px;
-  background: rgba(3, 168, 192, 0.12);
-  color: rgba(3, 168, 192, 0.88);
-  font-size: 11px;
-  line-height: 1;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.settings-data-zone__badge--danger {
-  background: rgba(220, 38, 38, 0.1);
-  color: rgba(220, 38, 38, 0.86);
+  display: block;
 }
 
 .settings-data-zone__header h6 {
@@ -21919,12 +21881,6 @@ input.transaction-inline-edit--amount::placeholder {
   line-height: 1.1;
   letter-spacing: -0.03em;
   color: var(--text);
-}
-
-.settings-data-zone__header p {
-  max-width: 42ch;
-  color: var(--muted);
-  line-height: 1.55;
 }
 
 .settings-section__intro {
@@ -22118,7 +22074,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-data-danger-item--history {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .settings-data-danger-copy {
@@ -22135,16 +22091,17 @@ input.transaction-inline-edit--amount::placeholder {
 .settings-data-danger-controls {
   display: flex;
   gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: flex-end;
-  justify-content: space-between;
-  width: 100%;
+  justify-content: flex-end;
+  width: auto;
 }
 
 .settings-inline-field {
   display: grid;
   gap: 6px;
-  min-width: min(100%, 240px);
+  min-width: 0;
+  width: 170px;
   color: var(--muted);
   font-size: 13px;
 }
@@ -22621,6 +22578,16 @@ input.transaction-inline-edit--amount::placeholder {
   .settings-data-danger-item--history {
     justify-items: stretch;
     text-align: left;
+  }
+
+  .settings-data-danger-controls {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .settings-inline-field {
+    width: min(100%, 220px);
   }
 
   .settings-data-grid--split,

@@ -1355,22 +1355,14 @@ export function SettingsHub({
             <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <h4>Data</h4>
-                <p>Export what you need or remove data carefully from one place.</p>
               </div>
             </div>
 
             <article className="settings-action-card settings-data-shell">
-              <div className="settings-data-shell__header">
-                <span className="settings-data-shell__eyebrow">Workspace controls</span>
-                <h5>Manage what you keep and what you clear</h5>
-              </div>
-
               <div className="settings-data-shell__grid">
                 <section className="settings-data-zone settings-data-zone--export">
                   <div className="settings-data-zone__header">
-                    <span className="settings-data-zone__badge">Export</span>
                     <h6>Download snapshots</h6>
-                    <p>Grab clean PDFs of your latest transactions and account balances.</p>
                   </div>
 
                   <div className="settings-data-export-actions">
@@ -1422,16 +1414,13 @@ export function SettingsHub({
 
                 <section className="settings-data-zone settings-data-zone--delete">
                   <div className="settings-data-zone__header">
-                    <span className="settings-data-zone__badge settings-data-zone__badge--danger">Delete</span>
                     <h6>Remove Clover data</h6>
-                    <p>These actions affect workspace records only and do not delete your login.</p>
                   </div>
 
                   <div className="settings-data-danger-list">
                     <div className="settings-data-danger-item settings-data-danger-item--history">
                       <div className="settings-data-danger-copy">
                         <strong>Transactions</strong>
-                        <span>Delete transactions before the selected date.</span>
                       </div>
                       <div className="settings-data-danger-controls">
                         <label className="settings-inline-field">
@@ -1452,7 +1441,6 @@ export function SettingsHub({
                     <div className="settings-data-danger-item">
                       <div className="settings-data-danger-copy">
                         <strong>Accounts</strong>
-                        <span>Delete accounts and linked transactions.</span>
                       </div>
                       <button
                         type="button"
@@ -1467,7 +1455,6 @@ export function SettingsHub({
                     <div className="settings-data-danger-item">
                       <div className="settings-data-danger-copy">
                         <strong>All Clover Data</strong>
-                        <span>Delete everything in Clover while keeping your login.</span>
                       </div>
                       <button
                         type="button"
