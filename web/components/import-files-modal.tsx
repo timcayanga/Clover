@@ -8202,8 +8202,8 @@ export function ImportFilesModal({
             multiple
             onChange={handleInputChange}
           />
-          <strong>Drop files here</strong>
-          <span>or browse for files from your computer.</span>
+          <strong>Drop statements, receipts, and screenshots here</strong>
+          <span>Upload bank statements, transaction screenshots, receipt images, or CSV files.</span>
           <button className="button button-secondary button-small" type="button" onClick={openFilePicker}>
             Choose files
           </button>
