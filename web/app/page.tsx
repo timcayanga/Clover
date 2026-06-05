@@ -82,7 +82,7 @@ export default async function HomePage() {
             <span>Stay in control.</span>
           </h1>
           <p className="landing-hero__lede">
-            Clover helps you understand your money by importing statements, organizing transactions, and making shared expenses easier to settle.
+            Clover helps you import financial data, understand your spending, and manage shared expenses in one place.
           </p>
 
           <div className="landing-hero__actions">
@@ -133,7 +133,7 @@ export default async function HomePage() {
       />
 
       <FeatureSection
-        id="budget-tracking"
+        id="insights"
         title={
           <>
             See what your <span className="landing-highlight">money</span> is telling you.
@@ -141,13 +141,13 @@ export default async function HomePage() {
         }
         copy={
           <p>
-            Clover turns the data you upload into reports and Adviser guidance that help you understand your spending, spot patterns, and make better
+            Clover turns the data you upload into reports and insights that help you understand your spending, spot patterns, and make better
             progress toward your goals.
           </p>
         }
         visual={
           <SectionVisual
-            eyebrow="Adviser"
+            eyebrow="Insights"
             title="Clear visibility"
             body="Turn uploaded records into reports that show patterns, trends, and progress over time."
             tone="dark"
@@ -176,30 +176,6 @@ export default async function HomePage() {
             title="3 people"
             body="Add expenses, assign shares, and see balances at a glance before anyone asks for a reminder."
             className="landing-visual--split"
-          />
-        }
-      />
-
-      <FeatureSection
-        id="reporting"
-        title={
-          <>
-            Build <span className="landing-highlight">awareness</span> with reporting and Adviser guidance.
-          </>
-        }
-        copy={
-          <p>
-            Clover turns your statements and transactions into reports that make trends easier to spot, while Adviser highlights what changed,
-            what is growing, and where you may want to pay closer attention.
-          </p>
-        }
-        visual={
-          <SectionVisual
-            eyebrow="Adviser"
-            title="Clear visibility"
-            body="See the shape of your spending over time with simple reporting that helps you make more informed decisions."
-            tone="dark"
-            className="landing-visual--report"
           />
         }
       />
@@ -237,8 +213,7 @@ export default async function HomePage() {
         }
         copy={
           <p>
-            Clover is built with security in mind, so your files, transactions, and account data stay protected as you import, review, and manage
-            your finances. We keep the workflow transparent while making sure your data remains private and secure.
+            Clover is built to keep your information protected, your imported data reviewable, and your account access under your control.
           </p>
         }
         visual={
@@ -273,17 +248,20 @@ export default async function HomePage() {
         <div className="landing-footer__columns">
           <div className="landing-footer__column">
             <p className="landing-footer__heading">Features</p>
-            <Link href="/features" prefetch={false}>
-              Overview
+            <Link href="/features#statement-import" prefetch={false}>
+              Data Import
             </Link>
-            <Link href="/features#tracking" prefetch={false}>
-              Tracking
+            <Link href="/features#insights" prefetch={false}>
+              Insights
             </Link>
-            <Link href="/features#understanding" prefetch={false}>
-              Understanding
+            <Link href="/features#split-bills" prefetch={false}>
+              Split Bills
             </Link>
-            <Link href="/features#planning" prefetch={false}>
-              Planning
+            <Link href="/features#pro" prefetch={false}>
+              Pro
+            </Link>
+            <Link href="/features#trust" prefetch={false}>
+              Security
             </Link>
           </div>
 

@@ -36781,10 +36781,10 @@ body[data-split-bill-modal-open="true"] .app-shell {
   color: var(--text);
   display: grid;
   gap: 0.34em;
-  font-size: clamp(1.95rem, 4.8vw, 3.3rem);
-  line-height: 0.92;
-  letter-spacing: -0.08em;
-  max-width: 10ch;
+  font-size: clamp(1.8rem, 3.4vw, 2.75rem);
+  line-height: 1;
+  letter-spacing: 0;
+  max-width: 12ch;
 }
 
 .landing-page .landing-hero__title span {
@@ -37094,7 +37094,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
 .landing-footer__columns {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
   width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
@@ -37183,9 +37183,9 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .landing-page .landing-hero__title {
     gap: 0.28em;
-    font-size: clamp(1.8rem, 10vw, 2.5rem);
-    line-height: 0.98;
-    max-width: 8.6ch;
+    font-size: clamp(1.65rem, 8vw, 2.15rem);
+    line-height: 1.04;
+    max-width: 12ch;
   }
 
   .landing-page .landing-hero__lede {
