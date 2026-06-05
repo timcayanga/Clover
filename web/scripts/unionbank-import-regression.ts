@@ -128,6 +128,37 @@ for (const sample of knownImageOnlySamples) {
   assert.equal(markerRows[0]?.accountNumber, sample.accountNumber, `${sample.fileName} marker fallback should preserve account number.`);
 }
 
+const unionBankBusinessSampleRows = parseImportText(
+  "",
+  "Union_Bank_of_the_Philippines_business_statement_Word_and_PDF_template.pdf",
+  "application/pdf",
+  { institution: "UnionBank" }
+);
+assert.equal(
+  unionBankBusinessSampleRows.find((row) => row.description === "Outward Fast Payments MARGOLIS FURNITURE")?.merchantClean,
+  "MARGOLIS FURNITURE"
+);
+assert.equal(
+  unionBankBusinessSampleRows.find((row) => row.description === "Outward Fast Payments MARGOLIS FURNITURE")?.categoryName,
+  "Shopping"
+);
+assert.equal(
+  unionBankBusinessSampleRows.find((row) => row.description === "Outward Fast Payments Screwfix Enfield")?.merchantClean,
+  "Screwfix Enfield"
+);
+assert.equal(
+  unionBankBusinessSampleRows.find((row) => row.description === "Outward Fast Payments Screwfix Enfield")?.categoryName,
+  "Shopping"
+);
+assert.equal(
+  unionBankBusinessSampleRows.find((row) => row.description === "Outward Fast Payments Jennifer Labelle")?.categoryName,
+  "Transfers"
+);
+assert.equal(
+  unionBankBusinessSampleRows.find((row) => row.description === "Card Purchase STAPLES")?.merchantClean,
+  "STAPLES"
+);
+
 assert.equal(
   matchesImportedAccountIdentity(
     {

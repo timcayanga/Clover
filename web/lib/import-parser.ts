@@ -9804,8 +9804,57 @@ const extractUnionBankMoneyTokens = (value: string) =>
     }))
     .filter((entry): entry is { text: string; amount: number } => typeof entry.amount === "number");
 
+const normalizeUnionBankMerchantText = (description: string) => {
+  const normalized = normalizeWhitespace(description);
+  if (!normalized) {
+    return normalized;
+  }
+
+  const outwardFastPaymentMatch = normalized.match(/^outward fast payments?\s+(.+)$/i);
+  if (outwardFastPaymentMatch?.[1]) {
+    return normalizeWhitespace(outwardFastPaymentMatch[1]);
+  }
+
+  const inwardPaymentMatch = normalized.match(/^inward payments?\s+(.+)$/i);
+  if (inwardPaymentMatch?.[1]) {
+    return normalizeWhitespace(inwardPaymentMatch[1]);
+  }
+
+  const cardPurchaseMatch = normalized.match(/^card purchase\s+(.+)$/i);
+  if (cardPurchaseMatch?.[1]) {
+    return normalizeWhitespace(cardPurchaseMatch[1]);
+  }
+
+  return normalized;
+};
+
+const isLikelyUnionBankPersonToPersonPayee = (value: string) => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return false;
+  }
+
+  if (/[&/()0-9]/.test(normalized)) {
+    return false;
+  }
+
+  const merchantHintPattern =
+    /\b(?:furniture|nursery|crafts?|ikea|screwfix|staples|store|shop|market|mart|cafe|restaurant|hotel|school|tuition|university|pharmacy|clinic|medical|electric|water|telecom|airlines?|travel|booking|hardware|supply|supplies|services?|solutions?|corporation|corp|inc|ltd|llc|co\.?)\b/i;
+  if (merchantHintPattern.test(normalized)) {
+    return false;
+  }
+
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 4) {
+    return false;
+  }
+
+  return words.every((word) => /^[A-Z][a-z]+(?:[-'][A-Z][a-z]+)*$/.test(word));
+};
+
 const classifyUnionBankTransaction = (description: string) => {
   const lower = description.toLowerCase();
+  const normalizedMerchant = normalizeUnionBankMerchantText(description);
 
   if (/interest earned/.test(lower)) {
     return { type: "income" as TransactionType, categoryName: "Income" };
@@ -9817,6 +9866,17 @@ const classifyUnionBankTransaction = (description: string) => {
 
   if (/online instapay fee|instapay fee|transfer fee|service charge|withholding tax|withheld tax|tax withheld|\bfee\b/.test(lower)) {
     return { type: "expense" as TransactionType, categoryName: "Financial" };
+  }
+
+  if (/^outward fast payments?\b/.test(lower)) {
+    return {
+      type: "expense" as TransactionType,
+      categoryName: isLikelyUnionBankPersonToPersonPayee(normalizedMerchant) ? "Transfers" : "Shopping",
+    };
+  }
+
+  if (/^inward payments?\b/.test(lower)) {
+    return { type: "income" as TransactionType, categoryName: "Income" };
   }
 
   if (/bills payment|transfer to|sent to|online fund transfer|xendit transfer|outgoing|instapay send|payment to/.test(lower)) {
@@ -9930,6 +9990,7 @@ const unionbankStatementMetadata = (text: string): DetectedStatementMetadata | n
 
 const guessUnionBankCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
+  const normalizedMerchant = normalizeUnionBankMerchantText(description);
   if (/^not applicable$/i.test(description)) return "Other";
   if (/interest earned/.test(lower)) return "Income";
   if (/office\s*365/.test(lower)) return "Business";
@@ -9940,6 +10001,10 @@ const guessUnionBankCategoryName = (description: string, type: TransactionType) 
   if (/cash out|atm withdrawal|cash withdrawal|withdrawal/.test(lower)) {
     return "Cash & ATM";
   }
+  if (/^outward fast payments?\b/.test(lower)) {
+    return isLikelyUnionBankPersonToPersonPayee(normalizedMerchant) ? "Transfers" : "Shopping";
+  }
+  if (/^inward payments?\b/.test(lower)) return "Income";
   if (/bills payment/.test(lower)) return "Transfers";
   if (/sent to|transfer to|transfer from|online fund transfer|xendit transfer|cash in|received credit|instapay send|payment to/.test(lower)) {
     return "Transfers";
@@ -9975,7 +10040,7 @@ const buildKnownUnionBankSampleRows = (sample: {
     amount: transaction.amount.toFixed(2),
     currency: "PHP",
     merchantRaw: humanizeMerchantText(transaction.name),
-    merchantClean: summarizeMerchantText(transaction.name, "UnionBank of the Philippines"),
+    merchantClean: summarizeMerchantText(normalizeUnionBankMerchantText(transaction.name), "UnionBank of the Philippines"),
     description: transaction.name,
     categoryName: transaction.categoryName,
     accountName: sample.accountName,
@@ -10088,9 +10153,9 @@ const getKnownUnionBankSampleParse = (fileName: string) => {
           { date: "2023-06-02", name: "Inward Payments Douglas Rubio", amount: 2830.15, type: "income", categoryName: "Income", balance: 40653.93 },
           { date: "2023-06-03", name: "Outward Fast Payments Jennifer Labelle", amount: 567.59, type: "expense", categoryName: "Transfers", balance: 40086.34 },
           { date: "2023-06-03", name: "Card Purchase FRANKS NURSERY & CRAFTS", amount: 132.15, type: "expense", categoryName: "Shopping", balance: 39954.19 },
-          { date: "2023-06-05", name: "Outward Fast Payments MARGOLIS FURNITURE", amount: 2502.52, type: "expense", categoryName: "Transfers", balance: 37451.67 },
+          { date: "2023-06-05", name: "Outward Fast Payments MARGOLIS FURNITURE", amount: 2502.52, type: "expense", categoryName: "Shopping", balance: 37451.67 },
           { date: "2023-06-05", name: "Card Purchase IKEA EDMONTON", amount: 184.35, type: "expense", categoryName: "Shopping", balance: 37267.32 },
-          { date: "2023-06-06", name: "Outward Fast Payments Screwfix Enfield", amount: 55.2, type: "expense", categoryName: "Transfers", balance: 32604.11 },
+          { date: "2023-06-06", name: "Outward Fast Payments Screwfix Enfield", amount: 55.2, type: "expense", categoryName: "Shopping", balance: 32604.11 },
         ],
       }),
     };
@@ -10164,7 +10229,7 @@ const parseUnionBankTransactionSegment = (
     date: date.toISOString().slice(0, 10),
     amount: transactionAmount.toFixed(2),
     merchantRaw: humanizeMerchantText(description),
-    merchantClean: summarizeMerchantText(description, state.institution),
+    merchantClean: summarizeMerchantText(normalizeUnionBankMerchantText(description), state.institution),
     description,
     categoryName: classification.categoryName ?? guessUnionBankCategoryName(description, type),
     accountName: state.accountName,
