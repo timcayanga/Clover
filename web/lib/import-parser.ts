@@ -8242,9 +8242,11 @@ const parseMayaMobileScreenshotImportText = (text: string) => {
       continue;
     }
 
-    const nearbyLines = lines
+    const candidateLines = lines
       .slice(index, Math.min(lines.length, index + 6))
       .filter((candidate, candidateIndex) => candidateIndex === 0 || !isDateLine(candidate));
+    const amountIndex = candidateLines.findIndex((candidate) => isAmountLine(candidate));
+    const nearbyLines = amountIndex >= 0 ? candidateLines.slice(0, amountIndex + 1) : candidateLines;
     const amountLine = nearbyLines.find((candidate) => isAmountLine(candidate)) ?? "";
     const amountMatch = amountLine.match(amountPattern);
     const amount = parseMoney(amountMatch ? `${amountMatch[1] === "-" ? "-" : ""}${amountMatch[2]}` : null);
@@ -16893,7 +16895,8 @@ const looksLikeWiseMobileScreenshotText = (text: string) => {
       .filter((currency): currency is string => Boolean(currency))
   );
   const hasWiseActivityLanguage = lines.some((line) => wiseMobileStatusPattern.test(line)) || /\bTo\s+PHP\b/i.test(text);
-  return uiScore >= 2 && amountCurrencies.size >= 1 && hasWiseActivityLanguage;
+  const hasVisibleDate = lines.some((line) => wiseMobileDatePattern.test(line));
+  return amountCurrencies.size >= 1 && (uiScore >= 1 || hasWiseActivityLanguage || hasVisibleDate);
 };
 
 const parseWiseMobileScreenshotMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {

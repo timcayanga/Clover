@@ -1079,6 +1079,9 @@ const imageStatementRowsLookUsable = (
   return true;
 };
 
+const isLikelyScreenshotImageFile = (fileName: string) =>
+  /(?:^|[\\/])IMG_\d+\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(fileName) || /screenshot/i.test(fileName);
+
 const isTruthyEnvValue = (value?: string | null) => {
   if (!value) {
     return false;
@@ -4829,7 +4832,8 @@ export const processImportFileText = async (
     importMode === "statement" &&
     !trainedReceiptDetails &&
     !String(options.text ?? "").trim() &&
-    !options.textCacheInfo;
+    !options.textCacheInfo &&
+    !isLikelyScreenshotImageFile(fileName);
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
   let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
