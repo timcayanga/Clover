@@ -8203,7 +8203,6 @@ export function ImportFilesModal({
             onChange={handleInputChange}
           />
           <strong>Drop statements, receipts, and screenshots here</strong>
-          <span>Upload bank statements, transaction screenshots, receipt images, or CSV files.</span>
           <button className="button button-secondary button-small" type="button" onClick={openFilePicker}>
             Choose files
           </button>
