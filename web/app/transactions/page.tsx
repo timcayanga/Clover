@@ -1982,13 +1982,6 @@ const toolbarChipStyle = {
   boxShadow: "none",
 } as const;
 
-const toolbarAddStyle = {
-  backgroundColor: "var(--accent)",
-  borderColor: "var(--accent)",
-  color: "#ffffff",
-  boxShadow: "none",
-} as const;
-
 const transactionsMenuStyle = {
   position: "relative",
   zIndex: 20,
@@ -6653,7 +6646,6 @@ function TransactionsPageContent() {
       <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>
         <button
           className="button button-secondary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
-          style={toolbarAddStyle}
           type="button"
           onClick={() => {
             if (!isCompactViewport) {
