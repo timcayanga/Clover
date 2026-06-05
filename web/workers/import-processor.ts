@@ -3130,6 +3130,7 @@ const resolveConfirmationAccount = async (params: {
   parsedRows: Array<{
     accountName?: unknown;
     institution?: unknown;
+    rawPayload?: unknown;
   }>;
   accountId?: string | null;
   planLimits?: {
@@ -3248,11 +3249,25 @@ const resolveConfirmationAccount = async (params: {
       throw error;
     }
   };
+  const mobileScreenshotIdentityRow =
+    params.parsedRows.find((row) => {
+      const rawPayload =
+        row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+          ? (row.rawPayload as Record<string, unknown>)
+          : null;
+      const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
+      const kind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
+      return (
+        /(?:gcash|maya)_mobile_screenshot/i.test(source) ||
+        /(?:gcash|maya)_mobile_screenshot/i.test(kind)
+      );
+    }) ?? null;
   const candidateRow =
-    (typeof params.statementMetadata?.accountName === "string" && params.statementMetadata.accountName.trim()
+    mobileScreenshotIdentityRow ??
+    (typeof params.statementMetadata?.institution === "string" && params.statementMetadata.institution.trim()
       ? params.statementMetadata
       : null) ??
-    (typeof params.statementMetadata?.institution === "string" && params.statementMetadata.institution.trim()
+    (typeof params.statementMetadata?.accountName === "string" && params.statementMetadata.accountName.trim()
       ? params.statementMetadata
       : null) ??
     params.parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ??

@@ -7966,6 +7966,21 @@ const parseGcashMobileScreenshotImportText = (text: string) => {
     .filter(Boolean);
   let currentDate: string | null = null;
   const rows: ParsedImportRow[] = [];
+  const timePattern = /\b\d{1,2}:\d{2}\s*[AP]M\b/i;
+  const amountPattern = /^([+-])\s*(?:₱|PHP|P)?\s*([0-9][0-9,]*\.\d{2})$/i;
+  const signedAmountTailPattern = /([+-])\s*(?:₱|PHP|P)?\s*([0-9][0-9,]*\.\d{2})$/i;
+  const isDateLine = (line: string) =>
+    /^Today$/i.test(line) ||
+    /^Yesterday$/i.test(line) ||
+    new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i").test(line);
+  const isStructuralLine = (line: string) =>
+    /^Transaction\s+History$/i.test(line) ||
+    /^As\s+of\b/i.test(line) ||
+    /^(Home|Inbox|QR|Transactions|Profile)$/i.test(line) ||
+    /^Want to see more/i.test(line) ||
+    /^Request transaction history/i.test(line);
+  const isAmountLine = (line: string) => amountPattern.test(line);
+  const isTimeLine = (line: string) => timePattern.test(line);
 
   const setDate = (line: string) => {
     if (/^Today$/i.test(line) && asOfDate) {
@@ -7990,7 +8005,7 @@ const parseGcashMobileScreenshotImportText = (text: string) => {
     if (!currentDate) {
       return;
     }
-    const match = detailLine.match(/^(.+?)\s+([+-]\s*\d[\d,]*\.\d{2})$/);
+    const match = detailLine.match(/^(.+?)\s+([+-]\s*(?:₱|PHP|P)?\s*\d[\d,]*\.\d{2})$/i);
     if (!match?.[1] || !match[2]) {
       return;
     }
@@ -8032,21 +8047,55 @@ const parseGcashMobileScreenshotImportText = (text: string) => {
     });
   };
 
+  const pushSplitRow = (timeText: string, startIndex: number) => {
+    if (!currentDate) {
+      return;
+    }
+
+    const candidateLines = lines
+      .slice(startIndex + 1, Math.min(lines.length, startIndex + 6))
+      .filter((candidate) => !isDateLine(candidate) && !isStructuralLine(candidate));
+    const amountIndex = candidateLines.findIndex((candidate) => isAmountLine(candidate));
+    const nearbyLines = amountIndex >= 0 ? candidateLines.slice(0, amountIndex + 1) : candidateLines;
+    const amountLine = nearbyLines.find((candidate) => isAmountLine(candidate)) ?? "";
+    const amountMatch = amountLine.match(amountPattern);
+    if (!amountMatch?.[1] || !amountMatch[2]) {
+      return;
+    }
+
+    const description = normalizeWhitespace(
+      nearbyLines
+        .filter((candidate) => !isAmountLine(candidate) && !isTimeLine(candidate))
+        .join(" ")
+    );
+    if (!description) {
+      return;
+    }
+
+    pushRow(timeText, `${description} ${amountMatch[1]}${amountMatch[2]}`);
+  };
+
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
     if (setDate(line)) {
       continue;
     }
 
-    const inlineMatch = line.match(/^(\d{1,2}:\d{2}\s*[AP]M)\s+(.+?\s+[+-]\s*\d[\d,]*\.\d{2})$/i);
+    const inlineMatch = line.match(/^(\d{1,2}:\d{2}\s*[AP]M)\s+(.+?\s+[+-]\s*(?:₱|PHP|P)?\s*\d[\d,]*\.\d{2})$/i);
     if (inlineMatch?.[1] && inlineMatch[2]) {
       pushRow(inlineMatch[1], inlineMatch[2]);
       continue;
     }
 
-    if (/^\d{1,2}:\d{2}\s*[AP]M$/i.test(line)) {
+    const inlineTrailingAmount = line.match(signedAmountTailPattern);
+    if (inlineTrailingAmount && currentDate && !isAmountLine(line)) {
+      pushRow("", line);
+      continue;
+    }
+
+    if (isTimeLine(line)) {
       pushRow(line, lines[index + 1] ?? "");
-      index += 1;
+      pushSplitRow(line, index);
     }
   }
 
