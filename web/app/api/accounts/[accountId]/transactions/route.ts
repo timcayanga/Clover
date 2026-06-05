@@ -173,6 +173,7 @@ type TransactionApiRow = {
   rawPayload: Prisma.JsonValue;
   normalizedPayload: Prisma.JsonValue | null;
   createdAt: string;
+  tags: Array<{ id: string; name: string }>;
 };
 
 const mapTransactionRow = (transaction: {
@@ -193,6 +194,7 @@ const mapTransactionRow = (transaction: {
   isExcluded: boolean;
   importFileId: string | null;
   createdAt: Date;
+  transactionTags: Array<{ tag: { id: string; name: string } }>;
   institution?: string | null;
   accountName?: string | null;
   accountNumber?: string | null;
@@ -254,6 +256,10 @@ const mapTransactionRow = (transaction: {
     rawPayload: transaction.rawPayload,
     normalizedPayload: transaction.normalizedPayload ?? null,
     createdAt: transaction.createdAt.toISOString(),
+    tags: transaction.transactionTags.map((entry) => ({
+      id: entry.tag.id,
+      name: entry.tag.name,
+    })),
   };
 };
 
@@ -576,6 +582,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
             select: {
               id: true,
               name: true,
+            },
+          },
+          transactionTags: {
+            select: {
+              tag: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
           },
           importFileId: true,

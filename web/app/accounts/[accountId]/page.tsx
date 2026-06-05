@@ -10,6 +10,7 @@ import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { FinancialAccountCard } from "@/components/financial-account-card";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
+import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
 import { formatUploadAccountDisplayName, getAccountCardName, getAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
@@ -24,6 +25,7 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
+import { getTransactionTagSignature, sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { clearImportActivity, getCompletedImportActivitySummary, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
 import {
@@ -122,6 +124,7 @@ type Transaction = {
   importFileId?: string | null;
   warningReason?: string | null;
   splitBill?: { id: string; title: string } | null;
+  tags?: Array<{ id: string; name: string }>;
   rawPayload?: unknown;
   normalizedPayload?: unknown;
 };
@@ -225,6 +228,7 @@ type TransactionDetailDraft = {
   description: string;
   isExcluded: boolean;
   isTransfer: boolean;
+  tags: string[];
   receiptLineItems: ReceiptLineItemDraft[];
 };
 
@@ -1141,6 +1145,7 @@ const createDetailDraft = (
     description: getTransactionUserNote(transaction),
     isExcluded: transaction.isExcluded,
     isTransfer: Boolean(transaction.isTransfer || effectiveType === "transfer"),
+    tags: sanitizeTransactionTagNames((transaction.tags ?? []).map((tag) => tag.name)),
     receiptLineItems: parseReceiptLineItemsFromPayload(transaction.rawPayload).map(receiptLineItemToDraft),
   };
 };
@@ -2931,6 +2936,10 @@ function AccountDetailPageContent() {
     [selectedTransaction?.rawPayload]
   );
   const selectedTransactionRawNote = useMemo(() => getTransactionParsedNote(selectedTransaction), [selectedTransaction]);
+  const transactionTagSuggestions = useMemo(
+    () => sanitizeTransactionTagNames(transactions.flatMap((transaction) => (transaction.tags ?? []).map((tag) => tag.name))),
+    [transactions]
+  );
   const detailReceiptLineItems = detailDraft?.receiptLineItems ?? selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
   const detailReceiptLineItemTotal = useMemo(
     () => getManualReceiptLineItemTotal(detailReceiptLineItems),
@@ -2950,6 +2959,7 @@ function AccountDetailPageContent() {
       detailDraft.currency !== (selectedTransaction.currency ?? account?.currency ?? "PHP") ||
       detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
       normalizeTransactionNotes(detailDraft.description) !== getTransactionUserNote(selectedTransaction) ||
+      getTransactionTagSignature(detailDraft.tags) !== getTransactionTagSignature((selectedTransaction.tags ?? []).map((tag) => tag.name)) ||
       detailDraft.isExcluded !== selectedTransaction.isExcluded ||
       detailDraft.isTransfer !== Boolean(selectedTransaction.isTransfer || selectedTransaction.type === "transfer") ||
       receiptLineItemSignature(detailDraft.receiptLineItems) !==
@@ -3182,6 +3192,8 @@ function AccountDetailPageContent() {
         amount: detailDraft.amount,
         currency: detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency || account?.currency || "PHP",
         type: detailDraftTypeToTransactionType(detailDraft.type),
+        description: detailDraft.description || null,
+        tags: sanitizeTransactionTagNames(detailDraft.tags),
         userNote: detailDraft.description || null,
         isExcluded: detailDraft.isExcluded,
         isTransfer: detailDraft.isTransfer,
@@ -5014,6 +5026,18 @@ function AccountDetailPageContent() {
                       placeholder="Optional note or review context"
                     />
                   </label>
+                  <div className="transaction-drawer-form__notes">
+                    <span className="transaction-drawer-field-label">
+                      <span>Tags</span>
+                    </span>
+                    <TransactionTagsEditor
+                      tags={detailDraft?.tags ?? []}
+                      onChange={(tags) => setDetailDraft((current) => (current ? { ...current, tags } : current))}
+                      suggestions={transactionTagSuggestions}
+                      placeholder="Examples: Shared, Travel, Personal"
+                      inputAriaLabel="Edit transaction tags"
+                    />
+                  </div>
                   {selectedTransactionRawSourceLine ? (
                     <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
                       <span>Raw source line</span>

@@ -15182,6 +15182,69 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 6px;
 }
 
+.transaction-tags-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.transaction-tags-editor__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.transaction-tags-editor__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(3, 168, 192, 0.18);
+  background: rgba(94, 211, 208, 0.14);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.transaction-tags-editor__remove {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0;
+  line-height: 1;
+}
+
+.transaction-tags-editor__input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.transaction-tags-editor__input-row input {
+  min-height: 40px;
+}
+
+.transaction-tags-editor__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.transaction-tags-editor__suggestion {
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .transaction-drawer-more__row {
   display: flex;
   align-items: center;
@@ -34065,6 +34128,16 @@ html[data-theme="dark"] .settings-plan-usage__card,
 html[data-theme="dark"] .settings-plan-usage__card--plan,
 html[data-theme="dark"] .transaction-drawer-receipt-table,
 html[data-theme="dark"] .transaction-drawer-more {
+  background: rgba(14, 23, 37, 0.88);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .transaction-tags-editor__chip {
+  background: rgba(71, 215, 232, 0.14);
+  border-color: rgba(71, 215, 232, 0.22);
+}
+
+html[data-theme="dark"] .transaction-tags-editor__suggestion {
   background: rgba(14, 23, 37, 0.88);
   border-color: rgba(148, 163, 184, 0.16);
 }

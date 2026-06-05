@@ -7,11 +7,13 @@ import { ImportFilesModal } from "@/components/import-files-modal";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
+import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getAccountDisplayName } from "@/lib/account-display";
 import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
+import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 
 type DashboardTopActionsProps = {
   workspaceId: string;
@@ -39,6 +41,7 @@ type ManualFormState = {
   categoryId: string;
   type: "debit" | "credit";
   description: string;
+  tags: string[];
   receiptLineItems: Array<{
     description: string;
     amount: string;
@@ -105,6 +108,7 @@ export function DashboardManualTransactionModal({
     categoryId: "",
     type: initialType,
     description: "",
+    tags: [],
     receiptLineItems: [],
   }));
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -353,6 +357,7 @@ export function DashboardManualTransactionModal({
           merchantRaw: form.merchantRaw,
           merchantClean: null,
           description: form.description.trim() || null,
+          tags: sanitizeTransactionTagNames(form.tags),
           receiptLineItems: form.receiptLineItems
             .filter((entry) => entry.description.trim() || entry.amount.trim())
             .map((entry) => ({
@@ -403,6 +408,7 @@ export function DashboardManualTransactionModal({
           amount: "",
           merchantRaw: "",
           description: "",
+          tags: [],
           receiptLineItems: [],
         }));
         setCategoryMenuOpen(false);
@@ -655,6 +661,16 @@ export function DashboardManualTransactionModal({
                       placeholder="Optional note or review context"
                     />
                   </label>
+
+                  <div className="transactions-manual-field transactions-manual-field--embedded-label">
+                    <span className="transactions-manual-field__label">Tags</span>
+                    <TransactionTagsEditor
+                      tags={form.tags}
+                      onChange={(tags) => setForm((current) => ({ ...current, tags }))}
+                      placeholder="Examples: Bills, Work, Family"
+                      inputAriaLabel="Add tags to transaction"
+                    />
+                  </div>
 
                   <div className="transactions-split-bill-link-panel__toggle-row">
                     <button

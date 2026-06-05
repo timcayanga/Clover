@@ -9,6 +9,7 @@ import { capturePostHogServerEvent } from "@/lib/analytics";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
+import { normalizeTransactionTagKey, sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ const patchSchema = z.object({
   merchantClean: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   userNote: z.string().nullable().optional(),
+  tags: z.array(z.string()).optional(),
   date: z.string().optional(),
   amount: z.union([z.string(), z.number()]).optional(),
   currency: z.string().min(1).optional(),
@@ -72,6 +74,25 @@ const sanitizeTransactionRawPayload = (
   return nextPayload as Prisma.InputJsonValue;
 };
 
+const buildTransactionTagWrites = (workspaceId: string, tags: readonly string[]) =>
+  sanitizeTransactionTagNames(tags).map((name) => ({
+    tag: {
+      connectOrCreate: {
+        where: {
+          workspaceId_normalizedName: {
+            workspaceId,
+            normalizedName: normalizeTransactionTagKey(name),
+          },
+        },
+        create: {
+          workspaceId,
+          name,
+          normalizedName: normalizeTransactionTagKey(name),
+        },
+      },
+    },
+  }));
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ transactionId: string }> }) {
   try {
     const { transactionId } = await params;
@@ -114,7 +135,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       payload.date !== undefined ||
       payload.amount !== undefined ||
       payload.currency !== undefined ||
-      payload.rawPayload !== undefined;
+      payload.rawPayload !== undefined ||
+      payload.tags !== undefined;
 
     const updated = await prisma.transaction.update({
       where: { id: transactionId },
@@ -163,17 +185,35 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
               rawPayload: payload.rawPayload === undefined ? transaction.rawPayload : (payload.rawPayload as Prisma.JsonValue),
               isTransfer: resolvedIsTransfer,
               isExcluded: payload.isExcluded ?? transaction.isExcluded,
+              tags: payload.tags === undefined ? undefined : sanitizeTransactionTagNames(payload.tags),
               reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : transaction.reviewStatus),
               editedAt: new Date().toISOString(),
             }
           : undefined,
         learnedRuleIdsApplied: editedFields ? appendManualEditMarker(transaction.learnedRuleIdsApplied) : undefined,
+        transactionTags:
+          payload.tags === undefined
+            ? undefined
+            : {
+                deleteMany: {},
+                create: buildTransactionTagWrites(transaction.workspaceId, payload.tags),
+              },
       },
       include: {
         splitBill: {
           select: {
             id: true,
             title: true,
+          },
+        },
+        transactionTags: {
+          select: {
+            tag: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
       },
@@ -245,6 +285,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
           type: updated.type,
           currency: updated.currency,
           reviewStatus: updated.reviewStatus,
+          tagCount: updated.transactionTags.length,
         },
       },
     });
@@ -352,6 +393,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         createdAt: updated.createdAt.toISOString(),
         updatedAt: updated.updatedAt.toISOString(),
         splitBill: updated.splitBill,
+        tags: updated.transactionTags.map((entry) => ({
+          id: entry.tag.id,
+          name: entry.tag.name,
+        })),
       },
     });
   } catch {

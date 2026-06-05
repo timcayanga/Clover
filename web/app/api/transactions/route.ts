@@ -15,6 +15,7 @@ import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
+import { normalizeTransactionTagKey, sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import {
   buildTransactionQueryWhere,
   buildTransactionQueryOrderBy,
@@ -111,6 +112,7 @@ type TransactionApiRow = {
   importFileId?: string | null;
   source: "upload" | "manual";
   splitBill: { id: string; title: string } | null;
+  tags: Array<{ id: string; name: string }>;
 };
 
 type TransactionSummaryRow = {
@@ -137,6 +139,7 @@ type TransactionSummaryRow = {
   createdAt: Date;
   isTransfer: boolean;
   isExcluded: boolean;
+  transactionTags: Array<{ tag: { id: string; name: string } }>;
 };
 
 const isResolvedReviewStatus = (status: string | null) =>
@@ -549,6 +552,7 @@ const mapTransactionRow = (transaction: {
   isExcluded: boolean;
   warningReason: string | null;
   splitBill: { id: string; title: string } | null;
+  transactionTags: Array<{ tag: { id: string; name: string } }>;
 }, workspaceAccounts: Array<{ id: string; accountNumber: string | null }>): TransactionApiRow => {
   const normalizedCurrency =
     normalizeInstitutionCurrency(
@@ -625,6 +629,10 @@ const mapTransactionRow = (transaction: {
     source,
     splitBill: transaction.splitBill,
     categoryName,
+    tags: transaction.transactionTags.map((entry) => ({
+      id: entry.tag.id,
+      name: entry.tag.name,
+    })),
   };
 };
 
@@ -655,11 +663,31 @@ const transactionSchema = z.object({
   merchantRaw: z.string().min(1),
   merchantClean: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
+  tags: z.array(z.string()).optional(),
   receiptLineItems: z.array(receiptLineItemSchema).optional(),
   isTransfer: z.boolean().optional(),
   isExcluded: z.boolean().optional(),
   preserveType: z.boolean().optional(),
 });
+
+const buildTransactionTagWrites = (workspaceId: string, tags: readonly string[]) =>
+  sanitizeTransactionTagNames(tags).map((name) => ({
+    tag: {
+      connectOrCreate: {
+        where: {
+          workspaceId_normalizedName: {
+            workspaceId,
+            normalizedName: normalizeTransactionTagKey(name),
+          },
+        },
+        create: {
+          workspaceId,
+          name,
+          normalizedName: normalizeTransactionTagKey(name),
+        },
+      },
+    },
+  }));
 
 const getWorkspaceCurrencyCodes = async (workspaceId: string) => {
   const rows = await prisma.transaction.findMany({
@@ -972,6 +1000,16 @@ export async function GET(request: Request) {
                 title: true,
               },
             },
+            transactionTags: {
+              select: {
+                tag: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
             createdAt: true,
             isTransfer: true,
             isExcluded: true,
@@ -1023,6 +1061,16 @@ export async function GET(request: Request) {
                   select: {
                     id: true,
                     title: true,
+                  },
+                },
+                transactionTags: {
+                  select: {
+                    tag: {
+                      select: {
+                        id: true,
+                        name: true,
+                      },
+                    },
                   },
                 },
                 createdAt: true,
@@ -1094,6 +1142,7 @@ export async function GET(request: Request) {
           description: transaction.description,
           isTransfer: transaction.isTransfer,
           isExcluded: transaction.isExcluded,
+          transactionTags: transaction.transactionTags,
           createdAt: transaction.createdAt,
           warningReason: getTransactionWarningReason(transaction, duplicateCounts),
           splitBill: transaction.splitBill,
@@ -1208,6 +1257,16 @@ export async function GET(request: Request) {
           createdAt: true,
           isTransfer: true,
           isExcluded: true,
+          transactionTags: {
+            select: {
+              tag: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
         },
         orderBy,
       }),
@@ -1259,6 +1318,16 @@ export async function GET(request: Request) {
               createdAt: true,
               isTransfer: true,
               isExcluded: true,
+              transactionTags: {
+                select: {
+                  tag: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
+                },
+              },
             },
             orderBy: [{ createdAt: "desc" }, { date: "desc" }],
             take: Math.min(25, requestedPageSize ?? 25),
@@ -1314,6 +1383,7 @@ export async function GET(request: Request) {
           description: transaction.description,
           isTransfer: transaction.isTransfer,
           isExcluded: transaction.isExcluded,
+          transactionTags: transaction.transactionTags,
           createdAt: transaction.createdAt,
           warningReason,
           splitBill: transaction.splitBill,
@@ -1502,8 +1572,15 @@ export async function POST(request: Request) {
           merchantClean: payload.merchantClean ?? payload.merchantRaw,
           categoryId: resolvedCategoryId,
           type: resolvedType,
+          tags: sanitizeTransactionTagNames(payload.tags ?? []),
         },
         learnedRuleIdsApplied: [],
+        transactionTags:
+          payload.tags === undefined
+            ? undefined
+            : {
+                create: buildTransactionTagWrites(payload.workspaceId, payload.tags),
+              },
       },
       include: {
         account: {
@@ -1516,6 +1593,16 @@ export async function POST(request: Request) {
         category: {
           select: {
             name: true,
+          },
+        },
+        transactionTags: {
+          select: {
+            tag: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
       },
@@ -1596,6 +1683,10 @@ export async function POST(request: Request) {
         updatedAt: transaction.updatedAt.toISOString(),
         accountName: createdAccount?.name ?? null,
         categoryName: createdCategory?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+        tags: transaction.transactionTags.map((entry) => ({
+          id: entry.tag.id,
+          name: entry.tag.name,
+        })),
       },
     }, { status: 201 });
   } catch (error) {

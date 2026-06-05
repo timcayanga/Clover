@@ -24,6 +24,7 @@ import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
+import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
 import { getCategoryIconTone } from "@/lib/category-icons";
 import {
   analyticsOnceKey,
@@ -64,6 +65,7 @@ import {
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
+import { getTransactionTagSignature, sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 
@@ -454,6 +456,7 @@ type Transaction = {
   isTransfer: boolean;
   isExcluded: boolean;
   splitBill?: { id: string; title: string } | null;
+  tags?: Array<{ id: string; name: string }>;
   source?: string | null;
   importFileId?: string | null;
   warningReason?: string | null;
@@ -524,6 +527,7 @@ type ManualTransactionForm = {
   type: "debit" | "credit";
   merchantRaw: string;
   description: string;
+  tags: string[];
   receiptLineItems: ReceiptLineItemDraft[];
 };
 
@@ -545,6 +549,7 @@ type TransactionDetailDraft = {
   description: string;
   isExcluded: boolean;
   isTransfer: boolean;
+  tags: string[];
   receiptLineItems: ReceiptLineItemDraft[];
 };
 
@@ -778,6 +783,7 @@ const createEmptyManualForm = (accountId = "", categoryId = "", currency = "PHP"
   type: "debit",
   merchantRaw: "",
   description: "",
+  tags: [],
   receiptLineItems: [],
 });
 
@@ -2034,6 +2040,7 @@ const createDetailDraft = (
     description: getTransactionUserNote(transaction),
     isExcluded: transaction.isExcluded,
     isTransfer: transaction.isTransfer,
+    tags: sanitizeTransactionTagNames((transaction.tags ?? []).map((tag) => tag.name)),
     receiptLineItems: parseReceiptLineItemsFromPayload(transaction.rawPayload).map(receiptLineItemToDraft),
   };
 };
@@ -4333,6 +4340,7 @@ function TransactionsPageContent() {
       detailDraft.currency !== selectedTransaction.currency ||
       detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
       normalizeTransactionNotes(detailDraft.description) !== getTransactionUserNote(selectedTransaction) ||
+      getTransactionTagSignature(detailDraft.tags) !== getTransactionTagSignature((selectedTransaction.tags ?? []).map((tag) => tag.name)) ||
       detailDraft.isExcluded !== selectedTransaction.isExcluded ||
       detailDraft.isTransfer !== selectedTransaction.isTransfer ||
       receiptLineItemSignature(detailDraft.receiptLineItems) !==
@@ -4404,6 +4412,10 @@ function TransactionsPageContent() {
     [selectedTransaction?.rawPayload]
   );
   const selectedTransactionRawNote = useMemo(() => getTransactionParsedNote(selectedTransaction), [selectedTransaction]);
+  const transactionTagSuggestions = useMemo(
+    () => sanitizeTransactionTagNames(transactions.flatMap((transaction) => (transaction.tags ?? []).map((tag) => tag.name))),
+    [transactions]
+  );
   const detailReceiptLineItems = detailDraft?.receiptLineItems ?? selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
   const detailReceiptLineItemTotal = useMemo(
     () => getManualReceiptLineItemTotal(detailReceiptLineItems),
@@ -5060,6 +5072,7 @@ function TransactionsPageContent() {
         merchantRaw: manualForm.merchantRaw,
         merchantClean: null,
         description: manualForm.description.trim() || null,
+        tags: sanitizeTransactionTagNames(manualForm.tags).map((name) => ({ id: `tag-${name}`, name })),
         isTransfer: false,
         isExcluded: false,
         source: "manual",
@@ -5111,6 +5124,7 @@ function TransactionsPageContent() {
           merchantRaw: manualForm.merchantRaw,
           merchantClean: null,
           description: manualForm.description.trim() || null,
+          tags: sanitizeTransactionTagNames(manualForm.tags),
           receiptLineItems,
           isTransfer: false,
           isExcluded: false,
@@ -5906,6 +5920,8 @@ function TransactionsPageContent() {
         amount: detailDraft.amount,
         currency: detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency,
         type: detailDraftTypeToTransactionType(detailDraft.type),
+        description: detailDraft.description || null,
+        tags: sanitizeTransactionTagNames(detailDraft.tags),
         userNote: detailDraft.description || null,
         isExcluded: detailDraft.isExcluded,
         isTransfer: detailDraft.isTransfer,
@@ -8122,6 +8138,17 @@ function TransactionsPageContent() {
                         />
                       </label>
 
+                      <div className="transactions-manual-field transactions-manual-field--embedded-label">
+                        <span className="transactions-manual-field__label">Tags</span>
+                        <TransactionTagsEditor
+                          tags={manualForm.tags}
+                          onChange={(tags) => setManualForm((current) => ({ ...current, tags }))}
+                          suggestions={transactionTagSuggestions}
+                          placeholder="Examples: Work, Tax, Vacation"
+                          inputAriaLabel="Add tags to transaction"
+                        />
+                      </div>
+
                       <div className="manual-more-panel__receipt-line-items">
                         <div className="manual-more-panel__section-head">
                           <span>Receipt line items</span>
@@ -8462,6 +8489,18 @@ function TransactionsPageContent() {
                     placeholder="Optional note or review context"
                   />
                 </label>
+                <div className="transaction-drawer-form__notes">
+                  <span className="transaction-drawer-field-label">
+                    <span>Tags</span>
+                  </span>
+                  <TransactionTagsEditor
+                    tags={detailDraft?.tags ?? []}
+                    onChange={(tags) => setDetailDraft((current) => (current ? { ...current, tags } : current))}
+                    suggestions={transactionTagSuggestions}
+                    placeholder="Examples: Family, Refund, Reimbursable"
+                    inputAriaLabel="Edit transaction tags"
+                  />
+                </div>
                 {selectedTransactionRawSourceLine ? (
                   <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
                     <span>Raw source line</span>
