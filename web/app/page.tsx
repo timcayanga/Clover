@@ -182,7 +182,6 @@ export default async function HomePage() {
 
       <FeatureSection
         id="pro"
-        reverse
         title={
           <>
             Unlock <span className="landing-highlight">Pro</span> features when you need more.
@@ -206,6 +205,7 @@ export default async function HomePage() {
 
       <FeatureSection
         id="trust"
+        reverse
         title={
           <>
             Keep your data <span className="landing-highlight">safe and secure</span>.
