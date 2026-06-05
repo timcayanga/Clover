@@ -1,0 +1,168 @@
+const PARSED_NOTE_KEYS = [
+  "fullDetails",
+  "parsedDetails",
+  "transactionDetails",
+  "transactionDetail",
+  "counterpartyDetails",
+  "counterparty",
+  "recipient",
+  "sender",
+  "notes",
+  "note",
+  "detail",
+  "details",
+  "trailingDetails",
+] as const;
+
+const normalizeTextValue = (value: unknown) => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value).trim() : "";
+  }
+
+  return typeof value === "string" ? value.trim() : "";
+};
+
+const normalizeComparableText = (value: unknown) =>
+  normalizeTextValue(value)
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+
+const looksLikeJsonBlob = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (!/^[\[{]/.test(trimmed)) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed !== null && typeof parsed === "object";
+  } catch {
+    return true;
+  }
+};
+
+const readNormalizedUserNote = (normalizedPayload: unknown) => {
+  const record = asRecord(normalizedPayload);
+  if (!record) {
+    return "";
+  }
+
+  for (const key of ["userNote", "user_note"]) {
+    const candidate = normalizeTextValue(record[key]);
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return "";
+};
+
+const getImportedParsedNoteFallback = (params: {
+  description?: unknown;
+  merchantRaw?: unknown;
+  merchantClean?: unknown;
+}) => {
+  const description = normalizeTextValue(params.description);
+  if (!description || looksLikeJsonBlob(description)) {
+    return "";
+  }
+
+  const normalizedDescription = normalizeComparableText(description);
+  const merchantCandidates = [params.merchantClean, params.merchantRaw]
+    .map((value) => normalizeComparableText(value))
+    .filter(Boolean);
+
+  if (merchantCandidates.includes(normalizedDescription)) {
+    return "";
+  }
+
+  return description;
+};
+
+export const extractRawParsedTransactionNote = (rawPayload: unknown) => {
+  const record = asRecord(rawPayload);
+  if (!record) {
+    return "";
+  }
+
+  for (const key of PARSED_NOTE_KEYS) {
+    const candidate = normalizeTextValue(record[key]);
+    if (!candidate || looksLikeJsonBlob(candidate)) {
+      continue;
+    }
+
+    return candidate;
+  }
+
+  return "";
+};
+
+export const getTransactionUserNoteValue = (params: {
+  normalizedPayload?: unknown;
+  description?: unknown;
+  source?: unknown;
+  importFileId?: unknown;
+}) => {
+  const normalizedUserNote = readNormalizedUserNote(params.normalizedPayload);
+  if (normalizedUserNote) {
+    return normalizedUserNote;
+  }
+
+  if (params.source === "manual" && !params.importFileId) {
+    return normalizeTextValue(params.description);
+  }
+
+  return "";
+};
+
+export const getTransactionParsedNoteValue = (params: {
+  rawPayload?: unknown;
+  normalizedPayload?: unknown;
+  description?: unknown;
+  merchantRaw?: unknown;
+  merchantClean?: unknown;
+  source?: unknown;
+  importFileId?: unknown;
+}) => {
+  const parsedNote = extractRawParsedTransactionNote(params.rawPayload);
+  if (parsedNote) {
+    return parsedNote;
+  }
+
+  if ((params.source === "upload" || params.importFileId) && !readNormalizedUserNote(params.normalizedPayload)) {
+    return getImportedParsedNoteFallback(params);
+  }
+
+  return "";
+};
+
+export const buildImportedTransactionRawPayload = (params: {
+  rawPayload?: unknown;
+  description?: unknown;
+  merchantRaw?: unknown;
+  merchantClean?: unknown;
+}) => {
+  const base = asRecord(params.rawPayload) ? { ...(params.rawPayload as Record<string, unknown>) } : {};
+  if (extractRawParsedTransactionNote(base)) {
+    return base;
+  }
+
+  const fallbackNote = getImportedParsedNoteFallback(params);
+  if (!fallbackNote) {
+    return base;
+  }
+
+  return {
+    ...base,
+    parsedDetails: normalizeTextValue(base.parsedDetails) || fallbackNote,
+    fullDetails: normalizeTextValue(base.fullDetails) || fallbackNote,
+  };
+};

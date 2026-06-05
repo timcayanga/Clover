@@ -67,6 +67,7 @@ import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toIntern
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
+import { buildImportedTransactionRawPayload, extractRawParsedTransactionNote, getTransactionParsedNoteValue } from "@/lib/transaction-notes";
 import { findBestImportedAccountMatch, matchesImportedAccountIdentity, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
   claimNextImportEnrichmentJob,
@@ -450,6 +451,7 @@ const buildConfirmedTransactionContentKey = (params: {
   merchantRaw: unknown;
   merchantClean: unknown;
   description: unknown;
+  rawPayload?: unknown;
 }) => {
   const date =
     params.date instanceof Date && !Number.isNaN(params.date.getTime())
@@ -465,7 +467,15 @@ const buildConfirmedTransactionContentKey = (params: {
   const merchant =
     normalizeTransactionDedupeText(params.merchantRaw) ||
     normalizeTransactionDedupeText(params.merchantClean) ||
-    normalizeTransactionDedupeText(params.description);
+    normalizeTransactionDedupeText(
+      getTransactionParsedNoteValue({
+        rawPayload: params.rawPayload,
+        description: params.description,
+        merchantRaw: params.merchantRaw,
+        merchantClean: params.merchantClean,
+        importFileId: "imported",
+      })
+    );
 
   return [
     typeof params.accountId === "string" && params.accountId.trim() ? params.accountId.trim() : "",
@@ -4043,10 +4053,17 @@ const buildImportTransactionCollapseKey = (transaction: {
     return `source-row:${transaction.accountId}:${sourceRowIndex}`;
   }
 
+  const parsedNote = getTransactionParsedNoteValue({
+    rawPayload: transaction.rawPayload,
+    description: transaction.description,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    importFileId: "imported",
+  });
   const merchant =
     normalizeTransactionDedupeText(transaction.merchantRaw) ||
     normalizeTransactionDedupeText(transaction.merchantClean) ||
-    normalizeTransactionDedupeText(transaction.description);
+    normalizeTransactionDedupeText(parsedNote);
 
   return [
     "fallback",
@@ -4055,7 +4072,7 @@ const buildImportTransactionCollapseKey = (transaction: {
     normalizeEnrichmentMatchAmount(transaction.amount),
     normalizeTransactionDedupeText(transaction.currency || "PHP").toUpperCase(),
     merchant,
-    normalizeTransactionDedupeText(transaction.description),
+    normalizeTransactionDedupeText(parsedNote),
   ].join("|");
 };
 
@@ -6641,48 +6658,7 @@ const looksLikeJsonBlob = (value: string) => {
 };
 
 const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | null | undefined) => {
-  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
-    return null;
-  }
-
-  const payload = rawPayload as Record<string, unknown>;
-  const candidates = [
-    payload.fullDetails,
-    payload.parsedDetails,
-    payload.transactionDetails,
-    payload.transactionDetail,
-    payload.counterpartyDetails,
-    payload.counterparty,
-    payload.recipient,
-    payload.sender,
-    payload.description,
-    payload.notes,
-    payload.memo,
-    payload.detail,
-    payload.details,
-    payload.trailingDetails,
-    payload.line,
-    payload.merchant,
-    payload.merchantRaw,
-    payload.transactionDescription,
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === "string") {
-      const trimmed = candidate.trim();
-      if (!trimmed) {
-        continue;
-      }
-
-      if (looksLikeJsonBlob(trimmed)) {
-        continue;
-      }
-
-      return trimmed;
-    }
-  }
-
-  return null;
+  return extractRawParsedTransactionNote(rawPayload) || null;
 };
 
 export const confirmImportFile = async (importFileId: string, accountId?: string | null): Promise<ConfirmImportResult> => {
@@ -8034,10 +8010,14 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         type: categoryCoercedType,
         merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
         merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : null,
-        description:
-          typeof row.description === "string" && row.description.trim()
-            ? row.description
-            : extractHumanReadableDescription(row.rawPayload ?? null),
+        description: getTransactionParsedNoteValue({
+          rawPayload: row.rawPayload ?? null,
+          description: row.description,
+          merchantRaw: row.merchantRaw ?? null,
+          merchantClean: row.merchantClean ?? row.merchantRaw ?? null,
+          source: "upload",
+          importFileId,
+        }),
         categoryName: parsedCategoryName,
         rawPayload: row.rawPayload ?? null,
       },
@@ -8114,10 +8094,18 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       (typeof row.merchantClean === "string" && row.merchantClean) ||
       (typeof row.merchantRaw === "string" && row.merchantRaw) ||
       "Imported transaction";
+    const importedParsedNote = getTransactionParsedNoteValue({
+      rawPayload: row.rawPayload ?? null,
+      description: row.description,
+      merchantRaw: row.merchantRaw ?? null,
+      merchantClean: row.merchantClean ?? row.merchantRaw ?? null,
+      source: "upload",
+      importFileId,
+    });
     const rowTeachability = assessParsedRowTeachability({
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
       merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
-      description: extractHumanReadableDescription(row.rawPayload ?? null),
+      description: importedParsedNote || null,
       categoryName,
       type: canonicalType,
       amount: row.amount,
@@ -8128,9 +8116,23 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       row: {
         merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
         merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : null,
-        description: extractHumanReadableDescription(row.rawPayload ?? null),
+        description: importedParsedNote || null,
         rawPayload: row.rawPayload ?? null,
       },
+    });
+    const importRawPayload = buildImportedTransactionRawPayload({
+      rawPayload: {
+        ...(row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : {}),
+        sourceRowIndex: index + 1,
+        sourceImportFileId: importFileId,
+        sourceStatementFingerprint:
+          typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
+            ? row.statementFingerprint.trim()
+            : checkpointStatementFingerprint,
+      },
+      description: row.description,
+      merchantRaw: row.merchantRaw ?? null,
+      merchantClean: row.merchantClean ?? row.merchantRaw ?? null,
     });
     const insertRow = buildTransactionInsertRecord({
       workspaceId: String(importFile.workspaceId),
@@ -8148,15 +8150,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       accountMatchConfidence: rowAccountMatchConfidence,
       duplicateConfidence: rowDuplicateConfidence,
       transferConfidence: rowTransferConfidence,
-      rawPayload: {
-        ...(row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : {}),
-        sourceRowIndex: index + 1,
-        sourceImportFileId: importFileId,
-        sourceStatementFingerprint:
-          typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
-            ? row.statementFingerprint.trim()
-            : checkpointStatementFingerprint,
-      } as Prisma.InputJsonValue,
+      rawPayload: importRawPayload as Prisma.InputJsonValue,
       normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
       date:
@@ -8171,7 +8165,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       type: canonicalType,
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
       merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
-      description: extractHumanReadableDescription(row.rawPayload ?? null),
+      description: null,
       isTransfer: canonicalType === "transfer",
       isExcluded:
         reviewOnlyRow ||
@@ -8213,10 +8207,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           amount: insertRow.amount as Prisma.Decimal | string | number,
           currency: String(insertRow.currency ?? "PHP"),
           merchantRaw: String(insertRow.merchantRaw ?? "Imported transaction"),
-          description:
-            typeof insertRow.description === "string" && insertRow.description.trim()
-              ? insertRow.description
-              : null,
+          description: canPatchImportedClassification ? null : existingImportTransaction.description,
           rawPayload: mergeImportJsonPayload(insertRow.rawPayload, existingImportTransaction.rawPayload) as Prisma.InputJsonValue,
           isExcluded: Boolean(insertRow.isExcluded),
           ...(canPatchImportedClassification
@@ -8244,17 +8235,9 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         type: canonicalType,
         merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
         merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
-        description: extractHumanReadableDescription(row.rawPayload ?? null),
+        description: importedParsedNote || null,
         categoryName,
-        rawPayload: {
-          ...(row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : {}),
-          sourceRowIndex: index + 1,
-          sourceImportFileId: importFileId,
-          sourceStatementFingerprint:
-            typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
-              ? row.statementFingerprint.trim()
-              : checkpointStatementFingerprint,
-        } as Prisma.InputJsonValue,
+        rawPayload: importRawPayload as Prisma.InputJsonValue,
       });
       continue;
     }
@@ -8298,17 +8281,9 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         type: canonicalType,
         merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
         merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
-        description: extractHumanReadableDescription(row.rawPayload ?? null),
+        description: importedParsedNote || null,
         categoryName,
-        rawPayload: {
-          ...(row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : {}),
-          sourceRowIndex: index + 1,
-          sourceImportFileId: importFileId,
-          sourceStatementFingerprint:
-            typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
-              ? row.statementFingerprint.trim()
-              : checkpointStatementFingerprint,
-        } as Prisma.InputJsonValue,
+        rawPayload: importRawPayload as Prisma.InputJsonValue,
       },
       trainingSignal: {
         merchantText,
@@ -8546,6 +8521,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           merchantRaw: true,
           merchantClean: true,
           description: true,
+          rawPayload: true,
         },
       }).then((rows) =>
         rows.map((row) =>
@@ -8556,6 +8532,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             merchantRaw: row.merchantRaw,
             merchantClean: row.merchantClean,
             description: row.description,
+            rawPayload: row.rawPayload,
           })
         )
       ).catch(() => [])
@@ -8627,6 +8604,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             merchantRaw: true,
             merchantClean: true,
             description: true,
+            rawPayload: true,
           },
         }).catch(() => []);
         const staleDuplicateIds = staleCandidateTransactions
@@ -8639,6 +8617,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
                 merchantRaw: row.merchantRaw,
                 merchantClean: row.merchantClean,
                 description: row.description,
+                rawPayload: row.rawPayload,
               })
             )
           )

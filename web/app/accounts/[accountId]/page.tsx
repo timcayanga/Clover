@@ -25,6 +25,7 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
+import { getTransactionParsedNoteValue } from "@/lib/transaction-notes";
 import { getTransactionTagSignature, sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { clearImportActivity, getCompletedImportActivitySummary, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
@@ -763,35 +764,21 @@ const getTransactionUserNote = (
 
 const getTransactionParsedNote = (
   transaction:
-    | Pick<Transaction, "rawPayload" | "description" | "source" | "importFileId">
+    | Pick<Transaction, "rawPayload" | "normalizedPayload" | "description" | "merchantRaw" | "merchantClean" | "source" | "importFileId">
     | null
     | undefined
-) => {
-  const parsedNote = getRawPayloadTextCandidate(transaction?.rawPayload, [
-    "fullDetails",
-    "parsedDetails",
-    "transactionDetails",
-    "transactionDetail",
-    "counterpartyDetails",
-    "counterparty",
-    "recipient",
-    "sender",
-    "notes",
-    "note",
-    "detail",
-    "details",
-    "trailingDetails",
-  ]);
-  if (parsedNote) {
-    return parsedNote;
-  }
-
-  if ((transaction?.source ?? null) === "upload" || transaction?.importFileId) {
-    return normalizeTransactionNotes(transaction?.description);
-  }
-
-  return "";
-};
+) =>
+  normalizeTransactionNotes(
+    getTransactionParsedNoteValue({
+      rawPayload: transaction?.rawPayload,
+      normalizedPayload: transaction?.normalizedPayload,
+      description: transaction?.description,
+      merchantRaw: transaction?.merchantRaw,
+      merchantClean: transaction?.merchantClean,
+      source: transaction?.source,
+      importFileId: transaction?.importFileId,
+    })
+  );
 
 const createEmptyReceiptLineItem = (): ReceiptLineItemDraft => ({
   description: "",
