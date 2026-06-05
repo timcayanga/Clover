@@ -45,6 +45,7 @@ import {
   type ImportActivitySnapshot,
   type ImportActivityStatus,
 } from "@/lib/import-activity";
+import { publishImportedSummary } from "@/lib/imported-summary-events";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import type { AccountType } from "@/lib/domain-types";
 
@@ -824,6 +825,8 @@ const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsight
   if (Array.isArray(summary.previewTransactions) && summary.previewTransactions.length > 0) {
     syncImportedWorkspaceTransactionCaches(workspaceId, summary.previewTransactions);
   }
+
+  publishImportedSummary(workspaceId, summary);
 };
 
 const waitForImportSettledVisibility = async (params: {

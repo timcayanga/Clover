@@ -26,6 +26,7 @@ import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { clearImportActivity, getCompletedImportActivitySummary, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
+import { subscribeImportedSummary } from "@/lib/imported-summary-events";
 import {
   buildFinalizingNoticeDismissalKey,
   dismissFinalizingNotice,
@@ -197,6 +198,28 @@ const uploadSummaryMatchesAccount = (
       (accountLastFour.length === 4 && normalizeLooseImportedValue(summary.accountName).includes(accountLastFour)) ||
       (!summaryAccountNumber && !accountAccountNumber)
   );
+};
+
+const buildImportedSummaryDedupKey = (
+  summary: NonNullable<ReturnType<typeof getCompletedImportActivitySummary>>
+) => {
+  const previewCount = Array.isArray(summary.previewTransactions) ? summary.previewTransactions.length : 0;
+  const previewIds = Array.isArray(summary.previewTransactions)
+    ? summary.previewTransactions
+        .map((transaction) => transaction.id)
+        .filter((value) => typeof value === "string" && value.trim().length > 0)
+        .slice(0, 5)
+        .join("|")
+    : "";
+
+  return [
+    summary.fileName,
+    summary.accountId ?? "",
+    summary.optimisticAccountId ?? "",
+    String(summary.rowsImported ?? 0),
+    String(previewCount),
+    previewIds,
+  ].join("::");
 };
 
 type Category = {
@@ -1304,6 +1327,7 @@ function AccountDetailPageContent() {
   const [dividendDeleteBusy, setDividendDeleteBusy] = useState<string | null>(null);
   const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState(false);
   const [importActivitySnapshot, setImportActivitySnapshot] = useState(() => readImportActivity());
+  const handledImportedSummaryKeysRef = useRef(new Set<string>());
   const loadedAccountIdRef = useRef<string | null>(null);
   const selectAllTransactionsRef = useRef<HTMLInputElement | null>(null);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
@@ -1334,6 +1358,41 @@ function AccountDetailPageContent() {
       setImportActivitySnapshot(readImportActivity());
     });
   }, []);
+
+  useEffect(() => {
+    return subscribeImportedSummary(({ workspaceId, summary }) => {
+      if (!account || workspaceId !== account.workspaceId || !uploadSummaryMatchesAccount(summary, account)) {
+        return;
+      }
+
+      const summaryKey = buildImportedSummaryDedupKey(summary);
+      if (handledImportedSummaryKeysRef.current.has(summaryKey)) {
+        return;
+      }
+
+      handledImportedSummaryKeysRef.current.add(summaryKey);
+      if (handledImportedSummaryKeysRef.current.size > 40) {
+        const [oldestKey] = handledImportedSummaryKeysRef.current;
+        if (oldestKey) {
+          handledImportedSummaryKeysRef.current.delete(oldestKey);
+        }
+      }
+
+      const previewTransactions = summary.previewTransactions ?? [];
+      if (previewTransactions.length === 0) {
+        return;
+      }
+
+      setTransactions((current) =>
+        mergeImportedWorkspaceTransactions(current, previewTransactions as ImportedWorkspaceTransaction[])
+      );
+      setTransactionTotalCount((current) =>
+        Math.max(current, Number(summary.rowsImported ?? 0) || previewTransactions.length)
+      );
+      setTransactionsLoading(false);
+      setHasInitialDataLoaded(true);
+    });
+  }, [account]);
 
   useEffect(() => {
     if (!account?.workspaceId) {
@@ -2315,15 +2374,14 @@ function AccountDetailPageContent() {
       return;
     }
 
-    if (transactions.length > 0) {
-      return;
-    }
-
-    setTransactions(mergeImportedWorkspaceTransactions([], matchingImportSummaryPreviewTransactions as ImportedWorkspaceTransaction[]));
+    handledImportedSummaryKeysRef.current.add(buildImportedSummaryDedupKey(matchingImportSummary));
+    setTransactions((current) =>
+      mergeImportedWorkspaceTransactions(current, matchingImportSummaryPreviewTransactions as ImportedWorkspaceTransaction[])
+    );
     setTransactionTotalCount((current) => Math.max(current, Number(matchingImportSummary?.rowsImported ?? 0) || matchingImportSummaryPreviewTransactions.length));
     setTransactionsLoading(false);
     setHasInitialDataLoaded(true);
-  }, [account, matchingImportSummary, matchingImportSummaryHasRows, matchingImportSummaryPreviewTransactions, transactions.length]);
+  }, [account, matchingImportSummary, matchingImportSummaryHasRows, matchingImportSummaryPreviewTransactions]);
 
   useEffect(() => {
     if (!account || balanceEditorOpen) {

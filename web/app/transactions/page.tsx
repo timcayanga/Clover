@@ -43,6 +43,7 @@ import { coerceTransactionTypeFromCategoryName, inferTransactionTypeFromAmount }
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { clearImportActivity, readImportActivity } from "@/lib/import-activity";
+import { subscribeImportedSummary } from "@/lib/imported-summary-events";
 import {
   buildFinalizingNoticeDismissalKey,
   dismissFinalizingNotice,
@@ -302,6 +303,26 @@ const mergeImportedPreviewTransactions = (
   }
 
   return mergeImportedWorkspaceTransactions(currentTransactions, previewTransactions);
+};
+
+const buildImportedSummaryDedupKey = (summary: UploadInsightsSummary) => {
+  const previewCount = Array.isArray(summary.previewTransactions) ? summary.previewTransactions.length : 0;
+  const previewIds = Array.isArray(summary.previewTransactions)
+    ? summary.previewTransactions
+        .map((transaction) => transaction.id)
+        .filter((value) => typeof value === "string" && value.trim().length > 0)
+        .slice(0, 5)
+        .join("|")
+    : "";
+
+  return [
+    summary.fileName,
+    summary.accountId ?? "",
+    summary.optimisticAccountId ?? "",
+    String(summary.rowsImported ?? 0),
+    String(previewCount),
+    previewIds,
+  ].join("::");
 };
 
 const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
@@ -2544,6 +2565,7 @@ function TransactionsPageContent() {
   const mobileLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
+  const handledImportedSummaryKeysRef = useRef(new Set<string>());
   const reviewTransactionParamRef = useRef<string | null>(null);
   const drilldownParamRef = useRef<string | null>(null);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
@@ -3177,6 +3199,123 @@ function TransactionsPageContent() {
       }
     }
   };
+
+  const applyImportedSummary = useCallback(
+    async (summary: UploadInsightsSummary) => {
+      const optimisticAccount = buildOptimisticImportedAccount(summary);
+      const previewTransactions = summary.previewTransactions ?? [];
+      const importedAccountKey = normalizeImportedAccountKey(
+        summary.accountName,
+        summary.institution,
+        summary.accountNumber ?? null,
+        summary.accountType ?? null,
+        previewTransactions[0]?.currency ?? null
+      );
+      const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+      let nextAccountsSnapshot: Account[] | null = null;
+
+      flushSync(() => {
+        setIsWorkspaceDataReady(true);
+
+        if (optimisticAccount) {
+          setAccounts((current) =>
+            (nextAccountsSnapshot = current.filter((account) => {
+              if (summary.optimisticAccountId && account.id === summary.optimisticAccountId) {
+                return false;
+              }
+
+              if (account.source === "upload") {
+                return (
+                  normalizeImportedAccountKey(
+                    account.name,
+                    account.institution,
+                    account.accountNumber,
+                    account.type,
+                    account.currency
+                  ) !== importedAccountKey
+                );
+              }
+
+              return true;
+            }))
+          );
+        } else {
+          setAccounts((current) => {
+            nextAccountsSnapshot = current;
+            return current;
+          });
+        }
+
+        if (importedAccountId) {
+          setTransactions((current) => {
+            if (previewTransactions.length === 0) {
+              return current;
+            }
+            return mergeImportedPreviewTransactions(current, previewTransactions);
+          });
+        } else if (previewTransactions.length > 0) {
+          setTransactions((current) => mergeImportedPreviewTransactions(current, previewTransactions));
+        }
+
+        if (optimisticAccount) {
+          setAccounts((current) => {
+            const next = mergeOptimisticImportedAccount(current, optimisticAccount);
+            nextAccountsSnapshot = next;
+            return next;
+          });
+        }
+      });
+
+      const settledAccountId =
+        (nextAccountsSnapshot ? resolvePersistedImportedAccountId(summary, nextAccountsSnapshot) : null) ??
+        (summary.accountId && !summary.accountId.startsWith("optimistic-") ? summary.accountId : null);
+      const settledSummary =
+        settledAccountId && settledAccountId !== summary.accountId
+          ? {
+              ...summary,
+              accountId: settledAccountId,
+              optimistic: false,
+              optimisticAccountId: null,
+            }
+          : summary;
+      setPendingImportSummary(settledSummary);
+
+      if (!selectedWorkspaceId) {
+        return;
+      }
+
+      setImportRefreshInFlight(true);
+      void refreshTransactionsAfterImport(selectedWorkspaceId).finally(() => {
+        setImportRefreshInFlight(false);
+      });
+
+      setMessage("Import complete. Accounts and Transactions are updated.");
+    },
+    [refreshTransactionsAfterImport, selectedWorkspaceId]
+  );
+
+  useEffect(() => {
+    return subscribeImportedSummary(({ workspaceId, summary }) => {
+      if (!selectedWorkspaceId || workspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      const summaryKey = buildImportedSummaryDedupKey(summary);
+      if (handledImportedSummaryKeysRef.current.has(summaryKey)) {
+        return;
+      }
+
+      handledImportedSummaryKeysRef.current.add(summaryKey);
+      if (handledImportedSummaryKeysRef.current.size > 40) {
+        const [oldestKey] = handledImportedSummaryKeysRef.current;
+        if (oldestKey) {
+          handledImportedSummaryKeysRef.current.delete(oldestKey);
+        }
+      }
+
+      void applyImportedSummary(summary);
+    });
+  }, [applyImportedSummary, selectedWorkspaceId]);
 
   const hydrateWorkspaceFromCache = (workspaceId: string) => {
     if (!workspaceId) {
@@ -8747,94 +8886,14 @@ function TransactionsPageContent() {
           setImportSeedFiles(null);
           setImportBackgroundOnly(false);
         }}
-      onImported={async (summary) => {
-          const optimisticAccount = buildOptimisticImportedAccount(summary);
-          const previewTransactions = summary.previewTransactions ?? [];
-          const importedAccountKey = normalizeImportedAccountKey(
-            summary.accountName,
-            summary.institution,
-            summary.accountNumber ?? null,
-            summary.accountType ?? null,
-            previewTransactions[0]?.currency ?? null
-          );
-          const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
-          let nextAccountsSnapshot: Account[] | null = null;
-
-          flushSync(() => {
-            setIsWorkspaceDataReady(true);
-
-            if (optimisticAccount) {
-              setAccounts((current) =>
-                (nextAccountsSnapshot = current.filter((account) => {
-                  if (summary.optimisticAccountId && account.id === summary.optimisticAccountId) {
-                    return false;
-                  }
-
-                  if (account.source === "upload") {
-                    return (
-                      normalizeImportedAccountKey(
-                        account.name,
-                        account.institution,
-                        account.accountNumber,
-                        account.type,
-                        account.currency
-                      ) !== importedAccountKey
-                    );
-                  }
-
-                  return true;
-                }))
-              );
-            } else {
-              setAccounts((current) => {
-                nextAccountsSnapshot = current;
-                return current;
-              });
-            }
-
-            if (importedAccountId) {
-              setTransactions((current) => {
-                if (previewTransactions.length === 0) {
-                  return current;
-                }
-                return mergeImportedPreviewTransactions(current, previewTransactions);
-              });
-            } else if (previewTransactions.length > 0) {
-              setTransactions((current) => mergeImportedPreviewTransactions(current, previewTransactions));
-            }
-
-            if (optimisticAccount) {
-              setAccounts((current) => {
-                const next = mergeOptimisticImportedAccount(current, optimisticAccount);
-                nextAccountsSnapshot = next;
-                return next;
-              });
-            }
-          });
-
-          const settledAccountId =
-            (nextAccountsSnapshot ? resolvePersistedImportedAccountId(summary, nextAccountsSnapshot) : null) ??
-            (summary.accountId && !summary.accountId.startsWith("optimistic-") ? summary.accountId : null);
-          const settledSummary =
-            settledAccountId && settledAccountId !== summary.accountId
-              ? {
-                  ...summary,
-                  accountId: settledAccountId,
-                  optimistic: false,
-                  optimisticAccountId: null,
-                }
-              : summary;
-          setPendingImportSummary(settledSummary);
-
-          if (!selectedWorkspaceId) {
+        onImported={async (summary) => {
+          const summaryKey = buildImportedSummaryDedupKey(summary);
+          if (handledImportedSummaryKeysRef.current.has(summaryKey)) {
             return;
           }
 
-          setImportRefreshInFlight(true);
-          void refreshTransactionsAfterImport(selectedWorkspaceId).finally(() => {
-            setImportRefreshInFlight(false);
-          });
-          setMessage("Import complete. Accounts and Transactions are updated.");
+          handledImportedSummaryKeysRef.current.add(summaryKey);
+          await applyImportedSummary(summary);
         }}
       />
       <PlanLimitNudge payload={planLimitNudge} onDismiss={() => setPlanLimitNudge(null)} />
