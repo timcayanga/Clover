@@ -147,6 +147,26 @@ type TrainedReceiptFixture = {
   categoryName: string;
   notes: string;
   paymentChannel: string;
+  lineItems?: Array<{
+    description: string;
+    quantity?: number;
+    amount: number;
+    unitPrice?: number;
+  }>;
+  receiptSummary?: {
+    subtotal?: number;
+    serviceCharge?: number;
+    discount?: number;
+    vat?: number;
+    total: number;
+  };
+  transferDetails?: {
+    direction: "sent" | "received";
+    counterpartyName: string;
+    counterpartyPhone?: string;
+    referenceNumber?: string;
+    occurredAt?: string;
+  };
 };
 
 const trainedReceiptFixtures: TrainedReceiptFixture[] = [
@@ -159,6 +179,22 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     categoryName: "Food & Dining",
     notes: "Restaurant dine-in bill with service charge",
     paymentChannel: "mixed",
+    lineItems: [
+      { description: "Beef Shortribs Adobo C", quantity: 2, amount: 3380 },
+      { description: "Lamb Pares", quantity: 1, amount: 720 },
+      { description: "Pork Kare-Curry", quantity: 1, amount: 650 },
+      { description: "Torched Salmon Donburi", quantity: 1, amount: 850 },
+      { description: "Yakult Lemonade", quantity: 1, amount: 180 },
+      { description: "Lychee Fizz", quantity: 1, amount: 395 },
+      { description: "Basil Old Fashioned", quantity: 1, amount: 395 },
+      { description: "Gin & Tonic", quantity: 1, amount: 395 },
+      { description: "Bottled Sea Salt Lemon", quantity: 1, amount: 180 },
+    ],
+    receiptSummary: {
+      subtotal: 7145,
+      serviceCharge: 637.95,
+      total: 7782.95,
+    },
   },
   {
     fileName: "2026-05-01 22.01.22.jpg",
@@ -169,6 +205,16 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     categoryName: "Food & Dining",
     notes: "Bar/restaurant receipt",
     paymentChannel: "mixed",
+    lineItems: [
+      { description: "Rice Is Nice", quantity: 1, amount: 440 },
+      { description: "Dirty Sorbetes", quantity: 1, amount: 440 },
+      { description: "Donhua", quantity: 2, amount: 660 },
+    ],
+    receiptSummary: {
+      subtotal: 1840,
+      serviceCharge: 164.29,
+      total: 2004.29,
+    },
   },
   {
     fileName: "2026-05-01 22.02.02.jpg",
@@ -179,6 +225,21 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     categoryName: "Food & Dining",
     notes: "Sales invoice with discount and VAT",
     paymentChannel: "mixed",
+    lineItems: [
+      { description: "Cafe Americano", quantity: 1, amount: 265 },
+      { description: "Frito Duo", quantity: 1, amount: 480 },
+      { description: "AC Manila Sour", quantity: 1, amount: 425 },
+      { description: "Strawberry Milkshake", quantity: 1, amount: 325 },
+      { description: "Watermelon Lemonade", quantity: 1, amount: 320 },
+      { description: "Chocolate Milkshake", quantity: 1, amount: 325 },
+      { description: "Mango Milkshake", quantity: 2, amount: 650 },
+    ],
+    receiptSummary: {
+      subtotal: 2790,
+      discount: -249.11,
+      vat: 269.04,
+      total: 2511,
+    },
   },
   {
     fileName: "2026-05-01 22.02.11.jpg",
@@ -189,6 +250,13 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     categoryName: "Transfers",
     notes: "Peer transfer via GCash",
     paymentChannel: "gcash",
+    transferDetails: {
+      direction: "sent",
+      counterpartyName: "JA..N PA....K L.",
+      counterpartyPhone: "+63 967 218 2712",
+      referenceNumber: "5037686307568",
+      occurredAt: "2026-02-10 22:28",
+    },
   },
   {
     fileName: "2026-05-01 22.02.15.jpg",
@@ -199,6 +267,13 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     categoryName: "Transfers",
     notes: "Duplicate transfer screen",
     paymentChannel: "gcash",
+    transferDetails: {
+      direction: "sent",
+      counterpartyName: "JA..N PA....K L.",
+      counterpartyPhone: "+63 967 218 2712",
+      referenceNumber: "5037685677954",
+      occurredAt: "2026-02-10 22:03",
+    },
   },
 ];
 
@@ -239,6 +314,97 @@ const resolveOrCreateReceiptCategoryId = async (workspaceId: string, categoryNam
   return createdCategory.id;
 };
 
+const formatReceiptMoney = (amount: number, currency: string) => `${currency} ${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const buildTrainedReceiptDetails = (fixture: TrainedReceiptFixture) => {
+  if (fixture.transferDetails) {
+    const detail = fixture.transferDetails;
+    const counterparty = [detail.counterpartyName, detail.counterpartyPhone ? `(${detail.counterpartyPhone})` : null].filter(Boolean).join(" ");
+    return [
+      `${detail.direction === "sent" ? "Sent" : "Received"} via ${fixture.paymentChannel.toUpperCase()} ${detail.direction === "sent" ? "to" : "from"} ${counterparty}.`,
+      detail.referenceNumber ? `Reference no. ${detail.referenceNumber}.` : null,
+      detail.occurredAt ? `Timestamp ${detail.occurredAt}.` : null,
+      `Total ${formatReceiptMoney(fixture.amount, fixture.currency)}.`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  const itemSummary =
+    fixture.lineItems && fixture.lineItems.length > 0
+      ? fixture.lineItems
+          .map((item) => {
+            const quantity = item.quantity ? `${item.quantity} x ` : "";
+            return `${quantity}${item.description} (${formatReceiptMoney(item.amount, fixture.currency)})`;
+          })
+          .join("; ")
+      : null;
+  const summary = fixture.receiptSummary
+    ? [
+        typeof fixture.receiptSummary.subtotal === "number" ? `Subtotal ${formatReceiptMoney(fixture.receiptSummary.subtotal, fixture.currency)}` : null,
+        typeof fixture.receiptSummary.serviceCharge === "number" ? `service charge ${formatReceiptMoney(fixture.receiptSummary.serviceCharge, fixture.currency)}` : null,
+        typeof fixture.receiptSummary.discount === "number" ? `discount ${formatReceiptMoney(fixture.receiptSummary.discount, fixture.currency)}` : null,
+        typeof fixture.receiptSummary.vat === "number" ? `VAT ${formatReceiptMoney(fixture.receiptSummary.vat, fixture.currency)}` : null,
+        `total ${formatReceiptMoney(fixture.receiptSummary.total, fixture.currency)}`,
+      ]
+        .filter(Boolean)
+        .join(", ")
+    : `Total ${formatReceiptMoney(fixture.amount, fixture.currency)}`;
+
+  return [fixture.notes, itemSummary ? `Items: ${itemSummary}.` : null, summary ? `Summary: ${summary}.` : null].filter(Boolean).join(" ");
+};
+
+const buildTrainedReceiptRawPayload = (fixture: TrainedReceiptFixture, detailNotes: string): Prisma.InputJsonValue =>
+  ({
+    source: "trained_receipt_fixture",
+    documentType: "receipt",
+    fullDetails: detailNotes,
+    notes: detailNotes,
+    ...(fixture.transferDetails
+      ? {
+          counterparty: fixture.transferDetails.counterpartyName,
+          ...(fixture.transferDetails.direction === "sent" ? { recipient: fixture.transferDetails.counterpartyName } : {}),
+          ...(fixture.transferDetails.direction === "received" ? { sender: fixture.transferDetails.counterpartyName } : {}),
+          transferDetails: fixture.transferDetails,
+        }
+      : {}),
+    ...(fixture.lineItems
+      ? {
+          receiptLineItems: fixture.lineItems.map((item) => ({
+            description: item.description,
+            ...(typeof item.quantity === "number" ? { quantity: item.quantity } : {}),
+            currency: fixture.currency,
+            ...(typeof item.unitPrice === "number" ? { unitPrice: item.unitPrice } : {}),
+            amount: item.amount,
+          })),
+        }
+      : {}),
+    ...(fixture.receiptSummary ? { receiptSummary: fixture.receiptSummary } : {}),
+    receiptDetails: {
+      merchant_raw: fixture.merchant,
+      merchant_clean: fixture.merchant,
+      transaction_date: fixture.date,
+      currency: fixture.currency,
+      total: fixture.amount,
+      category_name: fixture.categoryName,
+      notes: detailNotes,
+      payment_channel: fixture.paymentChannel,
+      ...(fixture.lineItems
+        ? {
+            line_items: fixture.lineItems.map((item) => ({
+              description: item.description,
+              ...(typeof item.quantity === "number" ? { quantity: item.quantity } : {}),
+              currency: fixture.currency,
+              ...(typeof item.unitPrice === "number" ? { unit_price: item.unitPrice } : {}),
+              amount: item.amount,
+            })),
+          }
+        : {}),
+      ...(fixture.receiptSummary ? { summary: fixture.receiptSummary } : {}),
+      ...(fixture.transferDetails ? { transfer_details: fixture.transferDetails } : {}),
+    },
+  }) as Prisma.InputJsonValue;
+
 const importTrainedReceiptFixture = async (params: {
   importFileId: string;
   workspaceId: string;
@@ -259,6 +425,14 @@ const importTrainedReceiptFixture = async (params: {
 
   const categoryId = await resolveOrCreateReceiptCategoryId(params.workspaceId, params.fixture.categoryName);
   const transactionDate = new Date(`${params.fixture.date}T00:00:00.000Z`);
+  const detailNotes = buildTrainedReceiptDetails(params.fixture);
+  const rawPayload = buildTrainedReceiptRawPayload(params.fixture, detailNotes);
+  const normalizedPayload = {
+    source: "trained_receipt_fixture",
+    normalizedName: params.fixture.merchant,
+    categoryName: params.fixture.categoryName,
+    notes: detailNotes,
+  } as Prisma.InputJsonValue;
   const existingTransaction = await prisma.transaction.findFirst({
     where: {
       importFileId: params.importFileId,
@@ -286,27 +460,28 @@ const importTrainedReceiptFixture = async (params: {
       type: "expense",
       merchantRaw: params.fixture.merchant,
       merchantClean: params.fixture.merchant,
-      description: params.fixture.merchant,
+      description: detailNotes,
       isTransfer: params.fixture.categoryName === "Transfers",
-      rawPayload: {
-        source: "trained_receipt_fixture",
-        documentType: "receipt",
-        receiptDetails: {
-          merchant_raw: params.fixture.merchant,
-          merchant_clean: params.fixture.merchant,
-          transaction_date: params.fixture.date,
-          currency: params.fixture.currency,
-          total: params.fixture.amount,
-          category_name: params.fixture.categoryName,
-          notes: params.fixture.notes,
-          payment_channel: params.fixture.paymentChannel,
-        },
-      } as Prisma.InputJsonValue,
-      normalizedPayload: {
-        source: "trained_receipt_fixture",
-        normalizedName: params.fixture.merchant,
-        categoryName: params.fixture.categoryName,
-      } as Prisma.InputJsonValue,
+      rawPayload,
+      normalizedPayload,
+    });
+  } else {
+    await prisma.transaction.update({
+      where: { id: existingTransaction.id },
+      data: {
+        categoryId,
+        reviewStatus: "confirmed",
+        parserConfidence: 95,
+        categoryConfidence: 95,
+        accountMatchConfidence: 100,
+        transferConfidence: params.fixture.categoryName === "Transfers" ? 80 : 0,
+        merchantRaw: params.fixture.merchant,
+        merchantClean: params.fixture.merchant,
+        description: detailNotes,
+        isTransfer: params.fixture.categoryName === "Transfers",
+        rawPayload,
+        normalizedPayload,
+      },
     });
   }
 
@@ -1066,9 +1241,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const shouldPreferSampleFallback =
         Boolean(sampleFallbackText) &&
         (!formExtractedText.trim() || Number(formExtractedTextMetadata?.confidence ?? 0) < 80);
-      const isImageUpload =
-        effectiveFileType.toLowerCase().startsWith("image/") ||
-        /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(effectiveFileName.toLowerCase());
+      const isImageUpload = isImageUploadFile(effectiveFileName, effectiveFileType);
       const trainedReceiptFixture = getTrainedReceiptFixture(effectiveFileName) ?? getTrainedReceiptFixture(formFileName);
       const isStatementImageUpload = isImageUpload && (!importMode || importMode === "statement");
       const shouldQueueDocumentUpload = !isStatementImageUpload && (isImageUpload || Boolean(importMode && importMode !== "statement"));
