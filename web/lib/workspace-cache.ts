@@ -73,8 +73,8 @@ export type ImportedWorkspaceTransaction = CachedRecord & {
   source?: string | null;
 };
 
-export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v8";
-export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v8";
+export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v9";
+export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v9";
 export const deletedAccountsWorkspaceCacheKey = "clover.accounts.deleted-account-ids.v1";
 export const deletingAccountsWorkspaceCacheKey = "clover.accounts.deleting-account-ids.v1";
 
@@ -198,22 +198,59 @@ export type ImportedAccountIdentityLike = {
   institution?: string | null;
   accountNumber?: string | null;
   type?: string | null;
+  currency?: string | null;
   source?: string | null;
+};
+
+const normalizeImportedCurrencyCode = (value?: string | null) => {
+  const normalized = normalizeWhitespace(String(value ?? "")).toUpperCase();
+  return normalized || null;
+};
+
+const isWiseWalletWithoutVisibleAccountNumber = ({
+  name,
+  institution,
+  accountNumber,
+  type,
+}: ImportedAccountIdentityLike) => {
+  const accountDigits = String(accountNumber ?? "").replace(/\D/g, "");
+  if (accountDigits) {
+    return false;
+  }
+
+  const normalizedType = normalizeWhitespace(String(type ?? "")).toLowerCase();
+  if (normalizedType !== "wallet") {
+    return false;
+  }
+
+  const bankLabel = canonicalImportedInstitutionKey(institution) || canonicalImportedInstitutionKey(name);
+  return bankLabel === "wise";
 };
 
 export const normalizeImportedAccountKey = (
   accountName?: string | null,
   institution?: string | null,
   accountNumber?: string | null,
-  accountType?: string | null
-) =>
-  normalizeMerchantText(
-    `${institution ?? ""} ${
-      normalizeAccountNumberIdentityDigits(accountNumber) ??
-      extractLastFourDigits(accountName) ??
-      normalizeWhitespace(String(accountName ?? ""))
-    } ${normalizeWhitespace(String(accountType ?? ""))}`
+  accountType?: string | null,
+  currency?: string | null
+) => {
+  const identityCore =
+    normalizeAccountNumberIdentityDigits(accountNumber) ??
+    extractLastFourDigits(accountName) ??
+    normalizeWhitespace(String(accountName ?? ""));
+  const currencyScope = isWiseWalletWithoutVisibleAccountNumber({
+    name: accountName,
+    institution,
+    accountNumber,
+    type: accountType,
+  })
+    ? normalizeImportedCurrencyCode(currency)
+    : null;
+
+  return normalizeMerchantText(
+    `${institution ?? ""} ${identityCore} ${normalizeWhitespace(String(accountType ?? ""))} ${currencyScope ?? ""}`
   );
+};
 
 const normalizeImportedAccountInstitutionKey = (value?: string | null) =>
   normalizeWhitespace(String(value ?? ""))
@@ -356,8 +393,14 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
     return 0;
   }
 
-  const leftKey = normalizeImportedAccountKey(left.name, left.institution, left.accountNumber, left.type);
-  const rightKey = normalizeImportedAccountKey(right.name, right.institution, right.accountNumber, right.type);
+  const leftKey = normalizeImportedAccountKey(left.name, left.institution, left.accountNumber, left.type, left.currency);
+  const rightKey = normalizeImportedAccountKey(
+    right.name,
+    right.institution,
+    right.accountNumber,
+    right.type,
+    right.currency
+  );
   if (leftKey === rightKey) {
     return 100;
   }
@@ -569,15 +612,11 @@ const normalizeCategoryName = (value?: string | null) => normalizeMerchantText(v
 const normalizeImportedTransactionAccountKey = (
   accountName?: string | null,
   institution?: string | null,
-  accountNumber?: string | null
+  accountNumber?: string | null,
+  accountType?: string | null,
+  currency?: string | null
 ) =>
-  normalizeMerchantText(
-    `${institution ?? ""} ${
-      normalizeAccountNumberIdentityDigits(accountNumber) ??
-      extractLastFourDigits(accountName) ??
-      normalizeWhitespace(String(accountName ?? ""))
-    }`
-  );
+  normalizeImportedAccountKey(accountName, institution, accountNumber, accountType, currency);
 
 const getImportedTransactionImportFileId = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
   const directImportFileId =
@@ -652,7 +691,14 @@ const getTransactionAccountIdentityKey = (entry: CachedRecord | ImportedWorkspac
       ? ((entry as { accountNumber?: string | null }).accountNumber as string)
       : null;
 
-  return normalizeImportedTransactionAccountKey(accountName, institution, accountNumber);
+  const accountType =
+    typeof (entry as { accountType?: string | null }).accountType === "string" &&
+    (entry as { accountType?: string | null }).accountType?.trim()
+      ? ((entry as { accountType?: string | null }).accountType as string)
+      : null;
+  const currency = typeof entry.currency === "string" && entry.currency.trim() ? entry.currency : null;
+
+  return normalizeImportedTransactionAccountKey(accountName, institution, accountNumber, accountType, currency);
 };
 
 const getMobileScreenshotPayloadKind = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
@@ -839,7 +885,8 @@ const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: Impor
     typeof account.name === "string" ? account.name : null,
     typeof account.institution === "string" ? account.institution : null,
     typeof account.accountNumber === "string" ? account.accountNumber : null,
-    typeof account.type === "string" ? account.type : null
+    typeof account.type === "string" ? account.type : null,
+    typeof account.currency === "string" ? account.currency : null
   );
   const matchIndex = items.findIndex((entry) => {
     const id = typeof entry.id === "string" ? entry.id : "";
@@ -847,7 +894,8 @@ const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: Impor
       typeof entry.name === "string" ? entry.name : null,
       typeof entry.institution === "string" ? entry.institution : null,
       typeof entry.accountNumber === "string" ? entry.accountNumber : null,
-      typeof entry.type === "string" ? entry.type : null
+      typeof entry.type === "string" ? entry.type : null,
+      typeof entry.currency === "string" ? entry.currency : null
     );
     return idsToReplace.has(id) || entryKey === accountKey || matchesImportedAccountIdentity(entry as ImportedAccountIdentityLike, account as ImportedAccountIdentityLike);
   });
@@ -1475,7 +1523,8 @@ export const findCachedTransactionsForAccount = (
         typeof snapshotAccount.name === "string" ? snapshotAccount.name : null,
         typeof snapshotAccount.institution === "string" ? snapshotAccount.institution : null,
         typeof snapshotAccount.accountNumber === "string" ? snapshotAccount.accountNumber : null,
-        typeof snapshotAccount.type === "string" ? snapshotAccount.type : null
+        typeof snapshotAccount.type === "string" ? snapshotAccount.type : null,
+        typeof snapshotAccount.currency === "string" ? snapshotAccount.currency : null
       );
       return accountIds.has(entryId) || accountIds.has(optimisticId) || (identityKey !== null && entryKey === identityKey);
     });
@@ -1502,7 +1551,9 @@ export const findCachedTransactionsForAccount = (
       const entryKey = normalizeImportedTransactionAccountKey(
         typeof entry.accountName === "string" ? entry.accountName : null,
         typeof (entry as { institution?: string | null }).institution === "string" ? (entry as { institution?: string | null }).institution ?? null : null,
-        typeof (entry as { accountNumber?: string | null }).accountNumber === "string" ? (entry as { accountNumber?: string | null }).accountNumber ?? null : null
+        typeof (entry as { accountNumber?: string | null }).accountNumber === "string" ? (entry as { accountNumber?: string | null }).accountNumber ?? null : null,
+        typeof (entry as { accountType?: string | null }).accountType === "string" ? (entry as { accountType?: string | null }).accountType ?? null : null,
+        typeof entry.currency === "string" ? entry.currency : null
       );
       return entryKey === identityKey;
     });

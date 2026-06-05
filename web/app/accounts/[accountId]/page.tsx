@@ -10,7 +10,6 @@ import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { FinancialAccountCard } from "@/components/financial-account-card";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
-import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
 import { formatUploadAccountDisplayName, getAccountCardName, getAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
@@ -25,8 +24,6 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
-import { getTransactionParsedNoteValue } from "@/lib/transaction-notes";
-import { getTransactionTagSignature, sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { clearImportActivity, getCompletedImportActivitySummary, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
 import {
@@ -125,7 +122,6 @@ type Transaction = {
   importFileId?: string | null;
   warningReason?: string | null;
   splitBill?: { id: string; title: string } | null;
-  tags?: Array<{ id: string; name: string }>;
   rawPayload?: unknown;
   normalizedPayload?: unknown;
 };
@@ -165,9 +161,16 @@ const uploadSummaryMatchesAccount = (
     summary.accountName,
     summary.institution,
     summary.accountNumber ?? null,
-    summary.accountType ?? account.type
+    summary.accountType ?? account.type,
+    summary.previewTransactions?.[0]?.currency ?? null
   );
-  const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+  const accountKey = normalizeImportedAccountKey(
+    account.name,
+    account.institution,
+    account.accountNumber,
+    account.type,
+    account.currency
+  );
   if (summaryKey === accountKey) {
     return true;
   }
@@ -229,7 +232,6 @@ type TransactionDetailDraft = {
   description: string;
   isExcluded: boolean;
   isTransfer: boolean;
-  tags: string[];
   receiptLineItems: ReceiptLineItemDraft[];
 };
 
@@ -750,7 +752,7 @@ const getNormalizedPayloadTextCandidate = (normalizedPayload: unknown, keys: str
 
 const getTransactionUserNote = (
   transaction:
-    | Pick<Transaction, "normalizedPayload">
+    | Pick<Transaction, "description" | "source" | "importFileId" | "normalizedPayload">
     | null
     | undefined
 ) => {
@@ -759,26 +761,44 @@ const getTransactionUserNote = (
     return normalizeTransactionNotes(normalizedUserNote);
   }
 
+  if ((transaction?.source ?? null) === "manual" && !transaction?.importFileId) {
+    return normalizeTransactionNotes(transaction?.description);
+  }
+
   return "";
 };
 
 const getTransactionParsedNote = (
   transaction:
-    | Pick<Transaction, "rawPayload" | "normalizedPayload" | "description" | "merchantRaw" | "merchantClean" | "source" | "importFileId">
+    | Pick<Transaction, "rawPayload" | "description" | "source" | "importFileId">
     | null
     | undefined
-) =>
-  normalizeTransactionNotes(
-    getTransactionParsedNoteValue({
-      rawPayload: transaction?.rawPayload,
-      normalizedPayload: transaction?.normalizedPayload,
-      description: transaction?.description,
-      merchantRaw: transaction?.merchantRaw,
-      merchantClean: transaction?.merchantClean,
-      source: transaction?.source,
-      importFileId: transaction?.importFileId,
-    })
-  );
+) => {
+  const parsedNote = getRawPayloadTextCandidate(transaction?.rawPayload, [
+    "fullDetails",
+    "parsedDetails",
+    "transactionDetails",
+    "transactionDetail",
+    "counterpartyDetails",
+    "counterparty",
+    "recipient",
+    "sender",
+    "notes",
+    "note",
+    "detail",
+    "details",
+    "trailingDetails",
+  ]);
+  if (parsedNote) {
+    return parsedNote;
+  }
+
+  if ((transaction?.source ?? null) === "upload" || transaction?.importFileId) {
+    return normalizeTransactionNotes(transaction?.description);
+  }
+
+  return "";
+};
 
 const createEmptyReceiptLineItem = (): ReceiptLineItemDraft => ({
   description: "",
@@ -1128,7 +1148,6 @@ const createDetailDraft = (
     description: getTransactionUserNote(transaction),
     isExcluded: transaction.isExcluded,
     isTransfer: Boolean(transaction.isTransfer || effectiveType === "transfer"),
-    tags: sanitizeTransactionTagNames((transaction.tags ?? []).map((tag) => tag.name)),
     receiptLineItems: parseReceiptLineItemsFromPayload(transaction.rawPayload).map(receiptLineItemToDraft),
   };
 };
@@ -1398,6 +1417,7 @@ function AccountDetailPageContent() {
             institution?: string | null;
             accountNumber?: string | null;
             type?: string | null;
+            currency?: string | null;
           }
         | null
         | undefined;
@@ -1408,6 +1428,7 @@ function AccountDetailPageContent() {
         institution: cachedImportedAccount?.institution ?? null,
         accountNumber: cachedImportedAccount?.accountNumber ?? null,
         type: cachedImportedAccount?.type ?? null,
+        currency: cachedImportedAccount?.currency ?? null,
       });
       const cachedTransactionsForAccountRows = Array.isArray(cachedTransactionsForAccount?.transactions)
         ? (cachedTransactionsForAccount.transactions as Transaction[])
@@ -1433,12 +1454,13 @@ function AccountDetailPageContent() {
             }
 
             return (
-              normalizeImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type) ===
+              normalizeImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type, entry.currency) ===
               normalizeImportedAccountKey(
                 cachedImportedAccount?.name ?? null,
                 cachedImportedAccount?.institution ?? null,
                 cachedImportedAccount?.accountNumber ?? null,
-                cachedImportedAccount?.type ?? null
+                cachedImportedAccount?.type ?? null,
+                cachedImportedAccount?.currency ?? null
               )
             );
           }) ?? null)
@@ -1897,8 +1919,8 @@ function AccountDetailPageContent() {
   }, [accountId]);
 
   const accountCheckpointKey = useMemo(
-    () => normalizeImportedAccountKey(account?.name, account?.institution, account?.accountNumber, account?.type),
-    [account?.accountNumber, account?.institution, account?.name, account?.type]
+    () => normalizeImportedAccountKey(account?.name, account?.institution, account?.accountNumber, account?.type, account?.currency),
+    [account?.accountNumber, account?.currency, account?.institution, account?.name, account?.type]
   );
 
   const latestCheckpoint = useMemo(() => {
@@ -1921,7 +1943,12 @@ function AccountDetailPageContent() {
         typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
         typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
         typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null,
-        typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null
+        typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null,
+        typeof sourceMetadata?.currency === "string"
+          ? sourceMetadata.currency
+          : typeof sourceMetadata?.accountCurrency === "string"
+            ? sourceMetadata.accountCurrency
+            : null
       );
       const checkpointNumber =
         typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null;
@@ -2109,8 +2136,14 @@ function AccountDetailPageContent() {
         }
 
         return (
-          normalizeImportedAccountKey(transaction.accountName, transaction.institution, transaction.accountNumber, account.type) ===
-          normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
+          normalizeImportedAccountKey(
+            transaction.accountName,
+            transaction.institution,
+            transaction.accountNumber,
+            account.type,
+            transaction.currency
+          ) ===
+          normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency)
         );
       }) ||
       transactionTotalCount > 0 ||
@@ -2129,8 +2162,14 @@ function AccountDetailPageContent() {
 
       return (
         account !== null &&
-        normalizeImportedAccountKey(transaction.accountName, transaction.institution, transaction.accountNumber, account.type) ===
-          normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) &&
+        normalizeImportedAccountKey(
+          transaction.accountName,
+          transaction.institution,
+          transaction.accountNumber,
+          account.type,
+          transaction.currency
+        ) ===
+          normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency) &&
         typeof transaction.institution === "string" &&
         transaction.institution.trim().length > 0
       );
@@ -2919,10 +2958,6 @@ function AccountDetailPageContent() {
     [selectedTransaction?.rawPayload]
   );
   const selectedTransactionRawNote = useMemo(() => getTransactionParsedNote(selectedTransaction), [selectedTransaction]);
-  const transactionTagSuggestions = useMemo(
-    () => sanitizeTransactionTagNames(transactions.flatMap((transaction) => (transaction.tags ?? []).map((tag) => tag.name))),
-    [transactions]
-  );
   const detailReceiptLineItems = detailDraft?.receiptLineItems ?? selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
   const detailReceiptLineItemTotal = useMemo(
     () => getManualReceiptLineItemTotal(detailReceiptLineItems),
@@ -2942,7 +2977,6 @@ function AccountDetailPageContent() {
       detailDraft.currency !== (selectedTransaction.currency ?? account?.currency ?? "PHP") ||
       detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
       normalizeTransactionNotes(detailDraft.description) !== getTransactionUserNote(selectedTransaction) ||
-      getTransactionTagSignature(detailDraft.tags) !== getTransactionTagSignature((selectedTransaction.tags ?? []).map((tag) => tag.name)) ||
       detailDraft.isExcluded !== selectedTransaction.isExcluded ||
       detailDraft.isTransfer !== Boolean(selectedTransaction.isTransfer || selectedTransaction.type === "transfer") ||
       receiptLineItemSignature(detailDraft.receiptLineItems) !==
@@ -3175,8 +3209,6 @@ function AccountDetailPageContent() {
         amount: detailDraft.amount,
         currency: detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency || account?.currency || "PHP",
         type: detailDraftTypeToTransactionType(detailDraft.type),
-        description: detailDraft.description || null,
-        tags: sanitizeTransactionTagNames(detailDraft.tags),
         userNote: detailDraft.description || null,
         isExcluded: detailDraft.isExcluded,
         isTransfer: detailDraft.isTransfer,
@@ -5009,18 +5041,6 @@ function AccountDetailPageContent() {
                       placeholder="Optional note or review context"
                     />
                   </label>
-                  <div className="transaction-drawer-form__notes">
-                    <span className="transaction-drawer-field-label">
-                      <span>Tags</span>
-                    </span>
-                    <TransactionTagsEditor
-                      tags={detailDraft?.tags ?? []}
-                      onChange={(tags) => setDetailDraft((current) => (current ? { ...current, tags } : current))}
-                      suggestions={transactionTagSuggestions}
-                      placeholder="Examples: Shared, Travel, Personal"
-                      inputAriaLabel="Edit transaction tags"
-                    />
-                  </div>
                   {selectedTransactionRawSourceLine ? (
                     <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
                       <span>Raw source line</span>

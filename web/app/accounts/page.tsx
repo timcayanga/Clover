@@ -108,9 +108,16 @@ const uploadSummaryMatchesAccount = (summary: UploadInsightsSummary, account: Ac
     summary.accountName,
     summary.institution,
     summary.accountNumber ?? null,
-    summary.accountType ?? account.type
+    summary.accountType ?? account.type,
+    summary.previewTransactions?.[0]?.currency ?? null
   );
-  const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+  const accountKey = normalizeImportedAccountKey(
+    account.name,
+    account.institution,
+    account.accountNumber,
+    account.type,
+    account.currency
+  );
   if (summaryKey === accountKey) {
     return true;
   }
@@ -230,6 +237,7 @@ const resolvePersistedImportedAccountId = (summary: UploadInsightsSummary, accou
       institution: summary.institution,
       accountNumber: summary.accountNumber ?? null,
       type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+      currency: summary.previewTransactions?.[0]?.currency ?? null,
     }
   );
 
@@ -240,8 +248,9 @@ const getImportedAccountKey = (
   name: string | null,
   institution: string | null,
   accountNumber?: string | null,
-  accountType?: string | null
-) => normalizeImportedAccountKey(name, institution, accountNumber ?? null, accountType ?? null);
+  accountType?: string | null,
+  currency?: string | null
+) => normalizeImportedAccountKey(name, institution, accountNumber ?? null, accountType ?? null, currency ?? null);
 
 const getImportedAccountLastFour = (value?: string | null) => {
   const digits = String(value ?? "").replace(/\D/g, "");
@@ -316,8 +325,14 @@ const transactionMatchesAccount = (transaction: Transaction, account: Account) =
   }
 
   return (
-    normalizeImportedAccountKey(transaction.accountName, transaction.institution, transaction.accountNumber, account.type) ===
-    normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
+    normalizeImportedAccountKey(
+      transaction.accountName,
+      transaction.institution,
+      transaction.accountNumber,
+      account.type,
+      transaction.currency
+    ) ===
+    normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency)
   );
 };
 
@@ -331,7 +346,8 @@ const mergeAccountsWithOptimisticImports = (
   const fetchedById = new Map(visibleFetchedAccounts.map((account) => [account.id, account] as const));
   const fetchedByKey = new Map(
     visibleFetchedAccounts.map(
-      (account) => [getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type), account] as const
+      (account) =>
+        [getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency), account] as const
     )
   );
   const mergedFetchedAccounts = visibleFetchedAccounts.map((account) => {
@@ -365,7 +381,7 @@ const mergeAccountsWithOptimisticImports = (
       return false;
     }
 
-    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
     return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
   });
 
@@ -382,7 +398,7 @@ const mergeAccountsWithOptimisticImports = (
       return false;
     }
 
-    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
     return !fetchedById.has(account.id) && !visibleFetchedAccounts.some((fetchedAccount) => matchesImportedAccountIdentity(account, fetchedAccount)) && !fetchedByKey.has(accountKey);
   });
 
@@ -496,6 +512,7 @@ type Transaction = {
   accountName?: string;
   institution?: string | null;
   accountNumber?: string | null;
+  currency: string;
   amount: string;
   type: "income" | "expense" | "transfer";
   date: string;
@@ -903,7 +920,12 @@ const getCheckpointIdentityKey = (checkpoint: StatementCheckpoint) =>
       typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
       checkpointInstitution,
       typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null,
-      accountType
+      accountType,
+      typeof sourceMetadata?.currency === "string"
+        ? sourceMetadata.currency
+        : typeof sourceMetadata?.accountCurrency === "string"
+          ? sourceMetadata.accountCurrency
+          : null
     );
   })();
 
@@ -972,7 +994,13 @@ const getLatestCheckpointForAccount = (
 ) => {
   let latestCheckpoint: StatementCheckpoint | null = null;
   let latestTime = -1;
-  const identityKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+  const identityKey = normalizeImportedAccountKey(
+    account.name,
+    account.institution,
+    account.accountNumber,
+    account.type,
+    account.currency
+  );
 
   for (const checkpoint of statementCheckpoints) {
     const sourceMetadata = checkpoint.sourceMetadata as Record<string, unknown> | null | undefined;
@@ -2107,7 +2135,7 @@ function AccountsPageContent() {
     const latestCheckpoint =
       latestCheckpoints.checkpointsByAccountId.get(account.id) ??
       latestCheckpoints.checkpointsByAccountKey.get(
-        normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
+        normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency)
       ) ??
       null;
     const cachedTransactionsWorkspace = selectedWorkspaceId ? getCachedTransactionsWorkspace(selectedWorkspaceId) : null;
@@ -2914,12 +2942,12 @@ function AccountsPageContent() {
       return account;
     }
 
-    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
     return (
       accounts.find(
         (entry) =>
           !entry.id.startsWith("optimistic-") &&
-          getImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type) === accountKey
+          getImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type, entry.currency) === accountKey
       ) ??
       accounts.find((entry) => !entry.id.startsWith("optimistic-") && matchesImportedAccountIdentity(entry, account)) ??
       null
@@ -4193,13 +4221,14 @@ function AccountsPageContent() {
         }}
       onImported={async (summary) => {
           const optimisticAccount = buildOptimisticImportedAccount(summary);
+          const previewTransactions = summary.previewTransactions ?? [];
           const importedAccountKey = getImportedAccountKey(
             summary.accountName,
             summary.institution,
             summary.accountNumber ?? null,
-            summary.accountType ?? null
+            summary.accountType ?? null,
+            previewTransactions[0]?.currency ?? null
           );
-          const previewTransactions = summary.previewTransactions ?? [];
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
           let nextAccountsSnapshot: Account[] | null = null;
           let nextTransactionsSnapshot: Transaction[] | null = null;
@@ -4215,7 +4244,8 @@ function AccountsPageContent() {
 
                   if (account.source === "upload") {
                     return (
-                      getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) !== importedAccountKey
+                      getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency) !==
+                        importedAccountKey
                     );
                   }
 

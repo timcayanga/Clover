@@ -66,6 +66,7 @@ const expandImportedAccountFilters = async (
     institution: string | null;
     type: string;
     accountNumber: string | null;
+    currency: string | null;
   }
 ) => {
   const siblingAccounts = await prisma.account.findMany({
@@ -78,6 +79,7 @@ const expandImportedAccountFilters = async (
       institution: true,
       type: true,
       accountNumber: true,
+      currency: true,
     },
   });
 
@@ -87,7 +89,8 @@ const expandImportedAccountFilters = async (
       requestedAccount.name,
       requestedAccount.institution,
       requestedAccount.accountNumber,
-      requestedAccount.type
+      requestedAccount.type,
+      requestedAccount.currency
     ),
     institution: canonicalInstitutionKey(requestedAccount.institution),
     digits: normalizeDigits(requestedAccount.accountNumber),
@@ -99,7 +102,13 @@ const expandImportedAccountFilters = async (
   for (const candidate of siblingAccounts) {
     const candidateDescriptor = {
       id: candidate.id,
-      key: normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, candidate.type),
+      key: normalizeImportedAccountKey(
+        candidate.name,
+        candidate.institution,
+        candidate.accountNumber,
+        candidate.type,
+        candidate.currency
+      ),
       institution: canonicalInstitutionKey(candidate.institution),
       digits: normalizeDigits(candidate.accountNumber),
       lastFour: getLastFourDigits(candidate.accountNumber ?? candidate.name),
@@ -310,7 +319,13 @@ const getRawPayloadSourceRowIndex = (rawPayload: Prisma.JsonValue | null | undef
 };
 
 const getImportedTransactionAccountIdentityKey = (transaction: TransactionApiRow) =>
-  normalizeImportedAccountKey(transaction.accountName, transaction.institution, transaction.accountNumber, null) || transaction.accountId;
+  normalizeImportedAccountKey(
+    transaction.accountName,
+    transaction.institution,
+    transaction.accountNumber,
+    null,
+    transaction.currency
+  ) || transaction.accountId;
 
 const getImportedTransactionStableKey = (transaction: TransactionApiRow) => {
   const sourceRowIndex = getRawPayloadSourceRowIndex(transaction.rawPayload);
@@ -525,7 +540,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
 
     const account = await prisma.account.findUnique({
       where: { id: accountId },
-      select: { id: true, workspaceId: true, name: true, institution: true, type: true, accountNumber: true, source: true },
+      select: { id: true, workspaceId: true, name: true, institution: true, type: true, accountNumber: true, currency: true, source: true },
     });
 
     if (!account) {

@@ -128,6 +128,45 @@ const normalizeAccountIdentityKey = (accountName?: string | null, institution?: 
     .trim();
 };
 
+const normalizeIdentityCurrencyCode = (value?: string | null) => {
+  const normalized = String(value ?? "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim().toUpperCase();
+  return normalized || null;
+};
+
+const isWiseWalletWithoutVisibleAccountNumber = (account: {
+  name?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+  type?: string | null;
+}) => {
+  const digits = String(account.accountNumber ?? "").replace(/\D/g, "");
+  if (digits) {
+    return false;
+  }
+
+  if (String(account.type ?? "").trim().toLowerCase() !== "wallet") {
+    return false;
+  }
+
+  return canonicalImportInstitutionKey(account.institution) === "wise" || canonicalImportInstitutionKey(account.name) === "wise";
+};
+
+const buildCurrencyScopedAccountIdentityKey = (account: {
+  name?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+  type?: string | null;
+  currency?: string | null;
+}) => {
+  const baseKey = normalizeAccountIdentityKey(account.name, account.institution, account.accountNumber);
+  if (!baseKey) {
+    return "";
+  }
+
+  const currencyScope = isWiseWalletWithoutVisibleAccountNumber(account) ? normalizeIdentityCurrencyCode(account.currency) : null;
+  return `${baseKey} ${currencyScope ?? ""}`.trim();
+};
+
 const parseNullableDecimal = (value: unknown) => {
   if (value === undefined || value === null || value === "") {
     return null;
@@ -318,6 +357,7 @@ const isGenericUploadedAccountForInstitution = (account: {
 
 const looksLikeReceiptImageFilenameAccount = (account: {
   name: string;
+  institution?: string | null | undefined;
   accountNumber?: string | null;
   source: string;
 }) => {
@@ -325,7 +365,7 @@ const looksLikeReceiptImageFilenameAccount = (account: {
     return false;
   }
 
-  const combined = `${account.name ?? ""} ${account.accountNumber ?? ""}`.trim();
+  const combined = `${account.name ?? ""} ${account.institution ?? ""} ${account.accountNumber ?? ""}`.trim();
   return (
     /\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)(?:\s|$)/i.test(combined) ||
     /^img[_-]?\d+(?:\.(?:jpe?g|png|webp))?(?:\s|$)/i.test(combined) ||
@@ -775,11 +815,18 @@ export async function GET(request: Request) {
           typeof sourceMetadata?.accountNumber === "string" && sourceMetadata.accountNumber.trim()
             ? sourceMetadata.accountNumber.trim()
             : null;
-        const checkpointKey = normalizeAccountIdentityKey(
-          typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
-          typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
-          checkpointNumber
-        );
+        const checkpointKey = buildCurrencyScopedAccountIdentityKey({
+          name: typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+          institution: typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+          accountNumber: checkpointNumber,
+          type: typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null,
+          currency:
+            typeof sourceMetadata?.currency === "string"
+              ? sourceMetadata.currency
+              : typeof sourceMetadata?.accountCurrency === "string"
+                ? sourceMetadata.accountCurrency
+                : null,
+        });
         const checkpointTime = Math.max(
           checkpoint.statementEndDate?.getTime() ?? 0,
           checkpoint.createdAt.getTime()
@@ -944,10 +991,17 @@ export async function GET(request: Request) {
       institution: string | null;
       accountNumber?: string | null;
       type: string;
+      currency?: string | null;
     }) => {
       let latestCheckpoint: (typeof statementCheckpoints)[number] | null = null;
       let latestTime = -1;
-      const accountKey = normalizeAccountIdentityKey(account.name, account.institution, account.accountNumber ?? null);
+      const accountKey = buildCurrencyScopedAccountIdentityKey({
+        name: account.name,
+        institution: account.institution,
+        accountNumber: account.accountNumber ?? null,
+        type: account.type,
+        currency: account.currency ?? null,
+      });
       const accountNumber = normalizeImportAccountNumber(account.accountNumber ?? null);
 
       for (const checkpoint of statementCheckpoints) {
@@ -957,11 +1011,18 @@ export async function GET(request: Request) {
             : null;
         const checkpointNumber =
           typeof sourceMetadata?.accountNumber === "string" ? normalizeImportAccountNumber(sourceMetadata.accountNumber) : null;
-        const checkpointKey = normalizeAccountIdentityKey(
-          typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
-          typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
-          checkpointNumber
-        );
+        const checkpointKey = buildCurrencyScopedAccountIdentityKey({
+          name: typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+          institution: typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+          accountNumber: checkpointNumber,
+          type: typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null,
+          currency:
+            typeof sourceMetadata?.currency === "string"
+              ? sourceMetadata.currency
+              : typeof sourceMetadata?.accountCurrency === "string"
+                ? sourceMetadata.accountCurrency
+                : null,
+        });
         const checkpointBankLabel =
           typeof sourceMetadata?.institution === "string"
             ? sourceMetadata.institution

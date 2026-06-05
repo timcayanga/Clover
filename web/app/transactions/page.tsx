@@ -24,7 +24,6 @@ import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
-import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
 import { getCategoryIconTone } from "@/lib/category-icons";
 import {
   analyticsOnceKey,
@@ -65,8 +64,6 @@ import {
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
-import { getTransactionParsedNoteValue } from "@/lib/transaction-notes";
-import { getTransactionTagSignature, sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 
@@ -180,7 +177,7 @@ const getTransactionAccountFilterKey = (account: Account) => {
     return `cash:${formatCurrencyCode(account.currency || "PHP")}`;
   }
 
-  return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+  return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
 };
 
 const buildTransactionAccountFilterOptions = (accounts: Account[]) => {
@@ -310,7 +307,10 @@ const mergeImportedPreviewTransactions = (
 const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
   const fetchedById = new Map(fetchedAccounts.map((account) => [account.id, account] as const));
   const fetchedByKey = new Map(
-    fetchedAccounts.map((account) => [normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type), account] as const)
+    fetchedAccounts.map(
+      (account) =>
+        [normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency), account] as const
+    )
   );
   const mergedFetchedAccounts = fetchedAccounts.map((account) => {
     const optimistic = currentAccounts.find((currentAccount) => {
@@ -339,7 +339,7 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
       return false;
     }
 
-    const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
     return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
   });
 
@@ -356,7 +356,7 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
       return false;
     }
 
-    const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
     return !fetchedById.has(account.id) && !fetchedAccounts.some((fetchedAccount) => matchesImportedAccountIdentity(account, fetchedAccount)) && !fetchedByKey.has(accountKey);
   });
 
@@ -457,7 +457,6 @@ type Transaction = {
   isTransfer: boolean;
   isExcluded: boolean;
   splitBill?: { id: string; title: string } | null;
-  tags?: Array<{ id: string; name: string }>;
   source?: string | null;
   importFileId?: string | null;
   warningReason?: string | null;
@@ -528,7 +527,6 @@ type ManualTransactionForm = {
   type: "debit" | "credit";
   merchantRaw: string;
   description: string;
-  tags: string[];
   receiptLineItems: ReceiptLineItemDraft[];
 };
 
@@ -550,7 +548,6 @@ type TransactionDetailDraft = {
   description: string;
   isExcluded: boolean;
   isTransfer: boolean;
-  tags: string[];
   receiptLineItems: ReceiptLineItemDraft[];
 };
 
@@ -784,7 +781,6 @@ const createEmptyManualForm = (accountId = "", categoryId = "", currency = "PHP"
   type: "debit",
   merchantRaw: "",
   description: "",
-  tags: [],
   receiptLineItems: [],
 });
 
@@ -1631,7 +1627,7 @@ const getNormalizedPayloadTextCandidate = (normalizedPayload: unknown, keys: str
 
 const getTransactionUserNote = (
   transaction:
-    | Pick<Transaction, "normalizedPayload">
+    | Pick<Transaction, "description" | "source" | "importFileId" | "normalizedPayload">
     | null
     | undefined
 ) => {
@@ -1640,26 +1636,44 @@ const getTransactionUserNote = (
     return normalizeTransactionNotes(normalizedUserNote);
   }
 
+  if ((transaction?.source ?? null) === "manual" && !transaction?.importFileId) {
+    return normalizeTransactionNotes(transaction?.description);
+  }
+
   return "";
 };
 
 const getTransactionParsedNote = (
   transaction:
-    | Pick<Transaction, "rawPayload" | "normalizedPayload" | "description" | "merchantRaw" | "merchantClean" | "source" | "importFileId">
+    | Pick<Transaction, "rawPayload" | "description" | "source" | "importFileId">
     | null
     | undefined
-) =>
-  normalizeTransactionNotes(
-    getTransactionParsedNoteValue({
-      rawPayload: transaction?.rawPayload,
-      normalizedPayload: transaction?.normalizedPayload,
-      description: transaction?.description,
-      merchantRaw: transaction?.merchantRaw,
-      merchantClean: transaction?.merchantClean,
-      source: transaction?.source,
-      importFileId: transaction?.importFileId,
-    })
-  );
+) => {
+  const parsedNote = getRawPayloadTextCandidate(transaction?.rawPayload, [
+    "fullDetails",
+    "parsedDetails",
+    "transactionDetails",
+    "transactionDetail",
+    "counterpartyDetails",
+    "counterparty",
+    "recipient",
+    "sender",
+    "notes",
+    "note",
+    "detail",
+    "details",
+    "trailingDetails",
+  ]);
+  if (parsedNote) {
+    return parsedNote;
+  }
+
+  if ((transaction?.source ?? null) === "upload" || transaction?.importFileId) {
+    return normalizeTransactionNotes(transaction?.description);
+  }
+
+  return "";
+};
 
 const createEmptyReceiptLineItem = (): ReceiptLineItemDraft => ({
   description: "",
@@ -2023,7 +2037,6 @@ const createDetailDraft = (
     description: getTransactionUserNote(transaction),
     isExcluded: transaction.isExcluded,
     isTransfer: transaction.isTransfer,
-    tags: sanitizeTransactionTagNames((transaction.tags ?? []).map((tag) => tag.name)),
     receiptLineItems: parseReceiptLineItemsFromPayload(transaction.rawPayload).map(receiptLineItemToDraft),
   };
 };
@@ -2502,12 +2515,20 @@ function TransactionsPageContent() {
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const searchText = useMemo(() => normalizeTransactionSearch(query), [query]);
 
   useEffect(() => {
     transactionsRef.current = transactions;
   }, [transactions]);
+  useEffect(() => {
+    if (mobileSearchOpen) {
+      mobileSearchInputRef.current?.focus();
+      mobileSearchInputRef.current?.select();
+    }
+  }, [mobileSearchOpen]);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
   const [manualCategoryTouched, setManualCategoryTouched] = useState(false);
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
@@ -3529,15 +3550,6 @@ function TransactionsPageContent() {
     setHeaderMenuPosition(null);
   };
 
-  const openAddMenu = () => {
-    flushSync(() => {
-      setSelectionMenuOpen(false);
-      setHeaderMenuOpen(null);
-      setHeaderMenuPosition(null);
-      setAddMenuOpen((current) => !current);
-    });
-  };
-
   const openImportFiles = (files: File[] | null = null, backgroundOnly = false) => {
     const shouldLaunchInBackground = backgroundOnly && !(files?.some(isImageImportFile) ?? false);
     flushSync(() => {
@@ -3549,28 +3561,6 @@ function TransactionsPageContent() {
       setImportSeedFiles(files && files.length > 0 ? files : null);
       setImportOpen(true);
     });
-  };
-
-  const openPhotoCapture = () => {
-    const input = addPhotoInputRef.current;
-    if (!input) {
-      return;
-    }
-
-    setAddMenuOpen(false);
-    input.value = "";
-    input.click();
-  };
-
-  const openPhotoLibrary = () => {
-    const input = addPhotoLibraryInputRef.current;
-    if (!input) {
-      return;
-    }
-
-    setAddMenuOpen(false);
-    input.value = "";
-    input.click();
   };
 
   const openMobileFilePicker = () => {
@@ -4323,7 +4313,6 @@ function TransactionsPageContent() {
       detailDraft.currency !== selectedTransaction.currency ||
       detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
       normalizeTransactionNotes(detailDraft.description) !== getTransactionUserNote(selectedTransaction) ||
-      getTransactionTagSignature(detailDraft.tags) !== getTransactionTagSignature((selectedTransaction.tags ?? []).map((tag) => tag.name)) ||
       detailDraft.isExcluded !== selectedTransaction.isExcluded ||
       detailDraft.isTransfer !== selectedTransaction.isTransfer ||
       receiptLineItemSignature(detailDraft.receiptLineItems) !==
@@ -4395,10 +4384,6 @@ function TransactionsPageContent() {
     [selectedTransaction?.rawPayload]
   );
   const selectedTransactionRawNote = useMemo(() => getTransactionParsedNote(selectedTransaction), [selectedTransaction]);
-  const transactionTagSuggestions = useMemo(
-    () => sanitizeTransactionTagNames(transactions.flatMap((transaction) => (transaction.tags ?? []).map((tag) => tag.name))),
-    [transactions]
-  );
   const detailReceiptLineItems = detailDraft?.receiptLineItems ?? selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
   const detailReceiptLineItemTotal = useMemo(
     () => getManualReceiptLineItemTotal(detailReceiptLineItems),
@@ -5055,7 +5040,6 @@ function TransactionsPageContent() {
         merchantRaw: manualForm.merchantRaw,
         merchantClean: null,
         description: manualForm.description.trim() || null,
-        tags: sanitizeTransactionTagNames(manualForm.tags).map((name) => ({ id: `tag-${name}`, name })),
         isTransfer: false,
         isExcluded: false,
         source: "manual",
@@ -5107,7 +5091,6 @@ function TransactionsPageContent() {
           merchantRaw: manualForm.merchantRaw,
           merchantClean: null,
           description: manualForm.description.trim() || null,
-          tags: sanitizeTransactionTagNames(manualForm.tags),
           receiptLineItems,
           isTransfer: false,
           isExcluded: false,
@@ -5903,8 +5886,6 @@ function TransactionsPageContent() {
         amount: detailDraft.amount,
         currency: detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency,
         type: detailDraftTypeToTransactionType(detailDraft.type),
-        description: detailDraft.description || null,
-        tags: sanitizeTransactionTagNames(detailDraft.tags),
         userNote: detailDraft.description || null,
         isExcluded: detailDraft.isExcluded,
         isTransfer: detailDraft.isTransfer,
@@ -6621,12 +6602,44 @@ function TransactionsPageContent() {
   const isTableLoading =
     transactions.length === 0 &&
     (isWorkspaceSelectionSettling || (Boolean(selectedWorkspaceId) && !isWorkspaceDataReady));
-  const transactionsShellActions = (
-    <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
-      <label
-        className="transactions-toolbar-search"
-        style={isCompactViewport ? transactionsToolbarSearchCompactStyle : transactionsToolbarSearchStyle}
+  const transactionsShellActions = isCompactViewport ? (
+    <div className="transactions-shell-actions transactions-shell-actions--compact" style={transactionsShellActionsStyle}>
+      <input
+        ref={addFileInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept=".csv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+        multiple
+        onChange={handleMobileFileChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
+      <button
+        className="button button-secondary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
+        type="button"
+        onClick={() => void openManualAdd()}
+        aria-label="Add transaction"
+        title="Add transaction"
       >
+        <ActionIcon name="plus" />
+        <span>Add transaction</span>
+      </button>
+
+      <button
+        className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload transactions-toolbar-upload transactions-toolbar-upload--compact"
+        type="button"
+        onClick={() => openImportFiles()}
+        aria-label="Upload files"
+        title="Upload files"
+      >
+        <ActionIcon name="upload" />
+        <span>Upload files</span>
+      </button>
+    </div>
+  ) : (
+    <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
+      <label className="transactions-toolbar-search" style={transactionsToolbarSearchStyle}>
         <span className="transactions-toolbar-search__icon" aria-hidden="true">
           <ActionIcon name="search" />
         </span>
@@ -6638,7 +6651,6 @@ function TransactionsPageContent() {
           placeholder="Search"
           aria-label="Search transactions"
           aria-keyshortcuts="/"
-          style={isCompactViewport ? { width: "auto", opacity: 1 } : undefined}
         />
       </label>
 
@@ -6694,91 +6706,41 @@ function TransactionsPageContent() {
           className="button button-secondary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
           type="button"
           onClick={() => {
-            if (!isCompactViewport) {
-              void openManualAdd();
-              return;
-            }
-
-            openAddMenu();
+            void openManualAdd();
           }}
           title="Add transaction (A)"
-          aria-expanded={isCompactViewport ? addMenuOpen : undefined}
           aria-label="Add transaction"
           aria-keyshortcuts="a"
         >
           <span className="button-icon" aria-hidden="true">
             <ActionIcon name="plus" />
           </span>
-          {!isCompactViewport ? <span>Add transaction</span> : null}
+          <span>Add transaction</span>
         </button>
-        {isCompactViewport && addMenuOpen && addMenuPortalStyle && typeof document !== "undefined"
-          ? createPortal(
-              <div
-                ref={addMenuPanelRef}
-                className="transactions-add-menu__panel transactions-add-menu__panel--portal"
-                style={addMenuPortalStyle}
-              >
-                <button
-                  className="transactions-add-menu__item"
-                  type="button"
-                  onClick={() => {
-                    setAddMenuOpen(false);
-                    void openManualAdd();
-                  }}
-                >
-                  {isCompactViewport ? "Add manually" : "Add transaction"}
-                </button>
-                {isCompactViewport ? (
-                  <button
-                    className="transactions-add-menu__item"
-                    type="button"
-                    onClick={openPhotoCapture}
-                  >
-                    Take photo
-                  </button>
-                ) : null}
-                {isCompactViewport ? (
-                  <button
-                    className="transactions-add-menu__item"
-                    type="button"
-                    onClick={openPhotoLibrary}
-                  >
-                    Choose photo
-                  </button>
-                ) : null}
-                <button
-                  className="transactions-add-menu__item transactions-add-menu__item--upload"
-                  type="button"
-                  onClick={() => {
-                    if (isCompactViewport) {
-                      openMobileFilePicker();
-                      return;
-                    }
-
-                    openImportFiles();
-                  }}
-                >
-                  {isCompactViewport ? "Upload file" : "Upload files"}
-                </button>
-              </div>,
-              document.body
-            )
-          : null}
       </div>
-      {!isCompactViewport ? (
-        <button
-          className="button button-primary button-small transactions-action-button transactions-toolbar-upload"
-          type="button"
-          onClick={() => openImportFiles()}
-        >
-          <span className="button-icon" aria-hidden="true">
-            <ActionIcon name="upload" />
-          </span>
-          <span>Upload files</span>
-        </button>
-      ) : null}
+      <button
+        className="button button-primary button-small transactions-action-button transactions-toolbar-upload"
+        type="button"
+        onClick={() => openImportFiles()}
+      >
+        <span className="button-icon" aria-hidden="true">
+          <ActionIcon name="upload" />
+        </span>
+        <span>Upload files</span>
+      </button>
     </div>
   );
+  const transactionsMobileLeadingActions = isCompactViewport ? (
+    <button
+      className="button button-secondary button-small transactions-search-trigger transactions-mobile-search-trigger"
+      type="button"
+      onClick={() => setMobileSearchOpen(true)}
+      aria-label="Search transactions"
+      title="Search transactions"
+    >
+      <ActionIcon name="search" />
+    </button>
+  ) : null;
 
   useEffect(() => {
     if (!selectedWorkspaceId || !isWorkspaceDataReady) {
@@ -6839,7 +6801,49 @@ function TransactionsPageContent() {
   }, []);
 
   return (
-    <CloverShell active="transactions" title="Transactions" actions={transactionsShellActions}>
+    <CloverShell
+      active="transactions"
+      title="Transactions"
+      mobileLeadingActions={transactionsMobileLeadingActions}
+      actions={transactionsShellActions}
+    >
+      {mobileSearchOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => setMobileSearchOpen(false)}>
+              <section
+                className="modal-card search-modal glass"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="transactions-mobile-search-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="modal-head">
+                  <div>
+                    <p className="eyebrow">Search</p>
+                    <h4 id="transactions-mobile-search-title">Search transactions</h4>
+                  </div>
+                  <button className="icon-button" type="button" onClick={() => setMobileSearchOpen(false)} aria-label="Close search">
+                    ×
+                  </button>
+                </div>
+                <div className="search-modal__body">
+                  <label className="search-modal__field">
+                    <span className="sr-only">Search transactions</span>
+                    <input
+                      ref={mobileSearchInputRef}
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="Search"
+                      aria-label="Search transactions"
+                    />
+                  </label>
+                  <p className="search-modal__hint">Results update in the list below.</p>
+                </div>
+              </section>
+            </div>,
+            document.body
+          )
+        : null}
       <PageFileDropZone
         enabled={true}
         title="Drop statement files anywhere"
@@ -8122,17 +8126,6 @@ function TransactionsPageContent() {
                         />
                       </label>
 
-                      <div className="transactions-manual-field transactions-manual-field--embedded-label">
-                        <span className="transactions-manual-field__label">Tags</span>
-                        <TransactionTagsEditor
-                          tags={manualForm.tags}
-                          onChange={(tags) => setManualForm((current) => ({ ...current, tags }))}
-                          suggestions={transactionTagSuggestions}
-                          placeholder="Examples: Work, Tax, Vacation"
-                          inputAriaLabel="Add tags to transaction"
-                        />
-                      </div>
-
                       <div className="manual-more-panel__receipt-line-items">
                         <div className="manual-more-panel__section-head">
                           <span>Receipt line items</span>
@@ -8480,18 +8473,6 @@ function TransactionsPageContent() {
                     placeholder="Optional note or review context"
                   />
                 </label>
-                <div className="transaction-drawer-form__notes">
-                  <span className="transaction-drawer-field-label">
-                    <span>Tags</span>
-                  </span>
-                  <TransactionTagsEditor
-                    tags={detailDraft?.tags ?? []}
-                    onChange={(tags) => setDetailDraft((current) => (current ? { ...current, tags } : current))}
-                    suggestions={transactionTagSuggestions}
-                    placeholder="Examples: Family, Refund, Reimbursable"
-                    inputAriaLabel="Edit transaction tags"
-                  />
-                </div>
                 {selectedTransactionRawSourceLine ? (
                   <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
                     <span>Raw source line</span>
@@ -8768,8 +8749,14 @@ function TransactionsPageContent() {
         }}
       onImported={async (summary) => {
           const optimisticAccount = buildOptimisticImportedAccount(summary);
-          const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution, summary.accountNumber ?? null, summary.accountType ?? null);
           const previewTransactions = summary.previewTransactions ?? [];
+          const importedAccountKey = normalizeImportedAccountKey(
+            summary.accountName,
+            summary.institution,
+            summary.accountNumber ?? null,
+            summary.accountType ?? null,
+            previewTransactions[0]?.currency ?? null
+          );
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
           let nextAccountsSnapshot: Account[] | null = null;
 
@@ -8784,7 +8771,15 @@ function TransactionsPageContent() {
                   }
 
                   if (account.source === "upload") {
-                    return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) !== importedAccountKey;
+                    return (
+                      normalizeImportedAccountKey(
+                        account.name,
+                        account.institution,
+                        account.accountNumber,
+                        account.type,
+                        account.currency
+                      ) !== importedAccountKey
+                    );
                   }
 
                   return true;

@@ -218,6 +218,55 @@ const normalizeAccountKey = (accountName?: string | null, institution?: string |
     .replace(/\s+/g, " ")
     .trim();
 
+const normalizeIdentityCurrencyCode = (value?: string | null) => {
+  const normalized = normalizeWhitespace(String(value ?? "")).toUpperCase();
+  return normalized || null;
+};
+
+const canonicalImportInstitutionKey = (value?: string | null) =>
+  normalizeWhitespace(String(value ?? ""))
+    .toLowerCase()
+    .replace(/\s+\d{4}$/, "")
+    .trim()
+    .replace(/\bunion\s*bank(?:\s+of\s+the\s+philippines)?\b/g, "unionbank")
+    .replace(/\bchina\s+bank\b/g, "chinabank")
+    .replace(/\bmetro\s+bank\b/g, "metrobank")
+    .replace(/\bphilippine\s+national\s+bank\b/g, "pnb");
+
+const isWiseWalletWithoutVisibleAccountNumber = (account: {
+  name?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+  type?: string | null;
+}) => {
+  const digits = String(account.accountNumber ?? "").replace(/\D/g, "");
+  if (digits) {
+    return false;
+  }
+
+  if (String(account.type ?? "").trim().toLowerCase() !== "wallet") {
+    return false;
+  }
+
+  return canonicalImportInstitutionKey(account.institution) === "wise" || canonicalImportInstitutionKey(account.name) === "wise";
+};
+
+const buildCurrencyScopedAccountKey = (account: {
+  name?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+  type?: string | null;
+  currency?: string | null;
+}) => {
+  const baseKey = normalizeAccountKey(account.name, account.institution, account.accountNumber);
+  if (!baseKey) {
+    return "";
+  }
+
+  const currencyScope = isWiseWalletWithoutVisibleAccountNumber(account) ? normalizeIdentityCurrencyCode(account.currency) : null;
+  return `${baseKey} ${currencyScope ?? ""}`.trim();
+};
+
 const accountNumbersMayMatch = (left?: string | null, right?: string | null, requireExactMatch = false) => {
   const leftDigits = String(left ?? "").replace(/\D/g, "");
   const rightDigits = String(right ?? "").replace(/\D/g, "");
@@ -272,7 +321,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
         ],
       });
       const accountNumber = typeof account.accountNumber === "string" ? account.accountNumber : null;
-      const accountKey = normalizeAccountKey(account.name, account.institution, accountNumber);
+      const accountKey = buildCurrencyScopedAccountKey({
+        name: account.name,
+        institution: account.institution,
+        accountNumber,
+        type: account.type,
+        currency: account.currency ?? null,
+      });
       let latestTime = -1;
 
       for (const checkpoint of checkpoints) {
@@ -280,11 +335,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
           checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
             ? (checkpoint.sourceMetadata as Record<string, unknown>)
             : null;
-        const checkpointKey = normalizeAccountKey(
-          typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
-          typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
-          typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null
-        );
+        const checkpointKey = buildCurrencyScopedAccountKey({
+          name: typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+          institution: typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+          accountNumber: typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null,
+          type: typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null,
+          currency:
+            typeof sourceMetadata?.currency === "string"
+              ? sourceMetadata.currency
+              : typeof sourceMetadata?.accountCurrency === "string"
+                ? sourceMetadata.accountCurrency
+                : null,
+        });
         const checkpointNumber = typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null;
         const matchesAccount =
           checkpoint.accountId === accountId ||
