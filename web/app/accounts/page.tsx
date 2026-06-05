@@ -3321,11 +3321,11 @@ function AccountsPageContent() {
             menuAlignment="end"
             showChevron={false}
           />
-          <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
+          <button className="button button-secondary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
             <ActionIcon name="plus" />
             <span>Add account</span>
           </button>
-          <button className="button button-secondary button-small accounts-toolbar-button" type="button" onClick={() => openImportFiles()}>
+          <button className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload" type="button" onClick={() => openImportFiles()}>
             <ActionIcon name="upload" />
             <span>Upload files</span>
           </button>
@@ -3415,10 +3415,10 @@ function AccountsPageContent() {
                   <strong>It's quiet in here.</strong>
                   <p>Add your first account to start seeing balances, history, and helpful review flags.</p>
                   <div className="accounts-empty-state__actions">
-                    <button className="button button-primary button-small" type="button" onClick={openAddAccount}>
+                    <button className="button button-secondary button-small" type="button" onClick={openAddAccount}>
                       Add account
                     </button>
-                    <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
+                    <button className="button button-primary button-small" type="button" onClick={() => openImportFiles()}>
                       Upload files
                     </button>
                   </div>
@@ -3447,10 +3447,10 @@ function AccountsPageContent() {
                     <strong>No accounts in {formatCurrencySymbol(selectedCurrency)} yet.</strong>
                     <p>Pick another currency or add/import an account in {formatCurrencySymbol(selectedCurrency)} to keep this view focused.</p>
                     <div className="accounts-empty-state__actions">
-                      <button className="button button-primary button-small" type="button" onClick={openAddAccount}>
+                      <button className="button button-secondary button-small" type="button" onClick={openAddAccount}>
                         Add account
                       </button>
-                      <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
+                      <button className="button button-primary button-small" type="button" onClick={() => openImportFiles()}>
                         Upload files
                       </button>
                     </div>
@@ -3468,10 +3468,10 @@ function AccountsPageContent() {
                     transactionHref="/transactions?manual=1"
                     actions={
                       <>
-                        <button className="button button-primary button-small" type="button" onClick={openAddAccount}>
+                        <button className="button button-secondary button-small" type="button" onClick={openAddAccount}>
                           Add account
                         </button>
-                        <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
+                        <button className="button button-primary button-small" type="button" onClick={() => openImportFiles()}>
                           Upload files
                         </button>
                       </>

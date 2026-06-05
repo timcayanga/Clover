@@ -6643,7 +6643,7 @@ function TransactionsPageContent() {
 
       <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>
         <button
-          className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
+          className="button button-secondary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
           style={toolbarAddStyle}
           type="button"
           onClick={() => {
@@ -6672,7 +6672,7 @@ function TransactionsPageContent() {
                 style={addMenuPortalStyle}
               >
                 <button
-                  className="transactions-add-menu__item"
+                  className="transactions-add-menu__item transactions-add-menu__item--upload"
                   type="button"
                   onClick={() => {
                     setAddMenuOpen(false);
@@ -7337,7 +7337,7 @@ function TransactionsPageContent() {
                       </button>
                     ) : null}
                     <button
-                      className="button button-secondary button-small transactions-empty-state__import"
+                      className="button button-primary button-small transactions-empty-state__import"
                       type="button"
                       onClick={() => {
                         if (isCompactViewport) {
@@ -7521,7 +7521,7 @@ function TransactionsPageContent() {
                       </button>
                     ) : null}
                     <button
-                      className="button button-secondary button-small transactions-empty-state__import"
+                      className="button button-primary button-small transactions-empty-state__import"
                       type="button"
                       onClick={() => {
                         if (isCompactViewport) {

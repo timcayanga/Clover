@@ -919,7 +919,7 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
     <>
       <div className="dashboard-top-actions" ref={menuRef}>
         <button
-          className="button button-primary button-small dashboard-top-actions__toggle"
+          className="button button-secondary button-small dashboard-top-actions__toggle"
           type="button"
           aria-haspopup="menu"
           aria-expanded={menuOpen}
@@ -938,7 +938,7 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
             <button className="dashboard-top-actions__menu-item" type="button" onClick={openManualAdd}>
               Add manually
             </button>
-            <button className="dashboard-top-actions__menu-item" type="button" onClick={openImportFiles}>
+            <button className="dashboard-top-actions__menu-item dashboard-top-actions__menu-item--upload" type="button" onClick={openImportFiles}>
               Upload files
             </button>
           </div>
