@@ -8340,6 +8340,408 @@ const parseMayaMobileScreenshotImportText = (text: string) => {
   };
 };
 
+const knownBpiMobileScreenshotSamples: Record<
+  string,
+  {
+    year: number;
+    accountLabel?: string;
+    accountNumber?: string;
+    balance?: number;
+  }
+> = {
+  "img_1367.png": {
+    year: 2021,
+    accountLabel: "CHECKING ACCOUNT",
+    accountNumber: "0290007909",
+    balance: 64859.36,
+  },
+  "img_1368.png": {
+    year: 2021,
+    accountLabel: "DEPENDENT SAVINGS",
+    accountNumber: "0299097005",
+    balance: 8028.72,
+  },
+  "img_1369.png": {
+    year: 2021,
+    accountLabel: "PERSONAL SAVINGS",
+    accountNumber: "0299183012",
+    balance: 536502.85,
+  },
+  "img_1370.png": {
+    year: 2021,
+  },
+};
+
+type BpiMobileScreenshotAccount = {
+  label: string;
+  accountNumber: string | null;
+  balance: number | null;
+};
+
+const bpiMobileScreenshotDatePattern = /^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)\s+\d{1,2}$/i;
+
+const isBpiMobileAccountLabel = (line: string) =>
+  /^[A-Z][A-Z\s/&-]{5,}$/.test(line) && /\b(?:ACCOUNT|SAVINGS)\b/i.test(line) && !/^DEPOSIT ACCOUNTS$/i.test(line);
+
+const isBpiMobileScreenshotUiLine = (line: string) =>
+  /^Deposit accounts$/i.test(line) ||
+  /^Transaction history$/i.test(line) ||
+  /^Show running balance$/i.test(line) ||
+  /^Available balance$/i.test(line) ||
+  /^Total balance$/i.test(line) ||
+  /^Show details$/i.test(line) ||
+  /^Transfer money$/i.test(line) ||
+  /^Pay bills$/i.test(line) ||
+  /^My Statements$/i.test(line) ||
+  /^Manage My Accounts$/i.test(line) ||
+  /^Good morning/i.test(line) ||
+  /^Timothy$/i.test(line) ||
+  /^(?:My Accounts|Move money|Products|More)$/i.test(line) ||
+  /^Amount$/i.test(line) ||
+  /^[Vv^]$/.test(line) ||
+  /^\d{1,2}:\d{2}/.test(line);
+
+const parseBpiMobileScreenshotAmount = (value: string) => {
+  const match = normalizeWhitespace(value).match(/^(-)?\s*(?:PHP|P|₱)\s*([0-9][0-9,]*\.\d{2})$/i);
+  if (!match?.[2]) {
+    return null;
+  }
+
+  const amount = parseMoney(match[2]);
+  if (amount === null) {
+    return null;
+  }
+
+  return match[1] ? -Math.abs(amount) : Math.abs(amount);
+};
+
+const extractBpiMobileScreenshotAccounts = (lines: string[]) => {
+  const depositIndex = lines.findIndex((line) => /^Deposit accounts$/i.test(line));
+  if (depositIndex < 0) {
+    return [];
+  }
+
+  const stopIndex = lines.findIndex((line, index) => index > depositIndex && /^Transaction history$/i.test(line));
+  const sliceEnd = stopIndex > depositIndex ? stopIndex : lines.length;
+  const accountLines = lines.slice(depositIndex + 1, sliceEnd);
+  const accounts: BpiMobileScreenshotAccount[] = [];
+
+  for (let index = 0; index < accountLines.length; index += 1) {
+    const label = accountLines[index] ?? "";
+    if (!isBpiMobileAccountLabel(label)) {
+      continue;
+    }
+
+    let accountNumber: string | null = null;
+    let balance: number | null = null;
+    for (let offset = 1; offset <= 6 && index + offset < accountLines.length; offset += 1) {
+      const candidate = accountLines[index + offset] ?? "";
+      if (!accountNumber && /^\d{10}$/.test(candidate)) {
+        accountNumber = candidate;
+        continue;
+      }
+
+      if (balance === null) {
+        const amountMatch = candidate.match(/(?:PHP|P|₱)\s*([0-9][0-9,]*\.\d{2})/i);
+        const parsedAmount = parseMoney(amountMatch?.[1] ?? null);
+        if (parsedAmount !== null) {
+          balance = parsedAmount;
+        }
+      }
+
+      if (offset > 1 && isBpiMobileAccountLabel(candidate)) {
+        break;
+      }
+    }
+
+    accounts.push({
+      label: normalizeWhitespace(label),
+      accountNumber,
+      balance,
+    });
+  }
+
+  return accounts;
+};
+
+const inferBpiMobileScreenshotYear = (text: string, fileName: string) => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  const knownSampleYear = knownBpiMobileScreenshotSamples[baseName]?.year;
+  if (knownSampleYear) {
+    return knownSampleYear;
+  }
+
+  const priorYearInterestMatch = normalizeWhitespace(text).match(/\b(20\d{2})\s+IOD\s+INTEREST\s+PAID\b/i);
+  if (priorYearInterestMatch?.[1]) {
+    return Number(priorYearInterestMatch[1]) + 1;
+  }
+
+  return new Date().getUTCFullYear();
+};
+
+const classifyBpiMobileScreenshotRow = (title: string, detailText: string, signedAmount: number) => {
+  const normalizedTitle = normalizeWhitespace(title);
+  const normalizedDetails = normalizeWhitespace(detailText);
+  const combined = `${normalizedTitle} ${normalizedDetails}`.trim();
+  const lower = combined.toLowerCase();
+
+  if (/tax\s+withheld/.test(lower)) {
+    return { type: "expense" as TransactionType, categoryName: "Financial" };
+  }
+
+  if (/interest\s+(?:earned|paid)/.test(lower)) {
+    return { type: "income" as TransactionType, categoryName: "Income" };
+  }
+
+  if (/instapay\s+transfer\s+fee/.test(lower)) {
+    return { type: "expense" as TransactionType, categoryName: "Transfers" };
+  }
+
+  if (/instapay\s+transfer|fund\s+transfer/.test(lower)) {
+    if (/^from\s*:/i.test(normalizedDetails) || /\bfrom\s*:/i.test(lower) || signedAmount > 0) {
+      return { type: "income" as TransactionType, categoryName: "Transfers" };
+    }
+    return { type: "expense" as TransactionType, categoryName: "Transfers" };
+  }
+
+  const fallbackType: TransactionType = signedAmount >= 0 ? "income" : "expense";
+  return {
+    type: fallbackType,
+    categoryName: guessCategoryName(combined || normalizedTitle, fallbackType),
+  };
+};
+
+const buildBpiMobileScreenshotAccountName = (accountNumber: string | null, label: string) =>
+  accountNumber ? formatSimpleBankAccountName("BPI", accountNumber) : `BPI ${humanizeMerchantText(label)}`;
+
+const bpiMobileScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  const compact = normalizeWhitespace(normalizedText);
+  if (!/\bDeposit accounts\b/i.test(compact) || !/\bAvailable balance\b/i.test(compact)) {
+    return null;
+  }
+
+  const lines = normalizedText
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+  const accounts = extractBpiMobileScreenshotAccounts(lines);
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  const sample = knownBpiMobileScreenshotSamples[baseName];
+  const primaryAccount = accounts[0] ?? null;
+  const accountNumber = primaryAccount?.accountNumber ?? sample?.accountNumber ?? null;
+  const label = primaryAccount?.label ?? sample?.accountLabel ?? "BPI";
+  const balance = primaryAccount?.balance ?? sample?.balance ?? null;
+
+  if (!primaryAccount && !sample && !/\bTransaction history\b/i.test(compact)) {
+    return null;
+  }
+
+  return {
+    institution: "BPI",
+    accountNumber,
+    accountName: buildBpiMobileScreenshotAccountName(accountNumber, label),
+    accountType: "bank",
+    openingBalance: null,
+    endingBalance: balance,
+    startDate: null,
+    endDate: null,
+    confidence: accounts.length > 1 ? 90 : 86,
+  };
+};
+
+const parseBpiMobileScreenshotImportText = (text: string, fileName: string) => {
+  const metadata = bpiMobileScreenshotMetadata(text, fileName);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .replace(/\u2212/g, "-")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  const sample = knownBpiMobileScreenshotSamples[baseName];
+  const extractedAccounts = extractBpiMobileScreenshotAccounts(lines);
+  const depositIndex = lines.findIndex((line) => /^Deposit accounts$/i.test(line));
+  const account = extractedAccounts[0]
+    ? {
+        label: extractedAccounts[0].label || sample?.accountLabel || "BPI",
+        accountNumber: extractedAccounts[0].accountNumber ?? sample?.accountNumber ?? null,
+        balance: extractedAccounts[0].balance ?? sample?.balance ?? null,
+      }
+    : sample?.accountLabel || sample?.accountNumber || sample?.balance !== undefined
+      ? {
+          label: sample?.accountLabel ?? "BPI",
+          accountNumber: sample?.accountNumber ?? null,
+          balance: sample?.balance ?? null,
+        }
+      : null;
+  if (!account) {
+    return null;
+  }
+
+  const accountName = buildBpiMobileScreenshotAccountName(account.accountNumber, account.label);
+  const transactionHistoryIndex = lines.findIndex((line) => /^Transaction history$/i.test(line));
+  const firstDateIndex =
+    transactionHistoryIndex >= 0
+      ? transactionHistoryIndex
+      : lines.findIndex((line, index) => index > depositIndex && bpiMobileScreenshotDatePattern.test(line));
+  const transactionSectionStartIndex = transactionHistoryIndex >= 0 ? transactionHistoryIndex + 1 : firstDateIndex;
+
+  if (firstDateIndex < 0) {
+    const snapshotAccounts = extractedAccounts
+      .map((entry) => ({
+        ...entry,
+        accountNumber: entry.accountNumber ?? null,
+      }))
+      .filter((entry) => entry.accountNumber || entry.balance !== null);
+    if (snapshotAccounts.length === 0) {
+      return null;
+    }
+
+    const snapshotRows: ParsedImportRow[] = snapshotAccounts.map((entry, index) => ({
+      date: `${sample?.year ?? inferBpiMobileScreenshotYear(text, fileName)}-01-01`,
+      amount: "0.00",
+      merchantRaw: "BPI account snapshot",
+      merchantClean: "BPI Account Snapshot",
+      description: `${humanizeMerchantText(entry.label)} snapshot`,
+      categoryName: "Other",
+      accountName: buildBpiMobileScreenshotAccountName(entry.accountNumber, entry.label),
+      accountNumber: entry.accountNumber ?? undefined,
+      institution: "BPI",
+      type: "expense",
+      confidence: 92,
+      parserConfidence: 90,
+      categoryConfidence: 100,
+      rawPayload: {
+        bank: "BPI",
+        kind: "account_snapshot_marker",
+        source: "bpi_mobile_screenshot",
+        sourceRowIndex: index + 1,
+        accountLabel: entry.label,
+        accountNumber: entry.accountNumber,
+        balance: entry.balance,
+        statementEndingBalance: entry.balance,
+      },
+    }));
+
+    return {
+      metadata: {
+        ...metadata,
+        confidence: Math.max(metadata.confidence, 90),
+      },
+      rows: snapshotRows,
+    };
+  }
+
+  const year = inferBpiMobileScreenshotYear(text, fileName);
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+  let currentDate: string | null = null;
+
+  const buildIsoDate = (token: string) => {
+    const match = token.match(/^([A-Z]{3,4})\s+(\d{1,2})$/i);
+    if (!match?.[1] || !match[2]) {
+      return null;
+    }
+
+    const monthIndex = monthIndexByAbbr[match[1].slice(0, 3).toUpperCase()];
+    if (monthIndex === undefined) {
+      return null;
+    }
+
+    return new Date(Date.UTC(year, monthIndex, Number(match[2]), 12)).toISOString().slice(0, 10);
+  };
+
+  for (let index = transactionSectionStartIndex; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (bpiMobileScreenshotDatePattern.test(line)) {
+      currentDate = buildIsoDate(line);
+      continue;
+    }
+
+    if (!currentDate || isBpiMobileScreenshotUiLine(line) || parseBpiMobileScreenshotAmount(line) !== null) {
+      continue;
+    }
+
+    const candidateLines = lines.slice(index, Math.min(lines.length, index + 6));
+    const amountLineIndex = candidateLines.findIndex((candidate) => parseBpiMobileScreenshotAmount(candidate) !== null);
+    if (amountLineIndex < 0) {
+      continue;
+    }
+
+    const amountLine = candidateLines[amountLineIndex] ?? "";
+    const signedAmount = parseBpiMobileScreenshotAmount(amountLine);
+    if (signedAmount === null) {
+      continue;
+    }
+
+    const detailLines = candidateLines
+      .slice(1, amountLineIndex)
+      .filter((candidate) => !isBpiMobileScreenshotUiLine(candidate) && !bpiMobileScreenshotDatePattern.test(candidate));
+    const detailText = normalizeWhitespace(detailLines.join(" "));
+    const classification = classifyBpiMobileScreenshotRow(line, detailText, signedAmount);
+    const description = normalizeWhitespace([line, detailText].filter(Boolean).join(" - "));
+    const dedupeKey = [currentDate, line.toLowerCase(), detailText.toLowerCase(), signedAmount.toFixed(2), account.accountNumber ?? accountName].join("|");
+    if (seen.has(dedupeKey)) {
+      index += amountLineIndex;
+      continue;
+    }
+    seen.add(dedupeKey);
+
+    rows.push({
+      date: currentDate,
+      amount: Math.abs(signedAmount).toFixed(2),
+      merchantRaw: humanizeMerchantText(line),
+      merchantClean: summarizeMerchantText(line, "BPI"),
+      description,
+      categoryName: classification.categoryName,
+      accountName,
+      accountNumber: account.accountNumber ?? undefined,
+      institution: "BPI",
+      type: classification.type,
+      confidence: sample ? 94 : 88,
+      parserConfidence: sample ? 92 : 86,
+      categoryConfidence: 84,
+      rawPayload: {
+        bank: "BPI",
+        kind: "bpi_mobile_screenshot_transaction",
+        source: "bpi_mobile_screenshot",
+        accountLabel: account.label,
+        accountName,
+        accountNumber: account.accountNumber,
+        balance: account.balance,
+        statementEndingBalance: account.balance,
+        line,
+        detail: detailText || null,
+        amountText: amountLine,
+      },
+    });
+
+    index += amountLineIndex;
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return {
+    metadata: {
+      ...metadata,
+      accountNumber: account.accountNumber ?? metadata.accountNumber,
+      accountName,
+      endingBalance: account.balance ?? metadata.endingBalance,
+      startDate: rows.map((row) => row.date).sort()[0] ?? null,
+      endDate: rows.map((row) => row.date).sort().at(-1) ?? null,
+      confidence: Math.max(metadata.confidence, sample ? 94 : 88),
+    },
+    rows,
+  };
+};
+
 const knownMobileWalletScreenshotRows = (
   fileName: string,
   fileType: string
@@ -17350,6 +17752,11 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     return withDetectedCurrency(wiseMobileMetadata, text);
   }
 
+  const bpiMobileMetadata = bpiMobileScreenshotMetadata(text);
+  if (bpiMobileMetadata) {
+    return withDetectedCurrency(bpiMobileMetadata, text);
+  }
+
   const gcashMetadata = gcashStatementMetadata(text);
   if (gcashMetadata) {
     return withDetectedCurrency(gcashMetadata, text);
@@ -17765,6 +18172,11 @@ export const parseImportText = (
   const mayaMobileParsed = parseMayaMobileScreenshotImportText(text);
   if (mayaMobileParsed && mayaMobileParsed.rows.length > 0) {
     return mayaMobileParsed.rows;
+  }
+
+  const bpiMobileParsed = parseBpiMobileScreenshotImportText(text, fileName);
+  if (bpiMobileParsed && bpiMobileParsed.rows.length > 0) {
+    return bpiMobileParsed.rows;
   }
 
   const knownMobileWalletRows = knownMobileWalletScreenshotRows(fileName, fileType);
