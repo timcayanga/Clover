@@ -8344,7 +8344,7 @@ const knownMobileWalletScreenshotRows = (
   fileName: string,
   fileType: string
 ): ParsedImportRow[] | null => {
-  if (!/\bimage\/(?:png|jpe?g|webp|heic|heif)\b/i.test(fileType)) {
+  if (!/\bimage\/(?:png|jpe?g|webp|heic|heif)\b/i.test(fileType) && !/^image$/i.test(fileType.trim())) {
     return null;
   }
 
