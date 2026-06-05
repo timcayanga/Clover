@@ -3173,6 +3173,7 @@ const resolveConfirmationAccount = async (params: {
       source?: string | null;
       currency?: string | null;
       balance?: number | null;
+      clearBalance?: boolean;
       creditLimit?: number | null;
     }
   ) => {
@@ -3215,6 +3216,9 @@ const resolveConfirmationAccount = async (params: {
       if (shouldUpdateBalance) {
         data.balance = next.balance.toString();
       }
+    }
+    if (next.clearBalance && account.source !== "manual" && account.balance !== null) {
+      data.balance = null;
     }
     if (typeof next.creditLimit === "number" && Number.isFinite(next.creditLimit) && compatibleAccountColumns.has("creditLimit")) {
       const currentCreditLimit =
@@ -3274,6 +3278,10 @@ const resolveConfirmationAccount = async (params: {
         /(?:gcash|maya)_mobile_screenshot/i.test(kind)
       );
     }) ?? null;
+  const mobileScreenshotWalletIdentity =
+    mobileScreenshotIdentityRow?.rawPayload && typeof mobileScreenshotIdentityRow.rawPayload === "object"
+      ? getMobileScreenshotWalletIdentity(mobileScreenshotIdentityRow.rawPayload as Prisma.JsonValue)
+      : null;
   const candidateRow =
     mobileScreenshotIdentityRow ??
     (typeof params.statementMetadata?.institution === "string" && params.statementMetadata.institution.trim()
@@ -3287,9 +3295,11 @@ const resolveConfirmationAccount = async (params: {
     null;
 
   const inferredInstitution =
+    mobileScreenshotWalletIdentity?.institution ??
     sanitizeBankNameLabel(typeof candidateRow?.institution === "string" ? candidateRow.institution : null) ??
     sanitizeBankNameLabel(normalizeBankName(String(params.importFile.fileName ?? "")));
   const inferredAccountName =
+    mobileScreenshotWalletIdentity?.accountName ??
     sanitizeBankNameLabel(typeof candidateRow?.accountName === "string" ? candidateRow.accountName : null) ?? inferredInstitution;
   const inferredAccountNumber =
     typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
@@ -3331,15 +3341,18 @@ const resolveConfirmationAccount = async (params: {
       : typeof params.statementMetadata?.openingBalance === "number" && Number.isFinite(params.statementMetadata.openingBalance)
         ? params.statementMetadata.openingBalance
         : null;
-  const inferredBalance =
-    parsedCheckpointBalance ??
-    (parsedTrailingBalance !== null && Number.isFinite(parsedTrailingBalance) ? parsedTrailingBalance : null);
+  const inferredBalance = mobileScreenshotWalletIdentity
+    ? null
+    : parsedCheckpointBalance ??
+      (parsedTrailingBalance !== null && Number.isFinite(parsedTrailingBalance) ? parsedTrailingBalance : null);
   const inferredCreditLimit =
     typeof params.statementMetadata?.creditLimit === "number" && Number.isFinite(params.statementMetadata.creditLimit)
       ? params.statementMetadata.creditLimit
       : null;
   const accountIdentityType: AccountType =
-    inferredAccountType ?? (inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank") as AccountType);
+    mobileScreenshotWalletIdentity?.accountType ??
+    inferredAccountType ??
+    (inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank") as AccountType);
   const workspaceAccounts = await prisma.account.findMany({
     where: { workspaceId },
     select: getCompatibleAccountSelect(compatibleAccountColumns),
@@ -3423,10 +3436,11 @@ const resolveConfirmationAccount = async (params: {
       name: inferredAccountName,
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
-      type: inferredAccountType,
+      type: accountIdentityType,
       source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
+      clearBalance: Boolean(mobileScreenshotWalletIdentity),
       creditLimit: inferredCreditLimit,
     });
 
@@ -3445,6 +3459,7 @@ const resolveConfirmationAccount = async (params: {
       source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
+      clearBalance: Boolean(mobileScreenshotWalletIdentity),
       creditLimit: inferredCreditLimit,
     });
 
@@ -3467,6 +3482,7 @@ const resolveConfirmationAccount = async (params: {
       source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
+      clearBalance: Boolean(mobileScreenshotWalletIdentity),
       creditLimit: inferredCreditLimit,
     });
 
@@ -3483,6 +3499,7 @@ const resolveConfirmationAccount = async (params: {
       source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
+      clearBalance: Boolean(mobileScreenshotWalletIdentity),
       creditLimit: inferredCreditLimit,
     });
 
@@ -3507,6 +3524,7 @@ const resolveConfirmationAccount = async (params: {
       source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
+      clearBalance: Boolean(mobileScreenshotWalletIdentity),
       creditLimit: inferredCreditLimit,
     });
 
@@ -4008,11 +4026,20 @@ const buildImportTransactionCollapseKey = (transaction: {
 }) => {
   const sourceRowIndex = getImportSourceRowIndex(transaction.rawPayload);
   const sourceStatementFingerprint = getImportSourceStatementFingerprint(transaction.rawPayload);
+  const mobileScreenshotKind = getMobileScreenshotPayloadKind(transaction.rawPayload);
   if (sourceStatementFingerprint && sourceRowIndex !== null) {
+    if (mobileScreenshotKind) {
+      return `mobile-source-statement:${mobileScreenshotKind}:${sourceStatementFingerprint}:${sourceRowIndex}`;
+    }
+
     return `source-statement:${transaction.accountId}:${sourceStatementFingerprint}:${sourceRowIndex}`;
   }
 
   if (sourceRowIndex !== null) {
+    if (mobileScreenshotKind) {
+      return `mobile-source-row:${mobileScreenshotKind}:${sourceRowIndex}`;
+    }
+
     return `source-row:${transaction.accountId}:${sourceRowIndex}`;
   }
 
@@ -7630,7 +7657,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           where: {
             deletedAt: null,
             workspaceId: String(importFile.workspaceId),
-            accountId: { in: matchingAccountIdsForImport },
             reviewStatus: { notIn: ["rejected", "duplicate_skipped"] },
             OR: [
               {
@@ -7837,34 +7863,45 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       ? (latestExplicitBalance.rawPayload as Record<string, unknown>).balance
       : null
   );
-  const fallbackReconciledBalance = deriveReconciledBalance({
-    transactions: parsedRows.map(
-      (row) =>
-        ({
-          amount: row.amount,
-          type: row.type ?? null,
-          merchantRaw: row.merchantRaw ?? null,
-          merchantClean: row.merchantClean ?? null,
-          description: row.description ?? null,
-          date: row.date ?? null,
-          rawPayload:
-            row.rawPayload && typeof row.rawPayload === "object"
-              ? (row.rawPayload as { balance?: unknown; amountDelta?: unknown; openingBalance?: unknown; kind?: string })
-              : null,
-        }) as BalanceLikeTransaction
-    ),
-    checkpoints:
-      statementCheckpoint && statementCheckpoint.endingBalance !== null
-        ? [
-            {
-              endingBalance: statementCheckpoint.endingBalance.toString(),
-              statementEndDate: statementCheckpoint.statementEndDate?.toISOString() ?? null,
-              createdAt: statementCheckpoint.createdAt.toISOString(),
-            },
-          ]
-    : [],
-  });
-  reconciledAccountBalance = statementEndingBalance ?? latestExplicitStatementBalance ?? fallbackReconciledBalance;
+  const mobileWalletScreenshotImport = parsedRows.some((row) =>
+    getMobileScreenshotPayloadKind(
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Prisma.JsonValue)
+        : null
+    )
+  );
+  const fallbackReconciledBalance = mobileWalletScreenshotImport
+    ? null
+    : deriveReconciledBalance({
+        transactions: parsedRows.map(
+          (row) =>
+            ({
+              amount: row.amount,
+              type: row.type ?? null,
+              merchantRaw: row.merchantRaw ?? null,
+              merchantClean: row.merchantClean ?? null,
+              description: row.description ?? null,
+              date: row.date ?? null,
+              rawPayload:
+                row.rawPayload && typeof row.rawPayload === "object"
+                  ? (row.rawPayload as { balance?: unknown; amountDelta?: unknown; openingBalance?: unknown; kind?: string })
+                  : null,
+            }) as BalanceLikeTransaction
+        ),
+        checkpoints:
+          statementCheckpoint && statementCheckpoint.endingBalance !== null
+            ? [
+                {
+                  endingBalance: statementCheckpoint.endingBalance.toString(),
+                  statementEndDate: statementCheckpoint.statementEndDate?.toISOString() ?? null,
+                  createdAt: statementCheckpoint.createdAt.toISOString(),
+                },
+              ]
+        : [],
+      });
+  reconciledAccountBalance = mobileWalletScreenshotImport
+    ? null
+    : statementEndingBalance ?? latestExplicitStatementBalance ?? fallbackReconciledBalance;
   if (multiAccountImport) {
     for (const group of parsedAccountGroups) {
       const groupAccount = accountByGroupKey.get(group.key);
@@ -7899,7 +7936,15 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const balanceToPersist = shouldPreserveUploadedAccountBalance ? currentAccountBalance : reconciledAccountBalance;
     reconciledAccountBalance = balanceToPersist;
 
-    if (balanceToPersist !== null) {
+    if (mobileWalletScreenshotImport) {
+      await tx.account.update({
+        where: { id: resolvedAccountId },
+        data: {
+          balance: null,
+          type: "wallet",
+        },
+      });
+    } else if (balanceToPersist !== null) {
       await tx.account.update({
         where: { id: resolvedAccountId },
         data: {

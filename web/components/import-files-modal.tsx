@@ -1585,6 +1585,40 @@ const isFilenameOnlyScreenshotSummary = (
   return Boolean(accountName && accountName === fallbackName && !institution && !accountNumber);
 };
 
+const resolveMobileWalletIdentityFromParsedRows = (rows: Array<Record<string, unknown>>) => {
+  for (const row of rows) {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
+    const kind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
+    const bank = typeof rawPayload?.bank === "string" ? rawPayload.bank : "";
+    const rowInstitution = typeof row.institution === "string" ? row.institution : "";
+    const identityText = `${source} ${kind} ${bank} ${rowInstitution}`;
+
+    if (/maya/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
+      return {
+        accountName: "Maya Wallet",
+        institution: "Maya",
+        accountType: "wallet" as const,
+        accountNumber: null,
+      };
+    }
+
+    if (/gcash/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
+      return {
+        accountName: "GCash",
+        institution: "GCash",
+        accountType: "wallet" as const,
+        accountNumber: null,
+      };
+    }
+  }
+
+  return null;
+};
+
 const hasStatementSuffix = (name?: string | null) => /\b\d{4}\b/.test(name ?? "");
 
 const isGenericSameInstitutionAccount = (account: AccountOption, institution: string | null) => {
@@ -5231,26 +5265,30 @@ export function ImportFilesModal({
         accountName: localMetadata?.accountName ?? guessedIdentity?.accountName ?? null,
         accountNumber: localMetadata?.accountNumber ?? guessedIdentity?.accountNumber ?? null,
       });
+      const mobileWalletIdentity = resolveMobileWalletIdentityFromParsedRows(parsedRows as Array<Record<string, unknown>>);
 
       if (!localMetadata && parsedRows.length === 0) {
         return;
       }
 
       const accountName =
+        mobileWalletIdentity?.accountName ??
         localMetadata?.accountName ??
         guessedIdentity?.accountName ??
         deriveFallbackAccountNameFromFileName(item.file.name);
-      const institution = localMetadata?.institution ?? guessedIdentity?.institution ?? null;
-      const accountNumber = localMetadata?.accountNumber ?? guessedIdentity?.accountNumber ?? null;
+      const institution = mobileWalletIdentity?.institution ?? localMetadata?.institution ?? guessedIdentity?.institution ?? null;
+      const accountNumber = mobileWalletIdentity?.accountNumber ?? localMetadata?.accountNumber ?? guessedIdentity?.accountNumber ?? null;
       if (/^UCPB$/i.test(institution ?? "") && !accountNumber) {
         return;
       }
       if (!accountName && !institution && parsedRows.length === 0) {
         return;
       }
-      const accountType = (localMetadata?.accountType ??
+      const accountType = (mobileWalletIdentity?.accountType ?? localMetadata?.accountType ??
         inferAccountTypeFromStatement(institution, accountName, "bank")) as UploadInsightsSummary["accountType"];
-      const endingBalance = toBalanceString(localMetadata?.endingBalance ?? getTrailingBalanceFromParsedRows(parsedRows) ?? null);
+      const endingBalance = mobileWalletIdentity
+        ? null
+        : toBalanceString(localMetadata?.endingBalance ?? getTrailingBalanceFromParsedRows(parsedRows) ?? null);
 
       const currentItem = itemsRef.current.find((entry) => entry.id === itemId);
       if (!currentItem || currentItem.status === "done" || currentItem.status === "error" || currentItem.confirmationState === "confirmed") {
