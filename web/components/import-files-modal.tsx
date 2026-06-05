@@ -6572,7 +6572,7 @@ export function ImportFilesModal({
           accountType: confirmedAccountType,
           balance: confirmedBalance,
           accountSummaries: serverAccountSummary ? [serverAccountSummary] : undefined,
-          optimisticAccountId: item.optimisticAccountId ?? null,
+          optimisticAccountId: null,
           previewTransactions: confirmedPreviewTransactions,
           incomeTotal: Number(confirmedInsightSummary.incomeTotal ?? 0),
           expenseTotal: Number(confirmedInsightSummary.expenseTotal ?? 0),

@@ -8437,6 +8437,8 @@ const knownMobileWalletScreenshotRows = (
     const categoryName =
       /cashin\s+from|send money/i.test(description)
         ? "Transfers"
+        : /online\s+payment|web\s+pay|pay\s+via\s+scanned\s+qr/i.test(description)
+          ? "Shopping"
         : guessCategoryName(description, type);
     return buildRow({
       institution: "GCash",
