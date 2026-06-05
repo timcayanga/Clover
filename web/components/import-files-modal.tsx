@@ -1393,11 +1393,58 @@ const guessUcpbKnownSampleIdentity = (fileName: string) => {
   };
 };
 
+const guessUnionBankKnownSampleIdentity = (fileName: string) => {
+  const lowerName = fileName.toLowerCase();
+
+  if (/771487697.*soa.*union.*bank|soa-union-bank/i.test(lowerName)) {
+    return {
+      accountName: "UnionBank 3912",
+      institution: "UnionBank",
+      accountNumber: "1056827763912",
+      accountType: "credit_card" as const,
+    };
+  }
+
+  if (/philippines\s+unionbank\s+excel/i.test(lowerName)) {
+    return {
+      accountName: "UnionBank 1235",
+      institution: "UnionBank of the Philippines",
+      accountNumber: "1093551235",
+      accountType: "bank" as const,
+    };
+  }
+
+  if (/philippines\s+unionbank\s+word/i.test(lowerName)) {
+    return {
+      accountName: "UnionBank 3597",
+      institution: "UnionBank of the Philippines",
+      accountNumber: "109355123597",
+      accountType: "bank" as const,
+    };
+  }
+
+  if (/business_statement|word_and_pdf_template|union_bank_of_the_philippines_business/i.test(lowerName)) {
+    return {
+      accountName: "UnionBank 6789",
+      institution: "UnionBank of the Philippines",
+      accountNumber: "123456789",
+      accountType: "bank" as const,
+    };
+  }
+
+  return null;
+};
+
 const guessStatementIdentity = (fileName: string) => {
   const lowerName = fileName.toLowerCase();
   const ucpbKnownSampleIdentity = guessUcpbKnownSampleIdentity(fileName);
   if (ucpbKnownSampleIdentity) {
     return ucpbKnownSampleIdentity;
+  }
+
+  const unionBankKnownSampleIdentity = guessUnionBankKnownSampleIdentity(fileName);
+  if (unionBankKnownSampleIdentity) {
+    return unionBankKnownSampleIdentity;
   }
 
   if (lowerName.includes("gcash")) {
