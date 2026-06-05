@@ -1266,13 +1266,26 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             cacheVersion: IMPORT_FILE_EXTRACTION_CACHE_VERSION,
           }).catch(() => null)
         : null;
-      await Promise.all([uploadPromise, uploadBankHintPromise]);
 
       if (trainedReceiptFixture) {
+        await uploadBankHintPromise.catch((error) => {
+          console.warn("Unable to save trained receipt import hint", {
+            importId,
+            error: summarizeErrorForLog(error),
+          });
+        });
         await importTrainedReceiptFixture({
           importFileId: importId,
           workspaceId: String(importFile.workspaceId),
           fixture: trainedReceiptFixture,
+        });
+        after(async () => {
+          await uploadPromise.catch((error) => {
+            console.warn("Unable to finish trained receipt raw file upload", {
+              importId,
+              error: summarizeErrorForLog(error),
+            });
+          });
         });
         const statusSnapshot = await loadImportStatusSnapshot(importId, {
           importFile: (await fetchImportFileCompat(importId)) ?? importFile,
@@ -1298,6 +1311,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
         });
       }
+
+      await Promise.all([uploadPromise, uploadBankHintPromise]);
 
       if (knownUnreadableUcpbExcelSample) {
         await updateImportFileCompat(importId, {

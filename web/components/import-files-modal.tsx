@@ -175,6 +175,7 @@ type ImportStatusPayload = {
     accountName?: string;
     institution?: string | null;
     accountNumber?: string | null;
+    categoryId?: string | null;
     reviewStatus?: string | null;
     date?: string;
     amount?: string;
@@ -1246,8 +1247,17 @@ const buildReceiptSummaryFromReceiptTransaction = (params: {
       sourceRowIndex: 1,
       accountId,
       accountName,
-      categoryId: null,
-      categoryName: null,
+      categoryId:
+        typeof params.receiptTransaction.categoryId === "string" && params.receiptTransaction.categoryId.trim()
+          ? params.receiptTransaction.categoryId.trim()
+          : null,
+      categoryName:
+        typeof params.receiptTransaction.rawPayload?.receiptDetails === "object" &&
+        params.receiptTransaction.rawPayload.receiptDetails !== null &&
+        !Array.isArray(params.receiptTransaction.rawPayload.receiptDetails) &&
+        typeof (params.receiptTransaction.rawPayload.receiptDetails as Record<string, unknown>).category_name === "string"
+          ? String((params.receiptTransaction.rawPayload.receiptDetails as Record<string, unknown>).category_name)
+          : null,
       reviewStatus: "pending_review",
       date,
       amount,
@@ -1255,7 +1265,10 @@ const buildReceiptSummaryFromReceiptTransaction = (params: {
       type: params.receiptTransaction.type ?? "expense",
       merchantRaw: merchantName,
       merchantClean: merchantName,
-      description: merchantName,
+      description:
+        typeof params.receiptTransaction.description === "string" && params.receiptTransaction.description.trim()
+          ? params.receiptTransaction.description.trim()
+          : merchantName,
       isTransfer: Boolean(params.receiptTransaction.isTransfer),
       isExcluded: Boolean(params.receiptTransaction.isExcluded),
       source: "upload",
