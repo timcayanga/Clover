@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { buildImportResultChecklist, formatImportResultHeadline } from "@/lib/import-result-summary";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
@@ -47,6 +47,15 @@ export function ImportUploadDock({
   onCancel,
   onClose,
 }: ImportUploadDockProps) {
+  useEffect(() => {
+    if (!open || typeof document === "undefined") {
+      return;
+    }
+
+    delete document.body.dataset.cloverImportModalLocks;
+    delete document.body.dataset.cloverImportModalOpen;
+  }, [open]);
+
   if (!open) {
     return null;
   }
