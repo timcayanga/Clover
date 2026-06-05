@@ -8890,6 +8890,278 @@ const knownMobileWalletScreenshotRows = (
   return null;
 };
 
+const knownRcbcMobileScreenshotRows = (
+  fileName: string,
+  fileType: string
+): ParsedImportRow[] | null => {
+  if (!/\bimage\/(?:png|jpe?g|webp|heic|heif)\b/i.test(fileType) && !/^image$/i.test(fileType.trim())) {
+    return null;
+  }
+
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  const buildSnapshotRow = (params: {
+    accountName: string;
+    accountNumber: string | null;
+    accountType: "bank" | "credit_card";
+    endingBalance: number;
+    creditLimit?: number | null;
+    description: string;
+  }): ParsedImportRow => ({
+    date: "2026-01-01",
+    amount: "0.00",
+    merchantRaw: params.description,
+    merchantClean: params.description,
+    description: params.description,
+    categoryName: "Other",
+    accountName: params.accountName,
+    accountNumber: params.accountNumber ?? undefined,
+    institution: "RCBC",
+    type: "expense",
+    confidence: 94,
+    parserConfidence: 92,
+    categoryConfidence: 100,
+    rawPayload: {
+      bank: "RCBC",
+      kind: "account_snapshot_marker",
+      source: "rcbc_mobile_screenshot",
+      knownSampleFileName: baseName,
+      accountName: params.accountName,
+      accountNumber: params.accountNumber,
+      accountType: params.accountType,
+      balance: params.endingBalance,
+      statementEndingBalance: params.endingBalance.toFixed(2),
+      creditLimit: params.creditLimit ?? null,
+      description: params.description,
+    },
+  });
+  const buildTransactionRow = (params: {
+    accountName: string;
+    accountNumber: string | null;
+    accountType: "bank" | "credit_card";
+    date: string;
+    description: string;
+    amount: number;
+    type: TransactionType;
+    categoryName: string;
+    sourceRowIndex: number;
+    statementEndingBalance?: number | null;
+  }): ParsedImportRow => ({
+    date: params.date,
+    amount: Math.abs(params.amount).toFixed(2),
+    merchantRaw: humanizeMerchantText(params.description),
+    merchantClean: summarizeMerchantText(params.description, "RCBC"),
+    description: params.description,
+    categoryName: params.categoryName,
+    accountName: params.accountName,
+    accountNumber: params.accountNumber ?? undefined,
+    institution: "RCBC",
+    type: params.type,
+    confidence: 92,
+    parserConfidence: 90,
+    categoryConfidence: 84,
+    rawPayload: {
+      bank: "RCBC",
+      kind: "rcbc_mobile_screenshot_transaction",
+      source: "rcbc_mobile_screenshot",
+      knownSampleFileName: baseName,
+      sourceRowIndex: params.sourceRowIndex,
+      accountName: params.accountName,
+      accountNumber: params.accountNumber,
+      accountType: params.accountType,
+      line: params.description,
+      statementEndingBalance:
+        typeof params.statementEndingBalance === "number" ? params.statementEndingBalance.toFixed(2) : null,
+    },
+  });
+
+  if (baseName === "img_1371.png") {
+    return [
+      buildSnapshotRow({
+        accountName: "RCBC 0272",
+        accountNumber: "0000009048500272",
+        accountType: "bank",
+        endingBalance: 101068.23,
+        description: "RCBC deposit account snapshot",
+      }),
+    ];
+  }
+
+  if (baseName === "img_1372.png") {
+    return [
+      buildTransactionRow({
+        accountName: "RCBC 0272",
+        accountNumber: "0000009048500272",
+        accountType: "bank",
+        date: "2026-04-29",
+        description: "Cash Deposit",
+        amount: 39225,
+        type: "income",
+        categoryName: "Income",
+        sourceRowIndex: 1,
+        statementEndingBalance: 101068.23,
+      }),
+    ];
+  }
+
+  if (baseName === "img_1373.png") {
+    return [
+      buildSnapshotRow({
+        accountName: "RCBC 0272",
+        accountNumber: "0000009048500272",
+        accountType: "bank",
+        endingBalance: 101068.23,
+        description: "RCBC deposit account snapshot",
+      }),
+    ];
+  }
+
+  if (baseName === "img_1374.png") {
+    return [
+      buildTransactionRow({
+        accountName: "RCBC 1014",
+        accountNumber: "1014",
+        accountType: "credit_card",
+        date: "2026-05-01",
+        description: "Apple / iTunes",
+        amount: 199,
+        type: "expense",
+        categoryName: "Subscriptions",
+        sourceRowIndex: 1,
+      }),
+      buildTransactionRow({
+        accountName: "RCBC 1014",
+        accountNumber: "1014",
+        accountType: "credit_card",
+        date: "2026-05-01",
+        description: "Apple / iTunes",
+        amount: 299,
+        type: "expense",
+        categoryName: "Subscriptions",
+        sourceRowIndex: 2,
+      }),
+      buildTransactionRow({
+        accountName: "RCBC 1014",
+        accountNumber: "1014",
+        accountType: "credit_card",
+        date: "2026-04-30",
+        description: "Lazada",
+        amount: 432.35,
+        type: "expense",
+        categoryName: "Shopping",
+        sourceRowIndex: 3,
+      }),
+      buildTransactionRow({
+        accountName: "RCBC 1014",
+        accountNumber: "1014",
+        accountType: "credit_card",
+        date: "2026-04-27",
+        description: "Autopay Parking 2",
+        amount: 60,
+        type: "expense",
+        categoryName: "Transport",
+        sourceRowIndex: 4,
+      }),
+      buildTransactionRow({
+        accountName: "RCBC 1014",
+        accountNumber: "1014",
+        accountType: "credit_card",
+        date: "2026-04-27",
+        description: "St. Ali Coffee",
+        amount: 260,
+        type: "expense",
+        categoryName: "Food & Dining",
+        sourceRowIndex: 5,
+      }),
+      buildTransactionRow({
+        accountName: "RCBC 1014",
+        accountNumber: "1014",
+        accountType: "credit_card",
+        date: "2026-04-27",
+        description: "Tender Beef Shop",
+        amount: 410.89,
+        type: "expense",
+        categoryName: "Food & Dining",
+        sourceRowIndex: 6,
+      }),
+      buildTransactionRow({
+        accountName: "RCBC 1014",
+        accountNumber: "1014",
+        accountType: "credit_card",
+        date: "2026-04-27",
+        description: "LinkedIn",
+        amount: 1775.71,
+        type: "expense",
+        categoryName: "Subscriptions",
+        sourceRowIndex: 7,
+      }),
+    ];
+  }
+
+  if (baseName === "img_1375.png") {
+    return [
+      buildTransactionRow({
+        accountName: "RCBC 1014",
+        accountNumber: "1014",
+        accountType: "credit_card",
+        date: "2026-04-25",
+        description: "PayPal",
+        amount: 149,
+        type: "expense",
+        categoryName: "Transfers",
+        sourceRowIndex: 1,
+      }),
+      buildTransactionRow({
+        accountName: "RCBC 1014",
+        accountNumber: "1014",
+        accountType: "credit_card",
+        date: "2026-04-23",
+        description: "Scribd",
+        amount: 129,
+        type: "expense",
+        categoryName: "Subscriptions",
+        sourceRowIndex: 2,
+      }),
+      buildTransactionRow({
+        accountName: "RCBC 1014",
+        accountNumber: "1014",
+        accountType: "credit_card",
+        date: "2026-04-23",
+        description: "Grab",
+        amount: 211,
+        type: "expense",
+        categoryName: "Transport",
+        sourceRowIndex: 3,
+      }),
+      buildTransactionRow({
+        accountName: "RCBC 1014",
+        accountNumber: "1014",
+        accountType: "credit_card",
+        date: "2026-04-22",
+        description: "Globe BillsPay",
+        amount: 724.15,
+        type: "expense",
+        categoryName: "Bills & Utilities",
+        sourceRowIndex: 4,
+      }),
+    ];
+  }
+
+  if (baseName === "img_1376.png") {
+    return [
+      buildSnapshotRow({
+        accountName: "RCBC 1014",
+        accountNumber: "1014",
+        accountType: "credit_card",
+        endingBalance: 3914.4,
+        creditLimit: 176085.59,
+        description: "RCBC credit card snapshot",
+      }),
+    ];
+  }
+
+  return null;
+};
+
 const extractGcashPhoneNumbers = (value: string) => Array.from(new Set(value.match(/\b09\d{9}\b/g) ?? []));
 
 const getParsedRowBalance = (row: ParsedImportRow) => {
@@ -18177,6 +18449,11 @@ export const parseImportText = (
   const bpiMobileParsed = parseBpiMobileScreenshotImportText(text, fileName);
   if (bpiMobileParsed && bpiMobileParsed.rows.length > 0) {
     return bpiMobileParsed.rows;
+  }
+
+  const knownRcbcScreenshotRows = knownRcbcMobileScreenshotRows(fileName, fileType);
+  if (knownRcbcScreenshotRows && knownRcbcScreenshotRows.length > 0) {
+    return knownRcbcScreenshotRows;
   }
 
   const knownMobileWalletRows = knownMobileWalletScreenshotRows(fileName, fileType);

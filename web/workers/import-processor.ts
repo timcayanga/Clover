@@ -3356,6 +3356,15 @@ const resolveConfirmationAccount = async (params: {
     params.parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ??
     params.parsedRows.find((row) => typeof row.institution === "string" && row.institution.trim()) ??
     null;
+  const candidateRowRawPayload =
+    candidateRow &&
+    typeof candidateRow === "object" &&
+    "rawPayload" in candidateRow &&
+    candidateRow.rawPayload &&
+    typeof candidateRow.rawPayload === "object" &&
+    !Array.isArray(candidateRow.rawPayload)
+      ? (candidateRow.rawPayload as Record<string, unknown>)
+      : null;
 
   const inferredInstitution =
     mobileScreenshotWalletIdentity?.institution ??
@@ -3367,6 +3376,10 @@ const resolveConfirmationAccount = async (params: {
   const inferredAccountNumber =
     typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
       ? params.statementMetadata.accountNumber.trim()
+      : typeof candidateRow?.accountNumber === "string" && candidateRow.accountNumber.trim()
+        ? candidateRow.accountNumber.trim()
+        : typeof candidateRowRawPayload?.accountNumber === "string" && candidateRowRawPayload.accountNumber.trim()
+          ? candidateRowRawPayload.accountNumber.trim()
       : null;
   const hasInferredAccountNumber = Boolean(inferredAccountNumber);
   const supportedImportAccountTypes: AccountType[] = [
@@ -3389,6 +3402,9 @@ const resolveConfirmationAccount = async (params: {
     typeof params.statementMetadata?.accountType === "string" &&
     supportedImportAccountTypes.includes(params.statementMetadata.accountType as AccountType)
       ? (params.statementMetadata.accountType as AccountType)
+      : typeof candidateRowRawPayload?.accountType === "string" &&
+          supportedImportAccountTypes.includes(candidateRowRawPayload.accountType as AccountType)
+        ? (candidateRowRawPayload.accountType as AccountType)
       : null;
   const inferredCurrency = normalizeInstitutionCurrency(
     inferredInstitution,
@@ -3411,6 +3427,8 @@ const resolveConfirmationAccount = async (params: {
   const inferredCreditLimit =
     typeof params.statementMetadata?.creditLimit === "number" && Number.isFinite(params.statementMetadata.creditLimit)
       ? params.statementMetadata.creditLimit
+      : typeof candidateRowRawPayload?.creditLimit === "number" && Number.isFinite(candidateRowRawPayload.creditLimit)
+        ? candidateRowRawPayload.creditLimit
       : null;
   const accountIdentityType: AccountType =
     mobileScreenshotWalletIdentity?.accountType ??
