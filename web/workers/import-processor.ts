@@ -2564,8 +2564,10 @@ const readWiseEvidenceText = (row: Record<string, unknown>) => {
 
   return [
     rawPayload?.sourceLine,
+    rawPayload?.fullLineText,
     parserEvidence?.source_text,
     parserEvidence?.sourceText,
+    parserEvidence?.reason,
     rawPayload?.notes,
   ]
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
@@ -2668,9 +2670,17 @@ const rowLooksLikeWiseWalletScreenshot = (
         .join(" ")
     : "";
   const amountCurrencies = new Set(parseWiseEvidenceAmounts(row).map((amount) => amount.currency));
+  const parserReason =
+    rawPayload?.parserEvidence &&
+    typeof rawPayload.parserEvidence === "object" &&
+    !Array.isArray(rawPayload.parserEvidence) &&
+    typeof (rawPayload.parserEvidence as Record<string, unknown>).reason === "string"
+      ? String((rawPayload.parserEvidence as Record<string, unknown>).reason)
+      : "";
   const hasWiseMobileLanguage =
     /\b(?:Added|Refunded|Received|Sent|To\s+[A-Z]{3})\b/i.test(evidenceText) ||
     /^(?:transfer|refund|real_spend)$/i.test(movementType) ||
+    /\b(?:two currencies|account-currency amount|merchant currency|merchant-currency)\b/i.test(`${parserReason} ${rawPayload?.notes ?? ""}`) ||
     /\b(?:mobile wallet|app transaction list screenshot|wallet\/app transaction (?:history|list)|transaction-history screenshot|multi-currency rows)\b/i.test(warnings);
   const isSupportedWiseStatementType = [
     "",
@@ -2686,7 +2696,7 @@ const rowLooksLikeWiseWalletScreenshot = (
     documentType === "statement" &&
     isSupportedWiseStatementType &&
     amountCurrencies.size > 0 &&
-    hasWiseMobileLanguage
+    (hasWiseMobileLanguage || amountCurrencies.size >= 2)
   );
 };
 
