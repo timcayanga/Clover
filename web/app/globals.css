@@ -19067,17 +19067,19 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   box-shadow: none;
 }
 
-.accounts-toolbar-button--upload {
+.button.accounts-toolbar-button--upload {
   background: var(--brand-gradient);
   border-color: transparent;
   color: #ffffff;
+  box-shadow: 0 12px 24px rgba(3, 168, 192, 0.16);
 }
 
-.accounts-toolbar-button--upload:hover,
-.accounts-toolbar-button--upload:focus-visible {
+.button.accounts-toolbar-button--upload:hover,
+.button.accounts-toolbar-button--upload:focus-visible {
   background: var(--brand-gradient-alt);
   border-color: transparent;
   color: #ffffff;
+  box-shadow: 0 14px 28px rgba(3, 168, 192, 0.2);
 }
 
 .accounts-currency-filter,
@@ -19355,7 +19357,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   color: var(--text);
 }
 
-.accounts-toolbar-button--upload .button-icon {
+.button.accounts-toolbar-button--upload .button-icon {
   color: currentColor;
 }
 
@@ -33443,13 +33445,22 @@ html[data-theme="dark"] .accounts-toolbar-button .button-icon {
   color: var(--muted-2);
 }
 
-html[data-theme="dark"] .accounts-toolbar-button--upload {
+html[data-theme="dark"] .button.accounts-toolbar-button--upload {
   background: var(--brand-gradient);
   border-color: transparent;
   color: #07111d;
+  box-shadow: 0 12px 24px rgba(71, 215, 232, 0.18);
 }
 
-html[data-theme="dark"] .accounts-toolbar-button--upload .button-icon {
+html[data-theme="dark"] .button.accounts-toolbar-button--upload:hover,
+html[data-theme="dark"] .button.accounts-toolbar-button--upload:focus-visible {
+  background: var(--brand-gradient-alt);
+  border-color: transparent;
+  color: #07111d;
+  box-shadow: 0 14px 28px rgba(71, 215, 232, 0.22);
+}
+
+html[data-theme="dark"] .button.accounts-toolbar-button--upload .button-icon {
   color: currentColor;
 }
 
