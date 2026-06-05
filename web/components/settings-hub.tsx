@@ -3,7 +3,7 @@
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { UserAvatarEditor } from "@/components/user-avatar-editor";
@@ -92,6 +92,45 @@ type SettingsHubProps = {
   paypalAnnualPlanId?: string | null;
   paypalBuyerCountry?: string | null;
   disableWorkspaceBootstrap?: boolean;
+};
+
+const SETTINGS_ACCOUNT_IDENTITY_CACHE_KEY = "clover.settings.account-identity.v1";
+
+type SettingsAccountIdentityCache = {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string;
+  imageUrl?: string | null;
+};
+
+const readStoredAccountIdentity = (): SettingsAccountIdentityCache | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_ACCOUNT_IDENTITY_CACHE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as SettingsAccountIdentityCache;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeStoredAccountIdentity = (identity: SettingsAccountIdentityCache) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(SETTINGS_ACCOUNT_IDENTITY_CACHE_KEY, JSON.stringify(identity));
+  } catch {
+    // Ignore storage failures; the live Clerk/API values still populate the form.
+  }
 };
 
 function SettingsIcon({ path }: { path: string }) {
@@ -225,6 +264,7 @@ export function SettingsHub({
   const [dataDeleteModal, setDataDeleteModal] = useState<DataDeleteModalState | null>(null);
   const [dataDeleteInFlight, setDataDeleteInFlight] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const accountNameDraftDirtyRef = useRef(false);
   const workspaceReady = Boolean(workspaceId);
 
   const activeProfile = profileList.find((profile) => profile.id === activeProfileId) ?? profileList[0] ?? null;
@@ -241,6 +281,52 @@ export function SettingsHub({
     setThemeMode(initialTheme);
     applyThemeMode(initialTheme);
   }, []);
+
+  useEffect(() => {
+    const cachedIdentity = readStoredAccountIdentity();
+    if (!cachedIdentity) {
+      return;
+    }
+
+    setFirstName((current) => current ?? cachedIdentity.firstName ?? null);
+    setLastName((current) => current ?? cachedIdentity.lastName ?? null);
+    setEmail((current) => current || cachedIdentity.email || initialEmail);
+    setAvatarUrl((current) => current ?? cachedIdentity.imageUrl ?? null);
+
+    if (!accountNameDraftDirtyRef.current) {
+      setFirstNameDraft((current) => current || cachedIdentity.firstName || "");
+      setLastNameDraft((current) => current || cachedIdentity.lastName || "");
+    }
+  }, [initialEmail]);
+
+  useEffect(() => {
+    if (!isLoaded || !user) {
+      return;
+    }
+
+    const clerkFirstName = user.firstName ?? null;
+    const clerkLastName = user.lastName ?? null;
+    const clerkEmail = user.primaryEmailAddress?.emailAddress ?? email;
+    const clerkImageUrl = user.imageUrl ?? avatarUrl;
+    const cachedIdentity = readStoredAccountIdentity();
+
+    writeStoredAccountIdentity({
+      firstName: clerkFirstName ?? cachedIdentity?.firstName ?? null,
+      lastName: clerkLastName ?? cachedIdentity?.lastName ?? null,
+      email: clerkEmail,
+      imageUrl: clerkImageUrl,
+    });
+
+    setFirstName((current) => current ?? clerkFirstName);
+    setLastName((current) => current ?? clerkLastName);
+    setEmail((current) => current || clerkEmail);
+    setAvatarUrl((current) => current ?? clerkImageUrl ?? null);
+
+    if (!accountNameDraftDirtyRef.current) {
+      setFirstNameDraft((current) => current || clerkFirstName || "");
+      setLastNameDraft((current) => current || clerkLastName || "");
+    }
+  }, [avatarUrl, email, isLoaded, user]);
 
   useEffect(() => {
     if (initialWorkspaceId || disableWorkspaceBootstrap) {
@@ -286,6 +372,12 @@ export function SettingsHub({
         setLastName(payload.lastName ?? initialLastName);
         setEmail(payload.email ?? initialEmail);
         setAvatarUrl(payload.imageUrl ?? initialAvatarUrl ?? null);
+        writeStoredAccountIdentity({
+          firstName: payload.firstName ?? initialFirstName,
+          lastName: payload.lastName ?? initialLastName,
+          email: payload.email ?? initialEmail,
+          imageUrl: payload.imageUrl ?? initialAvatarUrl ?? null,
+        });
         setPlanTier(payload.planTier ?? "free");
         setPaypalClientId(payload.paypalClientId ?? null);
         setPaypalMonthlyPlanId(payload.paypalMonthlyPlanId ?? null);
@@ -370,6 +462,12 @@ export function SettingsHub({
       setLastName(payload.lastName ?? initialLastName);
       setAvatarUrl(payload.imageUrl ?? null);
       setEmail(payload.email ?? email);
+      writeStoredAccountIdentity({
+        firstName: payload.firstName ?? initialFirstName,
+        lastName: payload.lastName ?? initialLastName,
+        email: payload.email ?? email,
+        imageUrl: payload.imageUrl ?? null,
+      });
       setPlanTier(payload.planTier ?? "free");
       setPaypalClientId(payload.paypalClientId ?? null);
       setPaypalMonthlyPlanId(payload.paypalMonthlyPlanId ?? null);
@@ -394,6 +492,10 @@ export function SettingsHub({
   }, [profileList]);
 
   useEffect(() => {
+    if (accountNameDraftDirtyRef.current) {
+      return;
+    }
+
     setFirstNameDraft(firstName ?? "");
     setLastNameDraft(lastName ?? "");
   }, [firstName, lastName]);
@@ -602,6 +704,13 @@ export function SettingsHub({
         }
         setFirstName(payload.firstName ?? null);
         setLastName(payload.lastName ?? null);
+        accountNameDraftDirtyRef.current = false;
+        writeStoredAccountIdentity({
+          firstName: payload.firstName ?? null,
+          lastName: payload.lastName ?? null,
+          email,
+          imageUrl: avatarUrl ?? user?.imageUrl ?? null,
+        });
         setAccountMessage("Account details updated.");
       } catch (error) {
         setAccountMessage(error instanceof Error ? error.message : "Unable to update account details.");
@@ -1042,11 +1151,25 @@ export function SettingsHub({
                 <div className="settings-account-form">
                   <label className="settings-inline-field">
                     <span>First name</span>
-                    <input value={firstNameDraft} onChange={(event) => setFirstNameDraft(event.target.value)} placeholder="First name" />
+                    <input
+                      value={firstNameDraft}
+                      onChange={(event) => {
+                        accountNameDraftDirtyRef.current = true;
+                        setFirstNameDraft(event.target.value);
+                      }}
+                      placeholder="First name"
+                    />
                   </label>
                   <label className="settings-inline-field">
                     <span>Last name</span>
-                    <input value={lastNameDraft} onChange={(event) => setLastNameDraft(event.target.value)} placeholder="Last name" />
+                    <input
+                      value={lastNameDraft}
+                      onChange={(event) => {
+                        accountNameDraftDirtyRef.current = true;
+                        setLastNameDraft(event.target.value);
+                      }}
+                      placeholder="Last name"
+                    />
                   </label>
                   <label className="settings-inline-field">
                     <span>Email</span>
