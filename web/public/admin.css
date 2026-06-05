@@ -21841,32 +21841,90 @@ input.transaction-inline-edit--amount::placeholder {
   width: 100%;
 }
 
-.settings-data-panel {
+.settings-data-shell {
+  gap: 24px;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 250, 251, 0.92));
+}
+
+.settings-data-shell__header {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-data-shell__eyebrow {
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(3, 168, 192, 0.85);
+}
+
+.settings-data-shell__header h5 {
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+
+.settings-data-shell__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.settings-data-zone {
   display: grid;
   gap: 18px;
+  min-width: 0;
+  padding: 20px;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
-.settings-data-panel__section {
+.settings-data-zone--export {
+  background: linear-gradient(180deg, rgba(3, 168, 192, 0.08), rgba(255, 255, 255, 0.82) 52%);
+}
+
+.settings-data-zone--delete {
+  background: linear-gradient(180deg, rgba(255, 99, 71, 0.08), rgba(255, 255, 255, 0.82) 48%);
+}
+
+.settings-data-zone__header {
   display: grid;
-  gap: 14px;
+  gap: 8px;
 }
 
-.settings-data-panel__section h5 {
-  font-size: 16px;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
+.settings-data-zone__badge {
+  width: fit-content;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.12);
+  color: rgba(3, 168, 192, 0.88);
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
-.settings-data-panel__section p {
-  margin-top: 6px;
+.settings-data-zone__badge--danger {
+  background: rgba(220, 38, 38, 0.1);
+  color: rgba(220, 38, 38, 0.86);
+}
+
+.settings-data-zone__header h6 {
+  font-size: 20px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.settings-data-zone__header p {
+  max-width: 42ch;
   color: var(--muted);
-  line-height: 1.5;
-}
-
-.settings-data-panel__divider {
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(15, 23, 42, 0.08), transparent);
+  line-height: 1.55;
 }
 
 .settings-section__intro {
@@ -22025,100 +22083,58 @@ input.transaction-inline-edit--amount::placeholder {
   align-content: start;
 }
 
-.settings-data-download__list {
+.settings-data-export-actions,
+.settings-data-danger-list {
   display: grid;
-  gap: 12px;
-  align-content: start;
+  gap: 14px;
 }
 
-.settings-data-download__item {
+.settings-data-export-card,
+.settings-data-danger-item {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr);
-  gap: 12px;
+  gap: 14px;
   align-items: center;
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.56);
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
   border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
-.settings-data-download__item-copy {
-  display: grid;
-  gap: 4px;
-  grid-column: 2;
-  justify-items: center;
-  text-align: center;
+.settings-data-export-card {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.settings-data-download__item > .button {
-  grid-column: 3;
-  justify-self: end;
-}
-
-.settings-data-download__item-copy strong {
-  font-size: 14px;
+.settings-data-export-card strong,
+.settings-data-danger-copy strong {
+  font-size: 16px;
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.02em;
 }
 
-.settings-data-download__item-copy span {
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--muted);
+.settings-data-danger-item {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.settings-data-delete--compact {
-  display: grid;
+.settings-data-danger-item--history {
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  width: 100%;
-  max-width: 100%;
 }
 
-.settings-data-delete--compact.settings-data-panel__section--delete {
-  padding-top: 2px;
-}
-
-.settings-data-delete__list {
+.settings-data-danger-copy {
   display: grid;
-  gap: 10px;
-  width: 100%;
+  gap: 5px;
 }
 
-.settings-data-delete__item {
-  display: grid;
-  gap: 8px;
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.56);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-}
-
-.settings-data-delete__item-copy {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-}
-
-.settings-data-delete__item-copy strong {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: -0.02em;
-}
-
-.settings-data-delete__item-copy span {
-  font-size: 12px;
-  line-height: 1.45;
+.settings-data-danger-copy span {
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--muted);
 }
 
-.settings-data-delete__controls {
+.settings-data-danger-controls {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
@@ -22591,15 +22607,20 @@ input.transaction-inline-edit--amount::placeholder {
     max-height: none;
   }
 
-  .settings-data-download__item {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: center;
+  .settings-data-shell__grid {
+    grid-template-columns: 1fr;
   }
 
-  .settings-data-download__item-copy,
-  .settings-data-download__item > .button {
-    grid-column: auto;
-    justify-self: center;
+  .settings-data-export-card,
+  .settings-data-danger-item {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .settings-data-danger-item--history {
+    justify-items: stretch;
+    text-align: left;
   }
 
   .settings-data-grid--split,
