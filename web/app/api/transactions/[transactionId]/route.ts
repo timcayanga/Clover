@@ -21,6 +21,7 @@ const patchSchema = z.object({
   merchantRaw: z.string().min(1).optional(),
   merchantClean: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
+  userNote: z.string().nullable().optional(),
   date: z.string().optional(),
   amount: z.union([z.string(), z.number()]).optional(),
   currency: z.string().min(1).optional(),
@@ -109,6 +110,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       payload.merchantRaw !== undefined ||
       payload.merchantClean !== undefined ||
       payload.description !== undefined ||
+      payload.userNote !== undefined ||
       payload.date !== undefined ||
       payload.amount !== undefined ||
       payload.currency !== undefined ||
@@ -124,7 +126,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         type: resolvedType,
         merchantRaw: payload.merchantRaw,
         merchantClean: payload.merchantClean,
-        description: payload.description,
+        description: payload.description === undefined ? undefined : payload.description,
         date: payload.date ? new Date(payload.date) : undefined,
         amount: payload.amount === undefined ? undefined : payload.amount.toString(),
         currency: payload.currency ? payload.currency.toUpperCase() : undefined,
@@ -144,6 +146,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
               merchantRaw: payload.merchantRaw ?? transaction.merchantRaw,
               merchantClean: payload.merchantClean ?? transaction.merchantClean ?? payload.merchantRaw ?? transaction.merchantRaw,
               description: payload.description ?? transaction.description,
+              userNote:
+                payload.userNote === undefined
+                  ? (
+                      transaction.normalizedPayload && typeof transaction.normalizedPayload === "object" && !Array.isArray(transaction.normalizedPayload)
+                        ? (transaction.normalizedPayload as Record<string, Prisma.JsonValue>).userNote ?? null
+                        : null
+                    )
+                  : payload.userNote,
               categoryId: payload.categoryId === undefined ? transaction.categoryId : payload.categoryId,
               accountId: payload.accountId ?? transaction.accountId,
               type: resolvedType,
@@ -338,6 +348,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         isTransfer: updated.isTransfer,
         isExcluded: updated.isExcluded,
         rawPayload: updated.rawPayload,
+        normalizedPayload: updated.normalizedPayload,
         createdAt: updated.createdAt.toISOString(),
         updatedAt: updated.updatedAt.toISOString(),
         splitBill: updated.splitBill,

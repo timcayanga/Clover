@@ -123,6 +123,7 @@ type Transaction = {
   warningReason?: string | null;
   splitBill?: { id: string; title: string } | null;
   rawPayload?: unknown;
+  normalizedPayload?: unknown;
 };
 
 const normalizeLooseImportedValue = (value: string | null | undefined) =>
@@ -727,6 +728,71 @@ const getRawPayloadTextCandidate = (rawPayload: unknown, keys: string[]) => {
   return "";
 };
 
+const getNormalizedPayloadTextCandidate = (normalizedPayload: unknown, keys: string[]) => {
+  if (!isRecord(normalizedPayload)) {
+    return "";
+  }
+
+  for (const key of keys) {
+    const candidate = normalizedPayload[key];
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return "";
+};
+
+const getTransactionUserNote = (
+  transaction:
+    | Pick<Transaction, "description" | "source" | "importFileId" | "normalizedPayload">
+    | null
+    | undefined
+) => {
+  const normalizedUserNote = getNormalizedPayloadTextCandidate(transaction?.normalizedPayload, ["userNote", "user_note"]);
+  if (normalizedUserNote) {
+    return normalizeTransactionNotes(normalizedUserNote);
+  }
+
+  if ((transaction?.source ?? null) === "manual" && !transaction?.importFileId) {
+    return normalizeTransactionNotes(transaction?.description);
+  }
+
+  return "";
+};
+
+const getTransactionParsedNote = (
+  transaction:
+    | Pick<Transaction, "rawPayload" | "description" | "source" | "importFileId">
+    | null
+    | undefined
+) => {
+  const parsedNote = getRawPayloadTextCandidate(transaction?.rawPayload, [
+    "fullDetails",
+    "parsedDetails",
+    "transactionDetails",
+    "transactionDetail",
+    "counterpartyDetails",
+    "counterparty",
+    "recipient",
+    "sender",
+    "notes",
+    "note",
+    "detail",
+    "details",
+    "trailingDetails",
+  ]);
+  if (parsedNote) {
+    return parsedNote;
+  }
+
+  if ((transaction?.source ?? null) === "upload" || transaction?.importFileId) {
+    return normalizeTransactionNotes(transaction?.description);
+  }
+
+  return "";
+};
+
 const createEmptyReceiptLineItem = (): ReceiptLineItemDraft => ({
   description: "",
   quantity: "",
@@ -1072,7 +1138,7 @@ const createDetailDraft = (
     amount: transaction.amount,
     currency: transaction.currency ?? "PHP",
     type: effectiveType === "income" ? "credit" : "debit",
-    description: normalizeTransactionNotes(transaction.description),
+    description: getTransactionUserNote(transaction),
     isExcluded: transaction.isExcluded,
     isTransfer: Boolean(transaction.isTransfer || effectiveType === "transfer"),
     receiptLineItems: parseReceiptLineItemsFromPayload(transaction.rawPayload).map(receiptLineItemToDraft),
@@ -2864,25 +2930,7 @@ function AccountDetailPageContent() {
     () => getRawPayloadTextCandidate(selectedTransaction?.rawPayload, ["line", "rawLine", "sourceLine", "rawText", "text"]),
     [selectedTransaction?.rawPayload]
   );
-  const selectedTransactionRawNote = useMemo(
-    () =>
-      getRawPayloadTextCandidate(selectedTransaction?.rawPayload, [
-        "fullDetails",
-        "parsedDetails",
-        "transactionDetails",
-        "transactionDetail",
-        "counterpartyDetails",
-        "counterparty",
-        "recipient",
-        "sender",
-        "notes",
-        "note",
-        "detail",
-        "details",
-        "trailingDetails",
-      ]),
-    [selectedTransaction?.rawPayload]
-  );
+  const selectedTransactionRawNote = useMemo(() => getTransactionParsedNote(selectedTransaction), [selectedTransaction]);
   const detailReceiptLineItems = detailDraft?.receiptLineItems ?? selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
   const detailReceiptLineItemTotal = useMemo(
     () => getManualReceiptLineItemTotal(detailReceiptLineItems),
@@ -2901,7 +2949,7 @@ function AccountDetailPageContent() {
       detailDraft.amount !== selectedTransaction.amount ||
       detailDraft.currency !== (selectedTransaction.currency ?? account?.currency ?? "PHP") ||
       detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
-      normalizeTransactionNotes(detailDraft.description) !== normalizeTransactionNotes(selectedTransaction.description ?? "") ||
+      normalizeTransactionNotes(detailDraft.description) !== getTransactionUserNote(selectedTransaction) ||
       detailDraft.isExcluded !== selectedTransaction.isExcluded ||
       detailDraft.isTransfer !== Boolean(selectedTransaction.isTransfer || selectedTransaction.type === "transfer") ||
       receiptLineItemSignature(detailDraft.receiptLineItems) !==
@@ -3134,7 +3182,7 @@ function AccountDetailPageContent() {
         amount: detailDraft.amount,
         currency: detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency || account?.currency || "PHP",
         type: detailDraftTypeToTransactionType(detailDraft.type),
-        description: detailDraft.description || null,
+        userNote: detailDraft.description || null,
         isExcluded: detailDraft.isExcluded,
         isTransfer: detailDraft.isTransfer,
         rawPayload: mergeReceiptLineItemsIntoPayload(

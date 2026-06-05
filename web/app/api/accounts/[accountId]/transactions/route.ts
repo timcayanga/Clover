@@ -171,6 +171,7 @@ type TransactionApiRow = {
   importFileId: string | null;
   source: string;
   rawPayload: Prisma.JsonValue;
+  normalizedPayload: Prisma.JsonValue | null;
   createdAt: string;
 };
 
@@ -186,6 +187,7 @@ const mapTransactionRow = (transaction: {
   reviewStatus: string | null;
   categoryConfidence: number;
   rawPayload: Prisma.JsonValue;
+  normalizedPayload: Prisma.JsonValue | null;
   category: { id: string; name: string } | null;
   description: string | null;
   isExcluded: boolean;
@@ -250,6 +252,7 @@ const mapTransactionRow = (transaction: {
     importFileId: transaction.importFileId,
     source,
     rawPayload: transaction.rawPayload,
+    normalizedPayload: transaction.normalizedPayload ?? null,
     createdAt: transaction.createdAt.toISOString(),
   };
 };
@@ -558,6 +561,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
           reviewStatus: true,
           categoryConfidence: true,
           rawPayload: true,
+          normalizedPayload: true,
           description: true,
           isExcluded: true,
           createdAt: true,
