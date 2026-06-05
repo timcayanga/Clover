@@ -2656,6 +2656,7 @@ const rowLooksLikeWiseWalletScreenshot = (
   const isSupportedWiseStatementType = [
     "",
     "bank",
+    "wallet",
     "transaction_history",
     "wallet_statement",
     "wallet_transaction_history",
