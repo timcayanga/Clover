@@ -97,7 +97,11 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
             <button className="button button-secondary button-small" type="button" onClick={handleSignOut}>
               Sign out
             </button>
-          ) : null}
+          ) : (
+            <Link className="button button-secondary button-small" href="/sign-in">
+              Switch account
+            </Link>
+          )}
         </div>
       </article>
 

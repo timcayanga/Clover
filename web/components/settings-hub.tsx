@@ -1358,10 +1358,11 @@ export function SettingsHub({
               </div>
             </div>
 
-            <div className="settings-data-grid settings-data-grid--split">
-              <article className="settings-action-card settings-data-download">
+            <article className="settings-action-card settings-data-panel">
+              <section className="settings-data-panel__section settings-data-panel__section--export">
                 <div>
-                  <h5>Download</h5>
+                  <h5>Export data</h5>
+                  <p>Download the parts of Clover data you want to keep or review offline.</p>
                 </div>
 
                 <div className="settings-data-download__list">
@@ -1377,10 +1378,7 @@ export function SettingsHub({
                         setStatusMessage(null);
                         void (async () => {
                           try {
-                            await runDownload(
-                              "/api/settings/export/transactions",
-                              "clover-transactions.pdf"
-                            );
+                            await runDownload("/api/settings/export/transactions", "clover-transactions.pdf");
                             setStatusMessage("Transactions download started.");
                           } catch (error) {
                             setStatusMessage(error instanceof Error ? error.message : "Something went wrong.");
@@ -1404,10 +1402,7 @@ export function SettingsHub({
                         setStatusMessage(null);
                         void (async () => {
                           try {
-                            await runDownload(
-                              "/api/settings/export/account-balances",
-                              "clover-account-balances.pdf"
-                            );
+                            await runDownload("/api/settings/export/account-balances", "clover-account-balances.pdf");
                             setStatusMessage("Account balances download started.");
                           } catch (error) {
                             setStatusMessage(error instanceof Error ? error.message : "Something went wrong.");
@@ -1419,71 +1414,74 @@ export function SettingsHub({
                     </button>
                   </div>
                 </div>
-              </article>
+              </section>
 
-              <article className="settings-action-card settings-data-delete settings-data-delete--compact">
+              <div className="settings-data-panel__divider" aria-hidden="true" />
+
+              <section className="settings-data-panel__section settings-data-panel__section--delete">
                 <div>
-                  <h5>Delete</h5>
+                  <h5>Delete data</h5>
+                  <p>Remove Clover data in a controlled way without changing your login.</p>
                 </div>
 
                 <div className="settings-data-delete__list">
-                <div className="settings-data-delete__item">
-                  <div className="settings-data-delete__item-copy">
-                    <strong>Transactions</strong>
-                    <span>Delete transactions before the selected date.</span>
+                  <div className="settings-data-delete__item">
+                    <div className="settings-data-delete__item-copy">
+                      <strong>Transactions</strong>
+                      <span>Delete transactions before the selected date.</span>
+                    </div>
+                    <div className="settings-data-delete__controls">
+                      <label className="settings-inline-field">
+                        <span>Before date</span>
+                        <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} />
+                      </label>
+                      <button
+                        type="button"
+                        className="button button-danger button-small"
+                        disabled={isPending}
+                        onClick={() => openDeleteModal("transactions")}
+                      >
+                        Delete transactions
+                      </button>
+                    </div>
                   </div>
-                  <div className="settings-data-delete__controls">
-                    <label className="settings-inline-field">
-                      <span>Before date</span>
-                      <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} />
-                    </label>
-                    <button
-                      type="button"
-                      className="button button-danger button-small"
-                      disabled={isPending}
-                      onClick={() => openDeleteModal("transactions")}
-                    >
-                      Delete transactions
-                    </button>
-                  </div>
-                </div>
 
-                <div className="settings-data-delete__item">
-                  <div className="settings-data-delete__item-copy">
-                    <strong>Accounts</strong>
-                    <span>Delete accounts and linked transactions.</span>
+                  <div className="settings-data-delete__item">
+                    <div className="settings-data-delete__item-copy">
+                      <strong>Accounts</strong>
+                      <span>Delete accounts and linked transactions.</span>
+                    </div>
+                    <div className="settings-data-delete__controls">
+                      <button
+                        type="button"
+                        className="button button-danger button-small"
+                        disabled={isPending}
+                        onClick={() => openDeleteModal("accounts")}
+                      >
+                        Delete accounts
+                      </button>
+                    </div>
                   </div>
-                  <div className="settings-data-delete__controls">
-                    <button
-                      type="button"
-                      className="button button-danger button-small"
-                      disabled={isPending}
-                      onClick={() => openDeleteModal("accounts")}
-                    >
-                      Delete accounts
-                    </button>
-                  </div>
-                </div>
 
-                <div className="settings-data-delete__item">
-                  <div className="settings-data-delete__item-copy">
-                    <strong>All Clover Data</strong>
-                    <span>Delete everything in Clover while keeping your login.</span>
-                  </div>
-                  <div className="settings-data-delete__controls">
-                    <button
-                      type="button"
-                      className="button button-danger button-small"
-                      disabled={isPending}
-                      onClick={() => openDeleteModal("all")}
-                    >
-                      Delete all data
-                    </button>
+                  <div className="settings-data-delete__item">
+                    <div className="settings-data-delete__item-copy">
+                      <strong>All Clover Data</strong>
+                      <span>Delete everything in Clover while keeping your login.</span>
+                    </div>
+                    <div className="settings-data-delete__controls">
+                      <button
+                        type="button"
+                        className="button button-danger button-small"
+                        disabled={isPending}
+                        onClick={() => openDeleteModal("all")}
+                      >
+                        Delete all data
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-              </article>
-            </div>
+              </section>
+            </article>
           </section>
         ) : null}
 

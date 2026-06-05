@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useClerk } from "@clerk/nextjs";
 import { persistSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -153,6 +154,12 @@ export function AccountActionsPanel({ isGuest = false }: AccountActionsPanelProp
             </button>
           ) : null}
 
+          {isGuest ? (
+            <Link className="button button-secondary button-small" href="/sign-in">
+              Sign in to switch account
+            </Link>
+          ) : null}
+
           <button
             className="button button-secondary button-small"
             type="button"
@@ -181,7 +188,9 @@ export function AccountActionsPanel({ isGuest = false }: AccountActionsPanelProp
         </div>
 
         <p className="account-actions-panel__note" aria-live="polite">
-          {isGuest ? "Guest sessions on staging cannot be changed here." : message ?? "The wipe action keeps your Clover account but removes app data."}
+          {isGuest
+            ? "Guest sessions on staging can switch to a real account from here."
+            : message ?? "The wipe action keeps your Clover account but removes app data."}
         </p>
       </section>
 
