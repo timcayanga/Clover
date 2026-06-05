@@ -2292,13 +2292,22 @@ function AccountsPageContent() {
     });
   }, [currencyFilteredAccounts]);
 
-  const featuredAccounts = useMemo(
-    () => {
-      const favoriteAccounts = visibleAccounts.filter((account) => Boolean(account.favorite));
-      return favoriteAccounts.length > 0 ? favoriteAccounts : visibleAccounts.slice(0, 4);
-    },
-    [visibleAccounts]
-  );
+  const featuredAccounts = useMemo(() => {
+    const swipableAccountTypes = new Set<SupportedAccountType>(["bank", "credit_card", "wallet", "cash"]);
+    const amountSortedAccounts = visibleAccounts
+      .filter((account) => swipableAccountTypes.has(getEffectiveAccountType(account)))
+      .sort((left, right) => {
+        const leftAmount = Math.abs(normalizeAccountBalance(getEffectiveAccountType(left), parseAmount(getDisplayedAccountBalance(left))));
+        const rightAmount = Math.abs(normalizeAccountBalance(getEffectiveAccountType(right), parseAmount(getDisplayedAccountBalance(right))));
+        if (rightAmount !== leftAmount) {
+          return rightAmount - leftAmount;
+        }
+
+        return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+      });
+    const favoriteAccounts = amountSortedAccounts.filter((account) => Boolean(account.favorite));
+    return favoriteAccounts.length > 0 ? favoriteAccounts : amountSortedAccounts;
+  }, [visibleAccounts, statementCheckpoints]);
 
   const totals = useMemo(() => {
     return currencyFilteredAccounts.reduce(
