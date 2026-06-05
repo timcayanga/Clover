@@ -2905,7 +2905,12 @@ const collapseDuplicateUploadedAccountsForAccount = async <
   const accountNumber = typeof account.accountNumber === "string" && account.accountNumber.trim() ? account.accountNumber.trim() : null;
   const institution = typeof account.institution === "string" && account.institution.trim() ? account.institution.trim() : null;
   const workspaceId = typeof account.workspaceId === "string" && account.workspaceId.trim() ? account.workspaceId.trim() : null;
-  if (!workspaceId || !accountNumber || !institution || account.source !== "upload") {
+  const canCollapseWalletByIdentity =
+    account.source === "upload" &&
+    account.type === "wallet" &&
+    !accountNumber &&
+    Boolean(institution);
+  if (!workspaceId || !institution || account.source !== "upload" || (!accountNumber && !canCollapseWalletByIdentity)) {
     return account;
   }
 
@@ -2915,9 +2920,9 @@ const collapseDuplicateUploadedAccountsForAccount = async <
   const duplicateCandidates = await prisma.account.findMany({
     where: {
       workspaceId,
-      accountNumber,
       type: account.type,
       source: "upload",
+      ...(accountNumber ? { accountNumber } : { accountNumber: null }),
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: {
@@ -2934,9 +2939,19 @@ const collapseDuplicateUploadedAccountsForAccount = async <
       updatedAt: true,
     },
   });
-  const duplicates = duplicateCandidates.filter(
-    (candidate) => canonicalInstitutionKey(candidate.institution) === canonicalInstitutionKey(institution)
-  );
+  const duplicates = duplicateCandidates.filter((candidate) => {
+    if (accountNumber) {
+      return canonicalInstitutionKey(candidate.institution) === canonicalInstitutionKey(institution);
+    }
+
+    return matchesImportedAccountIdentity(candidate, {
+      name: account.name,
+      institution,
+      accountNumber: null,
+      type: account.type,
+      currency: "currency" in account ? account.currency ?? null : null,
+    });
+  });
 
   if (duplicates.length <= 1) {
     return account;
