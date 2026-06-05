@@ -658,6 +658,7 @@ const transactionSchema = z.object({
   receiptLineItems: z.array(receiptLineItemSchema).optional(),
   isTransfer: z.boolean().optional(),
   isExcluded: z.boolean().optional(),
+  preserveType: z.boolean().optional(),
 });
 
 const getWorkspaceCurrencyCodes = async (workspaceId: string) => {
@@ -1305,7 +1306,9 @@ export async function POST(request: Request) {
 
     const resolvedCategoryId = payload.categoryId ?? otherCategory?.id ?? null;
     const resolvedCategoryName = selectedCategory?.name ?? otherCategory?.name ?? null;
-    const resolvedType = coerceTransactionTypeFromCategoryName(resolvedCategoryName, payload.type);
+    const resolvedType = payload.preserveType
+      ? payload.type
+      : coerceTransactionTypeFromCategoryName(resolvedCategoryName, payload.type);
     const resolvedIsTransfer = resolvedType === "transfer";
 
     const transaction = await prisma.transaction.create({

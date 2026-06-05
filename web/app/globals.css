@@ -20341,6 +20341,71 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   padding-inline: 14px;
 }
 
+.modal-card--cash-adjustment {
+  width: min(360px, calc(100vw - 24px));
+}
+
+.accounts-detail__cash-adjustment-form {
+  display: grid;
+  gap: 14px;
+}
+
+.accounts-detail__cash-adjustment-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.accounts-detail__cash-adjustment-toggle-button {
+  min-height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.accounts-detail__cash-adjustment-toggle-button.is-active {
+  border-color: rgba(3, 168, 192, 0.34);
+  background: rgba(3, 168, 192, 0.12);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(3, 168, 192, 0.08);
+}
+
+.accounts-detail__cash-adjustment-field {
+  display: grid;
+  gap: 6px;
+  color: var(--muted-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.accounts-detail__cash-adjustment-amount-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.accounts-detail__cash-adjustment-currency {
+  min-height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: rgba(243, 248, 250, 0.96);
+  color: var(--accent);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.accounts-detail__cash-adjustment-amount-row input {
+  width: 100%;
+  min-width: 0;
+}
+
 @media (min-width: 768px) {
   .accounts-detail__favorite-toggle {
     display: none !important;

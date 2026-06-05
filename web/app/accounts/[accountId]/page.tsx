@@ -8,7 +8,6 @@ import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
-import { DashboardManualTransactionModal } from "@/components/dashboard-top-actions";
 import { FinancialAccountCard } from "@/components/financial-account-card";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
 import { formatUploadAccountDisplayName, getAccountCardName, getAccountDisplayName } from "@/lib/account-display";
@@ -1177,7 +1176,11 @@ function AccountDetailPageContent() {
   const [accountIdentityEditorOpen, setAccountIdentityEditorOpen] = useState(false);
   const [accountEditSaveState, setAccountEditSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [balanceEditorOpen, setBalanceEditorOpen] = useState(false);
-  const [cashQuickAddOpen, setCashQuickAddOpen] = useState(false);
+  const [cashAdjustmentOpen, setCashAdjustmentOpen] = useState(false);
+  const [cashAdjustmentMode, setCashAdjustmentMode] = useState<"add" | "remove">("add");
+  const [cashAdjustmentAmount, setCashAdjustmentAmount] = useState("");
+  const [cashAdjustmentSaving, setCashAdjustmentSaving] = useState(false);
+  const [cashAdjustmentError, setCashAdjustmentError] = useState<string | null>(null);
   const [balanceDraft, setBalanceDraft] = useState("");
   const [balanceSaveState, setBalanceSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [creditLimitDraft, setCreditLimitDraft] = useState("");
@@ -2283,6 +2286,115 @@ function AccountDetailPageContent() {
     setBalanceDraft(Math.abs(parseAmount(displayBalance)).toFixed(2));
     setBalanceSaveState("idle");
     setBalanceEditorOpen(true);
+  };
+
+  const openCashAdjustment = () => {
+    setCashAdjustmentMode("add");
+    setCashAdjustmentAmount("");
+    setCashAdjustmentError(null);
+    setCashAdjustmentOpen(true);
+  };
+
+  const closeCashAdjustment = () => {
+    if (cashAdjustmentSaving) {
+      return;
+    }
+
+    setCashAdjustmentOpen(false);
+    setCashAdjustmentError(null);
+  };
+
+  const saveCashAdjustment = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!account?.workspaceId || account.type !== "cash") {
+      return;
+    }
+
+    const amount = Number(cashAdjustmentAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setCashAdjustmentError("Enter an amount greater than 0.");
+      return;
+    }
+
+    const isAddingCash = cashAdjustmentMode === "add";
+    const transactionDate = new Date().toISOString().slice(0, 10);
+    const categoryId =
+      getCategoryIdByName(categories, "Cash & ATM") ||
+      (isAddingCash ? getCategoryIdByName(categories, "Income") : "") ||
+      getCategoryIdByName(categories, "Other") ||
+      undefined;
+
+    setCashAdjustmentSaving(true);
+    setCashAdjustmentError(null);
+
+    try {
+      const response = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: account.workspaceId,
+          accountId: account.id,
+          categoryId,
+          date: transactionDate,
+          amount: amount.toFixed(2),
+          currency: account.currency,
+          type: isAddingCash ? "income" : "expense",
+          merchantRaw: isAddingCash ? "Cash added" : "Cash removed",
+          merchantClean: isAddingCash ? "Cash added" : "Cash removed",
+          description: isAddingCash ? "Cash count adjustment added." : "Cash count adjustment removed.",
+          isTransfer: false,
+          isExcluded: false,
+          preserveType: true,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { transaction?: Partial<Transaction>; error?: string };
+
+      if (!response.ok || !payload.transaction?.id) {
+        throw new Error(payload.error ?? "Unable to save cash adjustment.");
+      }
+
+      const createdTransaction: Transaction = {
+        id: payload.transaction.id,
+        workspaceId: account.workspaceId,
+        accountId: account.id,
+        accountName: payload.transaction.accountName ?? account.name,
+        categoryId: payload.transaction.categoryId ?? categoryId ?? null,
+        amount: String(payload.transaction.amount ?? amount.toFixed(2)),
+        currency: payload.transaction.currency ?? account.currency,
+        type: payload.transaction.type ?? (isAddingCash ? "income" : "expense"),
+        date: payload.transaction.date ?? transactionDate,
+        merchantRaw: payload.transaction.merchantRaw ?? (isAddingCash ? "Cash added" : "Cash removed"),
+        merchantClean: payload.transaction.merchantClean ?? (isAddingCash ? "Cash added" : "Cash removed"),
+        categoryName: payload.transaction.categoryName ?? (categoryId ? categories.find((category) => category.id === categoryId)?.name ?? null : null),
+        reviewStatus: payload.transaction.reviewStatus ?? "confirmed",
+        parserConfidence: payload.transaction.parserConfidence ?? 100,
+        categoryConfidence: payload.transaction.categoryConfidence ?? (categoryId ? 100 : 0),
+        accountMatchConfidence: payload.transaction.accountMatchConfidence ?? 100,
+        duplicateConfidence: payload.transaction.duplicateConfidence ?? 0,
+        transferConfidence: payload.transaction.transferConfidence ?? 0,
+        description: payload.transaction.description ?? (isAddingCash ? "Cash count adjustment added." : "Cash count adjustment removed."),
+        isExcluded: payload.transaction.isExcluded ?? false,
+        isTransfer: payload.transaction.isTransfer ?? false,
+        institution: account.institution,
+        accountNumber: account.accountNumber,
+        source: "manual",
+        importFileId: null,
+        warningReason: null,
+        splitBill: null,
+        rawPayload: payload.transaction.rawPayload,
+      };
+
+      setTransactions((current) => [createdTransaction, ...current.filter((transaction) => transaction.id !== createdTransaction.id)]);
+      setTransactionTotalCount((current) => current + 1);
+      setCashAdjustmentOpen(false);
+      setCashAdjustmentAmount("");
+      setMessage(isAddingCash ? "Cash added." : "Cash removed.");
+      router.refresh();
+    } catch (error) {
+      setCashAdjustmentError(error instanceof Error ? error.message : "Unable to save cash adjustment.");
+    } finally {
+      setCashAdjustmentSaving(false);
+    }
   };
 
   const saveBalanceFromCard = async (event: FormEvent<HTMLFormElement>) => {
@@ -3837,9 +3949,9 @@ function AccountDetailPageContent() {
                 <button
                   className="button button-secondary button-small accounts-detail__cash-add-button"
                   type="button"
-                  onClick={() => setCashQuickAddOpen(true)}
+                  onClick={openCashAdjustment}
                 >
-                  Add cash
+                  Adjust cash
                 </button>
               ) : null}
 
@@ -5209,15 +5321,74 @@ function AccountDetailPageContent() {
           </div>
         )}
 
-        {cashQuickAddOpen && account?.workspaceId ? (
-          <div className="modal-backdrop" role="presentation" onClick={() => setCashQuickAddOpen(false)}>
-            <DashboardManualTransactionModal
-              workspaceId={account.workspaceId}
-              accounts={[account]}
-              initialAccountId={account.id}
-              initialType="credit"
-              onClose={() => setCashQuickAddOpen(false)}
-            />
+        {cashAdjustmentOpen && account?.workspaceId ? (
+          <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={closeCashAdjustment}>
+            <section
+              className="modal-card modal-card--cash-adjustment glass"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cash-adjustment-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="modal-head">
+                <div>
+                  <p className="eyebrow">Cash account</p>
+                  <h4 id="cash-adjustment-title">Adjust cash</h4>
+                </div>
+                <button className="icon-button" type="button" onClick={closeCashAdjustment} aria-label="Close cash adjustment">
+                  ×
+                </button>
+              </div>
+
+              <form className="accounts-detail__cash-adjustment-form" onSubmit={saveCashAdjustment}>
+                <div className="accounts-detail__cash-adjustment-toggle" role="group" aria-label="Cash adjustment type">
+                  <button
+                    type="button"
+                    className={`accounts-detail__cash-adjustment-toggle-button ${cashAdjustmentMode === "add" ? "is-active" : ""}`}
+                    onClick={() => setCashAdjustmentMode("add")}
+                    aria-pressed={cashAdjustmentMode === "add"}
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    className={`accounts-detail__cash-adjustment-toggle-button ${cashAdjustmentMode === "remove" ? "is-active" : ""}`}
+                    onClick={() => setCashAdjustmentMode("remove")}
+                    aria-pressed={cashAdjustmentMode === "remove"}
+                  >
+                    Remove
+                  </button>
+                </div>
+
+                <label className="accounts-detail__cash-adjustment-field">
+                  <span>Amount</span>
+                  <div className="accounts-detail__cash-adjustment-amount-row">
+                    <span className="accounts-detail__cash-adjustment-currency">{account.currency}</span>
+                    <input
+                      value={cashAdjustmentAmount}
+                      onChange={(event) => setCashAdjustmentAmount(event.target.value)}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      autoFocus
+                      required
+                    />
+                  </div>
+                </label>
+
+                {cashAdjustmentError ? <p className="field-error">{cashAdjustmentError}</p> : null}
+
+                <div className="form-actions">
+                  <button className="button button-secondary" type="button" onClick={closeCashAdjustment} disabled={cashAdjustmentSaving}>
+                    Cancel
+                  </button>
+                  <button className="button button-primary" type="submit" disabled={cashAdjustmentSaving}>
+                    {cashAdjustmentSaving ? "Saving..." : cashAdjustmentMode === "add" ? "Add cash" : "Remove cash"}
+                  </button>
+                </div>
+              </form>
+            </section>
           </div>
         ) : null}
       </section>
