@@ -5,13 +5,14 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useClerk, useSession, useUser } from "@clerk/nextjs";
 import { UserAvatarEditor } from "@/components/user-avatar-editor";
 import { applyHelperTextPreference, HELPER_TEXT_STORAGE_KEY, readStoredHelperTextPreference } from "@/lib/helper-text-preference";
 import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme-preference";
 import { clearAllWorkspaceCaches } from "@/lib/workspace-cache";
 import { persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import type { BillingInterval } from "@/lib/billing-plans";
+import { signOutToLanding } from "@/lib/sign-out";
 
 const SettingsCategoriesPanel = dynamic(
   () => import("@/components/settings-categories-panel").then((module) => module.SettingsCategoriesPanel),
@@ -46,7 +47,17 @@ const SettingsPlanPanel = dynamic(
   }
 );
 
-type SettingsSectionKey = "account" | "profiles" | "display" | "data" | "categories" | "plan";
+type SettingsSectionKey =
+  | "account"
+  | "profiles"
+  | "notifications"
+  | "security"
+  | "imports"
+  | "regional"
+  | "display"
+  | "data"
+  | "categories"
+  | "plan";
 
 type ProfileSummary = {
   id: string;
@@ -65,6 +76,47 @@ type BillingSubscriptionSummary = {
   currentPeriodEnd: string | null;
   nextBillingTime: string | null;
   planTier: "free" | "pro";
+};
+
+type NotificationPreferences = {
+  weeklySummary: boolean;
+  importComplete: boolean;
+  transactionsNeedReview: boolean;
+  budgetWarnings: boolean;
+  inApp: boolean;
+  email: boolean;
+};
+
+type ImportPreferences = {
+  duplicateHandling: "ask" | "skip" | "replace";
+  reviewLowConfidence: boolean;
+  openReviewAfterImport: boolean;
+  askBeforeDifferentProfile: boolean;
+};
+
+type RegionalPreferences = {
+  baseCurrency: "PHP" | "USD";
+  dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD";
+  numberFormat: "1,234.56" | "1.234,56";
+  timeZone: string;
+};
+
+type DataUsePreferences = {
+  improveSuggestions: boolean;
+  adviserUsesContext: boolean;
+  clearCachedStateOnSignOut: boolean;
+};
+
+type WorkspaceDefaults = {
+  defaultLandingPage: "dashboard" | "transactions" | "accounts" | "reports";
+  defaultImportProfileId: string;
+};
+
+type SecuritySessionSummary = {
+  id: string;
+  status: string;
+  lastActiveAt: string | null;
+  isCurrent: boolean;
 };
 
 type DataDeleteScope = "transactions" | "accounts" | "all";
@@ -95,6 +147,11 @@ type SettingsHubProps = {
 };
 
 const SETTINGS_ACCOUNT_IDENTITY_CACHE_KEY = "clover.settings.account-identity.v1";
+const SETTINGS_NOTIFICATIONS_KEY = "clover.settings.notifications.v1";
+const SETTINGS_IMPORTS_KEY = "clover.settings.imports.v1";
+const SETTINGS_REGIONAL_KEY = "clover.settings.regional.v1";
+const SETTINGS_DATA_USE_KEY = "clover.settings.data-use.v1";
+const SETTINGS_WORKSPACE_DEFAULTS_KEY = "clover.settings.workspace-defaults.v1";
 
 type SettingsAccountIdentityCache = {
   firstName?: string | null;
@@ -120,6 +177,94 @@ const readStoredAccountIdentity = (): SettingsAccountIdentityCache | null => {
     return null;
   }
 };
+
+const readStoredJsonValue = <T,>(key: string, fallback: T): T => {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      return fallback;
+    }
+
+    return { ...fallback, ...(JSON.parse(raw) as Partial<T>) };
+  } catch {
+    return fallback;
+  }
+};
+
+const writeStoredJsonValue = (key: string, value: unknown) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage failures and keep the in-memory preference state.
+  }
+};
+
+const getDefaultProfileId = (profiles: ProfileSummary[]) =>
+  profiles
+    .filter((profile) => profile.type === "personal")
+    .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())[0]?.id ?? "";
+
+const formatRelativeSessionTime = (value: string | null) => {
+  if (!value) {
+    return "No recent activity";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "No recent activity";
+  }
+
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
+  if (diffMinutes < 60) {
+    return `Active ${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `Active ${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  }
+
+  const diffDays = Math.round(diffHours / 24);
+  return `Active ${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+};
+
+function SettingsToggleRow({
+  label,
+  helper,
+  checked,
+  onToggle,
+}: {
+  label: string;
+  helper?: string;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="settings-toggle-row">
+      <div className="settings-toggle-row__copy">
+        <strong>{label}</strong>
+        {helper ? <span>{helper}</span> : null}
+      </div>
+      <button
+        type="button"
+        className={`settings-display-toggle__button${checked ? " is-on" : ""}`}
+        aria-pressed={checked}
+        onClick={onToggle}
+      >
+        {checked ? "On" : "Off"}
+      </button>
+    </div>
+  );
+}
 
 const writeStoredAccountIdentity = (identity: SettingsAccountIdentityCache) => {
   if (typeof window === "undefined") {
@@ -155,6 +300,22 @@ const sectionCopy: Record<
   profiles: {
     title: "Profiles",
     icon: <SettingsIcon path="M5 6h14v4H5zM5 11h14v4H5zM5 16h14v2H5z" />,
+  },
+  notifications: {
+    title: "Notifications",
+    icon: <SettingsIcon path="M12 4a4 4 0 0 0-4 4v2.1c0 .7-.2 1.4-.6 2l-1.2 1.8A1 1 0 0 0 7 15.5h10a1 1 0 0 0 .8-1.6l-1.2-1.8c-.4-.6-.6-1.3-.6-2V8a4 4 0 0 0-4-4Z M10 18a2 2 0 0 0 4 0" />,
+  },
+  security: {
+    title: "Security",
+    icon: <SettingsIcon path="M12 3 5 6v5c0 4.2 2.7 8 7 10 4.3-2 7-5.8 7-10V6l-7-3Z M9.5 12l1.7 1.7L14.8 10" />,
+  },
+  imports: {
+    title: "Import Preferences",
+    icon: <SettingsIcon path="M12 4v10M8 10l4 4 4-4M5 18h14" />,
+  },
+  regional: {
+    title: "Regional Preferences",
+    icon: <SettingsIcon path="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z M3 12h18M12 3c2.6 2.4 4 5.7 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.7-4-9s1.4-6.6 4-9Z" />,
   },
   display: {
     title: "Display",
@@ -213,6 +374,8 @@ export function SettingsHub({
   disableWorkspaceBootstrap = false,
 }: SettingsHubProps) {
   const router = useRouter();
+  const { signOut } = useClerk();
+  const { session } = useSession();
   const { isLoaded, isSignedIn, user } = useUser();
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>(initialSection);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId);
@@ -261,6 +424,39 @@ export function SettingsHub({
   });
   const [planLoaded, setPlanLoaded] = useState(false);
   const [planLoading, setPlanLoading] = useState(false);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>({
+    weeklySummary: true,
+    importComplete: true,
+    transactionsNeedReview: true,
+    budgetWarnings: true,
+    inApp: true,
+    email: false,
+  });
+  const [importPreferences, setImportPreferences] = useState<ImportPreferences>({
+    duplicateHandling: "ask",
+    reviewLowConfidence: true,
+    openReviewAfterImport: true,
+    askBeforeDifferentProfile: true,
+  });
+  const [regionalPreferences, setRegionalPreferences] = useState<RegionalPreferences>({
+    baseCurrency: "PHP",
+    dateFormat: "MM/DD/YYYY",
+    numberFormat: "1,234.56",
+    timeZone: "Asia/Manila",
+  });
+  const [dataUsePreferences, setDataUsePreferences] = useState<DataUsePreferences>({
+    improveSuggestions: true,
+    adviserUsesContext: true,
+    clearCachedStateOnSignOut: true,
+  });
+  const [workspaceDefaults, setWorkspaceDefaults] = useState<WorkspaceDefaults>({
+    defaultLandingPage: "dashboard",
+    defaultImportProfileId: initialSelectedProfileId,
+  });
+  const [securitySessions, setSecuritySessions] = useState<SecuritySessionSummary[]>([]);
+  const [securityLoaded, setSecurityLoaded] = useState(false);
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityMessage, setSecurityMessage] = useState<string | null>(null);
   const [dataDeleteModal, setDataDeleteModal] = useState<DataDeleteModalState | null>(null);
   const [dataDeleteInFlight, setDataDeleteInFlight] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -268,6 +464,8 @@ export function SettingsHub({
   const workspaceReady = Boolean(workspaceId);
 
   const activeProfile = profileList.find((profile) => profile.id === activeProfileId) ?? profileList[0] ?? null;
+  const defaultProfileId = getDefaultProfileId(profileList);
+  const accountDraftChanged = firstNameDraft.trim() !== (firstName ?? "").trim() || lastNameDraft.trim() !== (lastName ?? "").trim();
   const primaryEmail = user?.primaryEmailAddress?.emailAddress ?? email;
   const connectedAccounts = user?.externalAccounts ?? [];
 
@@ -628,6 +826,49 @@ export function SettingsHub({
   }, []);
 
   useEffect(() => {
+    const guessedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Manila";
+    setNotificationPreferences(
+      readStoredJsonValue<NotificationPreferences>(SETTINGS_NOTIFICATIONS_KEY, {
+        weeklySummary: true,
+        importComplete: true,
+        transactionsNeedReview: true,
+        budgetWarnings: true,
+        inApp: true,
+        email: false,
+      })
+    );
+    setImportPreferences(
+      readStoredJsonValue<ImportPreferences>(SETTINGS_IMPORTS_KEY, {
+        duplicateHandling: "ask",
+        reviewLowConfidence: true,
+        openReviewAfterImport: true,
+        askBeforeDifferentProfile: true,
+      })
+    );
+    setRegionalPreferences(
+      readStoredJsonValue<RegionalPreferences>(SETTINGS_REGIONAL_KEY, {
+        baseCurrency: "PHP",
+        dateFormat: "MM/DD/YYYY",
+        numberFormat: "1,234.56",
+        timeZone: guessedTimeZone,
+      })
+    );
+    setDataUsePreferences(
+      readStoredJsonValue<DataUsePreferences>(SETTINGS_DATA_USE_KEY, {
+        improveSuggestions: true,
+        adviserUsesContext: true,
+        clearCachedStateOnSignOut: true,
+      })
+    );
+    setWorkspaceDefaults(
+      readStoredJsonValue<WorkspaceDefaults>(SETTINGS_WORKSPACE_DEFAULTS_KEY, {
+        defaultLandingPage: "dashboard",
+        defaultImportProfileId: initialSelectedProfileId,
+      })
+    );
+  }, [initialSelectedProfileId]);
+
+  useEffect(() => {
     window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
     applyThemeMode(themeMode);
   }, [themeMode]);
@@ -636,6 +877,90 @@ export function SettingsHub({
     window.localStorage.setItem(HELPER_TEXT_STORAGE_KEY, helperTextVisible ? "visible" : "hidden");
     applyHelperTextPreference(helperTextVisible);
   }, [helperTextVisible]);
+
+  useEffect(() => {
+    writeStoredJsonValue(SETTINGS_NOTIFICATIONS_KEY, notificationPreferences);
+  }, [notificationPreferences]);
+
+  useEffect(() => {
+    writeStoredJsonValue(SETTINGS_IMPORTS_KEY, importPreferences);
+  }, [importPreferences]);
+
+  useEffect(() => {
+    writeStoredJsonValue(SETTINGS_REGIONAL_KEY, regionalPreferences);
+  }, [regionalPreferences]);
+
+  useEffect(() => {
+    writeStoredJsonValue(SETTINGS_DATA_USE_KEY, dataUsePreferences);
+  }, [dataUsePreferences]);
+
+  useEffect(() => {
+    writeStoredJsonValue(SETTINGS_WORKSPACE_DEFAULTS_KEY, workspaceDefaults);
+  }, [workspaceDefaults]);
+
+  useEffect(() => {
+    if (!profileList.length) {
+      return;
+    }
+
+    setWorkspaceDefaults((current) => {
+      const fallbackProfileId = defaultProfileId || profileList[0]?.id || "";
+      if (!current.defaultImportProfileId || !profileList.some((profile) => profile.id === current.defaultImportProfileId)) {
+        return {
+          ...current,
+          defaultImportProfileId: fallbackProfileId,
+        };
+      }
+
+      return current;
+    });
+  }, [defaultProfileId, profileList]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSecuritySessions = async () => {
+      if (activeSection !== "security" || securityLoaded || securityLoading || !isLoaded || !user) {
+        return;
+      }
+
+      setSecurityLoading(true);
+      setSecurityMessage(null);
+
+      try {
+        const sessions = await user.getSessions();
+        if (cancelled) {
+          return;
+        }
+
+        setSecuritySessions(
+          sessions.map((entry) => ({
+            id: entry.id,
+            status: entry.status,
+            lastActiveAt:
+              (typeof entry.lastActiveAt === "number" ? new Date(entry.lastActiveAt).toISOString() : null) ??
+              (typeof entry.expireAt === "number" ? new Date(entry.expireAt).toISOString() : null),
+            isCurrent: entry.id === session?.id,
+          }))
+        );
+        setSecurityLoaded(true);
+      } catch (error) {
+        if (!cancelled) {
+          setSecurityMessage(error instanceof Error ? error.message : "Unable to load active sessions.");
+        }
+      } finally {
+        if (!cancelled) {
+          setSecurityLoading(false);
+        }
+      }
+    };
+
+    void loadSecuritySessions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, isLoaded, securityLoaded, securityLoading, session?.id, user]);
 
   useEffect(() => {
     if (!dataDeleteModal) {
@@ -664,6 +989,44 @@ export function SettingsHub({
 
     const blob = await response.blob();
     downloadBlob(blob, fileName);
+  };
+
+  const handleSignOutOtherDevices = () => {
+    if (!user || !session?.id) {
+      setSecurityMessage("No additional sessions found.");
+      return;
+    }
+
+    startTransition(async () => {
+      setSecurityMessage(null);
+
+      try {
+        const sessions = await user.getSessions();
+        const otherSessions = sessions.filter((entry) => entry.id !== session.id);
+
+        if (!otherSessions.length) {
+          setSecurityMessage("No other signed-in devices were found.");
+          return;
+        }
+
+        await Promise.all(otherSessions.map((entry) => entry.remove()));
+        const refreshedSessions = await user.getSessions();
+        setSecuritySessions(
+          refreshedSessions.map((entry) => ({
+            id: entry.id,
+            status: entry.status,
+            lastActiveAt:
+              (typeof entry.lastActiveAt === "number" ? new Date(entry.lastActiveAt).toISOString() : null) ??
+              (typeof entry.expireAt === "number" ? new Date(entry.expireAt).toISOString() : null),
+            isCurrent: entry.id === session.id,
+          }))
+        );
+        setSecurityLoaded(true);
+        setSecurityMessage("Signed out of other devices.");
+      } catch (error) {
+        setSecurityMessage(error instanceof Error ? error.message : "Unable to sign out other devices.");
+      }
+    });
   };
 
   const handleAccountSave = () => {
@@ -1023,11 +1386,6 @@ export function SettingsHub({
   };
 
   const handleProfileRemove = (profileId: string, profileName: string) => {
-    const defaultProfileId =
-      profileList
-        .filter((profile) => profile.type === "personal")
-        .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())[0]?.id ?? null;
-
     if (profileId === defaultProfileId) {
       setProfileMessage("The Personal profile is required and cannot be removed.");
       return;
@@ -1066,6 +1424,14 @@ export function SettingsHub({
         setProfileMessage(error instanceof Error ? error.message : "Unable to remove profile.");
       }
     });
+  };
+
+  const handleSafeSignOut = () => {
+    if (dataUsePreferences.clearCachedStateOnSignOut) {
+      clearAllWorkspaceCaches();
+    }
+
+    void signOutToLanding(signOut);
   };
 
   return (
@@ -1175,17 +1541,21 @@ export function SettingsHub({
                     <span>Email</span>
                     <input value={primaryEmail} readOnly />
                   </label>
-                  <div className="settings-account-form__actions">
-                    <button
-                      type="button"
-                      className="button button-primary button-small"
-                      onClick={handleAccountSave}
-                      disabled={isPending}
-                    >
-                      Save account
-                    </button>
-                    {accountMessage ? <p className="settings-helper">{accountMessage}</p> : null}
-                  </div>
+                  {accountDraftChanged || accountMessage ? (
+                    <div className="settings-account-form__actions">
+                      {accountDraftChanged ? (
+                        <button
+                          type="button"
+                          className="button button-primary button-small"
+                          onClick={handleAccountSave}
+                          disabled={isPending}
+                        >
+                          Save account
+                        </button>
+                      ) : null}
+                      {accountMessage ? <p className="settings-helper">{accountMessage}</p> : null}
+                    </div>
+                  ) : null}
 
                   <div className="settings-account-password">
                     <button
@@ -1291,6 +1661,8 @@ export function SettingsHub({
             isPending={isPending}
             profileMessage={profileMessage}
             profileListMessage={profileListMessage}
+            defaultProfileId={defaultProfileId}
+            workspaceDefaults={workspaceDefaults}
             onNewProfileNameChange={setNewProfileName}
             onRenameDraftChange={(profileId, value) =>
               setProfileRenameDrafts((current) => ({
@@ -1298,11 +1670,298 @@ export function SettingsHub({
                 [profileId]: value,
               }))
             }
+            onWorkspaceDefaultsChange={setWorkspaceDefaults}
             onCreateProfile={handleProfileCreate}
             onRenameProfile={handleProfileRename}
             onSwitchProfile={handleProfileSwitch}
             onRemoveProfile={handleProfileRemove}
           />
+        ) : null}
+
+        {activeSection === "notifications" ? (
+          <section className="settings-section settings-section--swap" role="tabpanel">
+            <div className="settings-section__intro settings-section__intro--single">
+              <div>
+                <h4>Notifications</h4>
+              </div>
+            </div>
+
+            <article className="settings-action-card settings-preference-card">
+              <div className="settings-preference-card__list">
+                <SettingsToggleRow
+                  label="Weekly summary"
+                  helper="Get a recurring snapshot of your money trends."
+                  checked={notificationPreferences.weeklySummary}
+                  onToggle={() =>
+                    setNotificationPreferences((current) => ({
+                      ...current,
+                      weeklySummary: !current.weeklySummary,
+                    }))
+                  }
+                />
+                <SettingsToggleRow
+                  label="Import complete"
+                  helper="Know when imports finish processing."
+                  checked={notificationPreferences.importComplete}
+                  onToggle={() =>
+                    setNotificationPreferences((current) => ({
+                      ...current,
+                      importComplete: !current.importComplete,
+                    }))
+                  }
+                />
+                <SettingsToggleRow
+                  label="Transactions need review"
+                  helper="Get alerts when Clover needs your confirmation."
+                  checked={notificationPreferences.transactionsNeedReview}
+                  onToggle={() =>
+                    setNotificationPreferences((current) => ({
+                      ...current,
+                      transactionsNeedReview: !current.transactionsNeedReview,
+                    }))
+                  }
+                />
+                <SettingsToggleRow
+                  label="Budget or plan-limit warnings"
+                  helper="Receive a heads-up before you run into important limits."
+                  checked={notificationPreferences.budgetWarnings}
+                  onToggle={() =>
+                    setNotificationPreferences((current) => ({
+                      ...current,
+                      budgetWarnings: !current.budgetWarnings,
+                    }))
+                  }
+                />
+                <SettingsToggleRow
+                  label="In-app notifications"
+                  checked={notificationPreferences.inApp}
+                  onToggle={() =>
+                    setNotificationPreferences((current) => ({
+                      ...current,
+                      inApp: !current.inApp,
+                    }))
+                  }
+                />
+                <SettingsToggleRow
+                  label="Email notifications"
+                  checked={notificationPreferences.email}
+                  onToggle={() =>
+                    setNotificationPreferences((current) => ({
+                      ...current,
+                      email: !current.email,
+                    }))
+                  }
+                />
+              </div>
+            </article>
+          </section>
+        ) : null}
+
+        {activeSection === "security" ? (
+          <section className="settings-section settings-section--swap" role="tabpanel">
+            <div className="settings-section__intro settings-section__intro--single">
+              <div>
+                <h4>Security</h4>
+              </div>
+            </div>
+
+            <div className="settings-preference-grid">
+              <article className="settings-action-card settings-preference-card">
+                <div className="settings-preference-card__head">
+                  <h5>Active Sessions</h5>
+                </div>
+                <div className="settings-session-list">
+                  {securitySessions.length ? (
+                    securitySessions.map((entry) => (
+                      <div key={entry.id} className="settings-session-item">
+                        <strong>{entry.isCurrent ? "Current device" : "Signed-in device"}</strong>
+                        <span>{formatRelativeSessionTime(entry.lastActiveAt)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="settings-session-item">
+                      <strong>{securityLoading ? "Loading sessions" : "Current device"}</strong>
+                      <span>{securityLoading ? "Checking your active sessions now." : "This is your only active session."}</span>
+                    </div>
+                  )}
+                </div>
+              </article>
+
+              <article className="settings-action-card settings-preference-card">
+                <div className="settings-preference-card__head">
+                  <h5>Sign Out Other Devices</h5>
+                </div>
+                <p>End all other active sessions and keep only this device signed in.</p>
+                <div className="settings-action-card__row">
+                  <button
+                    type="button"
+                    className="button button-secondary button-small"
+                    disabled={isPending || securityLoading}
+                    onClick={handleSignOutOtherDevices}
+                  >
+                    Sign out other devices
+                  </button>
+                  <button type="button" className="button button-secondary button-small" onClick={handleSafeSignOut}>
+                    Sign out here
+                  </button>
+                </div>
+                {securityMessage ? <p className="settings-helper">{securityMessage}</p> : null}
+              </article>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === "imports" ? (
+          <section className="settings-section settings-section--swap" role="tabpanel">
+            <div className="settings-section__intro settings-section__intro--single">
+              <div>
+                <h4>Import Preferences</h4>
+              </div>
+            </div>
+
+            <div className="settings-preference-grid">
+              <article className="settings-action-card settings-preference-card">
+                <div className="settings-preference-card__head">
+                  <h5>Review flow</h5>
+                </div>
+                <div className="settings-preference-card__list">
+                  <SettingsToggleRow
+                    label="Require manual review for low-confidence rows"
+                    checked={importPreferences.reviewLowConfidence}
+                    onToggle={() =>
+                      setImportPreferences((current) => ({
+                        ...current,
+                        reviewLowConfidence: !current.reviewLowConfidence,
+                      }))
+                    }
+                  />
+                  <SettingsToggleRow
+                    label="Open review automatically after import"
+                    checked={importPreferences.openReviewAfterImport}
+                    onToggle={() =>
+                      setImportPreferences((current) => ({
+                        ...current,
+                        openReviewAfterImport: !current.openReviewAfterImport,
+                      }))
+                    }
+                  />
+                  <SettingsToggleRow
+                    label="Ask before importing into a different profile"
+                    checked={importPreferences.askBeforeDifferentProfile}
+                    onToggle={() =>
+                      setImportPreferences((current) => ({
+                        ...current,
+                        askBeforeDifferentProfile: !current.askBeforeDifferentProfile,
+                      }))
+                    }
+                  />
+                </div>
+              </article>
+
+              <article className="settings-action-card settings-preference-card">
+                <div className="settings-preference-card__head">
+                  <h5>Duplicates</h5>
+                </div>
+                <label className="settings-inline-field">
+                  <span>When Clover suspects a duplicate import</span>
+                  <select
+                    value={importPreferences.duplicateHandling}
+                    onChange={(event) =>
+                      setImportPreferences((current) => ({
+                        ...current,
+                        duplicateHandling: event.target.value as ImportPreferences["duplicateHandling"],
+                      }))
+                    }
+                  >
+                    <option value="ask">Ask me first</option>
+                    <option value="skip">Skip duplicates</option>
+                    <option value="replace">Replace older copy</option>
+                  </select>
+                </label>
+              </article>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === "regional" ? (
+          <section className="settings-section settings-section--swap" role="tabpanel">
+            <div className="settings-section__intro settings-section__intro--single">
+              <div>
+                <h4>Regional Preferences</h4>
+              </div>
+            </div>
+
+            <div className="settings-preference-grid">
+              <article className="settings-action-card settings-preference-card">
+                <label className="settings-inline-field">
+                  <span>Base currency</span>
+                  <select
+                    value={regionalPreferences.baseCurrency}
+                    onChange={(event) =>
+                      setRegionalPreferences((current) => ({
+                        ...current,
+                        baseCurrency: event.target.value as RegionalPreferences["baseCurrency"],
+                      }))
+                    }
+                  >
+                    <option value="PHP">PHP</option>
+                    <option value="USD">USD</option>
+                  </select>
+                </label>
+                <label className="settings-inline-field">
+                  <span>Date format</span>
+                  <select
+                    value={regionalPreferences.dateFormat}
+                    onChange={(event) =>
+                      setRegionalPreferences((current) => ({
+                        ...current,
+                        dateFormat: event.target.value as RegionalPreferences["dateFormat"],
+                      }))
+                    }
+                  >
+                    <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                    <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                  </select>
+                </label>
+              </article>
+
+              <article className="settings-action-card settings-preference-card">
+                <label className="settings-inline-field">
+                  <span>Number format</span>
+                  <select
+                    value={regionalPreferences.numberFormat}
+                    onChange={(event) =>
+                      setRegionalPreferences((current) => ({
+                        ...current,
+                        numberFormat: event.target.value as RegionalPreferences["numberFormat"],
+                      }))
+                    }
+                  >
+                    <option value="1,234.56">1,234.56</option>
+                    <option value="1.234,56">1.234,56</option>
+                  </select>
+                </label>
+                <label className="settings-inline-field">
+                  <span>Time zone</span>
+                  <select
+                    value={regionalPreferences.timeZone}
+                    onChange={(event) =>
+                      setRegionalPreferences((current) => ({
+                        ...current,
+                        timeZone: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="Asia/Manila">Asia/Manila</option>
+                    <option value="UTC">UTC</option>
+                    <option value="America/Los_Angeles">America/Los_Angeles</option>
+                    <option value="America/New_York">America/New_York</option>
+                  </select>
+                </label>
+              </article>
+            </div>
+          </section>
         ) : null}
 
         {activeSection === "display" ? (
@@ -1468,6 +2127,44 @@ export function SettingsHub({
                   </div>
                 </section>
               </div>
+
+              <section className="settings-data-privacy">
+                <div className="settings-data-zone__header">
+                  <h6>Privacy & Data Use</h6>
+                </div>
+                <div className="settings-preference-card__list">
+                  <SettingsToggleRow
+                    label="Improve Clover suggestions from my confirmed edits"
+                    checked={dataUsePreferences.improveSuggestions}
+                    onToggle={() =>
+                      setDataUsePreferences((current) => ({
+                        ...current,
+                        improveSuggestions: !current.improveSuggestions,
+                      }))
+                    }
+                  />
+                  <SettingsToggleRow
+                    label="Use my data context in Adviser"
+                    checked={dataUsePreferences.adviserUsesContext}
+                    onToggle={() =>
+                      setDataUsePreferences((current) => ({
+                        ...current,
+                        adviserUsesContext: !current.adviserUsesContext,
+                      }))
+                    }
+                  />
+                  <SettingsToggleRow
+                    label="Clear cached app state on sign out"
+                    checked={dataUsePreferences.clearCachedStateOnSignOut}
+                    onToggle={() =>
+                      setDataUsePreferences((current) => ({
+                        ...current,
+                        clearCachedStateOnSignOut: !current.clearCachedStateOnSignOut,
+                      }))
+                    }
+                  />
+                </div>
+              </section>
             </article>
           </section>
         ) : null}

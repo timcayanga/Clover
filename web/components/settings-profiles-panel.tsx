@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 
 type ProfileSummary = {
@@ -19,11 +19,22 @@ type SettingsProfilesPanelProps = {
   profilesLoading: boolean;
   newProfileName: string;
   profileRenameDrafts: Record<string, string>;
+  defaultProfileId: string;
+  workspaceDefaults: {
+    defaultLandingPage: "dashboard" | "transactions" | "accounts" | "reports";
+    defaultImportProfileId: string;
+  };
   isPending: boolean;
   profileMessage: string | null;
   profileListMessage: string | null;
   onNewProfileNameChange: (value: string) => void;
   onRenameDraftChange: (profileId: string, value: string) => void;
+  onWorkspaceDefaultsChange: Dispatch<
+    SetStateAction<{
+      defaultLandingPage: "dashboard" | "transactions" | "accounts" | "reports";
+      defaultImportProfileId: string;
+    }>
+  >;
   onCreateProfile: () => void;
   onRenameProfile: (profileId: string) => void;
   onSwitchProfile: (profileId: string) => void;
@@ -38,21 +49,20 @@ export function SettingsProfilesPanel({
   profilesLoading: _profilesLoading,
   newProfileName,
   profileRenameDrafts,
+  defaultProfileId,
+  workspaceDefaults,
   isPending,
   profileMessage,
   profileListMessage,
   onNewProfileNameChange,
   onRenameDraftChange,
+  onWorkspaceDefaultsChange,
   onCreateProfile,
   onRenameProfile,
   onSwitchProfile,
   onRemoveProfile,
 }: SettingsProfilesPanelProps) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const defaultProfileId =
-    profileList
-      .filter((profile) => profile.type === "personal")
-      .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())[0]?.id ?? null;
 
   return (
     <section className="settings-section settings-section--swap" role="tabpanel">
@@ -127,6 +137,51 @@ export function SettingsProfilesPanel({
           Create Profile
         </button>
       </div>
+
+      <article className="settings-action-card settings-profile-defaults">
+        <div className="settings-account-card__head">
+          <h5>Workspace Defaults</h5>
+        </div>
+        <div className="settings-profile-defaults__grid">
+          <label className="settings-inline-field">
+            <span>Default landing page</span>
+            <select
+              value={workspaceDefaults.defaultLandingPage}
+              onChange={(event) =>
+                onWorkspaceDefaultsChange((current) => ({
+                  ...current,
+                  defaultLandingPage: event.target.value as typeof current.defaultLandingPage,
+                }))
+              }
+            >
+              <option value="dashboard">Dashboard</option>
+              <option value="transactions">Transactions</option>
+              <option value="accounts">Accounts</option>
+              <option value="reports">Reports</option>
+            </select>
+          </label>
+
+          <label className="settings-inline-field">
+            <span>Default import profile</span>
+            <select
+              value={workspaceDefaults.defaultImportProfileId}
+              onChange={(event) =>
+                onWorkspaceDefaultsChange((current) => ({
+                  ...current,
+                  defaultImportProfileId: event.target.value,
+                }))
+              }
+            >
+              {profileList.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                  {profile.id === defaultProfileId ? " (Personal)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </article>
 
       {profileMessage || profileListMessage ? <p className="settings-helper">{profileMessage ?? profileListMessage}</p> : null}
     </section>

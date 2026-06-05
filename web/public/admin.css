@@ -22100,16 +22100,117 @@ input.transaction-inline-edit--amount::placeholder {
 .settings-inline-field {
   display: grid;
   gap: 6px;
-  min-width: 0;
-  width: 170px;
+  min-width: min(100%, 240px);
   color: var(--muted);
   font-size: 13px;
 }
 
-.settings-inline-field input {
+.settings-inline-field input,
+.settings-inline-field select {
   min-height: 42px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  padding: 0 14px;
+  color: var(--text);
+}
+
+.settings-data-danger-controls .settings-inline-field {
+  min-width: 0;
+  width: 170px;
+}
+
+.settings-preference-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settings-preference-card {
+  align-content: start;
+}
+
+.settings-preference-card__head,
+.settings-preference-card__list {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.settings-toggle-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.settings-toggle-row:last-child {
+  padding-bottom: 0;
+}
+
+.settings-toggle-row__copy {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-toggle-row__copy strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.settings-toggle-row__copy span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-session-list {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-session-item {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.settings-session-item strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.settings-session-item span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.settings-profile-defaults {
+  margin-top: 4px;
+}
+
+.settings-profile-defaults__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settings-data-privacy {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .settings-plan-grid {
@@ -22586,8 +22687,18 @@ input.transaction-inline-edit--amount::placeholder {
     justify-content: space-between;
   }
 
-  .settings-inline-field {
+  .settings-data-danger-controls .settings-inline-field {
     width: min(100%, 220px);
+  }
+
+  .settings-preference-grid,
+  .settings-profile-defaults__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-toggle-row {
+    align-items: start;
+    flex-direction: column;
   }
 
   .settings-data-grid--split,
