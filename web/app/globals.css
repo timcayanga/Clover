@@ -32346,6 +32346,11 @@ button.accounts-detail__transaction-head-cell {
   gap: 12px;
 }
 
+.settings-category-section--panel {
+  padding: 18px;
+  border-radius: 24px;
+}
+
 .settings-category-section__head {
   display: flex;
   align-items: center;
@@ -32377,7 +32382,7 @@ button.accounts-detail__transaction-head-cell {
   overflow: hidden;
   border-radius: 20px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .settings-category-table--compact {
@@ -32406,10 +32411,12 @@ button.accounts-detail__transaction-head-cell {
 
 .settings-category-table--compact .settings-category-table__row--built-in {
   grid-template-columns: minmax(0, 1fr);
+  background: rgba(255, 255, 255, 0.74);
 }
 
 .settings-category-table--compact .settings-category-table__row--custom {
   grid-template-columns: minmax(0, 1fr) auto;
+  background: rgba(255, 255, 255, 0.74);
 }
 
 .settings-category-table__row--head {

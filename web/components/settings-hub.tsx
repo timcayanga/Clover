@@ -5,10 +5,11 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { useClerk, useSession, useUser } from "@clerk/nextjs";
+import { useClerk, useSession, useSessionList, useUser } from "@clerk/nextjs";
 import { UserAvatarEditor } from "@/components/user-avatar-editor";
 import { applyHelperTextPreference, HELPER_TEXT_STORAGE_KEY, readStoredHelperTextPreference } from "@/lib/helper-text-preference";
 import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme-preference";
+import { getCurrencyCatalogCodes, getCurrencyCatalogOption } from "@/lib/currencies";
 import { clearAllWorkspaceCaches } from "@/lib/workspace-cache";
 import { persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import type { BillingInterval } from "@/lib/billing-plans";
@@ -95,7 +96,7 @@ type ImportPreferences = {
 };
 
 type RegionalPreferences = {
-  baseCurrency: "PHP" | "USD";
+  baseCurrency: string;
   dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD";
   numberFormat: "1,234.56" | "1.234,56";
   timeZone: string;
@@ -152,6 +153,27 @@ const SETTINGS_IMPORTS_KEY = "clover.settings.imports.v1";
 const SETTINGS_REGIONAL_KEY = "clover.settings.regional.v1";
 const SETTINGS_DATA_USE_KEY = "clover.settings.data-use.v1";
 const SETTINGS_WORKSPACE_DEFAULTS_KEY = "clover.settings.workspace-defaults.v1";
+const FALLBACK_TIME_ZONES = [
+  "GMT",
+  "UTC",
+  "Africa/Johannesburg",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/New_York",
+  "America/Phoenix",
+  "Asia/Dubai",
+  "Asia/Hong_Kong",
+  "Asia/Kolkata",
+  "Asia/Manila",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "Europe/Berlin",
+  "Europe/London",
+  "Europe/Paris",
+  "Pacific/Auckland",
+] as const;
 
 type SettingsAccountIdentityCache = {
   firstName?: string | null;
@@ -212,6 +234,46 @@ const getDefaultProfileId = (profiles: ProfileSummary[]) =>
     .filter((profile) => profile.type === "personal")
     .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())[0]?.id ?? "";
 
+const sortProfiles = (profiles: ProfileSummary[]) =>
+  [...profiles].sort((left, right) => {
+    if (left.type === "personal" && right.type !== "personal") {
+      return -1;
+    }
+    if (right.type === "personal" && left.type !== "personal") {
+      return 1;
+    }
+
+    if (left.type === "personal" && right.type === "personal") {
+      return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+    }
+
+    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
+
+const normalizeProfileList = (profiles: ProfileSummary[], fallbackProfile?: { id: string; name: string }) => {
+  const nextProfiles = [...profiles];
+
+  if (fallbackProfile?.id && !nextProfiles.some((profile) => profile.id === fallbackProfile.id)) {
+    nextProfiles.unshift({
+      id: fallbackProfile.id,
+      name: fallbackProfile.name || "Personal",
+      type: "personal",
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+    });
+  }
+
+  return sortProfiles(nextProfiles);
+};
+
+const getTimeZoneOptions = () => {
+  const supportedValuesOf = (Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
+  const browserTimeZones = typeof supportedValuesOf === "function" ? supportedValuesOf("timeZone") : [];
+  return Array.from(new Set(["GMT", "UTC", ...browserTimeZones, ...FALLBACK_TIME_ZONES])).sort((left, right) => left.localeCompare(right));
+};
+
+const formatTimeZoneLabel = (value: string) => (value === "GMT" || value === "UTC" ? value : value.replaceAll("_", " / "));
+
 const formatRelativeSessionTime = (value: string | null) => {
   if (!value) {
     return "No recent activity";
@@ -239,12 +301,10 @@ const formatRelativeSessionTime = (value: string | null) => {
 
 function SettingsToggleRow({
   label,
-  helper,
   checked,
   onToggle,
 }: {
   label: string;
-  helper?: string;
   checked: boolean;
   onToggle: () => void;
 }) {
@@ -252,15 +312,17 @@ function SettingsToggleRow({
     <div className="settings-toggle-row">
       <div className="settings-toggle-row__copy">
         <strong>{label}</strong>
-        {helper ? <span>{helper}</span> : null}
       </div>
       <button
         type="button"
-        className={`settings-display-toggle__button${checked ? " is-on" : ""}`}
+        className={`settings-switch${checked ? " is-on" : ""}`}
         aria-pressed={checked}
+        aria-label={`${label}: ${checked ? "On" : "Off"}`}
         onClick={onToggle}
       >
-        {checked ? "On" : "Off"}
+        <span className="settings-switch__track" aria-hidden="true">
+          <span className="settings-switch__thumb" />
+        </span>
       </button>
     </div>
   );
@@ -376,6 +438,7 @@ export function SettingsHub({
   const router = useRouter();
   const { signOut } = useClerk();
   const { session } = useSession();
+  const { isLoaded: sessionListLoaded, sessions: deviceSessions } = useSessionList();
   const { isLoaded, isSignedIn, user } = useUser();
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>(initialSection);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId);
@@ -406,7 +469,9 @@ export function SettingsHub({
   const [passwordCurrentDraft, setPasswordCurrentDraft] = useState("");
   const [passwordNewDraft, setPasswordNewDraft] = useState("");
   const [passwordConfirmDraft, setPasswordConfirmDraft] = useState("");
-  const [profileList, setProfileList] = useState<ProfileSummary[]>(initialProfileList);
+  const [profileList, setProfileList] = useState<ProfileSummary[]>(() =>
+    normalizeProfileList(initialProfileList, initialWorkspaceId ? { id: initialWorkspaceId, name: initialWorkspaceName || "Personal" } : undefined)
+  );
   const [profilesLoaded, setProfilesLoaded] = useState(initialProfileList.length > 0);
   const [profilesLoading, setProfilesLoading] = useState(false);
   const [profileListMessage, setProfileListMessage] = useState<string | null>(null);
@@ -454,7 +519,6 @@ export function SettingsHub({
     defaultImportProfileId: initialSelectedProfileId,
   });
   const [securitySessions, setSecuritySessions] = useState<SecuritySessionSummary[]>([]);
-  const [securityLoaded, setSecurityLoaded] = useState(false);
   const [securityLoading, setSecurityLoading] = useState(false);
   const [securityMessage, setSecurityMessage] = useState<string | null>(null);
   const [dataDeleteModal, setDataDeleteModal] = useState<DataDeleteModalState | null>(null);
@@ -468,6 +532,8 @@ export function SettingsHub({
   const accountDraftChanged = firstNameDraft.trim() !== (firstName ?? "").trim() || lastNameDraft.trim() !== (lastName ?? "").trim();
   const primaryEmail = user?.primaryEmailAddress?.emailAddress ?? email;
   const connectedAccounts = user?.externalAccounts ?? [];
+  const currencyOptions = getCurrencyCatalogCodes().map((code) => getCurrencyCatalogOption(code));
+  const timeZoneOptions = getTimeZoneOptions();
 
   useEffect(() => {
     setActiveSection(initialSection);
@@ -690,6 +756,12 @@ export function SettingsHub({
   }, [profileList]);
 
   useEffect(() => {
+    setProfileList((current) =>
+      normalizeProfileList(current, workspaceId ? { id: workspaceId, name: workspaceName || "Personal" } : undefined)
+    );
+  }, [workspaceId, workspaceName]);
+
+  useEffect(() => {
     if (accountNameDraftDirtyRef.current) {
       return;
     }
@@ -720,7 +792,7 @@ export function SettingsHub({
         }
 
         if (!cancelled) {
-          setProfileList(payload.workspaces ?? []);
+          setProfileList(normalizeProfileList(payload.workspaces ?? [], workspaceId ? { id: workspaceId, name: workspaceName || "Personal" } : undefined));
           setProfilesLoaded(true);
         }
       } catch (error) {
@@ -739,7 +811,7 @@ export function SettingsHub({
     return () => {
       cancelled = true;
     };
-  }, [activeSection, profilesLoaded, profilesLoading]);
+  }, [activeSection, profilesLoaded, profilesLoading, workspaceId, workspaceName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -917,50 +989,31 @@ export function SettingsHub({
   }, [defaultProfileId, profileList]);
 
   useEffect(() => {
-    let cancelled = false;
+    if (activeSection !== "security") {
+      return;
+    }
 
-    const loadSecuritySessions = async () => {
-      if (activeSection !== "security" || securityLoaded || securityLoading || !isLoaded || !user) {
-        return;
-      }
-
+    if (!sessionListLoaded) {
       setSecurityLoading(true);
-      setSecurityMessage(null);
+      return;
+    }
 
-      try {
-        const sessions = await user.getSessions();
-        if (cancelled) {
-          return;
-        }
-
-        setSecuritySessions(
-          sessions.map((entry) => ({
-            id: entry.id,
-            status: entry.status,
-            lastActiveAt:
-              (typeof entry.lastActiveAt === "number" ? new Date(entry.lastActiveAt).toISOString() : null) ??
-              (typeof entry.expireAt === "number" ? new Date(entry.expireAt).toISOString() : null),
-            isCurrent: entry.id === session?.id,
-          }))
-        );
-        setSecurityLoaded(true);
-      } catch (error) {
-        if (!cancelled) {
-          setSecurityMessage(error instanceof Error ? error.message : "Unable to load active sessions.");
-        }
-      } finally {
-        if (!cancelled) {
-          setSecurityLoading(false);
-        }
-      }
-    };
-
-    void loadSecuritySessions();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeSection, isLoaded, securityLoaded, securityLoading, session?.id, user]);
+    setSecuritySessions(
+      (deviceSessions ?? []).map((entry) => ({
+        id: entry.id,
+        status: entry.status,
+        lastActiveAt:
+          typeof entry.lastActiveAt === "number"
+            ? new Date(entry.lastActiveAt).toISOString()
+            : typeof entry.expireAt === "number"
+              ? new Date(entry.expireAt).toISOString()
+              : null,
+        isCurrent: entry.id === session?.id,
+      }))
+    );
+    setSecurityLoading(false);
+    setSecurityMessage(null);
+  }, [activeSection, deviceSessions, session?.id, sessionListLoaded]);
 
   useEffect(() => {
     if (!dataDeleteModal) {
@@ -1021,7 +1074,6 @@ export function SettingsHub({
             isCurrent: entry.id === session.id,
           }))
         );
-        setSecurityLoaded(true);
         setSecurityMessage("Signed out of other devices.");
       } catch (error) {
         setSecurityMessage(error instanceof Error ? error.message : "Unable to sign out other devices.");
@@ -1690,7 +1742,6 @@ export function SettingsHub({
               <div className="settings-preference-card__list">
                 <SettingsToggleRow
                   label="Weekly summary"
-                  helper="Get a recurring snapshot of your money trends."
                   checked={notificationPreferences.weeklySummary}
                   onToggle={() =>
                     setNotificationPreferences((current) => ({
@@ -1701,7 +1752,6 @@ export function SettingsHub({
                 />
                 <SettingsToggleRow
                   label="Import complete"
-                  helper="Know when imports finish processing."
                   checked={notificationPreferences.importComplete}
                   onToggle={() =>
                     setNotificationPreferences((current) => ({
@@ -1712,7 +1762,6 @@ export function SettingsHub({
                 />
                 <SettingsToggleRow
                   label="Transactions need review"
-                  helper="Get alerts when Clover needs your confirmation."
                   checked={notificationPreferences.transactionsNeedReview}
                   onToggle={() =>
                     setNotificationPreferences((current) => ({
@@ -1723,7 +1772,6 @@ export function SettingsHub({
                 />
                 <SettingsToggleRow
                   label="Budget or plan-limit warnings"
-                  helper="Receive a heads-up before you run into important limits."
                   checked={notificationPreferences.budgetWarnings}
                   onToggle={() =>
                     setNotificationPreferences((current) => ({
@@ -1780,8 +1828,8 @@ export function SettingsHub({
                     ))
                   ) : (
                     <div className="settings-session-item">
-                      <strong>{securityLoading ? "Loading sessions" : "Current device"}</strong>
-                      <span>{securityLoading ? "Checking your active sessions now." : "This is your only active session."}</span>
+                      <strong>{securityLoading ? "Loading..." : "Current device"}</strong>
+                      <span>{securityLoading ? "Fetching active sessions" : "This device is active."}</span>
                     </div>
                   )}
                 </div>
@@ -1904,8 +1952,11 @@ export function SettingsHub({
                       }))
                     }
                   >
-                    <option value="PHP">PHP</option>
-                    <option value="USD">USD</option>
+                    {currencyOptions.map((option) => (
+                      <option key={option.code} value={option.code}>
+                        {option.code} · {option.name}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="settings-inline-field">
@@ -1953,10 +2004,11 @@ export function SettingsHub({
                       }))
                     }
                   >
-                    <option value="Asia/Manila">Asia/Manila</option>
-                    <option value="UTC">UTC</option>
-                    <option value="America/Los_Angeles">America/Los_Angeles</option>
-                    <option value="America/New_York">America/New_York</option>
+                    {timeZoneOptions.map((timeZone) => (
+                      <option key={timeZone} value={timeZone}>
+                        {formatTimeZoneLabel(timeZone)}
+                      </option>
+                    ))}
                   </select>
                 </label>
               </article>

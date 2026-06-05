@@ -4,7 +4,7 @@ import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { BillingActions } from "@/components/billing-actions";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
-import { type BillingInterval } from "@/lib/billing-plans";
+import { BILLING_PLANS, type BillingInterval } from "@/lib/billing-plans";
 import { getPlanDisplayLabel } from "@/lib/user-limits";
 
 type BillingSubscriptionSummary = {
@@ -112,6 +112,13 @@ function getUsagePercent(used: number, limit: number | null) {
   return Math.max(0, Math.min((used / limit) * 100, 100));
 }
 
+const monthlyBillingPlan = BILLING_PLANS.find((plan) => plan.interval === "monthly");
+const annualBillingPlan = BILLING_PLANS.find((plan) => plan.interval === "annual");
+const annualSavings =
+  monthlyBillingPlan && annualBillingPlan
+    ? Math.max(monthlyBillingPlan.priceValue * 12 - annualBillingPlan.priceValue, 0)
+    : 0;
+
 const planCards: PlanCard[] = [
   {
     value: "free",
@@ -130,10 +137,10 @@ const planCards: PlanCard[] = [
   },
   {
     value: "annual",
-    title: "Annual",
-    price: "PHP 1,299 / year",
+    title: annualBillingPlan?.label ?? "Annual",
+    price: `${annualBillingPlan?.priceLabel ?? "PHP 1,299"} / year`,
     badge: "Pro",
-    savings: "Save PHP 489 vs monthly",
+    savings: annualSavings > 0 ? `Save PHP ${annualSavings.toLocaleString()} vs monthly` : undefined,
     features: [
       "Everything in Free",
       "20 non-cash accounts",
@@ -146,8 +153,8 @@ const planCards: PlanCard[] = [
   },
   {
     value: "monthly",
-    title: "Monthly",
-    price: "PHP 149 / month",
+    title: monthlyBillingPlan?.label ?? "Monthly",
+    price: `${monthlyBillingPlan?.priceLabel ?? "PHP 149"} / month`,
     badge: "",
     features: [
       "Everything in Free",

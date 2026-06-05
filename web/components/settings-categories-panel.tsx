@@ -484,7 +484,7 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
         </div>
       </div>
 
-      <section className="settings-category-section" aria-label="Built-in categories">
+      <section className="settings-category-section settings-category-section--panel glass" aria-label="Built-in categories">
         <div className="settings-category-section__head">
           <h5>Built-in categories</h5>
         </div>
@@ -509,12 +509,12 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
         </div>
       </section>
 
-      <section className="settings-category-section" aria-label="Custom categories">
+      <section className="settings-category-section settings-category-section--panel glass" aria-label="Custom categories">
         <div className="settings-category-section__head">
           <h5>Custom categories</h5>
         </div>
 
-        <article className="settings-action-card settings-category-creator">
+        <article className="settings-action-card settings-category-creator glass">
           <div className="settings-category-creator__fields">
             <label className="settings-inline-field">
               <span>Name</span>
