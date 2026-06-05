@@ -246,6 +246,10 @@ const normalizeImportedInstitutionKey = (value?: string | null) =>
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase()
+    .replace(/\bunion\s*bank(?:\s+of\s+the\s+philippines)?\b/g, "unionbank")
+    .replace(/\bchina\s+bank\b/g, "chinabank")
+    .replace(/\bmetro\s+bank\b/g, "metrobank")
+    .replace(/\bphilippine\s+national\s+bank\b/g, "pnb")
     .replace(/\s+\d{4}$/, "")
     .trim();
 
@@ -274,6 +278,14 @@ const isGenericUploadedAccountShadowed = (account: Account, numberedAccounts: Ac
       getImportedAccountLastFour(numberedAccount.accountNumber) &&
       getImportedInstitutionShadowKey(numberedAccount) === institution
   );
+};
+
+const isTransientUploadedAccountPlaceholder = (account: Account) => {
+  if (account.source !== "upload" || getImportedAccountLastFour(account.accountNumber)) {
+    return false;
+  }
+
+  return account.type === "bank" || account.type === "credit_card" || account.type === "line_of_credit";
 };
 
 const transactionsEmptyStateIllustration = "/illustrations/clover-transactions-search-3d.png";
@@ -333,6 +345,10 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
       return false;
     }
 
+    if (isTransientUploadedAccountPlaceholder(account)) {
+      return false;
+    }
+
     if (isGenericUploadedAccountShadowed(account, fetchedAccounts)) {
       return false;
     }
@@ -345,6 +361,10 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
 };
 
 const mergeOptimisticImportedAccount = (currentAccounts: Account[], optimisticAccount: Account) => {
+  if (isTransientUploadedAccountPlaceholder(optimisticAccount)) {
+    return currentAccounts.filter((account) => !isGenericUploadedAccountShadowed(account, [optimisticAccount]));
+  }
+
   const matchedAccounts = currentAccounts.filter((account) => {
     if (account.id === optimisticAccount.id) {
       return true;
@@ -1469,6 +1489,20 @@ const hasImportedTransactionIdentity = (transaction: Transaction) => {
     typeof payload.sourceRowIndex === "number" ||
     (typeof payload.sourceRowIndex === "string" && payload.sourceRowIndex.trim().length > 0)
   );
+};
+
+const getTransactionImportFileId = (transaction: Transaction) => {
+  if (typeof transaction.importFileId === "string" && transaction.importFileId.trim()) {
+    return transaction.importFileId.trim();
+  }
+
+  const rawPayload = transaction.rawPayload;
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const sourceImportFileId = (rawPayload as Record<string, unknown>).sourceImportFileId;
+  return typeof sourceImportFileId === "string" && sourceImportFileId.trim() ? sourceImportFileId.trim() : null;
 };
 
 const getImportedTransactionsToPreserve = (transactions: Transaction[]) =>
@@ -2883,18 +2917,30 @@ function TransactionsPageContent() {
           : typeof summaryPayload?.totalCount === "number"
             ? summaryPayload.totalCount
             : fetchedTransactions.length;
+      const fetchedImportFileIds = new Set(
+        fetchedTransactions
+          .map((transaction) => getTransactionImportFileId(transaction))
+          .filter((importFileId): importFileId is string => Boolean(importFileId))
+      );
+      const importedTransactionsToPreserveAfterServerResponse =
+        fetchedImportFileIds.size > 0
+          ? importedTransactionsToPreserve.filter((transaction) => {
+              const importFileId = getTransactionImportFileId(transaction);
+              return !importFileId || !fetchedImportFileIds.has(importFileId);
+            })
+          : importedTransactionsToPreserve;
       const shouldPreserveImportedTransactions =
         !hasServerSideFilters &&
-        importedTransactionsToPreserve.length > 0 &&
+        importedTransactionsToPreserveAfterServerResponse.length > 0 &&
         exactServerTotalCount > 0 &&
         (
           Boolean(options?.background) ||
-          importedTransactionsToPreserve.length > fetchedTransactions.length ||
+          importedTransactionsToPreserveAfterServerResponse.length > fetchedTransactions.length ||
           exactServerTotalCount > fetchedTransactions.length
         );
       const mergedTransactionsWithImports =
-        shouldPreserveImportedTransactions && importedTransactionsToPreserve.length > 0
-          ? mergeImportedWorkspaceTransactions(mergedTransactions, importedTransactionsToPreserve as unknown as ImportedWorkspaceTransaction[])
+        shouldPreserveImportedTransactions && importedTransactionsToPreserveAfterServerResponse.length > 0
+          ? mergeImportedWorkspaceTransactions(mergedTransactions, importedTransactionsToPreserveAfterServerResponse as unknown as ImportedWorkspaceTransaction[])
           : mergedTransactions;
       const responseCurrencyCodes = Array.isArray(payload?.currencyCodes)
         ? payload.currencyCodes.map((value: unknown) => formatCurrencyCode(String(value ?? ""))).filter(Boolean)

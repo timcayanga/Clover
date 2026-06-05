@@ -257,6 +257,10 @@ const normalizeImportedInstitutionKey = (value?: string | null) =>
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase()
+    .replace(/\bunion\s*bank(?:\s+of\s+the\s+philippines)?\b/g, "unionbank")
+    .replace(/\bchina\s+bank\b/g, "chinabank")
+    .replace(/\bmetro\s+bank\b/g, "metrobank")
+    .replace(/\bphilippine\s+national\s+bank\b/g, "pnb")
     .replace(/\s+\d{4}$/, "")
     .trim();
 
@@ -285,6 +289,14 @@ const isGenericUploadedAccountShadowed = (account: Account, numberedAccounts: Ac
       getImportedAccountLastFour(numberedAccount.accountNumber) &&
       getImportedInstitutionShadowKey(numberedAccount) === institution
   );
+};
+
+const isTransientUploadedAccountPlaceholder = (account: Account) => {
+  if (account.source !== "upload" || getImportedAccountLastFour(account.accountNumber)) {
+    return false;
+  }
+
+  return account.type === "bank" || account.type === "credit_card" || account.type === "line_of_credit";
 };
 
 const mergeImportedPreviewTransactions = (
@@ -362,6 +374,10 @@ const mergeAccountsWithOptimisticImports = (
       return false;
     }
 
+    if (isTransientUploadedAccountPlaceholder(account)) {
+      return false;
+    }
+
     if (isGenericUploadedAccountShadowed(account, visibleFetchedAccounts)) {
       return false;
     }
@@ -374,6 +390,10 @@ const mergeAccountsWithOptimisticImports = (
 };
 
 const mergeOptimisticImportedAccount = (currentAccounts: Account[], optimisticAccount: Account) => {
+  if (isTransientUploadedAccountPlaceholder(optimisticAccount)) {
+    return currentAccounts.filter((account) => !isGenericUploadedAccountShadowed(account, [optimisticAccount]));
+  }
+
   const matchedAccounts = currentAccounts.filter((account) => {
     if (account.id === optimisticAccount.id) {
       return true;

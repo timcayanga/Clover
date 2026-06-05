@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { guessCategoryName, parseImportText } from "@/lib/import-parser";
-import { matchesImportedAccountIdentity, pruneImportedAccountPlaceholders } from "@/lib/workspace-cache";
+import { matchesImportedAccountIdentity, mergeImportedWorkspaceTransactions, pruneImportedAccountPlaceholders } from "@/lib/workspace-cache";
 
 const unionBankCardText = `
 UnionBank Plaza Bldg.,
@@ -178,6 +178,16 @@ const prunedUnionBankPlaceholders = pruneImportedAccountPlaceholders([
     transactionCount: 0,
   },
   {
+    id: "optimistic-blank-business-placeholder",
+    name: "UnionBank of the Philippines",
+    institution: "UnionBank of the Philippines",
+    accountNumber: null,
+    type: "bank",
+    source: "upload",
+    balance: "7",
+    transactionCount: 0,
+  },
+  {
     id: "business-6789",
     name: "UnionBank 6789",
     institution: "UnionBank",
@@ -202,6 +212,56 @@ assert.deepEqual(
   prunedUnionBankPlaceholders.map((account) => account.id),
   ["business-6789", "card-3912"],
   "UnionBank account cache should hide no-account-number uploaded placeholders while canonical accounts settle."
+);
+
+const mergedPreviewAndConfirmedRows = mergeImportedWorkspaceTransactions(
+  [
+    {
+      id: "optimistic-unionbank-import-12",
+      importFileId: "unionbank-import",
+      sourceRowIndex: 12,
+      accountId: "optimistic-account",
+      accountName: "UnionBank 3912",
+      institution: "UnionBank",
+      accountNumber: "1056827763912",
+      date: "2024-08-27",
+      amount: "99",
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "DISCORD NITRO",
+      merchantClean: "Discord Nitro",
+      description: "DISCORD NITRO",
+      source: "upload",
+    },
+  ],
+  [
+    {
+      id: "confirmed-unionbank-import-12",
+      importFileId: "unionbank-import",
+      accountId: "persisted-account",
+      accountName: "UnionBank 3912",
+      institution: "UnionBank",
+      accountNumber: "1056827763912",
+      date: "2024-08-27T12:00:00.000Z",
+      amount: "99",
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "DISCORD NITRO",
+      merchantClean: "Discord Nitro",
+      description: "DISCORD NITRO",
+      source: "upload",
+      rawPayload: {
+        sourceImportFileId: "unionbank-import",
+        sourceStatementFingerprint: "stmt_unionbank",
+        sourceRowIndex: 12,
+      },
+    },
+  ]
+);
+assert.deepEqual(
+  mergedPreviewAndConfirmedRows.map((row) => row.id),
+  ["confirmed-unionbank-import-12"],
+  "UnionBank optimistic preview rows should be replaced by confirmed rows from the same import."
 );
 
 console.log("[PASS] UnionBank statement parser handles card and known image-only samples.");

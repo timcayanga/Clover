@@ -267,10 +267,6 @@ const getImportedAccountInstitutionShadowKey = (account: CachedRecord | Imported
   canonicalImportedInstitutionKey(readImportedAccountText(account, "name"));
 
 const isTransientImportedAccountPlaceholder = (account: CachedRecord) => {
-  if (typeof account.id === "string" && account.id.startsWith("optimistic-")) {
-    return false;
-  }
-
   if (readImportedAccountText(account, "source") !== "upload" || hasImportedAccountNumber(account.accountNumber)) {
     return false;
   }
@@ -760,12 +756,12 @@ const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspace
   const importFileId = getImportedTransactionImportFileId(entry);
   const sourceRowIndex = getImportedTransactionSourceRowIndex(entry);
   const statementFingerprint = getImportedTransactionStatementFingerprint(entry);
-  if (statementFingerprint && sourceRowIndex !== null) {
-    return `statement:${statementFingerprint}:${sourceRowIndex}`;
-  }
-
   if (importFileId && sourceRowIndex !== null) {
     return `import:${importFileId}:${sourceRowIndex}`;
+  }
+
+  if (statementFingerprint && sourceRowIndex !== null) {
+    return `statement:${statementFingerprint}:${sourceRowIndex}`;
   }
 
   // Do not fuzzy-dedupe statement rows by date/amount/merchant. Real statements
