@@ -954,8 +954,11 @@ const normalizeReceiptFixtureFileName = (value: string) =>
   value
     .trim()
     .toLowerCase()
+    .replace(/^.*[\\/]/, "")
     .replace(/\s+/g, " ")
-    .replace(/^.*[\\/]/, "");
+    .replace(/\s*\(\d+\)(?=\.[^.]+$)/, "")
+    .replace(/\s*-\s*copy(?=\.[^.]+$)/, "")
+    .replace(/\s+copy(?=\.[^.]+$)/, "");
 
 const getTrainedReceiptFixture = (fileName: string) => {
   const normalizedFileName = normalizeReceiptFixtureFileName(fileName);

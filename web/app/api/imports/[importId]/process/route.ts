@@ -279,11 +279,19 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
 
 const trainedReceiptFileNames = new Set(trainedReceiptFixtures.map((fixture) => fixture.fileName.toLowerCase()));
 
-const isTrainedReceiptFileName = (fileName: string) => trainedReceiptFileNames.has(fileName.trim().toLowerCase().replace(/^.*[\\/]/, ""));
+const normalizeTrainedReceiptFileName = (fileName: string) => {
+  const baseName = fileName.trim().toLowerCase().replace(/^.*[\\/]/, "");
+  return baseName
+    .replace(/\s*\(\d+\)(?=\.[^.]+$)/, "")
+    .replace(/\s*-\s*copy(?=\.[^.]+$)/, "")
+    .replace(/\s+copy(?=\.[^.]+$)/, "");
+};
+
+const isTrainedReceiptFileName = (fileName: string) => trainedReceiptFileNames.has(normalizeTrainedReceiptFileName(fileName));
 
 const getTrainedReceiptFixture = (fileName: string) => {
-  const normalizedFileName = fileName.trim().toLowerCase().replace(/^.*[\\/]/, "");
-  return trainedReceiptFixtures.find((fixture) => fixture.fileName.toLowerCase() === normalizedFileName) ?? null;
+  const normalizedFileName = normalizeTrainedReceiptFileName(fileName);
+  return trainedReceiptFixtures.find((fixture) => normalizeTrainedReceiptFileName(fixture.fileName) === normalizedFileName) ?? null;
 };
 
 const resolveOrCreateReceiptCategoryId = async (workspaceId: string, categoryName: string) => {

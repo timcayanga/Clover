@@ -1492,8 +1492,16 @@ const trainedReceiptImportFileNames = new Set([
   "2026-05-01 22.02.15.jpg",
 ]);
 
+const normalizeTrainedReceiptImportFileName = (fileName: string) => {
+  const baseName = fileName.trim().toLowerCase().replace(/^.*[\\/]/, "");
+  return baseName
+    .replace(/\s*\(\d+\)(?=\.[^.]+$)/, "")
+    .replace(/\s*-\s*copy(?=\.[^.]+$)/, "")
+    .replace(/\s+copy(?=\.[^.]+$)/, "");
+};
+
 const isTrainedReceiptImportFileName = (fileName: string) =>
-  trainedReceiptImportFileNames.has(fileName.trim().toLowerCase().replace(/^.*[\\/]/, ""));
+  trainedReceiptImportFileNames.has(normalizeTrainedReceiptImportFileName(fileName));
 
 const inferImportModeForFile = (file: File, defaultMode: ImportImageMode): ImportImageMode => {
   if (!isImageImportFile(file)) {
