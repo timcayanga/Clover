@@ -1696,6 +1696,9 @@ const MAX_IMPORT_FILES_PER_BATCH = 25;
 const IMPORT_VISIBILITY_BASE_TIMEOUT_MS = 30_000;
 const IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 15_000;
 const IMPORT_VISIBILITY_MAX_TIMEOUT_MS = 2 * 60_000;
+const IMPORT_SERVER_HEAVY_VISIBILITY_BASE_TIMEOUT_MS = 60_000;
+const IMPORT_SERVER_HEAVY_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 30_000;
+const IMPORT_SERVER_HEAVY_VISIBILITY_MAX_TIMEOUT_MS = 4 * 60_000;
 const IMPORT_BACKGROUND_HARD_STOP_MS = 10 * 60_000;
 
 const getImportVisibilityTimeoutMs = (fileCount: number) =>
@@ -1786,6 +1789,30 @@ const shouldSkipClientStatementPreparse = (fileName: string) =>
   isNoisyVisibilityBank(fileName) ||
   isExplicitLowQualityUnionBankStatementFilename(fileName) ||
   isLikelyLowQualityPnbStatementFile(fileName);
+
+const isServerHeavyStatementBatchItem = (item: Pick<QueuedFile, "file" | "importMode">) => {
+  const mode = inferImportModeForFile(item.file, item.importMode ?? "statement");
+  const lowerName = item.file.name.toLowerCase();
+  return (
+    mode === "statement" &&
+    (lowerName.endsWith(".pdf") || lowerName.endsWith(".csv")) &&
+    (shouldSkipClientStatementPreparse(item.file.name) || shouldRequireVisibleRowsForImport(item.file.name))
+  );
+};
+
+const getImportVisibilityTimeoutMsForItems = (items: Array<Pick<QueuedFile, "file" | "importMode">>) => {
+  const fileCount = Math.max(1, items.length);
+  const hasServerHeavyBatch = items.some(isServerHeavyStatementBatchItem);
+  if (!hasServerHeavyBatch) {
+    return getImportVisibilityTimeoutMs(fileCount);
+  }
+
+  return Math.min(
+    IMPORT_SERVER_HEAVY_VISIBILITY_MAX_TIMEOUT_MS,
+    IMPORT_SERVER_HEAVY_VISIBILITY_BASE_TIMEOUT_MS +
+      Math.max(0, fileCount - 1) * IMPORT_SERVER_HEAVY_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS
+  );
+};
 
 const hasVisibleImportData = (
   item: QueuedFile,
@@ -2231,6 +2258,15 @@ export function ImportFilesModal({
     setItems((current) =>
       current.map((item) => {
         const itemSummary = getItemSummary(item);
+        const isRecoverableInFlight =
+          item.status !== "done" &&
+          item.status !== "error" &&
+          item.status !== "needs_password" &&
+          (Boolean(item.importFileId) ||
+            Boolean(item.targetAccountId) ||
+            item.importedRows !== null ||
+            item.confirmationState === "staged" ||
+            item.progress >= IMPORT_PROGRESS.uploading);
         if (hasVisibleImportData(item, itemSummary)) {
           return {
             ...item,
@@ -2247,6 +2283,20 @@ export function ImportFilesModal({
 
         if (item.status === "error" || item.status === "needs_password") {
           return item;
+        }
+
+        if (isRecoverableInFlight) {
+          return {
+            ...item,
+            status: "done",
+            confirmationState: "confirmed",
+            error: null,
+            errorCode: null,
+            errorTitle: null,
+            errorNextSteps: null,
+            progress: 100,
+            progressLabel: "Still processing",
+          };
         }
 
         return {
@@ -7717,7 +7767,7 @@ export function ImportFilesModal({
     setBusy(true);
     setValidationNotice(null);
     setMessage("Clover is lining up your files...");
-    const visibilityTimeoutMs = getImportVisibilityTimeoutMs(Math.max(1, items.length));
+    const visibilityTimeoutMs = getImportVisibilityTimeoutMsForItems(items);
     visibilityDeadlineRef.current = Date.now() + visibilityTimeoutMs;
     if (visibilityHardStopTimerRef.current) {
       window.clearTimeout(visibilityHardStopTimerRef.current);
@@ -7782,13 +7832,16 @@ export function ImportFilesModal({
       return isImageImportFile(item.file) && (mode === "statement" || mode === "receipt");
     };
     const processItemsForBatch = async (queue: QueuedFile[]) => {
-      if (queue.length <= 1 || !queue.every(isFastImageBatchItem)) {
+      const canParallelizeQueue =
+        queue.length > 1 &&
+        (queue.every(isFastImageBatchItem) || queue.every(isServerHeavyStatementBatchItem));
+      if (!canParallelizeQueue) {
         return processItemsSequentially(queue);
       }
 
       const results: Array<{ itemId: string; result: ImportProcessResult }> = [];
       let nextIndex = 0;
-      const workerCount = Math.min(3, queue.length);
+      const workerCount = Math.min(queue.every(isServerHeavyStatementBatchItem) ? 4 : 3, queue.length);
 
       const runWorker = async () => {
         while (!uploadCancelRequestedRef.current) {
