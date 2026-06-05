@@ -2080,12 +2080,12 @@ export function SettingsHub({
                     <div className="settings-data-danger-item settings-data-danger-item--history">
                       <div className="settings-data-danger-copy">
                         <strong>Transactions</strong>
-                      </div>
-                      <div className="settings-data-danger-controls">
                         <label className="settings-inline-field">
                           <span>Before date</span>
                           <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} />
                         </label>
+                      </div>
+                      <div className="settings-data-danger-controls">
                         <button
                           type="button"
                           className="button button-danger button-small"
