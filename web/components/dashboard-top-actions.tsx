@@ -454,7 +454,7 @@ export function DashboardManualTransactionModal({
                 <span className="transactions-manual-type-symbol" aria-hidden="true">
                   −
                 </span>
-                <span>Debit</span>
+                <span>Expenses</span>
               </button>
               <button
                 type="button"
@@ -465,7 +465,7 @@ export function DashboardManualTransactionModal({
                 <span className="transactions-manual-type-symbol" aria-hidden="true">
                   +
                 </span>
-                <span>Credit</span>
+                <span>Income</span>
               </button>
             </div>
 

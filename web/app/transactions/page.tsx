@@ -7834,7 +7834,7 @@ function TransactionsPageContent() {
                     <span className="transactions-manual-type-symbol" aria-hidden="true">
                       −
                     </span>
-                    <span>Debit</span>
+                    <span>Expenses</span>
                   </button>
                   <button
                     type="button"
@@ -7845,7 +7845,7 @@ function TransactionsPageContent() {
                     <span className="transactions-manual-type-symbol" aria-hidden="true">
                       +
                     </span>
-                    <span>Credit</span>
+                    <span>Income</span>
                   </button>
                 </div>
 
@@ -8303,8 +8303,8 @@ function TransactionsPageContent() {
                       )
                     }
                   >
-                    <option value="debit">Debit</option>
-                    <option value="credit">Credit</option>
+                    <option value="debit">Expenses</option>
+                    <option value="credit">Income</option>
                   </select>
                 </div>
               </label>

@@ -4867,8 +4867,8 @@ function AccountDetailPageContent() {
                         )
                       }
                     >
-                      <option value="debit">Debit</option>
-                      <option value="credit">Credit</option>
+                      <option value="debit">Expenses</option>
+                      <option value="credit">Income</option>
                     </select>
                   </div>
                 </label>
