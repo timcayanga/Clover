@@ -1715,8 +1715,8 @@ const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
 };
 
 const shouldSkipClientStatementPreparse = (fileName: string) =>
-  (isNoisyVisibilityBank(fileName) && !isKnownUnionBankSampleStatementFilename(fileName)) ||
-  (isExplicitLowQualityUnionBankStatementFilename(fileName) && !isKnownUnionBankSampleStatementFilename(fileName)) ||
+  isNoisyVisibilityBank(fileName) ||
+  isExplicitLowQualityUnionBankStatementFilename(fileName) ||
   isLikelyLowQualityPnbStatementFile(fileName);
 
 const hasVisibleImportData = (
