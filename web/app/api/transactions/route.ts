@@ -697,6 +697,7 @@ const normalizeLegacyTransactionVisibility = async (workspaceId: string) => {
 };
 
 const IMPORT_RECOVERY_TIMEOUT_MS = 1200;
+const RECENT_IMPORT_VISIBILITY_WINDOW_MS = 10 * 60 * 1000;
 
 const hasActiveWorkspaceImport = async (workspaceId: string) => {
   const activeImportCount = await prisma.importFile.count({
@@ -914,7 +915,23 @@ export async function GET(request: Request) {
 
     if (summaryMode === "light" && !hasEffectiveCategoryFilters) {
       const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
-      const [pageRows, duplicateRows] = await Promise.all([
+      const shouldBoostRecentImportRows =
+        requestedPage === 1 &&
+        !includeAll &&
+        (filters.sortField ?? "date") === "date" &&
+        (filters.sortDirection ?? "desc") === "desc" &&
+        !filters.query?.trim() &&
+        !filters.currencyFilter?.trim() &&
+        (filters.accountIds ?? []).length === 0 &&
+        (filters.typeFilters ?? []).length === 0 &&
+        (filters.merchantFilters ?? []).length === 0 &&
+        (filters.dateFilterMode ?? "ltd") === "ltd" &&
+        !filters.customStart?.trim() &&
+        !filters.customEnd?.trim() &&
+        !filters.amountMin?.trim() &&
+        !filters.amountMax?.trim();
+      const recentImportCutoff = new Date(Date.now() - RECENT_IMPORT_VISIBILITY_WINDOW_MS);
+      const [pageRows, recentImportRows, duplicateRows] = await Promise.all([
         prisma.transaction.findMany({
           where: visibleWhere,
           select: {
@@ -963,6 +980,59 @@ export async function GET(request: Request) {
           skip: pageStart,
           take: includeAll ? totalCount : requestedPageSize ?? 25,
         }),
+        shouldBoostRecentImportRows
+          ? prisma.transaction.findMany({
+              where: {
+                ...visibleWhere,
+                importFileId: { not: null },
+                createdAt: { gte: recentImportCutoff },
+              },
+              select: {
+                id: true,
+                accountId: true,
+                date: true,
+                amount: true,
+                type: true,
+                merchantRaw: true,
+                merchantClean: true,
+                importFileId: true,
+                categoryId: true,
+                rawPayload: true,
+                normalizedPayload: true,
+                reviewStatus: true,
+                parserConfidence: true,
+                categoryConfidence: true,
+                accountMatchConfidence: true,
+                duplicateConfidence: true,
+                transferConfidence: true,
+                currency: true,
+                description: true,
+                category: {
+                  select: {
+                    name: true,
+                  },
+                },
+                account: {
+                  select: {
+                    name: true,
+                    institution: true,
+                    accountNumber: true,
+                  },
+                },
+                splitBill: {
+                  select: {
+                    id: true,
+                    title: true,
+                  },
+                },
+                createdAt: true,
+                isTransfer: true,
+                isExcluded: true,
+              },
+              orderBy: [{ createdAt: "desc" }, { date: "desc" }],
+              take: Math.min(25, requestedPageSize ?? 25),
+            })
+          : Promise.resolve([]),
         prisma.transaction.findMany({
           where: {
             ...visibleWhere,
@@ -981,6 +1051,11 @@ export async function GET(request: Request) {
           take: 250,
         }),
       ]);
+      const recentImportRowIds = new Set(recentImportRows.map((transaction) => transaction.id));
+      const boostedPageRows = [
+        ...recentImportRows,
+        ...pageRows.filter((transaction) => !recentImportRowIds.has(transaction.id)),
+      ];
 
       const duplicateCounts = new Map<string, number>();
       for (const transaction of duplicateRows) {
@@ -993,7 +1068,7 @@ export async function GET(request: Request) {
         duplicateCounts.set(signature, (duplicateCounts.get(signature) ?? 0) + 1);
       }
 
-      const transactions = pageRows.map((transaction) =>
+      const transactions = boostedPageRows.map((transaction) =>
         mapTransactionRow({
           id: transaction.id,
           workspaceId,
