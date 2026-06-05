@@ -1053,7 +1053,7 @@ export function CommitmentsPanel({
             aria-label="Add recurring"
             onClick={(event) => event.stopPropagation()}
           >
-            <button className="button button-secondary button-small recurring-modal-close" type="button" onClick={onCloseAdd} aria-label="Close">
+            <button className="recurring-modal-close" type="button" onClick={onCloseAdd} aria-label="Close add recurring">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M6 6l12 12" />
                 <path d="M18 6 6 18" />

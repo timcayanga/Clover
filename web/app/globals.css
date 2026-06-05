@@ -1171,12 +1171,18 @@ body.transactions-manual-open .shell-quick-add-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
 }
 
 .recurring-add-modal {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 4200;
   background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(12px);
   display: grid;
@@ -1186,13 +1192,21 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .recurring-add-modal__card {
   border-radius: 26px;
+  position: relative;
 }
 
 .recurring-modal-close {
   position: absolute;
   top: 18px;
   right: 18px;
-  z-index: 1;
+  z-index: 2;
+}
+
+.recurring-modal-close:hover,
+.recurring-modal-close:focus-visible {
+  border-color: rgba(3, 168, 192, 0.34);
+  background: #ffffff;
+  color: var(--accent);
 }
 
 .recurring-modal-close svg {
