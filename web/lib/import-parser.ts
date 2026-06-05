@@ -16841,6 +16841,8 @@ const parseMayaSavingsImportText = (text: string, context: ImportParseContext = 
 const wiseMobileDatePattern = /^(?:[A-Z]|\d{0,2}\s*)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}$/i;
 const wiseMobileAmountPattern =
   /^([+−-]?\s*)?([0-9][0-9,]*(?:\.\d{1,2})?|0)\s+(AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/i;
+const wiseMobileAmountSearchPattern =
+  /([+−-]?\s*)?([0-9][0-9,]*(?:\.\d{1,2})?|0)\s+(AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)\b/gi;
 const wiseMobileStatusPattern = /^(?:Added|Refunded|Sent|Received|Card checked|Cancelled|Canceled|Failed|Withdrawn)$/i;
 
 const normalizeWiseMobileDateText = (line: string) =>
@@ -16868,6 +16870,71 @@ const parseWiseMobileAmountLine = (line: string) => {
   };
 };
 
+const extractWiseMobileAmountFromLine = (line: string) => {
+  const normalizedLine = normalizeWhitespace(line).replace(/\u2212/g, "-");
+  const exact = parseWiseMobileAmountLine(normalizedLine);
+  if (exact) {
+    const exactMatch = normalizedLine.match(wiseMobileAmountPattern);
+    return {
+      ...exact,
+      matchText: exactMatch?.[0] ?? normalizedLine,
+      index: exactMatch?.index ?? 0,
+      line: normalizedLine,
+      exactOnly: true,
+    };
+  }
+
+  const matches = Array.from(normalizedLine.matchAll(wiseMobileAmountSearchPattern));
+  const match = matches.at(-1);
+  if (!match) {
+    return null;
+  }
+
+  const signText = (match[1] ?? "").replace(/\s+/g, "");
+  const amount = parseMoney(match[2]);
+  const currency = normalizeCurrencyCode(match[3]);
+  if (amount === null || !currency) {
+    return null;
+  }
+
+  return {
+    amount,
+    currency,
+    sign: signText.startsWith("+") ? "credit" : signText.startsWith("-") || signText.startsWith("−") ? "debit" : null,
+    matchText: match[0],
+    index: match.index ?? 0,
+    line: normalizedLine,
+    exactOnly: false,
+  };
+};
+
+const cleanWiseMobileMerchantCandidate = (value: string) => {
+  const normalized = normalizeWhitespace(value)
+    .replace(/^[^A-Za-z0-9]+/u, "")
+    .replace(/^[A-Z]\s+(?=[A-Z][a-z])/u, "")
+    .replace(/^[A-Z]\s+(?=[A-Z]{2,})/u, "")
+    .replace(/^[liI1]\s+(?=[A-Z])/u, "")
+    .trim();
+  return normalized;
+};
+
+const extractWiseInlineMerchantCandidate = (
+  line: string,
+  amountInfo: NonNullable<ReturnType<typeof extractWiseMobileAmountFromLine>>
+) => {
+  const beforeAmount = cleanWiseMobileMerchantCandidate(line.slice(0, amountInfo.index));
+  if (/[A-Za-z]{2,}/.test(beforeAmount)) {
+    return beforeAmount;
+  }
+
+  const afterAmount = cleanWiseMobileMerchantCandidate(line.slice(amountInfo.index + amountInfo.matchText.length));
+  if (/[A-Za-z]{2,}/.test(afterAmount)) {
+    return afterAmount;
+  }
+
+  return null;
+};
+
 const formatWiseWalletAccountName = (currency?: string | null) => {
   return "Wise";
 };
@@ -16877,9 +16944,17 @@ const isWiseLikelyMerchantSpendCurrency = (currency?: string | null) => {
   return Boolean(normalizedCurrency && !/^(?:PHP|GBP|USD|CAD)$/.test(normalizedCurrency));
 };
 
+const normalizeWiseMobileUiCandidate = (line: string) =>
+  normalizeWhitespace(line)
+    .replace(/^[^A-Za-z0-9]+/u, "")
+    .replace(/^[A-Z]\s+(?=Search\b)/u, "")
+    .trim();
+
 const isWiseMobileUiLine = (line: string) =>
-  /^(?:Search\.{0,3}|Includes hidden|Type|Currency|Direction|Status|Filter|Back|All|Cards?|Home|Activity|Transactions?)$/i.test(line) ||
-  /^\d{1,2}:\d{2}$/.test(line) ||
+  /^(?:Search\.{0,3}|Includes hidden|Type|Currency|Direction|Status|Filter|Back|All|Cards?|Home|Activity|Transactions?)$/i.test(
+    normalizeWiseMobileUiCandidate(line)
+  ) ||
+  /^\d{1,2}:\d{2}$/.test(normalizeWiseMobileUiCandidate(line)) ||
   /^(?:Wi-?Fi|Battery|Signal)$/i.test(line);
 
 const looksLikeWiseMobileScreenshotText = (text: string) => {
@@ -16891,7 +16966,7 @@ const looksLikeWiseMobileScreenshotText = (text: string) => {
     Number(lines.some((line) => /^Search/i.test(line)));
   const amountCurrencies = new Set(
     lines
-      .map((line) => parseWiseMobileAmountLine(line)?.currency ?? null)
+      .map((line) => extractWiseMobileAmountFromLine(line)?.currency ?? null)
       .filter((currency): currency is string => Boolean(currency))
   );
   const hasWiseActivityLanguage = lines.some((line) => wiseMobileStatusPattern.test(line)) || /\bTo\s+PHP\b/i.test(text);
@@ -16937,6 +17012,49 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
   let currentDate: string | null = null;
   let pendingRow: ParsedImportRow | null = null;
 
+  const updatePendingRowPresentation = (row: ParsedImportRow) => {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : {};
+    const merchant = row.merchantRaw ?? "Wise transaction";
+    const status = typeof rawPayload.status === "string" ? rawPayload.status : null;
+    const sign = typeof rawPayload.sourceSign === "string" ? rawPayload.sourceSign : null;
+    const type: TransactionType =
+      sign === "credit" || /^(?:Added|Refunded|Received)$/i.test(status ?? "")
+        ? "income"
+        : /^(?:Sent)$/i.test(status ?? "")
+          ? "transfer"
+          : "expense";
+    const categoryName =
+      /^(?:Added|Sent|Received)$/i.test(status ?? "") || /^To\s+[A-Z]{3}$/i.test(merchant)
+        ? "Transfers"
+        : /refund/i.test(status ?? "")
+          ? "Income"
+          : guessCategoryName(`${merchant} ${status ?? ""}`, type);
+
+    row.merchantRaw = humanizeMerchantText(merchant);
+    row.merchantClean = summarizeMerchantText(merchant, "Wise");
+    row.description = normalizeWhitespace([merchant, status].filter(Boolean).join(" - ")) || merchant;
+    row.categoryName = categoryName;
+    row.type = type;
+    row.confidence = status || sign ? 88 : 82;
+    row.parserConfidence = 86;
+    row.categoryConfidence = 80;
+    row.accountName = formatWiseWalletAccountName(row.currency);
+    row.institution = "Wise";
+    row.rawPayload = {
+      ...rawPayload,
+      accountName: formatWiseWalletAccountName(row.currency),
+      accountCurrency: row.currency,
+      requiresAccountAmount:
+        sign === null &&
+        !status &&
+        type === "expense" &&
+        isWiseLikelyMerchantSpendCurrency(row.currency),
+    };
+  };
+
   const flushPending = () => {
     if (!pendingRow?.date || !pendingRow.amount || !pendingRow.merchantRaw) {
       pendingRow = null;
@@ -16947,6 +17065,13 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
       pendingRow.rawPayload && typeof pendingRow.rawPayload === "object" && !Array.isArray(pendingRow.rawPayload)
         ? (pendingRow.rawPayload as Record<string, unknown>)
         : null;
+    if (
+      parseMoney(String(pendingRow.amount ?? "")) === 0 &&
+      /^Card checked$/i.test(String(pendingRawPayload?.status ?? ""))
+    ) {
+      pendingRow = null;
+      return;
+    }
     if (pendingRawPayload?.requiresAccountAmount === true && pendingRawPayload.accountAmount === undefined) {
       pendingRow = null;
       return;
@@ -16985,7 +17110,50 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
       continue;
     }
 
-    const amountInfo = parseWiseMobileAmountLine(line);
+    if (pendingRow && wiseMobileStatusPattern.test(line)) {
+      const pendingRawPayload =
+        pendingRow.rawPayload && typeof pendingRow.rawPayload === "object" && !Array.isArray(pendingRow.rawPayload)
+          ? (pendingRow.rawPayload as Record<string, unknown>)
+          : {};
+      pendingRow.rawPayload = {
+        ...pendingRawPayload,
+        status: line,
+      };
+      updatePendingRowPresentation(pendingRow);
+      continue;
+    }
+
+    if (pendingRow && !wiseMobileStatusPattern.test(line)) {
+      const pendingRawPayload =
+        pendingRow.rawPayload && typeof pendingRow.rawPayload === "object" && !Array.isArray(pendingRow.rawPayload)
+          ? (pendingRow.rawPayload as Record<string, unknown>)
+          : {};
+      const pendingRequiresMerchant =
+        !pendingRow.merchantRaw || /^Wise transaction$/i.test(pendingRow.merchantRaw) || pendingRow.merchantRaw === "Wise";
+      if (pendingRequiresMerchant && !extractWiseMobileAmountFromLine(line)) {
+        const merchantCandidate = cleanWiseMobileMerchantCandidate(line);
+        if (/[A-Za-z]{2,}/.test(merchantCandidate)) {
+          pendingRow.merchantRaw = merchantCandidate;
+          updatePendingRowPresentation(pendingRow);
+          continue;
+        }
+      }
+      if (
+        pendingRequiresMerchant &&
+        typeof pendingRawPayload.status !== "string" &&
+        pendingRawPayload.requiresAccountAmount === true &&
+        !extractWiseMobileAmountFromLine(line)
+      ) {
+        const merchantCandidate = cleanWiseMobileMerchantCandidate(line);
+        if (/[A-Za-z]{2,}/.test(merchantCandidate)) {
+          pendingRow.merchantRaw = merchantCandidate;
+          updatePendingRowPresentation(pendingRow);
+          continue;
+        }
+      }
+    }
+
+    const amountInfo = extractWiseMobileAmountFromLine(line);
     if (amountInfo) {
       const pendingRawPayload =
         pendingRow?.rawPayload && typeof pendingRow.rawPayload === "object" && !Array.isArray(pendingRow.rawPayload)
@@ -16993,10 +17161,24 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
           : null;
       const pendingAmountLineIndex =
         typeof pendingRawPayload?.sourceAmountLineIndex === "number" ? pendingRawPayload.sourceAmountLineIndex : null;
+      const inlineMerchant = extractWiseInlineMerchantCandidate(line, amountInfo);
+      const lookbackMerchant =
+        [...lines.slice(Math.max(0, lineIndex - 2), lineIndex)]
+          .reverse()
+          .map((candidate) => cleanWiseMobileMerchantCandidate(candidate))
+          .find(
+            (candidate) =>
+              /[A-Za-z]{2,}/.test(candidate) &&
+              !isWiseMobileUiLine(candidate) &&
+              !wiseMobileStatusPattern.test(candidate) &&
+              !wiseMobileDatePattern.test(candidate) &&
+              !extractWiseMobileAmountFromLine(candidate)
+          ) ?? null;
       if (
         pendingRow &&
         pendingAmountLineIndex !== null &&
-        lineIndex - pendingAmountLineIndex === 1 &&
+        lineIndex - pendingAmountLineIndex <= 2 &&
+        pendingRawPayload?.requiresAccountAmount === true &&
         amountInfo.sign === null
       ) {
         pendingRow.rawPayload = {
@@ -17013,62 +17195,59 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
         pendingRow.amount = Math.abs(amountInfo.amount).toFixed(2);
         pendingRow.currency = amountInfo.currency;
         pendingRow.accountName = formatWiseWalletAccountName(amountInfo.currency);
+        if (
+          (inlineMerchant || lookbackMerchant) &&
+          (!pendingRow.merchantRaw || /^Wise transaction$/i.test(pendingRow.merchantRaw))
+        ) {
+          pendingRow.merchantRaw = inlineMerchant ?? lookbackMerchant ?? pendingRow.merchantRaw;
+        }
+        updatePendingRowPresentation(pendingRow);
         continue;
       }
 
       flushPending();
-      const recentText = lines.slice(Math.max(0, lineIndex - 3), lineIndex);
-      const status = [...recentText].reverse().find((candidate) => wiseMobileStatusPattern.test(candidate)) ?? null;
-      const merchant =
-        [...recentText]
-          .reverse()
-          .find((candidate) => !wiseMobileStatusPattern.test(candidate) && !wiseMobileAmountPattern.test(candidate) && !wiseMobileDatePattern.test(candidate)) ??
-        "Wise transaction";
-      const type: TransactionType =
-        amountInfo.sign === "credit" || /^(?:Added|Refunded|Received)$/i.test(status ?? "")
-          ? "income"
-          : /^(?:Sent)$/i.test(status ?? "")
-            ? "transfer"
-            : "expense";
-      const categoryName =
-        /^(?:Added|Sent|Received)$/i.test(status ?? "") || /^To\s+[A-Z]{3}$/i.test(merchant)
-          ? "Transfers"
-          : /refund/i.test(status ?? "")
-            ? "Income"
-            : guessCategoryName(`${merchant} ${status ?? ""}`, type);
-      const requiresAccountAmount =
-        amountInfo.sign === null &&
-        !status &&
-        type === "expense" &&
-        isWiseLikelyMerchantSpendCurrency(amountInfo.currency);
-
       pendingRow = {
         date: currentDate,
         amount: Math.abs(amountInfo.amount).toFixed(2),
         currency: amountInfo.currency,
-        merchantRaw: humanizeMerchantText(merchant),
-        merchantClean: summarizeMerchantText(merchant, "Wise"),
-        description: normalizeWhitespace([merchant, status].filter(Boolean).join(" - ")),
-        categoryName,
+        merchantRaw: inlineMerchant ?? lookbackMerchant ?? "Wise transaction",
+        merchantClean:
+          inlineMerchant || lookbackMerchant
+            ? summarizeMerchantText(inlineMerchant ?? lookbackMerchant ?? "Wise transaction", "Wise")
+            : "Wise transaction",
+        description: inlineMerchant ?? lookbackMerchant ?? "Wise transaction",
+        categoryName: "Other",
         accountName: formatWiseWalletAccountName(amountInfo.currency),
         accountNumber: metadata.accountNumber ?? undefined,
         institution: "Wise",
-        type,
-        confidence: status || amountInfo.sign ? 88 : 82,
+        type: amountInfo.sign === "credit" ? "income" : amountInfo.sign === "debit" ? "expense" : "expense",
+        confidence: amountInfo.sign ? 88 : 82,
         parserConfidence: 86,
         categoryConfidence: 80,
         rawPayload: {
           bank: "Wise",
           kind: "wise_mobile_screenshot_transaction",
-          amountText: line,
+          amountText: amountInfo.matchText,
           sourceAmountLineIndex: lineIndex,
-          status,
+          sourceSign: amountInfo.sign,
+          status: null,
           source: "wise_mobile_screenshot",
           accountName: formatWiseWalletAccountName(amountInfo.currency),
           accountCurrency: amountInfo.currency,
-          requiresAccountAmount,
+          requiresAccountAmount: false,
         },
       };
+      updatePendingRowPresentation(pendingRow);
+      continue;
+    }
+
+    if (pendingRow) {
+      const merchantCandidate = cleanWiseMobileMerchantCandidate(line);
+      const pendingRequiresMerchant = !pendingRow.merchantRaw || /^Wise transaction$/i.test(pendingRow.merchantRaw);
+      if (pendingRequiresMerchant && /[A-Za-z]{2,}/.test(merchantCandidate) && !isWiseMobileUiLine(merchantCandidate)) {
+        pendingRow.merchantRaw = merchantCandidate;
+        updatePendingRowPresentation(pendingRow);
+      }
     }
   }
 
