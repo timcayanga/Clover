@@ -3839,11 +3839,34 @@ const getMobileScreenshotPayloadKind = (rawPayload: Prisma.JsonValue | null | un
   const payload = rawPayload as Record<string, unknown>;
   const kind = typeof payload.kind === "string" ? payload.kind.trim() : "";
   const source = typeof payload.source === "string" ? payload.source.trim() : "";
-  if (kind === "gcash_mobile_screenshot_transaction" || source === "gcash_mobile_screenshot") {
+  const bank = typeof payload.bank === "string" ? payload.bank.trim() : "";
+  const identityText = `${kind} ${source} ${bank}`;
+  if (/gcash/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
     return "gcash";
   }
-  if (kind === "maya_mobile_screenshot_known_transaction" || source === "maya_mobile_screenshot") {
+  if (/maya/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
     return "maya";
+  }
+
+  return null;
+};
+
+const getMobileScreenshotWalletIdentity = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  const kind = getMobileScreenshotPayloadKind(rawPayload);
+  if (kind === "gcash") {
+    return {
+      accountName: "GCash",
+      institution: "GCash",
+      accountType: "wallet" as AccountType,
+    };
+  }
+
+  if (kind === "maya") {
+    return {
+      accountName: "Maya Wallet",
+      institution: "Maya",
+      accountType: "wallet" as AccountType,
+    };
   }
 
   return null;
@@ -4694,39 +4717,52 @@ export const processImportFileText = async (
     }).catch(() => null);
   };
   const confirmImportFileWithRetry = async (reason: string): Promise<ConfirmImportResult> => {
-    try {
-      return await confirmImportFile(importFileId, null);
-    } catch (firstError) {
-      const parsedRowsReady = await prisma.parsedTransaction.count({ where: { importFileId } }).catch(() => 0);
-      const shouldRetry = parsedRowsReady > 0;
-      if (!shouldRetry) {
-        throw firstError;
-      }
+    const maxAttempts = 5;
+    let lastError: unknown = null;
+    let lastParsedRowsReady = 0;
 
-      console.warn("[import-confirmation] retrying parsed-row confirmation after save failure", {
-        importFileId,
-        reason,
-        parsedRowsReady,
-        error: firstError,
-      });
-      await updateImportFileCompat(importFileId, {
-        status: "processing",
-        processingPhase: "reconciling",
-        processingMessage: "Clover parsed the rows and is retrying the final save.",
-      }).catch(() => null);
-      await new Promise((resolve) => setTimeout(resolve, 750));
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         return await confirmImportFile(importFileId, null);
-      } catch (secondError) {
-        console.warn("[import-confirmation] confirmation retry failed", {
+      } catch (error) {
+        lastError = error;
+        lastParsedRowsReady = await prisma.parsedTransaction.count({ where: { importFileId } }).catch(() => 0);
+        const shouldRetry = lastParsedRowsReady > 0 && attempt < maxAttempts;
+        if (!shouldRetry) {
+          break;
+        }
+
+        const nextAttempt = attempt + 1;
+        const delayMs = Math.min(4000, 500 * 2 ** (attempt - 1));
+        console.warn("[import-confirmation] retrying parsed-row confirmation after save failure", {
           importFileId,
           reason,
-          parsedRowsReady,
-          error: secondError,
+          attempt,
+          nextAttempt,
+          parsedRowsReady: lastParsedRowsReady,
+          delayMs,
+          error,
         });
-        throw secondError;
+        await updateImportFileCompat(importFileId, {
+          status: "processing",
+          processingPhase: "reconciling",
+          processingMessage:
+            nextAttempt <= 2
+              ? "Clover parsed the rows and is retrying the final save."
+              : `Clover parsed the rows and is retrying the final save (${nextAttempt}/${maxAttempts}).`,
+        }).catch(() => null);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
+
+    console.warn("[import-confirmation] confirmation retry failed", {
+      importFileId,
+      reason,
+      attempts: maxAttempts,
+      parsedRowsReady: lastParsedRowsReady,
+      error: lastError,
+    });
+    throw lastError instanceof Error ? lastError : new Error("Unable to confirm parsed import rows.");
   };
 
   if (!importFile) {
