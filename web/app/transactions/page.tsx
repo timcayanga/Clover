@@ -1630,17 +1630,13 @@ const getNormalizedPayloadTextCandidate = (normalizedPayload: unknown, keys: str
 
 const getTransactionUserNote = (
   transaction:
-    | Pick<Transaction, "description" | "source" | "importFileId" | "normalizedPayload">
+    | Pick<Transaction, "normalizedPayload">
     | null
     | undefined
 ) => {
   const normalizedUserNote = getNormalizedPayloadTextCandidate(transaction?.normalizedPayload, ["userNote", "user_note"]);
   if (normalizedUserNote) {
     return normalizeTransactionNotes(normalizedUserNote);
-  }
-
-  if ((transaction?.source ?? null) === "manual" && !transaction?.importFileId) {
-    return normalizeTransactionNotes(transaction?.description);
   }
 
   return "";
