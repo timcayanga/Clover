@@ -33,6 +33,10 @@ import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-ima
 import type { Prisma } from "@prisma/client";
 import { makeImportFileBytesFingerprint } from "@/lib/import-file-text.server";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
+import {
+  resolveReceiptAccountHintToAccount,
+  resolveReceiptInstitutionFallbackToAccount,
+} from "@/lib/receipt-account-resolution";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -419,6 +423,50 @@ const importTrainedReceiptFixture = async (params: {
   fixture: TrainedReceiptFixture;
 }) => {
   await ensureWorkspaceCashAccount(params.workspaceId, params.fixture.currency);
+  const workspaceAccounts = await prisma.account.findMany({
+    where: { workspaceId: params.workspaceId },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+      currency: true,
+    },
+  });
+  const directAccountResolution = resolveReceiptAccountHintToAccount(
+    params.fixture.accountMatch
+      ? {
+          accountName: params.fixture.accountMatch.account_name ?? null,
+          accountLast4: params.fixture.accountMatch.account_last4 ?? null,
+          confidence: params.fixture.accountMatch.confidence ?? 0,
+          reason: params.fixture.accountMatch.reason ?? null,
+        }
+      : null,
+    workspaceAccounts
+  );
+  const institutionFallbackResolution = resolveReceiptInstitutionFallbackToAccount(
+    /gcash/i.test(params.fixture.paymentChannel)
+      ? {
+          institution: "GCash",
+          accountName: "GCash",
+          accountType: "wallet",
+          reason: "Receipt screenshot detected as a GCash transfer.",
+        }
+      : /maya/i.test(params.fixture.paymentChannel)
+        ? {
+            institution: "Maya",
+            accountName: "Maya Wallet",
+            accountType: "wallet",
+            reason: "Receipt screenshot detected as a Maya transfer.",
+          }
+        : null,
+    workspaceAccounts
+  );
+  const matchedAccountId = directAccountResolution?.accountId ?? institutionFallbackResolution?.accountId ?? null;
+  const matchedAccount = matchedAccountId
+    ? workspaceAccounts.find((account) => account.id === matchedAccountId) ?? null
+    : null;
   const cashAccount = await prisma.account.findFirst({
     where: {
       workspaceId: params.workspaceId,
@@ -430,6 +478,7 @@ const importTrainedReceiptFixture = async (params: {
   if (!cashAccount?.id) {
     throw new Error("Unable to find Cash account for trained receipt import.");
   }
+  const targetAccountId = matchedAccount?.id ?? cashAccount.id;
 
   const categoryId = await resolveOrCreateReceiptCategoryId(params.workspaceId, params.fixture.categoryName);
   const transactionDate = new Date(`${params.fixture.date}T00:00:00.000Z`);
@@ -452,7 +501,7 @@ const importTrainedReceiptFixture = async (params: {
   if (!existingTransaction?.id) {
     await insertTransactionCompat({
       workspaceId: params.workspaceId,
-      accountId: cashAccount.id,
+      accountId: targetAccountId,
       importFileId: params.importFileId,
       categoryId,
       categoryName: params.fixture.categoryName,
@@ -478,6 +527,7 @@ const importTrainedReceiptFixture = async (params: {
       where: { id: existingTransaction.id },
       data: {
         categoryId,
+        accountId: targetAccountId,
         reviewStatus: "confirmed",
         parserConfidence: 95,
         categoryConfidence: 95,
@@ -497,7 +547,7 @@ const importTrainedReceiptFixture = async (params: {
     status: "done",
     processingPhase: "complete",
     processingMessage: "Receipt imported.",
-    accountId: cashAccount.id,
+    accountId: targetAccountId,
     parsedRowsCount: 1,
     confirmedTransactionsCount: 1,
   });

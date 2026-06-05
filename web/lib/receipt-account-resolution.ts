@@ -23,6 +23,13 @@ type ResolvedReceiptAccount = {
   reason: string;
 };
 
+type ReceiptInstitutionFallbackHint = {
+  institution: string | null;
+  accountName?: string | null;
+  accountType?: string | null;
+  reason?: string | null;
+};
+
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
 const normalizeToken = (value: string) =>
@@ -31,6 +38,15 @@ const normalizeToken = (value: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+const canonicalInstitutionKey = (value?: string | null) =>
+  normalizeToken(value ?? "")
+    .replace(/\bunion bank of the philippines\b/g, "unionbank")
+    .replace(/\bunion bank\b/g, "unionbank")
+    .replace(/\bchina bank\b/g, "chinabank")
+    .replace(/\bmetro bank\b/g, "metrobank")
+    .replace(/\bphilippine national bank\b/g, "pnb")
+    .replace(/\bg cash\b/g, "gcash");
 
 const extractLastFourDigits = (value?: string | null) => {
   if (!value) {
@@ -154,5 +170,58 @@ export const resolveReceiptAccountHintToAccount = (
     accountLast4: best.accountLast4,
     confidence: Math.min(99, Math.max(70, topScore)),
     reason: best.reasons.join(", ") || "Matched receipt account hint to saved account",
+  };
+};
+
+export const resolveReceiptInstitutionFallbackToAccount = (
+  hint: ReceiptInstitutionFallbackHint | null,
+  accounts: CandidateAccount[]
+): ResolvedReceiptAccount | null => {
+  const institutionKey = canonicalInstitutionKey(hint?.institution ?? hint?.accountName ?? null);
+  if (!institutionKey) {
+    return null;
+  }
+
+  const hintedType = normalizeToken(hint?.accountType ?? "");
+  const candidates = accounts.filter((account) => {
+    const accountInstitutionKey = canonicalInstitutionKey(account.institution ?? account.name);
+    if (!accountInstitutionKey) {
+      return false;
+    }
+
+    const institutionMatches =
+      accountInstitutionKey === institutionKey ||
+      accountInstitutionKey.includes(institutionKey) ||
+      institutionKey.includes(accountInstitutionKey);
+
+    if (!institutionMatches) {
+      return false;
+    }
+
+    if (hintedType && normalizeToken(account.type) !== hintedType) {
+      return false;
+    }
+
+    return true;
+  });
+
+  if (candidates.length !== 1) {
+    return null;
+  }
+
+  const account = candidates[0];
+  if (!account) {
+    return null;
+  }
+
+  return {
+    accountId: account.id,
+    accountName: account.name,
+    institution: account.institution ?? null,
+    accountLast4: getCandidateLast4(account),
+    confidence: 72,
+    reason:
+      hint?.reason?.trim() ||
+      `Matched ${hint?.institution ?? hint?.accountName ?? "institution"} screenshot to the only saved ${account.institution ?? account.name} account`,
   };
 };
