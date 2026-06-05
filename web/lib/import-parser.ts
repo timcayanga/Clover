@@ -16721,8 +16721,7 @@ const parseWiseMobileAmountLine = (line: string) => {
 };
 
 const formatWiseWalletAccountName = (currency?: string | null) => {
-  const normalizedCurrency = normalizeCurrencyCode(currency);
-  return normalizedCurrency ? `Wise ${normalizedCurrency}` : "Wise";
+  return "Wise";
 };
 
 const isWiseLikelyMerchantSpendCurrency = (currency?: string | null) => {

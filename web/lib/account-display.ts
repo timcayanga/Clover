@@ -34,7 +34,7 @@ const getWiseWalletDisplayName = (input: AccountDisplayInput) => {
     return null;
   }
 
-  const accountSuffix = extractLastFourDigits(input.accountNumber) ?? extractLastFourDigits(safeName);
+  const accountSuffix = extractLastFourDigits(input.accountNumber);
   if (accountSuffix) {
     return null;
   }

@@ -2583,6 +2583,19 @@ const readWiseAccountImpactAmount = (row: Record<string, unknown>) => {
     row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
       ? (row.rawPayload as Record<string, unknown>)
       : null;
+  const evidenceAmounts = parseWiseEvidenceAmounts(row);
+  if (evidenceAmounts.length >= 2) {
+    const accountAmount = evidenceAmounts.at(-1);
+    return accountAmount
+      ? {
+          amount: accountAmount.amount,
+          currency: accountAmount.currency,
+          text: accountAmount.text,
+          inferredFromEvidence: true,
+        }
+      : null;
+  }
+
   const explicitCurrency = normalizeWiseWalletCurrencyCode(
     typeof rawPayload?.accountCurrency === "string" ? rawPayload.accountCurrency : null
   );
@@ -2600,19 +2613,6 @@ const readWiseAccountImpactAmount = (row: Record<string, unknown>) => {
       text: typeof rawPayload?.accountAmountText === "string" ? rawPayload.accountAmountText : null,
       inferredFromEvidence: false,
     };
-  }
-
-  const evidenceAmounts = parseWiseEvidenceAmounts(row);
-  if (evidenceAmounts.length >= 2) {
-    const accountAmount = evidenceAmounts.at(-1);
-    return accountAmount
-      ? {
-          amount: accountAmount.amount,
-          currency: accountAmount.currency,
-          text: accountAmount.text,
-          inferredFromEvidence: true,
-        }
-      : null;
   }
 
   const onlyAmount = evidenceAmounts[0] ?? null;
@@ -4592,6 +4592,46 @@ const isWiseReviewOnlyTransaction = (params: {
   }
 
   return /\b(cancelled?|canceled|card checked|checked|failed|withdrawn)\b/.test(text);
+};
+
+const isWiseSkippableVerificationRow = (row: Record<string, unknown>, fallbackInstitution?: string | null) => {
+  const rawPayload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const identityText = [
+    fallbackInstitution,
+    row.institution,
+    row.accountName,
+    rawPayload?.institutionRaw,
+    rawPayload?.bank,
+    rawPayload?.source,
+    rawPayload?.kind,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  if (!/wise/i.test(identityText)) {
+    return false;
+  }
+
+  const rowAmount = parseAmountValue(
+    typeof row.amount === "number" || typeof row.amount === "string" ? String(row.amount) : null
+  );
+  const statusText = [
+    row.merchantRaw,
+    row.merchantClean,
+    row.description,
+    rawPayload?.status,
+    rawPayload?.transactionStatus,
+    rawPayload?.state,
+    rawPayload?.sourceLine,
+    rawPayload?.notes,
+  ]
+    .map((value) => String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" | ");
+
+  return rowAmount !== null && Math.abs(rowAmount) < 0.01 && /\bcard checked\b|\bverification\b|\bchecked\b/.test(statusText);
 };
 
 export const processImportFileText = async (
@@ -7104,6 +7144,19 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
         ? (row.rawPayload as Record<string, unknown>)
         : null;
+    if (
+      isWiseSkippableVerificationRow(
+        row as Record<string, unknown>,
+        checkpointBankName ?? (typeof statementMetadata?.institution === "string" ? statementMetadata.institution : null)
+      )
+    ) {
+      console.warn("[import-confirmation] skipped Wise screenshot verification row", {
+        importFileId,
+        merchant: typeof row.merchantClean === "string" ? row.merchantClean : row.merchantRaw,
+        currency: row.currency,
+      });
+      return false;
+    }
     if (rawPayload?.wiseAmbiguousAccountCurrency === true) {
       console.warn("[import-confirmation] skipped ambiguous Wise screenshot merchant-currency row", {
         importFileId,
@@ -7915,10 +7968,24 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
         ? (row.rawPayload as Record<string, unknown>)
         : null;
+    const rowWiseIdentityText = [
+      statementInstitution,
+      row.institution,
+      (row as { accountName?: unknown }).accountName,
+      rowRawPayload?.institutionRaw,
+      rowRawPayload?.bank,
+      rowRawPayload?.source,
+      rowRawPayload?.kind,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const rowWiseDocumentText = String(
+      rowRawPayload?.documentType ?? rowRawPayload?.importMode ?? rowRawPayload?.statementType ?? rowRawPayload?.source ?? ""
+    ).toLowerCase();
     const isWiseUndatedStatementRow =
       !parsedTransactionDate &&
-      /wise/i.test(String(statementInstitution ?? row.institution ?? rowRawPayload?.institutionRaw ?? "")) &&
-      String(rowRawPayload?.documentType ?? rowRawPayload?.importMode ?? "").toLowerCase().includes("statement");
+      /wise/i.test(rowWiseIdentityText) &&
+      (rowWiseDocumentText.includes("statement") || rowWiseDocumentText.includes("wise_mobile_screenshot"));
 
     if (rowIsOpeningBalance) {
       continue;
