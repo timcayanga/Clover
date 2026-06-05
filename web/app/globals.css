@@ -17763,13 +17763,24 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .transactions-page .transactions-toolbar-add {
+  background: rgba(242, 245, 247, 0.98);
+  border-color: rgba(182, 191, 197, 1);
+  color: #111111;
+  box-shadow: none;
   font-weight: 600;
   font-size: 0.78rem;
 }
 
 .transactions-page .transactions-toolbar-add:hover,
 .transactions-page .transactions-toolbar-add:focus {
+  background: rgba(235, 239, 241, 0.98);
+  border-color: rgba(160, 170, 176, 1);
+  color: #111111;
   box-shadow: none;
+}
+
+.transactions-page .transactions-toolbar-add .button-icon {
+  color: currentColor;
 }
 
 .transactions-page .transactions-toolbar-upload {
@@ -33521,6 +33532,19 @@ html[data-theme="dark"] .transactions-page .transactions-toolbar-upload:focus-vi
 
 html[data-theme="dark"] .transactions-page .transactions-toolbar-upload .button-icon {
   color: currentColor;
+}
+
+html[data-theme="dark"] .transactions-page .transactions-toolbar-add {
+  background: rgba(15, 23, 42, 0.98);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .transactions-page .transactions-toolbar-add:hover,
+html[data-theme="dark"] .transactions-page .transactions-toolbar-add:focus-visible {
+  background: rgba(30, 41, 59, 0.98);
+  border-color: rgba(148, 163, 184, 0.32);
+  color: #f8fafc;
 }
 
 html[data-theme="dark"] .sidebar-search-panel .sidebar-search input,
