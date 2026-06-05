@@ -845,6 +845,60 @@ const openAIJsonSchema = {
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
+const wiseEvidenceAmountPattern =
+  /([+−-]?\s*)?([0-9][0-9,]*(?:\.\d{1,2})?|0)\s+(AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)\b/gi;
+const wiseVisibleDateHeaderPattern =
+  /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b/i;
+
+const parseOpenAIWiseAmount = (value: string) => {
+  const normalized = value.replace(/,/g, "").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : null;
+};
+
+const parseOpenAIWiseEvidenceAmounts = (value?: string | null) => {
+  if (!value) {
+    return [];
+  }
+
+  return Array.from(value.matchAll(wiseEvidenceAmountPattern))
+    .map((match) => {
+      const amount = parseOpenAIWiseAmount(match[2] ?? "");
+      const currency = match[3]?.trim().toUpperCase();
+      if (amount === null || !currency) {
+        return null;
+      }
+
+      const sign = (match[1] ?? "").replace(/\s+/g, "");
+      return {
+        amount: Math.abs(amount),
+        currency,
+        sign: sign.startsWith("+") ? "credit" : sign.startsWith("-") || sign.startsWith("−") ? "debit" : null,
+        text: match[0],
+      };
+    })
+    .filter((entry): entry is { amount: number; currency: string; sign: "credit" | "debit" | null; text: string } =>
+      Boolean(entry)
+    );
+};
+
+const firstNonEmptyLine = (value?: string | null) =>
+  typeof value === "string"
+    ? value
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean) ?? null
+    : null;
+
+const hasVisibleWiseDateHeader = (value?: string | null) => {
+  const firstLine = firstNonEmptyLine(value);
+  return Boolean(firstLine && wiseVisibleDateHeaderPattern.test(firstLine));
+};
+
 const summaryRowPatterns = [
   /previous\s+statement\s+balance/i,
   /previous\s+balance/i,
@@ -1820,6 +1874,39 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       institution ??
       null;
     const accountType = normalizeAccountTypeValue(value.account.account_type ?? null, institution, accountNameCandidate, params.detectedMetadata?.accountType ?? "bank");
+    const statementType = String(value.statement_type ?? "").trim().toLowerCase();
+    const warningsText = value.quality_checks.warnings.filter(Boolean).join(" ");
+    const transactionEvidenceText = value.transactions
+      .map((row) => [row.raw_name, row.normalized_name, row.notes, row.parser_evidence.source_text].filter(Boolean).join("\n"))
+      .join("\n");
+    const wiseIdentityText = [
+      params.detectedMetadata?.institution,
+      params.detectedMetadata?.accountName,
+      value.institution,
+      value.institution_raw,
+      value.account.display_name,
+      value.account.institution_name,
+      warningsText,
+      transactionEvidenceText,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const looksLikeWiseWalletScreenshot =
+      documentType === "statement" &&
+      /^(?:wallet|transaction_history|wallet_statement|wallet_transaction_history)$/i.test(statementType) &&
+      (/wise/i.test(wiseIdentityText) ||
+        /\bIncludes hidden\b|\bDirection\b|\bTo\s+[A-Z]{3}\b|\bCard checked\b/i.test(transactionEvidenceText)) &&
+      (/\b(?:wallet|app transaction|transaction-history|multi-currency|mixed currencies|screenshot)\b/i.test(
+        `${warningsText} ${transactionEvidenceText}`
+      ) ||
+        /\b[0-9][0-9,]*(?:\.\d{1,2})?\s+(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)\b/i.test(
+          transactionEvidenceText
+        ));
+    const effectiveInstitution = looksLikeWiseWalletScreenshot ? "Wise" : institution;
+    const effectiveInstitutionRaw = looksLikeWiseWalletScreenshot ? "Wise" : institutionRaw;
+    const effectiveAccountNumber = looksLikeWiseWalletScreenshot ? null : accountNumber;
+    const effectiveAccountNameCandidate = looksLikeWiseWalletScreenshot ? "Wise" : accountNameCandidate;
+    const effectiveAccountType = looksLikeWiseWalletScreenshot ? "wallet" : accountType;
     const paymentDueDate =
       value.payment_due_date ??
       value.account.statement_period.end ??
@@ -1840,10 +1927,13 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         : 0;
     const qualityBoost = value.quality_checks.balance_reconciled ? 10 : 0;
     const metadata: DetectedStatementMetadata = {
-      institution: institution ?? null,
-      accountNumber: accountNumber ?? null,
-      accountName: accountNameCandidate,
-      accountType,
+      institution: effectiveInstitution ?? null,
+      accountNumber: effectiveAccountNumber ?? null,
+      accountName: effectiveAccountNameCandidate,
+      accountType: effectiveAccountType,
+      currency: looksLikeWiseWalletScreenshot
+        ? null
+        : ((value.account.currency?.trim().toUpperCase() || params.detectedMetadata?.currency) ?? null),
       openingBalance: params.detectedMetadata?.openingBalance ?? null,
       endingBalance: statementBalance,
       paymentDueDate,
@@ -1867,14 +1957,39 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     const mappedRows = value.transactions.map((row): ParsedImportRow | null => {
       const description = normalizeWhitespace(String(row.normalized_name ?? row.raw_name ?? "")).trim();
       const rawName = normalizeWhitespace(String(row.raw_name ?? description)).trim();
-      const amount = Math.abs(Number(row.amount));
+      const evidenceText = row.parser_evidence.source_text ?? null;
+      const wiseEvidenceAmounts = looksLikeWiseWalletScreenshot ? parseOpenAIWiseEvidenceAmounts(evidenceText) : [];
+      const accountImpactAmount = wiseEvidenceAmounts.length > 0 ? wiseEvidenceAmounts[wiseEvidenceAmounts.length - 1] : null;
+      const amount = accountImpactAmount ? accountImpactAmount.amount : Math.abs(Number(row.amount));
       if (!rawName || !Number.isFinite(amount)) {
         return null;
       }
 
       const rowInstitution =
-        simplifyInstitutionName(institution ?? value.account.institution_name ?? params.detectedMetadata?.institution ?? null) ?? institution ?? null;
-      const rowAccountName = accountNameCandidate ?? value.account.display_name ?? null;
+        looksLikeWiseWalletScreenshot
+          ? "Wise"
+          : simplifyInstitutionName(institution ?? value.account.institution_name ?? params.detectedMetadata?.institution ?? null) ?? institution ?? null;
+      const rowAccountName = looksLikeWiseWalletScreenshot ? "Wise" : accountNameCandidate ?? value.account.display_name ?? null;
+      const rowDate = row.date ?? row.transaction_date ?? row.post_date ?? null;
+      const evidenceHasDate = hasVisibleWiseDateHeader(evidenceText);
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const wiseUiNoise =
+        looksLikeWiseWalletScreenshot &&
+        (/\b(?:Search|Includes hidden|Type|Currency|Direction)\b/i.test(rawName) ||
+          /^(?:83|\d{1,3}|Feb\s+\d{1,2},?\s+\d{4}|Mar\s+\d{1,2},?\s+\d{4})$/i.test(rawName));
+      const wiseZeroVerification =
+        looksLikeWiseWalletScreenshot &&
+        amount === 0 &&
+        /\b(?:Card checked|verification|checked)\b/i.test(`${rawName} ${description} ${evidenceText ?? ""}`);
+      const wiseUndatedHallucination =
+        looksLikeWiseWalletScreenshot &&
+        !evidenceHasDate &&
+        (!rowDate || rowDate === todayIso) &&
+        !/\b(?:Added|Refunded|Received|Sent|To\s+[A-Z]{3})\b/i.test(`${rawName} ${description} ${evidenceText ?? ""}`);
+      if (wiseUiNoise || wiseZeroVerification || wiseUndatedHallucination) {
+        return null;
+      }
+
       const movementType = row.movement_type;
       const category = normalizeOpenAICategory(row.category, movementType);
       const internalType = mapMovementTypeToInternalType(movementType, row.notes ?? null, rawName);
@@ -1883,14 +1998,15 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       const reviewRequired = row.review_required || row.confidence_score < 85 || category === "Other" || movementType === "internal_movement";
 
       return {
-        date: row.date ?? undefined,
+        date: rowDate ?? undefined,
         amount: amount.toFixed(2),
-        currency: row.currency?.trim().toUpperCase() || metadata.currency || undefined,
+        currency: accountImpactAmount?.currency ?? (row.currency?.trim().toUpperCase() || metadata.currency || undefined),
         merchantRaw: rawName,
         merchantClean,
         description: description || rawName,
         categoryName: category,
         accountName: rowAccountName ?? metadata.accountName ?? undefined,
+        accountNumber: effectiveAccountNumber ?? undefined,
         institution: rowInstitution ?? undefined,
         type: internalType,
         confidence: Math.max(0, Math.min(100, Math.round(row.confidence_score ?? metadata.confidence ?? 0))),
@@ -1902,7 +2018,18 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           documentType,
           receiptAccountMatch,
           importMode: params.importMode ?? "statement",
-          institutionRaw,
+          institutionRaw: effectiveInstitutionRaw,
+          originalInstitutionRaw: institutionRaw,
+          accountName: rowAccountName ?? null,
+          accountNumber: effectiveAccountNumber,
+          ...(accountImpactAmount
+            ? {
+                accountCurrency: accountImpactAmount.currency,
+                accountAmount: accountImpactAmount.amount,
+                accountAmountText: accountImpactAmount.text,
+                wiseAccountImpactInferredFromEvidence: true,
+              }
+            : {}),
           sourceLine: row.parser_evidence.source_text ?? null,
           parserEvidence: row.parser_evidence,
           normalizedName: row.normalized_name ?? null,

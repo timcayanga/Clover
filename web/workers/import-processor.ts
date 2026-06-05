@@ -2725,11 +2725,11 @@ const normalizeWiseWalletParsedRows = (
   }
 
   return rows.map((row) => {
-    if (readParsedRowAccountNumber(row)) {
+    const rowLooksWise = rowLooksLikeWiseWalletScreenshot(row, metadataLooksWise);
+    if (readParsedRowAccountNumber(row) && !rowLooksWise) {
       return row;
     }
 
-    const rowLooksWise = rowLooksLikeWiseWalletScreenshot(row, metadataLooksWise);
     if (!rowLooksWise) {
       return row;
     }
@@ -2778,6 +2778,8 @@ const normalizeWiseWalletParsedRows = (
         ? {
             ...(row.rawPayload as Record<string, unknown>),
             accountName,
+            accountNumber: null,
+            institutionRaw: "Wise",
             accountCurrency: currency,
             ...(accountImpactAmount
               ? {
@@ -2789,6 +2791,8 @@ const normalizeWiseWalletParsedRows = (
           }
         : {
             accountName,
+            accountNumber: null,
+            institutionRaw: "Wise",
             accountCurrency: currency,
             ...(accountImpactAmount
               ? {
@@ -2805,6 +2809,7 @@ const normalizeWiseWalletParsedRows = (
       ...(accountImpactAmount ? { amount: accountImpactAmount.amount.toFixed(2), currency } : {}),
       institution: "Wise",
       accountName,
+      accountNumber: undefined,
       rawPayload,
     };
   });
