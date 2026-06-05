@@ -40,15 +40,15 @@ type DashboardTransaction = {
   amount: unknown;
   isExcluded: boolean;
   reviewStatus: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
-  categoryConfidence: number;
+  categoryConfidence: number | null;
   categoryId: string | null;
   type: "income" | "expense" | "transfer";
-  merchantRaw: string;
+  merchantRaw: string | null;
   merchantClean: string | null;
   account: {
     name: string;
     currency: string | null;
-  };
+  } | null;
   category: {
     name: string;
   } | null;
@@ -143,7 +143,7 @@ const summarizeTransactions = (transactions: DashboardTransaction[]): Aggregated
         accumulator.confirmed += 1;
       }
 
-      if (transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70) {
+      if (transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || (transaction.categoryConfidence ?? 0) < 70) {
         accumulator.reviewAttention += 1;
       }
 
@@ -151,7 +151,7 @@ const summarizeTransactions = (transactions: DashboardTransaction[]): Aggregated
         const categoryName = transaction.category?.name ?? "Unassigned";
         accumulator.expenseCategories.set(categoryName, (accumulator.expenseCategories.get(categoryName) ?? 0) + amount);
 
-        const merchantName = transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Unknown merchant";
+        const merchantName = transaction.merchantClean?.trim() || transaction.merchantRaw?.trim() || "Unknown merchant";
         const existingMerchant = accumulator.expenseMerchants.get(merchantName);
         if (existingMerchant) {
           existingMerchant.amount += amount;
@@ -370,11 +370,11 @@ async function resolveDashboardWorkspaceSummary(user: Awaited<ReturnType<typeof 
 
 async function DashboardStream({
   user,
+  workspaceSummary,
 }: {
   user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>;
+  workspaceSummary: WorkspaceSummary;
 }) {
-  const workspaceSummary = await resolveDashboardWorkspaceSummary(user);
-
   const cashAccountCount = workspaceSummary.accounts.filter((account) => account.type === "cash").length;
   const shouldShowStarterCard =
     workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts === 0;
@@ -561,7 +561,7 @@ async function DashboardStream({
   const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
   const spendDelta = currentSummary.current.expense - currentSummary.previous.expense;
   const reviewAttentionTransactions = currentThirtyDayTransactions.filter(
-    (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70
+    (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || (transaction.categoryConfidence ?? 0) < 70
   );
   const reviewAttentionCount = reviewAttentionTransactions.length;
   const daysSinceLastImport = latestImport
@@ -585,7 +585,7 @@ async function DashboardStream({
       type: transaction.type,
       merchantRaw: transaction.merchantRaw,
       merchantClean: transaction.merchantClean,
-      currency: transaction.account.currency,
+      currency: transaction.account?.currency ?? displayCurrency,
       category: transaction.category,
     }))
   );
@@ -955,7 +955,7 @@ async function DashboardPageStream() {
       }
       >
       <Suspense fallback={<DashboardStreamFallback />}>
-        <DashboardStream user={user} />
+        <DashboardStream user={user} workspaceSummary={workspaceSummary} />
       </Suspense>
     </CloverShell>
   );
