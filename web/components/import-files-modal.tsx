@@ -3741,6 +3741,132 @@ export function ImportFilesModal({
           if (
             !suppressUnionBankPreview &&
             !seededFallbackSummary &&
+            parsedRowsCount > 0 &&
+            !allowFilenameFallbackIdentity &&
+            !processingIdentity?.accountName &&
+            !processingIdentity?.institution &&
+            !summaryContext.accountName &&
+            !summaryContext.institution
+          ) {
+            const previewResponse = await fetch(`/api/imports/${importFileId}/preview`);
+            const previewPayload = previewResponse.ok ? await previewResponse.json().catch(() => null) : null;
+            const parsedRows = Array.isArray(previewPayload?.parsedRows)
+              ? previewPayload.parsedRows.filter((row: unknown): row is Record<string, unknown> =>
+                  Boolean(row && typeof row === "object" && !Array.isArray(row))
+                )
+              : [];
+            const identityRow =
+              parsedRows.find(
+                (row: Record<string, unknown>) =>
+                  typeof row.accountName === "string" &&
+                  row.accountName.trim() &&
+                  typeof row.institution === "string" &&
+                  row.institution.trim()
+              ) ?? parsedRows[0] ?? null;
+            const previewAccountName =
+              typeof identityRow?.accountName === "string" && identityRow.accountName.trim()
+                ? identityRow.accountName.trim()
+                : null;
+            const previewInstitution =
+              typeof identityRow?.institution === "string" && identityRow.institution.trim()
+                ? identityRow.institution.trim()
+                : null;
+            const previewAccountNumber =
+              typeof identityRow?.accountNumber === "string" && identityRow.accountNumber.trim()
+                ? identityRow.accountNumber.trim()
+                : null;
+            const previewAccountType =
+              typeof identityRow?.accountType === "string" &&
+              ["bank", "wallet", "credit_card", "cash", "investment", "other"].includes(identityRow.accountType)
+                ? (identityRow.accountType as UploadInsightsSummary["accountType"])
+                : /^(?:GCash|Maya)$/i.test(previewInstitution ?? "")
+                  ? "wallet"
+                  : summaryContext.accountType ?? null;
+
+            if (previewAccountName || previewInstitution || previewAccountNumber) {
+              const previewAccountId = await ensureTargetAccountId(
+                previewAccountName,
+                previewInstitution,
+                previewAccountType,
+                previewAccountNumber,
+                stableOptimisticBalance,
+                null
+              );
+              const previewTransactions = previewAccountId
+                ? buildOptimisticPreviewTransactions(parsedRows, {
+                    importFileId,
+                    accountId: previewAccountId,
+                    accountName: previewAccountName ?? previewInstitution ?? "Wallet",
+                    institution: previewInstitution,
+                    accountNumber: previewAccountNumber,
+                  })
+                : [];
+              if (previewAccountId && previewTransactions.length > 0) {
+                const previewSummary = buildOptimisticUploadSummary(
+                  summaryContext.fileName,
+                  Math.max(parsedRowsCount, previewTransactions.length),
+                  previewAccountId,
+                  previewAccountName,
+                  previewInstitution,
+                  previewAccountType,
+                  summaryContext.optimisticAccountId,
+                  stableOptimisticBalance,
+                  previewTransactions,
+                  previewAccountNumber
+                );
+
+                seededFallbackSummary = true;
+                latestResolvedAccountId = previewAccountId;
+                seedImportedWorkspaceCaches(workspaceId, previewSummary);
+                await Promise.resolve(onImported(previewSummary));
+                emitItemUpdate({
+                  status: "done",
+                  confirmationState: "confirmed",
+                  progress: 100,
+                  progressLabel: "Done",
+                  targetAccountId: previewAccountId,
+                  importedRows: Math.max(parsedRowsCount, previewTransactions.length),
+                });
+                emitImportActivity({
+                  workspaceId,
+                  surface: importActivitySurfaceRef.current,
+                  status: "done",
+                  fileName: summaryContext.fileName,
+                  fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+                  fileTotal: items.length,
+                  completedFiles: completedFileCount + 1,
+                  progress: 100,
+                  detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
+                  summary: previewSummary,
+                  errorMessage: null,
+                });
+                void confirmItemImport(
+                  itemId,
+                  importFileId,
+                  previewAccountId,
+                  {
+                    fileName: summaryContext.fileName,
+                    accountName: previewSummary.accountName,
+                    institution: previewSummary.institution,
+                    accountNumber: previewSummary.accountNumber ?? null,
+                    accountType: previewSummary.accountType,
+                    optimisticAccountId: summaryContext.optimisticAccountId,
+                    previewTransactions,
+                  },
+                  { backgroundOnly: true }
+                ).catch((error) => {
+                  console.warn("Background mobile wallet screenshot confirmation failed after visible import", {
+                    importFileId,
+                    error: error instanceof Error ? error.message : String(error),
+                  });
+                });
+                return;
+              }
+            }
+          }
+          if (
+            !suppressUnionBankPreview &&
+            !seededFallbackSummary &&
             (parsedRowsCount > 0 || Boolean(processingIdentity?.accountName || processingIdentity?.institution)) &&
             (allowFilenameFallbackIdentity || Boolean(processingIdentity?.accountName || processingIdentity?.institution))
           ) {
