@@ -32,41 +32,51 @@ const CATEGORY_ICON_SRC: Record<string, string> = {
 };
 
 const CATEGORY_TONES: Record<string, CategoryTone> = {
-  "bills & utilities": { backgroundColor: "rgba(250, 204, 21, 0.36)", borderColor: "rgba(202, 138, 4, 0.78)" },
-  utilities: { backgroundColor: "rgba(250, 204, 21, 0.36)", borderColor: "rgba(202, 138, 4, 0.78)" },
-  business: { backgroundColor: "rgba(15, 23, 42, 0.84)", borderColor: "rgba(15, 23, 42, 0.96)" },
-  "cash & atm": { backgroundColor: "rgba(110, 231, 183, 0.44)", borderColor: "rgba(5, 150, 105, 0.78)" },
-  education: { backgroundColor: "rgba(37, 99, 235, 0.36)", borderColor: "rgba(29, 78, 216, 0.78)" },
-  entertainment: { backgroundColor: "rgba(124, 58, 237, 0.36)", borderColor: "rgba(109, 40, 217, 0.78)" },
-  financial: { backgroundColor: "rgba(203, 213, 225, 0.56)", borderColor: "rgba(100, 116, 139, 0.78)" },
-  "food & dining": { backgroundColor: "rgba(249, 115, 22, 0.38)", borderColor: "rgba(194, 65, 12, 0.78)" },
-  groceries: { backgroundColor: "rgba(249, 115, 22, 0.38)", borderColor: "rgba(194, 65, 12, 0.78)" },
-  "gifts & donations": { backgroundColor: "rgba(236, 72, 153, 0.36)", borderColor: "rgba(190, 24, 93, 0.78)" },
-  "health & wellness": { backgroundColor: "rgba(239, 68, 68, 0.36)", borderColor: "rgba(185, 28, 28, 0.78)" },
-  medical: { backgroundColor: "rgba(239, 68, 68, 0.36)", borderColor: "rgba(185, 28, 28, 0.78)" },
-  housing: { backgroundColor: "rgba(146, 64, 14, 0.38)", borderColor: "rgba(120, 53, 15, 0.78)" },
-  income: { backgroundColor: "rgba(34, 197, 94, 0.38)", borderColor: "rgba(21, 128, 61, 0.78)" },
-  salary: { backgroundColor: "rgba(34, 197, 94, 0.38)", borderColor: "rgba(21, 128, 61, 0.78)" },
-  other: { backgroundColor: "rgba(255, 255, 255, 0.96)", borderColor: "rgba(148, 163, 184, 0.9)" },
-  shopping: { backgroundColor: "rgba(136, 19, 55, 0.42)", borderColor: "rgba(136, 19, 55, 0.88)" },
-  subscriptions: { backgroundColor: "rgba(129, 140, 248, 0.34)", borderColor: "rgba(99, 102, 241, 0.78)" },
-  transfers: { backgroundColor: "rgba(20, 184, 166, 0.38)", borderColor: "rgba(15, 118, 110, 0.78)" },
-  transport: { backgroundColor: "rgba(125, 211, 252, 0.44)", borderColor: "rgba(2, 132, 199, 0.78)" },
-  "travel & lifestyle": { backgroundColor: "rgba(245, 222, 179, 0.62)", borderColor: "rgba(180, 83, 9, 0.72)" },
-  investments: { backgroundColor: "rgba(124, 58, 237, 0.36)", borderColor: "rgba(109, 40, 217, 0.78)" },
-  investment: { backgroundColor: "rgba(124, 58, 237, 0.36)", borderColor: "rgba(109, 40, 217, 0.78)" },
-  default: { backgroundColor: "rgba(3, 168, 192, 0.28)", borderColor: "rgba(3, 168, 192, 0.68)" },
+  transport: { backgroundColor: "rgba(186, 230, 253, 0.88)", borderColor: "rgba(56, 189, 248, 0.92)" }, // light blue
+  education: { backgroundColor: "rgba(96, 165, 250, 0.88)", borderColor: "rgba(37, 99, 235, 0.92)" }, // blue
+  business: { backgroundColor: "rgba(37, 99, 235, 0.88)", borderColor: "rgba(30, 64, 175, 0.94)" }, // dark blue
+  "cash & atm": { backgroundColor: "rgba(187, 247, 208, 0.9)", borderColor: "rgba(74, 222, 128, 0.9)" }, // light green
+  income: { backgroundColor: "rgba(74, 222, 128, 0.9)", borderColor: "rgba(22, 163, 74, 0.94)" }, // green
+  salary: { backgroundColor: "rgba(74, 222, 128, 0.9)", borderColor: "rgba(22, 163, 74, 0.94)" },
+  investments: { backgroundColor: "rgba(34, 197, 94, 0.92)", borderColor: "rgba(21, 128, 61, 0.94)" }, // dark green
+  investment: { backgroundColor: "rgba(34, 197, 94, 0.92)", borderColor: "rgba(21, 128, 61, 0.94)" },
+  transfers: { backgroundColor: "rgba(94, 234, 212, 0.88)", borderColor: "rgba(13, 148, 136, 0.92)" }, // teal
+  "health & wellness": { backgroundColor: "rgba(248, 113, 113, 0.9)", borderColor: "rgba(220, 38, 38, 0.94)" }, // red
+  medical: { backgroundColor: "rgba(248, 113, 113, 0.9)", borderColor: "rgba(220, 38, 38, 0.94)" },
+  housing: { backgroundColor: "rgba(153, 27, 27, 0.9)", borderColor: "rgba(127, 29, 29, 0.96)" }, // dark red
+  "gifts & donations": { backgroundColor: "rgba(249, 168, 212, 0.88)", borderColor: "rgba(219, 39, 119, 0.92)" }, // pink
+  "food & dining": { backgroundColor: "rgba(253, 186, 116, 0.9)", borderColor: "rgba(251, 146, 60, 0.92)" }, // light orange
+  groceries: { backgroundColor: "rgba(253, 186, 116, 0.9)", borderColor: "rgba(251, 146, 60, 0.92)" },
+  shopping: { backgroundColor: "rgba(251, 146, 60, 0.9)", borderColor: "rgba(234, 88, 12, 0.94)" }, // orange
+  "travel & lifestyle": { backgroundColor: "rgba(254, 240, 138, 0.92)", borderColor: "rgba(250, 204, 21, 0.9)" }, // light yellow
+  "bills & utilities": { backgroundColor: "rgba(250, 204, 21, 0.92)", borderColor: "rgba(202, 138, 4, 0.94)" }, // yellow
+  utilities: { backgroundColor: "rgba(250, 204, 21, 0.92)", borderColor: "rgba(202, 138, 4, 0.94)" },
+  subscriptions: { backgroundColor: "rgba(221, 214, 254, 0.92)", borderColor: "rgba(167, 139, 250, 0.92)" }, // light purple
+  entertainment: { backgroundColor: "rgba(167, 139, 250, 0.92)", borderColor: "rgba(126, 34, 206, 0.92)" }, // purple
+  financial: { backgroundColor: "rgba(107, 33, 168, 0.92)", borderColor: "rgba(88, 28, 135, 0.96)" }, // dark purple
+  other: { backgroundColor: "rgba(180, 83, 9, 0.88)", borderColor: "rgba(120, 53, 15, 0.94)" }, // brown
+  default: { backgroundColor: "rgba(96, 165, 250, 0.88)", borderColor: "rgba(37, 99, 235, 0.92)" },
 };
 
 const FALLBACK_TONES: CategoryTone[] = [
-  { backgroundColor: "rgba(37, 99, 235, 0.36)", borderColor: "rgba(29, 78, 216, 0.78)" },
-  { backgroundColor: "rgba(34, 197, 94, 0.38)", borderColor: "rgba(21, 128, 61, 0.78)" },
-  { backgroundColor: "rgba(249, 115, 22, 0.38)", borderColor: "rgba(194, 65, 12, 0.78)" },
-  { backgroundColor: "rgba(236, 72, 153, 0.36)", borderColor: "rgba(190, 24, 93, 0.78)" },
-  { backgroundColor: "rgba(124, 58, 237, 0.36)", borderColor: "rgba(109, 40, 217, 0.78)" },
-  { backgroundColor: "rgba(20, 184, 166, 0.38)", borderColor: "rgba(15, 118, 110, 0.78)" },
-  { backgroundColor: "rgba(239, 68, 68, 0.36)", borderColor: "rgba(185, 28, 28, 0.78)" },
-  { backgroundColor: "rgba(250, 204, 21, 0.36)", borderColor: "rgba(202, 138, 4, 0.78)" },
+  { backgroundColor: "rgba(186, 230, 253, 0.88)", borderColor: "rgba(56, 189, 248, 0.92)" },
+  { backgroundColor: "rgba(96, 165, 250, 0.88)", borderColor: "rgba(37, 99, 235, 0.92)" },
+  { backgroundColor: "rgba(37, 99, 235, 0.88)", borderColor: "rgba(30, 64, 175, 0.94)" },
+  { backgroundColor: "rgba(187, 247, 208, 0.9)", borderColor: "rgba(74, 222, 128, 0.9)" },
+  { backgroundColor: "rgba(74, 222, 128, 0.9)", borderColor: "rgba(22, 163, 74, 0.94)" },
+  { backgroundColor: "rgba(34, 197, 94, 0.92)", borderColor: "rgba(21, 128, 61, 0.94)" },
+  { backgroundColor: "rgba(94, 234, 212, 0.88)", borderColor: "rgba(13, 148, 136, 0.92)" },
+  { backgroundColor: "rgba(248, 113, 113, 0.9)", borderColor: "rgba(220, 38, 38, 0.94)" },
+  { backgroundColor: "rgba(153, 27, 27, 0.9)", borderColor: "rgba(127, 29, 29, 0.96)" },
+  { backgroundColor: "rgba(249, 168, 212, 0.88)", borderColor: "rgba(219, 39, 119, 0.92)" },
+  { backgroundColor: "rgba(253, 186, 116, 0.9)", borderColor: "rgba(251, 146, 60, 0.92)" },
+  { backgroundColor: "rgba(251, 146, 60, 0.9)", borderColor: "rgba(234, 88, 12, 0.94)" },
+  { backgroundColor: "rgba(254, 240, 138, 0.92)", borderColor: "rgba(250, 204, 21, 0.9)" },
+  { backgroundColor: "rgba(250, 204, 21, 0.92)", borderColor: "rgba(202, 138, 4, 0.94)" },
+  { backgroundColor: "rgba(221, 214, 254, 0.92)", borderColor: "rgba(167, 139, 250, 0.92)" },
+  { backgroundColor: "rgba(167, 139, 250, 0.92)", borderColor: "rgba(126, 34, 206, 0.92)" },
+  { backgroundColor: "rgba(107, 33, 168, 0.92)", borderColor: "rgba(88, 28, 135, 0.96)" },
+  { backgroundColor: "rgba(180, 83, 9, 0.88)", borderColor: "rgba(120, 53, 15, 0.94)" },
 ];
 
 const hashCategoryName = (value: string) => {
