@@ -5233,6 +5233,13 @@ export function ImportFilesModal({
       });
       window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
 
+      // Local statement preparse is only a UI preview. Persisting an account
+      // before the real import succeeds can create orphan account cards when
+      // the browser preview completes but the server import never lands.
+      if (itemImportMode === "statement") {
+        return;
+      }
+
       if (accountName || institution || accountNumber) {
         void ensureTargetAccountId(
           accountName,
