@@ -4226,7 +4226,17 @@ export function ImportFilesModal({
           }
         }
 
-        const hasSettledRows = visibleImportComplete;
+        const hasMobileWalletPreviewRows = Boolean(
+          summaryContext.previewTransactions?.some((transaction) => {
+            const identityText = `${transaction.accountName ?? ""} ${summaryContext.accountName ?? ""} ${summaryContext.institution ?? ""}`;
+            return /gcash|maya/i.test(identityText);
+          })
+        );
+        const hasSettledRows =
+          visibleImportComplete ||
+          (importFile?.status === "done" &&
+            hasMobileWalletPreviewRows &&
+            Boolean(latestResolvedAccountId || primaryStatusAccountSummary?.accountId));
 
         if (hasSettledRows) {
           triggerImportEnrichment(importFileId);

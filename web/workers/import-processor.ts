@@ -4047,7 +4047,10 @@ const buildImportTransactionCollapseKey = (transaction: {
 
   if (sourceRowIndex !== null) {
     if (mobileScreenshotKind) {
-      return `mobile-source-row:${mobileScreenshotKind}:${sourceRowIndex}`;
+      const contentKey = buildMobileScreenshotContentKey(transaction);
+      return contentKey
+        ? `mobile-source-content:${contentKey}`
+        : `mobile-source-row:${mobileScreenshotKind}:${sourceRowIndex}`;
     }
 
     return `source-row:${transaction.accountId}:${sourceRowIndex}`;
