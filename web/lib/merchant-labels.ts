@@ -1541,6 +1541,31 @@ export const summarizeMerchantText = (value: string, institution?: string | null
     }
   }
 
+  if (institution === "UnionBank" || institution === "UnionBank of the Philippines") {
+    const outwardFastPaymentsMatch = simplified.match(/^outward fast payments?\s+(.+)$/i);
+    if (outwardFastPaymentsMatch?.[1]) {
+      return stripTrailingStatementNoise(stripLeadingStatementNoise(outwardFastPaymentsMatch[1])) || simplified;
+    }
+
+    const inwardPaymentsMatch = simplified.match(/^inward payments?\s+(.+)$/i);
+    if (inwardPaymentsMatch?.[1]) {
+      return stripTrailingStatementNoise(stripLeadingStatementNoise(inwardPaymentsMatch[1])) || simplified;
+    }
+
+    const cardPurchaseMatch = simplified.match(/^card purchase\s+(.+)$/i);
+    if (cardPurchaseMatch?.[1]) {
+      return stripTrailingStatementNoise(stripLeadingStatementNoise(cardPurchaseMatch[1])) || simplified;
+    }
+
+    if (/^online\s+instapaysend\b/i.test(simplified)) {
+      return "InstaPay Send";
+    }
+
+    if (/^online\s+fund\s+transfer\b/i.test(simplified)) {
+      return "Fund Transfer";
+    }
+  }
+
   if (compact.includes("fundtransfer")) {
     return "Fund Transfer";
   }

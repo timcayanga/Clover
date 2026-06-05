@@ -7472,9 +7472,10 @@ function TransactionsPageContent() {
                           "Other";
                         const isTransferTransaction = effectiveType === "transfer";
                         const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
-                        const merchantSummary =
-                          transaction.merchantClean?.trim() ||
-                          summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
+                        const merchantSummary = summarizeTransactionMerchantText(
+                          transaction.merchantClean ?? transaction.merchantRaw,
+                          accountInstitution
+                        );
                         const accountDisplayName =
                           accountNameById.get(transaction.accountId) ??
                           formatTransactionAccountDisplayName(transaction, accountById.get(transaction.accountId) ?? null);
@@ -8306,6 +8307,13 @@ function TransactionsPageContent() {
                 />
               </label>
 
+              {selectedTransactionRawNote ? (
+                <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
+                  <span>Parsed note</span>
+                  <strong>{selectedTransactionRawNote}</strong>
+                </div>
+              ) : null}
+
               <label>
                 Date
                 <input
@@ -8490,13 +8498,6 @@ function TransactionsPageContent() {
                     <strong>{selectedTransactionRawSourceLine}</strong>
                   </div>
                 ) : null}
-                {selectedTransactionRawNote ? (
-                  <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
-                    <span>Parsed note</span>
-                    <strong>{selectedTransactionRawNote}</strong>
-                  </div>
-                ) : null}
-
                 <div className="transaction-drawer-receipt-lines">
                   <div className="transaction-drawer-receipt-lines__head">
                     <span className="transaction-drawer-field-label">
