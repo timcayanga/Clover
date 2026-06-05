@@ -17772,6 +17772,27 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   box-shadow: none;
 }
 
+.transactions-page .transactions-toolbar-upload {
+  background: var(--brand-gradient);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(3, 168, 192, 0.16);
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.transactions-page .transactions-toolbar-upload:hover,
+.transactions-page .transactions-toolbar-upload:focus-visible {
+  background: var(--brand-gradient-alt);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 14px 28px rgba(3, 168, 192, 0.2);
+}
+
+.transactions-page .transactions-toolbar-upload .button-icon {
+  color: currentColor;
+}
+
 .recurring-topbar-add.button-primary {
   background: var(--brand-gradient);
   border-color: transparent;
@@ -33480,6 +33501,25 @@ html[data-theme="dark"] .button.accounts-toolbar-button--upload:focus-visible {
 }
 
 html[data-theme="dark"] .button.accounts-toolbar-button--upload .button-icon {
+  color: currentColor;
+}
+
+html[data-theme="dark"] .transactions-page .transactions-toolbar-upload {
+  background: var(--brand-gradient);
+  border-color: transparent;
+  color: #07111d;
+  box-shadow: 0 12px 24px rgba(71, 215, 232, 0.18);
+}
+
+html[data-theme="dark"] .transactions-page .transactions-toolbar-upload:hover,
+html[data-theme="dark"] .transactions-page .transactions-toolbar-upload:focus-visible {
+  background: var(--brand-gradient-alt);
+  border-color: transparent;
+  color: #07111d;
+  box-shadow: 0 14px 28px rgba(71, 215, 232, 0.22);
+}
+
+html[data-theme="dark"] .transactions-page .transactions-toolbar-upload .button-icon {
   color: currentColor;
 }
 

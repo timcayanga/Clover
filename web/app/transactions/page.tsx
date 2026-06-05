@@ -2066,6 +2066,7 @@ function ActionIcon({
     | "summary"
     | "save"
     | "download"
+    | "upload"
     | "more"
     | "account";
 }) {
@@ -2174,6 +2175,14 @@ function ActionIcon({
         <svg {...common}>
           <path d="M12 4v10" />
           <path d="m8 10 4 4 4-4" />
+          <path d="M5 19h14" />
+        </svg>
+      );
+    case "upload":
+      return (
+        <svg {...common}>
+          <path d="M12 14V4" />
+          <path d="m8 8 4-4 4 4" />
           <path d="M5 19h14" />
         </svg>
       );
@@ -6647,24 +6656,24 @@ function TransactionsPageContent() {
           style={toolbarAddStyle}
           type="button"
           onClick={() => {
+            if (!isCompactViewport) {
+              void openManualAdd();
+              return;
+            }
+
             openAddMenu();
           }}
           title="Add transaction (A)"
-          aria-expanded={addMenuOpen}
+          aria-expanded={isCompactViewport ? addMenuOpen : undefined}
           aria-label="Add transaction"
           aria-keyshortcuts="a"
         >
           <span className="button-icon" aria-hidden="true">
             <ActionIcon name="plus" />
           </span>
-          {!isCompactViewport ? <span>Add</span> : null}
-          {!isCompactViewport ? (
-            <span className="button-icon" aria-hidden="true">
-              <ActionIcon name="chevron-down" />
-            </span>
-          ) : null}
+          {!isCompactViewport ? <span>Add transaction</span> : null}
         </button>
-        {addMenuOpen && addMenuPortalStyle && typeof document !== "undefined"
+        {isCompactViewport && addMenuOpen && addMenuPortalStyle && typeof document !== "undefined"
           ? createPortal(
               <div
                 ref={addMenuPanelRef}
@@ -6672,7 +6681,7 @@ function TransactionsPageContent() {
                 style={addMenuPortalStyle}
               >
                 <button
-                  className="transactions-add-menu__item transactions-add-menu__item--upload"
+                  className="transactions-add-menu__item"
                   type="button"
                   onClick={() => {
                     setAddMenuOpen(false);
@@ -6700,7 +6709,7 @@ function TransactionsPageContent() {
                   </button>
                 ) : null}
                 <button
-                  className="transactions-add-menu__item"
+                  className="transactions-add-menu__item transactions-add-menu__item--upload"
                   type="button"
                   onClick={() => {
                     if (isCompactViewport) {
@@ -6718,6 +6727,18 @@ function TransactionsPageContent() {
             )
           : null}
       </div>
+      {!isCompactViewport ? (
+        <button
+          className="button button-primary button-small transactions-action-button transactions-toolbar-upload"
+          type="button"
+          onClick={() => openImportFiles()}
+        >
+          <span className="button-icon" aria-hidden="true">
+            <ActionIcon name="upload" />
+          </span>
+          <span>Upload files</span>
+        </button>
+      ) : null}
     </div>
   );
 
