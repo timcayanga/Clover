@@ -1176,11 +1176,11 @@ function AccountDetailPageContent() {
   const [accountIdentityEditorOpen, setAccountIdentityEditorOpen] = useState(false);
   const [accountEditSaveState, setAccountEditSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [balanceEditorOpen, setBalanceEditorOpen] = useState(false);
-  const [cashAdjustmentOpen, setCashAdjustmentOpen] = useState(false);
-  const [cashAdjustmentMode, setCashAdjustmentMode] = useState<"add" | "remove">("add");
-  const [cashAdjustmentAmount, setCashAdjustmentAmount] = useState("");
-  const [cashAdjustmentSaving, setCashAdjustmentSaving] = useState(false);
-  const [cashAdjustmentError, setCashAdjustmentError] = useState<string | null>(null);
+  const [balanceAdjustmentOpen, setBalanceAdjustmentOpen] = useState(false);
+  const [balanceAdjustmentMode, setBalanceAdjustmentMode] = useState<"add" | "remove">("add");
+  const [balanceAdjustmentAmount, setBalanceAdjustmentAmount] = useState("");
+  const [balanceAdjustmentSaving, setBalanceAdjustmentSaving] = useState(false);
+  const [balanceAdjustmentError, setBalanceAdjustmentError] = useState<string | null>(null);
   const [balanceDraft, setBalanceDraft] = useState("");
   const [balanceSaveState, setBalanceSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [creditLimitDraft, setCreditLimitDraft] = useState("");
@@ -2167,6 +2167,9 @@ function AccountDetailPageContent() {
         ? stableDisplayBalance
         : currentBalance.toString();
   const isCreditAccount = account?.type === "credit_card" || account?.type === "line_of_credit";
+  const canAdjustBalanceSimply = account ? ["cash", "bank", "wallet"].includes(account.type) : false;
+  const balanceAdjustmentIsCash = account?.type === "cash";
+  const balanceAdjustmentLabel = balanceAdjustmentIsCash ? "Adjust cash" : "Adjust balance";
   const importedCreditLimit = parseNullableNumber(
     latestCheckpoint?.sourceMetadata?.creditLimit === null || latestCheckpoint?.sourceMetadata?.creditLimit === undefined
       ? null
@@ -2288,44 +2291,64 @@ function AccountDetailPageContent() {
     setBalanceEditorOpen(true);
   };
 
-  const openCashAdjustment = () => {
-    setCashAdjustmentMode("add");
-    setCashAdjustmentAmount("");
-    setCashAdjustmentError(null);
-    setCashAdjustmentOpen(true);
-  };
-
-  const closeCashAdjustment = () => {
-    if (cashAdjustmentSaving) {
+  const openBalanceAdjustment = () => {
+    if (!canAdjustBalanceSimply) {
       return;
     }
 
-    setCashAdjustmentOpen(false);
-    setCashAdjustmentError(null);
+    setBalanceAdjustmentMode("add");
+    setBalanceAdjustmentAmount("");
+    setBalanceAdjustmentError(null);
+    setBalanceAdjustmentOpen(true);
   };
 
-  const saveCashAdjustment = async (event: FormEvent<HTMLFormElement>) => {
+  const closeBalanceAdjustment = () => {
+    if (balanceAdjustmentSaving) {
+      return;
+    }
+
+    setBalanceAdjustmentOpen(false);
+    setBalanceAdjustmentError(null);
+  };
+
+  const saveBalanceAdjustment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!account?.workspaceId || account.type !== "cash") {
+    if (!account?.workspaceId || !canAdjustBalanceSimply) {
       return;
     }
 
-    const amount = Number(cashAdjustmentAmount);
+    const amount = Number(balanceAdjustmentAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
-      setCashAdjustmentError("Enter an amount greater than 0.");
+      setBalanceAdjustmentError("Enter an amount greater than 0.");
       return;
     }
 
-    const isAddingCash = cashAdjustmentMode === "add";
+    const isAddingBalance = balanceAdjustmentMode === "add";
+    const isCashAdjustment = account.type === "cash";
+    const merchantLabel = isCashAdjustment
+      ? isAddingBalance
+        ? "Cash added"
+        : "Cash removed"
+      : isAddingBalance
+        ? "Balance added"
+        : "Balance removed";
+    const adjustmentDescription = isCashAdjustment
+      ? isAddingBalance
+        ? "Cash count adjustment added."
+        : "Cash count adjustment removed."
+      : isAddingBalance
+        ? "Balance adjustment added."
+        : "Balance adjustment removed.";
     const transactionDate = new Date().toISOString().slice(0, 10);
     const categoryId =
-      getCategoryIdByName(categories, "Cash & ATM") ||
-      (isAddingCash ? getCategoryIdByName(categories, "Income") : "") ||
+      (isCashAdjustment ? getCategoryIdByName(categories, "Cash & ATM") : "") ||
+      (isAddingBalance ? getCategoryIdByName(categories, "Income") : "") ||
+      getCategoryIdByName(categories, "Financial") ||
       getCategoryIdByName(categories, "Other") ||
       undefined;
 
-    setCashAdjustmentSaving(true);
-    setCashAdjustmentError(null);
+    setBalanceAdjustmentSaving(true);
+    setBalanceAdjustmentError(null);
 
     try {
       const response = await fetch("/api/transactions", {
@@ -2338,10 +2361,10 @@ function AccountDetailPageContent() {
           date: transactionDate,
           amount: amount.toFixed(2),
           currency: account.currency,
-          type: isAddingCash ? "income" : "expense",
-          merchantRaw: isAddingCash ? "Cash added" : "Cash removed",
-          merchantClean: isAddingCash ? "Cash added" : "Cash removed",
-          description: isAddingCash ? "Cash count adjustment added." : "Cash count adjustment removed.",
+          type: isAddingBalance ? "income" : "expense",
+          merchantRaw: merchantLabel,
+          merchantClean: merchantLabel,
+          description: adjustmentDescription,
           isTransfer: false,
           isExcluded: false,
           preserveType: true,
@@ -2350,7 +2373,7 @@ function AccountDetailPageContent() {
       const payload = (await response.json().catch(() => ({}))) as { transaction?: Partial<Transaction>; error?: string };
 
       if (!response.ok || !payload.transaction?.id) {
-        throw new Error(payload.error ?? "Unable to save cash adjustment.");
+        throw new Error(payload.error ?? "Unable to save balance adjustment.");
       }
 
       const createdTransaction: Transaction = {
@@ -2361,10 +2384,10 @@ function AccountDetailPageContent() {
         categoryId: payload.transaction.categoryId ?? categoryId ?? null,
         amount: String(payload.transaction.amount ?? amount.toFixed(2)),
         currency: payload.transaction.currency ?? account.currency,
-        type: payload.transaction.type ?? (isAddingCash ? "income" : "expense"),
+        type: payload.transaction.type ?? (isAddingBalance ? "income" : "expense"),
         date: payload.transaction.date ?? transactionDate,
-        merchantRaw: payload.transaction.merchantRaw ?? (isAddingCash ? "Cash added" : "Cash removed"),
-        merchantClean: payload.transaction.merchantClean ?? (isAddingCash ? "Cash added" : "Cash removed"),
+        merchantRaw: payload.transaction.merchantRaw ?? merchantLabel,
+        merchantClean: payload.transaction.merchantClean ?? merchantLabel,
         categoryName: payload.transaction.categoryName ?? (categoryId ? categories.find((category) => category.id === categoryId)?.name ?? null : null),
         reviewStatus: payload.transaction.reviewStatus ?? "confirmed",
         parserConfidence: payload.transaction.parserConfidence ?? 100,
@@ -2372,7 +2395,7 @@ function AccountDetailPageContent() {
         accountMatchConfidence: payload.transaction.accountMatchConfidence ?? 100,
         duplicateConfidence: payload.transaction.duplicateConfidence ?? 0,
         transferConfidence: payload.transaction.transferConfidence ?? 0,
-        description: payload.transaction.description ?? (isAddingCash ? "Cash count adjustment added." : "Cash count adjustment removed."),
+        description: payload.transaction.description ?? adjustmentDescription,
         isExcluded: payload.transaction.isExcluded ?? false,
         isTransfer: payload.transaction.isTransfer ?? false,
         institution: account.institution,
@@ -2386,14 +2409,14 @@ function AccountDetailPageContent() {
 
       setTransactions((current) => [createdTransaction, ...current.filter((transaction) => transaction.id !== createdTransaction.id)]);
       setTransactionTotalCount((current) => current + 1);
-      setCashAdjustmentOpen(false);
-      setCashAdjustmentAmount("");
-      setMessage(isAddingCash ? "Cash added." : "Cash removed.");
+      setBalanceAdjustmentOpen(false);
+      setBalanceAdjustmentAmount("");
+      setMessage(isCashAdjustment ? (isAddingBalance ? "Cash added." : "Cash removed.") : isAddingBalance ? "Balance added." : "Balance removed.");
       router.refresh();
     } catch (error) {
-      setCashAdjustmentError(error instanceof Error ? error.message : "Unable to save cash adjustment.");
+      setBalanceAdjustmentError(error instanceof Error ? error.message : "Unable to save balance adjustment.");
     } finally {
-      setCashAdjustmentSaving(false);
+      setBalanceAdjustmentSaving(false);
     }
   };
 
@@ -3945,13 +3968,13 @@ function AccountDetailPageContent() {
                 }
               />
 
-              {account.type === "cash" ? (
+              {canAdjustBalanceSimply ? (
                 <button
-                  className="button button-secondary button-small accounts-detail__cash-add-button"
+                  className="button button-secondary button-small accounts-detail__balance-adjust-button"
                   type="button"
-                  onClick={openCashAdjustment}
+                  onClick={openBalanceAdjustment}
                 >
-                  Adjust cash
+                  {balanceAdjustmentLabel}
                 </button>
               ) : null}
 
@@ -5321,52 +5344,52 @@ function AccountDetailPageContent() {
           </div>
         )}
 
-        {cashAdjustmentOpen && account?.workspaceId ? (
-          <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={closeCashAdjustment}>
+        {balanceAdjustmentOpen && account?.workspaceId ? (
+          <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={closeBalanceAdjustment}>
             <section
-              className="modal-card modal-card--cash-adjustment glass"
+              className="modal-card modal-card--balance-adjustment glass"
               role="dialog"
               aria-modal="true"
-              aria-labelledby="cash-adjustment-title"
+              aria-labelledby="balance-adjustment-title"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="modal-head">
                 <div>
-                  <p className="eyebrow">Cash account</p>
-                  <h4 id="cash-adjustment-title">Adjust cash</h4>
+                  <p className="eyebrow">{balanceAdjustmentIsCash ? "Cash account" : "Account balance"}</p>
+                  <h4 id="balance-adjustment-title">{balanceAdjustmentLabel}</h4>
                 </div>
-                <button className="icon-button" type="button" onClick={closeCashAdjustment} aria-label="Close cash adjustment">
+                <button className="icon-button" type="button" onClick={closeBalanceAdjustment} aria-label="Close balance adjustment">
                   ×
                 </button>
               </div>
 
-              <form className="accounts-detail__cash-adjustment-form" onSubmit={saveCashAdjustment}>
-                <div className="accounts-detail__cash-adjustment-toggle" role="group" aria-label="Cash adjustment type">
+              <form className="accounts-detail__balance-adjustment-form" onSubmit={saveBalanceAdjustment}>
+                <div className="accounts-detail__balance-adjustment-toggle" role="group" aria-label="Balance adjustment type">
                   <button
                     type="button"
-                    className={`accounts-detail__cash-adjustment-toggle-button ${cashAdjustmentMode === "add" ? "is-active" : ""}`}
-                    onClick={() => setCashAdjustmentMode("add")}
-                    aria-pressed={cashAdjustmentMode === "add"}
+                    className={`accounts-detail__balance-adjustment-toggle-button ${balanceAdjustmentMode === "add" ? "is-active" : ""}`}
+                    onClick={() => setBalanceAdjustmentMode("add")}
+                    aria-pressed={balanceAdjustmentMode === "add"}
                   >
                     Add
                   </button>
                   <button
                     type="button"
-                    className={`accounts-detail__cash-adjustment-toggle-button ${cashAdjustmentMode === "remove" ? "is-active" : ""}`}
-                    onClick={() => setCashAdjustmentMode("remove")}
-                    aria-pressed={cashAdjustmentMode === "remove"}
+                    className={`accounts-detail__balance-adjustment-toggle-button ${balanceAdjustmentMode === "remove" ? "is-active" : ""}`}
+                    onClick={() => setBalanceAdjustmentMode("remove")}
+                    aria-pressed={balanceAdjustmentMode === "remove"}
                   >
                     Remove
                   </button>
                 </div>
 
-                <label className="accounts-detail__cash-adjustment-field">
+                <label className="accounts-detail__balance-adjustment-field">
                   <span>Amount</span>
-                  <div className="accounts-detail__cash-adjustment-amount-row">
-                    <span className="accounts-detail__cash-adjustment-currency">{account.currency}</span>
+                  <div className="accounts-detail__balance-adjustment-amount-row">
+                    <span className="accounts-detail__balance-adjustment-currency">{account.currency}</span>
                     <input
-                      value={cashAdjustmentAmount}
-                      onChange={(event) => setCashAdjustmentAmount(event.target.value)}
+                      value={balanceAdjustmentAmount}
+                      onChange={(event) => setBalanceAdjustmentAmount(event.target.value)}
                       type="number"
                       min="0"
                       step="0.01"
@@ -5377,14 +5400,22 @@ function AccountDetailPageContent() {
                   </div>
                 </label>
 
-                {cashAdjustmentError ? <p className="field-error">{cashAdjustmentError}</p> : null}
+                {balanceAdjustmentError ? <p className="field-error">{balanceAdjustmentError}</p> : null}
 
                 <div className="form-actions">
-                  <button className="button button-secondary" type="button" onClick={closeCashAdjustment} disabled={cashAdjustmentSaving}>
+                  <button className="button button-secondary" type="button" onClick={closeBalanceAdjustment} disabled={balanceAdjustmentSaving}>
                     Cancel
                   </button>
-                  <button className="button button-primary" type="submit" disabled={cashAdjustmentSaving}>
-                    {cashAdjustmentSaving ? "Saving..." : cashAdjustmentMode === "add" ? "Add cash" : "Remove cash"}
+                  <button className="button button-primary" type="submit" disabled={balanceAdjustmentSaving}>
+                    {balanceAdjustmentSaving
+                      ? "Saving..."
+                      : balanceAdjustmentMode === "add"
+                        ? balanceAdjustmentIsCash
+                          ? "Add cash"
+                          : "Add balance"
+                        : balanceAdjustmentIsCash
+                          ? "Remove cash"
+                          : "Remove balance"}
                   </button>
                 </div>
               </form>
