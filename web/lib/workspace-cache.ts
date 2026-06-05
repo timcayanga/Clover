@@ -73,8 +73,8 @@ export type ImportedWorkspaceTransaction = CachedRecord & {
   source?: string | null;
 };
 
-export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v9";
-export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v9";
+export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v10";
+export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v10";
 export const deletedAccountsWorkspaceCacheKey = "clover.accounts.deleted-account-ids.v1";
 export const deletingAccountsWorkspaceCacheKey = "clover.accounts.deleting-account-ids.v1";
 
@@ -1477,6 +1477,7 @@ export const findCachedTransactionsForAccount = (
     institution?: string | null;
     accountNumber?: string | null;
     type?: string | null;
+    currency?: string | null;
   }
 ) => {
   if (!accountId) {
@@ -1508,7 +1509,9 @@ export const findCachedTransactionsForAccount = (
         ? normalizeImportedTransactionAccountKey(
             accountIdentity.name ?? null,
             accountIdentity.institution ?? null,
-            accountIdentity.accountNumber ?? null
+            accountIdentity.accountNumber ?? null,
+            accountIdentity.type ?? null,
+            accountIdentity.currency ?? null
           )
         : null;
     const accountIds = new Set<string>([accountId]);
