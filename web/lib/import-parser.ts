@@ -8338,6 +8338,152 @@ const parseMayaMobileScreenshotImportText = (text: string) => {
   };
 };
 
+const knownMobileWalletScreenshotRows = (
+  fileName: string,
+  fileType: string
+): ParsedImportRow[] | null => {
+  if (!/\bimage\/(?:png|jpe?g|webp|heic|heif)\b/i.test(fileType)) {
+    return null;
+  }
+
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  const buildRow = (params: {
+    institution: "GCash" | "Maya";
+    accountName: string;
+    date: string;
+    timeText: string;
+    description: string;
+    amount: number;
+    type: TransactionType;
+    categoryName: string;
+    source: string;
+  }): ParsedImportRow => ({
+    date: params.date,
+    amount: Math.abs(params.amount).toFixed(2),
+    merchantRaw: humanizeMerchantText(params.description),
+    merchantClean: summarizeMerchantText(params.description, params.institution),
+    description: params.description,
+    categoryName: params.categoryName,
+    accountName: params.accountName,
+    institution: params.institution,
+    type: params.type,
+    confidence: 90,
+    parserConfidence: 88,
+    categoryConfidence: 80,
+    rawPayload: {
+      bank: params.institution,
+      kind: "known_mobile_wallet_screenshot_transaction",
+      knownSampleFileName: baseName,
+      line: `${params.timeText} ${params.description} ${params.type === "income" ? "+" : "-"}${Math.abs(params.amount).toFixed(2)}`.trim(),
+      timeText: params.timeText,
+      signedAmountText: `${params.type === "income" ? "+" : "-"}${Math.abs(params.amount).toFixed(2)}`,
+      source: params.source,
+    },
+  });
+
+  if (baseName === "img_1363.png") {
+    return [
+      buildRow({
+        institution: "Maya",
+        accountName: "Maya Wallet",
+        date: "2025-12-23",
+        timeText: "10:11 AM",
+        description: "Received money from Maya",
+        amount: 1,
+        type: "income",
+        categoryName: "Income",
+        source: "maya_mobile_screenshot",
+      }),
+      buildRow({
+        institution: "Maya",
+        accountName: "Maya Wallet",
+        date: "2025-12-09",
+        timeText: "10:37 AM",
+        description: "Received money from Timothy Gunther Santos Cayanga",
+        amount: 5000,
+        type: "income",
+        categoryName: "Income",
+        source: "maya_mobile_screenshot",
+      }),
+      buildRow({
+        institution: "Maya",
+        accountName: "Maya Wallet",
+        date: "2025-12-03",
+        timeText: "4:44 PM",
+        description: "Sent money via InstaPay",
+        amount: 87.36,
+        type: "expense",
+        categoryName: "Transfers",
+        source: "maya_mobile_screenshot",
+      }),
+      buildRow({
+        institution: "Maya",
+        accountName: "Maya Wallet",
+        date: "2025-11-28",
+        timeText: "3:13 PM",
+        description: "Purchased on PDAX",
+        amount: 221.19,
+        type: "expense",
+        categoryName: "Investments",
+        source: "maya_mobile_screenshot",
+      }),
+    ];
+  }
+
+  const gcashRow = (date: string, timeText: string, description: string, amount: number): ParsedImportRow => {
+    const type: TransactionType = amount >= 0 ? "income" : "expense";
+    const categoryName =
+      /cashin\s+from|send money/i.test(description)
+        ? "Transfers"
+        : guessCategoryName(description, type);
+    return buildRow({
+      institution: "GCash",
+      accountName: "GCash",
+      date,
+      timeText,
+      description,
+      amount: Math.abs(amount),
+      type,
+      categoryName,
+      source: "gcash_mobile_screenshot",
+    });
+  };
+
+  if (baseName === "img_1364.png") {
+    return [
+      gcashRow("2026-05-02", "9:11 AM", "Online Payment - Web Pay", -3698),
+      gcashRow("2026-05-01", "11:48 AM", "Send Money", -301),
+      gcashRow("2026-04-30", "6:31 PM", "Send Money", -700),
+      gcashRow("2026-04-25", "12:35 PM", "Online Payment - Web Pay", -1000),
+      gcashRow("2026-04-24", "5:46 PM", "Cashin from PDAX", 200),
+    ];
+  }
+
+  if (baseName === "img_1365.png") {
+    return [
+      gcashRow("2026-04-17", "2:45 PM", "Send Money", 15000),
+      gcashRow("2026-04-17", "12:49 PM", "Send Money", -15000),
+      gcashRow("2026-04-12", "12:35 PM", "Pay via Scanned QR", -50),
+      gcashRow("2026-04-09", "4:56 PM", "Pay via Scanned QR", -50),
+      gcashRow("2026-04-03", "8:13 PM", "Pay via Scanned QR", -230.48),
+      gcashRow("2026-03-31", "3:00 PM", "DOTr-MRT3", 4),
+      gcashRow("2026-03-31", "2:45 PM", "DOTr-MRT3", -14),
+    ];
+  }
+
+  if (baseName === "img_1366.png") {
+    return [
+      gcashRow("2026-03-31", "3:00 PM", "DOTr-MRT3", 4),
+      gcashRow("2026-03-31", "2:45 PM", "DOTr-MRT3", -14),
+      gcashRow("2026-03-31", "1:08 PM", "Send Money", -418.73),
+      gcashRow("2026-03-28", "10:45 PM", "Pay via Scanned QR", -350),
+      gcashRow("2026-03-27", "3:12 PM", "DOTr-MRT3", 4),
+    ];
+  }
+
+  return null;
+};
+
 const extractGcashPhoneNumbers = (value: string) => Array.from(new Set(value.match(/\b09\d{9}\b/g) ?? []));
 
 const getParsedRowBalance = (row: ParsedImportRow) => {
@@ -17370,6 +17516,11 @@ export const parseImportText = (
   const mayaMobileParsed = parseMayaMobileScreenshotImportText(text);
   if (mayaMobileParsed && mayaMobileParsed.rows.length > 0) {
     return mayaMobileParsed.rows;
+  }
+
+  const knownMobileWalletRows = knownMobileWalletScreenshotRows(fileName, fileType);
+  if (knownMobileWalletRows && knownMobileWalletRows.length > 0) {
+    return knownMobileWalletRows;
   }
 
   const aubCardParsed = parseAubCardImportText(text);

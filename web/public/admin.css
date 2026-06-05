@@ -21842,7 +21842,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-section--data .settings-data-grid--split {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .settings-section__intro {
@@ -22008,10 +22008,10 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-data-download__item {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr);
   gap: 12px;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: center;
   width: 100%;
   padding: 12px 14px;
   border-radius: 16px;
@@ -22022,6 +22022,14 @@ input.transaction-inline-edit--amount::placeholder {
 .settings-data-download__item-copy {
   display: grid;
   gap: 4px;
+  grid-column: 2;
+  justify-items: center;
+  text-align: center;
+}
+
+.settings-data-download__item > .button {
+  grid-column: 3;
+  justify-self: end;
 }
 
 .settings-data-download__item-copy strong {
@@ -22553,6 +22561,17 @@ input.transaction-inline-edit--amount::placeholder {
   .settings-hub__menu {
     position: static;
     max-height: none;
+  }
+
+  .settings-data-download__item {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+
+  .settings-data-download__item-copy,
+  .settings-data-download__item > .button {
+    grid-column: auto;
+    justify-self: center;
   }
 
   .settings-data-grid--split,
