@@ -1031,6 +1031,15 @@ const buildOptimisticPreviewTransactions = (
 ): NonNullable<UploadInsightsSummary["previewTransactions"]> => {
   const previewTransactions = rows
     .map((row, index) => {
+      const rawPayload =
+        row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+          ? (row.rawPayload as Record<string, unknown>)
+          : null;
+      const rowKind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
+      if (rowKind === "account_snapshot_marker" || rowKind === "opening_balance") {
+        return null;
+      }
+
       const date = typeof row.date === "string" ? row.date : "";
       const amount = typeof row.amount === "string" || typeof row.amount === "number" ? String(row.amount) : "";
       const merchantRaw =
