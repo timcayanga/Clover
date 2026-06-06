@@ -66,7 +66,13 @@ import {
 import type { InstitutionSuggestion } from "@/lib/institution-suggestions";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
-import { clearImportActivity, getCompletedImportActivitySummary, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
+import {
+  clearImportActivity,
+  getCompletedImportActivitySummary,
+  importActivityHasCompletedRows,
+  readImportActivity,
+  subscribeImportActivity,
+} from "@/lib/import-activity";
 
 type PlanUsage = {
   accountCount: number;
@@ -488,6 +494,20 @@ const getCachedWorkspaceHydration = (workspaceId: string) => {
     imports: (transactionsSnapshot.imports as ImportFile[] | undefined) ?? [],
     updatedAt: transactionsSnapshot.updatedAt,
   };
+};
+
+const hasCachedWorkspaceDataEvidence = (workspaceId: string) => {
+  const cachedSnapshot = getCachedWorkspaceHydration(workspaceId);
+  if (!cachedSnapshot) {
+    return false;
+  }
+
+  return Boolean(
+    cachedSnapshot.accounts.length > 0 ||
+      cachedSnapshot.transactions.length > 0 ||
+      cachedSnapshot.statementCheckpoints.length > 0 ||
+      (cachedSnapshot.imports?.length ?? 0) > 0
+  );
 };
 
 type AccountRule = {
@@ -3323,6 +3343,35 @@ function AccountsPageContent() {
     accounts.length === 0 &&
     isColdLoading &&
     pageLoadingPulse - pageLoadingSinceRef.current < PAGE_LOADING_TIMEOUT_MS;
+  const hasWorkspaceDataEvidence =
+    Boolean(selectedWorkspaceId) &&
+    (
+      accounts.length > 0 ||
+      transactions.length > 0 ||
+      statementCheckpoints.length > 0 ||
+      hasCachedWorkspaceDataEvidence(selectedWorkspaceId) ||
+      (importActivitySnapshot?.workspaceId === selectedWorkspaceId &&
+        (importActivitySnapshot.status === "active" || importActivityHasCompletedRows(importActivitySnapshot)))
+    );
+  const shouldShowSyncingInsteadOfEmpty =
+    accounts.length === 0 &&
+    !accountsLoadFailed &&
+    !accountsLoading &&
+    hasWorkspaceDataEvidence;
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || !shouldShowSyncingInsteadOfEmpty) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true });
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [loadWorkspaceData, selectedWorkspaceId, shouldShowSyncingInsteadOfEmpty]);
 
   if (!hasInitialWorkspaceDataLoaded || showColdLoadGuard) {
     return <CloverLoadingScreen label="accounts" />;
@@ -3427,6 +3476,16 @@ function AccountsPageContent() {
                   <div className="accounts-empty-state__actions">
                     <button className="button button-primary button-small" type="button" onClick={() => void loadWorkspaceData(selectedWorkspaceId)}>
                       Retry
+                    </button>
+                  </div>
+                </div>
+              ) : shouldShowSyncingInsteadOfEmpty ? (
+                <div className="empty-state accounts-empty-state">
+                  <strong>Still syncing your accounts.</strong>
+                  <p>Clover found recent account or import activity, so this workspace does not look truly empty. We&apos;re refreshing the latest account data now.</p>
+                  <div className="accounts-empty-state__actions">
+                    <button className="button button-primary button-small" type="button" onClick={() => void loadWorkspaceData(selectedWorkspaceId, { awaitHydration: true })}>
+                      Refresh accounts
                     </button>
                   </div>
                 </div>
