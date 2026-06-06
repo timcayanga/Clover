@@ -6460,7 +6460,7 @@ export function ImportFilesModal({
         router.refresh();
         return {
           status: "done",
-          importedRows: completedReceiptSummary?.rowsImported ?? Number(processPayload?.imported ?? 0) || 0,
+          importedRows: completedReceiptSummary?.rowsImported ?? (Number(processPayload?.imported ?? 0) || 0),
           summary: completedReceiptSummary,
         };
       }

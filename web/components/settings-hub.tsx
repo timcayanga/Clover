@@ -2132,7 +2132,7 @@ export function SettingsHub({
                     <div className="settings-data-danger-item settings-data-danger-item--history">
                       <div className="settings-data-danger-copy">
                         <strong>Transactions</strong>
-                        <label className="settings-inline-field">
+                        <label className="settings-inline-field settings-inline-field--history">
                           <span>Before date</span>
                           <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} />
                         </label>
@@ -2140,7 +2140,7 @@ export function SettingsHub({
                       <div className="settings-data-danger-controls">
                         <button
                           type="button"
-                          className="button button-danger button-small"
+                          className="button button-danger button-small button-danger--history"
                           disabled={isPending}
                           onClick={() => openDeleteModal("transactions")}
                         >

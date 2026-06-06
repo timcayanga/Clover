@@ -22101,6 +22101,11 @@ input.transaction-inline-edit--amount::placeholder {
   justify-content: center;
 }
 
+.settings-data-danger-item .button-danger--history {
+  min-width: 180px;
+  padding-inline: 16px;
+}
+
 .settings-inline-field {
   display: grid;
   gap: 6px;
@@ -22117,6 +22122,15 @@ input.transaction-inline-edit--amount::placeholder {
   border: 1px solid rgba(15, 23, 42, 0.08);
   padding: 0 14px;
   color: var(--text);
+}
+
+.settings-inline-field--history {
+  min-width: min(100%, 190px);
+}
+
+.settings-inline-field--history input {
+  min-height: 38px;
+  padding-inline: 12px;
 }
 
 .settings-preference-grid {
