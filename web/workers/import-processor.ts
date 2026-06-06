@@ -8512,6 +8512,24 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     });
   }
 
+    const staleExistingImportTransactionIds = existingImportTransactions
+      .filter((transaction) => {
+        if (retainedExistingImportTransactionIds.has(transaction.id)) {
+          return false;
+        }
+        return transaction.reviewStatus !== "edited" && transaction.reviewStatus !== "rejected";
+      })
+      .map((transaction) => transaction.id);
+
+    if (staleExistingImportTransactionIds.length > 0) {
+      await tx.transaction.deleteMany({
+        where: {
+          id: { in: staleExistingImportTransactionIds },
+          reviewStatus: { notIn: ["edited", "rejected"] },
+        },
+      });
+    }
+
   const visibleTransactionsCount =
     retainedExistingImportTransactionsCount +
     preparedTransactions.length +
