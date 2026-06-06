@@ -78,7 +78,6 @@ export default async function HomePage() {
           <p className="eyebrow">Clover</p>
           <h1 className="landing-hero__title">
             <span>Track months of finances in minutes.</span>
-            <span>See what your money is telling you.</span>
           </h1>
           <p className="landing-hero__lede">
             Clover helps you upload financial data quickly, understand your spending, and manage shared expenses in one place.
