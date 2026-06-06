@@ -2677,6 +2677,26 @@ const readWiseEvidenceText = (row: Record<string, unknown>) => {
     .join("\n");
 };
 
+const readWisePrimaryEvidenceText = (row: Record<string, unknown>) => {
+  const rawPayload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const parserEvidence =
+    rawPayload?.parserEvidence && typeof rawPayload.parserEvidence === "object" && !Array.isArray(rawPayload.parserEvidence)
+      ? (rawPayload.parserEvidence as Record<string, unknown>)
+      : null;
+
+  return [
+    rawPayload?.sourceLine,
+    rawPayload?.fullLineText,
+    parserEvidence?.source_text,
+    parserEvidence?.sourceText,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join("\n");
+};
+
 const parseWiseEvidenceAmounts = (row: Record<string, unknown>) => {
   const text = readWiseEvidenceText(row);
   if (!text) {
@@ -2707,6 +2727,38 @@ const readWiseAccountImpactAmount = (row: Record<string, unknown>) => {
     row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
       ? (row.rawPayload as Record<string, unknown>)
       : null;
+  const primaryEvidenceText = readWisePrimaryEvidenceText(row);
+  const primaryEvidenceAmounts = primaryEvidenceText
+    ? Array.from(primaryEvidenceText.matchAll(wiseEvidenceAmountPattern))
+        .map((match) => {
+          const amount = parseAmountValue(match[2] ?? "");
+          const currency = normalizeWiseWalletCurrencyCode(match[3]);
+          if (amount === null || !currency) {
+            return null;
+          }
+
+          const sign = (match[1] ?? "").replace(/\s+/g, "");
+          return {
+            amount: Math.abs(amount),
+            currency,
+            sign: sign.startsWith("+") ? "credit" : sign.startsWith("-") || sign.startsWith("−") ? "debit" : null,
+            text: match[0],
+          };
+        })
+        .filter((value): value is { amount: number; currency: string; sign: "credit" | "debit" | null; text: string } => Boolean(value))
+    : [];
+  if (primaryEvidenceAmounts.length >= 2) {
+    const accountAmount = primaryEvidenceAmounts.at(-1);
+    return accountAmount
+      ? {
+          amount: accountAmount.amount,
+          currency: accountAmount.currency,
+          text: accountAmount.text,
+          inferredFromEvidence: true,
+        }
+      : null;
+  }
+
   const evidenceAmounts = parseWiseEvidenceAmounts(row);
   if (evidenceAmounts.length >= 2) {
     const accountAmount = evidenceAmounts.at(-1);
@@ -3513,11 +3565,18 @@ const resolveConfirmationAccount = async (params: {
     supportedImportAccountTypes.includes(params.statementMetadata.accountType as AccountType)
       ? (params.statementMetadata.accountType as AccountType)
       : null;
+  const explicitStatementCurrency =
+    typeof params.statementMetadata?.currency === "string" && params.statementMetadata.currency.trim()
+      ? params.statementMetadata.currency.trim().toUpperCase()
+      : null;
+  const candidatePayloadAccountCurrency =
+    normalizeWiseWalletCurrencyCode(candidateRowRawPayload?.accountCurrency) ??
+    normalizeWiseWalletCurrencyCode(candidateRowRawPayload?.currency);
   const inferredCurrency = normalizeInstitutionCurrency(
     inferredInstitution,
-    !wiseScreenshotIdentityRow && typeof params.statementMetadata?.currency === "string" && params.statementMetadata.currency.trim()
-      ? params.statementMetadata.currency.trim().toUpperCase()
-      : null,
+    wiseScreenshotIdentityRow
+      ? candidatePayloadAccountCurrency ?? explicitStatementCurrency
+      : explicitStatementCurrency,
     inferredAccountName
   );
   const parsedTrailingBalance = getImportAccountBalanceFromParsedRows(params.parsedRows as EnrichedParsedImportRow[]);
