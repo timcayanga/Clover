@@ -363,22 +363,6 @@ const sectionCopy: Record<
     title: "Profiles",
     icon: <SettingsIcon path="M5 6h14v4H5zM5 11h14v4H5zM5 16h14v2H5z" />,
   },
-  notifications: {
-    title: "Notifications",
-    icon: <SettingsIcon path="M12 4a4 4 0 0 0-4 4v2.1c0 .7-.2 1.4-.6 2l-1.2 1.8A1 1 0 0 0 7 15.5h10a1 1 0 0 0 .8-1.6l-1.2-1.8c-.4-.6-.6-1.3-.6-2V8a4 4 0 0 0-4-4Z M10 18a2 2 0 0 0 4 0" />,
-  },
-  security: {
-    title: "Security",
-    icon: <SettingsIcon path="M12 3 5 6v5c0 4.2 2.7 8 7 10 4.3-2 7-5.8 7-10V6l-7-3Z M9.5 12l1.7 1.7L14.8 10" />,
-  },
-  imports: {
-    title: "Import Preferences",
-    icon: <SettingsIcon path="M12 4v10M8 10l4 4 4-4M5 18h14" />,
-  },
-  regional: {
-    title: "Regional Preferences",
-    icon: <SettingsIcon path="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z M3 12h18M12 3c2.6 2.4 4 5.7 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.7-4-9s1.4-6.6 4-9Z" />,
-  },
   display: {
     title: "Display",
     icon: <SettingsIcon path="M7 7h10v10H7z M4 4h2M18 4h2M4 20h2M18 20h2M4 18V6M20 18V6" />,
@@ -387,9 +371,25 @@ const sectionCopy: Record<
     title: "Data",
     icon: <SettingsIcon path="M4 6h16M6 6v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6M9 10v6M15 10v6M10 3h4a1 1 0 0 1 1 1v2H9V4a1 1 0 0 1 1-1Z" />,
   },
+  imports: {
+    title: "Review",
+    icon: <SettingsIcon path="M12 4v10M8 10l4 4 4-4M5 18h14" />,
+  },
   categories: {
     title: "Categories",
     icon: <SettingsIcon path="M5 6h14M5 12h14M5 18h14M8 6v12M12 6v12M16 6v12" />,
+  },
+  notifications: {
+    title: "Notifications",
+    icon: <SettingsIcon path="M12 4a4 4 0 0 0-4 4v2.1c0 .7-.2 1.4-.6 2l-1.2 1.8A1 1 0 0 0 7 15.5h10a1 1 0 0 0 .8-1.6l-1.2-1.8c-.4-.6-.6-1.3-.6-2V8a4 4 0 0 0-4-4Z M10 18a2 2 0 0 0 4 0" />,
+  },
+  security: {
+    title: "Security",
+    icon: <SettingsIcon path="M12 3 5 6v5c0 4.2 2.7 8 7 10 4.3-2 7-5.8 7-10V6l-7-3Z M9.5 12l1.7 1.7L14.8 10" />,
+  },
+  regional: {
+    title: "Region",
+    icon: <SettingsIcon path="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z M3 12h18M12 3c2.6 2.4 4 5.7 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.7-4-9s1.4-6.6 4-9Z" />,
   },
   plan: {
     title: "Plan",
