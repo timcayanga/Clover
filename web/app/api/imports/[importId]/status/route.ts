@@ -180,6 +180,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       snapshot.importFile.status === "processing" &&
       snapshot.importFile.processingPhase === "reconciling" &&
       isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      !snapshot.accountDetailOnlyImport &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount > 0 &&
       Number.isFinite(updatedAtMs) &&
@@ -249,6 +250,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       snapshot.importFile.status === "processing" &&
       snapshot.importFile.processingPhase === "staged" &&
       isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      !snapshot.accountDetailOnlyImport &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount > 0 &&
       Number.isFinite(updatedAtMs) &&

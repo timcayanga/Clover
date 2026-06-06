@@ -76,6 +76,7 @@ export type ImportStatusSnapshot = {
   parsedRowsCount: number;
   confirmedTransactionsCount: number;
   visibleImportComplete: boolean;
+  accountDetailOnlyImport: boolean;
   accountSummaries: ImportAccountSummary[];
   confirmationStatus: string;
   telemetryPhase: string;
@@ -146,6 +147,67 @@ const loadVisibleImportAccountSummaries = async (importFileId: string): Promise<
   return Array.from(summariesByAccountId.values()).sort((left, right) =>
     (left.accountName ?? left.accountId).localeCompare(right.accountName ?? right.accountId)
   );
+};
+
+const buildCheckpointAccountSummary = async (
+  statementCheckpoint: Awaited<ReturnType<(typeof prisma)["accountStatementCheckpoint"]["findUnique"]>>,
+  importFileAccountId?: string | null
+): Promise<ImportAccountSummary[]> => {
+  const checkpointMetadata =
+    statementCheckpoint?.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object" && !Array.isArray(statementCheckpoint.sourceMetadata)
+      ? (statementCheckpoint.sourceMetadata as Record<string, unknown>)
+      : null;
+  const resolvedAccountId = statementCheckpoint?.accountId ?? importFileAccountId ?? null;
+  const accountRecord = resolvedAccountId
+    ? await prisma.account.findUnique({
+        where: { id: resolvedAccountId },
+        select: {
+          id: true,
+          name: true,
+          institution: true,
+          accountNumber: true,
+          type: true,
+          balance: true,
+        },
+      }).catch(() => null)
+    : null;
+
+  const accountName =
+    accountRecord?.name ??
+    (typeof checkpointMetadata?.accountName === "string" ? checkpointMetadata.accountName.trim() : null) ??
+    null;
+  const institution =
+    accountRecord?.institution ??
+    (typeof checkpointMetadata?.institution === "string" ? checkpointMetadata.institution.trim() : null) ??
+    null;
+  const accountNumber =
+    accountRecord?.accountNumber ??
+    (typeof checkpointMetadata?.accountNumber === "string" ? checkpointMetadata.accountNumber.trim() : null) ??
+    null;
+  const accountType =
+    (accountRecord?.type as AccountType | null | undefined) ??
+    (typeof checkpointMetadata?.accountType === "string" ? (checkpointMetadata.accountType as AccountType) : null) ??
+    null;
+  const balance =
+    statementCheckpoint?.endingBalance?.toString() ??
+    accountRecord?.balance?.toString() ??
+    null;
+
+  if (!resolvedAccountId || (!accountName && !institution && !accountNumber && !balance)) {
+    return [];
+  }
+
+  return [
+    {
+      accountId: resolvedAccountId,
+      accountName,
+      institution,
+      accountNumber,
+      accountType,
+      balance,
+      rowsImported: 0,
+    },
+  ];
 };
 
 const estimateFinalizationSecondsRemaining = (job: Awaited<ReturnType<typeof getImportEnrichmentJobByImportFileId>>) => {
@@ -263,11 +325,53 @@ export const loadImportStatusSnapshot = async (
     Number(importFile.confirmedTransactionsCount ?? 0),
     savedTransactionsCount
   );
-  const visibleImportComplete = confirmedTransactionsCount > 0 || hasConfirmedRows;
+  const nonMarkerParsedRowsCount =
+    parsedRowsCount > 0 && confirmedTransactionsCount === 0
+      ? await prisma.parsedTransaction
+          .count({
+            where: {
+              importFileId,
+              NOT: {
+                OR: [
+                  {
+                    rawPayload: {
+                      path: ["kind"],
+                      equals: "account_snapshot_marker",
+                    },
+                  },
+                  {
+                    rawPayload: {
+                      path: ["kind"],
+                      equals: "opening_balance",
+                    },
+                  },
+                ],
+              },
+            },
+          })
+          .catch(() => parsedRowsCount)
+      : confirmedTransactionsCount;
+  const accountDetailOnlyImport =
+    confirmedTransactionsCount === 0 &&
+    parsedRowsCount > 0 &&
+    nonMarkerParsedRowsCount === 0 &&
+    Boolean(
+      statementCheckpoint?.accountId ||
+        statementCheckpoint?.endingBalance !== null ||
+        (statementCheckpoint?.sourceMetadata &&
+          typeof statementCheckpoint.sourceMetadata === "object" &&
+          !Array.isArray(statementCheckpoint.sourceMetadata))
+    );
+  const visibleImportComplete = confirmedTransactionsCount > 0 || hasConfirmedRows || accountDetailOnlyImport;
   const hasVisibleImportData = visibleImportComplete || parsedRowsCount > 0 || checkpointRowCount > 0;
-  const accountSummaries = visibleImportComplete ? await loadVisibleImportAccountSummaries(importFileId) : [];
+  const accountSummaries = visibleImportComplete
+    ? confirmedTransactionsCount > 0 || hasConfirmedRows
+      ? await loadVisibleImportAccountSummaries(importFileId)
+      : await buildCheckpointAccountSummary(statementCheckpoint, importFile.accountId ?? null)
+    : [];
   const resolvedAccountId =
     importFile.accountId ??
+    statementCheckpoint?.accountId ??
     (accountSummaries.length === 1 ? accountSummaries[0]?.accountId ?? null : null);
 
   if (visibleImportComplete && !importFile.accountId && resolvedAccountId) {
@@ -312,6 +416,8 @@ export const loadImportStatusSnapshot = async (
       ? "confirmed"
       : importFile.status === "failed"
         ? "failed"
+        : accountDetailOnlyImport && importFile.status === "done"
+          ? "done"
         : importFile.status === "done" && hasParsedRows
           ? "staged"
           : importFile.status === "done"
@@ -403,6 +509,7 @@ export const loadImportStatusSnapshot = async (
     parsedRowsCount,
     confirmedTransactionsCount,
     visibleImportComplete,
+    accountDetailOnlyImport,
     accountSummaries,
     confirmationStatus,
     telemetryPhase: telemetry.phase,
