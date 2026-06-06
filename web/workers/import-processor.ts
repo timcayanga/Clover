@@ -2844,6 +2844,8 @@ const rowLooksLikeWiseWalletScreenshot = (
     "transaction_history",
     "wallet_statement",
     "wallet_transaction_history",
+    "wallet_statement_screenshot",
+    "wallet_transaction_history_screenshot",
   ].includes(statementType);
 
   return (
