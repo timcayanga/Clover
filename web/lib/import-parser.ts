@@ -117,7 +117,7 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/travel|airbnb|hotel|airline|flight|tour|holiday/.test(lower)) return "Travel & Lifestyle";
   if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox/.test(lower))
     return "Entertainment";
-  if (/puregold|shop|shopping|mall|amazon|alibaba|lazada|shopee|retail/.test(lower)) return "Shopping";
+  if (/puregold|shop|shopping|mall|amazon|alibaba|lazada|shopee|retail|camera/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
   if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
   if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";
@@ -4456,7 +4456,7 @@ const guessBpiCreditCategoryName = (description: string, type: TransactionType) 
   if (/bill|meralco|bayad center|payment/.test(lower)) return "Bills & Utilities";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/food|dining|restaurant|cafe|coffee|japanese|pho hoa|burnt bean|jung one|kiyosa|bar leone|savory project|gokan|goken/.test(lower)) return "Food & Dining";
-  if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|zalora|watsons|iherb|retail/.test(lower)) return "Shopping";
+  if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|zalora|watsons|iherb|retail|camera/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital|classpass/.test(lower)) return "Health & Wellness";
   if (/business|invoice|client|contract|linkedin|canva/.test(lower)) return "Business";
   if (/travel|airbnb|hotel|airline|flight|tour|holiday|paypal \*getyourguid|paypal \*trenitalias|paypal \*transfeero|paypal \*amami/.test(lower))
@@ -17480,6 +17480,30 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
   let currentDate: string | null = null;
   let pendingRow: ParsedImportRow | null = null;
 
+  const getWiseScreenshotRowTypeAndCategory = (params: {
+    merchant: string;
+    status: string | null;
+    sign: string | null;
+  }) => {
+    const merchant = params.merchant;
+    const status = params.status;
+    const sign = params.sign;
+    const isWalletTransfer = /^To\s+[A-Z]{3}$/i.test(merchant);
+    const isRefundOrReceive = /^(?:Refunded|Received)$/i.test(status ?? "");
+    const isSent = /^(?:Sent)$/i.test(status ?? "");
+    const isIncoming = sign === "credit" || isRefundOrReceive;
+    const type: TransactionType = isWalletTransfer ? "transfer" : isIncoming ? "income" : isSent ? "transfer" : "expense";
+    const categoryName = isWalletTransfer
+      ? "Transfers"
+      : /refund/i.test(status ?? "")
+        ? "Income"
+        : isSent
+          ? "Transfers"
+          : guessCategoryName(`${merchant} ${status ?? ""}`, type);
+
+    return { type, categoryName };
+  };
+
   const updatePendingRowPresentation = (row: ParsedImportRow) => {
     const rawPayload =
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
@@ -17488,18 +17512,7 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
     const merchant = row.merchantRaw ?? "Wise transaction";
     const status = typeof rawPayload.status === "string" ? rawPayload.status : null;
     const sign = typeof rawPayload.sourceSign === "string" ? rawPayload.sourceSign : null;
-    const type: TransactionType =
-      sign === "credit" || /^(?:Added|Refunded|Received)$/i.test(status ?? "")
-        ? "income"
-        : /^(?:Sent)$/i.test(status ?? "")
-          ? "transfer"
-          : "expense";
-    const categoryName =
-      /^(?:Added|Sent|Received)$/i.test(status ?? "") || /^To\s+[A-Z]{3}$/i.test(merchant)
-        ? "Transfers"
-        : /refund/i.test(status ?? "")
-          ? "Income"
-          : guessCategoryName(`${merchant} ${status ?? ""}`, type);
+    const { type, categoryName } = getWiseScreenshotRowTypeAndCategory({ merchant, status, sign });
 
     row.merchantRaw = humanizeMerchantText(merchant);
     row.merchantClean = summarizeMerchantText(merchant, "Wise");

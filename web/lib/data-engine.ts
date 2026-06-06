@@ -967,7 +967,7 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/travel|airbnb|hotel|airline|flight|tour|holiday/.test(lower)) return "Travel & Lifestyle";
   if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox/.test(lower))
     return "Entertainment";
-  if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|retail/.test(lower)) return "Shopping";
+  if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|retail|camera/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
   if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
   if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";

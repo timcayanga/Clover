@@ -1174,7 +1174,7 @@ const buildBankInstructionJson = (params: {
         "Wise mobile transaction-history screenshots may not show an account number or ending balance. Use account.display_name = Wise, account.institution_name = Wise, account.account_type = wallet, and keep account_number null when it is not visible.",
         "If a Wise row has one amount, that amount is in one of the user's Wise account currencies and should be the transaction amount/currency.",
         "If a Wise row has two amounts, the bold/larger first amount is the merchant/spend currency, while the smaller second amount is the user's Wise account currency and the actual account amount. Use the second amount/currency as the transaction amount, and preserve the first amount/currency in notes or parser evidence.",
-        "Rows with a plus sign, Added, Received, or Refunded are incoming/refund movements. Rows without a plus sign are outgoing spend unless the visible status says Sent or transfer-like.",
+        "For Wise screenshots, only a visible plus sign or an explicit refund/received status means money came into the account. Added by itself does not imply income. Rows without a plus sign are outgoing spend unless the visible status clearly says Sent or transfer-like.",
         "Rows such as Card checked with 0 USD are verification rows; include only if clearly visible and mark review_required true.",
         "Do not require an account number for a Wise screenshot if transaction rows are visible.",
       ],
@@ -1248,6 +1248,49 @@ const normalizeOpenAICategory = (category: string | null, movementType: AllowedM
   }
   const candidate = ALLOWED_CATEGORIES.find((value) => value.toLowerCase() === category.toLowerCase());
   return candidate ?? (movementType === "transfer" || movementType === "internal_movement" ? "Transfers" : "Other");
+};
+
+const deriveWiseScreenshotTypeAndCategory = (params: {
+  rawName: string;
+  description: string;
+  evidenceText: string | null;
+  normalizedCategory: AllowedCategory;
+  movementType: AllowedMovementType;
+}) => {
+  const evidenceAmounts = parseOpenAIWiseEvidenceAmounts(params.evidenceText);
+  const accountImpactAmount = evidenceAmounts.length > 0 ? evidenceAmounts[evidenceAmounts.length - 1] : null;
+  const sign = accountImpactAmount?.sign ?? null;
+  const signalText = `${params.rawName}\n${params.description}\n${params.evidenceText ?? ""}`;
+  const isWalletTransfer = /\bTo\s+[A-Z]{3}\b/i.test(signalText);
+  const isRefundOrReceive = /\b(?:Refunded|Received)\b/i.test(signalText);
+  const isSent = /\bSent\b/i.test(signalText);
+  const isIncoming = sign === "credit" || isRefundOrReceive;
+  const type: "income" | "expense" | "transfer" = isWalletTransfer
+    ? "transfer"
+    : isIncoming
+      ? "income"
+      : isSent
+        ? "transfer"
+        : "expense";
+
+  let category: AllowedCategory = params.normalizedCategory;
+  if (isWalletTransfer || params.movementType === "transfer" || params.movementType === "internal_movement" || isSent) {
+    category = "Transfers";
+  } else if (/refund/i.test(signalText)) {
+    category = "Income";
+  } else if (
+    category === "Other" ||
+    category === "Income" ||
+    category === "Transfers"
+  ) {
+    const guessedCategory = guessCategoryName(params.rawName, type);
+    const allowedGuessedCategory = ALLOWED_CATEGORIES.find((value) => value === guessedCategory);
+    if (allowedGuessedCategory) {
+      category = allowedGuessedCategory;
+    }
+  }
+
+  return { type, category };
 };
 
 const extractOutputText = (payload: Record<string, unknown>) => {
@@ -1991,8 +2034,18 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       }
 
       const movementType = row.movement_type;
-      const category = normalizeOpenAICategory(row.category, movementType);
-      const internalType = mapMovementTypeToInternalType(movementType, row.notes ?? null, rawName);
+      const normalizedCategory = normalizeOpenAICategory(row.category, movementType);
+      const wiseSemantics = looksLikeWiseWalletScreenshot
+        ? deriveWiseScreenshotTypeAndCategory({
+            rawName,
+            description,
+            evidenceText,
+            normalizedCategory,
+            movementType,
+          })
+        : null;
+      const category = wiseSemantics?.category ?? normalizedCategory;
+      const internalType = wiseSemantics?.type ?? mapMovementTypeToInternalType(movementType, row.notes ?? null, rawName);
       const merchantBase = row.normalized_name ?? row.raw_name ?? description;
       const merchantClean = summarizeMerchantText(merchantBase, rowInstitution);
       const reviewRequired = row.review_required || row.confidence_score < 85 || category === "Other" || movementType === "internal_movement";
