@@ -2577,6 +2577,26 @@ const readWiseWalletCurrencyFromRow = (row: Record<string, unknown>) => {
 const wiseEvidenceAmountPattern =
   /([+−-]?\s*)?([0-9][0-9,]*(?:\.\d{1,2})?|0)\s+(AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)\b/gi;
 
+const readWisePrimaryEvidenceText = (row: Record<string, unknown>) => {
+  const rawPayload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const parserEvidence =
+    rawPayload?.parserEvidence && typeof rawPayload.parserEvidence === "object" && !Array.isArray(rawPayload.parserEvidence)
+      ? (rawPayload.parserEvidence as Record<string, unknown>)
+      : null;
+
+  return [
+    rawPayload?.sourceLine,
+    rawPayload?.fullLineText,
+    parserEvidence?.source_text,
+    parserEvidence?.sourceText,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join("\n");
+};
+
 const readWiseEvidenceText = (row: Record<string, unknown>) => {
   const rawPayload =
     row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
@@ -2629,9 +2649,39 @@ const readWiseAccountImpactAmount = (row: Record<string, unknown>) => {
     row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
       ? (row.rawPayload as Record<string, unknown>)
       : null;
+  const primaryEvidenceText = readWisePrimaryEvidenceText(row);
+  const primaryEvidenceAmounts = primaryEvidenceText
+    ? Array.from(primaryEvidenceText.matchAll(wiseEvidenceAmountPattern))
+        .map((match) => {
+          const amount = parseAmountValue(match[2] ?? "");
+          const currency = normalizeWiseWalletCurrencyCode(match[3]);
+          if (amount === null || !currency) {
+            return null;
+          }
+
+          return {
+            amount: Math.abs(amount),
+            currency,
+            sign: null,
+            text: match[0],
+          };
+        })
+        .filter((value): value is { amount: number; currency: string; sign: null; text: string } => Boolean(value))
+    : [];
+  if (primaryEvidenceAmounts.length >= 2) {
+    const accountAmount = primaryEvidenceAmounts.at(-1);
+    return accountAmount
+      ? {
+          amount: accountAmount.amount,
+          currency: accountAmount.currency,
+          text: accountAmount.text,
+          inferredFromEvidence: true,
+        }
+      : null;
+  }
   const evidenceAmounts = parseWiseEvidenceAmounts(row);
   if (evidenceAmounts.length >= 2) {
-    const accountAmount = evidenceAmounts.at(-1);
+    const accountAmount = evidenceAmounts.findLast((amount) => amount.currency === primaryEvidenceAmounts.at(-1)?.currency) ?? evidenceAmounts.at(-1);
     return accountAmount
       ? {
           amount: accountAmount.amount,
