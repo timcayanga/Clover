@@ -6419,6 +6419,30 @@ export function ImportFilesModal({
           progress: 100,
           progressLabel: importedLabel,
         });
+        const completedReceiptSummary =
+          itemImportMode === "receipt"
+            ? processPayload?.receiptTransaction
+              ? buildReceiptSummaryFromReceiptTransaction({
+                  fileName: item.file.name,
+                  importFileId,
+                  receiptTransaction: processPayload.receiptTransaction,
+                  accountType: null,
+                })
+              : processPayload?.receiptDocument
+                ? buildReceiptSummaryFromReceiptDocument({
+                    fileName: item.file.name,
+                    importFileId,
+                    receiptDocument: processPayload.receiptDocument,
+                    accountId: typeof processPayload.accountId === "string" ? processPayload.accountId : null,
+                    accountType: null,
+                    previewAccountName: null,
+                  })
+                : null
+            : null;
+        if (completedReceiptSummary) {
+          seedImportedWorkspaceCaches(workspaceId, completedReceiptSummary);
+          await Promise.resolve(onImported(completedReceiptSummary));
+        }
         publishImportActivity({
           workspaceId,
           surface: importActivitySurfaceRef.current,
@@ -6429,15 +6453,15 @@ export function ImportFilesModal({
           completedFiles: completedFileCount + 1,
           progress: 100,
           detail: importedLabel,
-          summary: null,
+          summary: completedReceiptSummary,
           errorMessage: null,
         });
         setMessage(`Imported ${item.file.name}.`);
         router.refresh();
         return {
           status: "done",
-          importedRows: Number(processPayload?.imported ?? 0) || 0,
-          summary: null,
+          importedRows: completedReceiptSummary?.rowsImported ?? Number(processPayload?.imported ?? 0) || 0,
+          summary: completedReceiptSummary,
         };
       }
 
