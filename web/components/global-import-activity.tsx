@@ -261,10 +261,6 @@ export function GlobalImportActivity() {
 
   const isError = activity.status === "error";
 
-  if (activity.status === "active") {
-    return null;
-  }
-
   if (isError) {
     if (accountsSplashActive) {
       return null;
