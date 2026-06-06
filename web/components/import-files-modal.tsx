@@ -5391,6 +5391,9 @@ export function ImportFilesModal({
       const mobileWalletIdentity = resolveMobileWalletIdentityFromParsedRows(parsedRows as Array<Record<string, unknown>>);
       const parsedRowIdentity = resolveStatementIdentityFromParsedRows(parsedRows as Array<Record<string, unknown>>);
       const parsedAccountGroupCount = countDistinctStatementAccountsFromParsedRows(parsedRows as Array<Record<string, unknown>>);
+      const statementScreenshotPreparse =
+        item.file.type.startsWith("image/") || /^image$/i.test(fileTypeLabel(item.file));
+      const preferredStatementIdentity = statementScreenshotPreparse ? parsedRowIdentity ?? localMetadata : localMetadata ?? parsedRowIdentity;
 
       if (!localMetadata && parsedRows.length === 0) {
         return;
@@ -5398,14 +5401,19 @@ export function ImportFilesModal({
 
       const accountName =
         mobileWalletIdentity?.accountName ??
-        localMetadata?.accountName ??
-        parsedRowIdentity?.accountName ??
+        preferredStatementIdentity?.accountName ??
         guessedIdentity?.accountName ??
         (isGenericMobileScreenshotFileName(item.file.name) ? null : deriveFallbackAccountNameFromFileName(item.file.name));
       const institution =
-        mobileWalletIdentity?.institution ?? localMetadata?.institution ?? parsedRowIdentity?.institution ?? guessedIdentity?.institution ?? null;
+        mobileWalletIdentity?.institution ??
+        preferredStatementIdentity?.institution ??
+        guessedIdentity?.institution ??
+        null;
       const accountNumber =
-        mobileWalletIdentity?.accountNumber ?? localMetadata?.accountNumber ?? parsedRowIdentity?.accountNumber ?? guessedIdentity?.accountNumber ?? null;
+        mobileWalletIdentity?.accountNumber ??
+        preferredStatementIdentity?.accountNumber ??
+        guessedIdentity?.accountNumber ??
+        null;
       if (/^UCPB$/i.test(institution ?? "") && !accountNumber) {
         return;
       }
