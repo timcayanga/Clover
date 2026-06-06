@@ -670,6 +670,10 @@ const rebindResolvedImportAccount = async <
   return reboundAccount ?? null;
 };
 
+const isGenericScreenshotIdentityLabel = (value: unknown) =>
+  typeof value === "string" &&
+  /^(?:img|image)[ _-]*\d+\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(value.trim());
+
 const normalizeImportConfidenceScore = (value: unknown) => {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return 0;
@@ -3415,29 +3419,73 @@ const resolveConfirmationAccount = async (params: {
         /(?:gcash|maya)_mobile_screenshot/i.test(kind)
       );
     }) ?? null;
+  const wiseScreenshotIdentityRow =
+    params.parsedRows.find((row) => {
+      const rawPayload =
+        row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+          ? (row.rawPayload as Record<string, unknown>)
+          : null;
+      return /wise/i.test(
+        [
+          row.institution,
+          row.accountName,
+          typeof rawPayload?.institutionRaw === "string" ? rawPayload.institutionRaw : null,
+          typeof rawPayload?.accountName === "string" ? rawPayload.accountName : null,
+          typeof rawPayload?.source === "string" ? rawPayload.source : null,
+          typeof rawPayload?.kind === "string" ? rawPayload.kind : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      );
+    }) ?? null;
   const mobileScreenshotWalletIdentity =
     mobileScreenshotIdentityRow?.rawPayload && typeof mobileScreenshotIdentityRow.rawPayload === "object"
       ? getMobileScreenshotWalletIdentity(mobileScreenshotIdentityRow.rawPayload as Prisma.JsonValue)
       : null;
+  const metadataInstitution =
+    typeof params.statementMetadata?.institution === "string" && params.statementMetadata.institution.trim()
+      ? params.statementMetadata.institution.trim()
+      : null;
+  const metadataAccountName =
+    typeof params.statementMetadata?.accountName === "string" && params.statementMetadata.accountName.trim()
+      ? params.statementMetadata.accountName.trim()
+      : null;
+  const metadataLooksLikeGenericScreenshotIdentity =
+    isGenericScreenshotIdentityLabel(metadataInstitution) || isGenericScreenshotIdentityLabel(metadataAccountName);
   const candidateRow =
+    wiseScreenshotIdentityRow ??
     mobileScreenshotIdentityRow ??
-    (typeof params.statementMetadata?.institution === "string" && params.statementMetadata.institution.trim()
+    (!metadataLooksLikeGenericScreenshotIdentity && metadataInstitution
       ? params.statementMetadata
       : null) ??
-    (typeof params.statementMetadata?.accountName === "string" && params.statementMetadata.accountName.trim()
+    (!metadataLooksLikeGenericScreenshotIdentity && metadataAccountName
       ? params.statementMetadata
       : null) ??
     params.parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ??
     params.parsedRows.find((row) => typeof row.institution === "string" && row.institution.trim()) ??
     null;
+  const candidateRowRawPayload =
+    candidateRow &&
+    typeof candidateRow === "object" &&
+    "rawPayload" in candidateRow &&
+    candidateRow.rawPayload &&
+    typeof candidateRow.rawPayload === "object" &&
+    !Array.isArray(candidateRow.rawPayload)
+      ? (candidateRow.rawPayload as Record<string, unknown>)
+      : null;
 
   const inferredInstitution =
     mobileScreenshotWalletIdentity?.institution ??
+    sanitizeBankNameLabel(
+      typeof candidateRowRawPayload?.institutionRaw === "string" ? candidateRowRawPayload.institutionRaw : null
+    ) ??
     sanitizeBankNameLabel(typeof candidateRow?.institution === "string" ? candidateRow.institution : null) ??
     sanitizeBankNameLabel(normalizeBankName(String(params.importFile.fileName ?? "")));
   const inferredAccountName =
     mobileScreenshotWalletIdentity?.accountName ??
-    sanitizeBankNameLabel(typeof candidateRow?.accountName === "string" ? candidateRow.accountName : null) ?? inferredInstitution;
+    sanitizeBankNameLabel(typeof candidateRowRawPayload?.accountName === "string" ? candidateRowRawPayload.accountName : null) ??
+    sanitizeBankNameLabel(typeof candidateRow?.accountName === "string" ? candidateRow.accountName : null) ??
+    inferredInstitution;
   const inferredAccountNumber =
     typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
       ? params.statementMetadata.accountNumber.trim()
@@ -3460,13 +3508,14 @@ const resolveConfirmationAccount = async (params: {
     "other",
   ];
   const inferredAccountType: AccountType | null =
+    !wiseScreenshotIdentityRow &&
     typeof params.statementMetadata?.accountType === "string" &&
     supportedImportAccountTypes.includes(params.statementMetadata.accountType as AccountType)
       ? (params.statementMetadata.accountType as AccountType)
       : null;
   const inferredCurrency = normalizeInstitutionCurrency(
     inferredInstitution,
-    typeof params.statementMetadata?.currency === "string" && params.statementMetadata.currency.trim()
+    !wiseScreenshotIdentityRow && typeof params.statementMetadata?.currency === "string" && params.statementMetadata.currency.trim()
       ? params.statementMetadata.currency.trim().toUpperCase()
       : null,
     inferredAccountName
@@ -3480,7 +3529,9 @@ const resolveConfirmationAccount = async (params: {
         : null;
   const inferredBalance = mobileScreenshotWalletIdentity
     ? null
-    : parsedCheckpointBalance ??
+    : wiseScreenshotIdentityRow
+      ? parsedTrailingBalance
+      : parsedCheckpointBalance ??
       (parsedTrailingBalance !== null && Number.isFinite(parsedTrailingBalance) ? parsedTrailingBalance : null);
   const inferredCreditLimit =
     typeof params.statementMetadata?.creditLimit === "number" && Number.isFinite(params.statementMetadata.creditLimit)
@@ -3488,6 +3539,7 @@ const resolveConfirmationAccount = async (params: {
       : null;
   const accountIdentityType: AccountType =
     mobileScreenshotWalletIdentity?.accountType ??
+    (wiseScreenshotIdentityRow ? "wallet" : null) ??
     inferredAccountType ??
     (inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank") as AccountType);
   const workspaceAccounts = await prisma.account.findMany({
@@ -7512,6 +7564,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     (parsedAccountGroups.filter((group) => group.key !== "__default__").length > 1 &&
       parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))))) ||
     hasMultipleWiseWalletAccountGroups;
+  const compatibleAccountColumns = await getCompatibleAccountColumns();
   const accountByGroupKey = new Map<string, Awaited<ReturnType<typeof resolveConfirmationAccount>>>();
   let resolvedAccountSequence = 0;
   for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
