@@ -22097,13 +22097,13 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-data-danger-item .button-danger {
-  min-width: 220px;
+  min-width: 180px;
+  padding-inline: 16px;
   justify-content: center;
 }
 
 .settings-data-danger-item .button-danger--history {
   min-width: 180px;
-  padding-inline: 16px;
 }
 
 .settings-inline-field {
