@@ -322,7 +322,7 @@ type AdminUserListRow = User & {
 };
 
 function mapUser(user: AdminUserListRow): AdminUserListItem {
-  const effectiveLimits = getEffectiveUserLimits(user);
+  const effectiveLimits = getEffectiveUserLimits(user, { ignoreDevelopmentOverride: true });
   const attentionFlags = classifyAttentionFlags({
     accountLimit: effectiveLimits.accountLimit,
     monthlyUploadLimit: effectiveLimits.monthlyUploadLimit,
@@ -1034,7 +1034,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
   }
 
   const metrics = await fetchUserMetrics([user.id]);
-  const effectiveLimits = getEffectiveUserLimits(user);
+  const effectiveLimits = getEffectiveUserLimits(user, { ignoreDevelopmentOverride: true });
   const attentionFlags = classifyAttentionFlags({
     accountLimit: effectiveLimits.accountLimit,
     monthlyUploadLimit: effectiveLimits.monthlyUploadLimit,

@@ -20,16 +20,31 @@ const PLAN_DEFAULT_LIMITS: Record<PlanTier, UserLimits> = {
 };
 
 type UserLimitsLike = {
+  clerkUserId?: string | null;
   planTier: PlanTier;
   accountLimit: number | null;
   monthlyUploadLimit: number | null;
   transactionLimit: number | null;
 };
 
+type EffectiveUserLimitsOptions = {
+  ignoreDevelopmentOverride?: boolean;
+};
+
+const UNLIMITED_SYNTHETIC_USER_IDS = new Set(["staging-guest", "local-admin"]);
+
 export const getPlanDefaultLimits = (planTier: PlanTier): UserLimits => PLAN_DEFAULT_LIMITS[planTier];
 
-export const getEffectiveUserLimits = (user: UserLimitsLike): UserLimits => {
-  if (process.env.NODE_ENV !== "production") {
+export const getEffectiveUserLimits = (user: UserLimitsLike, options: EffectiveUserLimitsOptions = {}): UserLimits => {
+  if (user.clerkUserId && UNLIMITED_SYNTHETIC_USER_IDS.has(user.clerkUserId)) {
+    return {
+      accountLimit: null,
+      monthlyUploadLimit: null,
+      transactionLimit: null,
+    };
+  }
+
+  if (process.env.NODE_ENV !== "production" && !options.ignoreDevelopmentOverride) {
     return {
       accountLimit: null,
       monthlyUploadLimit: null,

@@ -70,14 +70,16 @@ const EMPTY_OVERVIEW: AdminUserOverview = {
   signupsPrev7d: 0,
 };
 
+const limitToDraftValue = (value: number | null) => (value === null ? "" : String(value));
+
 const initialDraft = (user: AdminUserListItem): AdminUserDraft => ({
   firstName: user.firstName ?? "",
   lastName: user.lastName ?? "",
   email: user.email,
   planTier: user.planTier,
-  accountLimit: String(user.accountLimit),
-  monthlyUploadLimit: String(user.monthlyUploadLimit),
-  transactionLimit: user.transactionLimit === null ? "" : String(user.transactionLimit),
+  accountLimit: limitToDraftValue(user.accountLimit),
+  monthlyUploadLimit: limitToDraftValue(user.monthlyUploadLimit),
+  transactionLimit: limitToDraftValue(user.transactionLimit),
   financialExperience: user.financialExperience ?? "",
   primaryGoal: user.primaryGoal ?? "",
   goalTargetAmount: user.goalTargetAmount ?? "",
@@ -230,9 +232,9 @@ function isDirty(user: AdminUserListItem, draft: AdminUserDraft) {
     draft.lastName.trim() !== (user.lastName ?? "") ||
     draft.email.trim() !== user.email ||
     draft.planTier !== user.planTier ||
-    draft.accountLimit.trim() !== String(user.accountLimit) ||
-    draft.monthlyUploadLimit.trim() !== String(user.monthlyUploadLimit) ||
-    draft.transactionLimit.trim() !== (user.transactionLimit === null ? "" : String(user.transactionLimit)) ||
+    draft.accountLimit.trim() !== limitToDraftValue(user.accountLimit) ||
+    draft.monthlyUploadLimit.trim() !== limitToDraftValue(user.monthlyUploadLimit) ||
+    draft.transactionLimit.trim() !== limitToDraftValue(user.transactionLimit) ||
     draft.financialExperience !== (user.financialExperience ?? "") ||
     draft.primaryGoal.trim() !== (user.primaryGoal ?? "") ||
     draft.goalTargetAmount.trim() !== (user.goalTargetAmount ?? "") ||

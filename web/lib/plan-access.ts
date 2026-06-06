@@ -6,6 +6,7 @@ import { countNonCashAccounts } from "@/lib/account-limit-count";
 export { countNonCashAccounts } from "@/lib/account-limit-count";
 
 type PlanLimitSource = {
+  clerkUserId?: string | null;
   planTier: "free" | "pro";
   accountLimit: number | null;
   monthlyUploadLimit: number | null;
@@ -156,6 +157,7 @@ export async function getWorkspaceOwnerLimits(workspaceId: string): Promise<User
     select: {
       user: {
         select: {
+          clerkUserId: true,
           planTier: true,
           accountLimit: true,
           monthlyUploadLimit: true,
