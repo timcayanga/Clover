@@ -612,7 +612,17 @@ const normalizeServerAccountSummaries = (value: unknown): NonNullable<UploadInsi
 
       return {
         accountId,
-        accountName: typeof record.accountName === "string" && record.accountName.trim() ? record.accountName.trim() : null,
+        accountName:
+          typeof record.accountName === "string" && record.accountName.trim()
+            ? formatUploadAccountDisplayName(
+                record.accountName.trim(),
+                typeof record.institution === "string" && record.institution.trim() ? record.institution.trim() : null,
+                typeof record.accountNumber === "string" && record.accountNumber.trim() ? record.accountNumber.trim() : null,
+                typeof record.accountType === "string" && record.accountType.trim()
+                  ? (record.accountType as UploadInsightsSummary["accountType"])
+                  : null
+              )
+            : null,
         institution: typeof record.institution === "string" && record.institution.trim() ? record.institution.trim() : null,
         accountNumber: typeof record.accountNumber === "string" && record.accountNumber.trim() ? record.accountNumber.trim() : null,
         accountType:
@@ -1711,6 +1721,64 @@ const resolveMobileWalletIdentityFromParsedRows = (rows: Array<Record<string, un
       accountNumber: null,
       currency: Array.from(wiseCurrencies)[0] ?? null,
     };
+  }
+
+  return null;
+};
+
+const resolveStatementIdentityFromParsedRows = (rows: Array<Record<string, unknown>>) => {
+  const walletIdentity = resolveMobileWalletIdentityFromParsedRows(rows);
+  if (walletIdentity) {
+    return walletIdentity;
+  }
+
+  for (const row of rows) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      continue;
+    }
+
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    const accountName = typeof row.accountName === "string" && row.accountName.trim()
+      ? row.accountName.trim()
+      : typeof rawPayload?.accountName === "string" && rawPayload.accountName.trim()
+        ? rawPayload.accountName.trim()
+        : null;
+    const institution = typeof row.institution === "string" && row.institution.trim()
+      ? row.institution.trim()
+      : typeof rawPayload?.institution === "string" && rawPayload.institution.trim()
+        ? rawPayload.institution.trim()
+        : typeof rawPayload?.bank === "string" && rawPayload.bank.trim()
+          ? rawPayload.bank.trim()
+          : null;
+    const accountNumber = typeof row.accountNumber === "string" && row.accountNumber.trim()
+      ? row.accountNumber.trim()
+      : typeof rawPayload?.accountNumber === "string" && rawPayload.accountNumber.trim()
+        ? rawPayload.accountNumber.trim()
+        : null;
+    const rawAccountType = typeof rawPayload?.accountType === "string" ? rawPayload.accountType.trim() : "";
+    const accountType =
+      rawAccountType === "bank" ||
+      rawAccountType === "wallet" ||
+      rawAccountType === "credit_card" ||
+      rawAccountType === "cash" ||
+      rawAccountType === "investment" ||
+      rawAccountType === "other"
+        ? (rawAccountType as UploadAccountType)
+        : inferAccountTypeFromStatement(institution, accountName, "bank");
+    const currency = typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : null;
+
+    if (accountName || institution || accountNumber) {
+      return {
+        accountName,
+        institution,
+        accountNumber,
+        accountType,
+        currency,
+      };
+    }
   }
 
   return null;
@@ -5434,28 +5502,28 @@ export function ImportFilesModal({
         accountName: localMetadata?.accountName ?? guessedIdentity?.accountName ?? null,
         accountNumber: localMetadata?.accountNumber ?? guessedIdentity?.accountNumber ?? null,
       });
-      const mobileWalletIdentity = resolveMobileWalletIdentityFromParsedRows(parsedRows as Array<Record<string, unknown>>);
+      const parsedRowIdentity = resolveStatementIdentityFromParsedRows(parsedRows as Array<Record<string, unknown>>);
 
       if (!localMetadata && parsedRows.length === 0) {
         return;
       }
 
       const accountName =
-        mobileWalletIdentity?.accountName ??
+        parsedRowIdentity?.accountName ??
         localMetadata?.accountName ??
         guessedIdentity?.accountName ??
         deriveFallbackAccountNameFromFileName(item.file.name);
-      const institution = mobileWalletIdentity?.institution ?? localMetadata?.institution ?? guessedIdentity?.institution ?? null;
-      const accountNumber = mobileWalletIdentity?.accountNumber ?? localMetadata?.accountNumber ?? guessedIdentity?.accountNumber ?? null;
+      const institution = parsedRowIdentity?.institution ?? localMetadata?.institution ?? guessedIdentity?.institution ?? null;
+      const accountNumber = parsedRowIdentity?.accountNumber ?? localMetadata?.accountNumber ?? guessedIdentity?.accountNumber ?? null;
       if (/^UCPB$/i.test(institution ?? "") && !accountNumber) {
         return;
       }
       if (!accountName && !institution && parsedRows.length === 0) {
         return;
       }
-      const accountType = (mobileWalletIdentity?.accountType ?? localMetadata?.accountType ??
+      const accountType = (parsedRowIdentity?.accountType ?? localMetadata?.accountType ??
         inferAccountTypeFromStatement(institution, accountName, "bank")) as UploadInsightsSummary["accountType"];
-      const endingBalance = mobileWalletIdentity
+      const endingBalance = parsedRowIdentity?.accountType === "wallet"
         ? null
         : toBalanceString(localMetadata?.endingBalance ?? getTrailingBalanceFromParsedRows(parsedRows) ?? null);
 
@@ -5468,7 +5536,7 @@ export function ImportFilesModal({
         accountName,
         institution,
         accountNumber,
-        mobileWalletIdentity?.currency ?? null,
+        parsedRowIdentity?.currency ?? null,
         accountType
       );
       const optimisticAccountId = resolvedAccountId.startsWith("optimistic-") ? resolvedAccountId : null;

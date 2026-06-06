@@ -13,6 +13,15 @@ type AccountDisplayInput = {
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
+const isGenericScreenshotLikeName = (value?: string | null) => {
+  const normalized = normalizeWhitespace(value ?? "").replace(/\.[^.]+$/, "").toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return /^(?:img|screenshot|screen\s*shot|photo|image)[_\s-]?\d{3,8}(?:\s+\d{3,8})?$/.test(normalized);
+};
+
 const extractLastFourDigits = (value?: string | null) => {
   if (!value) {
     return null;
@@ -51,7 +60,11 @@ const resolveBankLabel = (input: AccountDisplayInput) => {
   const normalizedInstitution = normalizeBankName(input.institution);
   const safeInstitution =
     normalizedInstitution !== "Unknown" ? normalizedInstitution : sanitizeBankNameLabel(input.institution) ?? null;
-  const safeName = sanitizeBankNameLabel(input.name) ?? null;
+  const rawSafeName = sanitizeBankNameLabel(input.name) ?? null;
+  const safeName =
+    rawSafeName && isGenericScreenshotLikeName(rawSafeName) && (safeInstitution || input.accountNumber)
+      ? null
+      : rawSafeName;
   const brand = getAccountBrand({
     institution: safeInstitution,
     name: safeName,
@@ -71,7 +84,11 @@ export const formatUploadAccountDisplayName = (
   accountNumber?: string | null,
   type?: string | null
 ) => {
-  const safeName = sanitizeBankNameLabel(name) ?? null;
+  const rawSafeName = sanitizeBankNameLabel(name) ?? null;
+  const safeName =
+    rawSafeName && isGenericScreenshotLikeName(rawSafeName) && (normalizeBankName(institution) !== "Unknown" || accountNumber)
+      ? null
+      : rawSafeName;
   const wiseWalletName = getWiseWalletDisplayName({ name, institution, accountNumber, type });
   const safeInstitution = normalizeBankName(institution);
   const resolvedLabel = resolveBankLabel({
