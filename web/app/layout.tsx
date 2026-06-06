@@ -9,6 +9,7 @@ import { getAppBuildInfo } from "@/lib/build-info";
 import { ThemeSync } from "@/components/theme-sync";
 import { THEME_RESOLVED_COOKIE_KEY, THEME_STORAGE_KEY } from "@/lib/theme-preference";
 import { HelperTextSync } from "@/components/helper-text-sync";
+import { StagingBrowserStateReset } from "@/components/staging-browser-state-reset";
 
 const clerkLocalization = {
   userProfile: {
@@ -118,6 +119,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       >
         <ThemeSync />
         <HelperTextSync />
+        <StagingBrowserStateReset
+          buildId={buildInfo.buildId}
+          deploymentId={buildInfo.deploymentId ?? null}
+          gitSha={buildInfo.gitSha ?? null}
+        />
         <GlobalImportActivity />
         {publishableKey ? (
           <ClerkAppProvider publishableKey={publishableKey} localization={clerkLocalization}>

@@ -4,7 +4,8 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 const STAGING_HOSTNAME = "staging.clover.ph";
-const RESET_MARKER_KEY = "clover.staging-browser-state-reset.v1";
+const RESET_MARKER_KEY = "clover.staging-browser-state-reset.v2";
+const DEPLOYMENT_MARKER_KEY = "clover.staging.deployment-marker.v1";
 const STAY_SIGNED_IN_KEY = "clover.staging.keep-signed-in.v1";
 
 const COOKIE_PREFIXES = ["__clerk_", "__client_uat"];
@@ -24,21 +25,30 @@ const deleteCookie = (name: string) => {
   }
 };
 
-const clearBrowserState = () => {
-  const cookieNames = document.cookie
-    .split(";")
-    .map((entry) => entry.split("=")[0]?.trim())
-    .filter(Boolean);
+const clearBrowserState = ({ clearAuth }: { clearAuth: boolean }) => {
+  const preservedKeys = new Set([STAY_SIGNED_IN_KEY, DEPLOYMENT_MARKER_KEY]);
 
-  for (const cookieName of cookieNames) {
-    if (COOKIE_PREFIXES.some((prefix) => cookieName.startsWith(prefix))) {
-      deleteCookie(cookieName);
+  if (clearAuth) {
+    const cookieNames = document.cookie
+      .split(";")
+      .map((entry) => entry.split("=")[0]?.trim())
+      .filter(Boolean);
+
+    for (const cookieName of cookieNames) {
+      if (COOKIE_PREFIXES.some((prefix) => cookieName.startsWith(prefix))) {
+        deleteCookie(cookieName);
+      }
     }
   }
 
   try {
     for (const key of Object.keys(window.localStorage)) {
-      if (key.startsWith("clerk") || key.startsWith("__clerk")) {
+      if (preservedKeys.has(key)) {
+        continue;
+      }
+      const isAuthKey = key.startsWith("clerk") || key.startsWith("__clerk");
+      const isAppKey = key.startsWith("clover.");
+      if ((clearAuth && isAuthKey) || isAppKey) {
         window.localStorage.removeItem(key);
       }
     }
@@ -48,7 +58,9 @@ const clearBrowserState = () => {
 
   try {
     for (const key of Object.keys(window.sessionStorage)) {
-      if (key.startsWith("clerk") || key.startsWith("__clerk")) {
+      const isAuthKey = key.startsWith("clerk") || key.startsWith("__clerk");
+      const isAppKey = key.startsWith("clover.");
+      if ((clearAuth && isAuthKey) || isAppKey) {
         window.sessionStorage.removeItem(key);
       }
     }
@@ -57,13 +69,25 @@ const clearBrowserState = () => {
   }
 };
 
-export function StagingBrowserStateReset() {
+type StagingBrowserStateResetProps = {
+  buildId: string;
+  deploymentId: string | null;
+  gitSha: string | null;
+};
+
+const getBuildMarker = ({ buildId, deploymentId, gitSha }: StagingBrowserStateResetProps) =>
+  [deploymentId, buildId, gitSha].filter(Boolean).join(":");
+
+export function StagingBrowserStateReset(props: StagingBrowserStateResetProps) {
   const pathname = usePathname() ?? "/";
 
   useEffect(() => {
     if (window.location.hostname !== STAGING_HOSTNAME) {
       return;
     }
+
+    const buildMarker = getBuildMarker(props) || "unknown";
+    const sessionResetMarkerKey = `${RESET_MARKER_KEY}:${buildMarker}`;
 
     const isPublicLandingRoute =
       pathname === "/" ||
@@ -77,36 +101,54 @@ export function StagingBrowserStateReset() {
       pathname.startsWith("/sso-callback") ||
       pathname.startsWith("/onboarding");
 
-    if (!isPublicLandingRoute) {
-      return;
-    }
+    let keepSignedIn = false;
 
     try {
-      if (window.localStorage.getItem(STAY_SIGNED_IN_KEY) === "true") {
-        return;
-      }
+      keepSignedIn = window.localStorage.getItem(STAY_SIGNED_IN_KEY) === "true";
     } catch {
       // If storage is blocked, proceed with the cleanup once.
     }
 
-    if (window.name.includes(WINDOW_NAME_MARKER)) {
+    try {
+      const previousBuildMarker = window.localStorage.getItem(DEPLOYMENT_MARKER_KEY);
+      if (previousBuildMarker !== buildMarker) {
+        window.localStorage.setItem(DEPLOYMENT_MARKER_KEY, buildMarker);
+
+        if (window.sessionStorage.getItem(sessionResetMarkerKey) !== "done") {
+          window.sessionStorage.setItem(sessionResetMarkerKey, "done");
+          clearBrowserState({ clearAuth: !keepSignedIn });
+          window.location.reload();
+          return;
+        }
+      }
+    } catch {
+      // If storage is blocked, fall back to the route-level cleanup below.
+    }
+
+    if (!isPublicLandingRoute || keepSignedIn) {
       return;
     }
 
-    window.name = window.name ? `${window.name}|${WINDOW_NAME_MARKER}` : WINDOW_NAME_MARKER;
+    const windowMarker = `${WINDOW_NAME_MARKER}:${buildMarker}`;
+
+    if (window.name.includes(windowMarker)) {
+      return;
+    }
+
+    window.name = window.name ? `${window.name}|${windowMarker}` : windowMarker;
 
     try {
-      if (window.sessionStorage.getItem(RESET_MARKER_KEY) === "done") {
+      if (window.sessionStorage.getItem(sessionResetMarkerKey) === "done") {
         return;
       }
-      window.sessionStorage.setItem(RESET_MARKER_KEY, "done");
+      window.sessionStorage.setItem(sessionResetMarkerKey, "done");
     } catch {
       // If storage is blocked, still proceed with the cleanup once.
     }
 
-    clearBrowserState();
+    clearBrowserState({ clearAuth: true });
     window.location.reload();
-  }, [pathname]);
+  }, [pathname, props.buildId, props.deploymentId, props.gitSha]);
 
   return null;
 }
