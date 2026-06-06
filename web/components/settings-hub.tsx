@@ -315,13 +315,13 @@ function SettingsToggleRow({
       </div>
       <button
         type="button"
-        className={`settings-switch${checked ? " is-on" : ""}`}
+        className={`settings-ios-switch${checked ? " is-on" : ""}`}
         aria-pressed={checked}
         aria-label={`${label}: ${checked ? "On" : "Off"}`}
         onClick={onToggle}
       >
-        <span className="settings-switch__track" aria-hidden="true">
-          <span className="settings-switch__thumb" />
+        <span className="settings-ios-switch__track" aria-hidden="true">
+          <span className="settings-ios-switch__thumb" />
         </span>
       </button>
     </div>

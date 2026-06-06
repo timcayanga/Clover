@@ -22163,7 +22163,7 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--text);
 }
 
-.settings-switch {
+.settings-ios-switch {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -22174,7 +22174,7 @@ input.transaction-inline-edit--amount::placeholder {
   background: transparent;
 }
 
-.settings-switch__track {
+.settings-ios-switch__track {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -22187,7 +22187,7 @@ input.transaction-inline-edit--amount::placeholder {
   transition: background 180ms ease, box-shadow 180ms ease;
 }
 
-.settings-switch__thumb {
+.settings-ios-switch__thumb {
   width: 26px;
   height: 26px;
   border-radius: 999px;
@@ -22196,15 +22196,15 @@ input.transaction-inline-edit--amount::placeholder {
   transition: transform 180ms ease;
 }
 
-.settings-switch.is-on .settings-switch__track {
+.settings-ios-switch.is-on .settings-ios-switch__track {
   background: linear-gradient(135deg, rgba(96, 223, 178, 0.96), rgba(67, 202, 225, 0.96));
 }
 
-.settings-switch.is-on .settings-switch__thumb {
+.settings-ios-switch.is-on .settings-ios-switch__thumb {
   transform: translateX(20px);
 }
 
-.settings-switch:focus-visible {
+.settings-ios-switch:focus-visible {
   outline: 2px solid rgba(3, 168, 192, 0.32);
   outline-offset: 3px;
 }
