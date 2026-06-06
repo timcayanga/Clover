@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
 
+const inferMostRecentApplicableYear = (monthIndex: number, day: number) => {
+  const now = new Date();
+  const currentYear = now.getUTCFullYear();
+  const todayUtc = Date.UTC(currentYear, now.getUTCMonth(), now.getUTCDate(), 12, 0, 0);
+  const candidateUtc = Date.UTC(currentYear, monthIndex, day, 12, 0, 0);
+  return candidateUtc <= todayUtc ? currentYear : currentYear - 1;
+};
+
 const samples = [
   {
     fileName: "IMG_1367.PNG",
@@ -165,6 +173,11 @@ assert.equal(checkingRows[2]?.categoryName, "Income");
 assert.equal(checkingRows[3]?.categoryName, "Financial");
 
 const dependentRows = parseImportText(samples[1].text, samples[1].fileName, "image/png", { institution: "BPI" });
+assert.equal(
+  dependentRows[0]?.date,
+  `${inferMostRecentApplicableYear(3, 13)}-04-13`,
+  "BPI screenshot rows without a visible year should use the most recent applicable year."
+);
 assert.equal(
   dependentRows.find((row) => /InstaPay Transfer Fee/i.test(String(row.merchantClean ?? row.merchantRaw ?? row.description ?? "")))?.categoryName,
   "Transfers",

@@ -5231,6 +5231,27 @@ export const processImportFileText = async (
     });
   }
 
+  if (likelyScreenshotStatement && !text.trim() && pageImages?.length) {
+    await updateImportFileCompat(importFileId, {
+      status: "processing",
+      processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "reading_account_details",
+      processingMessage: "Reading screenshot text...",
+    }).catch(() => null);
+
+    const transcript = await transcribeImportImagesWithOpenAI({
+      fileName,
+      fileType,
+      detectedMetadata: checkpointBankName ? { institution: checkpointBankName } : null,
+      pageImages,
+      importMode,
+      timeoutMs: 25_000,
+    }).catch(() => null);
+
+    if (transcript?.transcript.trim()) {
+      text = normalizeStatementImageOcrText(transcript.transcript);
+    }
+  }
+
   if (isJsonImportFile(fileType, fileName)) {
     return processImportTrainingJson(importFileId, importFile, text, options, startedAt);
   }
@@ -5396,6 +5417,18 @@ export const processImportFileText = async (
       }
     }
   }
+  const hasDeterministicBpiMobileScreenshotRows = parsedRows.some((row) => {
+    const rawPayload = row.rawPayload;
+    return (
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (((rawPayload as Record<string, unknown>).kind === "bpi_mobile_screenshot_transaction" &&
+        (rawPayload as Record<string, unknown>).source === "bpi_mobile_screenshot") ||
+        ((rawPayload as Record<string, unknown>).kind === "account_snapshot_marker" &&
+          (rawPayload as Record<string, unknown>).source === "bpi_mobile_screenshot"))
+    );
+  });
   const parsedRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(parsedRows as Array<Record<string, unknown>>);
   const hasKnownUnionBankSampleRows = parsedRows.some((row) => {
     const rawPayload = row.rawPayload;
@@ -5842,18 +5875,21 @@ export const processImportFileText = async (
   }
 
   const deterministicStatementParseLooksStrong =
-    importMode === "statement" &&
-    parsedRows.length >= 10 &&
-    parsedDateCoverage >= 0.75 &&
-    hasKnownInstitution &&
-    (Boolean(metadataForParse.accountNumber) || parsedRowsHaveMultipleAccountNumbers) &&
-    (metadataForParse.confidence ?? 0) >= 80;
+    hasDeterministicBpiMobileScreenshotRows ||
+    (importMode === "statement" &&
+      parsedRows.length >= 10 &&
+      parsedDateCoverage >= 0.75 &&
+      hasKnownInstitution &&
+      (Boolean(metadataForParse.accountNumber) || parsedRowsHaveMultipleAccountNumbers) &&
+      (metadataForParse.confidence ?? 0) >= 80);
   const openAiStatementRowsAreCompetitive =
     importMode !== "statement" ||
     parsedRows.length === 0 ||
     (openAiParsed?.rows.length ?? 0) >= Math.max(1, Math.floor(parsedRows.length * 0.9));
   const shouldAdoptOpenAiStatementParse =
-    importMode !== "statement" || !deterministicStatementParseLooksStrong || openAiStatementRowsAreCompetitive;
+    importMode !== "statement" ||
+    (!hasDeterministicBpiMobileScreenshotRows &&
+      (!deterministicStatementParseLooksStrong || openAiStatementRowsAreCompetitive));
   const useOpenAiParse =
     Boolean(openAiParsed?.audit.schemaValidated) &&
     shouldAdoptOpenAiStatementParse &&

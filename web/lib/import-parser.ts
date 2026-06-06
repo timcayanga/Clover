@@ -8343,26 +8343,22 @@ const parseMayaMobileScreenshotImportText = (text: string) => {
 const knownBpiMobileScreenshotSamples: Record<
   string,
   {
-    year: number;
     accountLabel?: string;
     accountNumber?: string;
     balance?: number;
   }
 > = {
   "img_1367.png": {
-    year: 2021,
     accountLabel: "CHECKING ACCOUNT",
     accountNumber: "0290007909",
     balance: 64859.36,
   },
   "img_1368.png": {
-    year: 2021,
     accountLabel: "DEPENDENT SAVINGS",
     accountNumber: "0299097005",
     balance: 8028.72,
   },
   "img_1369.png": {
-    year: 2021,
     accountLabel: "PERSONAL SAVINGS",
     accountNumber: "0299183012",
     balance: 536502.85,
@@ -8465,18 +8461,20 @@ const extractBpiMobileScreenshotAccounts = (lines: string[]) => {
 };
 
 const inferBpiMobileScreenshotYear = (text: string, fileName: string) => {
-  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
-  const knownSampleYear = knownBpiMobileScreenshotSamples[baseName]?.year;
-  if (knownSampleYear) {
-    return knownSampleYear;
-  }
-
   const priorYearInterestMatch = normalizeWhitespace(text).match(/\b(20\d{2})\s+IOD\s+INTEREST\s+PAID\b/i);
   if (priorYearInterestMatch?.[1]) {
     return Number(priorYearInterestMatch[1]) + 1;
   }
 
   return new Date().getUTCFullYear();
+};
+
+const inferMostRecentApplicableBpiScreenshotYear = (monthIndex: number, day: number) => {
+  const now = new Date();
+  const currentYear = now.getUTCFullYear();
+  const todayUtc = Date.UTC(currentYear, now.getUTCMonth(), now.getUTCDate(), 12, 0, 0);
+  const candidateUtc = Date.UTC(currentYear, monthIndex, day, 12, 0, 0);
+  return candidateUtc <= todayUtc ? currentYear : currentYear - 1;
 };
 
 const classifyBpiMobileScreenshotRow = (title: string, detailText: string, signedAmount: number) => {
@@ -8637,7 +8635,6 @@ const parseBpiMobileScreenshotImportText = (text: string, fileName: string) => {
     };
   }
 
-  const year = inferBpiMobileScreenshotYear(text, fileName);
   const rows: ParsedImportRow[] = [];
   const seen = new Set<string>();
   let currentDate: string | null = null;
@@ -8653,7 +8650,9 @@ const parseBpiMobileScreenshotImportText = (text: string, fileName: string) => {
       return null;
     }
 
-    return new Date(Date.UTC(year, monthIndex, Number(match[2]), 12)).toISOString().slice(0, 10);
+    const day = Number(match[2]);
+    const year = inferMostRecentApplicableBpiScreenshotYear(monthIndex, day);
+    return new Date(Date.UTC(year, monthIndex, day, 12)).toISOString().slice(0, 10);
   };
 
   for (let index = transactionSectionStartIndex; index < lines.length; index += 1) {

@@ -1591,8 +1591,7 @@ const isFilenameOnlyScreenshotSummary = (
   const fallbackName = deriveFallbackAccountNameFromFileName(fileName).trim().toLowerCase();
   const accountName = String(summary.accountName ?? "").trim().toLowerCase();
   const institution = String(summary.institution ?? "").trim();
-  const accountNumber = String(summary.accountNumber ?? "").trim();
-  return Boolean(accountName && accountName === fallbackName && !institution && !accountNumber);
+  return Boolean(accountName && accountName === fallbackName && !institution);
 };
 
 const readParsedRowString = (row: Record<string, unknown>, key: string) => {
