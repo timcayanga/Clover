@@ -22,10 +22,7 @@ import {
   storeImportedFileTextCacheRecord,
 } from "@/lib/import-file-text.server";
 import { downloadImportObject } from "@/lib/import-storage.server";
-import {
-  resolveReceiptAccountHintToAccount,
-  resolveReceiptInstitutionFallbackToAccount,
-} from "@/lib/receipt-account-resolution";
+import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import { parseReceiptText } from "@/lib/split-bill";
 import {
@@ -1673,7 +1670,7 @@ const parseTrainingJsonPayload = (jsonText: string, params: { fileName: string; 
     readCandidateString(objects, ["statementText", "sourceText", "rawText", "ocrText", "rawStatementText"]) ??
     jsonText;
 
-  const detectedMetadata = detectStatementMetadataFromText(sourceText);
+  const detectedMetadata = detectStatementMetadataFromText(sourceText, fileName);
   const metadata = {
     ...detectedMetadata,
     institution: institution ?? detectedMetadata.institution ?? null,
@@ -2577,26 +2574,6 @@ const readWiseWalletCurrencyFromRow = (row: Record<string, unknown>) => {
 const wiseEvidenceAmountPattern =
   /([+−-]?\s*)?([0-9][0-9,]*(?:\.\d{1,2})?|0)\s+(AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)\b/gi;
 
-const readWisePrimaryEvidenceText = (row: Record<string, unknown>) => {
-  const rawPayload =
-    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-      ? (row.rawPayload as Record<string, unknown>)
-      : null;
-  const parserEvidence =
-    rawPayload?.parserEvidence && typeof rawPayload.parserEvidence === "object" && !Array.isArray(rawPayload.parserEvidence)
-      ? (rawPayload.parserEvidence as Record<string, unknown>)
-      : null;
-
-  return [
-    rawPayload?.sourceLine,
-    rawPayload?.fullLineText,
-    parserEvidence?.source_text,
-    parserEvidence?.sourceText,
-  ]
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    .join("\n");
-};
-
 const readWiseEvidenceText = (row: Record<string, unknown>) => {
   const rawPayload =
     row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
@@ -2649,39 +2626,9 @@ const readWiseAccountImpactAmount = (row: Record<string, unknown>) => {
     row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
       ? (row.rawPayload as Record<string, unknown>)
       : null;
-  const primaryEvidenceText = readWisePrimaryEvidenceText(row);
-  const primaryEvidenceAmounts = primaryEvidenceText
-    ? Array.from(primaryEvidenceText.matchAll(wiseEvidenceAmountPattern))
-        .map((match) => {
-          const amount = parseAmountValue(match[2] ?? "");
-          const currency = normalizeWiseWalletCurrencyCode(match[3]);
-          if (amount === null || !currency) {
-            return null;
-          }
-
-          return {
-            amount: Math.abs(amount),
-            currency,
-            sign: null,
-            text: match[0],
-          };
-        })
-        .filter((value): value is { amount: number; currency: string; sign: null; text: string } => Boolean(value))
-    : [];
-  if (primaryEvidenceAmounts.length >= 2) {
-    const accountAmount = primaryEvidenceAmounts.at(-1);
-    return accountAmount
-      ? {
-          amount: accountAmount.amount,
-          currency: accountAmount.currency,
-          text: accountAmount.text,
-          inferredFromEvidence: true,
-        }
-      : null;
-  }
   const evidenceAmounts = parseWiseEvidenceAmounts(row);
   if (evidenceAmounts.length >= 2) {
-    const accountAmount = evidenceAmounts.findLast((amount) => amount.currency === primaryEvidenceAmounts.at(-1)?.currency) ?? evidenceAmounts.at(-1);
+    const accountAmount = evidenceAmounts.at(-1);
     return accountAmount
       ? {
           amount: accountAmount.amount,
@@ -3406,15 +3353,6 @@ const resolveConfirmationAccount = async (params: {
     params.parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ??
     params.parsedRows.find((row) => typeof row.institution === "string" && row.institution.trim()) ??
     null;
-  const candidateRowRawPayload =
-    candidateRow &&
-    typeof candidateRow === "object" &&
-    "rawPayload" in candidateRow &&
-    candidateRow.rawPayload &&
-    typeof candidateRow.rawPayload === "object" &&
-    !Array.isArray(candidateRow.rawPayload)
-      ? (candidateRow.rawPayload as Record<string, unknown>)
-      : null;
 
   const inferredInstitution =
     mobileScreenshotWalletIdentity?.institution ??
@@ -3426,10 +3364,6 @@ const resolveConfirmationAccount = async (params: {
   const inferredAccountNumber =
     typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
       ? params.statementMetadata.accountNumber.trim()
-      : typeof candidateRow?.accountNumber === "string" && candidateRow.accountNumber.trim()
-        ? candidateRow.accountNumber.trim()
-        : typeof candidateRowRawPayload?.accountNumber === "string" && candidateRowRawPayload.accountNumber.trim()
-          ? candidateRowRawPayload.accountNumber.trim()
       : null;
   const hasInferredAccountNumber = Boolean(inferredAccountNumber);
   const supportedImportAccountTypes: AccountType[] = [
@@ -3452,9 +3386,6 @@ const resolveConfirmationAccount = async (params: {
     typeof params.statementMetadata?.accountType === "string" &&
     supportedImportAccountTypes.includes(params.statementMetadata.accountType as AccountType)
       ? (params.statementMetadata.accountType as AccountType)
-      : typeof candidateRowRawPayload?.accountType === "string" &&
-          supportedImportAccountTypes.includes(candidateRowRawPayload.accountType as AccountType)
-        ? (candidateRowRawPayload.accountType as AccountType)
       : null;
   const inferredCurrency = normalizeInstitutionCurrency(
     inferredInstitution,
@@ -3477,8 +3408,6 @@ const resolveConfirmationAccount = async (params: {
   const inferredCreditLimit =
     typeof params.statementMetadata?.creditLimit === "number" && Number.isFinite(params.statementMetadata.creditLimit)
       ? params.statementMetadata.creditLimit
-      : typeof candidateRowRawPayload?.creditLimit === "number" && Number.isFinite(candidateRowRawPayload.creditLimit)
-        ? candidateRowRawPayload.creditLimit
       : null;
   const accountIdentityType: AccountType =
     mobileScreenshotWalletIdentity?.accountType ??
@@ -4015,75 +3944,6 @@ const getMobileScreenshotWalletIdentity = (rawPayload: Prisma.JsonValue | null |
       accountName: "Maya Wallet",
       institution: "Maya",
       accountType: "wallet" as AccountType,
-    };
-  }
-
-  return null;
-};
-
-const inferReceiptInstitutionFallbackHint = (params: {
-  parsedRows: ParsedImportRow[];
-  receiptDetails: Record<string, unknown> | null;
-  receiptAccountMatch: Record<string, unknown> | null;
-}) => {
-  for (const row of params.parsedRows) {
-    const walletIdentity =
-      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-        ? getMobileScreenshotWalletIdentity(row.rawPayload as Prisma.JsonValue)
-        : null;
-    if (walletIdentity) {
-      return {
-        institution: walletIdentity.institution,
-        accountName: walletIdentity.accountName,
-        accountType: walletIdentity.accountType,
-        reason: `Detected ${walletIdentity.institution} screenshot identity from the imported image.`,
-      };
-    }
-  }
-
-  const paymentMethod =
-    typeof params.receiptDetails?.payment_method === "string" && params.receiptDetails.payment_method.trim()
-      ? params.receiptDetails.payment_method.trim()
-      : typeof params.receiptDetails?.paymentChannel === "string" && params.receiptDetails.paymentChannel.trim()
-        ? params.receiptDetails.paymentChannel.trim()
-        : "";
-  if (/gcash/i.test(paymentMethod)) {
-    return {
-      institution: "GCash",
-      accountName: "GCash",
-      accountType: "wallet",
-      reason: "Receipt payment channel was identified as GCash.",
-    };
-  }
-
-  if (/maya/i.test(paymentMethod)) {
-    return {
-      institution: "Maya",
-      accountName: "Maya Wallet",
-      accountType: "wallet",
-      reason: "Receipt payment channel was identified as Maya.",
-    };
-  }
-
-  const matchedAccountName =
-    typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
-      ? params.receiptAccountMatch.account_name.trim()
-      : "";
-  if (/gcash/i.test(matchedAccountName)) {
-    return {
-      institution: "GCash",
-      accountName: "GCash",
-      accountType: "wallet",
-      reason: "Receipt account hint identified GCash.",
-    };
-  }
-
-  if (/maya/i.test(matchedAccountName)) {
-    return {
-      institution: "Maya",
-      accountName: "Maya Wallet",
-      accountType: "wallet",
-      reason: "Receipt account hint identified Maya.",
     };
   }
 
@@ -5038,7 +4898,7 @@ export const processImportFileText = async (
     return {
       imported: 0,
       duplicate: false,
-      metadata: detectStatementMetadataFromText(""),
+      metadata: detectStatementMetadataFromText("", importFile.fileName),
       accountId: typeof importFile.accountId === "string" ? importFile.accountId : null,
       confirmedTransactionsCount: 0,
       insightSummary: undefined,
@@ -5067,7 +4927,7 @@ export const processImportFileText = async (
     return {
       imported: previouslyVisibleRows,
       duplicate: false,
-      metadata: detectStatementMetadataFromText(""),
+      metadata: detectStatementMetadataFromText("", importFile.fileName),
       accountId: typeof importFile.accountId === "string" ? importFile.accountId : null,
       confirmedTransactionsCount: previouslyVisibleRows,
       insightSummary: undefined,
@@ -5148,7 +5008,7 @@ export const processImportFileText = async (
     !textHasMultipleCimbAccountSections || hasMultipleParsedAccountNumbers(cachedParsedRows);
   const freshImageMetadataForCacheGate =
     imageImport && importMode === "statement"
-      ? detectStatementMetadataFromText(normalizeStatementImageOcrText(text))
+      ? detectStatementMetadataFromText(normalizeStatementImageOcrText(text), importFile.fileName)
       : null;
   const cachedMetadataForCacheGate =
     textCacheInfo?.cacheRecord?.metadata &&
@@ -5191,7 +5051,7 @@ export const processImportFileText = async (
   const cachedParseRecord = canReuseCachedStatementParse ? textCacheInfo?.cacheRecord ?? null : null;
   const metadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
     ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
-    : detectStatementMetadataFromText(textForParse);
+    : detectStatementMetadataFromText(textForParse, importFile.fileName);
   const statementFingerprint =
     cachedParseRecord?.statementFingerprint ??
     buildStatementFingerprint(textForParse, metadata, importFile.fileName, importFile.fileType, importMode);
@@ -5609,40 +5469,20 @@ export const processImportFileText = async (
         })
       : null;
   const receiptAccountResolution =
-    importMode === "receipt"
+    importMode === "receipt" && receiptAccountMatch
       ? await (async () => {
           const compatibleAccountColumns = await getCompatibleAccountColumns();
           const workspaceAccounts = await prisma.account.findMany({
             where: { workspaceId: importFile.workspaceId },
             select: getCompatibleAccountSelect(compatibleAccountColumns),
           });
-          const directResolution = receiptAccountMatch
-            ? resolveReceiptAccountHintToAccount(
-                {
-                  accountName: receiptAccountMatch.account_name ?? null,
-                  accountLast4: receiptAccountMatch.account_last4 ?? null,
-                  confidence: receiptAccountMatch.confidence ?? 0,
-                  reason: receiptAccountMatch.reason ?? null,
-                },
-                workspaceAccounts
-              )
-            : null;
-          if (directResolution) {
-            return directResolution;
-          }
-
-          return resolveReceiptInstitutionFallbackToAccount(
-            inferReceiptInstitutionFallbackHint({
-              parsedRows: rows,
-              receiptDetails:
-                receiptDetails && typeof receiptDetails === "object" && !Array.isArray(receiptDetails)
-                  ? (receiptDetails as Record<string, unknown>)
-                  : null,
-              receiptAccountMatch:
-                receiptAccountMatch && typeof receiptAccountMatch === "object" && !Array.isArray(receiptAccountMatch)
-                  ? (receiptAccountMatch as Record<string, unknown>)
-                  : null,
-            }),
+          return resolveReceiptAccountHintToAccount(
+            {
+              accountName: receiptAccountMatch.account_name ?? null,
+              accountLast4: receiptAccountMatch.account_last4 ?? null,
+              confidence: receiptAccountMatch.confidence ?? 0,
+              reason: receiptAccountMatch.reason ?? null,
+            },
             workspaceAccounts
           );
         })()
@@ -6063,25 +5903,13 @@ export const processImportFileText = async (
     usedFastScreenshotParse: imageStatementParseLooksUsable,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
-  const resolvedReceiptAccount =
-    resolvedReceiptAccountId
-      ? await prisma.account.findUnique({
-          where: { id: resolvedReceiptAccountId },
-          select: {
-            id: true,
-            name: true,
-            institution: true,
-            accountNumber: true,
-          },
-        })
-      : null;
   const receiptDocumentCashAccountId =
     importMode === "receipt"
       ? await resolveWorkspaceCashAccountId(String(importFile.workspaceId), resolvedMetadata.currency ?? "PHP")
       : null;
   const documentImportAccountId =
     importMode === "receipt"
-      ? resolvedReceiptAccount?.id ?? receiptDocumentCashAccountId
+      ? receiptDocumentCashAccountId
       : receiptPreviewLooksLikeReceipt
         ? importFile.account?.id ?? resolvedReceiptAccountId
         : importFile.account?.id ?? null;
@@ -6126,9 +5954,9 @@ export const processImportFileText = async (
             : importMode === "notes"
               ? "notes"
               : "statement",
-    institution: importMode === "receipt" ? resolvedReceiptAccount?.institution ?? null : resolvedMetadata.institution ?? null,
-    accountName: importMode === "receipt" ? resolvedReceiptAccount?.name ?? "Cash" : resolvedMetadata.accountName ?? null,
-    accountNumber: importMode === "receipt" ? resolvedReceiptAccount?.accountNumber ?? null : resolvedMetadata.accountNumber ?? null,
+    institution: importMode === "receipt" ? null : resolvedMetadata.institution ?? null,
+    accountName: importMode === "receipt" ? "Cash" : resolvedMetadata.accountName ?? null,
+    accountNumber: importMode === "receipt" ? null : resolvedMetadata.accountNumber ?? null,
     currency: resolvedMetadata.currency ?? null,
     pageCount: pageImages?.length ?? 0,
     confidence: resolvedMetadata.confidence ?? 0,
@@ -7092,7 +6920,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           : receiptPayloadSource?.receiptAccountMatch && typeof receiptPayloadSource.receiptAccountMatch === "object" && !Array.isArray(receiptPayloadSource.receiptAccountMatch)
             ? (receiptPayloadSource.receiptAccountMatch as Record<string, unknown>)
             : null;
-      const targetAccountId =
+      const cashAccountId =
         receiptDocument?.accountId ??
         (documentImport?.accountId && !String(documentImport.accountId).startsWith("optimistic-") ? documentImport.accountId : null) ??
         (await resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency));
@@ -7163,12 +6991,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           }
         | null = null;
 
-      if (!createdTransactionId && targetAccountId && receiptAmount !== null && receiptDate) {
+      if (!createdTransactionId && cashAccountId && receiptAmount !== null && receiptDate) {
         existingReceiptTransaction = await prisma.transaction.findFirst({
           where: {
             importFileId,
+            accountId: cashAccountId,
           },
-          select: { id: true, accountId: true, normalizedPayload: true },
+          select: { id: true, normalizedPayload: true },
         }).catch(() => null);
 
         if (existingReceiptTransaction?.id) {
@@ -7176,7 +7005,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         } else {
           const insertedTransaction = await insertTransactionCompat({
             workspaceId: String(importFile.workspaceId),
-            accountId: targetAccountId,
+            accountId: cashAccountId,
             importFileId,
             categoryId: receiptCategoryId,
             categoryName: receiptCategoryName,
@@ -7270,7 +7099,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         await prisma.transaction.update({
           where: { id: createdTransactionId },
           data: {
-            accountId: targetAccountId ?? existingReceiptTransaction?.accountId ?? undefined,
             categoryId: receiptCategoryId,
             categoryConfidence: 95,
             normalizedPayload: {
@@ -7380,7 +7208,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       return {
         imported: createdTransactionId ? 1 : 0,
         duplicate: false,
-        metadata: detectStatementMetadataFromText(""),
+        metadata: detectStatementMetadataFromText("", importFile.fileName),
         accountId: cashAccountId ?? documentImport?.accountId ?? accountId ?? null,
         confirmedTransactionsCount: createdTransactionId ? 1 : 0,
         insightSummary: null,
@@ -7425,7 +7253,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     return {
       imported: 0,
       duplicate: false,
-      metadata: detectStatementMetadataFromText(""),
+      metadata: detectStatementMetadataFromText("", importFile.fileName),
       accountId: accountId ?? null,
       confirmedTransactionsCount: 0,
       insightSummary: null,
@@ -7482,7 +7310,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     return {
       imported: 0,
       duplicate: false,
-      metadata: detectStatementMetadataFromText(""),
+      metadata: detectStatementMetadataFromText("", importFile.fileName),
       accountId: accountId ?? null,
       confirmedTransactionsCount: 0,
       insightSummary: null,

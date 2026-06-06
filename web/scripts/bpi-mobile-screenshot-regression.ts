@@ -136,8 +136,11 @@ More`,
 ] as const;
 
 for (const sample of samples) {
-  const metadata = detectStatementMetadata(sample.text);
+  const metadata = detectStatementMetadata(sample.text, sample.fileName);
   assert.equal(metadata?.institution, "BPI", `${sample.fileName} should detect BPI metadata.`);
+  if (sample.fileName === "IMG_1369.PNG") {
+    assert.equal(metadata?.accountNumber, "0299183012", "IMG_1369.PNG metadata should recover the hidden account number.");
+  }
 
   const rows = parseImportText(sample.text, sample.fileName, "image/png", { institution: "BPI" });
   assert.equal(rows.length, sample.expectedRows, `${sample.fileName} row count mismatch.`);

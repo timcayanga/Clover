@@ -45,7 +45,6 @@ import {
   type ImportActivitySnapshot,
   type ImportActivityStatus,
 } from "@/lib/import-activity";
-import { publishImportedSummary } from "@/lib/imported-summary-events";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import type { AccountType } from "@/lib/domain-types";
 
@@ -92,7 +91,6 @@ type StatementIdentity = {
   institution: string | null;
   accountNumber: string | null;
   accountType: UploadAccountType;
-  currency?: string | null;
 };
 
 type QueuedFile = {
@@ -365,20 +363,12 @@ const canonicalizeSecurityBankUploadIdentity = (params: {
 const accountRuleKey = (name: string, institution: string | null) =>
   `${(institution ?? "").trim().toLowerCase()}::${extractLastFourDigits(name) ?? name.trim().toLowerCase()}`;
 
-const importedAccountIdentityKey = (
-  name: string | null,
-  institution: string | null,
-  accountNumber?: string | null,
-  accountType?: string | null,
-  currency?: string | null
-) =>
-  normalizeImportedAccountKey(
-    normalizeStatementAccountName(name ?? "", institution),
-    institution ?? null,
-    accountNumber ?? null,
-    accountType ?? null,
-    currency ?? null
-  );
+const importedAccountIdentityKey = (name: string | null, institution: string | null, accountNumber?: string | null) =>
+  `${normalizeStatementAccountName(name ?? "", institution).toLowerCase()}::${(institution ?? "").trim().toLowerCase()}::${(
+    accountNumber ?? ""
+  )
+    .replace(/\D/g, "")
+    .slice(-4)}`;
 
 const findKnownImportedBalance = (
   accounts: AccountOption[],
@@ -404,13 +394,7 @@ const findKnownImportedBalance = (
       )
     : null;
   const targetIdentityKey = normalizedName
-    ? importedAccountIdentityKey(
-        normalizedName,
-        params.institution ?? null,
-        params.accountNumber ?? null,
-        params.accountType ?? null,
-        null
-      )
+    ? importedAccountIdentityKey(normalizedName, params.institution ?? null, params.accountNumber ?? null)
     : null;
   const targetInstitution = (params.institution ?? "").trim().toLowerCase();
   const targetLastFour = extractLastFourDigits(params.accountNumber ?? normalizedName ?? null);
@@ -423,9 +407,7 @@ const findKnownImportedBalance = (
     const accountIdentityKey = importedAccountIdentityKey(
       typeof account.name === "string" ? account.name : null,
       typeof account.institution === "string" ? account.institution : null,
-      typeof account.accountNumber === "string" ? account.accountNumber : null,
-      typeof account.type === "string" ? account.type : null,
-      typeof account.currency === "string" ? account.currency : null
+      typeof account.accountNumber === "string" ? account.accountNumber : null
     );
     if (targetIdentityKey && accountIdentityKey === targetIdentityKey) {
       return true;
@@ -457,7 +439,6 @@ const getKnownPreviewTransactions = (params: {
   institution?: string | null;
   accountNumber?: string | null;
   accountType?: UploadAccountType;
-  currency?: string | null;
   previewTransactions?: NonNullable<UploadInsightsSummary["previewTransactions"]>;
 }) => {
   if (Array.isArray(params.previewTransactions) && params.previewTransactions.length > 0) {
@@ -475,7 +456,7 @@ const getKnownPreviewTransactions = (params: {
     institution: params.institution ?? null,
     accountNumber: params.accountNumber ?? null,
     type: params.accountType ?? null,
-    currency: params.currency ?? null,
+    currency: params.previewTransactions?.[0]?.currency ?? null,
   });
 
   if (!cached || !Array.isArray(cached.transactions) || cached.transactions.length === 0) {
@@ -612,17 +593,7 @@ const normalizeServerAccountSummaries = (value: unknown): NonNullable<UploadInsi
 
       return {
         accountId,
-        accountName:
-          typeof record.accountName === "string" && record.accountName.trim()
-            ? formatUploadAccountDisplayName(
-                record.accountName.trim(),
-                typeof record.institution === "string" && record.institution.trim() ? record.institution.trim() : null,
-                typeof record.accountNumber === "string" && record.accountNumber.trim() ? record.accountNumber.trim() : null,
-                typeof record.accountType === "string" && record.accountType.trim()
-                  ? (record.accountType as UploadInsightsSummary["accountType"])
-                  : null
-              )
-            : null,
+        accountName: typeof record.accountName === "string" && record.accountName.trim() ? record.accountName.trim() : null,
         institution: typeof record.institution === "string" && record.institution.trim() ? record.institution.trim() : null,
         accountNumber: typeof record.accountNumber === "string" && record.accountNumber.trim() ? record.accountNumber.trim() : null,
         accountType:
@@ -799,22 +770,8 @@ const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsight
       return (
         entryId === importedAccount.id ||
         optimisticId === importedAccount.id ||
-        importedAccountIdentityKey(
-          entryName,
-          entryInstitution,
-          entryAccountNumber,
-          typeof (entry as { type?: unknown }).type === "string" ? ((entry as { type?: string }).type ?? null) : null,
-          typeof (entry as { currency?: unknown }).currency === "string"
-            ? ((entry as { currency?: string }).currency ?? null)
-            : null
-        ) ===
-          importedAccountIdentityKey(
-            importedName,
-            summary.institution ?? null,
-            summary.accountNumber ?? null,
-            summary.accountType ?? null,
-            summary.previewTransactions?.[0]?.currency ?? null
-          )
+        importedAccountIdentityKey(entryName, entryInstitution, entryAccountNumber) ===
+          importedAccountIdentityKey(importedName, summary.institution ?? null, summary.accountNumber ?? null)
       );
     });
 
@@ -835,8 +792,6 @@ const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsight
   if (Array.isArray(summary.previewTransactions) && summary.previewTransactions.length > 0) {
     syncImportedWorkspaceTransactionCaches(workspaceId, summary.previewTransactions);
   }
-
-  publishImportedSummary(workspaceId, summary);
 };
 
 const waitForImportSettledVisibility = async (params: {
@@ -1625,40 +1580,6 @@ const isGenericMobileScreenshotFileName = (fileName: string) => {
   return /^(?:img|screenshot|screen\s*shot|photo|image)[_\s-]?\d{3,8}(?:\s*\(\d+\))?\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(normalized);
 };
 
-const isGenericMobileScreenshotIdentityLabel = (value?: string | null) => {
-  const normalized = String(value ?? "").trim().replace(/^.*[\\/]/, "");
-  if (!normalized) {
-    return false;
-  }
-
-  return /^(?:img|screenshot|screen\s*shot|photo|image)[_\s-]?\d{3,8}(?:\s*\(\d+\))?(?:\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif))?$/i.test(
-    normalized
-  );
-};
-
-const sanitizeMobileScreenshotIdentity = (identity: StatementIdentity | null): StatementIdentity | null => {
-  if (!identity) {
-    return null;
-  }
-
-  const accountName = isGenericMobileScreenshotIdentityLabel(identity.accountName) ? null : identity.accountName;
-  const institution = isGenericMobileScreenshotIdentityLabel(identity.institution) ? null : identity.institution;
-  if (!accountName && !institution && !identity.accountNumber) {
-    return {
-      ...identity,
-      accountName: null,
-      institution: null,
-      accountNumber: identity.accountNumber ?? null,
-    };
-  }
-
-  return {
-    ...identity,
-    accountName,
-    institution,
-  };
-};
-
 const isFilenameOnlyScreenshotSummary = (
   fileName: string,
   summary: UploadInsightsSummary | null | undefined
@@ -1674,8 +1595,56 @@ const isFilenameOnlyScreenshotSummary = (
   return Boolean(accountName && accountName === fallbackName && !institution && !accountNumber);
 };
 
+const readParsedRowString = (row: Record<string, unknown>, key: string) => {
+  const direct = row[key];
+  if (typeof direct === "string" && direct.trim()) {
+    return direct.trim();
+  }
+
+  const rawPayload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const payloadValue = rawPayload?.[key];
+  return typeof payloadValue === "string" && payloadValue.trim() ? payloadValue.trim() : null;
+};
+
+const resolveStatementIdentityFromParsedRows = (rows: Array<Record<string, unknown>>) => {
+  for (const row of rows) {
+    const accountName = readParsedRowString(row, "accountName");
+    const institution = readParsedRowString(row, "institution");
+    const accountNumber = readParsedRowString(row, "accountNumber");
+    if (accountName || institution || accountNumber) {
+      return {
+        accountName,
+        institution,
+        accountNumber,
+      };
+    }
+  }
+
+  return null;
+};
+
+const countDistinctStatementAccountsFromParsedRows = (rows: Array<Record<string, unknown>>) => {
+  const keys = new Set<string>();
+  for (const row of rows) {
+    const accountNumber = readParsedRowString(row, "accountNumber");
+    const institution = readParsedRowString(row, "institution") ?? "";
+    const accountName = readParsedRowString(row, "accountName") ?? "";
+    if (accountNumber) {
+      keys.add(`number:${accountNumber.replace(/\D/g, "")}`);
+      continue;
+    }
+    if (institution || accountName) {
+      keys.add(`name:${institution.toLowerCase()}::${accountName.toLowerCase()}`);
+    }
+  }
+
+  return keys.size;
+};
+
 const resolveMobileWalletIdentityFromParsedRows = (rows: Array<Record<string, unknown>>) => {
-  const wiseCurrencies = new Set<string>();
   for (const row of rows) {
     const rawPayload =
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
@@ -1702,81 +1671,6 @@ const resolveMobileWalletIdentityFromParsedRows = (rows: Array<Record<string, un
         institution: "GCash",
         accountType: "wallet" as const,
         accountNumber: null,
-      };
-    }
-
-    if (/wise/i.test(identityText) && /wise_mobile_screenshot|mobile_screenshot|wallet_screenshot/i.test(identityText)) {
-      const currency = typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : null;
-      if (currency) {
-        wiseCurrencies.add(currency);
-      }
-    }
-  }
-
-  if (wiseCurrencies.size === 1) {
-    return {
-      accountName: "Wise",
-      institution: "Wise",
-      accountType: "wallet" as const,
-      accountNumber: null,
-      currency: Array.from(wiseCurrencies)[0] ?? null,
-    };
-  }
-
-  return null;
-};
-
-const resolveStatementIdentityFromParsedRows = (rows: Array<Record<string, unknown>>) => {
-  const walletIdentity = resolveMobileWalletIdentityFromParsedRows(rows);
-  if (walletIdentity) {
-    return walletIdentity;
-  }
-
-  for (const row of rows) {
-    if (!row || typeof row !== "object" || Array.isArray(row)) {
-      continue;
-    }
-
-    const rawPayload =
-      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-        ? (row.rawPayload as Record<string, unknown>)
-        : null;
-    const accountName = typeof row.accountName === "string" && row.accountName.trim()
-      ? row.accountName.trim()
-      : typeof rawPayload?.accountName === "string" && rawPayload.accountName.trim()
-        ? rawPayload.accountName.trim()
-        : null;
-    const institution = typeof row.institution === "string" && row.institution.trim()
-      ? row.institution.trim()
-      : typeof rawPayload?.institution === "string" && rawPayload.institution.trim()
-        ? rawPayload.institution.trim()
-        : typeof rawPayload?.bank === "string" && rawPayload.bank.trim()
-          ? rawPayload.bank.trim()
-          : null;
-    const accountNumber = typeof row.accountNumber === "string" && row.accountNumber.trim()
-      ? row.accountNumber.trim()
-      : typeof rawPayload?.accountNumber === "string" && rawPayload.accountNumber.trim()
-        ? rawPayload.accountNumber.trim()
-        : null;
-    const rawAccountType = typeof rawPayload?.accountType === "string" ? rawPayload.accountType.trim() : "";
-    const accountType =
-      rawAccountType === "bank" ||
-      rawAccountType === "wallet" ||
-      rawAccountType === "credit_card" ||
-      rawAccountType === "cash" ||
-      rawAccountType === "investment" ||
-      rawAccountType === "other"
-        ? (rawAccountType as UploadAccountType)
-        : inferAccountTypeFromStatement(institution, accountName, "bank");
-    const currency = typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : null;
-
-    if (accountName || institution || accountNumber) {
-      return {
-        accountName,
-        institution,
-        accountNumber,
-        accountType,
-        currency,
       };
     }
   }
@@ -3760,8 +3654,8 @@ export function ImportFilesModal({
           statementCheckpoint?.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object"
             ? (statementCheckpoint.sourceMetadata as Record<string, unknown>)
             : null;
-        const checkpointIdentity = sanitizeMobileScreenshotIdentity(resolveStatementIdentityFromMetadata(statementMetadata));
-        const processingIdentity = sanitizeMobileScreenshotIdentity(
+        const checkpointIdentity = resolveStatementIdentityFromMetadata(statementMetadata);
+        const processingIdentity =
           (primaryStatusAccountSummary
             ? {
                 accountName: primaryStatusAccountSummary.accountName,
@@ -3800,8 +3694,7 @@ export function ImportFilesModal({
                   summaryContext.accountType ??
                   inferAccountTypeFromStatement(summaryContext.institution, summaryContext.accountName, "bank"),
               }
-            : null)
-        );
+            : null);
         const resolvedAccountDisplayName = formatUploadAccountDisplayName(
           processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName,
           processingIdentity?.institution ?? summaryContext.institution ?? null,
@@ -4076,7 +3969,6 @@ export function ImportFilesModal({
                   Boolean(row && typeof row === "object" && !Array.isArray(row))
                 )
               : [];
-            const mobileWalletIdentity = resolveMobileWalletIdentityFromParsedRows(parsedRows);
             const identityRow =
               parsedRows.find(
                 (row: Record<string, unknown>) =>
@@ -4086,64 +3978,33 @@ export function ImportFilesModal({
                   row.institution.trim()
               ) ?? parsedRows[0] ?? null;
             const previewAccountName =
-              mobileWalletIdentity?.accountName ??
-              (typeof identityRow?.accountName === "string" &&
-              identityRow.accountName.trim() &&
-              !isGenericMobileScreenshotIdentityLabel(identityRow.accountName)
+              typeof identityRow?.accountName === "string" && identityRow.accountName.trim()
                 ? identityRow.accountName.trim()
-                : null);
+                : null;
             const previewInstitution =
-              mobileWalletIdentity?.institution ??
-              (typeof identityRow?.institution === "string" &&
-              identityRow.institution.trim() &&
-              !isGenericMobileScreenshotIdentityLabel(identityRow.institution)
+              typeof identityRow?.institution === "string" && identityRow.institution.trim()
                 ? identityRow.institution.trim()
-                : null);
+                : null;
             const previewAccountNumber =
-              mobileWalletIdentity?.accountNumber ??
-              (typeof identityRow?.accountNumber === "string" && identityRow.accountNumber.trim()
+              typeof identityRow?.accountNumber === "string" && identityRow.accountNumber.trim()
                 ? identityRow.accountNumber.trim()
-                : null);
+                : null;
             const previewAccountType =
-              mobileWalletIdentity?.accountType ??
-              (typeof identityRow?.accountType === "string" &&
+              typeof identityRow?.accountType === "string" &&
               ["bank", "wallet", "credit_card", "cash", "investment", "other"].includes(identityRow.accountType)
                 ? (identityRow.accountType as UploadInsightsSummary["accountType"])
-                : /^(?:GCash|Maya|Wise)$/i.test(previewInstitution ?? "")
+                : /^(?:GCash|Maya)$/i.test(previewInstitution ?? "")
                   ? "wallet"
-                  : summaryContext.accountType ?? null);
-            const previewAccountCurrency =
-              mobileWalletIdentity?.currency ??
-              (typeof identityRow?.currency === "string" && identityRow.currency.trim() ? identityRow.currency.trim().toUpperCase() : null);
-            const wisePreviewCurrencies = Array.from(
-              new Set(
-                parsedRows
-                  .map((row) => {
-                    const rawPayload =
-                      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-                        ? (row.rawPayload as Record<string, unknown>)
-                        : null;
-                    const currency =
-                      (typeof rawPayload?.accountCurrency === "string" && rawPayload.accountCurrency.trim()
-                        ? rawPayload.accountCurrency.trim().toUpperCase()
-                        : null) ??
-                      (typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : null);
-                    return /wise/i.test(`${row.institution ?? ""} ${row.accountName ?? ""} ${rawPayload?.institutionRaw ?? ""} ${rawPayload?.bank ?? ""}`)
-                      ? currency
-                      : null;
-                  })
-                  .filter((value): value is string => Boolean(value))
-              )
-            );
+                  : summaryContext.accountType ?? null;
 
-            if ((previewAccountName || previewInstitution || previewAccountNumber) && !(previewInstitution === "Wise" && wisePreviewCurrencies.length > 1)) {
+            if (previewAccountName || previewInstitution || previewAccountNumber) {
               const previewAccountId = await ensureTargetAccountId(
                 previewAccountName,
                 previewInstitution,
                 previewAccountType,
                 previewAccountNumber,
                 stableOptimisticBalance,
-                previewAccountCurrency
+                null
               );
               const previewTransactions = previewAccountId
                 ? buildOptimisticPreviewTransactions(parsedRows, {
@@ -5380,9 +5241,7 @@ export function ImportFilesModal({
   const resolveLocalAccountId = (
     statementAccountName: string | null,
     institution: string | null,
-    accountNumber: string | null,
-    accountCurrency?: string | null,
-    accountType?: UploadAccountType
+    accountNumber: string | null
   ) => {
     if (statementAccountName) {
       const normalizedStatementAccountName = normalizeStatementAccountName(statementAccountName, institution);
@@ -5390,8 +5249,8 @@ export function ImportFilesModal({
         normalizedStatementAccountName,
         institution ?? null,
         accountNumber ?? null,
-        accountCurrency ?? null,
-        accountType ?? null
+        null,
+        null
       );
       const persistedExisting =
         accounts.find(
@@ -5492,7 +5351,7 @@ export function ImportFilesModal({
         return;
       }
 
-      const localMetadata = detectStatementMetadata(text);
+      const localMetadata = detectStatementMetadata(text, item.file.name);
       const guessedIdentity = guessStatementIdentity(item.file.name);
       if (itemImportMode !== "statement") {
         return;
@@ -5502,28 +5361,41 @@ export function ImportFilesModal({
         accountName: localMetadata?.accountName ?? guessedIdentity?.accountName ?? null,
         accountNumber: localMetadata?.accountNumber ?? guessedIdentity?.accountNumber ?? null,
       });
+      const mobileWalletIdentity = resolveMobileWalletIdentityFromParsedRows(parsedRows as Array<Record<string, unknown>>);
       const parsedRowIdentity = resolveStatementIdentityFromParsedRows(parsedRows as Array<Record<string, unknown>>);
+      const parsedAccountGroupCount = countDistinctStatementAccountsFromParsedRows(parsedRows as Array<Record<string, unknown>>);
 
       if (!localMetadata && parsedRows.length === 0) {
         return;
       }
 
       const accountName =
-        parsedRowIdentity?.accountName ??
+        mobileWalletIdentity?.accountName ??
         localMetadata?.accountName ??
+        parsedRowIdentity?.accountName ??
         guessedIdentity?.accountName ??
-        deriveFallbackAccountNameFromFileName(item.file.name);
-      const institution = parsedRowIdentity?.institution ?? localMetadata?.institution ?? guessedIdentity?.institution ?? null;
-      const accountNumber = parsedRowIdentity?.accountNumber ?? localMetadata?.accountNumber ?? guessedIdentity?.accountNumber ?? null;
+        (isGenericMobileScreenshotFileName(item.file.name) ? null : deriveFallbackAccountNameFromFileName(item.file.name));
+      const institution =
+        mobileWalletIdentity?.institution ?? localMetadata?.institution ?? parsedRowIdentity?.institution ?? guessedIdentity?.institution ?? null;
+      const accountNumber =
+        mobileWalletIdentity?.accountNumber ?? localMetadata?.accountNumber ?? parsedRowIdentity?.accountNumber ?? guessedIdentity?.accountNumber ?? null;
       if (/^UCPB$/i.test(institution ?? "") && !accountNumber) {
         return;
       }
       if (!accountName && !institution && parsedRows.length === 0) {
         return;
       }
-      const accountType = (parsedRowIdentity?.accountType ?? localMetadata?.accountType ??
+      if (!mobileWalletIdentity && parsedAccountGroupCount > 1) {
+        updateItem(itemId, {
+          importFileId: item.importFileId ?? item.id,
+          importedRows: parsedRows.length,
+          progressLabel: "Preview ready",
+        });
+        return;
+      }
+      const accountType = (mobileWalletIdentity?.accountType ?? localMetadata?.accountType ??
         inferAccountTypeFromStatement(institution, accountName, "bank")) as UploadInsightsSummary["accountType"];
-      const endingBalance = parsedRowIdentity?.accountType === "wallet"
+      const endingBalance = mobileWalletIdentity
         ? null
         : toBalanceString(localMetadata?.endingBalance ?? getTrailingBalanceFromParsedRows(parsedRows) ?? null);
 
@@ -5532,13 +5404,7 @@ export function ImportFilesModal({
         return;
       }
 
-      const resolvedAccountId = resolveLocalAccountId(
-        accountName,
-        institution,
-        accountNumber,
-        parsedRowIdentity?.currency ?? null,
-        accountType
-      );
+      const resolvedAccountId = resolveLocalAccountId(accountName, institution, accountNumber);
       const optimisticAccountId = resolvedAccountId.startsWith("optimistic-") ? resolvedAccountId : null;
       const localImportFileId = item.importFileId ?? item.id;
 
@@ -5556,6 +5422,7 @@ export function ImportFilesModal({
           accountId: resolvedAccountId,
           accountName,
           institution,
+          accountNumber,
         }),
         accountNumber,
         true
@@ -5571,13 +5438,6 @@ export function ImportFilesModal({
         progressLabel: parsedRows.length > 0 ? "Preview ready" : "Reading locally",
       });
       window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
-
-      // Local statement preparse is only a UI preview. Persisting an account
-      // before the real import succeeds can create orphan account cards when
-      // the browser preview completes but the server import never lands.
-      if (itemImportMode === "statement") {
-        return;
-      }
 
       if (accountName || institution || accountNumber) {
         void ensureTargetAccountId(
@@ -6419,30 +6279,6 @@ export function ImportFilesModal({
           progress: 100,
           progressLabel: importedLabel,
         });
-        const completedReceiptSummary =
-          itemImportMode === "receipt"
-            ? processPayload?.receiptTransaction
-              ? buildReceiptSummaryFromReceiptTransaction({
-                  fileName: item.file.name,
-                  importFileId,
-                  receiptTransaction: processPayload.receiptTransaction,
-                  accountType: null,
-                })
-              : processPayload?.receiptDocument
-                ? buildReceiptSummaryFromReceiptDocument({
-                    fileName: item.file.name,
-                    importFileId,
-                    receiptDocument: processPayload.receiptDocument,
-                    accountId: typeof processPayload.accountId === "string" ? processPayload.accountId : null,
-                    accountType: null,
-                    previewAccountName: null,
-                  })
-                : null
-            : null;
-        if (completedReceiptSummary) {
-          seedImportedWorkspaceCaches(workspaceId, completedReceiptSummary);
-          await Promise.resolve(onImported(completedReceiptSummary));
-        }
         publishImportActivity({
           workspaceId,
           surface: importActivitySurfaceRef.current,
@@ -6453,7 +6289,7 @@ export function ImportFilesModal({
           completedFiles: completedFileCount + 1,
           progress: 100,
           detail: importedLabel,
-          summary: completedReceiptSummary,
+          summary: null,
           errorMessage: null,
         });
         setMessage(`Imported ${item.file.name}.`);

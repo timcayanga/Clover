@@ -1031,8 +1031,8 @@ const extractTrailingMoneyFromText = (text: string) => {
   return values.at(-1) ?? null;
 };
 
-export const detectStatementMetadataFromText = (text: string): StatementMetadataSnapshot => {
-  const metadata = detectStatementMetadata(text);
+export const detectStatementMetadataFromText = (text: string, fileName = ""): StatementMetadataSnapshot => {
+  const metadata = detectStatementMetadata(text, fileName);
   const institution = sanitizeBankNameLabel(metadata?.institution ?? detectInstitutionFromText(text));
   const normalizedText = normalizeWhitespace(text);
   const cimbAccountNumbers =
