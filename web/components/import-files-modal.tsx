@@ -1921,8 +1921,13 @@ const hasVisibleImportData = (
   const localPreviewRows = Array.isArray(summary?.previewTransactions)
     ? summary.previewTransactions.length
     : 0;
-  const localHasRows = Math.max(localRows, localPreviewRows) > 0 && Boolean(summary?.accountId);
+  const localSummaryIsServerBacked = summary?.optimistic !== true;
+  const localHasRows =
+    localSummaryIsServerBacked &&
+    Math.max(localRows, localPreviewRows) > 0 &&
+    Boolean(summary?.accountId);
   const localHasAccountDetails =
+    localSummaryIsServerBacked &&
     Boolean(summary?.accountId) &&
     Boolean(summary?.accountName || summary?.accountNumber || summary?.balance);
   const itemHasRows = item.importedRows !== null && item.importedRows > 0 && Boolean(item.targetAccountId);
@@ -8032,8 +8037,6 @@ export function ImportFilesModal({
       );
     });
 
-    const canContinueBatchInBackground = itemsToProcess.length <= 1;
-
     if (hasBrowserParsableStatements) {
       for (const item of itemsToProcess) {
         if (shouldSkipClientStatementPreparse(item.file.name)) {
@@ -8042,47 +8045,11 @@ export function ImportFilesModal({
         void preparsePendingItemLocally(item.id);
       }
 
-      const preUploadVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(3_000, 1_200 + items.length * 450));
-      if (
-        canContinueBatchInBackground &&
-        preUploadVisibilityReady &&
-        !uploadPausedRef.current &&
-        !uploadCancelRequestedRef.current
-      ) {
-        void processItemsForBatch(itemsToProcess).finally(() => {
-          router.refresh();
-        });
-        setBusy(false);
-        visibilityDeadlineRef.current = null;
-        if (visibilityHardStopTimerRef.current) {
-          window.clearTimeout(visibilityHardStopTimerRef.current);
-          visibilityHardStopTimerRef.current = null;
-        }
-        return;
-      }
+      await waitForLocalPrimaryVisibility(Math.min(3_000, 1_200 + items.length * 450));
     }
 
     const processResultsPromise = processItemsForBatch(itemsToProcess);
-    const localVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
-
-    if (
-      canContinueBatchInBackground &&
-      localVisibilityReady &&
-      itemsToProcess.length > 0 &&
-      !uploadPausedRef.current &&
-      !uploadCancelRequestedRef.current
-    ) {
-      void processResultsPromise.finally(() => {
-        router.refresh();
-      });
-      setBusy(false);
-      visibilityDeadlineRef.current = null;
-      if (visibilityHardStopTimerRef.current) {
-        window.clearTimeout(visibilityHardStopTimerRef.current);
-        visibilityHardStopTimerRef.current = null;
-      }
-      return;
-    }
+    await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
 
     const processResults = await processResultsPromise;
 
