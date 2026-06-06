@@ -2,13 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { formatCurrencyAmount } from "@/lib/currency-format";
-import type {
-  AdminUserDetail,
-  AdminUserListItem,
-  AdminUserListResponse,
-  AdminUserOverview,
-  AdminUserUpdateInput,
-} from "@/lib/admin-users";
+import type { AdminUserListItem, AdminUserListResponse, AdminUserOverview, AdminUserUpdateInput } from "@/lib/admin-users";
 import type { AdminErrorLogListResponse } from "@/lib/admin-error-logs";
 
 type AdminUserDraft = {
@@ -19,15 +13,11 @@ type AdminUserDraft = {
   accountLimit: string;
   monthlyUploadLimit: string;
   transactionLimit: string;
-  financialExperience: "beginner" | "comfortable" | "advanced" | "";
-  primaryGoal: string;
-  goalTargetAmount: string;
-  goalTargetSource: string;
-  onboardingCompletedAt: string;
-  dataWipedAt: string;
 };
 
 type DraftMap = Record<string, AdminUserDraft>;
+
+const USERS_PAGE_SIZE = 100;
 
 const EMPTY_DRAFT: AdminUserDraft = {
   firstName: "",
@@ -37,12 +27,6 @@ const EMPTY_DRAFT: AdminUserDraft = {
   accountLimit: "",
   monthlyUploadLimit: "",
   transactionLimit: "",
-  financialExperience: "",
-  primaryGoal: "",
-  goalTargetAmount: "",
-  goalTargetSource: "",
-  onboardingCompletedAt: "",
-  dataWipedAt: "",
 };
 
 const EMPTY_OVERVIEW: AdminUserOverview = {
@@ -80,12 +64,6 @@ const initialDraft = (user: AdminUserListItem): AdminUserDraft => ({
   accountLimit: limitToDraftValue(user.accountLimit),
   monthlyUploadLimit: limitToDraftValue(user.monthlyUploadLimit),
   transactionLimit: limitToDraftValue(user.transactionLimit),
-  financialExperience: user.financialExperience ?? "",
-  primaryGoal: user.primaryGoal ?? "",
-  goalTargetAmount: user.goalTargetAmount ?? "",
-  goalTargetSource: user.goalTargetSource ?? "",
-  onboardingCompletedAt: toDatetimeLocalValue(user.onboardingCompletedAt),
-  dataWipedAt: toDatetimeLocalValue(user.dataWipedAt),
 });
 
 export type AdminUsersConsoleProps = {
@@ -96,58 +74,11 @@ export type AdminUsersConsoleProps = {
 const emptyResponse = (): AdminUserListResponse => ({
   users: [],
   page: 1,
-  pageSize: 25,
+  pageSize: USERS_PAGE_SIZE,
   totalCount: 0,
   totalPages: 1,
   overview: EMPTY_OVERVIEW,
 });
-
-const emptyDetail = (): AdminUserDetail => ({
-  id: "",
-  clerkUserId: "",
-  email: "",
-  fullName: "",
-  planTier: "free",
-  planTierLocked: false,
-  planLabel: "Free",
-  verified: false,
-  workspaceCount: 0,
-  bankAccountCount: 0,
-  transactionCount: 0,
-  activeAccountCount: 0,
-  investmentAccountCount: 0,
-  investmentValue: "0",
-  transactionVolume: "0",
-  monthlyUploads: 0,
-  renewalAt: null,
-  createdAt: "",
-  updatedAt: "",
-  lastActivityAt: null,
-  recentErrorCount: 0,
-  attentionLevel: "low",
-  attentionFlags: [],
-  recentTransactions: [],
-  recentImports: [],
-  recentGoals: [],
-  recentErrors: [],
-  recentAuditLogs: [],
-  workspaces: [],
-});
-
-function toDatetimeLocalValue(value: string | null) {
-  if (!value) {
-    return "";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const offsetMinutes = date.getTimezoneOffset();
-  const adjusted = new Date(date.getTime() - offsetMinutes * 60_000);
-  return adjusted.toISOString().slice(0, 16);
-}
 
 function formatDate(value: string | null) {
   if (!value) {
@@ -158,31 +89,6 @@ function formatDate(value: string | null) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function formatPlanDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-PH", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function formatLimitDisplay(value: number | null) {
-  return value === null ? "Unlimited" : value.toLocaleString();
-}
-
-function parseLimitInput(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const parsed = Number(trimmed);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
 function formatMoney(value: string | null) {
@@ -210,20 +116,14 @@ function formatTrendValue(current: number, previous: number) {
   return `${delta > 0 ? "+" : ""}${percent}% ${direction}`;
 }
 
-function attentionTone(level: "low" | "medium" | "high") {
-  if (level === "high") {
-    return "admin-users__pill--warn";
+function parseLimitInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
   }
 
-  if (level === "medium") {
-    return "admin-users__pill--sync";
-  }
-
-  return "admin-users__pill--success";
-}
-
-function normalizeDraft(user: AdminUserListItem): AdminUserDraft {
-  return initialDraft(user);
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
 function isDirty(user: AdminUserListItem, draft: AdminUserDraft) {
@@ -234,14 +134,26 @@ function isDirty(user: AdminUserListItem, draft: AdminUserDraft) {
     draft.planTier !== user.planTier ||
     draft.accountLimit.trim() !== limitToDraftValue(user.accountLimit) ||
     draft.monthlyUploadLimit.trim() !== limitToDraftValue(user.monthlyUploadLimit) ||
-    draft.transactionLimit.trim() !== limitToDraftValue(user.transactionLimit) ||
-    draft.financialExperience !== (user.financialExperience ?? "") ||
-    draft.primaryGoal.trim() !== (user.primaryGoal ?? "") ||
-    draft.goalTargetAmount.trim() !== (user.goalTargetAmount ?? "") ||
-    draft.goalTargetSource.trim() !== (user.goalTargetSource ?? "") ||
-    draft.onboardingCompletedAt !== toDatetimeLocalValue(user.onboardingCompletedAt) ||
-    draft.dataWipedAt !== toDatetimeLocalValue(user.dataWipedAt)
+    draft.transactionLimit.trim() !== limitToDraftValue(user.transactionLimit)
   );
+}
+
+async function patchUser(userId: string, payload: AdminUserUpdateInput) {
+  const response = await fetch(`/api/admin/users/${userId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const result = (await response.json()) as { user?: AdminUserListItem; error?: string };
+
+  if (!response.ok || !result.user) {
+    throw new Error(result.error ?? "Unable to update user.");
+  }
+
+  return result.user;
 }
 
 export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUsersConsoleProps) {
@@ -257,7 +169,6 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
   );
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
   const [planFilter, setPlanFilter] = useState<"all" | "free" | "pro">("all");
   const [verifiedFilter, setVerifiedFilter] = useState<"all" | "yes" | "no">("all");
   const [lockedFilter, setLockedFilter] = useState<"all" | "locked" | "unlocked">("all");
@@ -274,26 +185,16 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
   const [errorLogError, setErrorLogError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
-  const [unlockingUserId, setUnlockingUserId] = useState<string | null>(null);
-  const [selectedUserIds, setSelectedUserIds] = useState<Record<string, boolean>>({});
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
-  const [selectedUserLoading, setSelectedUserLoading] = useState(false);
-  const [selectedUserError, setSelectedUserError] = useState<string | null>(null);
-  const [reconcilingUserId, setReconcilingUserId] = useState<string | null>(null);
+  const [blockingUserId, setBlockingUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      setPage(1);
       setQuery(queryInput.trim());
     }, 300);
 
     return () => window.clearTimeout(timeout);
   }, [queryInput]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [planFilter, verifiedFilter, lockedFilter]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -312,36 +213,67 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
       setError(null);
 
       try {
-        const params = new URLSearchParams({
-          page: String(page),
-          pageSize: "25",
-          planTier: planFilter,
-          verified: verifiedFilter,
-          locked: lockedFilter,
-        });
+        const buildParams = (pageNumber: number) => {
+          const params = new URLSearchParams({
+            page: String(pageNumber),
+            pageSize: String(USERS_PAGE_SIZE),
+            planTier: planFilter,
+            verified: verifiedFilter,
+            locked: lockedFilter,
+          });
 
-        if (query) {
-          params.set("query", query);
-        }
+          if (query) {
+            params.set("query", query);
+          }
 
-        const response = await fetch(`/api/admin/users?${params.toString()}`, {
+          return params;
+        };
+
+        const firstResponse = await fetch(`/api/admin/users?${buildParams(1).toString()}`, {
           signal: controller.signal,
         });
 
-        const payload = (await response.json()) as AdminUserListResponse & { error?: string };
+        const firstPayload = (await firstResponse.json()) as AdminUserListResponse & { error?: string };
 
-        if (!response.ok) {
-          throw new Error(payload.error ?? "Unable to load users.");
+        if (!firstResponse.ok) {
+          throw new Error(firstPayload.error ?? "Unable to load users.");
         }
 
-        setData(payload);
+        let allUsers = firstPayload.users;
+
+        if (firstPayload.totalPages > 1) {
+          const remainingPages = Array.from({ length: firstPayload.totalPages - 1 }, (_, index) => index + 2);
+          const remainingResponses = await Promise.all(
+            remainingPages.map(async (pageNumber) => {
+              const response = await fetch(`/api/admin/users?${buildParams(pageNumber).toString()}`, {
+                signal: controller.signal,
+              });
+
+              const payload = (await response.json()) as AdminUserListResponse & { error?: string };
+
+              if (!response.ok) {
+                throw new Error(payload.error ?? "Unable to load users.");
+              }
+
+              return payload;
+            })
+          );
+
+          allUsers = [firstPayload, ...remainingResponses].flatMap((payload) => payload.users);
+        }
+
+        setData({
+          ...firstPayload,
+          users: allUsers,
+          page: 1,
+          pageSize: allUsers.length,
+          totalPages: 1,
+        });
         setDrafts((current) => {
           const next = { ...current };
 
-          for (const user of payload.users) {
-            if (!next[user.id]) {
-              next[user.id] = initialDraft(user);
-            }
+          for (const user of allUsers) {
+            next[user.id] = next[user.id] && isDirty(user, next[user.id]) ? next[user.id] : initialDraft(user);
           }
 
           return next;
@@ -363,7 +295,7 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
     void load();
 
     return () => controller.abort();
-  }, [page, query, planFilter, verifiedFilter, lockedFilter, refreshNonce]);
+  }, [query, planFilter, verifiedFilter, lockedFilter, refreshNonce]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -418,51 +350,6 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
     return () => controller.abort();
   }, [errorPage, errorQuery, errorRefreshNonce]);
 
-  useEffect(() => {
-    if (!selectedUserId) {
-      setSelectedUser(null);
-      setSelectedUserError(null);
-      setSelectedUserLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-
-    const load = async () => {
-      setSelectedUserLoading(true);
-      setSelectedUserError(null);
-
-      try {
-        const response = await fetch(`/api/admin/users/${selectedUserId}/details`, {
-          signal: controller.signal,
-        });
-
-        const payload = (await response.json()) as { detail?: AdminUserDetail; error?: string };
-
-        if (!response.ok || !payload.detail) {
-          throw new Error(payload.error ?? "Unable to load user details.");
-        }
-
-        setSelectedUser(payload.detail);
-      } catch (loadError) {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        setSelectedUserError(loadError instanceof Error ? loadError.message : "Unable to load user details.");
-        setSelectedUser(null);
-      } finally {
-        if (!controller.signal.aborted) {
-          setSelectedUserLoading(false);
-        }
-      }
-    };
-
-    void load();
-
-    return () => controller.abort();
-  }, [selectedUserId, refreshNonce]);
-
   const updateDraft = (userId: string, patch: Partial<AdminUserDraft>) => {
     setDrafts((current) => ({
       ...current,
@@ -474,68 +361,46 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
     setSaveMessage(null);
   };
 
+  const applyUpdatedUser = (updatedUser: AdminUserListItem) => {
+    setData((current) => ({
+      ...current,
+      users: current.users.map((entry) => (entry.id === updatedUser.id ? updatedUser : entry)),
+    }));
+    setDrafts((current) => ({
+      ...current,
+      [updatedUser.id]: initialDraft(updatedUser),
+    }));
+  };
+
   const saveRow = (user: AdminUserListItem) => {
     const draft = drafts[user.id] ?? initialDraft(user);
-
-    const payload: AdminUserUpdateInput = {};
-    const firstName = draft.firstName.trim();
-    const lastName = draft.lastName.trim();
-    const email = draft.email.trim();
     const accountLimit = parseLimitInput(draft.accountLimit);
     const monthlyUploadLimit = parseLimitInput(draft.monthlyUploadLimit);
     const transactionLimit = parseLimitInput(draft.transactionLimit);
-    const primaryGoal = draft.primaryGoal.trim();
-    const goalTargetSource = draft.goalTargetSource.trim();
-    const goalTargetAmount = draft.goalTargetAmount.trim();
 
     if (accountLimit === undefined || monthlyUploadLimit === undefined || transactionLimit === undefined) {
       setSaveMessage("Limits must be whole numbers or blank for the plan default.");
       return;
     }
 
-    payload.firstName = firstName || null;
-    payload.lastName = lastName || null;
-    payload.email = email;
-    payload.planTier = draft.planTier;
-    payload.accountLimit = accountLimit;
-    payload.monthlyUploadLimit = monthlyUploadLimit;
-    payload.transactionLimit = transactionLimit;
-    payload.financialExperience = draft.financialExperience || null;
-    payload.primaryGoal = primaryGoal || null;
-    payload.goalTargetAmount = goalTargetAmount || null;
-    payload.goalTargetSource = goalTargetSource || null;
-    payload.onboardingCompletedAt = draft.onboardingCompletedAt || null;
-    payload.dataWipedAt = draft.dataWipedAt || null;
+    const payload: AdminUserUpdateInput = {
+      firstName: draft.firstName.trim() || null,
+      lastName: draft.lastName.trim() || null,
+      email: draft.email.trim(),
+      planTier: draft.planTier,
+      accountLimit,
+      monthlyUploadLimit,
+      transactionLimit,
+    };
 
     setSavingUserId(user.id);
     setSaveMessage(null);
 
     void (async () => {
       try {
-        const response = await fetch(`/api/admin/users/${user.id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const result = (await response.json()) as { user?: AdminUserListItem; error?: string };
-
-        if (!response.ok || !result.user) {
-          throw new Error(result.error ?? "Unable to save user.");
-        }
-
-        setData((current) => ({
-          ...current,
-          users: current.users.map((entry) => (entry.id === result.user?.id ? result.user! : entry)),
-        }));
-        setDrafts((current) => ({
-          ...current,
-          [result.user!.id]: normalizeDraft(result.user!),
-        }));
-        setRefreshNonce((value) => value + 1);
-        setSaveMessage(`Saved ${result.user.fullName || result.user.email}.`);
+        const updatedUser = await patchUser(user.id, payload);
+        applyUpdatedUser(updatedUser);
+        setSaveMessage(`Saved ${updatedUser.fullName || updatedUser.email}.`);
       } catch (saveError) {
         setSaveMessage(saveError instanceof Error ? saveError.message : "Unable to save user.");
       } finally {
@@ -544,69 +409,43 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
     })();
   };
 
-  const unlockTier = (user: AdminUserListItem) => {
-    setUnlockingUserId(user.id);
+  const blockUser = (user: AdminUserListItem) => {
+    setBlockingUserId(user.id);
     setSaveMessage(null);
 
     void (async () => {
       try {
-        const response = await fetch(`/api/admin/users/${user.id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ planTierLocked: false }),
-        });
-
-        const result = (await response.json()) as { user?: AdminUserListItem; error?: string };
-
-        if (!response.ok || !result.user) {
-          throw new Error(result.error ?? "Unable to unlock tier.");
-        }
-
-        setData((current) => ({
-          ...current,
-          users: current.users.map((entry) => (entry.id === result.user?.id ? result.user! : entry)),
-        }));
-        setDrafts((current) => ({
-          ...current,
-          [result.user!.id]: normalizeDraft(result.user!),
-        }));
-        setRefreshNonce((value) => value + 1);
-        setSaveMessage(`Unlocked tier for ${result.user.fullName || result.user.email}.`);
-      } catch (unlockError) {
-        setSaveMessage(unlockError instanceof Error ? unlockError.message : "Unable to unlock tier.");
+        const updatedUser = await patchUser(user.id, { verified: false, planTierLocked: true });
+        applyUpdatedUser(updatedUser);
+        setSaveMessage(`Blocked ${updatedUser.fullName || updatedUser.email}.`);
+      } catch (blockError) {
+        setSaveMessage(blockError instanceof Error ? blockError.message : "Unable to block user.");
       } finally {
-        setUnlockingUserId((current) => (current === user.id ? null : current));
+        setBlockingUserId((current) => (current === user.id ? null : current));
       }
     })();
   };
 
-  const reconcileUser = (userId: string) => {
-    setReconcilingUserId(userId);
+  const deleteUser = (user: AdminUserListItem) => {
+    if (!window.confirm(`Delete ${user.fullName || user.email}? This will mark the user as wiped in Clover.`)) {
+      return;
+    }
+
+    setDeletingUserId(user.id);
     setSaveMessage(null);
 
     void (async () => {
       try {
-        const response = await fetch(`/api/admin/users/${userId}/reconcile`, {
-          method: "POST",
+        const updatedUser = await patchUser(user.id, {
+          verified: false,
+          dataWipedAt: new Date().toISOString(),
         });
-
-        const result = (await response.json()) as { detail?: AdminUserDetail; error?: string };
-
-        if (!response.ok || !result.detail) {
-          throw new Error(result.error ?? "Unable to reconcile user.");
-        }
-
-        setRefreshNonce((value) => value + 1);
-        if (selectedUserId === userId) {
-          setSelectedUser(result.detail);
-        }
-        setSaveMessage(`Reconciled billing state for ${result.detail.fullName || result.detail.email}.`);
-      } catch (reconcileError) {
-        setSaveMessage(reconcileError instanceof Error ? reconcileError.message : "Unable to reconcile user.");
+        applyUpdatedUser(updatedUser);
+        setSaveMessage(`Deleted ${updatedUser.fullName || updatedUser.email}.`);
+      } catch (deleteError) {
+        setSaveMessage(deleteError instanceof Error ? deleteError.message : "Unable to delete user.");
       } finally {
-        setReconcilingUserId((current) => (current === userId ? null : current));
+        setDeletingUserId((current) => (current === user.id ? null : current));
       }
     })();
   };
@@ -623,58 +462,6 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
     }
 
     window.location.assign(`/api/admin/users/export?${params.toString()}`);
-  };
-
-  const openUserDetails = (userId: string) => {
-    setSelectedUserIds({});
-    setSelectedUserId(userId);
-  };
-
-  const clearSelectedUsers = () => {
-    setSelectedUserIds({});
-  };
-
-  const toggleSelectedUser = (userId: string) => {
-    setSelectedUserIds((current) => ({
-      ...current,
-      [userId]: !current[userId],
-    }));
-  };
-
-  const selectedUserIdList = Object.entries(selectedUserIds)
-    .filter(([, value]) => value)
-    .map(([userId]) => userId);
-
-  const updateManyUsers = async (payload: AdminUserUpdateInput) => {
-    const targets = selectedUserIdList.length > 0 ? selectedUserIdList : selectedListUser ? [selectedListUser.id] : [];
-    if (targets.length === 0) {
-      setSaveMessage("Select at least one user first.");
-      return;
-    }
-
-    setSaveMessage(null);
-    try {
-      for (const userId of targets) {
-        const response = await fetch(`/api/admin/users/${userId}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-          const result = (await response.json()) as { error?: string };
-          throw new Error(result.error ?? "Unable to update user.");
-        }
-      }
-
-      setRefreshNonce((value) => value + 1);
-      setSaveMessage(`Updated ${targets.length} user${targets.length === 1 ? "" : "s"}.`);
-      clearSelectedUsers();
-    } catch (updateError) {
-      setSaveMessage(updateError instanceof Error ? updateError.message : "Unable to update users.");
-    }
   };
 
   const applySavedView = (view: string) => {
@@ -720,51 +507,6 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
     }
   };
 
-  const selectVisibleUsers = () => {
-    setSelectedUserIds((current) => {
-      const next = { ...current };
-      for (const user of visibleUsers) {
-        next[user.id] = true;
-      }
-      return next;
-    });
-  };
-
-  const reconcileSelectedUsers = async () => {
-    if (selectedUserIdList.length === 0) {
-      setSaveMessage("Select at least one user first.");
-      return;
-    }
-
-    setSaveMessage(null);
-    try {
-      for (const userId of selectedUserIdList) {
-        const response = await fetch(`/api/admin/users/${userId}/reconcile`, {
-          method: "POST",
-        });
-
-        if (!response.ok) {
-          const result = (await response.json()) as { error?: string };
-          throw new Error(result.error ?? "Unable to reconcile user.");
-        }
-      }
-
-      setRefreshNonce((value) => value + 1);
-      setSaveMessage(`Reconciled ${selectedUserIdList.length} user${selectedUserIdList.length === 1 ? "" : "s"}.`);
-      clearSelectedUsers();
-    } catch (reconcileError) {
-      setSaveMessage(reconcileError instanceof Error ? reconcileError.message : "Unable to reconcile users.");
-    }
-  };
-
-  const revertRow = (user: AdminUserListItem) => {
-    setDrafts((current) => ({
-      ...current,
-      [user.id]: initialDraft(user),
-    }));
-    setSaveMessage(null);
-  };
-
   const visibleUsers = useMemo(() => {
     if (savedView === "attention") {
       return data.users.filter((user) => user.attentionLevel !== "low");
@@ -772,10 +514,6 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
 
     return data.users;
   }, [data.users, savedView]);
-  const selectedListUser = useMemo(
-    () => data.users.find((entry) => entry.id === selectedUserId) ?? null,
-    [data.users, selectedUserId]
-  );
 
   return (
     <section className="admin-users">
@@ -785,7 +523,7 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
             <p className="eyebrow">Internal admin</p>
             <h2>Command center</h2>
             <p className="panel-muted">
-              Inline editing for the fields you use most often, with analytics, alerts, and user drill-downs layered around it.
+              A compact user directory for plan edits, limits, and quick account actions.
             </p>
           </div>
           <div className="admin-users__stats">
@@ -810,16 +548,8 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
               <span>Tx volume</span>
             </div>
             <div className="admin-users__stat">
-              <strong>{formatMoney(data.overview.totalInvestmentValue)}</strong>
-              <span>Investment value</span>
-            </div>
-            <div className="admin-users__stat">
               <strong>{data.overview.productionErrors7d.toLocaleString()}</strong>
               <span>Prod errors 7d</span>
-            </div>
-            <div className="admin-users__stat">
-              <strong>{data.overview.engagedUsers30d.toLocaleString()}</strong>
-              <span>Engaged 30d</span>
             </div>
           </div>
         </div>
@@ -850,16 +580,16 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
         <div className="admin-users__toolbar">
           <label className="admin-users__search">
             <span className="sr-only">Search users</span>
-              <input
-                type="search"
-                placeholder="Search by name, email, or Clerk ID"
-                value={queryInput}
+            <input
+              type="search"
+              placeholder="Search by name, email, or Clerk ID"
+              value={queryInput}
               onChange={(event) => {
                 setSavedView("custom");
                 setQueryInput(event.target.value);
               }}
-              />
-            </label>
+            />
+          </label>
           <select className="admin-users__inline-select" value={savedView} onChange={(event) => applySavedView(event.target.value)}>
             <option value="all">Saved views</option>
             <option value="custom">Custom filters</option>
@@ -907,263 +637,14 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
           <button className="button button-secondary" type="button" onClick={exportUsers}>
             Export CSV
           </button>
-          <button className="button button-secondary" type="button" onClick={selectVisibleUsers}>
-            Select page
-          </button>
-          <button className="button button-secondary" type="button" onClick={clearSelectedUsers}>
-            Clear selection
-          </button>
-          <button className="button button-secondary" type="button" onClick={() => updateManyUsers({ verified: true })}>
-            Mark verified
-          </button>
-          <button className="button button-secondary" type="button" onClick={() => updateManyUsers({ verified: false })}>
-            Mark unverified
-          </button>
-          <button className="button button-secondary" type="button" onClick={() => updateManyUsers({ onboardingCompletedAt: null })}>
-            Reset onboarding
-          </button>
-          <button className="button button-secondary" type="button" onClick={reconcileSelectedUsers}>
-            Reconcile billing
-          </button>
           <button className="button button-secondary" type="button" onClick={() => setRefreshNonce((value) => value + 1)}>
             Refresh
           </button>
-          <span className="panel-muted">
-            {selectedUserIdList.length > 0 ? `${selectedUserIdList.length} selected` : "No users selected"}
-          </span>
         </div>
       </div>
 
       {error ? <div className="admin-users__notice admin-users__notice--error">{error}</div> : null}
       {saveMessage ? <div className="admin-users__notice">{saveMessage}</div> : null}
-
-      {selectedUserId ? (
-        <article className="table-panel admin-users__detail-panel">
-          <div className="admin-users__table-head">
-            <div>
-              <p className="eyebrow">User drill-down</p>
-              <h3>{selectedUser?.fullName || selectedUser?.email || "Loading user..."}</h3>
-              <p className="panel-muted">{selectedUser?.email || selectedUserId}</p>
-            </div>
-            <div className="admin-users__row-actions">
-              {selectedUser ? (
-                <>
-                  <button
-                    className="button button-secondary button-small"
-                    type="button"
-                    onClick={() => reconcileUser(selectedUser.id)}
-                    disabled={reconcilingUserId === selectedUser.id}
-                  >
-                    {reconcilingUserId === selectedUser.id ? "Reconciling..." : "Reconcile billing"}
-                  </button>
-                  <button
-                    className="button button-secondary button-small"
-                    type="button"
-                    onClick={() => updateManyUsers({ verified: !selectedUser.verified })}
-                  >
-                    {selectedUser.verified ? "Unverify" : "Verify"}
-                  </button>
-                  <button
-                    className="button button-secondary button-small"
-                    type="button"
-                    onClick={() => updateManyUsers({ onboardingCompletedAt: null })}
-                  >
-                    Reset onboarding
-                  </button>
-                  <button
-                    className="button button-secondary button-small"
-                    type="button"
-                    onClick={() => {
-                      if (!selectedListUser) {
-                        return;
-                      }
-
-                      unlockTier(selectedListUser);
-                    }}
-                    disabled={!selectedUser?.planTierLocked || unlockingUserId === selectedUser.id}
-                  >
-                    {unlockingUserId === selectedUser?.id ? "Unlocking..." : "Unlock tier"}
-                  </button>
-                  <button className="button button-secondary button-small" type="button" onClick={() => setSelectedUserId(null)}>
-                    Close
-                  </button>
-                </>
-              ) : null}
-            </div>
-          </div>
-
-          {selectedUserLoading ? <div className="admin-users__loading" role="status">Loading user details...</div> : null}
-          {selectedUserError ? <div className="admin-users__notice admin-users__notice--error">{selectedUserError}</div> : null}
-
-          {selectedUser ? (
-            <div className="admin-users__detail">
-              <div className="admin-users__detail-grid">
-                <div className="admin-users__detail-card">
-                  <span>Plan</span>
-                  <strong>{selectedUser.planLabel}</strong>
-                  <small>{selectedUser.planTierLocked ? "Locked" : "Billing synced"}</small>
-                </div>
-                <div className="admin-users__detail-card">
-                  <span>Renewal</span>
-                  <strong>{formatPlanDate(selectedUser.renewalAt)}</strong>
-                  <small>{selectedUser.renewalAt ? "Next billing date" : "No billing row"}</small>
-                </div>
-                <div className="admin-users__detail-card">
-                  <span>Transactions</span>
-                  <strong>{selectedUser.transactionCount.toLocaleString()}</strong>
-                  <small>{formatMoney(selectedUser.transactionVolume)} volume</small>
-                </div>
-                <div className="admin-users__detail-card">
-                  <span>Investments</span>
-                  <strong>{selectedUser.investmentAccountCount.toLocaleString()}</strong>
-                  <small>{formatMoney(selectedUser.investmentValue)} value</small>
-                </div>
-                <div className="admin-users__detail-card">
-                  <span>Workspaces</span>
-                  <strong>{selectedUser.workspaceCount.toLocaleString()}</strong>
-                  <small>{selectedUser.bankAccountCount} bank accounts</small>
-                </div>
-                <div className="admin-users__detail-card">
-                  <span>Uploads</span>
-                  <strong>{selectedUser.monthlyUploads.toLocaleString()}</strong>
-                  <small>This month</small>
-                </div>
-                <div className="admin-users__detail-card">
-                  <span>Attention</span>
-                  <strong>{selectedUser.attentionLevel.toUpperCase()}</strong>
-                  <small>{selectedUser.attentionFlags.length > 0 ? selectedUser.attentionFlags.join(" · ") : "No active flags"}</small>
-                </div>
-              </div>
-
-              <div className="admin-users__detail-sections">
-                <section className="admin-users__detail-section">
-                  <h4>Recent transactions</h4>
-                  <ul className="admin-users__detail-list">
-                    {selectedUser.recentTransactions.length > 0 ? (
-                      selectedUser.recentTransactions.map((entry) => (
-                        <li key={entry.id}>
-                          <strong>{entry.merchant}</strong>
-                          <span>
-                            {formatDate(entry.date)} · {entry.accountName} · {entry.workspaceName}
-                          </span>
-                          <small>
-                            {formatMoney(entry.amount)} · {entry.type}
-                            {entry.isTransfer ? " · movement" : ""}
-                            {entry.isExcluded ? " · excluded" : ""}
-                          </small>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="admin-users__detail-empty">No transactions yet.</li>
-                    )}
-                  </ul>
-                </section>
-
-                <section className="admin-users__detail-section">
-                  <h4>Recent imports</h4>
-                  <ul className="admin-users__detail-list">
-                    {selectedUser.recentImports.length > 0 ? (
-                      selectedUser.recentImports.map((entry) => (
-                        <li key={entry.id}>
-                          <strong>{entry.fileName}</strong>
-                          <span>
-                            {formatDate(entry.uploadedAt)} · {entry.workspaceName}
-                          </span>
-                          <small>
-                            {entry.status} · {entry.parsedRowsCount} parsed · {entry.confirmedTransactionsCount} confirmed
-                          </small>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="admin-users__detail-empty">No imports yet.</li>
-                    )}
-                  </ul>
-                </section>
-
-                <section className="admin-users__detail-section">
-                  <h4>Recent goals</h4>
-                  <ul className="admin-users__detail-list">
-                    {selectedUser.recentGoals.length > 0 ? (
-                      selectedUser.recentGoals.map((entry) => (
-                        <li key={entry.id}>
-                          <strong>{entry.primaryGoal ?? "Goal update"}</strong>
-                          <span>{formatDate(entry.createdAt)}</span>
-                          <small>
-                            {entry.targetAmount ? formatMoney(entry.targetAmount) : "No target"} · {entry.source ?? "No source"}
-                          </small>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="admin-users__detail-empty">No goals yet.</li>
-                    )}
-                  </ul>
-                </section>
-
-                <section className="admin-users__detail-section">
-                  <h4>Recent errors</h4>
-                  <ul className="admin-users__detail-list">
-                    {selectedUser.recentErrors.length > 0 ? (
-                      selectedUser.recentErrors.map((entry) => (
-                        <li key={entry.id}>
-                          <strong>{entry.message}</strong>
-                          <span>
-                            {formatDate(entry.occurredAt)} · {entry.route ?? "No route"}
-                          </span>
-                          <small className="admin-users__mono">{entry.buildId}</small>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="admin-users__detail-empty">No user-linked errors.</li>
-                    )}
-                  </ul>
-                </section>
-
-                <section className="admin-users__detail-section">
-                  <h4>Workspace activity</h4>
-                  <ul className="admin-users__detail-list">
-                    {selectedUser.workspaces.length > 0 ? (
-                      selectedUser.workspaces.map((workspace) => (
-                        <li key={workspace.id}>
-                          <strong>{workspace.name}</strong>
-                          <span>
-                            {workspace.type} · {formatDate(workspace.updatedAt)}
-                          </span>
-                          <small>
-                            {workspace.accountCount} accounts · {workspace.transactionCount} transactions · {workspace.importCount} imports
-                          </small>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="admin-users__detail-empty">No workspaces yet.</li>
-                    )}
-                  </ul>
-                </section>
-
-                <section className="admin-users__detail-section">
-                  <h4>Audit log</h4>
-                  <ul className="admin-users__detail-list">
-                    {selectedUser.recentAuditLogs.length > 0 ? (
-                      selectedUser.recentAuditLogs.map((entry) => (
-                        <li key={entry.id}>
-                          <strong>
-                            {entry.action} · {entry.entity}
-                          </strong>
-                          <span>
-                            {formatDate(entry.createdAt)} · {entry.workspaceName}
-                          </span>
-                          <small>{entry.entityId ?? "No entity id"}</small>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="admin-users__detail-empty">No audit records yet.</li>
-                    )}
-                  </ul>
-                </section>
-              </div>
-            </div>
-          ) : null}
-        </article>
-      ) : null}
 
       <article className="table-panel admin-users__table-panel">
         <div className="admin-users__table-head">
@@ -1172,51 +653,30 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
             <h3>All users</h3>
           </div>
           <p className="panel-muted">
-            Showing {data.users.length} of {data.totalCount}
+            Showing {visibleUsers.length} of {data.totalCount}
           </p>
         </div>
 
         {loading ? <div className="admin-users__loading" role="status">Loading users...</div> : null}
 
-        {!loading && data.users.length === 0 ? (
+        {!loading && visibleUsers.length === 0 ? (
           <div className="empty-state">
             <strong>No users found.</strong>
             <p>Try a different search term or clear the filter to see the full list.</p>
           </div>
         ) : null}
 
-        {!loading && data.users.length > 0 ? (
-          <div className="admin-users__table-wrap">
-            <table className="admin-users__table">
+        {!loading && visibleUsers.length > 0 ? (
+          <div className="admin-users__table-wrap admin-users__directory-wrap">
+            <table className="admin-users__table admin-users__directory-table">
               <thead>
                 <tr>
-                  <th>First name</th>
-                  <th>Last name</th>
-                  <th>Email</th>
-                  <th>Tier</th>
-                  <th>Account limit</th>
-                  <th>Upload limit</th>
-                  <th>Transaction rows</th>
-                  <th>Renewal</th>
-                  <th>Financial exp</th>
-                  <th>Primary goal</th>
-                  <th>Goal target</th>
-                  <th>Goal source</th>
-                  <th>Onboarding</th>
-                  <th>Data wiped</th>
-                  <th>Verified</th>
-                  <th>Clerk ID</th>
-                  <th>Workspaces</th>
-                  <th>Bank accounts</th>
-                  <th>Transactions</th>
-                  <th>Active accounts</th>
-                  <th>Investments</th>
-                  <th>Investment value</th>
-                  <th>Tx volume</th>
-                  <th>Monthly uploads</th>
-                  <th>Billing</th>
-                  <th>Created</th>
-                  <th>Updated</th>
+                  <th>User</th>
+                  <th>Plan</th>
+                  <th>Limits</th>
+                  <th>Status</th>
+                  <th>Usage</th>
+                  <th>Activity</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -1225,199 +685,78 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                   const draft = drafts[user.id] ?? initialDraft(user);
                   const dirty = isDirty(user, draft);
                   const saving = savingUserId === user.id;
+                  const blocking = blockingUserId === user.id;
+                  const deleting = deletingUserId === user.id;
+                  const busy = saving || blocking || deleting;
 
                   return (
-                    <tr key={user.id} className={`${dirty ? "is-dirty" : ""} ${selectedUserId === user.id ? "is-selected" : ""}`}>
-                      <td>
-                        <input
-                          className="admin-users__inline-input"
-                          value={draft.firstName}
-                          onChange={(event) => updateDraft(user.id, { firstName: event.target.value })}
-                          aria-label={`${user.email} first name`}
-                        />
+                    <tr key={user.id} className={dirty ? "is-dirty" : undefined}>
+                      <td className="admin-users__user-cell">
+                        <strong>{user.fullName || user.email}</strong>
+                        <small className="admin-users__cell-note">{user.email}</small>
+                        <small className="admin-users__cell-note admin-users__mono">{user.clerkUserId}</small>
                       </td>
-                      <td>
-                        <input
-                          className="admin-users__inline-input"
-                          value={draft.lastName}
-                          onChange={(event) => updateDraft(user.id, { lastName: event.target.value })}
-                          aria-label={`${user.email} last name`}
-                        />
+                      <td className="admin-users__plan-cell">
+                        <select
+                          className="admin-users__inline-select"
+                          value={draft.planTier}
+                          onChange={(event) => updateDraft(user.id, { planTier: event.target.value as "free" | "pro" })}
+                          aria-label={`${user.email} plan tier`}
+                        >
+                          <option value="free">Free</option>
+                          <option value="pro">Pro</option>
+                        </select>
+                        <small className="admin-users__cell-note">
+                          {user.planTierLocked ? "Locked manually" : "Billing synced"} · {user.billingSubscription?.status ?? "No billing row"}
+                        </small>
                       </td>
-                      <td>
-                        <input
-                          className="admin-users__inline-input"
-                          type="email"
-                          value={draft.email}
-                          onChange={(event) => updateDraft(user.id, { email: event.target.value })}
-                          aria-label={`${user.email} email`}
-                        />
-                      </td>
-                      <td>
-                        <div className="admin-users__tier-stack">
-                          <select
-                            className="admin-users__inline-select"
-                            value={draft.planTier}
-                            onChange={(event) => updateDraft(user.id, { planTier: event.target.value as "free" | "pro" })}
-                            aria-label={`${user.email} plan tier`}
-                          >
-                            <option value="free">Free</option>
-                            <option value="pro">Pro</option>
-                          </select>
-                          <div className="admin-users__tier-badges">
-                            {user.planTierLocked ? (
-                              <>
-                                <span className="admin-users__pill admin-users__pill--locked">Locked</span>
-                                <small className="admin-users__tier-note">Manual override active</small>
-                              </>
-                            ) : (
-                              <>
-                                <span className="admin-users__pill admin-users__pill--sync">Billing</span>
-                                <small className="admin-users__tier-note">Syncs with billing</small>
-                              </>
-                            )}
-                            <small className="admin-users__tier-note">{user.planLabel}</small>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
+                      <td className="admin-users__limits-cell">
                         <input
                           className="admin-users__inline-input"
                           inputMode="numeric"
                           value={draft.accountLimit}
                           onChange={(event) => updateDraft(user.id, { accountLimit: event.target.value })}
                           aria-label={`${user.email} account limit`}
+                          placeholder="Accounts"
                         />
-                      </td>
-                      <td>
                         <input
                           className="admin-users__inline-input"
                           inputMode="numeric"
                           value={draft.monthlyUploadLimit}
                           onChange={(event) => updateDraft(user.id, { monthlyUploadLimit: event.target.value })}
-                          aria-label={`${user.email} monthly upload limit`}
+                          aria-label={`${user.email} upload limit`}
+                          placeholder="Uploads"
                         />
-                      </td>
-                      <td>
                         <input
                           className="admin-users__inline-input"
                           inputMode="numeric"
                           value={draft.transactionLimit}
                           onChange={(event) => updateDraft(user.id, { transactionLimit: event.target.value })}
                           aria-label={`${user.email} transaction limit`}
+                          placeholder="Rows"
                         />
                       </td>
-                      <td>
-                        <div className="admin-users__status-stack">
-                          <strong>{formatPlanDate(user.renewalAt)}</strong>
-                          <small>{user.billingSubscription ? `${user.billingSubscription.status} · ${user.billingSubscription.interval ?? "no interval"}` : "No billing row"}</small>
-                        </div>
-                      </td>
-                      <td>
-                        <select
-                          className="admin-users__inline-select"
-                          value={draft.financialExperience}
-                          onChange={(event) =>
-                            updateDraft(user.id, {
-                              financialExperience: event.target.value as AdminUserDraft["financialExperience"],
-                            })
-                          }
-                          aria-label={`${user.email} financial experience`}
-                        >
-                          <option value="">Not set</option>
-                          <option value="beginner">Beginner</option>
-                          <option value="comfortable">Comfortable</option>
-                          <option value="advanced">Advanced</option>
-                        </select>
-                      </td>
-                      <td>
-                        <input
-                          className="admin-users__inline-input"
-                          value={draft.primaryGoal}
-                          onChange={(event) => updateDraft(user.id, { primaryGoal: event.target.value })}
-                          aria-label={`${user.email} primary goal`}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="admin-users__inline-input"
-                          inputMode="decimal"
-                          value={draft.goalTargetAmount}
-                          onChange={(event) => updateDraft(user.id, { goalTargetAmount: event.target.value })}
-                          aria-label={`${user.email} goal target amount`}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="admin-users__inline-input"
-                          value={draft.goalTargetSource}
-                          onChange={(event) => updateDraft(user.id, { goalTargetSource: event.target.value })}
-                          aria-label={`${user.email} goal target source`}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="admin-users__inline-input"
-                          type="datetime-local"
-                          value={draft.onboardingCompletedAt}
-                          onChange={(event) => updateDraft(user.id, { onboardingCompletedAt: event.target.value })}
-                          aria-label={`${user.email} onboarding completed at`}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="admin-users__inline-input"
-                          type="datetime-local"
-                          value={draft.dataWipedAt}
-                          onChange={(event) => updateDraft(user.id, { dataWipedAt: event.target.value })}
-                          aria-label={`${user.email} data wiped at`}
-                        />
-                      </td>
-                      <td>
+                      <td className="admin-users__status-cell">
+                        <span className={`admin-users__pill admin-users__pill--${user.planTier}`}>{user.planLabel}</span>
                         <span className={`admin-users__pill ${user.verified ? "admin-users__pill--success" : "admin-users__pill--warn"}`}>
-                          {user.verified ? "Verified" : "Unverified"}
+                          {user.verified ? "Verified" : "Blocked"}
                         </span>
-                        <div className="admin-users__status-stack">
-                          <small className={`admin-users__pill ${attentionTone(user.attentionLevel)}`}>{user.attentionLevel} attention</small>
-                          <small>{user.attentionFlags.length > 0 ? user.attentionFlags[0] : "No active flags"}</small>
-                        </div>
+                        {user.dataWipedAt ? <span className="admin-users__pill admin-users__pill--locked">Deleted</span> : null}
+                        {user.attentionLevel !== "low" ? <small className="admin-users__cell-note">{user.attentionFlags[0] ?? "Needs attention"}</small> : null}
                       </td>
-                      <td>
-                        <span className="admin-users__mono">{user.clerkUserId}</span>
+                      <td className="admin-users__usage-cell">
+                        <strong>
+                          {user.workspaceCount} ws · {user.bankAccountCount} acct
+                        </strong>
+                        <small className="admin-users__cell-note">
+                          {user.transactionCount.toLocaleString()} transactions · {user.monthlyUploads} uploads
+                        </small>
                       </td>
-                      <td>{user.workspaceCount}</td>
-                      <td>{user.bankAccountCount}</td>
-                      <td>{user.transactionCount}</td>
-                      <td>{user.activeAccountCount}</td>
-                      <td>{user.investmentAccountCount}</td>
-                      <td>
-                        <strong className="admin-users__currency">{formatMoney(user.investmentValue)}</strong>
-                      </td>
-                      <td>
-                        <strong className="admin-users__currency">{formatMoney(user.transactionVolume)}</strong>
-                      </td>
-                      <td>{user.monthlyUploads}</td>
-                      <td>
-                        <div className="admin-users__status-stack">
-                          {user.billingSubscription ? (
-                            <>
-                              <span className={`admin-users__pill admin-users__pill--${user.billingSubscription.planTier}`}>
-                                {user.planLabel}
-                              </span>
-                              <small>
-                                {user.billingSubscription.status} · {user.billingSubscription.interval ?? "no interval"}
-                              </small>
-                            </>
-                          ) : (
-                            <small>No billing row</small>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <small>{formatDate(user.createdAt)}</small>
-                      </td>
-                      <td>
-                        <small>{formatDate(user.updatedAt)}</small>
+                      <td className="admin-users__activity-cell">
+                        <strong>{formatDate(user.updatedAt)}</strong>
+                        <small className="admin-users__cell-note">
+                          Renewal: {formatDate(user.renewalAt)} · Volume: {formatMoney(user.transactionVolume)}
+                        </small>
                       </td>
                       <td>
                         <div className="admin-users__row-actions">
@@ -1425,39 +764,25 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                             className={`button button-small ${dirty ? "button-primary" : "button-secondary"}`}
                             type="button"
                             onClick={() => saveRow(user)}
-                            disabled={saving || unlockingUserId === user.id || !dirty}
+                            disabled={busy || !dirty}
                           >
-                            {saving ? "Saving..." : dirty ? "Save" : "Saved"}
+                            {saving ? "Saving..." : "Save"}
                           </button>
                           <button
                             className="button button-secondary button-small"
                             type="button"
-                            onClick={() => unlockTier(user)}
-                            disabled={saving || unlockingUserId === user.id || !user.planTierLocked}
+                            onClick={() => blockUser(user)}
+                            disabled={busy || !user.verified}
                           >
-                            {unlockingUserId === user.id ? "Unlocking..." : "Unlock"}
+                            {blocking ? "Blocking..." : "Block"}
                           </button>
                           <button
                             className="button button-secondary button-small"
                             type="button"
-                            onClick={() => revertRow(user)}
-                            disabled={saving || unlockingUserId === user.id || !dirty}
+                            onClick={() => deleteUser(user)}
+                            disabled={busy || Boolean(user.dataWipedAt)}
                           >
-                            Revert
-                          </button>
-                          <button
-                            className="button button-secondary button-small"
-                            type="button"
-                            onClick={() => openUserDetails(user.id)}
-                          >
-                            Open
-                          </button>
-                          <button
-                            className="button button-secondary button-small"
-                            type="button"
-                            onClick={() => toggleSelectedUser(user.id)}
-                          >
-                            {selectedUserIds[user.id] ? "Selected" : "Select"}
+                            {deleting ? "Deleting..." : "Delete"}
                           </button>
                         </div>
                       </td>
@@ -1530,24 +855,18 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                         <small>{formatDate(log.occurredAt)}</small>
                       </td>
                       <td>
-                        <div className="admin-users__status-stack">
-                          <strong>{log.message}</strong>
-                          {log.name ? <small>{log.name}</small> : null}
-                        </div>
+                        <strong>{log.message}</strong>
+                        {log.name ? <small className="admin-users__cell-note">{log.name}</small> : null}
                       </td>
                       <td>
-                        <div className="admin-users__status-stack">
-                          <strong className="admin-users__mono">{log.buildId}</strong>
-                          {log.deploymentId ? <small className="admin-users__mono">{log.deploymentId}</small> : null}
-                        </div>
+                        <strong className="admin-users__mono">{log.buildId}</strong>
+                        {log.deploymentId ? <small className="admin-users__mono">{log.deploymentId}</small> : null}
                       </td>
                       <td>{log.environment}</td>
                       <td>{log.source}</td>
                       <td>
-                        <div className="admin-users__status-stack">
-                          <strong>{log.route ?? "—"}</strong>
-                          {log.method ? <small>{log.method}</small> : null}
-                        </div>
+                        <strong>{log.route ?? "—"}</strong>
+                        {log.method ? <small className="admin-users__cell-note">{log.method}</small> : null}
                       </td>
                       <td>{log.statusCode ?? "—"}</td>
                       <td>{log.userId ?? log.clerkUserId ?? "—"}</td>
@@ -1587,23 +906,6 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
             </button>
           </div>
         </article>
-
-        <div className="admin-users__pager">
-          <button className="button button-secondary button-small" type="button" onClick={() => setPage((value) => Math.max(value - 1, 1))} disabled={page <= 1 || loading}>
-            Previous
-          </button>
-          <span>
-            Page {data.page} of {data.totalPages}
-          </span>
-          <button
-            className="button button-secondary button-small"
-            type="button"
-            onClick={() => setPage((value) => Math.min(value + 1, data.totalPages))}
-            disabled={page >= data.totalPages || loading}
-          >
-            Next
-          </button>
-        </div>
       </article>
     </section>
   );

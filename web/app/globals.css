@@ -24097,13 +24097,6 @@ button.accounts-detail__transaction-head-cell {
   background: rgba(255, 255, 255, 0.94);
 }
 
-.admin-users__grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
-  gap: 18px;
-  align-items: start;
-}
-
 .admin-users__table-panel {
   min-width: 0;
 }
@@ -24130,6 +24123,10 @@ button.accounts-detail__transaction-head-cell {
   background: rgba(255, 255, 255, 0.8);
 }
 
+.admin-users__directory-wrap {
+  max-height: 68vh;
+}
+
 .admin-users__table {
   width: max-content;
   min-width: 100%;
@@ -24152,132 +24149,40 @@ button.accounts-detail__transaction-head-cell {
   white-space: nowrap;
 }
 
-.admin-users__table thead th:nth-child(1),
-.admin-users__table tbody td:nth-child(1) {
+.admin-users__directory-table thead th:nth-child(1),
+.admin-users__directory-table tbody td:nth-child(1) {
+  width: 235px;
+}
+
+.admin-users__directory-table thead th:nth-child(2),
+.admin-users__directory-table tbody td:nth-child(2) {
   width: 150px;
 }
 
-.admin-users__table thead th:nth-child(2),
-.admin-users__table tbody td:nth-child(2) {
-  width: 150px;
+.admin-users__directory-table thead th:nth-child(3),
+.admin-users__directory-table tbody td:nth-child(3) {
+  width: 170px;
 }
 
-.admin-users__table thead th:nth-child(3),
-.admin-users__table tbody td:nth-child(3) {
-  width: 280px;
+.admin-users__directory-table thead th:nth-child(4),
+.admin-users__directory-table tbody td:nth-child(4) {
+  width: 160px;
 }
 
-.admin-users__table thead th:nth-child(4),
-.admin-users__table tbody td:nth-child(4) {
-  width: 108px;
+.admin-users__directory-table thead th:nth-child(5),
+.admin-users__directory-table tbody td:nth-child(5) {
+  width: 130px;
 }
 
-.admin-users__table thead th:nth-child(5),
-.admin-users__table tbody td:nth-child(5) {
-  width: 152px;
+.admin-users__directory-table thead th:nth-child(6),
+.admin-users__directory-table tbody td:nth-child(6) {
+  width: 210px;
 }
 
-.admin-users__table thead th:nth-child(6),
-.admin-users__table tbody td:nth-child(6) {
-  width: 240px;
-}
-
-.admin-users__table thead th:nth-child(7),
-.admin-users__table tbody td:nth-child(7) {
-  width: 150px;
-}
-
-.admin-users__table thead th:nth-child(8),
-.admin-users__table tbody td:nth-child(8) {
-  width: 200px;
-}
-
-.admin-users__table thead th:nth-child(9),
-.admin-users__table tbody td:nth-child(9),
-.admin-users__table thead th:nth-child(10),
-.admin-users__table tbody td:nth-child(10) {
-  width: 176px;
-}
-
-.admin-users__table thead th:nth-child(11),
-.admin-users__table tbody td:nth-child(11) {
-  width: 106px;
-}
-
-.admin-users__table thead th:nth-child(12),
-.admin-users__table tbody td:nth-child(12) {
-  width: 230px;
-}
-
-.admin-users__table thead th:nth-child(13),
-.admin-users__table tbody td:nth-child(13) {
-  width: 104px;
-}
-
-.admin-users__table thead th:nth-child(14),
-.admin-users__table tbody td:nth-child(14) {
-  width: 124px;
-}
-
-.admin-users__table thead th:nth-child(15),
-.admin-users__table tbody td:nth-child(15),
-.admin-users__table thead th:nth-child(16),
-.admin-users__table tbody td:nth-child(16) {
-  width: 164px;
-}
-
-.admin-users__table thead th:nth-child(17),
-.admin-users__table tbody td:nth-child(17) {
-  width: 220px;
-}
-
-.admin-users__table thead th:nth-child(18),
-.admin-users__table tbody td:nth-child(18),
-.admin-users__table thead th:nth-child(19),
-.admin-users__table tbody td:nth-child(19) {
-  width: 152px;
-}
-
-.admin-users__table thead th:nth-child(20),
-.admin-users__table tbody td:nth-child(20) {
-  width: 152px;
-}
-
-.admin-users__table thead th:nth-child(21),
-.admin-users__table tbody td:nth-child(21) {
-  width: 132px;
-}
-
-.admin-users__table thead th:nth-child(22),
-.admin-users__table tbody td:nth-child(22) {
-  width: 176px;
-}
-
-.admin-users__table thead th:nth-child(23),
-.admin-users__table tbody td:nth-child(23) {
-  width: 138px;
-}
-
-.admin-users__table thead th:nth-child(24),
-.admin-users__table tbody td:nth-child(24) {
-  width: 188px;
-}
-
-.admin-users__table thead th:nth-child(25),
-.admin-users__table tbody td:nth-child(25),
-.admin-users__table thead th:nth-child(26),
-.admin-users__table tbody td:nth-child(26) {
-  width: 152px;
-}
-
-.admin-users__table thead th:nth-child(27),
-.admin-users__table tbody td:nth-child(27) {
-  width: 152px;
-}
-
-.admin-users__table thead th:nth-child(28),
-.admin-users__table tbody td:nth-child(28) {
-  width: 180px;
+.admin-users__directory-table thead th:nth-child(7),
+.admin-users__directory-table tbody td:nth-child(7) {
+  width: 235px;
+  min-width: 235px;
 }
 
 .admin-users__table tbody tr {
@@ -24288,14 +24193,14 @@ button.accounts-detail__transaction-head-cell {
   background: rgba(3, 168, 192, 0.04);
 }
 
-.admin-users__table tbody tr.is-selected {
-  background: rgba(59, 130, 246, 0.06);
-}
-
 .admin-users__table tbody td {
   padding: 14px 16px;
   vertical-align: top;
   overflow: hidden;
+}
+
+.admin-users__directory-table tbody td {
+  padding: 10px 12px;
 }
 
 .admin-users__inline-input,
@@ -24320,6 +24225,55 @@ button.accounts-detail__transaction-head-cell {
   box-shadow: 0 0 0 4px rgba(3, 168, 192, 0.14);
 }
 
+.admin-users__directory-table .admin-users__inline-input,
+.admin-users__directory-table .admin-users__inline-select {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.admin-users__cell-note {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.admin-users__user-cell > * + *,
+.admin-users__plan-cell > * + *,
+.admin-users__usage-cell > * + *,
+.admin-users__activity-cell > * + *,
+.admin-users__status-cell > * + * {
+  margin-top: 4px;
+}
+
+.admin-users__limits-cell {
+  white-space: nowrap;
+}
+
+.admin-users__limits-cell > .admin-users__inline-input {
+  display: inline-block;
+  width: calc((100% - 12px) / 3);
+  vertical-align: top;
+}
+
+.admin-users__limits-cell > .admin-users__inline-input + .admin-users__inline-input {
+  margin-left: 6px;
+}
+
+.admin-users__status-cell > .admin-users__pill {
+  margin-right: 6px;
+}
+
+.admin-users__user-cell strong,
+.admin-users__usage-cell strong,
+.admin-users__activity-cell strong {
+  font-size: 14px;
+  line-height: 1.25;
+}
+
 .admin-users__mono {
   display: inline-block;
   max-width: 100%;
@@ -24333,11 +24287,12 @@ button.accounts-detail__transaction-head-cell {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  width: fit-content;
+  padding: 5px 9px;
   border-radius: 999px;
   background: rgba(3, 168, 192, 0.08);
   color: var(--accent);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: capitalize;
 }
@@ -24372,36 +24327,22 @@ button.accounts-detail__transaction-head-cell {
   color: #1d4ed8;
 }
 
-.admin-users__status-stack {
+.admin-users__row-actions {
   display: grid;
-  gap: 8px;
-}
-
-.admin-users__tier-stack {
-  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
   gap: 6px;
 }
 
-.admin-users__tier-badges {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.admin-users__row-actions .button {
+  min-width: 0;
 }
 
-.admin-users__tier-note {
-  color: var(--muted);
-}
-
-.admin-users__currency {
-  font-size: 14px;
-}
-
-.admin-users__row-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.admin-users__row-actions .button-small {
+  min-height: 34px;
+  padding-inline: 12px;
+  font-size: 13px;
 }
 
 .admin-users__pager {
@@ -24416,102 +24357,6 @@ button.accounts-detail__transaction-head-cell {
   display: grid;
   gap: 16px;
   margin-top: 18px;
-}
-
-.admin-users__detail-panel {
-  background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 24%),
-    rgba(255, 255, 255, 0.92);
-}
-
-.admin-users__detail {
-  display: grid;
-  gap: 16px;
-}
-
-.admin-users__detail-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.admin-users__detail-card {
-  display: grid;
-  gap: 6px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: rgba(245, 248, 250, 0.88);
-  border: 1px solid rgba(219, 227, 232, 0.94);
-}
-
-.admin-users__detail-card span {
-  color: var(--muted);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.admin-users__detail-card strong {
-  font-size: 18px;
-  line-height: 1.15;
-}
-
-.admin-users__detail-card small {
-  color: var(--muted);
-}
-
-.admin-users__detail-sections {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.admin-users__detail-section {
-  display: grid;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(219, 227, 232, 0.94);
-}
-
-.admin-users__detail-section h4 {
-  font-size: 16px;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-}
-
-.admin-users__detail-list {
-  display: grid;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.admin-users__detail-list li {
-  display: grid;
-  gap: 4px;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(245, 248, 250, 0.84);
-  border: 1px solid rgba(219, 227, 232, 0.78);
-}
-
-.admin-users__detail-list strong {
-  font-size: 14px;
-  line-height: 1.35;
-}
-
-.admin-users__detail-list span,
-.admin-users__detail-list small {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.admin-users__detail-empty {
-  color: var(--muted);
 }
 
 .admin-users__error-details {
@@ -24538,76 +24383,6 @@ button.accounts-detail__transaction-head-cell {
   font-size: 12px;
   line-height: 1.45;
   color: var(--muted);
-}
-
-.admin-users__drawer {
-  position: sticky;
-  top: 24px;
-}
-
-.admin-users__drawer-card {
-  display: grid;
-  gap: 18px;
-}
-
-.admin-users__drawer-card--empty {
-  min-height: 380px;
-  place-content: center;
-}
-
-.admin-users__drawer-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.admin-users__form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.admin-users__form-wide {
-  grid-column: 1 / -1;
-}
-
-.admin-users__detail-card {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 20px;
-  background: rgba(245, 248, 250, 0.88);
-  border: 1px solid var(--stroke);
-}
-
-.admin-users__detail-card span,
-.admin-users__meta span {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.admin-users__detail-card strong,
-.admin-users__meta {
-  font-size: 14px;
-}
-
-.admin-users__drawer-foot {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.admin-users__meta {
-  display: grid;
-  gap: 6px;
-}
-
-.admin-users__detail-card strong {
-  word-break: break-word;
 }
 
 .empty-state {
@@ -24718,24 +24493,6 @@ button.accounts-detail__transaction-head-cell {
 }
 
 @media (max-width: 1024px) {
-  .admin-users__grid {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-users__drawer {
-    position: static;
-  }
-
-  .admin-users__form {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-users__detail-grid,
-  .admin-users__detail-sections,
-  .admin-users__detail-card {
-    grid-template-columns: 1fr;
-  }
-
   .admin-users__stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -26707,23 +26464,17 @@ button.accounts-detail__transaction-head-cell {
     border-radius: 22px;
   }
 
-  .admin-users__stats,
-  .admin-users__detail-grid,
-  .admin-users__detail-sections,
-  .admin-users__detail-card {
+  .admin-users__stats {
     grid-template-columns: 1fr;
   }
 
   .admin-users__toolbar,
-  .admin-users__pager,
-  .admin-users__drawer-head,
-  .admin-users__drawer-foot {
+  .admin-users__pager {
     flex-direction: column;
     align-items: stretch;
   }
 
   .admin-users__search,
-  .admin-users__drawer .button,
   .admin-users__pager .button {
     width: 100%;
   }
