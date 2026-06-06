@@ -5085,13 +5085,13 @@ export const processImportFileText = async (
   const isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
   const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
   const trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
+  const likelyScreenshotStatement = imageImport && importMode === "statement" && isLikelyScreenshotImageFile(fileName);
   const shouldPreferDirectImageStatementVision =
     imageImport &&
     importMode === "statement" &&
     !trainedReceiptDetails &&
     !String(options.text ?? "").trim() &&
-    !options.textCacheInfo &&
-    !isLikelyScreenshotImageFile(fileName);
+    !options.textCacheInfo;
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
   let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
@@ -5622,7 +5622,7 @@ export const processImportFileText = async (
     pageImages?.length &&
     !canUseFastImageParse &&
     importMode !== "receipt" &&
-    !shouldPreferDirectImageStatementVision
+    (!shouldPreferDirectImageStatementVision || likelyScreenshotStatement)
   );
   const openAiParseIsUsableWiseScreenshot =
     imageImport &&
