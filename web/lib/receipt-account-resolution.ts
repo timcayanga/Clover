@@ -246,7 +246,7 @@ export const buildReceiptInstitutionAccountDraft = (
   const fallbackInstitution = normalizeWhitespace(hint?.institution ?? hint?.accountName ?? "") || null;
   const fallbackReason =
     hint?.reason?.trim() ||
-    `Detected ${fallbackInstitution ?? fallbackName || "wallet"} screenshot with no existing matching account.`;
+    `Detected ${(fallbackInstitution ?? fallbackName) || "wallet"} screenshot with no existing matching account.`;
 
   if (institutionKey === "gcash") {
     return {

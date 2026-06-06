@@ -578,17 +578,23 @@ async function DashboardStream({
   const uploadReminderCopy = latestImport
     ? `Last import was ${daysSinceLastImport === 0 ? "today" : `${daysSinceLastImport ?? 0} day${daysSinceLastImport === 1 ? "" : "s"} ago`}. Add recent statements so advice stays current.`
     : "Upload a recent statement so Clover can start finding spending patterns.";
-  const recurringCandidates = buildRecurringTransactionSummaries(
-    currentTransactions.map((transaction) => ({
-      amount: transaction.amount,
-      date: transaction.date,
-      type: transaction.type,
-      merchantRaw: transaction.merchantRaw,
-      merchantClean: transaction.merchantClean,
-      currency: transaction.account?.currency ?? displayCurrency,
-      category: transaction.category,
-    }))
-  );
+  const recurringCandidates = (() => {
+    try {
+      return buildRecurringTransactionSummaries(
+        currentTransactions.map((transaction) => ({
+          amount: transaction.amount,
+          date: transaction.date,
+          type: transaction.type,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          currency: transaction.account?.currency ?? displayCurrency,
+          category: transaction.category,
+        }))
+      );
+    } catch {
+      return [];
+    }
+  })();
   const recurringCandidate = recurringCandidates[0] ?? null;
   const weeklySpendDelta = weeklySummary.current.expense - weeklySummary.previous.expense;
   const weeklyNetLabel =

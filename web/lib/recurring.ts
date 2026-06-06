@@ -4,7 +4,7 @@ export type RecurringTransactionLike = {
   amount: unknown;
   date: Date;
   type: "income" | "expense" | "transfer";
-  merchantRaw: string;
+  merchantRaw: string | null;
   merchantClean: string | null;
   currency?: string | null;
   category?: {
@@ -42,8 +42,10 @@ export const buildRecurringTransactionSummaries = (transactions: RecurringTransa
       return false;
     }
 
+    const merchantRaw = typeof transaction.merchantRaw === "string" ? transaction.merchantRaw : "";
+
     return (
-      recurringTransactionPattern.test(transaction.merchantRaw) ||
+      recurringTransactionPattern.test(merchantRaw) ||
       recurringTransactionPattern.test(transaction.merchantClean ?? "") ||
       recurringTransactionPattern.test(transaction.category?.name ?? "")
     );
@@ -56,7 +58,7 @@ export const buildRecurringTransactionSummaries = (transactions: RecurringTransa
   const grouped = new Map<string, RecurringTransactionSummary>();
 
   for (const transaction of candidates) {
-    const name = (transaction.merchantClean ?? transaction.merchantRaw).trim();
+    const name = (transaction.merchantClean ?? transaction.merchantRaw ?? transaction.category?.name ?? "Recurring expense").trim();
     const currency = typeof transaction.currency === "string" && transaction.currency.trim() ? transaction.currency.trim().toUpperCase() : null;
     const key = `${name.toLowerCase()}::${currency ?? "PHP"}`;
     const amount = toAmount(transaction.amount);
