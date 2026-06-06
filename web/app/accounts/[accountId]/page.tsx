@@ -49,7 +49,6 @@ import {
   normalizeImportedAccountKey,
   findBestImportedAccountMatch as findBestImportedAccountIdentityMatch,
   mergeImportedWorkspaceTransactions,
-  clearWorkspaceCache,
   type ImportedWorkspaceTransaction,
 } from "@/lib/workspace-cache";
 import {
@@ -3987,19 +3986,17 @@ function AccountDetailPageContent() {
         clearDeletingWorkspaceAccount(workspaceId, accountId);
         markDeletedWorkspaceAccount(workspaceId, accountId);
         applyOptimisticWorkspaceAccountDeletion(workspaceId, accountId);
-        clearWorkspaceCache(workspaceId);
+      }
+
+      const response = await fetch(`/api/accounts/${accountId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to delete account.");
       }
 
       router.replace("/accounts");
-      void fetch(`/api/accounts/${accountId}`, {
-        method: "DELETE",
-        keepalive: true,
-      }).catch(() => {
-        if (workspaceId) {
-          clearDeletedWorkspaceAccount(workspaceId, accountId);
-          clearDeletingWorkspaceAccount(workspaceId, accountId);
-        }
-      });
     } catch (error) {
       const workspaceId = account?.workspaceId ?? selectedWorkspaceId ?? readSelectedWorkspaceId() ?? null;
       if (workspaceId) {

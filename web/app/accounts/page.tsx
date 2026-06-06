@@ -36,7 +36,6 @@ import {
   markDeletedWorkspaceAccount,
   markDeletingWorkspaceAccount,
   clearDeletingWorkspaceAccount,
-  clearWorkspaceCache,
   normalizeImportedAccountKey,
   findBestImportedAccountMatch as findBestImportedAccountIdentityMatch,
   matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
@@ -3056,7 +3055,6 @@ function AccountsPageContent() {
       markDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
       deletedAccountIdsRef.current.add(accountToDelete.id);
       applyOptimisticWorkspaceAccountDeletion(selectedWorkspaceId, accountToDelete.id);
-      clearWorkspaceCache(selectedWorkspaceId);
       flushSync(() => {
         setAccounts((current) => current.filter((account) => account.id !== accountToDelete.id));
         setTransactions((current) => current.filter((transaction) => transaction.accountId !== accountToDelete.id));
@@ -3066,21 +3064,20 @@ function AccountsPageContent() {
         setMessage(`Account "${accountToDelete.name}" deleted.`);
       });
 
-      void fetch(`/api/accounts/${accountToDelete.id}`, {
+      const response = await fetch(`/api/accounts/${accountToDelete.id}`, {
         method: "DELETE",
-        keepalive: true,
-      }).catch(() => {
-        clearDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
-        deletedAccountIdsRef.current.delete(accountToDelete.id);
-        void loadWorkspaceData(selectedWorkspaceId, { silent: true });
       });
+
+      if (!response.ok) {
+        throw new Error(`Unable to delete account "${accountToDelete.name}".`);
+      }
     } catch (error) {
       clearDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
       deletedAccountIdsRef.current.delete(accountToDelete.id);
       clearDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
       deletingAccountIdsRef.current.delete(accountToDelete.id);
       setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
-      void loadWorkspaceData(selectedWorkspaceId, { silent: true });
+      await loadWorkspaceData(selectedWorkspaceId, { silent: true });
       setMessage(error instanceof Error ? error.message : `Unable to delete account "${accountToDelete.name}".`);
     } finally {
       setAccountDeleteBusy(false);
