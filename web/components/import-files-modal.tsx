@@ -8032,7 +8032,7 @@ export function ImportFilesModal({
       const lowerName = item.file.name.toLowerCase();
       return (
         mode === "statement" &&
-        (lowerName.endsWith(".pdf") || lowerName.endsWith(".csv")) &&
+        ((lowerName.endsWith(".pdf") || lowerName.endsWith(".csv")) || isImageImportFile(item.file)) &&
         !shouldSkipClientStatementPreparse(item.file.name)
       );
     });
