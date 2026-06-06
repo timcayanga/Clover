@@ -1372,7 +1372,26 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         });
       }
 
-      await Promise.all([uploadPromise, uploadBankHintPromise]);
+      const hasInlineStatementImageText = isStatementImageUpload && formExtractedText.trim().length > 0;
+
+      if (hasInlineStatementImageText) {
+        await uploadBankHintPromise.catch((error) => {
+          console.warn("Unable to save statement image import hint", {
+            importId,
+            error: summarizeErrorForLog(error),
+          });
+        });
+        after(async () => {
+          await uploadPromise.catch((error) => {
+            console.warn("Unable to finish statement image raw file upload", {
+              importId,
+              error: summarizeErrorForLog(error),
+            });
+          });
+        });
+      } else {
+        await Promise.all([uploadPromise, uploadBankHintPromise]);
+      }
 
       if (knownUnreadableUcpbExcelSample) {
         await updateImportFileCompat(importId, {

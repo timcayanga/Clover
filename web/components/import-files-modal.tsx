@@ -6015,7 +6015,7 @@ export function ImportFilesModal({
         !shouldSkipLocalStatementPreparse &&
         !extractedTextForUpload &&
         itemImportMode === "statement" &&
-        (lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv"))
+        ((lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv")) || isImageImportFile(item.file))
       ) {
         updateItem(itemId, {
           progress: IMPORT_PROGRESS.preparing,
