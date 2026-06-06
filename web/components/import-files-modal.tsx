@@ -270,6 +270,15 @@ const fileAnalyticsBase = (file: File, workspaceId: string) => ({
   file_size_bytes: file.size,
 });
 
+const clearImportInteractionLocks = () => {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  delete document.body.dataset.cloverImportModalLocks;
+  delete document.body.dataset.cloverImportModalOpen;
+};
+
 const getImportErrorCode = (error: unknown) => {
   if (error instanceof Error) {
     return error.name && error.name !== "Error" ? error.name : error.message || "unknown_error";
@@ -2433,6 +2442,8 @@ export function ImportFilesModal({
     }
 
     if (outcome.issueCount === 0) {
+      clearImportInteractionLocks();
+      setLaunchInBackground(true);
       publishImportActivity({
         workspaceId,
         surface: "background",
@@ -2589,6 +2600,7 @@ export function ImportFilesModal({
       autoLoadedQaIdsRef.current.clear();
       localPreparseStartedRef.current.clear();
       localPreparseSummaryByItemIdRef.current.clear();
+      clearImportInteractionLocks();
       autoCloseAfterStartRef.current = false;
       visibilityDeadlineRef.current = null;
       if (visibilityHardStopTimerRef.current) {
@@ -7776,10 +7788,8 @@ export function ImportFilesModal({
       return;
     }
 
-    const body = document.body;
     if (open && (backgroundOnly || launchInBackground || showCompactProgress)) {
-      delete body.dataset.cloverImportModalLocks;
-      delete body.dataset.cloverImportModalOpen;
+      clearImportInteractionLocks();
     }
   }, [backgroundOnly, launchInBackground, open, shouldLockPageInteraction, showCompactProgress]);
 
