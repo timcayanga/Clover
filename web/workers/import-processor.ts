@@ -5382,43 +5382,30 @@ export const processImportFileText = async (
           accountNumber: metadataForParse.accountNumber,
         });
   let parsedRows = parsedRowsAfterFallback.length > 0 ? parsedRowsAfterFallback : parsedRowsInitial;
+  const wiseScreenshotTextLooksLikely =
+    imageImport &&
+    importMode === "statement" &&
+    /\b(?:Includes hidden|Type|Currency|Direction|Refunded|Card checked|To\s+[A-Z]{3})\b/i.test(textForParse) &&
+    /\b(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)\b/i.test(textForParse);
+  const hasWiseDeterministicRows = parsedRows.some((row) => {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    return (
+      /wise/i.test(`${row.institution ?? ""} ${row.accountName ?? ""} ${readParsedRowPayloadText(row, "institutionRaw") ?? ""}`) ||
+      rawPayload?.kind === "wise_mobile_screenshot_transaction" ||
+      rawPayload?.source === "wise_mobile_screenshot"
+    );
+  });
   const isWiseImageStatement =
     imageImport &&
     importMode === "statement" &&
-    /wise/i.test([metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName].filter(Boolean).join(" "));
-  let wiseImageTranscriptAttempted = false;
-  if (isWiseImageStatement && parsedRows.length === 0 && pageImages?.length) {
-    wiseImageTranscriptAttempted = true;
-    await updateImportFileCompat(importFileId, {
-      status: "processing",
-      processingPhase: "identifying_transactions",
-      processingMessage: "Reading Wise screenshot transactions...",
-    });
-    const transcript = await transcribeImportImagesWithOpenAI({
-      fileName,
-      fileType,
-      detectedMetadata: {
-        ...metadataForParse,
-        institution: "Wise",
-        accountName: metadataForParse.accountName ?? "Wise",
-        accountType: "wallet",
-      },
-      pageImages,
-      importMode,
-      timeoutMs: 45_000,
-    });
-    if (transcript?.transcript.trim()) {
-      const transcriptText = normalizeStatementImageOcrText(transcript.transcript);
-      const transcriptRows = parseImportText(transcriptText, fileName, fileType, {
-        institution: "Wise",
-        accountName: metadataForParse.accountName ?? "Wise",
-        accountNumber: metadataForParse.accountNumber,
-      });
-      if (transcriptRows.length > 0) {
-        parsedRows = transcriptRows;
-      }
-    }
-  }
+    (
+      /wise/i.test([metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName].filter(Boolean).join(" ")) ||
+      wiseScreenshotTextLooksLikely ||
+      hasWiseDeterministicRows
+    );
   const hasDeterministicBpiMobileScreenshotRows = parsedRows.some((row) => {
     const rawPayload = row.rawPayload;
     return (
@@ -5608,11 +5595,11 @@ export const processImportFileText = async (
       parsedRows,
       pageImages,
       fileDataBase64: pdfFileDataBase64,
-      preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
+      preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length) || isWiseImageStatement,
       importMode,
       pageImageLimit: imageImport && importMode === "statement" ? 1 : isWiseImageStatement ? 1 : null,
-      timeoutMs: imageImport && importMode === "statement" ? 35_000 : isWiseImageStatement ? 60_000 : null,
-      retryTimeoutMs: imageImport && importMode === "statement" ? 15_000 : isWiseImageStatement ? 20_000 : null,
+      timeoutMs: isWiseImageStatement ? 18_000 : imageImport && importMode === "statement" ? 35_000 : null,
+      retryTimeoutMs: isWiseImageStatement ? 8_000 : imageImport && importMode === "statement" ? 15_000 : null,
     });
 
     openAiMetadata = openAiParsed

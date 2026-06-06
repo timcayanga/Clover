@@ -108,7 +108,7 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/epsaten/.test(lower)) return type === "expense" ? "Cash & ATM" : "Income";
   if (/el\/?espay/.test(lower)) return type === "expense" || type === "transfer" ? "Transfers" : "Income";
   if (/payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
-  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut|yoshinoya/.test(lower)) return "Food & Dining";
+  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut|yoshinoya|bar leone|savory project|gokan|goken/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
@@ -117,7 +117,7 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/travel|airbnb|hotel|airline|flight|tour|holiday/.test(lower)) return "Travel & Lifestyle";
   if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox/.test(lower))
     return "Entertainment";
-  if (/puregold|shop|shopping|mall|amazon|lazada|shopee|retail/.test(lower)) return "Shopping";
+  if (/puregold|shop|shopping|mall|amazon|alibaba|lazada|shopee|retail/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
   if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
   if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";
@@ -4455,8 +4455,8 @@ const guessBpiCreditCategoryName = (description: string, type: TransactionType) 
   if (/expressnet|megalinkw?|\/drw\b/.test(lower)) return "Cash & ATM";
   if (/bill|meralco|bayad center|payment/.test(lower)) return "Bills & Utilities";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
-  if (/food|dining|restaurant|cafe|coffee|japanese|pho hoa|burnt bean|jung one|kiyosa/.test(lower)) return "Food & Dining";
-  if (/shop|shopping|mall|amazon|lazada|shopee|zalora|watsons|iherb|retail/.test(lower)) return "Shopping";
+  if (/food|dining|restaurant|cafe|coffee|japanese|pho hoa|burnt bean|jung one|kiyosa|bar leone|savory project|gokan|goken/.test(lower)) return "Food & Dining";
+  if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|zalora|watsons|iherb|retail/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital|classpass/.test(lower)) return "Health & Wellness";
   if (/business|invoice|client|contract|linkedin|canva/.test(lower)) return "Business";
   if (/travel|airbnb|hotel|airline|flight|tour|holiday|paypal \*getyourguid|paypal \*trenitalias|paypal \*transfeero|paypal \*amami/.test(lower))

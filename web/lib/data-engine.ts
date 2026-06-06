@@ -957,7 +957,7 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/interest\s+earned|interestearned|salary|payroll|income|deposit|cash\s*in\b|cashin\b|cash\/?check\s+deposit|received|credit memo/.test(lower)) return "Income";
   if (/interbankservicecharge|atmwithdrawalacquirerfee|financecharge|financecharges|latepaymentfee|annualfee/.test(compact)) return "Financial";
   if (/incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|systemdebit|systemcredit|miscellaneousdebit|investmentsweep/.test(compact)) return "Transfers";
-  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout/.test(lower)) return "Food & Dining";
+  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|bar leone|savory project|gokan|goken/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
   if (/discord\s+nitro/.test(lower) || /discordnitro/.test(compact)) return "Subscriptions";
@@ -967,7 +967,7 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/travel|airbnb|hotel|airline|flight|tour|holiday/.test(lower)) return "Travel & Lifestyle";
   if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox/.test(lower))
     return "Entertainment";
-  if (/shop|shopping|mall|amazon|lazada|shopee|retail/.test(lower)) return "Shopping";
+  if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|retail/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
   if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
   if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";

@@ -393,6 +393,20 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
     return 0;
   }
 
+  const leftWiseWalletCurrency = isWiseWalletWithoutVisibleAccountNumber(left)
+    ? normalizeImportedCurrencyCode(left.currency)
+    : null;
+  const rightWiseWalletCurrency = isWiseWalletWithoutVisibleAccountNumber(right)
+    ? normalizeImportedCurrencyCode(right.currency)
+    : null;
+  if (
+    leftWiseWalletCurrency &&
+    rightWiseWalletCurrency &&
+    leftWiseWalletCurrency !== rightWiseWalletCurrency
+  ) {
+    return 0;
+  }
+
   const leftKey = normalizeImportedAccountKey(left.name, left.institution, left.accountNumber, left.type, left.currency);
   const rightKey = normalizeImportedAccountKey(
     right.name,
