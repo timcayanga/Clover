@@ -23,11 +23,18 @@ type ResolvedReceiptAccount = {
   reason: string;
 };
 
-type ReceiptInstitutionFallbackHint = {
+export type ReceiptInstitutionFallbackHint = {
   institution: string | null;
   accountName?: string | null;
   accountType?: string | null;
   reason?: string | null;
+};
+
+export type ReceiptInstitutionAccountDraft = {
+  accountName: string;
+  institution: string | null;
+  accountType: string;
+  reason: string;
 };
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -223,5 +230,84 @@ export const resolveReceiptInstitutionFallbackToAccount = (
     reason:
       hint?.reason?.trim() ||
       `Matched ${hint?.institution ?? hint?.accountName ?? "institution"} screenshot to the only saved ${account.institution ?? account.name} account`,
+  };
+};
+
+export const buildReceiptInstitutionAccountDraft = (
+  hint: ReceiptInstitutionFallbackHint | null
+): ReceiptInstitutionAccountDraft | null => {
+  const institutionKey = canonicalInstitutionKey(hint?.institution ?? hint?.accountName ?? null);
+  if (!institutionKey) {
+    return null;
+  }
+
+  const hintedType = normalizeToken(hint?.accountType ?? "");
+  const fallbackName = normalizeWhitespace(hint?.accountName ?? hint?.institution ?? "");
+  const fallbackInstitution = normalizeWhitespace(hint?.institution ?? hint?.accountName ?? "") || null;
+  const fallbackReason =
+    hint?.reason?.trim() ||
+    `Detected ${fallbackInstitution ?? fallbackName || "wallet"} screenshot with no existing matching account.`;
+
+  if (institutionKey === "gcash") {
+    return {
+      accountName: "GCash",
+      institution: "GCash",
+      accountType: "wallet",
+      reason: fallbackReason,
+    };
+  }
+
+  if (institutionKey === "maya") {
+    return {
+      accountName: "Maya Wallet",
+      institution: "Maya",
+      accountType: "wallet",
+      reason: fallbackReason,
+    };
+  }
+
+  if (institutionKey === "unionbank") {
+    return {
+      accountName: "UnionBank",
+      institution: "UnionBank",
+      accountType: hintedType || "bank",
+      reason: fallbackReason,
+    };
+  }
+
+  if (institutionKey === "chinabank") {
+    return {
+      accountName: "Chinabank",
+      institution: "Chinabank",
+      accountType: hintedType || "bank",
+      reason: fallbackReason,
+    };
+  }
+
+  if (institutionKey === "metrobank") {
+    return {
+      accountName: "Metrobank",
+      institution: "Metrobank",
+      accountType: hintedType || "bank",
+      reason: fallbackReason,
+    };
+  }
+
+  if (institutionKey === "pnb") {
+    return {
+      accountName: "PNB",
+      institution: "PNB",
+      accountType: hintedType || "bank",
+      reason: fallbackReason,
+    };
+  }
+
+  const inferredType = hintedType || getHintAccountType(fallbackName) || "bank";
+  const inferredName = fallbackName || fallbackInstitution || "Imported account";
+  return {
+    accountName: inferredName,
+    institution: fallbackInstitution,
+    accountType: inferredType,
+    reason: fallbackReason,
   };
 };

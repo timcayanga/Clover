@@ -1,5 +1,6 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { buildImportKey } from "@/lib/import-keys";
+import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import {
   detectStatementMetadataFromText,
   countParsedTransactionRows,
@@ -34,6 +35,7 @@ import type { Prisma } from "@prisma/client";
 import { makeImportFileBytesFingerprint } from "@/lib/import-file-text.server";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import {
+  buildReceiptInstitutionAccountDraft,
   resolveReceiptAccountHintToAccount,
   resolveReceiptInstitutionFallbackToAccount,
 } from "@/lib/receipt-account-resolution";
@@ -326,6 +328,67 @@ const resolveOrCreateReceiptCategoryId = async (workspaceId: string, categoryNam
   return createdCategory.id;
 };
 
+const createDetectedReceiptInstitutionAccount = async (params: {
+  workspaceId: string;
+  currency: string;
+  institutionHint: {
+    institution: string | null;
+    accountName?: string | null;
+    accountType?: string | null;
+    reason?: string | null;
+  } | null;
+}) => {
+  const draft = buildReceiptInstitutionAccountDraft(params.institutionHint);
+  if (!draft) {
+    return null;
+  }
+
+  const existing = await prisma.account.findFirst({
+    where: {
+      workspaceId: params.workspaceId,
+      type: draft.accountType,
+      OR: [
+        {
+          institution: draft.institution,
+        },
+        {
+          name: formatUploadAccountDisplayName(draft.accountName, draft.institution, null, draft.accountType),
+        },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+      currency: true,
+    },
+  });
+  if (existing) {
+    return existing;
+  }
+
+  return prisma.account.create({
+    data: {
+      workspaceId: params.workspaceId,
+      name: formatUploadAccountDisplayName(draft.accountName, draft.institution, null, draft.accountType),
+      institution: draft.institution,
+      type: draft.accountType,
+      currency: params.currency,
+      source: "upload",
+    },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+      currency: true,
+    },
+  });
+};
+
 const formatReceiptMoney = (amount: number, currency: string) => `${currency} ${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const buildTrainedReceiptDetails = (fixture: TrainedReceiptFixture) => {
@@ -463,6 +526,29 @@ const importTrainedReceiptFixture = async (params: {
         : null,
     workspaceAccounts
   );
+  const createdInstitutionAccount =
+    !directAccountResolution && !institutionFallbackResolution
+      ? await createDetectedReceiptInstitutionAccount({
+          workspaceId: params.workspaceId,
+          currency: params.fixture.currency,
+          institutionHint:
+            /gcash/i.test(params.fixture.paymentChannel)
+              ? {
+                  institution: "GCash",
+                  accountName: "GCash",
+                  accountType: "wallet",
+                  reason: "Receipt screenshot detected as a GCash transfer.",
+                }
+              : /maya/i.test(params.fixture.paymentChannel)
+                ? {
+                    institution: "Maya",
+                    accountName: "Maya Wallet",
+                    accountType: "wallet",
+                    reason: "Receipt screenshot detected as a Maya transfer.",
+                  }
+                : null,
+        })
+      : null;
   const matchedAccountId = directAccountResolution?.accountId ?? institutionFallbackResolution?.accountId ?? null;
   const matchedAccount = matchedAccountId
     ? workspaceAccounts.find((account) => account.id === matchedAccountId) ?? null
@@ -478,7 +564,7 @@ const importTrainedReceiptFixture = async (params: {
   if (!cashAccount?.id) {
     throw new Error("Unable to find Cash account for trained receipt import.");
   }
-  const targetAccountId = matchedAccount?.id ?? cashAccount.id;
+  const targetAccountId = matchedAccount?.id ?? createdInstitutionAccount?.id ?? cashAccount.id;
 
   const categoryId = await resolveOrCreateReceiptCategoryId(params.workspaceId, params.fixture.categoryName);
   const transactionDate = new Date(`${params.fixture.date}T00:00:00.000Z`);

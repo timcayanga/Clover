@@ -22,7 +22,11 @@ import {
   storeImportedFileTextCacheRecord,
 } from "@/lib/import-file-text.server";
 import { downloadImportObject } from "@/lib/import-storage.server";
-import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
+import {
+  buildReceiptInstitutionAccountDraft,
+  resolveReceiptAccountHintToAccount,
+  resolveReceiptInstitutionFallbackToAccount,
+} from "@/lib/receipt-account-resolution";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import { parseReceiptText } from "@/lib/split-bill";
 import {
@@ -1077,6 +1081,75 @@ const buildReceiptDetailsFromTrainingFixture = (fixture: TrainedReceiptFixture) 
   },
 });
 
+const inferReceiptInstitutionFallbackHint = (params: {
+  parsedRows: Array<Record<string, unknown>>;
+  receiptDetails: Record<string, unknown> | null;
+  receiptAccountMatch: Record<string, unknown> | null;
+}) => {
+  const detailValues = [
+    params.receiptDetails?.payment_method,
+    params.receiptDetails?.paymentMethod,
+    params.receiptDetails?.payment_channel,
+    params.receiptDetails?.paymentChannel,
+    params.receiptDetails?.merchant_clean,
+    params.receiptDetails?.merchantClean,
+    params.receiptDetails?.merchant_raw,
+    params.receiptDetails?.merchantRaw,
+    params.receiptDetails?.notes,
+    params.receiptDetails?.fullDetails,
+    params.receiptAccountMatch?.account_name,
+    params.receiptAccountMatch?.reason,
+    ...params.parsedRows.flatMap((row) => [
+      row.accountName,
+      row.institution,
+      row.merchantRaw,
+      row.merchantClean,
+      row.description,
+    ]),
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .map((value) => value.trim());
+
+  const joined = detailValues.join(" ").toLowerCase();
+  const accountNameHint =
+    (typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
+      ? params.receiptAccountMatch.account_name.trim()
+      : null) || null;
+  const safeAccountNameHint = accountNameHint && !/^mixed$/i.test(accountNameHint) ? accountNameHint : null;
+
+  const matchers: Array<{
+    pattern: RegExp;
+    institution: string;
+    accountName: string;
+    accountType: "wallet" | "bank";
+    reason: string;
+  }> = [
+    { pattern: /\bgcash\b/, institution: "GCash", accountName: "GCash", accountType: "wallet", reason: "Detected GCash screenshot with no existing GCash account." },
+    { pattern: /\bmaya\b/, institution: "Maya", accountName: "Maya Wallet", accountType: "wallet", reason: "Detected Maya screenshot with no existing Maya account." },
+    { pattern: /\bunion\s*bank\b|\bunionbank\b/, institution: "UnionBank", accountName: "UnionBank", accountType: "bank", reason: "Detected UnionBank screenshot with no existing UnionBank account." },
+    { pattern: /\bchina\s*bank\b|\bchinabank\b/, institution: "Chinabank", accountName: "Chinabank", accountType: "bank", reason: "Detected Chinabank screenshot with no existing Chinabank account." },
+    { pattern: /\bmetro\s*bank\b|\bmetrobank\b/, institution: "Metrobank", accountName: "Metrobank", accountType: "bank", reason: "Detected Metrobank screenshot with no existing Metrobank account." },
+    { pattern: /\bphilippine national bank\b|\bpnb\b/, institution: "PNB", accountName: "PNB", accountType: "bank", reason: "Detected PNB screenshot with no existing PNB account." },
+    { pattern: /\bcimb\b/, institution: "CIMB", accountName: "CIMB", accountType: "bank", reason: "Detected CIMB screenshot with no existing CIMB account." },
+    { pattern: /\bsecurity\s*bank\b/, institution: "Security Bank", accountName: "Security Bank", accountType: "bank", reason: "Detected Security Bank screenshot with no existing Security Bank account." },
+    { pattern: /\bwise\b/, institution: "Wise", accountName: "Wise", accountType: "bank", reason: "Detected Wise screenshot with no existing Wise account." },
+    { pattern: /\bbdo\b|banco de oro/, institution: "BDO", accountName: "BDO", accountType: "bank", reason: "Detected BDO screenshot with no existing BDO account." },
+    { pattern: /\bbpi\b|bank of the philippine islands/, institution: "BPI", accountName: "BPI", accountType: "bank", reason: "Detected BPI screenshot with no existing BPI account." },
+  ];
+
+  const matched = matchers.find((entry) => entry.pattern.test(joined));
+  if (!matched) {
+    return null;
+  }
+
+  return {
+    institution: matched.institution,
+    accountName: safeAccountNameHint ?? matched.accountName,
+    accountType: matched.accountType,
+    reason: matched.reason,
+  };
+};
+
 const resolveWorkspaceCashAccountId = async (workspaceId: string, currency = "PHP") => {
   await ensureWorkspaceCashAccount(workspaceId, currency);
   const normalizedCurrency =
@@ -1092,6 +1165,72 @@ const resolveWorkspaceCashAccountId = async (workspaceId: string, currency = "PH
   });
 
   return cashAccount?.id ?? null;
+};
+
+const ensureDetectedReceiptInstitutionAccount = async (params: {
+  workspaceId: string;
+  currency: string;
+  institutionHint: {
+    institution: string | null;
+    accountName?: string | null;
+    accountType?: string | null;
+    reason?: string | null;
+  } | null;
+}) => {
+  const draft = buildReceiptInstitutionAccountDraft(params.institutionHint);
+  if (!draft) {
+    return null;
+  }
+
+  const compatibleAccountColumns = await getCompatibleAccountColumns();
+  const existing = await prisma.account.findFirst({
+    where: {
+      workspaceId: params.workspaceId,
+      type: draft.accountType,
+      OR: [
+        {
+          institution: draft.institution,
+        },
+        {
+          name: formatUploadAccountDisplayName(draft.accountName, draft.institution, null, draft.accountType),
+        },
+      ],
+    },
+    select: getCompatibleAccountSelect(compatibleAccountColumns),
+  });
+  if (existing) {
+    return existing;
+  }
+
+  try {
+    return await prisma.account.create({
+      data: {
+        workspaceId: params.workspaceId,
+        name: formatUploadAccountDisplayName(draft.accountName, draft.institution, null, draft.accountType),
+        institution: draft.institution,
+        type: draft.accountType,
+        currency: params.currency,
+        source: "upload",
+      },
+      select: getCompatibleAccountSelect(compatibleAccountColumns),
+    });
+  } catch (error) {
+    if (isMissingAccountNumberColumnError(error)) {
+      return await prisma.account.create({
+        data: {
+          workspaceId: params.workspaceId,
+          name: formatUploadAccountDisplayName(draft.accountName, draft.institution, null, draft.accountType),
+          institution: draft.institution,
+          type: draft.accountType,
+          currency: params.currency,
+          source: "upload",
+        },
+        select: getCompatibleAccountSelect(compatibleAccountColumns),
+      });
+    }
+
+    throw error;
+  }
 };
 
 const countRowsWithParseableDates = (rows: Array<{ date?: string | null }>) =>
@@ -5686,15 +5825,60 @@ export const processImportFileText = async (
             where: { workspaceId: importFile.workspaceId },
             select: getCompatibleAccountSelect(compatibleAccountColumns),
           });
-          return resolveReceiptAccountHintToAccount(
-            {
-              accountName: receiptAccountMatch.account_name ?? null,
-              accountLast4: receiptAccountMatch.account_last4 ?? null,
-              confidence: receiptAccountMatch.confidence ?? 0,
-              reason: receiptAccountMatch.reason ?? null,
-            },
+          const institutionFallbackHint = inferReceiptInstitutionFallbackHint({
+            parsedRows: rows,
+            receiptDetails:
+              receiptDetails && typeof receiptDetails === "object" && !Array.isArray(receiptDetails)
+                ? (receiptDetails as Record<string, unknown>)
+                : null,
+            receiptAccountMatch:
+              receiptAccountMatch && typeof receiptAccountMatch === "object" && !Array.isArray(receiptAccountMatch)
+                ? (receiptAccountMatch as Record<string, unknown>)
+                : null,
+          });
+          const directResolution = receiptAccountMatch
+            ? resolveReceiptAccountHintToAccount(
+                {
+                  accountName: receiptAccountMatch.account_name ?? null,
+                  accountLast4: receiptAccountMatch.account_last4 ?? null,
+                  confidence: receiptAccountMatch.confidence ?? 0,
+                  reason: receiptAccountMatch.reason ?? null,
+                },
+                workspaceAccounts
+              )
+            : null;
+          if (directResolution) {
+            return directResolution;
+          }
+
+          const fallbackResolution = resolveReceiptInstitutionFallbackToAccount(
+            institutionFallbackHint,
             workspaceAccounts
           );
+          if (fallbackResolution) {
+            return fallbackResolution;
+          }
+
+          const createdAccount = await ensureDetectedReceiptInstitutionAccount({
+            workspaceId: String(importFile.workspaceId),
+            currency: normalizeInstitutionCurrency(null, resolvedMetadata.currency ?? "PHP", institutionFallbackHint?.institution ?? institutionFallbackHint?.accountName ?? null) ?? (String(resolvedMetadata.currency ?? "PHP").trim().toUpperCase() || "PHP"),
+            institutionHint: institutionFallbackHint,
+          });
+          if (!createdAccount) {
+            return null;
+          }
+
+          return {
+            accountId: createdAccount.id,
+            accountName: createdAccount.name,
+            institution: createdAccount.institution ?? null,
+            accountLast4:
+              typeof createdAccount.accountNumber === "string" && createdAccount.accountNumber.trim()
+                ? createdAccount.accountNumber.replace(/\D/g, "").slice(-4) || null
+                : null,
+            confidence: 88,
+            reason: institutionFallbackHint?.reason?.trim() || "Created a new detected institution account for this receipt screenshot.",
+          };
         })()
       : null;
 
@@ -7133,10 +7317,42 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           : receiptPayloadSource?.receiptAccountMatch && typeof receiptPayloadSource.receiptAccountMatch === "object" && !Array.isArray(receiptPayloadSource.receiptAccountMatch)
             ? (receiptPayloadSource.receiptAccountMatch as Record<string, unknown>)
             : null;
-      const cashAccountId =
+      const receiptInstitutionFallbackHint = inferReceiptInstitutionFallbackHint({
+        parsedRows: [],
+        receiptDetails: receiptDetailsRecord,
+        receiptAccountMatch: receiptAccountMatchPayload,
+      });
+      const detectedReceiptAccount =
+        receiptDocument?.accountId
+          ? null
+          : await ensureDetectedReceiptInstitutionAccount({
+              workspaceId: String(importFile.workspaceId),
+              currency: receiptCurrency,
+              institutionHint: receiptInstitutionFallbackHint,
+            });
+      const cashAccountId = await resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency);
+      const targetAccountId =
         receiptDocument?.accountId ??
+        detectedReceiptAccount?.id ??
         (documentImport?.accountId && !String(documentImport.accountId).startsWith("optimistic-") ? documentImport.accountId : null) ??
-        (await resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency));
+        cashAccountId;
+      const receiptPaymentMethod =
+        receiptDocument?.paymentMethod ?? (typeof receiptDetailsRecord?.payment_method === "string" ? receiptDetailsRecord.payment_method : null);
+      const receiptNormalizationContext = [
+        receiptMerchantClean,
+        receiptMerchantRaw,
+        receiptPaymentMethod,
+        typeof receiptDetailsRecord?.notes === "string" ? receiptDetailsRecord.notes : null,
+        typeof receiptDetailsRecord?.fullDetails === "string" ? receiptDetailsRecord.fullDetails : null,
+      ]
+        .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+        .join(" ");
+      const normalizedReceiptMerchantClean =
+        /gcash/i.test(String(receiptPaymentMethod ?? "")) && /gcash|wallet transfer|sent via|total amount sent|ref\.?\s*no/i.test(receiptNormalizationContext)
+          ? "GCash Transfer"
+          : /maya/i.test(String(receiptPaymentMethod ?? "")) && /maya|wallet transfer|sent via|total amount sent|ref\.?\s*no/i.test(receiptNormalizationContext)
+            ? "Maya Transfer"
+            : receiptMerchantClean;
       const receiptCategoryName = (() => {
         const trainedCategoryName =
           typeof receiptDetailsRecord?.category_name === "string" && receiptDetailsRecord.category_name.trim()
@@ -7163,7 +7379,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
                     .toLowerCase()
                 : "";
         const lineItemText = receiptLineItems.map((item) => item.description).join(" ").toLowerCase();
-        const receiptContextText = `${receiptMerchantClean || ""} ${receiptMerchantRaw || ""} ${receiptTypeText} ${lineItemText}`.trim();
+        const receiptContextText = `${normalizedReceiptMerchantClean || ""} ${receiptMerchantRaw || ""} ${receiptTypeText} ${lineItemText}`.trim();
 
         if (
           /\btemporary bill\b/.test(receiptTypeText) ||
@@ -7183,7 +7399,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           return "Food & Dining";
         }
 
-        const merchantGuess = guessCategoryName(receiptMerchantClean || receiptMerchantRaw, "expense");
+        const merchantGuess = guessCategoryName(normalizedReceiptMerchantClean || receiptMerchantRaw, "expense");
         if (merchantGuess !== "Other") {
           return merchantGuess;
         }
@@ -7204,11 +7420,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           }
         | null = null;
 
-      if (!createdTransactionId && cashAccountId && receiptAmount !== null && receiptDate) {
+      if (!createdTransactionId && targetAccountId && receiptAmount !== null && receiptDate) {
         existingReceiptTransaction = await prisma.transaction.findFirst({
           where: {
             importFileId,
-            accountId: cashAccountId,
+            accountId: targetAccountId,
           },
           select: { id: true, normalizedPayload: true },
         }).catch(() => null);
@@ -7218,7 +7434,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         } else {
           const insertedTransaction = await insertTransactionCompat({
             workspaceId: String(importFile.workspaceId),
-            accountId: cashAccountId,
+            accountId: targetAccountId,
             importFileId,
             categoryId: receiptCategoryId,
             categoryName: receiptCategoryName,
@@ -7238,8 +7454,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             currency: receiptCurrency,
             type: "expense",
             merchantRaw: receiptMerchantRaw,
-            merchantClean: receiptMerchantClean,
-            description: receiptMerchantClean,
+            merchantClean: normalizedReceiptMerchantClean,
+            description: normalizedReceiptMerchantClean,
             rawPayload: {
               source: "receipt",
               documentType: "receipt",
@@ -7247,7 +7463,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               receiptDetails: {
                 ...(receiptDetailsRecord ?? {}),
                 merchantRaw: receiptMerchantRaw,
-                merchantClean: receiptMerchantClean,
+                merchantClean: normalizedReceiptMerchantClean,
                 transactionDate: receiptDate?.toISOString() ?? null,
                 transactionTime: receiptDocument?.transactionTime ?? null,
                 currency: receiptCurrency,
@@ -7287,7 +7503,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               receiptAccountMatch: receiptAccountMatchPayload as Prisma.InputJsonValue | null,
             } as Prisma.InputJsonValue,
             normalizedPayload: {
-              merchantClean: receiptMerchantClean,
+              merchantClean: normalizedReceiptMerchantClean,
               categoryId: receiptCategoryId,
               categoryName: receiptCategoryName,
               type: "expense",
@@ -7316,7 +7532,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             categoryConfidence: 95,
             normalizedPayload: {
               ...(existingNormalizedPayload ?? {}),
-              merchantClean: receiptMerchantClean,
+              merchantClean: normalizedReceiptMerchantClean,
               categoryId: receiptCategoryId,
               categoryName: receiptCategoryName,
               type: "expense",
@@ -7351,10 +7567,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         await upsertReceiptDocumentCompat({
           workspaceId: String(importFile.workspaceId),
           documentImportId: documentImport.id,
-          accountId: cashAccountId,
+          accountId: targetAccountId,
           transactionId: createdTransactionId,
           merchantRaw: receiptMerchantRaw,
-          merchantClean: receiptMerchantClean,
+          merchantClean: normalizedReceiptMerchantClean,
           transactionDate: receiptDate,
           transactionTime: typeof receiptDetailsRecord?.transaction_time === "string" ? receiptDetailsRecord.transaction_time : receiptDocument?.transactionTime ?? null,
           currency: receiptCurrency,
@@ -7375,7 +7591,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             receiptDetails: {
               ...(receiptDetailsRecord ?? {}),
               merchantRaw: receiptMerchantRaw,
-              merchantClean: receiptMerchantClean,
+              merchantClean: normalizedReceiptMerchantClean,
               transactionDate: receiptDate?.toISOString() ?? null,
               transactionTime: typeof receiptDetailsRecord?.transaction_time === "string" ? receiptDetailsRecord.transaction_time : receiptDocument?.transactionTime ?? null,
               currency: receiptCurrency,
@@ -7422,7 +7638,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         imported: createdTransactionId ? 1 : 0,
         duplicate: false,
         metadata: detectStatementMetadataFromText("", importFile.fileName),
-        accountId: cashAccountId ?? documentImport?.accountId ?? accountId ?? null,
+        accountId: targetAccountId ?? documentImport?.accountId ?? accountId ?? null,
         confirmedTransactionsCount: createdTransactionId ? 1 : 0,
         insightSummary: null,
         accountBalance: null,

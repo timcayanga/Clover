@@ -25,7 +25,7 @@ import {
   parseImportText,
 } from "@/lib/import-parser";
 import { parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
-import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
+import { buildReceiptInstitutionAccountDraft, resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { getImportErrorSpec, isResumableImportErrorCode, type ImportErrorStage, type ImportErrorSpec } from "@/lib/import-error-spec";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
@@ -5376,8 +5376,45 @@ export function ImportFilesModal({
         const matchedReceiptAccount = receiptHint
           ? accounts.find((account) => account.id === receiptHint.accountId) ?? null
           : null;
+        const detectedReceiptInstitutionAccount =
+          !matchedReceiptAccount
+            ? buildReceiptInstitutionAccountDraft(
+                /gcash/i.test(String(receiptPreview.paymentMethod ?? ""))
+                  ? {
+                      institution: "GCash",
+                      accountName: "GCash",
+                      accountType: "wallet",
+                      reason: "Receipt payment channel was identified as GCash.",
+                    }
+                  : /maya/i.test(String(receiptPreview.paymentMethod ?? ""))
+                    ? {
+                        institution: "Maya",
+                        accountName: "Maya Wallet",
+                        accountType: "wallet",
+                        reason: "Receipt payment channel was identified as Maya.",
+                      }
+                    : null
+              )
+            : null;
         const cashAccount = resolveCashAccountOption(accounts);
-        const targetAccount = matchedReceiptAccount ?? cashAccount;
+        const targetAccount =
+          matchedReceiptAccount ??
+          (detectedReceiptInstitutionAccount
+            ? {
+                id: `optimistic-${crypto.randomUUID()}`,
+                name: formatUploadAccountDisplayName(
+                  detectedReceiptInstitutionAccount.accountName,
+                  detectedReceiptInstitutionAccount.institution,
+                  null,
+                  detectedReceiptInstitutionAccount.accountType
+                ),
+                institution: detectedReceiptInstitutionAccount.institution,
+                accountNumber: null,
+                type: detectedReceiptInstitutionAccount.accountType,
+                currency: receiptPreview.currency ?? "PHP",
+              }
+            : null) ??
+          cashAccount;
         if (!targetAccount) {
           return;
         }
