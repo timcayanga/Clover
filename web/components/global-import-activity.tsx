@@ -55,7 +55,17 @@ const canShowImportActivityOnPath = (pathname: string | null) => {
 };
 
 const dismissedImportActivityStorageKey = "clover.import.activity.dismissed.v1";
-const staleActiveImportTimeoutMs = 2 * 60 * 1000;
+const staleActiveImportBaseTimeoutMs = 2 * 60 * 1000;
+const staleActiveImportPerFileTimeoutMs = 30 * 1000;
+const staleActiveImportMaxTimeoutMs = 12 * 60 * 1000;
+
+const getStaleActiveImportTimeoutMs = (activity: ImportActivitySnapshot) => {
+  const fileTotal = Number.isFinite(Number(activity.fileTotal)) ? Math.max(1, Number(activity.fileTotal)) : 1;
+  return Math.min(
+    staleActiveImportMaxTimeoutMs,
+    staleActiveImportBaseTimeoutMs + Math.max(0, fileTotal - 1) * staleActiveImportPerFileTimeoutMs
+  );
+};
 
 const getDismissKey = (activity: ImportActivitySnapshot | null) => {
   if (!activity) {
@@ -213,7 +223,7 @@ export function GlobalImportActivity() {
       return;
     }
 
-    const remainingMs = Math.max(0, staleActiveImportTimeoutMs - (Date.now() - activity.updatedAt));
+    const remainingMs = Math.max(0, getStaleActiveImportTimeoutMs(activity) - (Date.now() - activity.updatedAt));
     const timeout = window.setTimeout(() => {
       const current = readImportActivity();
       if (!current || current.status !== "active" || current.updatedAt !== activity.updatedAt) {

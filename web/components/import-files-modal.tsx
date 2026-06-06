@@ -1806,6 +1806,9 @@ const MAX_IMPORT_FILES_PER_BATCH = 25;
 const IMPORT_VISIBILITY_BASE_TIMEOUT_MS = 30_000;
 const IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 15_000;
 const IMPORT_VISIBILITY_MAX_TIMEOUT_MS = 2 * 60_000;
+const IMPORT_IMAGE_HEAVY_VISIBILITY_BASE_TIMEOUT_MS = 60_000;
+const IMPORT_IMAGE_HEAVY_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 20_000;
+const IMPORT_IMAGE_HEAVY_VISIBILITY_MAX_TIMEOUT_MS = 5 * 60_000;
 const IMPORT_SERVER_HEAVY_VISIBILITY_BASE_TIMEOUT_MS = 60_000;
 const IMPORT_SERVER_HEAVY_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 30_000;
 const IMPORT_SERVER_HEAVY_VISIBILITY_MAX_TIMEOUT_MS = 4 * 60_000;
@@ -1915,6 +1918,17 @@ const isServerHeavyStatementBatchItem = (item: Pick<QueuedFile, "file" | "import
 const getImportVisibilityTimeoutMsForItems = (items: Array<Pick<QueuedFile, "file" | "importMode">>) => {
   const fileCount = Math.max(1, items.length);
   const hasServerHeavyBatch = items.some(isServerHeavyStatementBatchItem);
+  const hasOnlyFastImages = items.length > 0 && items.every((item) => {
+    const mode = inferImportModeForFile(item.file, item.importMode ?? "statement");
+    return isImageImportFile(item.file) && (mode === "statement" || mode === "receipt");
+  });
+  if (hasOnlyFastImages) {
+    return Math.min(
+      IMPORT_IMAGE_HEAVY_VISIBILITY_MAX_TIMEOUT_MS,
+      IMPORT_IMAGE_HEAVY_VISIBILITY_BASE_TIMEOUT_MS +
+        Math.max(0, fileCount - 1) * IMPORT_IMAGE_HEAVY_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS
+    );
+  }
   if (!hasServerHeavyBatch) {
     return getImportVisibilityTimeoutMs(fileCount);
   }
@@ -1979,21 +1993,26 @@ const summarizeVisibilityOutcome = (
     (item) => !successful.includes(item) && !failed.includes(item) && !partial.includes(item)
   );
 
+  const queued = blocked.filter((item) => item.status === "pending" && !item.importFileId && item.progress < IMPORT_PROGRESS.uploading);
+  const blockedFailures = blocked.filter((item) => !queued.includes(item));
+
   const listNames = (label: string, entries: QueuedFile[]) =>
     entries.length > 0 ? `${label}: ${entries.map((entry) => entry.file.name).join(", ")}.` : "";
-  const issueCount = partial.length + failed.length + blocked.length;
+  const failureCount = failed.length + blockedFailures.length;
 
   return {
     successful,
     partial,
     failed,
     blocked,
-    issueCount,
+    queued,
+    failureCount,
     message: [
-      `${successful.length} visible, ${partial.length} partially parsed, ${failed.length + blocked.length} failed.`,
+      `${successful.length} visible, ${partial.length} partially parsed, ${queued.length} queued, ${failed.length + blockedFailures.length} failed.`,
       listNames("Partial", partial),
-      listNames("Failed", [...failed, ...blocked]),
-      partial.length > 0
+      listNames("Queued", queued),
+      listNames("Failed", [...failed, ...blockedFailures]),
+      partial.length > 0 || queued.length > 0
         ? `Clover will keep working in the background for up to ${Math.round(IMPORT_BACKGROUND_HARD_STOP_MS / 60_000)} minutes.`
         : "",
     ]
@@ -2416,6 +2435,19 @@ export function ImportFilesModal({
           };
         }
 
+        if (reason !== "visible") {
+          return {
+            ...item,
+            status: "pending",
+            error: null,
+            errorCode: null,
+            errorTitle: null,
+            errorNextSteps: null,
+            progress: Math.max(item.progress, IMPORT_PROGRESS.pending),
+            progressLabel: "Queued in background",
+          };
+        }
+
         return {
           ...item,
           status: "error",
@@ -2444,13 +2476,34 @@ export function ImportFilesModal({
       visibilityHardStopTimerRef.current = null;
     }
 
-    if (outcome.issueCount > 0) {
+    if (outcome.failureCount > 0) {
       clearImportActivity();
       lastImportActivityRef.current = null;
       return;
     }
 
-    if (outcome.issueCount === 0) {
+    if (outcome.partial.length > 0 || outcome.queued.length > 0) {
+      clearImportInteractionLocks();
+      setLaunchInBackground(true);
+      publishImportActivity({
+        workspaceId,
+        surface: "background",
+        status: "active",
+        fileName: currentItems[currentItems.length - 1]?.file.name ?? null,
+        fileIndex: Math.max(1, outcome.successful.length),
+        fileTotal: currentItems.length,
+        completedFiles: outcome.successful.length,
+        progress: Math.min(99, Math.max(IMPORT_PROGRESS.uploading, Math.round((outcome.successful.length / currentItems.length) * 100))),
+        detail: outcomeMessage,
+        summary: completedSummary,
+        errorMessage: null,
+        errorTitle: null,
+        errorNextSteps: null,
+      });
+      return;
+    }
+
+    if (outcome.failureCount === 0) {
       clearImportInteractionLocks();
       setLaunchInBackground(true);
       publishImportActivity({
@@ -8059,7 +8112,7 @@ export function ImportFilesModal({
 
       const results: Array<{ itemId: string; result: ImportProcessResult }> = [];
       let nextIndex = 0;
-      const workerCount = Math.min(queue.every(isServerHeavyStatementBatchItem) ? 4 : 3, queue.length);
+      const workerCount = Math.min(queue.every(isServerHeavyStatementBatchItem) ? 4 : 6, queue.length);
 
       const runWorker = async () => {
         while (!uploadCancelRequestedRef.current) {

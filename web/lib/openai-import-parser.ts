@@ -899,6 +899,21 @@ const hasVisibleWiseDateHeader = (value?: string | null) => {
   return Boolean(firstLine && wiseVisibleDateHeaderPattern.test(firstLine));
 };
 
+const parseVisibleWiseDateHeader = (value?: string | null) => {
+  const firstLine = firstNonEmptyLine(value);
+  if (!firstLine || !wiseVisibleDateHeaderPattern.test(firstLine)) {
+    return null;
+  }
+
+  const normalized = firstLine.replace(/\bSept\b/i, "Sep").replace(/,/g, "").trim();
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString().slice(0, 10);
+};
+
 const summaryRowPatterns = [
   /previous\s+statement\s+balance/i,
   /previous\s+balance/i,
@@ -2013,7 +2028,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           ? "Wise"
           : simplifyInstitutionName(institution ?? value.account.institution_name ?? params.detectedMetadata?.institution ?? null) ?? institution ?? null;
       const rowAccountName = looksLikeWiseWalletScreenshot ? "Wise" : accountNameCandidate ?? value.account.display_name ?? null;
-      const rowDate = row.date ?? row.transaction_date ?? row.post_date ?? null;
+      const recoveredWiseDate = looksLikeWiseWalletScreenshot ? parseVisibleWiseDateHeader(evidenceText) : null;
+      const rowDate = row.date ?? row.transaction_date ?? row.post_date ?? recoveredWiseDate ?? null;
       const evidenceHasDate = hasVisibleWiseDateHeader(evidenceText);
       const todayIso = new Date().toISOString().slice(0, 10);
       const wiseUiNoise =
@@ -2030,6 +2046,10 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         (!rowDate || rowDate === todayIso) &&
         !/\b(?:Added|Refunded|Received|Sent|To\s+[A-Z]{3})\b/i.test(`${rawName} ${description} ${evidenceText ?? ""}`);
       if (wiseUiNoise || wiseZeroVerification || wiseUndatedHallucination) {
+        return null;
+      }
+
+      if (looksLikeWiseWalletScreenshot && !rowDate) {
         return null;
       }
 

@@ -9,9 +9,11 @@ import { parseImportText } from "@/lib/import-parser";
 const webRoot = basename(process.cwd()) === "web" ? process.cwd() : join(process.cwd(), "web");
 loadEnvConfig(webRoot);
 
-const sampleRoot =
-  process.env.CLOVER_WISE_SCREENSHOT_ROOT ??
-  "/Users/TimCayanga1/Documents/Bank Screenshots";
+const sampleRoots = [
+  process.env.CLOVER_WISE_SCREENSHOT_ROOT,
+  "/Users/TimCayanga1/Documents/Bank Screenshots/Wise",
+  "/Users/TimCayanga1/Documents/Bank Screenshots",
+].filter((value): value is string => Boolean(value && value.trim()));
 
 const checks = [
   { fileName: "IMG_1327.PNG", minimumRows: 4 },
@@ -43,8 +45,18 @@ const main = async () => {
   let totalRows = 0;
 
   for (const check of checks) {
-    const absolutePath = join(sampleRoot, check.fileName);
-    const text = await readImageText(absolutePath);
+    let resolvedPath: string | null = null;
+    for (const candidate of sampleRoots.map((root) => join(root, check.fileName))) {
+      try {
+        await readFile(candidate);
+        resolvedPath = candidate;
+        break;
+      } catch {
+        // Try the next candidate root.
+      }
+    }
+    assert.ok(resolvedPath, `${check.fileName} should exist in one of: ${sampleRoots.join(", ")}`);
+    const text = await readImageText(resolvedPath);
     const metadata = detectStatementMetadataFromText(text);
     const rows = parseImportText(text, check.fileName, "image/png", {
       institution: metadata.institution,
