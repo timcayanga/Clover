@@ -1315,7 +1315,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         importMode,
         trainingMode: formTrainingMode,
       });
-      const cachedDocRecordPromise = shouldQueueDocumentUpload || isNoisyPdfBank
+      const shouldUseCachedExtractionRecord =
+        shouldQueueDocumentUpload || isNoisyPdfBank || isStatementImageUpload;
+      const cachedDocRecordPromise = shouldUseCachedExtractionRecord
         ? loadImportFileExtractionCache({
             workspaceId: String(importFile.workspaceId),
             fileFingerprint,
@@ -1642,7 +1644,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         (forceInlineProcessing || shouldProcessKnownStatementInline || isNoisyPdfBank || isPnbPdfUpload || treatAsKnownUnionBankSampleStatement) &&
         (hasExtractedText || canReuseCachedParseSnapshot || isNoisyPdfBank || isPnbPdfUpload || treatAsKnownUnionBankSampleStatement) &&
         (parsedMetadataConfidence >= 80 || shouldProcessKnownStatementInline || isNoisyPdfBank || isPnbPdfUpload || treatAsKnownUnionBankSampleStatement);
+      const shouldProcessInlineStatementImage =
+        isStatementImageUpload && bytes.length <= 10_000_000;
       const shouldProcessInline =
+        shouldProcessInlineStatementImage ||
         (!shouldQueueDocumentUpload &&
           !isPdfUpload(effectiveFileName, effectiveFileType) &&
           ((hasExtractedText && parsedMetadataConfidence >= 95 && bytes.length <= 8_000_000) ||
