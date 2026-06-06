@@ -593,6 +593,83 @@ const updateImportFileWithTxCompat = async (
   );
 };
 
+const rebindResolvedImportAccount = async <
+  T extends {
+    id: string;
+    workspaceId?: string | null;
+    name: string;
+    institution: string | null;
+    accountNumber: string | null;
+    type: AccountType;
+    currency?: string | null;
+    source?: string | null;
+  },
+>(
+  workspaceId: string,
+  account: T | null,
+  compatibleColumns: Set<string>
+) => {
+  if (!account) {
+    return null;
+  }
+
+  const currentAccount = await prisma.account.findUnique({
+    where: { id: account.id },
+    select: getCompatibleAccountSelect(compatibleColumns),
+  });
+  if (currentAccount) {
+    return currentAccount;
+  }
+
+  const workspaceAccounts = await prisma.account.findMany({
+    where: { workspaceId },
+    select: getCompatibleAccountSelect(compatibleColumns),
+  });
+  const accountNumber = typeof account.accountNumber === "string" && account.accountNumber.trim() ? account.accountNumber.trim() : null;
+  const looksWiseWallet =
+    account.type === "wallet" &&
+    !accountNumber &&
+    /wise/i.test(`${account.institution ?? ""} ${account.name ?? ""}`);
+  const normalizedWiseCurrency = looksWiseWallet
+    ? normalizeWiseWalletCurrencyCode(account.currency ?? null) ??
+      normalizeInstitutionCurrency("Wise", account.currency ?? null, account.name ?? null)
+    : null;
+
+  const reboundAccount =
+    (looksWiseWallet
+      ? workspaceAccounts
+          .filter((candidate) => candidate.source === "upload")
+          .filter((candidate) => candidate.type === "wallet")
+          .filter((candidate) => !String(candidate.accountNumber ?? "").replace(/\D/g, ""))
+          .filter((candidate) => /wise/i.test(`${candidate.institution ?? ""} ${candidate.name ?? ""}`))
+          .find((candidate) => {
+            const candidateCurrency =
+              normalizeWiseWalletCurrencyCode(candidate.currency ?? null) ??
+              normalizeInstitutionCurrency("Wise", candidate.currency ?? null, candidate.name ?? null);
+            return candidateCurrency === normalizedWiseCurrency;
+          }) ?? null
+      : null) ??
+    workspaceAccounts.find((candidate) =>
+      matchesImportedAccountIdentity(candidate, {
+        name: account.name,
+        institution: account.institution,
+        accountNumber,
+        type: account.type,
+        currency: "currency" in account ? account.currency ?? null : null,
+      })
+    ) ??
+    (!accountNumber
+      ? findBestImportedAccountMatch(workspaceAccounts, {
+          name: account.name,
+          institution: account.institution,
+          accountNumber: null,
+          type: account.type,
+        })
+      : null);
+
+  return reboundAccount ?? null;
+};
+
 const normalizeImportConfidenceScore = (value: unknown) => {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return 0;
@@ -7472,6 +7549,17 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
 
     accountByGroupKey.set(group.key, groupAccount);
     resolvedAccountSequence += 1;
+  }
+  const workspaceIdForResolvedAccounts = String(importFile.workspaceId);
+  for (const [groupKey, groupAccount] of Array.from(accountByGroupKey.entries())) {
+    const reboundAccount = await rebindResolvedImportAccount(
+      workspaceIdForResolvedAccounts,
+      groupAccount,
+      compatibleAccountColumns
+    );
+    if (reboundAccount) {
+      accountByGroupKey.set(groupKey, reboundAccount);
+    }
   }
   const account = accountByGroupKey.get(parsedAccountGroups[0]?.key ?? "__default__") ?? accountByGroupKey.values().next().value ?? null;
   if (!account) {

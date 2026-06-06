@@ -1825,7 +1825,9 @@ const isLikelyLowQualityUnionBankStatementFile = (fileName: string) =>
   isLikelyLowQualityUnionBankStatementFilename(fileName) || normalizeBankName(fileName) === "UnionBank";
 
 const shouldRequireVisibleRowsForImport = (fileName: string) =>
-  normalizeBankName(fileName) === "UnionBank" || isLikelyLowQualityUnionBankStatementFilename(fileName);
+  normalizeBankName(fileName) === "UnionBank" ||
+  isLikelyLowQualityUnionBankStatementFilename(fileName) ||
+  isGenericMobileScreenshotFileName(fileName);
 
 const importSummaryHasVisibleRows = (summary: UploadInsightsSummary | null | undefined) => {
   const rowsImported = Number(summary?.rowsImported ?? 0);
@@ -3601,7 +3603,12 @@ export function ImportFilesModal({
     const startedAt = Date.now();
     const requiresVisibleRows = shouldRequireVisibleRowsForImport(summaryContext.fileName);
     const allowFilenameFallbackIdentity = !isGenericMobileScreenshotFileName(summaryContext.fileName);
-    const MAX_WAIT_MS = backgroundOnly ? IMPORT_BACKGROUND_HARD_STOP_MS : requiresVisibleRows ? 75_000 : 180_000;
+    const isGenericScreenshotStatement = isGenericMobileScreenshotFileName(summaryContext.fileName);
+    const MAX_WAIT_MS = backgroundOnly
+      ? IMPORT_BACKGROUND_HARD_STOP_MS
+      : requiresVisibleRows || isGenericScreenshotStatement
+        ? 4 * 60_000
+        : 180_000;
     let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
@@ -3644,6 +3651,10 @@ export function ImportFilesModal({
         if (!latestResolvedAccountId && primaryStatusAccountSummary?.accountId) {
           latestResolvedAccountId = primaryStatusAccountSummary.accountId;
         }
+        const hasVisibleImportPresence =
+          Boolean(payload.visibleImportComplete) ||
+          confirmedTransactionsCount > 0 ||
+          statusAccountSummaries.some((summary) => Boolean(summary.accountId) && Number(summary.rowsImported ?? 0) > 0);
         const telemetryPhase = typeof payload.telemetryPhase === "string" ? payload.telemetryPhase : null;
         const telemetryLabel = typeof payload.telemetryLabel === "string" ? payload.telemetryLabel : null;
         const telemetryMessage = typeof payload.telemetryMessage === "string" ? payload.telemetryMessage : null;
@@ -5718,7 +5729,7 @@ export function ImportFilesModal({
         }
 
         if (importStatus === "failed") {
-          if (parsedRowsCount > 0 || confirmedTransactionsCount > 0) {
+          if (hasVisibleImportPresence) {
             closeImportAsRecoverable(
               itemId,
               fileName,
@@ -5792,8 +5803,7 @@ export function ImportFilesModal({
         });
 
         if (Date.now() - startedAt >= MAX_WAIT_MS) {
-          const hasRecoverableProgress =
-            Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0;
+          const hasRecoverableProgress = hasVisibleImportPresence;
           if (hasRecoverableProgress) {
             closeImportAsRecoverable(
               itemId,
@@ -5869,8 +5879,7 @@ export function ImportFilesModal({
       });
 
       if (Date.now() - startedAt >= MAX_WAIT_MS) {
-        const hasRecoverableProgress =
-          Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0;
+        const hasRecoverableProgress = hasVisibleImportPresence;
         if (hasRecoverableProgress) {
           closeImportAsRecoverable(
             itemId,
@@ -5889,7 +5898,7 @@ export function ImportFilesModal({
       await sleep(500);
     }
 
-    const hasRecoverableFinalProgress = Boolean(importFileId);
+    const hasRecoverableFinalProgress = false;
 
     if (hasRecoverableFinalProgress) {
       closeImportAsRecoverable(
