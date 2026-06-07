@@ -5563,11 +5563,16 @@ export function ImportFilesModal({
         return;
       }
 
-      const accountName =
+      const rawAccountName =
         mobileWalletIdentity?.accountName ??
         preferredStatementIdentity?.accountName ??
         guessedIdentity?.accountName ??
         (isGenericMobileScreenshotFileName(item.file.name) ? null : deriveFallbackAccountNameFromFileName(item.file.name));
+      const suppressFilenameAccountName =
+        isGenericMobileScreenshotFileName(item.file.name) &&
+        Boolean(rawAccountName) &&
+        rawAccountName.trim().toLowerCase() === deriveFallbackAccountNameFromFileName(item.file.name).trim().toLowerCase();
+      const accountName = suppressFilenameAccountName ? null : rawAccountName;
       const institution =
         mobileWalletIdentity?.institution ??
         preferredStatementIdentity?.institution ??
@@ -5597,21 +5602,27 @@ export function ImportFilesModal({
       const endingBalance = mobileWalletIdentity
         ? null
         : toBalanceString(localMetadata?.endingBalance ?? getTrailingBalanceFromParsedRows(parsedRows) ?? null);
+      const resolvedAccountName =
+        accountName ??
+        (institution || accountNumber
+          ? formatUploadAccountDisplayName(institution ?? "Imported account", institution, accountNumber, accountType)
+          : null);
 
       const currentItem = itemsRef.current.find((entry) => entry.id === itemId);
       if (!currentItem || currentItem.status === "done" || currentItem.status === "error" || currentItem.confirmationState === "confirmed") {
         return;
       }
 
-      const resolvedAccountId = resolveLocalAccountId(accountName, institution, accountNumber);
+      const resolvedAccountId = resolveLocalAccountId(resolvedAccountName, institution, accountNumber);
       const optimisticAccountId = resolvedAccountId.startsWith("optimistic-") ? resolvedAccountId : null;
       const localImportFileId = item.importFileId ?? item.id;
+      const previewAccountName = resolvedAccountName ?? institution ?? "Imported account";
 
       const summary = buildOptimisticUploadSummary(
         item.file.name,
         parsedRows.length,
         resolvedAccountId,
-        accountName,
+        previewAccountName,
         institution,
         accountType,
         optimisticAccountId,
@@ -5619,7 +5630,7 @@ export function ImportFilesModal({
         buildOptimisticPreviewTransactions(parsedRows, {
           importFileId: localImportFileId,
           accountId: resolvedAccountId,
-          accountName,
+          accountName: previewAccountName,
           institution,
           accountNumber,
         }),
@@ -5638,9 +5649,9 @@ export function ImportFilesModal({
       });
       window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
 
-      if (accountName || institution || accountNumber) {
+      if (resolvedAccountName || institution || accountNumber) {
         void ensureTargetAccountId(
-          accountName,
+          resolvedAccountName,
           institution,
           accountType,
           accountNumber,
