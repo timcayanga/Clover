@@ -1598,6 +1598,29 @@ const isGenericMobileScreenshotFileName = (fileName: string) => {
   return /^(?:img|screenshot|screen\s*shot|photo|image)[_\s-]?\d{3,8}(?:\s*\(\d+\))?\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(normalized);
 };
 
+const deriveStatementFallbackAccountName = (
+  fileName: string,
+  institution?: string | null,
+  accountNumber?: string | null,
+  accountType?: UploadInsightsSummary["accountType"] | null,
+) => {
+  if (!isGenericMobileScreenshotFileName(fileName)) {
+    return deriveFallbackAccountNameFromFileName(fileName);
+  }
+
+  const normalizedInstitution = typeof institution === "string" && institution.trim() ? institution.trim() : null;
+  if (!normalizedInstitution) {
+    return null;
+  }
+
+  return formatUploadAccountDisplayName(
+    normalizedInstitution,
+    normalizedInstitution,
+    accountNumber ?? null,
+    accountType ?? null,
+  );
+};
+
 const isFilenameOnlyScreenshotSummary = (
   fileName: string,
   summary: UploadInsightsSummary | null | undefined
@@ -5602,7 +5625,18 @@ export function ImportFilesModal({
         mobileWalletIdentity?.accountName ??
         preferredStatementIdentity?.accountName ??
         guessedIdentity?.accountName ??
-        (isGenericMobileScreenshotFileName(item.file.name) ? null : deriveFallbackAccountNameFromFileName(item.file.name));
+        deriveStatementFallbackAccountName(
+          item.file.name,
+          mobileWalletIdentity?.institution ??
+            preferredStatementIdentity?.institution ??
+            guessedIdentity?.institution ??
+            null,
+          mobileWalletIdentity?.accountNumber ??
+            preferredStatementIdentity?.accountNumber ??
+            guessedIdentity?.accountNumber ??
+            null,
+          (mobileWalletIdentity?.accountType ?? localMetadata?.accountType ?? null) as UploadInsightsSummary["accountType"] | null
+        );
       const suppressFilenameAccountName =
         isGenericMobileScreenshotFileName(item.file.name) &&
         Boolean(rawAccountName) &&
@@ -6303,7 +6337,15 @@ export function ImportFilesModal({
 
           await monitorQueuedImportAndConfirm(itemId, importFileId!, null, {
             fileName: item.file.name,
-            fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+            fallbackAccountName:
+              deriveStatementFallbackAccountName(
+                item.file.name,
+                guessedIdentity?.institution ?? null,
+                guessedIdentity?.accountNumber ?? null,
+                guessedIdentity
+                  ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+                  : null,
+              ) ?? "Imported statement",
             guessedAccountName: guessedIdentity?.accountName ?? null,
             guessedInstitution: guessedIdentity?.institution ?? null,
             guessedAccountNumber: null,
@@ -7161,7 +7203,16 @@ export function ImportFilesModal({
             optimisticAccountId,
             {
               fileName: item.file.name,
-              fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+              fallbackAccountName:
+                deriveStatementFallbackAccountName(
+                  item.file.name,
+                  statementIdentity?.institution ?? guessedIdentity?.institution ?? null,
+                  statementIdentity?.accountNumber ?? guessedIdentity?.accountNumber ?? null,
+                  statementIdentity?.accountType ??
+                    (guessedIdentity
+                      ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+                      : null),
+                ) ?? "Imported statement",
               guessedAccountName: guessedIdentity?.accountName ?? null,
               guessedInstitution: guessedIdentity?.institution ?? null,
               guessedAccountNumber: null,
@@ -7230,7 +7281,16 @@ export function ImportFilesModal({
             optimisticAccountId,
             {
               fileName: item.file.name,
-              fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+              fallbackAccountName:
+                deriveStatementFallbackAccountName(
+                  item.file.name,
+                  statementIdentity?.institution ?? guessedIdentity?.institution ?? null,
+                  statementIdentity?.accountNumber ?? guessedIdentity?.accountNumber ?? null,
+                  statementIdentity?.accountType ??
+                    (guessedIdentity
+                      ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+                      : null),
+                ) ?? "Imported statement",
               guessedAccountName: guessedIdentity?.accountName ?? null,
               guessedInstitution: guessedIdentity?.institution ?? null,
               guessedAccountNumber: null,
@@ -7291,7 +7351,16 @@ export function ImportFilesModal({
 
         await monitorQueuedImportAndConfirm(itemId, importFileId, optimisticAccountId, {
           fileName: item.file.name,
-          fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+          fallbackAccountName:
+            deriveStatementFallbackAccountName(
+              item.file.name,
+              statementIdentity?.institution ?? guessedIdentity?.institution ?? null,
+              statementIdentity?.accountNumber ?? guessedIdentity?.accountNumber ?? null,
+              statementIdentity?.accountType ??
+                (guessedIdentity
+                  ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+                  : null),
+            ) ?? "Imported statement",
           guessedAccountName: guessedIdentity?.accountName ?? null,
           guessedInstitution: guessedIdentity?.institution ?? null,
           guessedAccountNumber: null,
@@ -7487,7 +7556,16 @@ export function ImportFilesModal({
       } else {
         void monitorQueuedImportAndConfirm(itemId, importFileId, null, {
           fileName: item.file.name,
-          fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+          fallbackAccountName:
+            deriveStatementFallbackAccountName(
+              item.file.name,
+              statementIdentity?.institution ?? guessedIdentity?.institution ?? null,
+              statementIdentity?.accountNumber ?? guessedIdentity?.accountNumber ?? null,
+              statementIdentity?.accountType ??
+                (guessedIdentity
+                  ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+                  : null),
+            ) ?? "Imported statement",
           guessedAccountName: guessedIdentity?.accountName ?? null,
           guessedInstitution: guessedIdentity?.institution ?? null,
           guessedAccountNumber: null,
@@ -7765,7 +7843,13 @@ export function ImportFilesModal({
         if (recoverableImportFileId && fallbackAccountId) {
           void monitorQueuedImportAndConfirm(itemId, recoverableImportFileId, fallbackAccountId, {
             fileName: item.file.name,
-            fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+            fallbackAccountName:
+              deriveStatementFallbackAccountName(
+                item.file.name,
+                recoverableIdentity?.institution ?? null,
+                recoverableIdentity?.accountNumber ?? null,
+                recoverableIdentity?.accountType ?? null,
+              ) ?? "Imported statement",
             guessedAccountName: recoverableIdentity?.accountName ?? null,
             guessedInstitution: recoverableIdentity?.institution ?? null,
             guessedAccountNumber: recoverableIdentity?.accountNumber ?? null,
@@ -8560,7 +8644,8 @@ export function ImportFilesModal({
         resumedAccountId ?? item.targetAccountId ?? null,
         {
           fileName: item.file.name,
-          fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+          fallbackAccountName:
+            deriveStatementFallbackAccountName(item.file.name, null, null, null) ?? "Imported statement",
           guessedAccountName: null,
           guessedInstitution: null,
           guessedAccountNumber: null,

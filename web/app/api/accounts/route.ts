@@ -289,6 +289,15 @@ const readImportedJsonText = (payload: unknown, key: string) => {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 };
 
+const readImportedAccountType = (payload: unknown) => {
+  const accountType = readImportedJsonText(payload, "accountType") ?? readImportedJsonText(payload, "type");
+  if (!accountType) {
+    return null;
+  }
+
+  return isSupportedAccountType(accountType) ? accountType : null;
+};
+
 const readImportedSourceRowIndex = (payload: unknown) => {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return null;
@@ -373,6 +382,21 @@ const looksLikeReceiptImageFilenameAccount = (account: {
   );
 };
 
+const looksLikeGenericImageFilenameAccount = (account: {
+  name: string;
+  institution?: string | null | undefined;
+  accountNumber?: string | null;
+  source: string;
+}) => {
+  if (account.source !== "upload") {
+    return false;
+  }
+
+  return /^(?:img|screenshot|screen\s*shot|photo|image)[_\s-]?\d{3,8}(?:\s*\(\d+\))?(?:\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif))?(?:\s+\d{4})?$/i.test(
+    normalizeImportInstitution(account.name)
+  );
+};
+
 const repairParsedImportedAccounts = async (workspaceId: string, compatibleColumns: Set<string>) => {
   if (!compatibleColumns.has("accountNumber") || !(await hasCompatibleTable("ParsedTransaction"))) {
     return;
@@ -443,6 +467,7 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
     accountNumber: string;
     accountName: string | null;
     institution: string | null;
+    accountType: string | null;
     currency: string | null;
     balance: string | null;
     rows: RepairGroupRow[];
@@ -461,14 +486,15 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
     const key = `${institution.toLowerCase() || "unknown"}:${accountNumber}`;
     const group: RepairGroup =
       groups.get(key) ??
-      {
-        accountNumber,
-        accountName: row.accountName?.trim() || readImportedJsonText(row.rawPayload, "accountName"),
-        institution: institution || null,
-        currency: row.currency?.trim().toUpperCase() || null,
-        balance: null,
-        rows: [],
-      };
+        {
+          accountNumber,
+          accountName: row.accountName?.trim() || readImportedJsonText(row.rawPayload, "accountName"),
+          institution: institution || null,
+          accountType: readImportedAccountType(row.rawPayload),
+          currency: row.currency?.trim().toUpperCase() || null,
+          balance: null,
+          rows: [],
+        };
     const runningBalance = readImportedRunningBalance(row.rawPayload);
     if (group.balance === null && runningBalance !== null) {
       group.balance = runningBalance.toFixed(2);
@@ -478,7 +504,8 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
   }
 
   for (const group of groups.values()) {
-    const accountType = "bank" as const;
+    const accountType =
+      (group.accountType && isSupportedAccountType(group.accountType) ? group.accountType : null) ?? "bank";
     const groupIdentityKey = importedAccountIdentityKey(group.institution, group.accountNumber);
     let account =
       (groupIdentityKey ? accountByNumber.get(groupIdentityKey) ?? null : null) ??
@@ -529,6 +556,7 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
         data: {
           name: accountName,
           institution: resolvedInstitution ?? group.institution,
+          type: accountType,
           currency,
           source: "upload",
           ...(group.balance !== null ? { balance: group.balance } : {}),
@@ -1106,10 +1134,15 @@ export async function GET(request: Request) {
           : latestCheckpoint && effectiveInstitution && effectiveAccountNumber
             ? "upload"
             : account.source;
+      const shouldReplaceGenericImageFilename =
+        looksLikeGenericImageFilenameAccount(account) &&
+        Boolean(effectiveInstitution || effectiveAccountNumber || checkpointAccountName);
       const effectiveAccountName =
         effectiveSource === "upload"
           ? formatUploadAccountDisplayName(
-              checkpointAccountName ?? account.name,
+              shouldReplaceGenericImageFilename
+                ? checkpointAccountName ?? effectiveInstitution ?? account.name
+                : checkpointAccountName ?? account.name,
               effectiveInstitution,
               effectiveAccountNumber,
               account.type
