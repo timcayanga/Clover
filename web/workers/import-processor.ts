@@ -1267,6 +1267,18 @@ const imageStatementRowsLookUsable = (
     prefersVisionFallbackForInstitution: boolean;
   }
 ) => {
+  const deterministicScreenshotRows = rows.filter((row) => {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    const kind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
+    const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
+    return (
+      /(?:gcash|maya|bpi|wise)_mobile_screenshot/i.test(`${kind} ${source}`) ||
+      /known_mobile_wallet_screenshot_transaction/i.test(kind)
+    );
+  });
   const accountSnapshotMarkerRows = rows.filter((row) => {
     const rawPayload = row.rawPayload;
     return (
@@ -1300,6 +1312,18 @@ const imageStatementRowsLookUsable = (
 
   if ((mobileScreenshotRows.length === 0 && rows.length < 3) || options.suspiciousDateCoverage) {
     return false;
+  }
+
+  const deterministicScreenshotAmountCoverage =
+    deterministicScreenshotRows.length > 0
+      ? countRowsWithParseableAmounts(deterministicScreenshotRows) / deterministicScreenshotRows.length
+      : 0;
+  if (
+    deterministicScreenshotRows.length >= 2 &&
+    options.parsedRowsWithDates >= 1 &&
+    deterministicScreenshotAmountCoverage >= 0.8
+  ) {
+    return true;
   }
 
   const amountCoverage = rows.length > 0 ? countRowsWithParseableAmounts(rows) / rows.length : 0;
@@ -4095,6 +4119,14 @@ const recordImportDataQaInBackground = (params: {
   startedAt: number;
   usedVisionFallback: boolean;
   usedOpenAiFallback: boolean;
+  timingBreakdown?: {
+    readMs?: number;
+    parseMs?: number;
+    confirmMs?: number;
+    cacheHit?: boolean;
+    reusedCachedStatementParse?: boolean;
+    usedFastScreenshotParse?: boolean;
+  };
   actorUserId?: string | null;
 }) => {
   void recordDataQaRun({
@@ -4109,10 +4141,15 @@ const recordImportDataQaInBackground = (params: {
     metadata: params.metadata,
     timings: {
       totalMs: Date.now() - params.startedAt,
-      parsingMs: Date.now() - params.startedAt,
+      parsingMs: params.timingBreakdown?.parseMs ?? Date.now() - params.startedAt,
+      readMs: params.timingBreakdown?.readMs ?? null,
+      confirmMs: params.timingBreakdown?.confirmMs ?? null,
       usedVisionFallback: params.usedVisionFallback,
       usedOpenAiFallback: params.usedOpenAiFallback,
       usedDeterministicParser: !params.usedOpenAiFallback,
+      cacheHit: params.timingBreakdown?.cacheHit ?? false,
+      reusedCachedStatementParse: params.timingBreakdown?.reusedCachedStatementParse ?? false,
+      usedFastScreenshotParse: params.timingBreakdown?.usedFastScreenshotParse ?? false,
     },
     duplicate: false,
     actorUserId: params.actorUserId ?? null,
@@ -5124,6 +5161,12 @@ export const processImportFileText = async (
   } = {}
 ): Promise<ProcessImportResult> => {
   const startedAt = Date.now();
+  const readStartedAt = startedAt;
+  let textReadyAt = startedAt;
+  let parseStartedAt = startedAt;
+  let parseCompletedAt = startedAt;
+  let confirmationStartedAt = startedAt;
+  let confirmationCompletedAt = startedAt;
   const autoRerunAttempt = Number(options.autoRerunAttempt ?? 0);
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const importFile = await fetchImportFileCompat(importFileId);
@@ -5370,6 +5413,7 @@ export const processImportFileText = async (
       }
     }
   }
+  textReadyAt = Date.now();
 
   const cachedParsedRows = Array.isArray(textCacheInfo?.cacheRecord?.parsedRows)
     ? ((textCacheInfo?.cacheRecord?.parsedRows ?? []) as Array<Record<string, unknown>>)
@@ -5439,6 +5483,8 @@ export const processImportFileText = async (
       text = normalizeStatementImageOcrText(transcript.transcript);
     }
   }
+  textReadyAt = Date.now();
+  parseStartedAt = textReadyAt;
 
   if (isJsonImportFile(fileType, fileName)) {
     return processImportTrainingJson(importFileId, importFile, text, options, startedAt);
@@ -5814,6 +5860,7 @@ export const processImportFileText = async (
         )
       : null;
   }
+  parseCompletedAt = Date.now();
   const receiptDetails =
     importMode === "receipt" &&
     trainedReceiptDetails
@@ -6345,6 +6392,14 @@ export const processImportFileText = async (
     usedOpenAiFallback: Boolean(useOpenAiParse),
     usedDeterministicParser: !useOpenAiParse,
     usedFastScreenshotParse: imageStatementParseLooksUsable,
+    cacheHit: Boolean(textCacheInfo?.cacheHit),
+    reusedCachedStatementParse: canReuseCachedStatementParse,
+    timings: {
+      readMs: Math.max(0, textReadyAt - readStartedAt),
+      parseMs: Math.max(0, parseCompletedAt - parseStartedAt),
+      confirmMs: Math.max(0, confirmationCompletedAt - confirmationStartedAt),
+      totalMs: Date.now() - startedAt,
+    },
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const receiptDocumentCashAccountId =
@@ -6753,7 +6808,9 @@ export const processImportFileText = async (
         processingPhase: "reconciling",
         processingMessage: "Clover is matching the visible rows to the account.",
       });
+      confirmationStartedAt = Date.now();
       confirmedImportResult = await confirmImportFileWithRetry("fast_image_statement");
+      confirmationCompletedAt = Date.now();
       if (confirmedImportResult.status === "staged") {
         await updateImportFileCompat(importFileId, {
           status: "processing",
@@ -6796,6 +6853,14 @@ export const processImportFileText = async (
         startedAt,
         usedVisionFallback: Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
+        timingBreakdown: {
+          readMs: Math.max(0, textReadyAt - readStartedAt),
+          parseMs: Math.max(0, parseCompletedAt - parseStartedAt),
+          confirmMs: Math.max(0, confirmationCompletedAt - confirmationStartedAt),
+          cacheHit: Boolean(textCacheInfo?.cacheHit),
+          reusedCachedStatementParse: canReuseCachedStatementParse,
+          usedFastScreenshotParse: imageStatementParseLooksUsable,
+        },
         actorUserId: options.actorUserId ?? null,
       });
       void (async () => {
@@ -6864,11 +6929,16 @@ export const processImportFileText = async (
       metadata: resolvedMetadata,
       timings: {
         totalMs: Date.now() - startedAt,
-        parsingMs: Date.now() - startedAt,
+        parsingMs: Math.max(0, parseCompletedAt - parseStartedAt),
+        readMs: Math.max(0, textReadyAt - readStartedAt),
+        confirmMs: Math.max(0, confirmationCompletedAt - confirmationStartedAt),
         usedVisionFallback: Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
         usedDeterministicParser: !useOpenAiParse,
         pageCount: pageImages?.length ?? 0,
+        cacheHit: Boolean(textCacheInfo?.cacheHit),
+        reusedCachedStatementParse: canReuseCachedStatementParse,
+        usedFastScreenshotParse: imageStatementParseLooksUsable,
       },
       duplicate: false,
       actorUserId: options.actorUserId ?? null,
