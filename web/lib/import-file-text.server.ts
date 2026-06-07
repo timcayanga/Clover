@@ -510,6 +510,122 @@ const shouldRetryImageOcrBestEffort = (params: {
   return !looksStrongEnough;
 };
 
+const buildReceiptAwareOcrCandidates = async (
+  normalizedBuffer: Buffer,
+  profile: ImageNormalizationProfile
+) => {
+  if (profile === "generic") {
+    return [] as Array<{ label: string; dataUrl: string }>;
+  }
+
+  try {
+    const sharpModule = await import("sharp");
+    const sharp = sharpModule.default;
+    const image = sharp(normalizedBuffer);
+    const metadata = await image.metadata();
+    const width = Number(metadata.width ?? 0);
+    const height = Number(metadata.height ?? 0);
+
+    if (width <= 0 || height <= 0) {
+      return [] as Array<{ label: string; dataUrl: string }>;
+    }
+
+    const candidates: Array<{ label: string; dataUrl: string }> = [];
+    const overlap = Math.max(24, Math.round(Math.min(width, height) * 0.04));
+
+    if (width >= Math.round(height * 1.2)) {
+      const halfWidth = Math.max(1, Math.round(width / 2));
+      const leftWidth = Math.min(width, halfWidth + overlap);
+      const rightLeft = Math.max(0, width - (halfWidth + overlap));
+      const rightWidth = width - rightLeft;
+
+      const left = await sharp(normalizedBuffer)
+        .extract({ left: 0, top: 0, width: leftWidth, height })
+        .jpeg({ quality: 88, chromaSubsampling: "4:4:4" })
+        .toBuffer();
+      const right = await sharp(normalizedBuffer)
+        .extract({ left: rightLeft, top: 0, width: rightWidth, height })
+        .jpeg({ quality: 88, chromaSubsampling: "4:4:4" })
+        .toBuffer();
+
+      candidates.push(
+        { label: "ocr-left", dataUrl: `data:image/jpeg;base64,${left.toString("base64")}` },
+        { label: "ocr-right", dataUrl: `data:image/jpeg;base64,${right.toString("base64")}` }
+      );
+    }
+
+    if (height >= Math.round(width * 1.6)) {
+      const halfHeight = Math.max(1, Math.round(height / 2));
+      const topHeight = Math.min(height, halfHeight + overlap);
+      const bottomTop = Math.max(0, height - (halfHeight + overlap));
+      const bottomHeight = height - bottomTop;
+
+      const top = await sharp(normalizedBuffer)
+        .extract({ left: 0, top: 0, width, height: topHeight })
+        .jpeg({ quality: 88, chromaSubsampling: "4:4:4" })
+        .toBuffer();
+      const bottom = await sharp(normalizedBuffer)
+        .extract({ left: 0, top: bottomTop, width, height: bottomHeight })
+        .jpeg({ quality: 88, chromaSubsampling: "4:4:4" })
+        .toBuffer();
+
+      candidates.push(
+        { label: "ocr-top", dataUrl: `data:image/jpeg;base64,${top.toString("base64")}` },
+        { label: "ocr-bottom", dataUrl: `data:image/jpeg;base64,${bottom.toString("base64")}` }
+      );
+    }
+
+    return candidates;
+  } catch {
+    return [] as Array<{ label: string; dataUrl: string }>;
+  }
+};
+
+const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
+  normalizedDataUrl: string;
+  normalizedBuffer: Buffer;
+  fileType?: string | null;
+  fileName?: string | null;
+  importMode?: string | null;
+}) => {
+  const firstPassText = await extractTextFromImageBufferWithOcr(params.normalizedDataUrl);
+  if (
+    !shouldRetryImageOcrBestEffort({
+      firstPassText,
+      fileType: params.fileType,
+      fileName: params.fileName,
+      importMode: params.importMode,
+    })
+  ) {
+    return firstPassText;
+  }
+
+  const profile = resolveImageNormalizationProfile({
+    fileType: params.fileType,
+    fileName: params.fileName,
+    importMode: params.importMode,
+  });
+  const candidates = await buildReceiptAwareOcrCandidates(params.normalizedBuffer, profile);
+
+  const candidateTexts = await Promise.all(
+    candidates.map(async (candidate) => ({
+      label: candidate.label,
+      text: await extractTextFromImageBufferWithOcrBestEffort(candidate.dataUrl),
+    }))
+  );
+
+  const bestText = pickBestStatementTextCandidate([
+    { text: firstPassText, label: "ocr-psm-6" },
+    ...candidateTexts,
+  ]);
+
+  if (bestText.trim()) {
+    return bestText;
+  }
+
+  return extractTextFromImageBufferWithOcrBestEffort(params.normalizedDataUrl);
+};
+
 type PdfOcrProfile = "standard" | "aggressive";
 
 const renderPdfPagesToOcrText = async (
@@ -1982,11 +2098,12 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
     }
 
     const normalized = await normalizeImportedImageBytes(new Uint8Array(await file.arrayBuffer()), lowerType, lowerName);
-    const firstPassText = await extractTextFromImageBufferWithOcr(normalized.dataUrl);
-    if (!shouldRetryImageOcrBestEffort({ firstPassText, fileType: lowerType, fileName: lowerName })) {
-      return firstPassText;
-    }
-    return extractTextFromImageBufferWithOcrBestEffort(normalized.dataUrl);
+    return extractTextFromImageBufferWithReceiptAwareFallback({
+      normalizedDataUrl: normalized.dataUrl,
+      normalizedBuffer: normalized.buffer,
+      fileType: lowerType,
+      fileName: lowerName,
+    });
   }
 
   throw new Error("Only PDF, CSV, and common image files are supported.");
@@ -2101,16 +2218,13 @@ export const readImportedFileTextWithCacheInfo = async (
 
     if (isImageImportFileName(params.fileType, params.fileName)) {
       const normalized = await normalizeImportedImageBytes(bytes, params.fileType, params.fileName, params.importMode);
-      const firstPassText = await extractTextFromImageBufferWithOcr(normalized.dataUrl);
-      if (!shouldRetryImageOcrBestEffort({
-        firstPassText,
+      return extractTextFromImageBufferWithReceiptAwareFallback({
+        normalizedDataUrl: normalized.dataUrl,
+        normalizedBuffer: normalized.buffer,
         fileType: params.fileType,
         fileName: params.fileName,
         importMode: params.importMode,
-      })) {
-        return firstPassText;
-      }
-      return extractTextFromImageBufferWithOcrBestEffort(normalized.dataUrl);
+      });
     }
 
     try {

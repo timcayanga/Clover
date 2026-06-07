@@ -905,7 +905,7 @@ const normalizeReceiptLineItems = (
     .filter((item): item is NormalizedReceiptLineItem => item !== null);
 
 const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptText>) => ({
-  receipt_type: "receipt",
+  receipt_type: preview.receiptType,
   merchant_raw: preview.merchantName ?? null,
   merchant_clean: preview.merchantName ?? null,
   document_number: null,

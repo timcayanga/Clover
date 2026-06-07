@@ -82,6 +82,7 @@ export type ReceiptPreviewAccountMatch = {
 
 export type ReceiptPreviewResult = {
   receiptText: string;
+  receiptType: "restaurant_receipt" | "official_receipt" | "tax_invoice" | "travel_ticket" | "wallet_transfer" | "generic_receipt";
   merchantName: string | null;
   billDate: string | null;
   currency: string;
@@ -1500,6 +1501,40 @@ const detectReceiptPayerNameFromText = (lines: string[]) => {
   return null;
 };
 
+const classifyReceiptTypeFromText = (text: string, paymentMethod: string | null) => {
+  const normalized = normalizeWhitespace(text).toLowerCase();
+  const paymentContext = String(paymentMethod ?? "").toLowerCase();
+
+  if (
+    /\b(?:sent via gcash|sent via maya|express send|total amount sent|ref\.?\s*no|reference\s*:\s*\d{6,})\b/.test(normalized) ||
+    /\b(?:gcash|maya|wise)\b/.test(paymentContext)
+  ) {
+    return "wallet_transfer" as const;
+  }
+
+  if (
+    /\b(?:electronic ticket receipt|itinerary receipt|passenger itinerary|booking reference|ticket number|flight|depart|arrival|boarding)\b/.test(normalized)
+  ) {
+    return "travel_ticket" as const;
+  }
+
+  if (/\b(?:tax invoice|invoice no\.?|sales invoice)\b/.test(normalized)) {
+    return "tax_invoice" as const;
+  }
+
+  if (/\b(?:official receipt|or no\.?|cash slip)\b/.test(normalized)) {
+    return "official_receipt" as const;
+  }
+
+  if (
+    /\b(?:dine in|table\s*:?|guest|server|cashier|subtotal|service charge|vat item|temporary bill|bar|restaurant|cafe)\b/.test(normalized)
+  ) {
+    return "restaurant_receipt" as const;
+  }
+
+  return "generic_receipt" as const;
+};
+
 export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const normalized = receiptText.replace(/\u00a0/g, " ");
   const { lines, fragmentJoins } = mergeFragmentLines(
@@ -1556,6 +1591,7 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
       : null);
   const paymentMethod = detectReceiptPaymentMethodFromText(lines, receiptAccountMatch);
   const receiptPayerName = detectReceiptPayerNameFromText(lines);
+  const receiptType = classifyReceiptTypeFromText(normalized, paymentMethod);
 
   const itemConfidenceBonus = items.reduce((sum, item) => sum + (item.quantity ? 3 : 0) + (item.unitPrice ? 3 : 0), 0);
   const wrappedItemBonus = items.reduce((sum, item) => sum + (item.wrapped ? 2 : 0), 0);
@@ -1624,6 +1660,7 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
 
   return {
     receiptText: normalized.trim(),
+    receiptType,
     merchantName,
     billDate,
     currency,
