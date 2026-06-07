@@ -21,32 +21,37 @@ export async function GET() {
 
     const cookieStore = await cookies();
     const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
-    let selectedWorkspace = await prisma.workspace.findFirst({
-      where: {
-        userId: user.id,
-        type: "personal",
-      },
-      select: {
-        id: true,
-        name: true,
-      },
-      orderBy: [{ createdAt: "asc" }],
-    });
+    let selectedWorkspace = selectedWorkspaceCookieId
+      ? await prisma.workspace.findFirst({
+          where: {
+            id: selectedWorkspaceCookieId,
+            userId: user.id,
+          },
+          select: {
+            id: true,
+            name: true,
+          },
+        })
+      : null;
+
+    if (!selectedWorkspace) {
+      selectedWorkspace = await prisma.workspace.findFirst({
+        where: {
+          userId: user.id,
+          type: "personal",
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+        orderBy: [{ createdAt: "asc" }],
+      });
+    }
 
     if (!selectedWorkspace) {
       const starterWorkspace = await ensureStarterWorkspace(user);
       selectedWorkspace = await prisma.workspace.findUnique({
         where: { id: starterWorkspace.id },
-        select: {
-          id: true,
-          name: true,
-        },
-      });
-    }
-
-    if (!selectedWorkspace && selectedWorkspaceCookieId) {
-      selectedWorkspace = await prisma.workspace.findFirst({
-        where: { id: selectedWorkspaceCookieId, userId: user.id },
         select: {
           id: true,
           name: true,

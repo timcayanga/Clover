@@ -55,31 +55,7 @@ export default async function SettingsPage() {
         ? left.createdAt.getTime() - right.createdAt.getTime()
         : right.updatedAt.getTime() - left.updatedAt.getTime();
     });
-    const personalWorkspace =
-      (await prisma.workspace.findFirst({
-        where: {
-          user: {
-            clerkUserId: user.clerkUserId,
-          },
-          type: "personal",
-        },
-        orderBy: { createdAt: "asc" },
-        select: {
-          id: true,
-          name: true,
-          },
-        })) ??
-      (await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified).then(async (starterWorkspace) =>
-        prisma.workspace.findUnique({
-          where: { id: starterWorkspace.id },
-          select: {
-            id: true,
-            name: true,
-          },
-        })
-      ));
     const selectedWorkspace =
-      personalWorkspace ??
       (selectedWorkspaceCookieId
         ? await prisma.workspace.findFirst({
             where: {
@@ -93,7 +69,29 @@ export default async function SettingsPage() {
               name: true,
             },
           })
-        : null);
+        : null) ??
+      (await prisma.workspace.findFirst({
+        where: {
+          user: {
+            clerkUserId: user.clerkUserId,
+          },
+          type: "personal",
+        },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          name: true,
+        },
+      })) ??
+      (await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified).then(async (starterWorkspace) =>
+        prisma.workspace.findUnique({
+          where: { id: starterWorkspace.id },
+          select: {
+            id: true,
+            name: true,
+          },
+        })
+      ));
 
     workspaceId = selectedWorkspace?.id ?? "";
     workspaceName = selectedWorkspace?.name ?? "Personal";
