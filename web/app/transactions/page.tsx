@@ -163,6 +163,35 @@ const appendAccountLastFour = (label: string, accountNumber?: string | null) => 
   return `${normalizedLabel} ${suffix}`.trim();
 };
 
+const isWiseWalletWithoutVisibleAccountNumber = (account: {
+  name?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+  type?: string | null;
+  source?: string | null;
+}) => {
+  const identity = `${account.institution ?? ""} ${account.name ?? ""}`.trim();
+  return (
+    /\bwise\b/i.test(identity) &&
+    !getImportedAccountLastFour(account.accountNumber) &&
+    (account.type === "wallet" || account.source === "upload")
+  );
+};
+
+const appendWiseWalletCurrency = (label: string, currency?: string | null) => {
+  const normalizedLabel = label.replace(/\s+/g, " ").trim();
+  const currencyCode = formatCurrencyCode(currency || "");
+  if (!normalizedLabel || !currencyCode) {
+    return normalizedLabel;
+  }
+
+  if (new RegExp(`\\b${currencyCode}$`, "i").test(normalizedLabel)) {
+    return normalizedLabel;
+  }
+
+  return `${normalizedLabel} ${currencyCode}`.trim();
+};
+
 const formatTransactionAccountName = (account: Account) => {
   if (account.type === "cash") {
     return getAccountDisplayName(account);
@@ -178,6 +207,10 @@ const formatTransactionAccountName = (account: Account) => {
           source: account.source,
         })
       : getAccountDisplayName(account);
+
+  if (isWiseWalletWithoutVisibleAccountNumber(account)) {
+    return appendWiseWalletCurrency(accountLabel, account.currency);
+  }
 
   return appendAccountLastFour(accountLabel, account.accountNumber);
 };
@@ -215,19 +248,25 @@ const buildTransactionAccountFilterOptions = (accounts: Account[]) => {
 };
 
 const formatTransactionAccountDisplayName = (
-  transaction: { accountName?: string | null; institution?: string | null; accountNumber?: string | null },
+  transaction: { accountName?: string | null; institution?: string | null; accountNumber?: string | null; currency?: string | null },
   account?: Account | null
 ) => {
   if (account) {
     return formatTransactionAccountName(account);
   }
 
-  return formatUploadAccountDisplayName(
+  const accountLabel = formatUploadAccountDisplayName(
     transaction.accountName,
     transaction.institution,
     transaction.accountNumber ?? null,
     null
   );
+
+  if (isWiseWalletWithoutVisibleAccountNumber(transaction)) {
+    return appendWiseWalletCurrency(accountLabel, transaction.currency);
+  }
+
+  return accountLabel;
 };
 
 const formatEditableSignedAmount = (transaction: { amount: string; type: "income" | "expense" | "transfer" }, effectiveType: "income" | "expense" | "transfer") => {
@@ -1676,6 +1715,19 @@ const getRawPayloadTextCandidate = (rawPayload: unknown, keys: string[]) => {
   return "";
 };
 
+const getNestedPayloadTextCandidate = (payload: unknown, path: string[]) => {
+  let current: unknown = payload;
+  for (const key of path) {
+    if (!isRecord(current)) {
+      return "";
+    }
+
+    current = current[key];
+  }
+
+  return typeof current === "string" && current.trim() ? current.trim() : "";
+};
+
 const getNormalizedPayloadTextCandidate = (normalizedPayload: unknown, keys: string[]) => {
   if (!isRecord(normalizedPayload)) {
     return "";
@@ -1732,6 +1784,17 @@ const getTransactionParsedNote = (
   ]);
   if (parsedNote) {
     return parsedNote;
+  }
+
+  const parserEvidenceNote =
+    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parserEvidence", "sourceText"]) ||
+    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parserEvidence", "source_text"]) ||
+    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parserEvidence", "reason"]) ||
+    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parser_evidence", "source_text"]) ||
+    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parser_evidence", "sourceText"]) ||
+    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parser_evidence", "reason"]);
+  if (parserEvidenceNote) {
+    return parserEvidenceNote;
   }
 
   if ((transaction?.source ?? null) === "upload" || transaction?.importFileId) {

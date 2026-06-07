@@ -91,6 +91,15 @@ export const isStandaloneCashPaymentDescription = (value?: string | null) => {
 export const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
+  if (/emmanuel\s+payments?/.test(lower) || /emmanuelpayments?/.test(compact)) return "Shopping";
+  if (/sydney\s+opera\s+house/.test(lower) || /sydneyoperahouse/.test(compact)) return "Entertainment";
+  if (/relay\b/.test(lower)) return "Shopping";
+  if (/souvenir/.test(lower) || /souvenir/.test(compact)) return "Travel & Lifestyle";
+  if (
+    /pedro\s+the\s+grocer|grocer\b|mcdonald'?s|milksha|gogyo|goken|savory\s+project|bar\s+leone|four\s+frogs/.test(lower) ||
+    /pedrothegrocer|mcdonalds|milksha|gogyo|goken|savoryproject|barleone|fourfrogs/.test(compact)
+  )
+    return "Food & Dining";
   if (isStandaloneCashPaymentDescription(text)) return "Shopping";
   if (isStatementPaymentSettlementDescription(text)) return "Transfers";
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";

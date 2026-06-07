@@ -757,6 +757,19 @@ const getRawPayloadTextCandidate = (rawPayload: unknown, keys: string[]) => {
   return "";
 };
 
+const getNestedPayloadTextCandidate = (payload: unknown, path: string[]) => {
+  let current: unknown = payload;
+  for (const key of path) {
+    if (!isRecord(current)) {
+      return "";
+    }
+
+    current = current[key];
+  }
+
+  return typeof current === "string" && current.trim() ? current.trim() : "";
+};
+
 const getNormalizedPayloadTextCandidate = (normalizedPayload: unknown, keys: string[]) => {
   if (!isRecord(normalizedPayload)) {
     return "";
@@ -813,6 +826,17 @@ const getTransactionParsedNote = (
   ]);
   if (parsedNote) {
     return parsedNote;
+  }
+
+  const parserEvidenceNote =
+    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parserEvidence", "sourceText"]) ||
+    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parserEvidence", "source_text"]) ||
+    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parserEvidence", "reason"]) ||
+    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parser_evidence", "source_text"]) ||
+    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parser_evidence", "sourceText"]) ||
+    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parser_evidence", "reason"]);
+  if (parserEvidenceNote) {
+    return parserEvidenceNote;
   }
 
   if ((transaction?.source ?? null) === "upload" || transaction?.importFileId) {
