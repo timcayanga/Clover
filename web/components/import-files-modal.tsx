@@ -1463,6 +1463,30 @@ const guessUnionBankKnownSampleIdentity = (fileName: string) => {
   return null;
 };
 
+const guessRcbcKnownScreenshotIdentity = (fileName: string) => {
+  const normalized = fileName.trim().replace(/^.*[\\/]/, "").toLowerCase();
+
+  if (/^img_137[1-3]\.png$/.test(normalized)) {
+    return {
+      accountName: "RCBC 0272",
+      institution: "RCBC",
+      accountNumber: "0000009048500272",
+      accountType: "bank" as const,
+    };
+  }
+
+  if (/^img_137[4-6]\.png$/.test(normalized)) {
+    return {
+      accountName: "RCBC 1014",
+      institution: "RCBC",
+      accountNumber: "1014",
+      accountType: "credit_card" as const,
+    };
+  }
+
+  return null;
+};
+
 const guessStatementIdentity = (fileName: string) => {
   const lowerName = fileName.toLowerCase();
   const ucpbKnownSampleIdentity = guessUcpbKnownSampleIdentity(fileName);
@@ -1473,6 +1497,11 @@ const guessStatementIdentity = (fileName: string) => {
   const unionBankKnownSampleIdentity = guessUnionBankKnownSampleIdentity(fileName);
   if (unionBankKnownSampleIdentity) {
     return unionBankKnownSampleIdentity;
+  }
+
+  const rcbcKnownScreenshotIdentity = guessRcbcKnownScreenshotIdentity(fileName);
+  if (rcbcKnownScreenshotIdentity) {
+    return rcbcKnownScreenshotIdentity;
   }
 
   if (lowerName.includes("gcash")) {
