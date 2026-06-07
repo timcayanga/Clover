@@ -42,7 +42,13 @@ import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName, inferTransactionTypeFromAmount } from "@/lib/transaction-directions";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
-import { clearImportActivity, readImportActivity } from "@/lib/import-activity";
+import {
+  clearImportActivity,
+  importActivityHasCompletedRows,
+  readImportActivity,
+  subscribeImportActivity,
+  type ImportActivitySnapshot,
+} from "@/lib/import-activity";
 import { subscribeImportedSummary } from "@/lib/imported-summary-events";
 import {
   buildFinalizingNoticeDismissalKey,
@@ -78,6 +84,8 @@ const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
   { ssr: false }
 );
+
+const IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS = 10 * 60 * 1000;
 
 type Workspace = {
   id: string;
@@ -1496,6 +1504,42 @@ const getCachedTransactionsWorkspace = (workspaceId: string): TransactionsWorksp
   };
 };
 
+const hasCachedTransactionsWorkspaceEvidence = (workspaceId: string) => {
+  const snapshot = getCachedTransactionsWorkspace(workspaceId);
+  if (!snapshot) {
+    return false;
+  }
+
+  const summaryTotalCount =
+    snapshot.summary && typeof snapshot.summary === "object" && typeof snapshot.summary.totalCount === "number"
+      ? snapshot.summary.totalCount
+      : 0;
+
+  return Boolean(
+    snapshot.accounts.length > 0 ||
+      snapshot.transactions.length > 0 ||
+      snapshot.imports.length > 0 ||
+      (snapshot.totalCount ?? 0) > 0 ||
+      summaryTotalCount > 0
+  );
+};
+
+const hasRecentWorkspaceImportEvidence = (
+  activity: ImportActivitySnapshot | null,
+  workspaceId: string
+) => {
+  if (!workspaceId || !activity || activity.workspaceId !== workspaceId) {
+    return false;
+  }
+
+  const isFresh = Date.now() - Number(activity.updatedAt ?? 0) <= IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS;
+  if (!isFresh) {
+    return false;
+  }
+
+  return activity.status === "active" || importActivityHasCompletedRows(activity);
+};
+
 const hasImportedTransactionIdentity = (transaction: Transaction) => {
   if (typeof transaction.importFileId === "string" && transaction.importFileId.trim()) {
     return true;
@@ -2537,6 +2581,7 @@ function TransactionsPageContent() {
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [importActivitySnapshot, setImportActivitySnapshot] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
   const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const searchText = useMemo(() => normalizeTransactionSearch(query), [query]);
@@ -2550,6 +2595,12 @@ function TransactionsPageContent() {
       mobileSearchInputRef.current?.select();
     }
   }, [mobileSearchOpen]);
+  useEffect(() => {
+    setImportActivitySnapshot(readImportActivity());
+    return subscribeImportActivity(() => {
+      setImportActivitySnapshot(readImportActivity());
+    });
+  }, []);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
   const [manualCategoryTouched, setManualCategoryTouched] = useState(false);
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
@@ -3005,6 +3056,12 @@ function TransactionsPageContent() {
         transactionsRef.current.length > 0
           ? transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
           : visibleCachedWorkspaceTransactions;
+      const shouldPreserveKnownTransactionsWhileImportSettles =
+        !hasServerSideFilters &&
+        fetchedTransactions.length === 0 &&
+        exactServerTotalCount === 0 &&
+        stableBaseTransactions.length > 0 &&
+        hasRecentWorkspaceImportEvidence(importActivitySnapshot, workspaceId);
       const shouldPatchExistingTransactions = Boolean(options?.append || !hasFreshTransactions);
       const baseTransactions = shouldPatchExistingTransactions ? stableBaseTransactions : [];
       const mergedTransactions = options?.append
@@ -3059,6 +3116,52 @@ function TransactionsPageContent() {
               : typeof summaryPayload?.totalCount === "number"
                 ? Math.max(summaryPayload.totalCount, mergedTransactionsWithImports.length)
                 : mergedTransactionsWithImports.length;
+      if (shouldPreserveKnownTransactionsWhileImportSettles) {
+        const fallbackCurrencyCodes =
+          responseCurrencyCodes.length > 0
+            ? responseCurrencyCodes
+            : getWorkspaceCurrencyCodes(stableBaseTransactions);
+        const fallbackSummary =
+          buildVisibleTransactionSummary(
+            stableBaseTransactions,
+            {
+              totalCount: Math.max(transactionsSummary.totalCount, stableBaseTransactions.length),
+              currencyCodes: fallbackCurrencyCodes,
+            },
+            accountNumberById
+          ) ?? null;
+
+        setWorkspaceCurrencyCodes(fallbackCurrencyCodes);
+        setTransactions(stableBaseTransactions);
+        setTransactionsSummary((currentSummary) => ({
+          ...currentSummary,
+          totalCount: Math.max(currentSummary.totalCount, stableBaseTransactions.length),
+          income: fallbackSummary?.income ?? currentSummary.income,
+          spending: fallbackSummary?.spending ?? currentSummary.spending,
+          transfers: fallbackSummary?.transfers ?? currentSummary.transfers,
+          review: fallbackSummary?.review ?? currentSummary.review,
+          currencyCodes: fallbackCurrencyCodes,
+          topCategory: fallbackSummary?.topCategory ?? currentSummary.topCategory,
+          topAccount: fallbackSummary?.topAccount ?? currentSummary.topAccount,
+          firstTransactionDate: fallbackSummary?.firstTransactionDate ?? currentSummary.firstTransactionDate,
+          lastTransactionDate: fallbackSummary?.lastTransactionDate ?? currentSummary.lastTransactionDate,
+        }));
+        setTransactionsLoadFailed(false);
+        if (!options?.background) {
+          setIsWorkspaceDataReady(true);
+          setHasInitialTransactionsLoaded(true);
+          window.setTimeout(() => {
+            void loadTransactionsPage(workspaceId, {
+              background: true,
+              includeAll: options?.includeAll,
+              pageOverride: options?.pageOverride ?? transactionsPage,
+              pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
+              summaryMode: options?.summaryMode ?? "light",
+            });
+          }, 1800);
+        }
+        return;
+      }
       setWorkspaceCurrencyCodes(nextCurrencyCodes);
       setTransactions(mergedTransactionsWithImports);
       if (options?.append) {
@@ -6741,6 +6844,39 @@ function TransactionsPageContent() {
   const isTableLoading =
     transactions.length === 0 &&
     (isWorkspaceSelectionSettling || (Boolean(selectedWorkspaceId) && !isWorkspaceDataReady));
+  const hasTransactionDataEvidence =
+    Boolean(selectedWorkspaceId) &&
+    (
+      transactions.length > 0 ||
+      imports.length > 0 ||
+      hasCachedTransactionsWorkspaceEvidence(selectedWorkspaceId) ||
+      hasRecentWorkspaceImportEvidence(importActivitySnapshot, selectedWorkspaceId)
+    );
+  const shouldShowSyncingInsteadOfEmpty =
+    totalTransactionCountForDisplay === 0 &&
+    !hasActiveServerSideFilters &&
+    !transactionsLoadFailed &&
+    !isTableLoading &&
+    hasTransactionDataEvidence;
+  useEffect(() => {
+    if (!selectedWorkspaceId || !shouldShowSyncingInsteadOfEmpty) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: false, background: true });
+      void loadTransactionsPage(selectedWorkspaceId, {
+        background: true,
+        pageOverride: transactionsPage,
+        pageSizeOverride: transactionsPageSize,
+        summaryMode: "light",
+      });
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [selectedWorkspaceId, shouldShowSyncingInsteadOfEmpty, transactionsPage, transactionsPageSize]);
   const transactionsShellActions = isCompactViewport ? (
     <div className="transactions-shell-actions transactions-shell-actions--compact" style={transactionsShellActionsStyle}>
       <input
@@ -7512,6 +7648,11 @@ function TransactionsPageContent() {
                   </div>
                 );
               })
+            ) : shouldShowSyncingInsteadOfEmpty ? (
+              <div className="empty-state">
+                <strong>Still syncing your transactions.</strong>
+                <p>Clover found recent import or cached transaction activity, so this workspace does not look truly empty. We&apos;re refreshing the latest rows now.</p>
+              </div>
             ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
               <EmptyDataCta
                 className="transactions-empty-state--table"
@@ -7696,6 +7837,11 @@ function TransactionsPageContent() {
                     <span>{isMobileLoadingMore ? "Loading more transactions…" : "Scroll for more"}</span>
                   </div>
                 ) : null}
+              </div>
+            ) : shouldShowSyncingInsteadOfEmpty ? (
+              <div className="empty-state">
+                <strong>Still syncing your transactions.</strong>
+                <p>Clover found recent import or cached transaction activity, so this workspace does not look truly empty. We&apos;re refreshing the latest rows now.</p>
               </div>
             ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
               <EmptyDataCta
