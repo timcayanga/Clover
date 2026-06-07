@@ -91,15 +91,38 @@ export const isStandaloneCashPaymentDescription = (value?: string | null) => {
 export const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
+  const hasTravelContext =
+    /(?:sydney|melbourne|nsw|harbour|opera\s+house|great\s+ocean\s+road|skybus|airport|tourism|leura|surry\s+hills|george\s+st|circular|bath|victoria|apollo\s+bay)/.test(lower) ||
+    /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
+  const hasForeignMerchantCurrencyContext =
+    /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
+
   if (/emmanuel\s+payments?/.test(lower) || /emmanuelpayments?/.test(compact)) return "Shopping";
   if (/sydney\s+opera\s+house/.test(lower) || /sydneyoperahouse/.test(compact)) return "Entertainment";
   if (/relay\b/.test(lower)) return "Shopping";
   if (/souvenir/.test(lower) || /souvenir/.test(compact)) return "Travel & Lifestyle";
   if (
-    /pedro\s+the\s+grocer|grocer\b|mcdonald'?s|milksha|gogyo|goken|savory\s+project|bar\s+leone|four\s+frogs/.test(lower) ||
-    /pedrothegrocer|mcdonalds|milksha|gogyo|goken|savoryproject|barleone|fourfrogs/.test(compact)
+    /sydney\s+harbour\s+gifts?|melbourne\s+souvenir|u\s+neek\s+souvenirs?|great\s+ocean\s+road|moonlit\s+sanctuary|parks?\s+victoria/.test(lower) ||
+    /sydneyharbourgifts?|melbournesouvenir|uneeksouvenirs?|greatoceanroad|moonlitsanctuary|parksvictoria/.test(compact)
+  ) {
+    return "Travel & Lifestyle";
+  }
+  if (/transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal/.test(lower) || /transportfornsw|skybus|parking|airport|rail|trainpal/.test(compact)) {
+    return "Transport";
+  }
+  if (
+    /pedro\s+the\s+grocer|grocer\b|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills/.test(lower) ||
+    /pedrothegrocer|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills/.test(compact)
   )
     return "Food & Dining";
+  if (
+    hasTravelContext &&
+    hasForeignMerchantCurrencyContext &&
+    (/souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|great\s+ocean\s+road|parks?\s+victoria/.test(lower) ||
+      /souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|greatoceanroad|parksvictoria/.test(compact))
+  ) {
+    return "Travel & Lifestyle";
+  }
   if (isStandaloneCashPaymentDescription(text)) return "Shopping";
   if (isStatementPaymentSettlementDescription(text)) return "Transfers";
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";
@@ -17762,22 +17785,27 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
     merchant: string;
     status: string | null;
     sign: string | null;
+    merchantCurrency?: string | null;
+    accountCurrency?: string | null;
   }) => {
     const merchant = params.merchant;
     const status = params.status;
     const sign = params.sign;
+    const merchantCurrency = params.merchantCurrency;
+    const accountCurrency = params.accountCurrency;
     const isWalletTransfer = /^To\s+[A-Z]{3}$/i.test(merchant);
     const isRefundOrReceive = /^(?:Refunded|Received)$/i.test(status ?? "");
     const isSent = /^(?:Sent)$/i.test(status ?? "");
     const isIncoming = sign === "credit" || isRefundOrReceive;
     const type: TransactionType = isWalletTransfer ? "transfer" : isIncoming ? "income" : isSent ? "transfer" : "expense";
+    const categoryContext = [merchant, status, merchantCurrency, accountCurrency].filter(Boolean).join(" ");
     const categoryName = isWalletTransfer
       ? "Transfers"
       : /refund/i.test(status ?? "")
         ? "Income"
         : isSent
           ? "Transfers"
-          : guessCategoryName(`${merchant} ${status ?? ""}`, type);
+          : guessCategoryName(categoryContext, type);
 
     return { type, categoryName };
   };
@@ -17790,7 +17818,9 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
     const merchant = row.merchantRaw ?? "Wise transaction";
     const status = typeof rawPayload.status === "string" ? rawPayload.status : null;
     const sign = typeof rawPayload.sourceSign === "string" ? rawPayload.sourceSign : null;
-    const { type, categoryName } = getWiseScreenshotRowTypeAndCategory({ merchant, status, sign });
+    const merchantCurrency = typeof rawPayload.merchantCurrency === "string" ? rawPayload.merchantCurrency : null;
+    const accountCurrency = typeof rawPayload.accountCurrency === "string" ? rawPayload.accountCurrency : null;
+    const { type, categoryName } = getWiseScreenshotRowTypeAndCategory({ merchant, status, sign, merchantCurrency, accountCurrency });
 
     row.merchantRaw = humanizeMerchantText(merchant);
     row.merchantClean = summarizeMerchantText(merchant, "Wise");

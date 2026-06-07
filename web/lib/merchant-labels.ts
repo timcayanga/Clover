@@ -447,6 +447,56 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Outgoing Transfer",
     },
   ],
+  Wise: [
+    {
+      patterns: [/gogyo(?:\s*-\s*surry\s+hills)?/i],
+      replacement: "Gogyo - Surry Hills",
+    },
+    {
+      patterns: [/milksha(?:\s+syd(?:ney)?)?/i],
+      replacement: "Milksha Sydney",
+    },
+    {
+      patterns: [/pedro\s+the\s+grocer(?:\s+makat)?/i],
+      replacement: "Pedro the Grocer",
+    },
+    {
+      patterns: [/ls\s+melbourne\s+souvenir/i],
+      replacement: "Melbourne Souvenir",
+    },
+    {
+      patterns: [/u\s+neek\s+souvenirs?\s+pty\s+ltd/i, /neek\s+souvenirs?\s+pty\s+ltd/i],
+      replacement: "U Neek Souvenirs Pty Ltd",
+    },
+    {
+      patterns: [/sydney\s+harbour\s+gifts?/i],
+      replacement: "Sydney Harbour Gifts",
+    },
+    {
+      patterns: [/ls\s+four\s+frogs\s+circular/i],
+      replacement: "Four Frogs Circular",
+    },
+    {
+      patterns: [/ls\s+mayeb\s+sammy/i],
+      replacement: "Mayeb Sammy",
+    },
+    {
+      patterns: [/v\s+happy\s+foods\s+pty\s+ltd/i],
+      replacement: "Happy Foods Pty Ltd",
+    },
+    {
+      patterns: [/ls\s+skyway\s+restaurant/i],
+      replacement: "Skyway Restaurant",
+    },
+    {
+      patterns: [/wootea\s+george\s+st/i],
+      replacement: "Wootea George St",
+    },
+    {
+      patterns: [/s1peron\s*-\s*zeller/i],
+      replacement: "S1peron - Zeller",
+    },
+  ],
   RCBC: [
     {
       patterns: [/\bthe\s+sm\s+store\b.*\bsm\s+fairview\b/i, /\bsm\s+fairview\b/i],

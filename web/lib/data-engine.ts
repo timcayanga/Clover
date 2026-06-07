@@ -502,6 +502,11 @@ export const extractLastFourDigits = (value?: string | null) => {
 const getHardcodedCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
   const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
+  const hasTravelContext =
+    /(?:sydney|melbourne|nsw|harbour|opera\s+house|great\s+ocean\s+road|skybus|airport|tourism|leura|surry\s+hills|george\s+st|circular|bath|victoria|apollo\s+bay)/.test(lower) ||
+    /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
+  const hasForeignMerchantCurrencyContext =
+    /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
 
   if (isStandaloneCashPaymentDescription(merchantText)) {
     return "Shopping";
@@ -559,10 +564,30 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
   }
 
   if (
-    /pedro\s+the\s+grocer|grocer\b|mcdonald'?s|milksha|gogyo|goken|savory\s+project|bar\s+leone|four\s+frogs/.test(lower) ||
-    /pedrothegrocer|mcdonalds|milksha|gogyo|goken|savoryproject|barleone|fourfrogs/.test(compact)
+    /sydney\s+harbour\s+gifts?|melbourne\s+souvenir|u\s+neek\s+souvenirs?|great\s+ocean\s+road|moonlit\s+sanctuary|parks?\s+victoria/.test(lower) ||
+    /sydneyharbourgifts?|melbournesouvenir|uneeksouvenirs?|greatoceanroad|moonlitsanctuary|parksvictoria/.test(compact)
+  ) {
+    return "Travel & Lifestyle";
+  }
+
+  if (/transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal/.test(lower) || /transportfornsw|skybus|parking|airport|rail|trainpal/.test(compact)) {
+    return "Transport";
+  }
+
+  if (
+    /pedro\s+the\s+grocer|grocer\b|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills/.test(lower) ||
+    /pedrothegrocer|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills/.test(compact)
   ) {
     return "Food & Dining";
+  }
+
+  if (
+    hasTravelContext &&
+    hasForeignMerchantCurrencyContext &&
+    (/souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|great\s+ocean\s+road|parks?\s+victoria/.test(lower) ||
+      /souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|greatoceanroad|parksvictoria/.test(compact))
+  ) {
+    return "Travel & Lifestyle";
   }
 
   if (/shopee|puregold|price\s+club/.test(lower) || /shopee|puregold|priceclub/.test(compact)) {
@@ -966,6 +991,11 @@ export const buildTrainingSignalDedupeKey = (params: {
 export const guessCategoryFallback = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
   const compact = normalizeWhitespace(description).replace(/\s+/g, "").toLowerCase();
+  const hasTravelContext =
+    /(?:sydney|melbourne|nsw|harbour|opera\s+house|great\s+ocean\s+road|skybus|airport|tourism|leura|surry\s+hills|george\s+st|circular|bath|victoria|apollo\s+bay)/.test(lower) ||
+    /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
+  const hasForeignMerchantCurrencyContext =
+    /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
   const override = getHardcodedCategoryOverride(description);
   if (override) return override;
   if (/deposit to gsave|withdraw from gsave|seamoney credit|maribank credit/.test(lower)) return "Financial";
@@ -980,16 +1010,24 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/interest\s+earned|interestearned|salary|payroll|income|deposit|cash\s*in\b|cashin\b|cash\/?check\s+deposit|received|credit memo/.test(lower)) return "Income";
   if (/interbankservicecharge|atmwithdrawalacquirerfee|financecharge|financecharges|latepaymentfee|annualfee/.test(compact)) return "Financial";
   if (/incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|systemdebit|systemcredit|miscellaneousdebit|investmentsweep/.test(compact)) return "Transfers";
-  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|bar leone|savory project|gokan|goken/.test(lower)) return "Food & Dining";
+  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|bar leone|savory project|gokan|goken|mcdonald'?s|milksha|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|four\s+frogs/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
   if (/discord\s+nitro/.test(lower) || /discordnitro/.test(compact)) return "Subscriptions";
   if (/google\s+one/.test(lower) || /googleone/.test(compact)) return "Subscriptions";
   if (/mlbb\s+top\s+up|mobile\s+legends|mlbbtopup/.test(lower) || /mlbbtopup|mobilelegends/.test(compact)) return "Entertainment";
   if (/bill|utilities|electric|water|internet|phone|subscription|openai|netflix|spotify/.test(lower)) return "Bills & Utilities";
-  if (/travel|airbnb|hotel|airline|flight|tour|holiday/.test(lower)) return "Travel & Lifestyle";
+  if (/travel|airbnb|hotel|airline|flight|tour|holiday|souvenir|harbour\s+gifts?|tourism|sanctuary/.test(lower)) return "Travel & Lifestyle";
   if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox/.test(lower))
     return "Entertainment";
+  if (
+    hasTravelContext &&
+    hasForeignMerchantCurrencyContext &&
+    (/souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|great\s+ocean\s+road|parks?\s+victoria/.test(lower) ||
+      /souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|greatoceanroad|parksvictoria/.test(compact))
+  ) {
+    return "Travel & Lifestyle";
+  }
   if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|retail|camera/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
   if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
@@ -3969,6 +4007,12 @@ export const enrichParsedRowsWithTraining = async (params: {
       !Array.isArray(rowWithInstitution.normalizedPayload)
         ? (rowWithInstitution.normalizedPayload as Record<string, unknown>)
         : null;
+    const rawPayload =
+      rowWithInstitution.rawPayload &&
+      typeof rowWithInstitution.rawPayload === "object" &&
+      !Array.isArray(rowWithInstitution.rawPayload)
+        ? (rowWithInstitution.rawPayload as Record<string, unknown>)
+        : null;
     const categoryText = [
       row.merchantRaw,
       row.merchantClean,
@@ -3976,6 +4020,16 @@ export const enrichParsedRowsWithTraining = async (params: {
       deterministicMerchantName,
       typeof normalizedPayload?.merchantClean === "string" ? normalizedPayload.merchantClean : null,
       typeof normalizedPayload?.categoryName === "string" ? normalizedPayload.categoryName : null,
+      typeof rawPayload?.merchantCurrency === "string" ? rawPayload.merchantCurrency : null,
+      typeof rawPayload?.accountCurrency === "string" ? rawPayload.accountCurrency : null,
+      typeof rawPayload?.merchantAmountText === "string" ? rawPayload.merchantAmountText : null,
+      typeof rawPayload?.accountAmountText === "string" ? rawPayload.accountAmountText : null,
+      typeof rawPayload?.status === "string" ? rawPayload.status : null,
+      typeof normalizedPayload?.merchantCurrency === "string" ? normalizedPayload.merchantCurrency : null,
+      typeof normalizedPayload?.accountCurrency === "string" ? normalizedPayload.accountCurrency : null,
+      typeof normalizedPayload?.merchantAmountText === "string" ? normalizedPayload.merchantAmountText : null,
+      typeof normalizedPayload?.accountAmountText === "string" ? normalizedPayload.accountAmountText : null,
+      typeof normalizedPayload?.status === "string" ? normalizedPayload.status : null,
     ]
       .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
       .join(" ");
