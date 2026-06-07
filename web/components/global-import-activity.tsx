@@ -309,18 +309,5 @@ export function GlobalImportActivity() {
     );
   }
 
-  return (
-    <ImportUploadDock
-      open
-      tone="default"
-      fileName={activity.fileName}
-      fileIndex={activity.fileIndex}
-      fileTotal={activity.fileTotal}
-      completedFiles={activity.completedFiles}
-      progress={activity.progress}
-      detail={activity.detail}
-      summary={activity.summary}
-      onClose={handleClose}
-    />
-  );
+  return null;
 }

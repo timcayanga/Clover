@@ -1995,6 +1995,7 @@ const summarizeVisibilityOutcome = (
 
   const queued = blocked.filter((item) => item.status === "pending" && !item.importFileId && item.progress < IMPORT_PROGRESS.uploading);
   const blockedFailures = blocked.filter((item) => !queued.includes(item));
+  const retryNeeded = [...partial, ...queued, ...failed, ...blockedFailures];
 
   const listNames = (label: string, entries: QueuedFile[]) =>
     entries.length > 0 ? `${label}: ${entries.map((entry) => entry.file.name).join(", ")}.` : "";
@@ -2006,12 +2007,16 @@ const summarizeVisibilityOutcome = (
     failed,
     blocked,
     queued,
+    retryNeeded,
     failureCount,
     message: [
       `${successful.length} visible, ${partial.length} partially parsed, ${queued.length} queued, ${failed.length + blockedFailures.length} failed.`,
       listNames("Partial", partial),
       listNames("Queued", queued),
       listNames("Failed", [...failed, ...blockedFailures]),
+      retryNeeded.length > 0
+        ? `Try uploading again: ${retryNeeded.map((entry) => entry.file.name).join(", ")}.`
+        : "",
       partial.length > 0 || queued.length > 0
         ? `Clover will keep working in the background for up to ${Math.round(IMPORT_BACKGROUND_HARD_STOP_MS / 60_000)} minutes.`
         : "",
@@ -2508,6 +2513,36 @@ export function ImportFilesModal({
     if (visibilityHardStopTimerRef.current) {
       window.clearTimeout(visibilityHardStopTimerRef.current);
       visibilityHardStopTimerRef.current = null;
+    }
+
+    if (reason === "deadline" && outcome.retryNeeded.length > 0) {
+      const retryFileNames = outcome.retryNeeded.map((entry) => entry.file.name).join(", ");
+      publishImportActivity({
+        workspaceId,
+        surface: "background",
+        status: "error",
+        fileName: outcome.retryNeeded[0]?.file.name ?? currentItems[currentItems.length - 1]?.file.name ?? null,
+        fileIndex: Math.max(1, outcome.successful.length),
+        fileTotal: currentItems.length,
+        completedFiles: outcome.successful.length,
+        progress: Math.min(
+          99,
+          Math.max(IMPORT_PROGRESS.uploading, Math.round((outcome.successful.length / currentItems.length) * 100))
+        ),
+        detail: "Import timed out",
+        summary: completedSummary,
+        errorCode: "I-107",
+        errorTitle: "Some files were not uploaded",
+        errorMessage: `${outcomeMessage} Try uploading these files again: ${retryFileNames}.`,
+        errorNextSteps: [
+          `Upload these files again: ${retryFileNames}.`,
+          "Try uploading fewer files at a time if the batch is large.",
+          "Use the original PDF or a clearer screenshot when available.",
+        ],
+      });
+      lastImportActivityRef.current = null;
+      primaryVisibilityCompletedRef.current = true;
+      return;
     }
 
     if (outcome.failureCount > 0) {
