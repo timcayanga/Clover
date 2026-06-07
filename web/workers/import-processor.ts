@@ -945,6 +945,15 @@ const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptT
   },
 });
 
+const previewLooksLikeUsableReceipt = (preview: ReturnType<typeof parseReceiptText> | null) =>
+  Boolean(
+    preview &&
+      preview.total !== null &&
+      preview.billDate &&
+      preview.confidence >= 65 &&
+      (preview.items.length > 0 || Boolean(preview.merchantName) || Boolean(preview.paymentMethod))
+  );
+
 type TrainedReceiptFixture = {
   fileName: string;
   documentType: string;
@@ -5662,14 +5671,7 @@ export const processImportFileText = async (
   }
   const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
   const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
-  const receiptPreviewLooksLikeReceipt =
-    Boolean(
-      receiptPreview &&
-        receiptPreview.items.length > 0 &&
-        receiptPreview.total !== null &&
-        receiptPreview.billDate &&
-        receiptPreview.confidence >= 80
-    );
+  const receiptPreviewLooksLikeReceipt = previewLooksLikeUsableReceipt(receiptPreview);
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
     hasReliableDeterministicStatementParse ||
@@ -5817,6 +5819,13 @@ export const processImportFileText = async (
           expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
         })
       : null;
+  const receiptFastPathReady =
+    importMode === "receipt" &&
+    Boolean(
+      trainedReceiptDetails ||
+        (receiptPreviewLooksLikeReceipt && (openAiReceiptValidation?.score ?? 0) >= 4) ||
+        (openAiReceiptValidation?.score ?? 0) >= 5
+    );
   const receiptAccountResolution =
     importMode === "receipt" && receiptAccountMatch
       ? await (async () => {
@@ -6440,6 +6449,95 @@ export const processImportFileText = async (
         pageCount: pageImages?.length ?? 0,
       } as Prisma.InputJsonValue,
     });
+  }
+
+  if (importMode === "receipt" && documentImportRecord && receiptFastPathReady) {
+    await updateImportFileCompat(importFileId, {
+      status: "processing",
+      processingPhase: "reconciling",
+      processingMessage: "Clover is saving the receipt.",
+    }).catch(() => null);
+
+    try {
+      confirmedImportResult = await confirmImportFileWithRetry("receipt_fast_path");
+      if (confirmedImportResult.status === "staged") {
+        await updateImportFileCompat(importFileId, {
+          status: "processing",
+          processingPhase: "staged",
+          processingMessage: "Clover saved the receipt and is finalizing the visible row.",
+        }).catch(() => null);
+
+        emitImportProcessingEvent("import_processing_completed", {
+          processing_status: "staged",
+          processing_phase: "staged",
+          imported_rows: confirmedImportResult.imported,
+        });
+
+        return {
+          imported: confirmedImportResult.imported,
+          duplicate: Boolean(confirmedImportResult.duplicate),
+          metadata: resolvedMetadata,
+          accountId: confirmedImportResult.accountId ?? null,
+          accountSummaries: confirmedImportResult.accountSummaries,
+          confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
+          insightSummary: confirmedImportResult.insightSummary ?? undefined,
+          accountBalance: confirmedImportResult.accountBalance ?? null,
+          status: "staged",
+        };
+      }
+
+      await updateImportFileCompat(importFileId, {
+        status: "done",
+        processingPhase: "complete",
+        processingMessage: "Receipt imported. Clover is refining the details in the background.",
+        confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? confirmedImportResult.imported,
+      }).catch(() => null);
+
+      emitImportProcessingEvent("import_processing_completed", {
+        processing_status: "done",
+        processing_phase: "visible_rows_saved",
+        imported_rows: confirmedImportResult.imported,
+      });
+
+      void (async () => {
+        const cleanupRowsAfterConfirmation = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
+        if (cleanupRowsAfterConfirmation <= 0) {
+          return;
+        }
+
+        await upsertImportEnrichmentJob({
+          workspaceId: String(importFile.workspaceId),
+          importFileId,
+          totalRows: Math.max(1, cleanupRowsAfterConfirmation),
+          phase: "queued",
+          forceRequeue: false,
+        }).catch(() => null);
+
+        processImportEnrichmentJobsInBackground(importFileId, Math.max(1, cleanupRowsAfterConfirmation));
+      })().catch((error) => {
+        console.warn("Unable to start background receipt enrichment after fast-path import", {
+          importFileId,
+          error,
+        });
+      });
+
+      return {
+        imported: confirmedImportResult.imported,
+        duplicate: Boolean(confirmedImportResult.duplicate),
+        metadata: resolvedMetadata,
+        accountId: confirmedImportResult.accountId ?? null,
+        accountSummaries: confirmedImportResult.accountSummaries,
+        confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
+        insightSummary: confirmedImportResult.insightSummary ?? undefined,
+        accountBalance: confirmedImportResult.accountBalance ?? null,
+        status: "done",
+      };
+    } catch (error) {
+      console.warn("[import-performance] receipt fast-path confirmation fell back to full pipeline", {
+        importFileId,
+        error,
+      });
+    }
   }
 
   if (documentImportRecord && (importMode === "portfolio" || importMode === "account_detail")) {
