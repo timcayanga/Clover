@@ -3979,7 +3979,7 @@ export function ImportFilesModal({
             (processingPhase === "queued_retry" || telemetryPhase === "queued") &&
             parsedRowsCount === 0 &&
             confirmedTransactionsCount === 0 &&
-            Date.now() - startedAt >= 2_500;
+            Date.now() - startedAt >= 1_500;
 
           if (shouldAutoResumeQueuedImport) {
             queuedResumeAttempted = true;
@@ -8195,7 +8195,7 @@ export function ImportFilesModal({
       const results: Array<{ itemId: string; result: ImportProcessResult }> = [];
       let nextIndex = 0;
       const shouldRefreshDuringBatch = queue.some(isFastImageBatchItem);
-      const workerCount = Math.min(queue.every(isServerHeavyStatementBatchItem) ? 4 : 8, queue.length);
+      const workerCount = Math.min(queue.every(isServerHeavyStatementBatchItem) ? 4 : queue.every(isFastImageBatchItem) ? 10 : 8, queue.length);
 
       const runWorker = async () => {
         while (!uploadCancelRequestedRef.current) {

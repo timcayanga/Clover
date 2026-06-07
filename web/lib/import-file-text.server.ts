@@ -1883,7 +1883,10 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
 export const readImportedFileTextWithCacheInfo = async (
   params: { storageKey: string; fileType: string; fileName: string; workspaceId?: string | null; importMode?: string | null },
   password?: string,
-  pdfJsBaseUrl?: string | null
+  pdfJsBaseUrl?: string | null,
+  options?: {
+    skipFreshExtractionOnCacheMiss?: boolean;
+  }
 ): Promise<ImportedFileTextWithCacheInfo> => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   const aggressiveProfile = shouldUseAggressivePdfOcrProfile(params.fileName) ? "aggressive" : "standard";
@@ -1958,6 +1961,15 @@ export const readImportedFileTextWithCacheInfo = async (
       text: resolvedText,
       cacheHit: true,
       cacheRecord: persistentCache,
+    };
+  }
+
+  if (options?.skipFreshExtractionOnCacheMiss) {
+    return {
+      fileFingerprint,
+      text: "",
+      cacheHit: false,
+      cacheRecord: null,
     };
   }
 

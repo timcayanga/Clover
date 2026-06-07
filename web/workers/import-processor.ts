@@ -5295,12 +5295,6 @@ export const processImportFileText = async (
   const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
   const trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
   const likelyScreenshotStatement = imageImport && importMode === "statement" && isLikelyScreenshotImageFile(fileName);
-  const shouldPreferDirectImageStatementVision =
-    imageImport &&
-    importMode === "statement" &&
-    !trainedReceiptDetails &&
-    !String(options.text ?? "").trim() &&
-    !options.textCacheInfo;
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
   let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
@@ -5308,6 +5302,45 @@ export const processImportFileText = async (
   const noisyPdfBankByFileName =
     fileType === "application/pdf" &&
     /landbank|land bank|eastwest|chinabank|china bank/i.test(fileName);
+
+  if (
+    !textCacheInfo &&
+    imageImport &&
+    importMode === "statement" &&
+    !trainedReceiptDetails &&
+    !String(options.text ?? "").trim() &&
+    storageKey
+  ) {
+    try {
+      textCacheInfo = await readImportedFileTextWithCacheInfo(
+        {
+          storageKey,
+          fileType,
+          fileName,
+          workspaceId: String(importFile.workspaceId),
+          importMode,
+        },
+        options.password,
+        options.pdfJsBaseUrl,
+        { skipFreshExtractionOnCacheMiss: true }
+      );
+      if (textCacheInfo.cacheHit) {
+        text = textCacheInfo.text;
+      }
+    } catch (error) {
+      console.warn("Unable to probe screenshot cache before direct vision; continuing with live parse", {
+        importFileId,
+        error,
+      });
+    }
+  }
+
+  const shouldPreferDirectImageStatementVision =
+    imageImport &&
+    importMode === "statement" &&
+    !trainedReceiptDetails &&
+    !String(text ?? "").trim() &&
+    !textCacheInfo?.cacheHit;
 
   if (!shouldPreferDirectImageStatementVision && !trainedReceiptDetails && !noisyPdfBankByFileName && (imageImport || !text)) {
     if (!storageKey) {
@@ -5360,13 +5393,18 @@ export const processImportFileText = async (
       : null;
   const cachedParsePreservesMobileScreenshotIdentity =
     !freshMobileScreenshotInstitution || cachedMetadataForCacheGate?.institution === freshMobileScreenshotInstitution;
+  const cachedScreenshotParseLooksReusable =
+    imageImport &&
+    importMode === "statement" &&
+    cachedParsedRows.length > 0 &&
+    Boolean(textCacheInfo?.cacheRecord?.metadata);
   const canReuseCachedStatementParse =
     importMode === "statement" &&
-    Boolean(textCacheInfo?.cacheHit) &&
+    (Boolean(textCacheInfo?.cacheHit) || cachedScreenshotParseLooksReusable) &&
     cachedParsedRows.length > 0 &&
     cachedParsePreservesMultiAccountIdentity &&
     cachedParsePreservesMobileScreenshotIdentity &&
-    Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) &&
+    (Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) || imageImport) &&
     Boolean(textCacheInfo?.cacheRecord?.metadata);
 
   if (imageImport && !trainedReceiptDetails && !canReuseCachedStatementParse) {
