@@ -181,6 +181,8 @@ type NormalizedImageBytes = {
   dataUrl: string;
 };
 
+type ImageNormalizationProfile = "generic" | "receipt" | "wallet_screenshot";
+
 const IMPORT_FILE_TEXT_CACHE_LIMIT = 24;
 const importedFileTextCache = new Map<string, Promise<string>>();
 const importedFileTextCacheRecordMap = new Map<string, ImportFileTextCacheRecord>();
@@ -468,6 +470,44 @@ const extractTextFromImageBufferWithOcrBestEffort = async (imageSource: Buffer |
     { text: secondPass, label: "ocr-psm-11" },
     { text: thirdPass, label: "ocr-psm-4" },
   ]);
+};
+
+const shouldRetryImageOcrBestEffort = (params: {
+  firstPassText: string;
+  fileType?: string | null;
+  fileName?: string | null;
+  importMode?: string | null;
+}) => {
+  const firstPassText = String(params.firstPassText ?? "").trim();
+  if (!firstPassText) {
+    return true;
+  }
+
+  const lowerName = `${params.fileType ?? ""} ${params.fileName ?? ""}`.toLowerCase();
+  const importMode = String(params.importMode ?? "").toLowerCase();
+  const profile: ImageNormalizationProfile =
+    importMode === "receipt" || /\b(?:receipt|invoice|sales invoice|official receipt|cash slip|temporary bill|amount due)\b/.test(lowerName)
+      ? /\b(?:gcash|maya|wise|wallet|transfer|sent via|express send)\b/.test(lowerName)
+        ? "wallet_screenshot"
+        : "receipt"
+      : /\b(?:gcash|maya|wise|wallet|transfer|sent via|express send|screenshot|screen shot|screen_shot)\b/.test(lowerName)
+        ? "wallet_screenshot"
+        : "generic";
+
+  if (profile === "generic") {
+    return false;
+  }
+
+  const compact = firstPassText.replace(/\s+/g, " ").trim();
+  const lineCount = firstPassText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).length;
+  const hasCurrencyOrAmount = /(?:₱|PHP|\$|€|£|¥)|\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/.test(firstPassText);
+  const hasReceiptKeywords = /\b(?:total|amount|subtotal|vat|tax|ref\.?\s*no|sales invoice|official receipt|sent via|cashier|guest|table|service charge)\b/i.test(firstPassText);
+  const looksStrongEnough =
+    compact.length >= (profile === "wallet_screenshot" ? 80 : 140) &&
+    lineCount >= (profile === "wallet_screenshot" ? 4 : 7) &&
+    (hasCurrencyOrAmount || hasReceiptKeywords);
+
+  return !looksStrongEnough;
 };
 
 type PdfOcrProfile = "standard" | "aggressive";
@@ -1420,16 +1460,84 @@ const isImageImportFileName = (fileType: string | null | undefined, fileName: st
   );
 };
 
-const normalizeImportedImageBytes = async (bytes: Uint8Array, fileType: string | null | undefined, fileName: string | null | undefined) => {
+const resolveImageNormalizationProfile = (params: {
+  fileType?: string | null;
+  fileName?: string | null;
+  importMode?: string | null;
+}): ImageNormalizationProfile => {
+  const lowerName = `${params.fileType ?? ""} ${params.fileName ?? ""}`.toLowerCase();
+  const importMode = String(params.importMode ?? "").toLowerCase();
+
+  if (
+    importMode === "receipt" ||
+    /\b(?:receipt|invoice|sales invoice|official receipt|cash slip|temporary bill|or#|amount due|subtotal|vat|service charge)\b/.test(lowerName)
+  ) {
+    if (/\b(?:gcash|maya|wise|wallet|transfer|sent via|express send)\b/.test(lowerName)) {
+      return "wallet_screenshot";
+    }
+    return "receipt";
+  }
+
+  if (/\b(?:gcash|maya|wise|wallet|transfer|sent via|express send|screenshot|screen shot|screen_shot)\b/.test(lowerName)) {
+    return "wallet_screenshot";
+  }
+
+  return "generic";
+};
+
+const normalizeImportedImageBytes = async (
+  bytes: Uint8Array,
+  fileType: string | null | undefined,
+  fileName: string | null | undefined,
+  importMode?: string | null
+) => {
   const mimeType = String(fileType ?? "").trim().toLowerCase();
   const lowerName = String(fileName ?? "").toLowerCase();
   const isHeicLike = /image\/(heic|heif)(-sequence)?/.test(mimeType) || /\.(heic|heif)$/i.test(lowerName);
+  const profile = resolveImageNormalizationProfile({ fileType, fileName, importMode });
 
   try {
     const sharpModule = await import("sharp");
     const sharp = sharpModule.default;
     const image = sharp(Buffer.from(bytes), { animated: true }).rotate();
-    const output = isHeicLike ? await image.jpeg({ quality: 90 }).toBuffer() : await image.jpeg({ quality: 90 }).toBuffer();
+    const metadata = await image.metadata().catch(() => null);
+    const width = Number(metadata?.width ?? 0);
+    const height = Number(metadata?.height ?? 0);
+    const longestEdge = Math.max(width, height, 0);
+    const resizeLimit = profile === "wallet_screenshot" ? 1600 : profile === "receipt" ? 1800 : 2200;
+
+    if (longestEdge > resizeLimit) {
+      image.resize({
+        width: width >= height ? resizeLimit : undefined,
+        height: height > width ? resizeLimit : undefined,
+        fit: "inside",
+        withoutEnlargement: true,
+      });
+    }
+
+    image.removeAlpha().flatten({ background: "#ffffff" });
+
+    if (profile === "receipt") {
+      image
+        .grayscale()
+        .normalize()
+        .linear(1.08, -6)
+        .sharpen({ sigma: 1.1, m1: 0.6, m2: 2.2 })
+        .median(1);
+    } else if (profile === "wallet_screenshot") {
+      image
+        .normalize()
+        .modulate({ brightness: 1.04, saturation: 0.92 })
+        .sharpen({ sigma: 0.9, m1: 0.4, m2: 1.6 });
+    } else {
+      image
+        .normalize()
+        .sharpen({ sigma: 0.8, m1: 0.3, m2: 1.2 });
+    }
+
+    const output = isHeicLike
+      ? await image.jpeg({ quality: 88, chromaSubsampling: "4:4:4" }).toBuffer()
+      : await image.jpeg({ quality: 88, chromaSubsampling: "4:4:4" }).toBuffer();
     return {
       mimeType: "image/jpeg",
       buffer: output,
@@ -1874,7 +1982,11 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
     }
 
     const normalized = await normalizeImportedImageBytes(new Uint8Array(await file.arrayBuffer()), lowerType, lowerName);
-    return extractTextFromImageBufferWithOcr(normalized.dataUrl);
+    const firstPassText = await extractTextFromImageBufferWithOcr(normalized.dataUrl);
+    if (!shouldRetryImageOcrBestEffort({ firstPassText, fileType: lowerType, fileName: lowerName })) {
+      return firstPassText;
+    }
+    return extractTextFromImageBufferWithOcrBestEffort(normalized.dataUrl);
   }
 
   throw new Error("Only PDF, CSV, and common image files are supported.");
@@ -1890,6 +2002,11 @@ export const readImportedFileTextWithCacheInfo = async (
 ): Promise<ImportedFileTextWithCacheInfo> => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   const aggressiveProfile = shouldUseAggressivePdfOcrProfile(params.fileName) ? "aggressive" : "standard";
+  const imageProfile = resolveImageNormalizationProfile({
+    fileType: params.fileType,
+    fileName: params.fileName,
+    importMode: params.importMode,
+  });
   const bytes = await downloadImportObject(params.storageKey);
   const fileFingerprint = makeImportFileBytesFingerprint(bytes);
   const cacheKey = [
@@ -1900,6 +2017,7 @@ export const readImportedFileTextWithCacheInfo = async (
     String(params.importMode ?? ""),
     String(password ?? ""),
     String(pdfJsBaseUrl ?? ""),
+    imageProfile,
     shouldPreferPdfOcrFirst(params.fileName) ? "ocr-first" : "text-first",
     aggressiveProfile === "aggressive" ? "aggressive-ocr" : "standard-ocr",
   ].join(":");
@@ -1982,8 +2100,17 @@ export const readImportedFileTextWithCacheInfo = async (
     }
 
     if (isImageImportFileName(params.fileType, params.fileName)) {
-      const normalized = await normalizeImportedImageBytes(bytes, params.fileType, params.fileName);
-      return extractTextFromImageBufferWithOcr(normalized.dataUrl);
+      const normalized = await normalizeImportedImageBytes(bytes, params.fileType, params.fileName, params.importMode);
+      const firstPassText = await extractTextFromImageBufferWithOcr(normalized.dataUrl);
+      if (!shouldRetryImageOcrBestEffort({
+        firstPassText,
+        fileType: params.fileType,
+        fileName: params.fileName,
+        importMode: params.importMode,
+      })) {
+        return firstPassText;
+      }
+      return extractTextFromImageBufferWithOcrBestEffort(normalized.dataUrl);
     }
 
     try {
@@ -2051,7 +2178,7 @@ export const readImportedFileTextWithCacheInfo = async (
 };
 
 export const readImportedFileText = async (
-  params: { storageKey: string; fileType: string; fileName: string },
+  params: { storageKey: string; fileType: string; fileName: string; importMode?: string | null },
   password?: string,
   pdfJsBaseUrl?: string | null
 ) => readImportedFileTextWithCacheInfo(params, password, pdfJsBaseUrl).then((result) => result.text);
@@ -2121,7 +2248,7 @@ export const readImportedPdfPageImages = async (
   }
 };
 
-export const readImportedFileImageDataUrls = async (params: { storageKey: string; fileType: string; fileName: string }) => {
+export const readImportedFileImageDataUrls = async (params: { storageKey: string; fileType: string; fileName: string; importMode?: string | null }) => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   if (!/\.(png|jpe?g|webp|heic|heif|gif|bmp|avif)$/.test(lowerName) && !/^image\//.test(String(params.fileType ?? "").toLowerCase())) {
     return [];
@@ -2144,13 +2271,18 @@ export const readImportedFileImageDataUrls = async (params: { storageKey: string
     throw lastDownloadError instanceof Error ? lastDownloadError : new Error("Unable to read imported image file.");
   }
   const fileFingerprint = makeImportFileBytesFingerprint(bytes);
-  const cacheKey = ["image-data", fileFingerprint, lowerName].join(":");
+  const profile = resolveImageNormalizationProfile({
+    fileType: params.fileType,
+    fileName: params.fileName,
+    importMode: params.importMode,
+  });
+  const cacheKey = ["image-data", fileFingerprint, lowerName, profile].join(":");
   const cachedDataUrls = importedFileImageDataUrlCache.get(cacheKey);
   if (cachedDataUrls) {
     return cachedDataUrls;
   }
 
-  const normalized = normalizeImportedImageBytes(bytes, params.fileType, params.fileName).then((value) => [{ page: 1, dataUrl: value.dataUrl }]);
+  const normalized = normalizeImportedImageBytes(bytes, params.fileType, params.fileName, params.importMode).then((value) => [{ page: 1, dataUrl: value.dataUrl }]);
   rememberImportCacheEntry(importedFileImageDataUrlCache, cacheKey, normalized);
   try {
     const dataUrls = await normalized;

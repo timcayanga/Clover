@@ -5460,6 +5460,7 @@ export const processImportFileText = async (
       storageKey,
       fileType,
       fileName,
+      importMode,
     });
   }
 
@@ -5775,6 +5776,7 @@ export const processImportFileText = async (
           storageKey: String(importFile.storageKey ?? ""),
           fileType,
           fileName,
+          importMode,
         });
       } else if (fileType === "application/pdf") {
         const importedBytes = await downloadImportObject(storageKey);
@@ -5920,7 +5922,7 @@ export const processImportFileText = async (
             select: getCompatibleAccountSelect(compatibleAccountColumns),
           });
           const institutionFallbackHint = inferReceiptInstitutionFallbackHint({
-            parsedRows: rows,
+            parsedRows,
             receiptDetails:
               receiptDetails && typeof receiptDetails === "object" && !Array.isArray(receiptDetails)
                 ? (receiptDetails as Record<string, unknown>)
@@ -5955,7 +5957,12 @@ export const processImportFileText = async (
 
           const createdAccount = await ensureDetectedReceiptInstitutionAccount({
             workspaceId: String(importFile.workspaceId),
-            currency: normalizeInstitutionCurrency(null, resolvedMetadata.currency ?? "PHP", institutionFallbackHint?.institution ?? institutionFallbackHint?.accountName ?? null) ?? (String(resolvedMetadata.currency ?? "PHP").trim().toUpperCase() || "PHP"),
+            currency:
+              normalizeInstitutionCurrency(
+                null,
+                metadataForParse.currency ?? "PHP",
+                institutionFallbackHint?.institution ?? institutionFallbackHint?.accountName ?? null
+              ) ?? (String(metadataForParse.currency ?? "PHP").trim().toUpperCase() || "PHP"),
             institutionHint: institutionFallbackHint,
           });
           if (!createdAccount) {
