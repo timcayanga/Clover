@@ -23,6 +23,7 @@
     "qa:ucpb-process": "tsx scripts/ucpb-process-route-regression.ts",
     "qa:eastwest-process": "tsx scripts/eastwest-process-route-regression.ts",
     "qa:wise-screenshots": "tsx scripts/wise-screenshot-regression.ts",
+    "qa:rcbc-screenshots": "tsx scripts/rcbc-screenshot-regression.ts",
     "qa:training-signals": "tsx scripts/training-signal-dedupe.ts",
     "qa:training-signals-db": "tsx scripts/record-training-signal-regression.ts",
     "qa:data-loop": "tsx scripts/data-qa-regression.ts",

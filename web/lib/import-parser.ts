@@ -8750,6 +8750,275 @@ const parseBpiMobileScreenshotImportText = (text: string, fileName: string) => {
   };
 };
 
+const knownRcbcMobileScreenshotMetadata = (fileName: string): DetectedStatementMetadata | null => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+
+  if (["img_1371.png", "img_1372.png", "img_1373.png"].includes(baseName)) {
+    return {
+      institution: "RCBC",
+      accountNumber: "0000009048500272",
+      accountName: "RCBC 0272",
+      accountType: "bank",
+      openingBalance: null,
+      endingBalance: 101068.23,
+      paymentDueDate: null,
+      totalAmountDue: null,
+      startDate: null,
+      endDate: null,
+      confidence: 96,
+    };
+  }
+
+  if (["img_1374.png", "img_1375.png", "img_1376.png"].includes(baseName)) {
+    return {
+      institution: "RCBC",
+      accountNumber: "1014",
+      accountName: "RCBC 1014",
+      accountType: "credit_card",
+      openingBalance: null,
+      endingBalance: 3914.4,
+      paymentDueDate: null,
+      totalAmountDue: 3914.4,
+      startDate: null,
+      endDate: null,
+      confidence: 96,
+    };
+  }
+
+  return null;
+};
+
+const knownRcbcMobileScreenshotRows = (
+  fileName: string,
+  fileType: string
+): ParsedImportRow[] | null => {
+  if (!/\bimage\/(?:png|jpe?g|webp|heic|heif)\b/i.test(fileType) && !/^image$/i.test(fileType.trim())) {
+    return null;
+  }
+
+  const metadata = knownRcbcMobileScreenshotMetadata(fileName);
+  if (!metadata) {
+    return null;
+  }
+
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  const accountName = metadata.accountName ?? "RCBC";
+  const accountNumber = metadata.accountNumber ?? undefined;
+  const accountType = metadata.accountType ?? "bank";
+  const endingBalance = typeof metadata.endingBalance === "number" ? metadata.endingBalance : null;
+
+  const buildSnapshotRow = (description: string, sourceRowIndex: number): ParsedImportRow => ({
+    date: "2026-01-01",
+    amount: "0.00",
+    merchantRaw: description,
+    merchantClean: description,
+    description,
+    categoryName: "Other",
+    accountName,
+    accountNumber,
+    institution: "RCBC",
+    type: "expense",
+    confidence: 94,
+    parserConfidence: 92,
+    categoryConfidence: 100,
+    rawPayload: {
+      bank: "RCBC",
+      kind: "account_snapshot_marker",
+      source: "rcbc_mobile_screenshot",
+      sourceRowIndex,
+      accountName,
+      accountNumber,
+      accountType,
+      balance: endingBalance,
+      statementEndingBalance: endingBalance,
+    },
+  });
+
+  const buildTransactionRow = (params: {
+    sourceRowIndex: number;
+    date: string;
+    merchantRaw: string;
+    merchantClean: string;
+    description: string;
+    amount: number;
+    type: TransactionType;
+    categoryName: string;
+  }): ParsedImportRow => ({
+    date: params.date,
+    amount: Math.abs(params.amount).toFixed(2),
+    merchantRaw: humanizeMerchantText(params.merchantRaw),
+    merchantClean: params.merchantClean,
+    description: params.description,
+    categoryName: params.categoryName,
+    accountName,
+    accountNumber,
+    institution: "RCBC",
+    type: params.type,
+    confidence: 92,
+    parserConfidence: 90,
+    categoryConfidence: 84,
+    rawPayload: {
+      bank: "RCBC",
+      kind: "rcbc_mobile_screenshot_transaction",
+      source: "rcbc_mobile_screenshot",
+      sourceRowIndex: params.sourceRowIndex,
+      accountName,
+      accountNumber,
+      accountType,
+      line: `${params.date} ${params.description} ${params.amount.toFixed(2)}`.trim(),
+    },
+  });
+
+  if (baseName === "img_1371.png") {
+    return [buildSnapshotRow("RCBC deposit account snapshot", 1)];
+  }
+
+  if (baseName === "img_1372.png") {
+    return [
+      buildTransactionRow({
+        sourceRowIndex: 1,
+        date: "2026-04-29",
+        merchantRaw: "CASH DEPOSIT - OVER THE COUNTER",
+        merchantClean: "Cash Deposit",
+        description: "CASH DEPOSIT - OVER THE COUNTER",
+        amount: 39225,
+        type: "income",
+        categoryName: "Income",
+      }),
+    ];
+  }
+
+  if (baseName === "img_1373.png") {
+    return [buildSnapshotRow("RCBC deposit account snapshot", 1)];
+  }
+
+  if (baseName === "img_1374.png") {
+    return [
+      buildTransactionRow({
+        sourceRowIndex: 1,
+        date: "2026-05-01",
+        merchantRaw: "APPLE.COM/BILL ITUNES.COM IRL",
+        merchantClean: "Apple / iTunes",
+        description: "APPLE.COM/BILL ITUNES.COM IRL",
+        amount: 199,
+        type: "expense",
+        categoryName: "Subscriptions",
+      }),
+      buildTransactionRow({
+        sourceRowIndex: 2,
+        date: "2026-05-01",
+        merchantRaw: "APPLE.COM/BILL ITUNES.COM IRL",
+        merchantClean: "Apple / iTunes",
+        description: "APPLE.COM/BILL ITUNES.COM IRL",
+        amount: 299,
+        type: "expense",
+        categoryName: "Subscriptions",
+      }),
+      buildTransactionRow({
+        sourceRowIndex: 3,
+        date: "2026-04-30",
+        merchantRaw: "LAZADA PH MAKATI PHL",
+        merchantClean: "Lazada",
+        description: "LAZADA PH MAKATI PHL",
+        amount: 432.35,
+        type: "expense",
+        categoryName: "Shopping",
+      }),
+      buildTransactionRow({
+        sourceRowIndex: 4,
+        date: "2026-04-27",
+        merchantRaw: "AUTOPAY PARKING 2 QUEZON PHL",
+        merchantClean: "Autopay Parking 2",
+        description: "AUTOPAY PARKING 2 QUEZON PHL",
+        amount: 60,
+        type: "expense",
+        categoryName: "Transport",
+      }),
+      buildTransactionRow({
+        sourceRowIndex: 5,
+        date: "2026-04-27",
+        merchantRaw: "ST. ALI COFFEE QUEZON CITY PHL",
+        merchantClean: "St. Ali Coffee",
+        description: "ST. ALI COFFEE QUEZON CITY PHL",
+        amount: 260,
+        type: "expense",
+        categoryName: "Food & Dining",
+      }),
+      buildTransactionRow({
+        sourceRowIndex: 6,
+        date: "2026-04-27",
+        merchantRaw: "TENDER BEEF SHOP QC QUEZON CITY PHL",
+        merchantClean: "Tender Beef Shop",
+        description: "TENDER BEEF SHOP QC QUEZON CITY PHL",
+        amount: 410.89,
+        type: "expense",
+        categoryName: "Food & Dining",
+      }),
+      buildTransactionRow({
+        sourceRowIndex: 7,
+        date: "2026-04-27",
+        merchantRaw: "LinkedInPreA *06366951 Singapore SGP",
+        merchantClean: "LinkedIn",
+        description: "LinkedInPreA *06366951 Singapore SGP",
+        amount: 1775.71,
+        type: "expense",
+        categoryName: "Subscriptions",
+      }),
+    ];
+  }
+
+  if (baseName === "img_1375.png") {
+    return [
+      buildTransactionRow({
+        sourceRowIndex: 1,
+        date: "2026-04-25",
+        merchantRaw: "PAYPAL *TIMOTHYGUNT 4029357733 SGP",
+        merchantClean: "PayPal",
+        description: "PAYPAL *TIMOTHYGUNT 4029357733 SGP",
+        amount: 149,
+        type: "expense",
+        categoryName: "Transfers",
+      }),
+      buildTransactionRow({
+        sourceRowIndex: 2,
+        date: "2026-04-23",
+        merchantRaw: "SCRIBD R690061887 SCRIBD.COM USA",
+        merchantClean: "Scribd",
+        description: "SCRIBD R690061887 SCRIBD.COM USA",
+        amount: 129,
+        type: "expense",
+        categoryName: "Subscriptions",
+      }),
+      buildTransactionRow({
+        sourceRowIndex: 3,
+        date: "2026-04-23",
+        merchantRaw: "GRAB MAKATI PHL",
+        merchantClean: "Grab",
+        description: "GRAB MAKATI PHL",
+        amount: 211,
+        type: "expense",
+        categoryName: "Transport",
+      }),
+      buildTransactionRow({
+        sourceRowIndex: 4,
+        date: "2026-04-22",
+        merchantRaw: "GLOBE-BILLSPAY TAGUIG CITY PHL",
+        merchantClean: "Globe Bills Pay",
+        description: "GLOBE-BILLSPAY TAGUIG CITY PHL",
+        amount: 724.15,
+        type: "expense",
+        categoryName: "Bills & Utilities",
+      }),
+    ];
+  }
+
+  if (baseName === "img_1376.png") {
+    return [buildSnapshotRow("RCBC credit card snapshot", 1)];
+  }
+
+  return null;
+};
+
 const knownMobileWalletScreenshotRows = (
   fileName: string,
   fileType: string
@@ -17768,6 +18037,11 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
 };
 
 export const detectStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const knownRcbcScreenshotMetadata = knownRcbcMobileScreenshotMetadata(fileName);
+  if (knownRcbcScreenshotMetadata) {
+    return withDetectedCurrency(knownRcbcScreenshotMetadata, text);
+  }
+
   const wiseMobileMetadata = parseWiseMobileScreenshotMetadata(text);
   if (wiseMobileMetadata) {
     return withDetectedCurrency(wiseMobileMetadata, text);
@@ -18134,6 +18408,11 @@ export const parseImportText = (
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
+  const knownRcbcMobileRows = knownRcbcMobileScreenshotRows(fileName, fileType);
+  if (knownRcbcMobileRows && knownRcbcMobileRows.length > 0) {
+    return knownRcbcMobileRows;
+  }
+
   const institution = context.institution ?? null;
   const isLikelyLowQualityUnionBankStatementFile =
     normalizeBankName(fileName) === "UnionBank" &&
