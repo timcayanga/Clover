@@ -86,6 +86,7 @@ const ImportFilesModal = dynamic(
 );
 
 const IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS = 10 * 60 * 1000;
+const WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS = 2_500;
 
 type Workspace = {
   id: string;
@@ -2878,6 +2879,10 @@ function TransactionsPageContent() {
       return;
     }
 
+    const hasResilientFallbackEvidence = () =>
+      hasCachedTransactionsWorkspaceEvidence(workspaceId) ||
+      hasRecentWorkspaceImportEvidence(importActivitySnapshot, workspaceId);
+
     try {
       const [accountsResponse, categoriesResponse, importResponse] = await Promise.all([
         fetchJsonOnce<{ accounts?: Account[] }>({
@@ -2932,7 +2937,14 @@ function TransactionsPageContent() {
       }
     } catch {
       if (!options?.background) {
-        setMessage("Unable to load workspace metadata.");
+        if (hasResilientFallbackEvidence()) {
+          setMessage("");
+          window.setTimeout(() => {
+            void loadWorkspaceMetadata(workspaceId, { skipImports: options?.skipImports, background: true });
+          }, WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS);
+        } else {
+          setMessage("Unable to load workspace metadata.");
+        }
       }
     }
   };
@@ -2949,6 +2961,9 @@ function TransactionsPageContent() {
     }
   ) => {
     const requestId = ++transactionsLoadRequestRef.current;
+    const hasResilientFallbackEvidence = () =>
+      hasCachedTransactionsWorkspaceEvidence(workspaceId) ||
+      hasRecentWorkspaceImportEvidence(importActivitySnapshot, workspaceId);
 
     if (!workspaceId) {
       setTransactions([]);
@@ -3267,8 +3282,9 @@ function TransactionsPageContent() {
 
       if (!options?.background) {
         const hadFallbackRows = transactionsRef.current.length > 0 || hydrateWorkspaceFromCache(workspaceId);
-        setMessage(hadFallbackRows ? "" : "Unable to load transactions.");
-        setTransactionsLoadFailed(!hadFallbackRows);
+        const shouldSuppressFailure = hadFallbackRows || hasResilientFallbackEvidence();
+        setMessage(shouldSuppressFailure ? "" : "Unable to load transactions.");
+        setTransactionsLoadFailed(!shouldSuppressFailure);
         setIsWorkspaceDataReady(true);
         setHasInitialTransactionsLoaded(true);
         window.setTimeout(() => {
@@ -3278,7 +3294,7 @@ function TransactionsPageContent() {
             pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
             summaryMode: "light",
           });
-        }, 3500);
+        }, shouldSuppressFailure ? WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS : 3500);
       }
     }
   };

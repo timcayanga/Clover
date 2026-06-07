@@ -97,6 +97,7 @@ const ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS = [
 const ACCOUNT_LOADING_TIMEOUT_MS = 45_000;
 const ACCOUNT_LOADING_PULSE_MS = 5_000;
 const PAGE_LOADING_TIMEOUT_MS = 12_000;
+const WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS = 2_500;
 
 const isImageImportFile = (file: File) =>
   /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) || file.type.startsWith("image/");
@@ -508,6 +509,22 @@ const hasCachedWorkspaceDataEvidence = (workspaceId: string) => {
       cachedSnapshot.statementCheckpoints.length > 0 ||
       (cachedSnapshot.imports?.length ?? 0) > 0
   );
+};
+
+const hasRecentWorkspaceImportEvidence = (
+  workspaceId: string,
+  activity: ReturnType<typeof readImportActivity>
+) => {
+  if (!workspaceId || !activity || activity.workspaceId !== workspaceId) {
+    return false;
+  }
+
+  const isFresh = Date.now() - Number(activity.updatedAt ?? 0) <= 10 * 60 * 1000;
+  if (!isFresh) {
+    return false;
+  }
+
+  return activity.status === "active" || importActivityHasCompletedRows(activity);
 };
 
 type AccountRule = {
@@ -1578,6 +1595,9 @@ function AccountsPageContent() {
     let visibleFetchedAccounts: Account[] = [];
     let visibleCachedWorkspaceAccounts: Account[] = [];
     const backgroundTasks: Promise<void>[] = [];
+    const hasResilientFallbackEvidence = () =>
+      hasCachedWorkspaceDataEvidence(workspaceId) ||
+      hasRecentWorkspaceImportEvidence(workspaceId, importActivitySnapshot);
 
     if (!workspaceId) {
       setAccounts([]);
@@ -1629,8 +1649,16 @@ function AccountsPageContent() {
         setStatementCheckpoints(Array.isArray(payload?.statementCheckpoints) ? (payload.statementCheckpoints as StatementCheckpoint[]) : []);
       } else {
         if (!options?.silent) {
-          setMessage("Unable to load accounts for this workspace.");
-          setAccountsLoadFailed(true);
+          if (hasResilientFallbackEvidence()) {
+            setMessage("");
+            setAccountsLoadFailed(false);
+            window.setTimeout(() => {
+              void loadWorkspaceData(workspaceId, { silent: true, awaitHydration: true });
+            }, WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS);
+          } else {
+            setMessage("Unable to load accounts for this workspace.");
+            setAccountsLoadFailed(true);
+          }
           setHasInitialWorkspaceDataLoaded(true);
         }
       }
@@ -1736,9 +1764,15 @@ function AccountsPageContent() {
 
       const hydrated = hydrateWorkspaceFromCache(workspaceId);
       if (!options?.silent) {
-        setMessage(hydrated ? "" : "Unable to load accounts for this workspace.");
-        setAccountsLoadFailed(!hydrated && accounts.length === 0);
+        const shouldSuppressFailure = hydrated || hasResilientFallbackEvidence();
+        setMessage(shouldSuppressFailure ? "" : "Unable to load accounts for this workspace.");
+        setAccountsLoadFailed(!shouldSuppressFailure && accounts.length === 0);
         setHasInitialWorkspaceDataLoaded(true);
+        if (shouldSuppressFailure) {
+          window.setTimeout(() => {
+            void loadWorkspaceData(workspaceId, { silent: true, awaitHydration: true });
+          }, WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS);
+        }
       }
     } finally {
       if (!options?.silent) {
