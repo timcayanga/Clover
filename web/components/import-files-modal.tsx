@@ -8112,7 +8112,7 @@ export function ImportFilesModal({
 
       const results: Array<{ itemId: string; result: ImportProcessResult }> = [];
       let nextIndex = 0;
-      const workerCount = Math.min(queue.every(isServerHeavyStatementBatchItem) ? 4 : 6, queue.length);
+      const workerCount = Math.min(queue.every(isServerHeavyStatementBatchItem) ? 4 : 8, queue.length);
 
       const runWorker = async () => {
         while (!uploadCancelRequestedRef.current) {
@@ -8143,6 +8143,8 @@ export function ImportFilesModal({
       await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
       return results;
     };
+    const isFastImageBatch = itemsToProcess.length > 0 && itemsToProcess.every(isFastImageBatchItem);
+    const canContinueBatchInBackground = itemsToProcess.length <= 1 || isFastImageBatch;
     const hasBrowserParsableStatements = itemsToProcess.some((item) => {
       const mode = item.importMode ?? "statement";
       const lowerName = item.file.name.toLowerCase();
@@ -8161,11 +8163,34 @@ export function ImportFilesModal({
         void preparsePendingItemLocally(item.id);
       }
 
-      await waitForLocalPrimaryVisibility(Math.min(3_000, 1_200 + items.length * 450));
+      await waitForLocalPrimaryVisibility(
+        isFastImageBatch ? Math.min(6_000, 2_500 + items.length * 350) : Math.min(3_000, 1_200 + items.length * 450)
+      );
     }
 
     const processResultsPromise = processItemsForBatch(itemsToProcess);
-    await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
+    const localVisibilityReady = await waitForLocalPrimaryVisibility(
+      isFastImageBatch ? Math.min(45_000, 12_000 + items.length * 3_000) : Math.min(12_000, 4_000 + items.length * 2_000)
+    );
+
+    if (
+      canContinueBatchInBackground &&
+      localVisibilityReady &&
+      itemsToProcess.length > 0 &&
+      !uploadPausedRef.current &&
+      !uploadCancelRequestedRef.current
+    ) {
+      void processResultsPromise.finally(() => {
+        router.refresh();
+      });
+      setBusy(false);
+      visibilityDeadlineRef.current = null;
+      if (visibilityHardStopTimerRef.current) {
+        window.clearTimeout(visibilityHardStopTimerRef.current);
+        visibilityHardStopTimerRef.current = null;
+      }
+      return;
+    }
 
     const processResults = await processResultsPromise;
 
