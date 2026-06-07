@@ -908,9 +908,9 @@ const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptT
   receipt_type: preview.receiptType,
   merchant_raw: preview.merchantName ?? null,
   merchant_clean: preview.merchantName ?? null,
-  document_number: null,
-  invoice_number: null,
-  booking_reference: null,
+  document_number: preview.documentNumber ?? null,
+  invoice_number: preview.invoiceNumber ?? null,
+  booking_reference: preview.bookingReference ?? null,
   order_number: null,
   buyer_name: preview.receiptPayerName ?? null,
   transaction_date: preview.billDate ?? null,
@@ -7653,6 +7653,22 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
                 : "";
         const lineItemText = receiptLineItems.map((item) => item.description).join(" ").toLowerCase();
         const receiptContextText = `${normalizedReceiptMerchantClean || ""} ${receiptMerchantRaw || ""} ${receiptTypeText} ${lineItemText}`.trim();
+
+        if (/\bwallet_transfer\b/.test(receiptTypeText)) {
+          return "Transfers";
+        }
+
+        if (/\btravel_ticket\b/.test(receiptTypeText)) {
+          return "Travel & Lifestyle";
+        }
+
+        if (/\btax_invoice\b/.test(receiptTypeText)) {
+          return "Business";
+        }
+
+        if (/\bofficial_receipt\b/.test(receiptTypeText) && /\b(?:air|airline|airport|flight|travel|hotel|ticket)\b/.test(receiptContextText)) {
+          return "Travel & Lifestyle";
+        }
 
         if (
           /\btemporary bill\b/.test(receiptTypeText) ||

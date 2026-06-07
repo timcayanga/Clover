@@ -85,6 +85,9 @@ export type ReceiptPreviewResult = {
   receiptType: "restaurant_receipt" | "official_receipt" | "tax_invoice" | "travel_ticket" | "wallet_transfer" | "generic_receipt";
   merchantName: string | null;
   billDate: string | null;
+  documentNumber: string | null;
+  invoiceNumber: string | null;
+  bookingReference: string | null;
   currency: string;
   currencyMentions: string[];
   currencyWarning: string | null;
@@ -1535,6 +1538,19 @@ const classifyReceiptTypeFromText = (text: string, paymentMethod: string | null)
   return "generic_receipt" as const;
 };
 
+const extractReceiptField = (text: string, patterns: RegExp[]) => {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const rawValue = match?.[1] ?? null;
+    const value = rawValue ? normalizeWhitespace(rawValue).replace(/[.)\]]+$/g, "").trim() : null;
+    if (value && value.length >= 3) {
+      return value;
+    }
+  }
+
+  return null;
+};
+
 export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const normalized = receiptText.replace(/\u00a0/g, " ");
   const { lines, fragmentJoins } = mergeFragmentLines(
@@ -1592,6 +1608,18 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const paymentMethod = detectReceiptPaymentMethodFromText(lines, receiptAccountMatch);
   const receiptPayerName = detectReceiptPayerNameFromText(lines);
   const receiptType = classifyReceiptTypeFromText(normalized, paymentMethod);
+  const invoiceNumber = extractReceiptField(normalized, [
+    /\b(?:invoice\s*(?:no\.?|number|#)|sales invoice\s*(?:no\.?|#)|tax invoice\s*(?:no\.?|#))\s*[:#-]?\s*([A-Z0-9-]{4,})/i,
+  ]);
+  const bookingReference = extractReceiptField(normalized, [
+    /\b(?:booking reference|reference code|confirmation code|record locator)\s*[:#-]?\s*([A-Z0-9-]{4,})/i,
+    /\b(?:pnr)\s*[:#-]?\s*([A-Z0-9-]{4,})/i,
+  ]);
+  const documentNumber = extractReceiptField(normalized, [
+    /\b(?:official receipt|receipt|or no\.?|cash slip)\s*(?:no\.?|#)?\s*[:#-]?\s*([A-Z0-9-]{3,})/i,
+    /\b(?:ref\.?\s*no|reference)\s*[:#-]?\s*([A-Z0-9-]{6,})/i,
+    /\b(?:ticket number)\s*[:#-]?\s*([A-Z0-9-]{6,})/i,
+  ]);
 
   const itemConfidenceBonus = items.reduce((sum, item) => sum + (item.quantity ? 3 : 0) + (item.unitPrice ? 3 : 0), 0);
   const wrappedItemBonus = items.reduce((sum, item) => sum + (item.wrapped ? 2 : 0), 0);
@@ -1663,6 +1691,9 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
     receiptType,
     merchantName,
     billDate,
+    documentNumber,
+    invoiceNumber,
+    bookingReference,
     currency,
     currencyMentions,
     currencyWarning,
