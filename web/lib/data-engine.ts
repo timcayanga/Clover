@@ -639,6 +639,38 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
   return null;
 };
 
+const isContextualCategoryOverride = (merchantText: string, categoryName: string) => {
+  const lower = merchantText.toLowerCase();
+  const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
+  const hasTravelContext =
+    /(?:sydney|melbourne|nsw|harbour|opera\s+house|great\s+ocean\s+road|skybus|airport|tourism|leura|surry\s+hills|george\s+st|circular|bath|victoria|apollo\s+bay)/.test(lower) ||
+    /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
+  const hasForeignMerchantCurrencyContext =
+    /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
+
+  if (categoryName === "Transport") {
+    return /transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal/.test(lower) || /transportfornsw|skybus|parking|airport|rail|trainpal/.test(compact);
+  }
+
+  if (categoryName === "Travel & Lifestyle") {
+    return hasTravelContext || hasForeignMerchantCurrencyContext;
+  }
+
+  if (categoryName === "Entertainment") {
+    return /opera\s+house|ticket\s+sales/.test(lower) || /operahouse|ticketsales/.test(compact);
+  }
+
+  if (categoryName === "Food & Dining") {
+    return hasTravelContext || hasForeignMerchantCurrencyContext;
+  }
+
+  if (categoryName === "Shopping") {
+    return /relay|emmanuel\s+payments?/.test(lower) || /relay|emmanuelpayments?/.test(compact);
+  }
+
+  return false;
+};
+
 const HARDCODED_EXACT_MERCHANT_KEYS = new Set([
   "deposit",
   "withdrawal",
@@ -3061,10 +3093,11 @@ export const classifyMerchant = (params: {
   let bestScore = 0;
 
   if (hardcodedOverride) {
+    const contextualOverride = isContextualCategoryOverride(categoryText || params.merchantText, hardcodedOverride);
     return {
       categoryName: hardcodedOverride,
-      confidence: 99,
-      categoryReason: "hardcoded-override",
+      confidence: contextualOverride ? 84 : 99,
+      categoryReason: contextualOverride ? "contextual-hardcoded-override" : "hardcoded-override",
       categorySource: "deterministic_override",
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
@@ -3985,6 +4018,10 @@ export const enrichParsedRowsWithTraining = async (params: {
     }
 
     if (!details.categoryName || details.categoryName.trim().toLowerCase() === "other") {
+      return true;
+    }
+
+    if (details.categoryReason === "contextual-hardcoded-override" && details.effectiveConfidence < 80) {
       return true;
     }
 
