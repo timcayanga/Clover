@@ -5509,21 +5509,26 @@ export const processImportFileText = async (
       },
       importFile.fileType
     );
-  const existingTemplate = await loadStatementTemplate({
-    workspaceId: String(importFile.workspaceId),
-    fingerprint: statementFingerprint,
-  });
-  const institutionTemplate =
-    existingTemplate ??
-    (metadata.confidence < 80
-      ? await loadBestStatementTemplateForInstitution({
+  const existingTemplate =
+    importMode === "receipt"
+      ? null
+      : await loadStatementTemplate({
           workspaceId: String(importFile.workspaceId),
-          institution: metadata.institution,
-          fileType: importFile.fileType,
-          accountType: metadata.accountType ?? null,
-          statementFamilySignature,
-        })
-      : null);
+          fingerprint: statementFingerprint,
+        });
+  const institutionTemplate =
+    importMode === "receipt"
+      ? null
+      : existingTemplate ??
+        (metadata.confidence < 80
+          ? await loadBestStatementTemplateForInstitution({
+              workspaceId: String(importFile.workspaceId),
+              institution: metadata.institution,
+              fileType: importFile.fileType,
+              accountType: metadata.accountType ?? null,
+              statementFamilySignature,
+            })
+          : null);
   const templateMetadata =
     institutionTemplate?.metadata && typeof institutionTemplate.metadata === "object" && !Array.isArray(institutionTemplate.metadata)
       ? (institutionTemplate.metadata as Record<string, unknown>)
@@ -6308,21 +6313,26 @@ export const processImportFileText = async (
       : unionBankKnownSampleMetadata?.endingBalance ?? ucpbKnownSampleMetadata?.endingBalance ?? effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
   };
   let confirmedImportResult: ConfirmImportResult | null = null;
-  await ensureParsedAccountGroupsMaterialized({
-    importFile,
-    rows: effectiveRows as Array<Record<string, unknown>>,
-    metadata: resolvedMetadata,
-  }).catch((error) => {
-    console.warn("[import-account-match] unable to materialize parsed account groups before duplicate check", {
-      importFileId,
-      error,
+  if (importMode === "statement") {
+    await ensureParsedAccountGroupsMaterialized({
+      importFile,
+      rows: effectiveRows as Array<Record<string, unknown>>,
+      metadata: resolvedMetadata,
+    }).catch((error) => {
+      console.warn("[import-account-match] unable to materialize parsed account groups before duplicate check", {
+        importFileId,
+        error,
+      });
     });
-  });
-  const duplicateImportFileId = await findExistingImportedStatement({
-    workspaceId: importFile.workspaceId,
-    statementFingerprint,
-    importFileId,
-  });
+  }
+  const duplicateImportFileId =
+    importMode === "statement"
+      ? await findExistingImportedStatement({
+          workspaceId: importFile.workspaceId,
+          statementFingerprint,
+          importFileId,
+        })
+      : null;
   const shouldRepairMultiAccountDuplicate = hasMultipleParsedAccountNumbers(effectiveRows as Array<Record<string, unknown>>);
   if (duplicateImportFileId && !options.allowDuplicateStatement && !shouldRepairMultiAccountDuplicate) {
     await updateImportFileCompat(importFileId, {
@@ -7763,17 +7773,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           phase: "queued",
           forceRequeue: false,
         });
-        await processImportEnrichmentJobs({
-          importFileId,
-          limit: MAX_IMPORT_ENRICHMENT_ATTEMPTS,
-          batchSize: 500,
-          workerId: `receipt-import-enrichment-${importFileId}`,
-        }).catch((error) => {
-          console.warn("Unable to finalize receipt enrichment immediately after import", {
-            importFileId,
-            error,
-          });
-        });
+        processImportEnrichmentJobsInBackground(importFileId, Math.max(1, cleanupRowsAfterConfirmation));
       }
 
       if (createdTransactionId && documentImport?.id) {
