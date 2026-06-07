@@ -2077,6 +2077,8 @@ export function ImportFilesModal({
   const activeUploadAbortControllersRef = useRef<Set<AbortController>>(new Set());
   const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
+  const backgroundRouterRefreshTimerRef = useRef<number | null>(null);
+  const lastBackgroundRouterRefreshAtRef = useRef(0);
 
   useEffect(() => {
     itemsRef.current = items;
@@ -2085,6 +2087,38 @@ export function ImportFilesModal({
   useEffect(() => {
     uploadPausedRef.current = uploadPaused;
   }, [uploadPaused]);
+
+  useEffect(() => {
+    return () => {
+      if (backgroundRouterRefreshTimerRef.current) {
+        window.clearTimeout(backgroundRouterRefreshTimerRef.current);
+        backgroundRouterRefreshTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const scheduleBackgroundRouterRefresh = useCallback(
+    (delayMs = 250) => {
+      const minimumRefreshGapMs = 2_000;
+      const now = Date.now();
+      const elapsedSinceLastRefresh = now - lastBackgroundRouterRefreshAtRef.current;
+      const effectiveDelayMs =
+        elapsedSinceLastRefresh >= minimumRefreshGapMs
+          ? delayMs
+          : Math.max(delayMs, minimumRefreshGapMs - elapsedSinceLastRefresh);
+
+      if (backgroundRouterRefreshTimerRef.current) {
+        return;
+      }
+
+      backgroundRouterRefreshTimerRef.current = window.setTimeout(() => {
+        backgroundRouterRefreshTimerRef.current = null;
+        lastBackgroundRouterRefreshAtRef.current = Date.now();
+        router.refresh();
+      }, effectiveDelayMs);
+    },
+    [router]
+  );
 
   const publishImportActivity = (
     snapshot:
@@ -3945,7 +3979,7 @@ export function ImportFilesModal({
             (processingPhase === "queued_retry" || telemetryPhase === "queued") &&
             parsedRowsCount === 0 &&
             confirmedTransactionsCount === 0 &&
-            Date.now() - startedAt >= 5_000;
+            Date.now() - startedAt >= 2_500;
 
           if (shouldAutoResumeQueuedImport) {
             queuedResumeAttempted = true;
@@ -8149,6 +8183,7 @@ export function ImportFilesModal({
 
       const results: Array<{ itemId: string; result: ImportProcessResult }> = [];
       let nextIndex = 0;
+      const shouldRefreshDuringBatch = queue.some(isFastImageBatchItem);
       const workerCount = Math.min(queue.every(isServerHeavyStatementBatchItem) ? 4 : 8, queue.length);
 
       const runWorker = async () => {
@@ -8167,10 +8202,14 @@ export function ImportFilesModal({
           const controller = new AbortController();
           activeUploadAbortControllersRef.current.add(controller);
           try {
+            const result = await processFile(item.id, { signal: controller.signal });
             results.push({
               itemId: item.id,
-              result: await processFile(item.id, { signal: controller.signal }),
+              result,
             });
+            if (shouldRefreshDuringBatch && (result.status === "done" || result.status === "staged")) {
+              scheduleBackgroundRouterRefresh();
+            }
           } finally {
             activeUploadAbortControllersRef.current.delete(controller);
           }
@@ -8221,6 +8260,7 @@ export function ImportFilesModal({
       !uploadPausedRef.current &&
       !uploadCancelRequestedRef.current
     ) {
+      scheduleBackgroundRouterRefresh(0);
       void processResultsPromise.finally(() => {
         router.refresh();
       });

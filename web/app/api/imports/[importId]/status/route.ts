@@ -16,11 +16,11 @@ import { after, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const STALE_RECEIPT_PROCESSING_MS = 3 * 60 * 1000;
-const STALE_STATEMENT_IMAGE_QUEUE_MS = 15 * 1000;
-const STALE_STATEMENT_IMAGE_READING_MS = 45 * 1000;
-const STALE_STATEMENT_IMAGE_RECONCILING_MS = 30 * 1000;
-const STALE_STATEMENT_IMAGE_STAGED_MS = 30 * 1000;
-const STALE_STATEMENT_IMAGE_EMPTY_DONE_MS = 15 * 1000;
+const STALE_STATEMENT_IMAGE_QUEUE_MS = 25 * 1000;
+const STALE_STATEMENT_IMAGE_READING_MS = 75 * 1000;
+const STALE_STATEMENT_IMAGE_RECONCILING_MS = 45 * 1000;
+const STALE_STATEMENT_IMAGE_STAGED_MS = 45 * 1000;
+const STALE_STATEMENT_IMAGE_EMPTY_DONE_MS = 30 * 1000;
 
 const isImageImportFile = (fileName?: string | null, fileType?: string | null) =>
   String(fileType ?? "").toLowerCase().startsWith("image/") ||
