@@ -7457,6 +7457,7 @@ export function ImportFilesModal({
     } catch (error) {
       if (isPasswordError(error)) {
         const currentImportFileId = importFileId ?? item.importFileId ?? null;
+        setLaunchInBackground(false);
         if (item.password.trim()) {
           capturePostHogClientEvent("password_failed", {
             ...fileAnalyticsBase(item.file, workspaceId),
@@ -8066,6 +8067,11 @@ export function ImportFilesModal({
     uploadCancelRequestedRef.current = false;
     setUploadPaused(false);
     uploadPausedRef.current = false;
+    if (!backgroundOnly) {
+      setLaunchInBackground(true);
+      importActivitySurfaceRef.current = "background";
+      clearImportInteractionLocks();
+    }
     setBusy(true);
     setValidationNotice(null);
     setMessage("Clover is lining up your files...");
