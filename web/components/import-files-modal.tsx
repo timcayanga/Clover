@@ -2554,6 +2554,12 @@ export function ImportFilesModal({
     return hasVisibleImportData(item, localPreparseSummaryByItemIdRef.current.get(item.id));
   };
 
+  const countPrimaryVisibleItems = (itemsToCheck: QueuedFile[]) => {
+    return itemsToCheck.reduce((count, item) => {
+      return count + (hasPrimaryDataForItem(item) ? 1 : 0);
+    }, 0);
+  };
+
   const waitForLocalPrimaryVisibility = async (timeoutMs: number) => {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
@@ -2570,6 +2576,31 @@ export function ImportFilesModal({
     return itemsRef.current
       .filter((item) => item.confirmationState !== "confirmed")
       .every(hasPrimaryDataForItem);
+  };
+
+  const waitForLocalMinimumPrimaryVisibility = async (minimumVisibleItems: number, timeoutMs: number) => {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const currentItems = itemsRef.current.filter((item) => item.confirmationState !== "confirmed");
+      if (
+        currentItems.length === 0 ||
+        currentItems.every(hasPrimaryDataForItem) ||
+        countPrimaryVisibleItems(currentItems) >= Math.min(minimumVisibleItems, currentItems.length)
+      ) {
+        closeVisibleImportModalIfPrimaryDataReady();
+        return true;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+    }
+
+    closeVisibleImportModalIfPrimaryDataReady();
+    const currentItems = itemsRef.current.filter((item) => item.confirmationState !== "confirmed");
+    return (
+      currentItems.length === 0 ||
+      currentItems.every(hasPrimaryDataForItem) ||
+      countPrimaryVisibleItems(currentItems) >= Math.min(minimumVisibleItems, currentItems.length)
+    );
   };
 
   useEffect(() => {
@@ -8169,9 +8200,13 @@ export function ImportFilesModal({
     }
 
     const processResultsPromise = processItemsForBatch(itemsToProcess);
-    const localVisibilityReady = await waitForLocalPrimaryVisibility(
-      isFastImageBatch ? Math.min(45_000, 12_000 + items.length * 3_000) : Math.min(12_000, 4_000 + items.length * 2_000)
-    );
+    const minimumVisibleItemsForBackground = isFastImageBatch ? Math.min(2, itemsToProcess.length) : itemsToProcess.length;
+    const localVisibilityReady = isFastImageBatch
+      ? await waitForLocalMinimumPrimaryVisibility(
+          minimumVisibleItemsForBackground,
+          Math.min(35_000, 10_000 + items.length * 2_000)
+        )
+      : await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
 
     if (
       canContinueBatchInBackground &&
