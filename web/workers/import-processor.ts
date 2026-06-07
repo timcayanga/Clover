@@ -945,6 +945,49 @@ const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptT
   },
 });
 
+const buildDetectedMetadataFromReceiptPreview = (
+  preview: ReturnType<typeof parseReceiptText> | null,
+  fallback: ReturnType<typeof detectStatementMetadataFromText>
+) => {
+  const paymentContext = `${preview?.paymentMethod ?? ""} ${preview?.receiptText ?? ""}`.toLowerCase();
+  const inferredInstitution =
+    /\bgcash\b/.test(paymentContext)
+      ? "GCash"
+      : /\bmaya\b/.test(paymentContext)
+        ? "Maya"
+        : /\bwise\b/.test(paymentContext)
+          ? "Wise"
+          : fallback.institution ?? null;
+  const inferredAccountType =
+    inferredInstitution === "GCash" || inferredInstitution === "Maya" || inferredInstitution === "Wise"
+      ? "wallet"
+      : "cash";
+  const normalizedCurrency = normalizeInstitutionCurrency(
+    inferredInstitution,
+    preview?.currency ?? fallback.currency ?? "PHP",
+    preview?.merchantName ?? fallback.accountName ?? null
+  );
+  const previewTotal = parseAmountValue(preview?.total ?? null);
+
+  return {
+    ...fallback,
+    institution: inferredInstitution,
+    accountNumber: null,
+    accountName:
+      inferredInstitution === "GCash" || inferredInstitution === "Maya" || inferredInstitution === "Wise"
+        ? inferredInstitution
+        : "Cash",
+    accountType: inferredAccountType,
+    currency: normalizedCurrency,
+    openingBalance: null,
+    endingBalance: previewTotal ?? fallback.endingBalance ?? null,
+    totalAmountDue: previewTotal ?? fallback.totalAmountDue ?? null,
+    startDate: preview?.billDate ?? fallback.startDate ?? null,
+    endDate: preview?.billDate ?? fallback.endDate ?? null,
+    confidence: Math.max(Number(fallback.confidence ?? 0), Math.round(preview?.confidence ?? 0), 70),
+  } as ReturnType<typeof detectStatementMetadataFromText>;
+};
+
 const previewLooksLikeUsableReceipt = (preview: ReturnType<typeof parseReceiptText> | null) =>
   Boolean(
     preview &&
@@ -5492,10 +5535,17 @@ export const processImportFileText = async (
   }
 
   const textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
+  const receiptPreview = importMode === "receipt" || imageImport ? parseReceiptText(textForParse) : null;
+  const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
+  const receiptPreviewLooksLikeReceipt = previewLooksLikeUsableReceipt(receiptPreview);
   const cachedParseRecord = canReuseCachedStatementParse ? textCacheInfo?.cacheRecord ?? null : null;
-  const metadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
-    ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
-    : detectStatementMetadataFromText(textForParse, importFile.fileName);
+  const detectedMetadata = detectStatementMetadataFromText(textForParse, importFile.fileName);
+  const metadata =
+    cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
+      ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
+      : importMode === "receipt"
+        ? buildDetectedMetadataFromReceiptPreview(receiptPreview, detectedMetadata)
+        : detectedMetadata;
   const statementFingerprint =
     cachedParseRecord?.statementFingerprint ??
     buildStatementFingerprint(textForParse, metadata, importFile.fileName, importFile.fileType, importMode);
@@ -5583,14 +5633,17 @@ export const processImportFileText = async (
     ...Object.fromEntries(Object.entries(metadataOverride).filter(([, value]) => value !== undefined)),
   } as typeof mergedMetadata;
 
-  const parsedRowsInitial = canReuseCachedStatementParse
-    ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
-    : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
-        institution: metadataForParse.institution,
-        accountName: metadataForParse.accountName,
-        accountNumber: metadataForParse.accountNumber,
-      });
-  const isBpiHybridFallbackCandidate = (() => {
+  const parsedRowsInitial =
+    importMode === "receipt"
+      ? ([] as Array<ReturnType<typeof parseImportText>[number]>)
+      : canReuseCachedStatementParse
+        ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
+        : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
+            institution: metadataForParse.institution,
+            accountName: metadataForParse.accountName,
+            accountNumber: metadataForParse.accountNumber,
+          });
+  const isBpiHybridFallbackCandidate = importMode === "statement" && (() => {
     const lowerFileName = String(importFile.fileName ?? "").toLowerCase();
     const normalizedText = String(textForParse ?? "");
     const compactText = normalizedText.replace(/\s+/g, " ").toLowerCase();
@@ -5612,7 +5665,7 @@ export const processImportFileText = async (
     );
   })();
   const parsedRowsAfterFallback =
-    parsedRowsInitial.length > 0 || !isBpiHybridFallbackCandidate
+    importMode !== "statement" || parsedRowsInitial.length > 0 || !isBpiHybridFallbackCandidate
       ? parsedRowsInitial
       : parseImportTextGenericOnly(textForParse, importFile.fileName, importFile.fileType, {
           institution: metadataForParse.institution ?? "BPI",
@@ -5759,9 +5812,6 @@ export const processImportFileText = async (
       dateCoverage: Number(parsedDateCoverage.toFixed(3)),
     });
   }
-  const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
-  const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
-  const receiptPreviewLooksLikeReceipt = previewLooksLikeUsableReceipt(receiptPreview);
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
     hasReliableDeterministicStatementParse ||
