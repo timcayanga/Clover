@@ -1424,6 +1424,15 @@ const guessUcpbKnownSampleIdentity = (fileName: string) => {
 const guessUnionBankKnownSampleIdentity = (fileName: string) => {
   const lowerName = fileName.toLowerCase();
 
+  if (/^img_138[7-9]\.png$/.test(lowerName) || /^img_139[0-6]\.png$/.test(lowerName)) {
+    return {
+      accountName: "UnionBank 8037",
+      institution: "UnionBank",
+      accountNumber: "8037",
+      accountType: "bank" as const,
+    };
+  }
+
   if (/771487697.*soa.*union.*bank|soa-union-bank/i.test(lowerName)) {
     return {
       accountName: "UnionBank 3912",

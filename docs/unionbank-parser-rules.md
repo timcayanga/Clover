@@ -5,6 +5,7 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 ## Scope
 
 - Applies to UnionBank savings and UnionBank credit-card statement PDFs.
+- Applies to UnionBank mobile savings screenshots, including account-card snapshots and transaction-history screens.
 - Use institution-aware parser selection so savings and card statements do not get mixed.
 - Preserve raw imports, normalized rows, and learned rules separately.
 
@@ -21,6 +22,18 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 - Keep `Online Fund Transfer` as `Transfers`.
 - Treat `Incoming Credit` with `Not Applicable` or similarly vague descriptions as ambiguous and review them.
 - For UnionBank, never let footer prose or page labels become transactions just because they contain dates or amounts.
+
+## Mobile Screenshot Rules
+
+- Dashboard screenshots that show the UnionBank account card should create or refresh the account identity and balance, not fake spending rows.
+- For the current UnionBank mobile training set, the account card shows masked last four digits `8037` and an available balance of `116,465.28`.
+- Transaction-history screenshots include UI labels such as `Account Details`, `Download`, `Transaction History`, and the `All / Received / Sent` filter chips. Ignore those lines entirely.
+- Month labels like `May 2026` or `November 2025` are section headers, not transactions.
+- In UnionBank mobile screenshots, each real row ends with a posted date such as `April 13, 2026`; any wrapped merchant or detail lines immediately above that date belong to the same transaction.
+- `BANKARD VISA` belongs to the preceding `Bills Payment` row and should stay attached to that transaction as raw detail.
+- Preserve multiline outgoing-transfer payees like `Sent to Timothy Gunther Santos Cayanga WSE 499772` instead of truncating them to only the first line.
+- Keep `Not Applicable` credits as ambiguous low-confidence rows. Do not drop them unless the image is too incomplete to support the row.
+- Overlapping screenshots can show the same row more than once. Clover should dedupe repeated UnionBank screenshot rows by account/date/amount/description once they resolve to the same account identity.
 
 ## Credit Card Rules
 

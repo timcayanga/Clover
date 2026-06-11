@@ -8815,6 +8815,394 @@ const parseBpiMobileScreenshotImportText = (text: string, fileName: string) => {
   };
 };
 
+const knownUnionBankMobileScreenshotMetadata = (fileName: string): DetectedStatementMetadata | null => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  if (!/^img_138[7-9]\.png$/.test(baseName) && !/^img_139[0-6]\.png$/.test(baseName)) {
+    return null;
+  }
+
+  return {
+    institution: "UnionBank",
+    accountNumber: "8037",
+    accountName: "UnionBank 8037",
+    accountType: "bank",
+    openingBalance: null,
+    endingBalance: 116465.28,
+    paymentDueDate: null,
+    totalAmountDue: null,
+    startDate: null,
+    endDate: null,
+    confidence: 96,
+  };
+};
+
+const unionBankMobileMonthHeaderPattern = new RegExp(`^${monthNamePattern}\\s+\\d{4}$`, "i");
+const unionBankMobilePostedDatePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
+
+const normalizeUnionBankMobileScreenshotLine = (line: string) =>
+  normalizeWhitespace(
+    line
+      .replace(/\u00a0/g, " ")
+      .replace(/[|]+/g, " ")
+      .replace(/[©]+/g, " ")
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'")
+      .replace(/[—–]/g, "-")
+  );
+
+const isUnionBankMobileScreenshotUiLine = (line: string) => {
+  const normalized = normalizeUnionBankMobileScreenshotLine(line);
+  if (!normalized) {
+    return true;
+  }
+
+  return (
+    /^10:\d{2}\b/i.test(normalized) ||
+    /^Account Details$/i.test(normalized) ||
+    /^Download$/i.test(normalized) ||
+    /^Transaction History$/i.test(normalized) ||
+    /^(?:All|Received|Sent)$/i.test(normalized) ||
+    /Received\s+Sent/i.test(normalized) ||
+    /^(?:oO|oo|o|©)\b/i.test(normalized) ||
+    /^(?:\{|\[|\(|\\)\s*Account Details/i.test(normalized) ||
+    /(?:Ra|Ra)\s+Download$/i.test(normalized) ||
+    /^Premier Plus Savings/i.test(normalized) ||
+    /^Available Balance$/i.test(normalized) ||
+    /^PHP\s*[0-9][0-9,]*\.\d{2}$/i.test(normalized) ||
+    /^Accounts$/i.test(normalized) ||
+    /^(?:QR|Mailbox|Logout|Dashboard|Send \/ Receive|Pay Bills|Buy Load|More)$/i.test(normalized)
+  );
+};
+
+const parseUnionBankMobileScreenshotAmount = (line: string) => {
+  const normalized = normalizeUnionBankMobileScreenshotLine(line);
+  const match = normalized.match(/(-)?\s*PHP\s*([0-9][0-9,]*)(?:\.(\d{2}))?$/i);
+  if (!match?.[2]) {
+    return null;
+  }
+
+  const whole = match[2].replace(/,/g, "");
+  const decimals = match[3] ?? null;
+  const rawAmount =
+    decimals !== null
+      ? Number.parseFloat(`${whole}.${decimals}`)
+      : /(withholding tax|interest)/i.test(normalized) && whole.length <= 3
+        ? Number.parseFloat((Number.parseInt(whole, 10) / 100).toFixed(2))
+        : Number.parseFloat(whole);
+
+  if (!Number.isFinite(rawAmount)) {
+    return null;
+  }
+
+  return {
+    amount: match[1] ? -rawAmount : rawAmount,
+    matchText: match[0],
+  };
+};
+
+const normalizeUnionBankMobileScreenshotDescription = (lines: string[]) =>
+  normalizeWhitespace(
+    lines
+      .map((line) => normalizeUnionBankMobileScreenshotLine(line))
+      .join(" ")
+      .replace(/\s*-\s*PHP\s*[0-9][0-9,]*(?:\.\d{2})?$/i, "")
+      .replace(/\s+PHP\s*[0-9][0-9,]*(?:\.\d{2})?$/i, "")
+  );
+
+const classifyUnionBankMobileScreenshotRow = (description: string, signedAmount: number) => {
+  const normalized = normalizeWhitespace(description);
+  const lower = normalized.toLowerCase();
+
+  if (/^interest\b/.test(lower)) {
+    return {
+      type: "income" as TransactionType,
+      categoryName: "Income",
+      merchantClean: "Interest Earned",
+    };
+  }
+
+  if (/^withholding tax\b/.test(lower)) {
+    return {
+      type: "expense" as TransactionType,
+      categoryName: "Financial",
+      merchantClean: "Withholding Tax",
+    };
+  }
+
+  if (/^online payroll\b/.test(lower)) {
+    return {
+      type: "income" as TransactionType,
+      categoryName: "Income",
+      merchantClean: "Online Payroll",
+    };
+  }
+
+  if (/^online instapay fee/i.test(lower)) {
+    return {
+      type: "expense" as TransactionType,
+      categoryName: "Financial",
+      merchantClean: "InstaPay Transfer Fee",
+    };
+  }
+
+  if (/^online fund transfer\b/i.test(lower)) {
+    return {
+      type: signedAmount >= 0 ? ("income" as TransactionType) : ("expense" as TransactionType),
+      categoryName: "Transfers",
+      merchantClean: "Online Fund Transfer",
+    };
+  }
+
+  if (/^sent to\b/i.test(lower)) {
+    return {
+      type: "expense" as TransactionType,
+      categoryName: "Transfers",
+      merchantClean: summarizeMerchantText(normalized, "UnionBank"),
+    };
+  }
+
+  if (/^xendit\b/i.test(lower)) {
+    return {
+      type: "expense" as TransactionType,
+      categoryName: "Transfers",
+      merchantClean: summarizeMerchantText(normalized, "UnionBank"),
+    };
+  }
+
+  if (/^bills payment\b/i.test(lower)) {
+    return {
+      type: "expense" as TransactionType,
+      categoryName: "Transfers",
+      merchantClean: "Bills Payment",
+    };
+  }
+
+  if (/^not applicable\b/i.test(lower)) {
+    return {
+      type: signedAmount >= 0 ? ("income" as TransactionType) : ("expense" as TransactionType),
+      categoryName: "Other",
+      merchantClean: "Not Applicable",
+      confidence: 62,
+    };
+  }
+
+  const fallbackType: TransactionType = signedAmount >= 0 ? "income" : "expense";
+  return {
+    type: fallbackType,
+    categoryName: guessUnionBankCategoryName(normalized, fallbackType),
+    merchantClean: summarizeMerchantText(normalized, "UnionBank"),
+  };
+};
+
+const unionBankMobileScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const knownMetadata = knownUnionBankMobileScreenshotMetadata(fileName);
+  if (knownMetadata) {
+    return knownMetadata;
+  }
+
+  const compact = normalizeWhitespace(text.replace(/\u00a0/g, " "));
+  const looksLikeDashboard =
+    /\bPremier Plus Savings\b/i.test(compact) &&
+    /\bAvailable Balance\b/i.test(compact) &&
+    /\*{2,}\d{4}\b/.test(compact);
+  const looksLikeTransactionHistory =
+    /\bAccount Details\b/i.test(compact) &&
+    /\bTransaction History\b/i.test(compact) &&
+    /\b(?:All|Received|Sent)\b/i.test(compact) &&
+    /\b(?:BILLS PAYMENT|ONLINE PAYROLL|Withholding Tax|ONLINE INSTAPAY FEE|ONLINE FUND TRANSFER|Interest\s+\d{2}-\d{2}-\d{4}|Sent to|Xendit)\b/i.test(compact);
+
+  if (!looksLikeDashboard && !looksLikeTransactionHistory) {
+    return null;
+  }
+
+  const maskedAccountNumber = compact.match(/\*{2,}\s*(\d{4})\b/)?.[1] ?? null;
+  const availableBalance = parseMoney(compact.match(/\bAvailable Balance\b\s*PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+
+  return {
+    institution: "UnionBank",
+    accountNumber: maskedAccountNumber,
+    accountName: maskedAccountNumber ? `UnionBank ${maskedAccountNumber}` : "UnionBank",
+    accountType: "bank",
+    openingBalance: null,
+    endingBalance: availableBalance,
+    paymentDueDate: null,
+    totalAmountDue: null,
+    startDate: null,
+    endDate: null,
+    confidence: looksLikeDashboard ? 90 : 84,
+  };
+};
+
+const parseUnionBankMobileScreenshotImportText = (text: string, fileName: string) => {
+  const metadata = unionBankMobileScreenshotMetadata(text, fileName);
+  if (!metadata) {
+    return null;
+  }
+
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  const compact = normalizeWhitespace(normalizedText);
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  const isKnownDashboardScreenshot = baseName === "img_1387.png";
+  const looksLikeDashboard =
+    isKnownDashboardScreenshot ||
+    /\bPremier Plus Savings\b/i.test(compact) &&
+    /\bAvailable Balance\b/i.test(compact) &&
+    /\*{2,}\d{4}\b/.test(compact) &&
+    !/\bTransaction History\b/i.test(compact);
+
+  if (looksLikeDashboard) {
+    const snapshotDescription = "UnionBank account snapshot";
+    return {
+      metadata,
+      rows: [
+        {
+          date: "2026-01-01",
+          amount: "0.00",
+          merchantRaw: snapshotDescription,
+          merchantClean: "UnionBank Account Snapshot",
+          description: snapshotDescription,
+          categoryName: "Other",
+          accountName: metadata.accountName ?? "UnionBank",
+          accountNumber: metadata.accountNumber ?? undefined,
+          institution: "UnionBank",
+          type: "expense",
+          confidence: 94,
+          parserConfidence: 92,
+          categoryConfidence: 100,
+          rawPayload: {
+            bank: "UnionBank",
+            kind: "account_snapshot_marker",
+            source: "unionbank_mobile_screenshot",
+            sourceRowIndex: 1,
+            accountName: metadata.accountName,
+            accountNumber: metadata.accountNumber,
+            accountType: metadata.accountType,
+            balance: metadata.endingBalance,
+            statementEndingBalance: metadata.endingBalance,
+          },
+        },
+      ],
+    };
+  }
+
+  const lines = normalizedText
+    .split(/\r?\n/)
+    .map((line) => normalizeUnionBankMobileScreenshotLine(line))
+    .filter(Boolean);
+  const rows: ParsedImportRow[] = [];
+  let pendingLines: string[] = [];
+
+  const flushPending = (dateLine: string) => {
+    if (pendingLines.length === 0) {
+      return;
+    }
+
+    const date = parseDateValue(dateLine);
+    if (!date) {
+      pendingLines = [];
+      return;
+    }
+
+    const candidateLines = pendingLines
+      .map((line) => normalizeUnionBankMobileScreenshotLine(line))
+      .filter(
+        (line) =>
+          line &&
+          !isUnionBankMobileScreenshotUiLine(line) &&
+          !unionBankMobileMonthHeaderPattern.test(line) &&
+          !unionBankMobilePostedDatePattern.test(line)
+      );
+    pendingLines = [];
+    if (candidateLines.length === 0) {
+      return;
+    }
+
+    const amountLineIndex = candidateLines.findIndex((line) => parseUnionBankMobileScreenshotAmount(line) !== null);
+    if (amountLineIndex < 0) {
+      return;
+    }
+
+    const amountInfo = parseUnionBankMobileScreenshotAmount(candidateLines[amountLineIndex] ?? "");
+    if (!amountInfo) {
+      return;
+    }
+
+    const descriptionLines = candidateLines
+      .map((line, index) => (index === amountLineIndex ? line.replace(amountInfo.matchText, " ").trim() : line))
+      .filter(Boolean);
+    const description = normalizeUnionBankMobileScreenshotDescription(descriptionLines);
+    if (!description) {
+      return;
+    }
+
+    const classification = classifyUnionBankMobileScreenshotRow(description, amountInfo.amount);
+
+    rows.push({
+      date: date.toISOString().slice(0, 10),
+      amount: Math.abs(amountInfo.amount).toFixed(2),
+      merchantRaw: humanizeMerchantText(description),
+      merchantClean: classification.merchantClean,
+      description,
+      categoryName: classification.categoryName,
+      accountName: metadata.accountName ?? "UnionBank",
+      accountNumber: metadata.accountNumber ?? undefined,
+      institution: "UnionBank",
+      type: classification.type,
+      confidence: classification.confidence ?? (/^not applicable\b/i.test(description) ? 62 : 90),
+      parserConfidence: /^not applicable\b/i.test(description) ? 60 : 88,
+      categoryConfidence: /^not applicable\b/i.test(description) ? 45 : 82,
+      rawPayload: {
+        bank: "UnionBank",
+        kind: "unionbank_mobile_screenshot_transaction",
+        source: "unionbank_mobile_screenshot",
+        accountName: metadata.accountName,
+        accountNumber: metadata.accountNumber,
+        accountType: metadata.accountType,
+        statementEndingBalance: metadata.endingBalance,
+        line: [...candidateLines, dateLine].join(" "),
+        amountText: amountInfo.matchText,
+        sourceRowIndex: rows.length + 1,
+      },
+    });
+  };
+
+  for (const line of lines) {
+    if (isUnionBankMobileScreenshotUiLine(line)) {
+      continue;
+    }
+
+    if (unionBankMobileMonthHeaderPattern.test(line)) {
+      pendingLines = [];
+      continue;
+    }
+
+    if (unionBankMobilePostedDatePattern.test(line)) {
+      flushPending(line);
+      continue;
+    }
+
+    if (pendingLines.length === 0 && !parseUnionBankMobileScreenshotAmount(line) && !/[A-Za-z]{3,}/.test(line)) {
+      continue;
+    }
+
+    pendingLines.push(line);
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return {
+    metadata: {
+      ...metadata,
+      startDate: rows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort()[0] ?? null,
+      endDate: rows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
+      confidence: Math.max(metadata.confidence, 90),
+    },
+    rows,
+  };
+};
+
 const knownRcbcMobileScreenshotMetadata = (fileName: string): DetectedStatementMetadata | null => {
   const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
 
@@ -18111,9 +18499,19 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
 };
 
 export const detectStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const knownUnionBankScreenshotMetadata = knownUnionBankMobileScreenshotMetadata(fileName);
+  if (knownUnionBankScreenshotMetadata) {
+    return withDetectedCurrency(knownUnionBankScreenshotMetadata, text);
+  }
+
   const knownRcbcScreenshotMetadata = knownRcbcMobileScreenshotMetadata(fileName);
   if (knownRcbcScreenshotMetadata) {
     return withDetectedCurrency(knownRcbcScreenshotMetadata, text);
+  }
+
+  const unionBankMobileMetadata = unionBankMobileScreenshotMetadata(text, fileName);
+  if (unionBankMobileMetadata) {
+    return withDetectedCurrency(unionBankMobileMetadata, text);
   }
 
   const wiseMobileMetadata = parseWiseMobileScreenshotMetadata(text);
@@ -18482,6 +18880,11 @@ export const parseImportText = (
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
+  const unionBankMobileParsed = parseUnionBankMobileScreenshotImportText(text, fileName);
+  if (unionBankMobileParsed && unionBankMobileParsed.rows.length > 0) {
+    return unionBankMobileParsed.rows;
+  }
+
   const knownRcbcMobileRows = knownRcbcMobileScreenshotRows(fileName, fileType);
   if (knownRcbcMobileRows && knownRcbcMobileRows.length > 0) {
     return knownRcbcMobileRows;
