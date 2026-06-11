@@ -13,8 +13,6 @@ export const metadata = {
 
 export default async function SettingsPage() {
   const session = await getSessionContext();
-  const user = session.isGuest ? null : await getOrCreateCurrentUser(session.userId);
-
   let workspaceId = "";
   let workspaceName = "Settings";
   let profileList: Array<{
@@ -24,82 +22,93 @@ export default async function SettingsPage() {
     createdAt: string;
     updatedAt: string;
   }> = [];
+  let user: Awaited<ReturnType<typeof getOrCreateCurrentUser>> | null = null;
+
+  try {
+    user = session.isGuest ? null : await getOrCreateCurrentUser(session.userId);
+  } catch (error) {
+    console.error("[settings-page] unable to load current user", error);
+  }
 
   if (user && user.dataWipedAt === null) {
-    const cookieStore = await cookies();
-    const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
-    await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
-    const userWorkspacesRaw = await prisma.workspace.findMany({
-      where: { userId: user.id },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-    const userWorkspaces = [...userWorkspacesRaw].sort((left, right) => {
-      if (left.type === "personal" && right.type === "personal") {
-        return left.createdAt.getTime() - right.createdAt.getTime();
-      }
-      if (left.type === "personal") {
-        return -1;
-      }
-      if (right.type === "personal") {
-        return 1;
-      }
+    try {
+      const cookieStore = await cookies();
+      const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
+      await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
+      const userWorkspacesRaw = await prisma.workspace.findMany({
+        where: { userId: user.id },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      const userWorkspaces = [...userWorkspacesRaw].sort((left, right) => {
+        if (left.type === "personal" && right.type === "personal") {
+          return left.createdAt.getTime() - right.createdAt.getTime();
+        }
+        if (left.type === "personal") {
+          return -1;
+        }
+        if (right.type === "personal") {
+          return 1;
+        }
 
-      return right.updatedAt.getTime() === left.updatedAt.getTime()
-        ? left.createdAt.getTime() - right.createdAt.getTime()
-        : right.updatedAt.getTime() - left.updatedAt.getTime();
-    });
-    const selectedWorkspace =
-      (selectedWorkspaceCookieId
-        ? await prisma.workspace.findFirst({
-            where: {
-              id: selectedWorkspaceCookieId,
-              user: {
-                clerkUserId: user.clerkUserId,
+        return right.updatedAt.getTime() === left.updatedAt.getTime()
+          ? left.createdAt.getTime() - right.createdAt.getTime()
+          : right.updatedAt.getTime() - left.updatedAt.getTime();
+      });
+      const selectedWorkspace =
+        (selectedWorkspaceCookieId
+          ? await prisma.workspace.findFirst({
+              where: {
+                id: selectedWorkspaceCookieId,
+                user: {
+                  clerkUserId: user.clerkUserId,
+                },
               },
+              select: {
+                id: true,
+                name: true,
+              },
+            })
+          : null) ??
+        (await prisma.workspace.findFirst({
+          where: {
+            user: {
+              clerkUserId: user.clerkUserId,
             },
+            type: "personal",
+          },
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            name: true,
+          },
+        })) ??
+        (await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified).then(async (starterWorkspace) =>
+          prisma.workspace.findUnique({
+            where: { id: starterWorkspace.id },
             select: {
               id: true,
               name: true,
             },
           })
-        : null) ??
-      (await prisma.workspace.findFirst({
-        where: {
-          user: {
-            clerkUserId: user.clerkUserId,
-          },
-          type: "personal",
-        },
-        orderBy: { createdAt: "asc" },
-        select: {
-          id: true,
-          name: true,
-        },
-      })) ??
-      (await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified).then(async (starterWorkspace) =>
-        prisma.workspace.findUnique({
-          where: { id: starterWorkspace.id },
-          select: {
-            id: true,
-            name: true,
-          },
-        })
-      ));
+        ));
 
-    workspaceId = selectedWorkspace?.id ?? "";
-    workspaceName = selectedWorkspace?.name ?? "Personal";
-    profileList = userWorkspaces.map((workspace) => ({
-      ...workspace,
-      createdAt: workspace.createdAt.toISOString(),
-      updatedAt: workspace.updatedAt.toISOString(),
-    }));
+      workspaceId = selectedWorkspace?.id ?? "";
+      workspaceName = selectedWorkspace?.name ?? "Personal";
+      profileList = userWorkspaces.map((workspace) => ({
+        ...workspace,
+        createdAt: workspace.createdAt.toISOString(),
+        updatedAt: workspace.updatedAt.toISOString(),
+      }));
+    } catch (error) {
+      console.error("[settings-page] unable to load workspaces", error);
+    }
   }
 
   return (

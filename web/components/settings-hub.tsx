@@ -1317,7 +1317,6 @@ export function SettingsHub({
           deletedCount: null,
         });
         setStatusMessage("All Clover data was deleted successfully.");
-        router.refresh();
         return;
       }
 
@@ -1328,7 +1327,10 @@ export function SettingsHub({
         deletedCount: deleted,
       });
       setStatusMessage(dataDeleteCopy[dataDeleteModal.scope].successBody(deleted));
-      router.refresh();
+      setPlanLoaded(false);
+      if (dataDeleteModal.scope === "accounts") {
+        setProfilesLoaded(false);
+      }
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Something went wrong.");
       closeDeleteModal();
