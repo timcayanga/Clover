@@ -36,9 +36,15 @@ const resolveDatabaseUrl = () => {
     const url = new URL(configuredUrl);
     const isSupabaseTransactionPooler =
       url.hostname.endsWith(".pooler.supabase.com") && url.port === "6543";
+    const isDirectSupabaseHost = url.hostname.endsWith(".supabase.co");
 
     if (isSupabaseTransactionPooler && !url.searchParams.has("pgbouncer")) {
       url.searchParams.set("pgbouncer", "true");
+      return url.toString();
+    }
+
+    if (isDirectSupabaseHost && !url.searchParams.has("sslmode")) {
+      url.searchParams.set("sslmode", "require");
       return url.toString();
     }
 
