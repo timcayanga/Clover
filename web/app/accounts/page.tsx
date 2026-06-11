@@ -342,10 +342,110 @@ const transactionMatchesAccount = (transaction: Transaction, account: Account) =
   );
 };
 
+const inferImportedAccountTypeFromTransaction = (transaction: Transaction): SupportedAccountType => {
+  const identity = `${transaction.institution ?? ""} ${transaction.accountName ?? ""}`.toLowerCase();
+  if (/\bwise\b/.test(identity)) {
+    return "wallet";
+  }
+
+  return inferAccountTypeFromStatement(
+    transaction.institution ?? null,
+    transaction.accountName ?? transaction.merchantClean ?? transaction.merchantRaw,
+    "bank"
+  );
+};
+
+const deriveOptimisticAccountsFromTransactions = (
+  transactions: Transaction[],
+  existingAccounts: Account[],
+  deletedAccountIds: Set<string>
+) => {
+  const existingById = new Map(existingAccounts.map((account) => [account.id, account] as const));
+  const existingByKey = new Map(
+    existingAccounts.map(
+      (account) =>
+        [getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency), account] as const
+    )
+  );
+  const derivedAccounts = new Map<string, Account>();
+
+  for (const transaction of transactions) {
+    if (!transaction.accountId || deletedAccountIds.has(transaction.accountId)) {
+      continue;
+    }
+
+    const matchedExistingById = existingById.get(transaction.accountId) ?? null;
+    const inferredType = matchedExistingById?.type ?? inferImportedAccountTypeFromTransaction(transaction);
+    const importedAccountKey = getImportedAccountKey(
+      transaction.accountName ?? null,
+      transaction.institution ?? null,
+      transaction.accountNumber ?? null,
+      inferredType,
+      transaction.currency
+    );
+    const matchedExisting =
+      matchedExistingById ??
+      (importedAccountKey ? existingByKey.get(importedAccountKey) ?? null : null);
+
+    if (matchedExisting && !matchedExisting.id.startsWith("optimistic-")) {
+      continue;
+    }
+
+    const displayName = formatUploadAccountDisplayName(
+      transaction.accountName ?? transaction.institution ?? "Imported account",
+      transaction.institution ?? null,
+      transaction.accountNumber ?? null,
+      inferredType
+    );
+    const seedAccount = matchedExisting ?? {
+      id: transaction.accountId,
+      name: displayName,
+      institution: transaction.institution ?? null,
+      accountNumber: transaction.accountNumber ?? null,
+      investmentSubtype: null,
+      investmentSymbol: null,
+      investmentQuantity: null,
+      investmentCostBasis: null,
+      investmentPrincipal: null,
+      investmentStartDate: null,
+      investmentMaturityDate: null,
+      investmentInterestRate: null,
+      investmentMaturityValue: null,
+      type: inferredType,
+      currency: transaction.currency,
+      source: "upload",
+      balance: null,
+      transactionCount: 0,
+      favorite: false,
+      updatedAt: transaction.date,
+      createdAt: transaction.date,
+    };
+    const currentCount = derivedAccounts.get(seedAccount.id)?.transactionCount ?? seedAccount.transactionCount ?? 0;
+    derivedAccounts.set(seedAccount.id, {
+      ...seedAccount,
+      source: "upload",
+      currency: seedAccount.currency || transaction.currency,
+      transactionCount: currentCount + 1,
+      updatedAt: transaction.date > seedAccount.updatedAt ? transaction.date : seedAccount.updatedAt,
+      createdAt: transaction.date < seedAccount.createdAt ? transaction.date : seedAccount.createdAt,
+    });
+  }
+
+  return Array.from(derivedAccounts.values()).filter((account) => {
+    if (isTransientUploadedAccountPlaceholder(account)) {
+      return false;
+    }
+
+    return !isGenericUploadedAccountShadowed(account, existingAccounts);
+  });
+};
+
 const mergeAccountsWithOptimisticImports = (
   fetchedAccounts: Account[],
   currentAccounts: Account[],
-  deletedAccountIds: Set<string>
+  deletedAccountIds: Set<string>,
+  supportingTransactions: Transaction[] = [],
+  options?: { preserveImportedEvidence?: boolean }
 ) => {
   const visibleFetchedAccounts = fetchedAccounts.filter((account) => !deletedAccountIds.has(account.id));
   const visibleCurrentAccounts = currentAccounts.filter((account) => !deletedAccountIds.has(account.id));
@@ -407,8 +507,25 @@ const mergeAccountsWithOptimisticImports = (
     const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
     return !fetchedById.has(account.id) && !visibleFetchedAccounts.some((fetchedAccount) => matchesImportedAccountIdentity(account, fetchedAccount)) && !fetchedByKey.has(accountKey);
   });
+  const baseMergedAccounts = [...preservedCurrentAccounts, ...optimisticAccounts, ...mergedFetchedAccounts];
+  const shouldPreserveImportedEvidence = options?.preserveImportedEvidence ?? false;
+  if (!shouldPreserveImportedEvidence || supportingTransactions.length === 0) {
+    return baseMergedAccounts;
+  }
 
-  return [...preservedCurrentAccounts, ...optimisticAccounts, ...mergedFetchedAccounts];
+  const derivedOptimisticAccounts = deriveOptimisticAccountsFromTransactions(
+    supportingTransactions,
+    baseMergedAccounts,
+    deletedAccountIds
+  ).filter(
+    (account) =>
+      !baseMergedAccounts.some(
+        (existingAccount) =>
+          existingAccount.id === account.id || matchesImportedAccountIdentity(existingAccount, account)
+      )
+  );
+
+  return [...derivedOptimisticAccounts, ...baseMergedAccounts];
 };
 
 const mergeOptimisticImportedAccount = (currentAccounts: Account[], optimisticAccount: Account) => {
@@ -1642,7 +1759,13 @@ function AccountsPageContent() {
           mergeAccountsWithOptimisticImports(
             visibleFetchedAccounts,
             current.length > 0 ? current.filter((account) => !deletedAccountIdsRef.current.has(account.id)) : visibleCachedWorkspaceAccounts,
-            deletedAccountIdsRef.current
+            deletedAccountIdsRef.current,
+            transactions.filter(
+              (transaction) =>
+                !deletedAccountIdsRef.current.has(transaction.accountId) &&
+                !deletingAccountIdsRef.current.has(transaction.accountId)
+            ),
+            { preserveImportedEvidence: hasRecentWorkspaceImportEvidence(workspaceId, importActivitySnapshot) }
           )
         );
         setAccountRules(Array.isArray(payload?.accountRules) ? payload.accountRules : []);
@@ -1748,6 +1871,15 @@ function AccountsPageContent() {
                     visibleFetchedTransactions
                   )
             );
+            setAccounts((current) =>
+              mergeAccountsWithOptimisticImports(
+                visibleFetchedAccounts,
+                current.filter((account) => !deletedAccountIdsRef.current.has(account.id)),
+                deletedAccountIdsRef.current,
+                visibleFetchedTransactions.length > 0 ? visibleFetchedTransactions : visibleCachedWorkspaceTransactions,
+                { preserveImportedEvidence: true }
+              )
+            );
           }
         } catch {
           // Background transaction hydration is best-effort.
@@ -1807,7 +1939,11 @@ function AccountsPageContent() {
         (!deletedAccountIdsRef.current.has(checkpoint.accountId) && !deletingAccountIdsRef.current.has(checkpoint.accountId))
     );
 
-    setAccounts(filteredAccounts);
+    setAccounts(
+      mergeAccountsWithOptimisticImports(filteredAccounts, filteredAccounts, deletedAccountIdsRef.current, filteredTransactions, {
+        preserveImportedEvidence: true,
+      })
+    );
     setAccountRules(cachedSnapshot.accountRules as AccountRule[]);
     setTransactions(filteredTransactions);
     setStatementCheckpoints(filteredCheckpoints);
