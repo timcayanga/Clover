@@ -43,6 +43,8 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 
 - Use merchant normalization before broad category fallback.
 - Use contextual cues from merchant-spend currency and travel/location terms when available. For example, `Transport for NSW`, `SkyBus`, parking, rail, and airport merchants should bias toward `Transport`; souvenir and landmark/travel merchants should bias toward `Travel & Lifestyle`; venue/ticket landmarks such as `Sydney Opera House` should bias toward `Entertainment`.
+- If the merchant text looks like a person or transfer counterparty rather than a business name, prefer `Transfers`.
+- For unseen screenshot merchants with readable text, prefer contextual keyword guesses over leaving the row as `Other`.
 - Restaurants, cafes, groceries, parking, transport, education, subscriptions, and shopping should use the shared category rules.
 - Refunds should be `Income` or transfer-like refund movement depending on the source row.
 - Currency conversion and wallet funding rows should be `Transfers`.
@@ -58,6 +60,7 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 
 - Uploading Wise screenshots should create or reuse separate wallet accounts internally by account-impact currency, while displaying each account as `Wise` with no account number unless one is visible in the source.
 - Transactions should appear in Clover with their original currencies preserved.
+- Once screenshot transactions are visible in the UI, later background reconciliation should not temporarily hide or shrink those visible rows while the remaining files finish processing.
 - The import modal should complete once visible rows are saved, even without account number or balance metadata.
 - If the first Wise screenshot OCR/transcription pass returns no rows or times out, Clover should still run one bounded structured vision fallback before returning `I-104`.
 - Wise mobile screenshots should prefer a direct structured vision parse over multi-pass OCR. Target visible UI timing is 3-8 seconds for one clear screenshot, 10-25 seconds for five screenshots, and 20-45 seconds for ten screenshots.

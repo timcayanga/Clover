@@ -487,6 +487,41 @@ const fnv1a = (value: string) => {
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
+const isLikelyPersonTransferName = (value: string) => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return false;
+  }
+
+  const cleaned = normalized.replace(/[^A-Za-z\s.'’-]/g, " ").replace(/\s+/g, " ").trim();
+  if (!cleaned) {
+    return false;
+  }
+
+  if (
+    /\b(?:airport|mall|market|grocer|grocery|restaurant|cafe|coffee|bar|books?|school|college|opera|harbour|transport|bus|train|station|parking|souvenir|tourism|sanctuary|victoria|ticket|tickets|supermarket|shop|store|mart|paypal|amazon|prime|mcdonald|milksha|gogyo|gokan|goken|leone|project|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|donki|byrdi|seeds|estate|vacation|nirvana|waterfront|relay|skybus|citibank|bank|finance|financial|oil|convenience|mitrtown)\b/i.test(
+      cleaned
+    )
+  ) {
+    return false;
+  }
+
+  const tokens = cleaned
+    .split(" ")
+    .filter(Boolean)
+    .filter((token) => token !== "." && !/^(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/.test(token));
+  if (tokens.length === 0 || tokens.length > 4) {
+    return false;
+  }
+
+  const validTokens = tokens.filter((token) => /^[A-Z][a-z]+$/.test(token) || /^[A-Z]{2,}$/.test(token) || /^[A-Z]\.?$/.test(token)).length;
+  if (tokens.length >= 2 && validTokens === tokens.length) {
+    return true;
+  }
+
+  return tokens.length === 1 && /^[A-Z]{4,}$/.test(tokens[0] ?? "");
+};
+
 export const normalizeAccountRuleKey = (accountName?: string | null, institution?: string | null) =>
   normalizeMerchantText(
     `${institution ?? ""} ${extractLastFourDigits(accountName) ?? normalizeWhitespace(String(accountName ?? ""))}`
@@ -507,6 +542,10 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
   const hasForeignMerchantCurrencyContext =
     /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
+
+  if (isLikelyPersonTransferName(merchantText)) {
+    return "Transfers";
+  }
 
   if (isStandaloneCashPaymentDescription(merchantText)) {
     return "Shopping";
@@ -574,11 +613,31 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Transport";
   }
 
+  if (/liberty\s+oil|fuel|petrol|gas\s+station/.test(lower) || /libertyoil|fuel|petrol|gasstation/.test(compact)) {
+    return "Transport";
+  }
+
   if (
     /pedro\s+the\s+grocer|grocer\b|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills/.test(lower) ||
     /pedrothegrocer|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills/.test(compact)
   ) {
     return "Food & Dining";
+  }
+
+  if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) {
+    return "Food & Dining";
+  }
+
+  if (/books?\b|asia\s+books/.test(lower) || /books|asiabooks/.test(compact)) {
+    return "Education";
+  }
+
+  if (/samyan\s+mitrtown|paypal|convenience|mitrtown/.test(lower) || /samyanmitrtown|paypal|convenience|mitrtown/.test(compact)) {
+    return "Shopping";
+  }
+
+  if (/citibank.*\bfin\b|bank.*\bfin\b/.test(lower) || /citibank.*fin|bank.*fin/.test(compact)) {
+    return "Transfers";
   }
 
   if (
@@ -1028,6 +1087,7 @@ export const guessCategoryFallback = (description: string, type: TransactionType
     /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
   const hasForeignMerchantCurrencyContext =
     /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
+  if (isLikelyPersonTransferName(description)) return "Transfers";
   const override = getHardcodedCategoryOverride(description);
   if (override) return override;
   if (/deposit to gsave|withdraw from gsave|seamoney credit|maribank credit/.test(lower)) return "Financial";
@@ -1043,7 +1103,9 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/interbankservicecharge|atmwithdrawalacquirerfee|financecharge|financecharges|latepaymentfee|annualfee/.test(compact)) return "Financial";
   if (/incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|systemdebit|systemcredit|miscellaneousdebit|investmentsweep/.test(compact)) return "Transfers";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|bar leone|savory project|gokan|goken|mcdonald'?s|milksha|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|four\s+frogs/.test(lower)) return "Food & Dining";
+  if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
+  if (/liberty\s+oil|petrol|gas\s+station/.test(lower) || /libertyoil|petrol|gasstation/.test(compact)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
   if (/discord\s+nitro/.test(lower) || /discordnitro/.test(compact)) return "Subscriptions";
   if (/google\s+one/.test(lower) || /googleone/.test(compact)) return "Subscriptions";
@@ -1060,7 +1122,9 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   ) {
     return "Travel & Lifestyle";
   }
+  if (/samyan\s+mitrtown|paypal|convenience|mitrtown/.test(lower) || /samyanmitrtown|paypal|convenience|mitrtown/.test(compact)) return "Shopping";
   if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|retail|camera/.test(lower)) return "Shopping";
+  if (/books?\b|asia\s+books/.test(lower) || /books|asiabooks/.test(compact)) return "Education";
   if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
   if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
   if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";

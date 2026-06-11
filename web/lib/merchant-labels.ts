@@ -496,6 +496,26 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       patterns: [/s1peron\s*-\s*zeller/i],
       replacement: "S1peron - Zeller",
     },
+    {
+      patterns: [/samyan\s+mitrtown/i],
+      replacement: "Samyan Mitrtown",
+    },
+    {
+      patterns: [/asia\s+books/i],
+      replacement: "Asia Books",
+    },
+    {
+      patterns: [/black\s+cabin\s+bar/i, /lpe\s+black\s+cabin\s+bar/i],
+      replacement: "Black Cabin Bar",
+    },
+    {
+      patterns: [/liberty\s+oil\s+convenience/i],
+      replacement: "Liberty Oil Convenience",
+    },
+    {
+      patterns: [/citibank\s+ire\s+fin\s+s/i],
+      replacement: "Citibank IRE FIN S",
+    },
   ],
   RCBC: [
     {

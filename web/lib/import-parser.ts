@@ -88,6 +88,41 @@ export const isStandaloneCashPaymentDescription = (value?: string | null) => {
   return !isStatementPaymentSettlementDescription(lower);
 };
 
+const isLikelyPersonTransferName = (value: string) => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return false;
+  }
+
+  const cleaned = normalized.replace(/[^A-Za-z\s.'’-]/g, " ").replace(/\s+/g, " ").trim();
+  if (!cleaned) {
+    return false;
+  }
+
+  if (
+    /\b(?:airport|mall|market|grocer|grocery|restaurant|cafe|coffee|bar|books?|school|college|opera|harbour|transport|bus|train|station|parking|souvenir|tourism|sanctuary|victoria|ticket|tickets|supermarket|shop|store|mart|paypal|amazon|prime|mcdonald|milksha|gogyo|gokan|goken|leone|project|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|donki|byrdi|seeds|estate|vacation|nirvana|waterfront|relay|skybus|citibank|bank|finance|financial|oil|convenience|mitrtown)\b/i.test(
+      cleaned
+    )
+  ) {
+    return false;
+  }
+
+  const tokens = cleaned
+    .split(" ")
+    .filter(Boolean)
+    .filter((token) => token !== "." && !/^(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/.test(token));
+  if (tokens.length === 0 || tokens.length > 4) {
+    return false;
+  }
+
+  const validTokens = tokens.filter((token) => /^[A-Z][a-z]+$/.test(token) || /^[A-Z]{2,}$/.test(token) || /^[A-Z]\.?$/.test(token)).length;
+  if (tokens.length >= 2 && validTokens === tokens.length) {
+    return true;
+  }
+
+  return tokens.length === 1 && /^[A-Z]{4,}$/.test(tokens[0] ?? "");
+};
+
 export const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
@@ -97,6 +132,7 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   const hasForeignMerchantCurrencyContext =
     /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
 
+  if (isLikelyPersonTransferName(text)) return "Transfers";
   if (/emmanuel\s+payments?/.test(lower) || /emmanuelpayments?/.test(compact)) return "Shopping";
   if (/sydney\s+opera\s+house/.test(lower) || /sydneyoperahouse/.test(compact)) return "Entertainment";
   if (/relay\b/.test(lower)) return "Shopping";
@@ -110,11 +146,17 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal/.test(lower) || /transportfornsw|skybus|parking|airport|rail|trainpal/.test(compact)) {
     return "Transport";
   }
+  if (/liberty\s+oil|fuel|petrol|gas\s+station/.test(lower) || /libertyoil|fuel|petrol|gasstation/.test(compact)) return "Transport";
   if (
     /pedro\s+the\s+grocer|grocer\b|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills/.test(lower) ||
     /pedrothegrocer|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills/.test(compact)
   )
     return "Food & Dining";
+  if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) return "Food & Dining";
+  if (/books?\b|asia\s+books/.test(lower) || /books|asiabooks/.test(compact)) return "Education";
+  if (/samyan\s+mitrtown|paypal|convenience|mitrtown/.test(lower) || /samyanmitrtown|paypal|convenience|mitrtown/.test(compact))
+    return "Shopping";
+  if (/citibank.*\bfin\b|bank.*\bfin\b/.test(lower) || /citibank.*fin|bank.*fin/.test(compact)) return "Transfers";
   if (
     hasTravelContext &&
     hasForeignMerchantCurrencyContext &&
@@ -17794,12 +17836,14 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
     const merchantCurrency = params.merchantCurrency;
     const accountCurrency = params.accountCurrency;
     const isWalletTransfer = /^To\s+[A-Z]{3}$/i.test(merchant);
+    const isPersonTransfer = isLikelyPersonTransferName(merchant);
     const isRefundOrReceive = /^(?:Refunded|Received)$/i.test(status ?? "");
     const isSent = /^(?:Sent)$/i.test(status ?? "");
     const isIncoming = sign === "credit" || isRefundOrReceive;
-    const type: TransactionType = isWalletTransfer ? "transfer" : isIncoming ? "income" : isSent ? "transfer" : "expense";
+    const type: TransactionType =
+      isWalletTransfer || isPersonTransfer ? "transfer" : isIncoming ? "income" : isSent ? "transfer" : "expense";
     const categoryContext = [merchant, status, merchantCurrency, accountCurrency].filter(Boolean).join(" ");
-    const categoryName = isWalletTransfer
+    const categoryName = isWalletTransfer || isPersonTransfer
       ? "Transfers"
       : /refund/i.test(status ?? "")
         ? "Income"

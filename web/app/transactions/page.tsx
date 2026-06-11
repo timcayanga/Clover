@@ -3134,17 +3134,6 @@ function TransactionsPageContent() {
         transactionsRef.current.length > 0
           ? transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
           : visibleCachedWorkspaceTransactions;
-      const shouldPreserveKnownTransactionsWhileImportSettles =
-        !hasServerSideFilters &&
-        fetchedTransactions.length === 0 &&
-        exactServerTotalCount === 0 &&
-        stableBaseTransactions.length > 0 &&
-        hasRecentWorkspaceImportEvidence(importActivitySnapshot, workspaceId);
-      const shouldPatchExistingTransactions = Boolean(options?.append || !hasFreshTransactions);
-      const baseTransactions = shouldPatchExistingTransactions ? stableBaseTransactions : [];
-      const mergedTransactions = options?.append
-        ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
-        : mergeImportedWorkspaceTransactions(baseTransactions, fetchedTransactions);
       const summaryPayload = payload?.summary && typeof payload.summary === "object" ? payload.summary : null;
       const exactServerTotalCount =
         typeof payload?.totalCount === "number"
@@ -3152,6 +3141,22 @@ function TransactionsPageContent() {
           : typeof summaryPayload?.totalCount === "number"
             ? summaryPayload.totalCount
             : fetchedTransactions.length;
+      const hasRecentImportEvidence = hasRecentWorkspaceImportEvidence(importActivitySnapshot, workspaceId);
+      const shouldPreserveKnownTransactionsWhileImportSettles =
+        !hasServerSideFilters &&
+        stableBaseTransactions.length > 0 &&
+        hasRecentImportEvidence &&
+        (
+          (fetchedTransactions.length === 0 && exactServerTotalCount === 0) ||
+          (fetchedTransactions.length > 0 &&
+            mergeImportedWorkspaceTransactions(stableBaseTransactions, fetchedTransactions).length < stableBaseTransactions.length &&
+            exactServerTotalCount <= stableBaseTransactions.length)
+        );
+      const shouldPatchExistingTransactions = Boolean(options?.append || !hasFreshTransactions);
+      const baseTransactions = shouldPatchExistingTransactions ? stableBaseTransactions : [];
+      const mergedTransactions = options?.append
+        ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
+        : mergeImportedWorkspaceTransactions(baseTransactions, fetchedTransactions);
       const fetchedImportFileIds = new Set(
         fetchedTransactions
           .map((transaction) => getTransactionImportFileId(transaction))
@@ -3167,11 +3172,12 @@ function TransactionsPageContent() {
       const shouldPreserveImportedTransactions =
         !hasServerSideFilters &&
         importedTransactionsToPreserveAfterServerResponse.length > 0 &&
-        exactServerTotalCount > 0 &&
+        (exactServerTotalCount > 0 || hasRecentImportEvidence) &&
         (
           Boolean(options?.background) ||
           importedTransactionsToPreserveAfterServerResponse.length > fetchedTransactions.length ||
-          exactServerTotalCount > fetchedTransactions.length
+          exactServerTotalCount > fetchedTransactions.length ||
+          fetchedTransactions.length < stableBaseTransactions.length
         );
       const mergedTransactionsWithImports =
         shouldPreserveImportedTransactions && importedTransactionsToPreserveAfterServerResponse.length > 0
