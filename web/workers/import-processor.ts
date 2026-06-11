@@ -22,11 +22,7 @@ import {
   storeImportedFileTextCacheRecord,
 } from "@/lib/import-file-text.server";
 import { downloadImportObject } from "@/lib/import-storage.server";
-import {
-  buildReceiptInstitutionAccountDraft,
-  resolveReceiptAccountHintToAccount,
-  resolveReceiptInstitutionFallbackToAccount,
-} from "@/lib/receipt-account-resolution";
+import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import { parseReceiptText } from "@/lib/split-bill";
 import {
@@ -597,87 +593,6 @@ const updateImportFileWithTxCompat = async (
   );
 };
 
-const rebindResolvedImportAccount = async <
-  T extends {
-    id: string;
-    workspaceId?: string | null;
-    name: string;
-    institution: string | null;
-    accountNumber: string | null;
-    type: AccountType;
-    currency?: string | null;
-    source?: string | null;
-  },
->(
-  workspaceId: string,
-  account: T | null,
-  compatibleColumns: Set<string>
-) => {
-  if (!account) {
-    return null;
-  }
-
-  const currentAccount = await prisma.account.findUnique({
-    where: { id: account.id },
-    select: getCompatibleAccountSelect(compatibleColumns),
-  });
-  if (currentAccount) {
-    return currentAccount;
-  }
-
-  const workspaceAccounts = await prisma.account.findMany({
-    where: { workspaceId },
-    select: getCompatibleAccountSelect(compatibleColumns),
-  });
-  const accountNumber = typeof account.accountNumber === "string" && account.accountNumber.trim() ? account.accountNumber.trim() : null;
-  const looksWiseWallet =
-    account.type === "wallet" &&
-    !accountNumber &&
-    /wise/i.test(`${account.institution ?? ""} ${account.name ?? ""}`);
-  const normalizedWiseCurrency = looksWiseWallet
-    ? normalizeWiseWalletCurrencyCode(account.currency ?? null) ??
-      normalizeInstitutionCurrency("Wise", account.currency ?? null, account.name ?? null)
-    : null;
-
-  const reboundAccount =
-    (looksWiseWallet
-      ? workspaceAccounts
-          .filter((candidate) => candidate.source === "upload")
-          .filter((candidate) => candidate.type === "wallet")
-          .filter((candidate) => !String(candidate.accountNumber ?? "").replace(/\D/g, ""))
-          .filter((candidate) => /wise/i.test(`${candidate.institution ?? ""} ${candidate.name ?? ""}`))
-          .find((candidate) => {
-            const candidateCurrency =
-              normalizeWiseWalletCurrencyCode(candidate.currency ?? null) ??
-              normalizeInstitutionCurrency("Wise", candidate.currency ?? null, candidate.name ?? null);
-            return candidateCurrency === normalizedWiseCurrency;
-          }) ?? null
-      : null) ??
-    workspaceAccounts.find((candidate) =>
-      matchesImportedAccountIdentity(candidate, {
-        name: account.name,
-        institution: account.institution,
-        accountNumber,
-        type: account.type,
-        currency: "currency" in account ? account.currency ?? null : null,
-      })
-    ) ??
-    (!accountNumber
-      ? findBestImportedAccountMatch(workspaceAccounts, {
-          name: account.name,
-          institution: account.institution,
-          accountNumber: null,
-          type: account.type,
-        })
-      : null);
-
-  return reboundAccount ?? null;
-};
-
-const isGenericScreenshotIdentityLabel = (value: unknown) =>
-  typeof value === "string" &&
-  /^(?:img|image)[ _-]*\d+\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(value.trim());
-
 const normalizeImportConfidenceScore = (value: unknown) => {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return 0;
@@ -905,12 +820,12 @@ const normalizeReceiptLineItems = (
     .filter((item): item is NormalizedReceiptLineItem => item !== null);
 
 const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptText>) => ({
-  receipt_type: preview.receiptType,
+  receipt_type: "receipt",
   merchant_raw: preview.merchantName ?? null,
   merchant_clean: preview.merchantName ?? null,
-  document_number: preview.documentNumber ?? null,
-  invoice_number: preview.invoiceNumber ?? null,
-  booking_reference: preview.bookingReference ?? null,
+  document_number: null,
+  invoice_number: null,
+  booking_reference: null,
   order_number: null,
   buyer_name: preview.receiptPayerName ?? null,
   transaction_date: preview.billDate ?? null,
@@ -944,61 +859,6 @@ const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptT
     reason: "Receipt fallback parsed from OCR text",
   },
 });
-
-const buildDetectedMetadataFromReceiptPreview = (
-  preview: ReturnType<typeof parseReceiptText> | null,
-  fallback: ReturnType<typeof detectStatementMetadataFromText>
-) => {
-  const paymentContext = `${preview?.paymentMethod ?? ""} ${preview?.receiptText ?? ""}`.toLowerCase();
-  const inferredInstitution =
-    /\bgcash\b/.test(paymentContext)
-      ? "GCash"
-      : /\bmaya\b/.test(paymentContext)
-        ? "Maya"
-        : /\bwise\b/.test(paymentContext)
-          ? "Wise"
-          : fallback.institution ?? null;
-  const inferredAccountType =
-    inferredInstitution === "GCash" || inferredInstitution === "Maya" || inferredInstitution === "Wise"
-      ? "wallet"
-      : "cash";
-  const normalizedCurrency = normalizeInstitutionCurrency(
-    inferredInstitution,
-    preview?.currency ?? fallback.currency ?? "PHP",
-    preview?.merchantName ?? fallback.accountName ?? null
-  );
-  const previewTotal = parseAmountValue(preview?.total ?? null);
-
-  return {
-    ...fallback,
-    institution: inferredInstitution,
-    accountNumber: null,
-    accountName:
-      inferredInstitution === "GCash" || inferredInstitution === "Maya" || inferredInstitution === "Wise"
-        ? inferredInstitution
-        : "Cash",
-    accountType: inferredAccountType,
-    currency: normalizedCurrency,
-    openingBalance: null,
-    endingBalance: previewTotal ?? fallback.endingBalance ?? null,
-    totalAmountDue: previewTotal ?? fallback.totalAmountDue ?? null,
-    startDate: preview?.billDate ?? fallback.startDate ?? null,
-    endDate: preview?.billDate ?? fallback.endDate ?? null,
-    confidence: Math.max(Number(fallback.confidence ?? 0), Math.round(preview?.confidence ?? 0), 70),
-  } as ReturnType<typeof detectStatementMetadataFromText>;
-};
-
-const previewLooksLikeUsableReceipt = (preview: ReturnType<typeof parseReceiptText> | null) =>
-  Boolean(
-    preview &&
-      preview.total !== null &&
-      preview.confidence >= 55 &&
-      (
-        (Boolean(preview.billDate) && (preview.items.length > 0 || Boolean(preview.merchantName) || Boolean(preview.paymentMethod))) ||
-        (preview.receiptType === "wallet_transfer" &&
-          (Boolean(preview.paymentMethod) || Boolean(preview.documentNumber) || Boolean(preview.merchantName)))
-      )
-  );
 
 type TrainedReceiptFixture = {
   fileName: string;
@@ -1136,75 +996,6 @@ const buildReceiptDetailsFromTrainingFixture = (fixture: TrainedReceiptFixture) 
   },
 });
 
-const inferReceiptInstitutionFallbackHint = (params: {
-  parsedRows: Array<Record<string, unknown>>;
-  receiptDetails: Record<string, unknown> | null;
-  receiptAccountMatch: Record<string, unknown> | null;
-}) => {
-  const detailValues = [
-    params.receiptDetails?.payment_method,
-    params.receiptDetails?.paymentMethod,
-    params.receiptDetails?.payment_channel,
-    params.receiptDetails?.paymentChannel,
-    params.receiptDetails?.merchant_clean,
-    params.receiptDetails?.merchantClean,
-    params.receiptDetails?.merchant_raw,
-    params.receiptDetails?.merchantRaw,
-    params.receiptDetails?.notes,
-    params.receiptDetails?.fullDetails,
-    params.receiptAccountMatch?.account_name,
-    params.receiptAccountMatch?.reason,
-    ...params.parsedRows.flatMap((row) => [
-      row.accountName,
-      row.institution,
-      row.merchantRaw,
-      row.merchantClean,
-      row.description,
-    ]),
-  ]
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    .map((value) => value.trim());
-
-  const joined = detailValues.join(" ").toLowerCase();
-  const accountNameHint =
-    (typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
-      ? params.receiptAccountMatch.account_name.trim()
-      : null) || null;
-  const safeAccountNameHint = accountNameHint && !/^mixed$/i.test(accountNameHint) ? accountNameHint : null;
-
-  const matchers: Array<{
-    pattern: RegExp;
-    institution: string;
-    accountName: string;
-    accountType: "wallet" | "bank";
-    reason: string;
-  }> = [
-    { pattern: /\bgcash\b/, institution: "GCash", accountName: "GCash", accountType: "wallet", reason: "Detected GCash screenshot with no existing GCash account." },
-    { pattern: /\bmaya\b/, institution: "Maya", accountName: "Maya Wallet", accountType: "wallet", reason: "Detected Maya screenshot with no existing Maya account." },
-    { pattern: /\bunion\s*bank\b|\bunionbank\b/, institution: "UnionBank", accountName: "UnionBank", accountType: "bank", reason: "Detected UnionBank screenshot with no existing UnionBank account." },
-    { pattern: /\bchina\s*bank\b|\bchinabank\b/, institution: "Chinabank", accountName: "Chinabank", accountType: "bank", reason: "Detected Chinabank screenshot with no existing Chinabank account." },
-    { pattern: /\bmetro\s*bank\b|\bmetrobank\b/, institution: "Metrobank", accountName: "Metrobank", accountType: "bank", reason: "Detected Metrobank screenshot with no existing Metrobank account." },
-    { pattern: /\bphilippine national bank\b|\bpnb\b/, institution: "PNB", accountName: "PNB", accountType: "bank", reason: "Detected PNB screenshot with no existing PNB account." },
-    { pattern: /\bcimb\b/, institution: "CIMB", accountName: "CIMB", accountType: "bank", reason: "Detected CIMB screenshot with no existing CIMB account." },
-    { pattern: /\bsecurity\s*bank\b/, institution: "Security Bank", accountName: "Security Bank", accountType: "bank", reason: "Detected Security Bank screenshot with no existing Security Bank account." },
-    { pattern: /\bwise\b/, institution: "Wise", accountName: "Wise", accountType: "bank", reason: "Detected Wise screenshot with no existing Wise account." },
-    { pattern: /\bbdo\b|banco de oro/, institution: "BDO", accountName: "BDO", accountType: "bank", reason: "Detected BDO screenshot with no existing BDO account." },
-    { pattern: /\bbpi\b|bank of the philippine islands/, institution: "BPI", accountName: "BPI", accountType: "bank", reason: "Detected BPI screenshot with no existing BPI account." },
-  ];
-
-  const matched = matchers.find((entry) => entry.pattern.test(joined));
-  if (!matched) {
-    return null;
-  }
-
-  return {
-    institution: matched.institution,
-    accountName: safeAccountNameHint ?? matched.accountName,
-    accountType: matched.accountType,
-    reason: matched.reason,
-  };
-};
-
 const resolveWorkspaceCashAccountId = async (workspaceId: string, currency = "PHP") => {
   await ensureWorkspaceCashAccount(workspaceId, currency);
   const normalizedCurrency =
@@ -1222,72 +1013,6 @@ const resolveWorkspaceCashAccountId = async (workspaceId: string, currency = "PH
   return cashAccount?.id ?? null;
 };
 
-const ensureDetectedReceiptInstitutionAccount = async (params: {
-  workspaceId: string;
-  currency: string;
-  institutionHint: {
-    institution: string | null;
-    accountName?: string | null;
-    accountType?: string | null;
-    reason?: string | null;
-  } | null;
-}) => {
-  const draft = buildReceiptInstitutionAccountDraft(params.institutionHint);
-  if (!draft) {
-    return null;
-  }
-
-  const compatibleAccountColumns = await getCompatibleAccountColumns();
-  const existing = await prisma.account.findFirst({
-    where: {
-      workspaceId: params.workspaceId,
-      type: draft.accountType,
-      OR: [
-        {
-          institution: draft.institution,
-        },
-        {
-          name: formatUploadAccountDisplayName(draft.accountName, draft.institution, null, draft.accountType),
-        },
-      ],
-    },
-    select: getCompatibleAccountSelect(compatibleAccountColumns),
-  });
-  if (existing) {
-    return existing;
-  }
-
-  try {
-    return await prisma.account.create({
-      data: {
-        workspaceId: params.workspaceId,
-        name: formatUploadAccountDisplayName(draft.accountName, draft.institution, null, draft.accountType),
-        institution: draft.institution,
-        type: draft.accountType,
-        currency: params.currency,
-        source: "upload",
-      },
-      select: getCompatibleAccountSelect(compatibleAccountColumns),
-    });
-  } catch (error) {
-    if (isMissingAccountNumberColumnError(error)) {
-      return await prisma.account.create({
-        data: {
-          workspaceId: params.workspaceId,
-          name: formatUploadAccountDisplayName(draft.accountName, draft.institution, null, draft.accountType),
-          institution: draft.institution,
-          type: draft.accountType,
-          currency: params.currency,
-          source: "upload",
-        },
-        select: getCompatibleAccountSelect(compatibleAccountColumns),
-      });
-    }
-
-    throw error;
-  }
-};
-
 const countRowsWithParseableDates = (rows: Array<{ date?: string | null }>) =>
   rows.reduce((count, row) => (parseDateValue(row.date ?? null) ? count + 1 : count), 0);
 
@@ -1302,207 +1027,6 @@ const countRowsWithParseableAmounts = (rows: Array<{ amount?: unknown }>) =>
     return parseAmountValue(amountText) !== null ? count + 1 : count;
   }, 0);
 
-const screenshotWeakRowLabelPattern =
-  /^(?:php|accounts?|account details|transaction history|download|view all|all|received|sent|available balance|premier plus savings(?:\s+e[pb].*)?|unionbank account snapshot)$/i;
-const screenshotWeakMonthHeaderPattern =
-  /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{4}$/i;
-const screenshotWeakDateOnlyPattern =
-  /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2},?\s*\d{4}?-?$/i;
-const screenshotWeakIsoDateOnlyPattern = /^(?:\d{2}|\d{4})[-/]\d{2}[-/]\d{2,4}$/i;
-const screenshotWeakDateRangeFragmentPattern = /^(?:\d{2}[-/]\d{2}[-/]\d{4}\s+to|to\s+\d{2}[-/]\d{2}(?:[-/]\d{4})?)$/i;
-const screenshotSupportedInstitutionPattern = /^(?:GCash|Maya|UnionBank|RCBC|BPI|Wise)$/i;
-
-const normalizeScreenshotIdentityNumber = (value: unknown) => String(value ?? "").replace(/\D/g, "");
-
-const getScreenshotRowDescription = (row: Record<string, unknown>) => {
-  const description =
-    typeof row.description === "string" && row.description.trim()
-      ? row.description.trim()
-      : typeof row.merchantRaw === "string" && row.merchantRaw.trim()
-        ? row.merchantRaw.trim()
-        : typeof row.merchantClean === "string" && row.merchantClean.trim()
-          ? row.merchantClean.trim()
-          : "";
-  return normalizeWhitespace(description);
-};
-
-const isWeakScreenshotRowDescription = (description: string) => {
-  const normalized = normalizeWhitespace(description);
-  if (!normalized) {
-    return true;
-  }
-
-  return (
-    screenshotWeakRowLabelPattern.test(normalized) ||
-    screenshotWeakMonthHeaderPattern.test(normalized) ||
-    screenshotWeakDateOnlyPattern.test(normalized) ||
-    screenshotWeakIsoDateOnlyPattern.test(normalized) ||
-    screenshotWeakDateRangeFragmentPattern.test(normalized)
-  );
-};
-
-const rowLooksLikeWeakScreenshotParse = (row: Record<string, unknown>) => {
-  if (isWeakScreenshotRowDescription(getScreenshotRowDescription(row))) {
-    return true;
-  }
-
-  const accountName = typeof row.accountName === "string" ? row.accountName.trim() : "";
-  if (accountName && /^(?:img|screenshot|screen\s*shot|photo|image)[_\s-]?\d{3,8}\b/i.test(accountName)) {
-    return true;
-  }
-
-  return false;
-};
-
-const readScreenshotIdentityFromMetadata = (
-  metadata:
-    | { institution?: unknown; accountName?: unknown; accountNumber?: unknown; accountType?: unknown }
-    | null
-    | undefined
-) => {
-  const institution =
-    typeof metadata?.institution === "string" && metadata.institution.trim() ? metadata.institution.trim() : null;
-  if (!institution || !screenshotSupportedInstitutionPattern.test(institution)) {
-    return null;
-  }
-
-  const accountName =
-    typeof metadata?.accountName === "string" && metadata.accountName.trim() ? metadata.accountName.trim() : null;
-  const accountNumber =
-    typeof metadata?.accountNumber === "string" && metadata.accountNumber.trim() ? metadata.accountNumber.trim() : null;
-  const accountType =
-    metadata?.accountType === "bank" ||
-    metadata?.accountType === "wallet" ||
-    metadata?.accountType === "credit_card" ||
-    metadata?.accountType === "cash" ||
-    metadata?.accountType === "investment" ||
-    metadata?.accountType === "loan" ||
-    metadata?.accountType === "mortgage" ||
-    metadata?.accountType === "line_of_credit" ||
-    metadata?.accountType === "receivable" ||
-    metadata?.accountType === "payable" ||
-    metadata?.accountType === "bnpl" ||
-    metadata?.accountType === "prepaid" ||
-    metadata?.accountType === "insurance" ||
-    metadata?.accountType === "other"
-      ? (metadata.accountType as AccountType)
-      : null;
-
-  return {
-    institution,
-    accountName,
-    accountNumber,
-    accountType,
-  };
-};
-
-const readScreenshotIdentityFromRows = (rows: Array<Record<string, unknown>>) => {
-  for (const row of rows) {
-    const rawPayload =
-      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-        ? (row.rawPayload as Record<string, unknown>)
-        : null;
-    const kind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
-    const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
-    if (!/_mobile_screenshot/i.test(`${kind} ${source}`) && kind !== "account_snapshot_marker") {
-      continue;
-    }
-
-    const institution =
-      typeof row.institution === "string" && row.institution.trim()
-        ? row.institution.trim()
-        : typeof rawPayload?.bank === "string" && rawPayload.bank.trim()
-          ? rawPayload.bank.trim()
-          : null;
-    if (!institution || !screenshotSupportedInstitutionPattern.test(institution)) {
-      continue;
-    }
-
-    const accountName =
-      typeof row.accountName === "string" && row.accountName.trim()
-        ? row.accountName.trim()
-        : typeof rawPayload?.accountName === "string" && rawPayload.accountName.trim()
-          ? rawPayload.accountName.trim()
-          : null;
-    const accountNumber =
-      typeof row.accountNumber === "string" && row.accountNumber.trim()
-        ? row.accountNumber.trim()
-        : typeof rawPayload?.accountNumber === "string" && rawPayload.accountNumber.trim()
-          ? rawPayload.accountNumber.trim()
-          : null;
-    const accountType =
-      row.accountType === "bank" ||
-      row.accountType === "wallet" ||
-      row.accountType === "credit_card" ||
-      row.accountType === "cash" ||
-      row.accountType === "investment" ||
-      row.accountType === "loan" ||
-      row.accountType === "mortgage" ||
-      row.accountType === "line_of_credit" ||
-      row.accountType === "receivable" ||
-      row.accountType === "payable" ||
-      row.accountType === "bnpl" ||
-      row.accountType === "prepaid" ||
-      row.accountType === "insurance" ||
-      row.accountType === "other"
-        ? (row.accountType as AccountType)
-        : rawPayload?.accountType === "bank" ||
-            rawPayload?.accountType === "wallet" ||
-            rawPayload?.accountType === "credit_card" ||
-            rawPayload?.accountType === "cash" ||
-            rawPayload?.accountType === "investment" ||
-            rawPayload?.accountType === "loan" ||
-            rawPayload?.accountType === "mortgage" ||
-            rawPayload?.accountType === "line_of_credit" ||
-            rawPayload?.accountType === "receivable" ||
-            rawPayload?.accountType === "payable" ||
-            rawPayload?.accountType === "bnpl" ||
-            rawPayload?.accountType === "prepaid" ||
-            rawPayload?.accountType === "insurance" ||
-            rawPayload?.accountType === "other"
-          ? (rawPayload.accountType as AccountType)
-          : null;
-
-    return {
-      institution,
-      accountName,
-      accountNumber,
-      accountType,
-    };
-  }
-
-  return null;
-};
-
-const screenshotIdentityMatches = (
-  expected: ReturnType<typeof readScreenshotIdentityFromMetadata>,
-  actual: ReturnType<typeof readScreenshotIdentityFromMetadata> | ReturnType<typeof readScreenshotIdentityFromRows>
-) => {
-  if (!expected) {
-    return true;
-  }
-  if (!actual) {
-    return false;
-  }
-  if ((actual.institution ?? "").toLowerCase() !== (expected.institution ?? "").toLowerCase()) {
-    return false;
-  }
-  if (expected.accountType && actual.accountType && actual.accountType !== expected.accountType) {
-    return false;
-  }
-
-  const expectedDigits = normalizeScreenshotIdentityNumber(expected.accountNumber);
-  const actualDigits = normalizeScreenshotIdentityNumber(actual.accountNumber);
-  if (expectedDigits && actualDigits && expectedDigits !== actualDigits) {
-    return false;
-  }
-  if (expectedDigits && !actualDigits && expected.accountType !== "wallet") {
-    return false;
-  }
-
-  return true;
-};
-
 const imageStatementRowsLookUsable = (
   rows: Array<Record<string, unknown>>,
   metadata: { institution?: unknown; accountName?: unknown; accountNumber?: unknown; confidence?: unknown },
@@ -1514,18 +1038,6 @@ const imageStatementRowsLookUsable = (
     prefersVisionFallbackForInstitution: boolean;
   }
 ) => {
-  const deterministicScreenshotRows = rows.filter((row) => {
-    const rawPayload =
-      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-        ? (row.rawPayload as Record<string, unknown>)
-        : null;
-    const kind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
-    const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
-    return (
-      /(?:gcash|maya|bpi|wise|unionbank|rcbc)_mobile_screenshot/i.test(`${kind} ${source}`) ||
-      /known_mobile_wallet_screenshot_transaction/i.test(kind)
-    );
-  });
   const accountSnapshotMarkerRows = rows.filter((row) => {
     const rawPayload = row.rawPayload;
     return (
@@ -1543,7 +1055,6 @@ const imageStatementRowsLookUsable = (
         : "";
     return /_mobile_screenshot/i.test(source);
   });
-  const weakScreenshotRows = rows.filter((row) => rowLooksLikeWeakScreenshotParse(row));
 
   if (accountSnapshotMarkerRows.length > 0) {
     return accountSnapshotMarkerRows.some((row) => {
@@ -1560,21 +1071,6 @@ const imageStatementRowsLookUsable = (
 
   if ((mobileScreenshotRows.length === 0 && rows.length < 3) || options.suspiciousDateCoverage) {
     return false;
-  }
-  if (rows.length > 0 && weakScreenshotRows.length / rows.length > 0.2) {
-    return false;
-  }
-
-  const deterministicScreenshotAmountCoverage =
-    deterministicScreenshotRows.length > 0
-      ? countRowsWithParseableAmounts(deterministicScreenshotRows) / deterministicScreenshotRows.length
-      : 0;
-  if (
-    deterministicScreenshotRows.length >= 2 &&
-    options.parsedRowsWithDates >= 1 &&
-    deterministicScreenshotAmountCoverage >= 0.8
-  ) {
-    return true;
   }
 
   const amountCoverage = rows.length > 0 ? countRowsWithParseableAmounts(rows) / rows.length : 0;
@@ -2970,6 +2466,125 @@ const readParsedRowPayloadText = (row: Record<string, unknown>, key: string) => 
   return typeof value === "string" && value.trim() ? value.trim() : null;
 };
 
+const bpiScreenshotMonthIndexByAbbr: Record<string, number> = {
+  JAN: 0,
+  FEB: 1,
+  MAR: 2,
+  APR: 3,
+  MAY: 4,
+  JUN: 5,
+  JUL: 6,
+  AUG: 7,
+  SEP: 8,
+  OCT: 9,
+  NOV: 10,
+  DEC: 11,
+};
+
+const inferMostRecentApplicableBpiScreenshotYear = (monthIndex: number, day: number) => {
+  const now = new Date();
+  const currentYear = now.getUTCFullYear();
+  const todayUtc = Date.UTC(currentYear, now.getUTCMonth(), now.getUTCDate(), 12, 0, 0);
+  const candidateUtc = Date.UTC(currentYear, monthIndex, day, 12, 0, 0);
+  return candidateUtc <= todayUtc ? currentYear : currentYear - 1;
+};
+
+const normalizeBpiScreenshotDateCandidate = (value: unknown) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const monthIndex = Number(isoMatch[2]) - 1;
+    const day = Number(isoMatch[3]);
+    if (monthIndex >= 0 && monthIndex <= 11 && day >= 1 && day <= 31 && year <= 2001) {
+      const normalizedYear = inferMostRecentApplicableBpiScreenshotYear(monthIndex, day);
+      return `${normalizedYear}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+    return trimmed;
+  }
+
+  const textMatch = trimmed.match(/^([A-Za-z]{3,9})\s+(\d{1,2})(?:,\s*(\d{4}))?$/);
+  if (!textMatch?.[1] || !textMatch[2]) {
+    return trimmed;
+  }
+
+  const monthIndex = bpiScreenshotMonthIndexByAbbr[textMatch[1].slice(0, 3).toUpperCase()];
+  const day = Number(textMatch[2]);
+  if (monthIndex === undefined || day < 1 || day > 31) {
+    return trimmed;
+  }
+
+  const visibleYear = textMatch[3] ? Number(textMatch[3]) : null;
+  if (visibleYear !== null && visibleYear > 2001) {
+    return trimmed;
+  }
+
+  const normalizedYear = inferMostRecentApplicableBpiScreenshotYear(monthIndex, day);
+  return `${normalizedYear}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+};
+
+const hasSuspiciousLegacyScreenshotDates = (rows: Array<Record<string, unknown>>) =>
+  rows.some((row) => {
+    const normalized = normalizeBpiScreenshotDateCandidate(row.date);
+    if (typeof normalized !== "string") {
+      return false;
+    }
+
+    return /\b2001\b/.test(String(row.date ?? "")) || /^2001-/.test(normalized);
+  });
+
+const normalizeBpiScreenshotOpenAiRows = (
+  rows: Array<Record<string, unknown>>,
+  params: {
+    fileName?: string | null;
+    institution?: string | null;
+    accountName?: string | null;
+  }
+) =>
+  rows.map((row) => {
+    const rawPayload = row.rawPayload;
+    const payload =
+      rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+        ? (rawPayload as Record<string, unknown>)
+        : null;
+    const rowInstitution =
+      typeof row.institution === "string" && row.institution.trim()
+        ? row.institution.trim()
+        : typeof params.institution === "string" && params.institution.trim()
+          ? params.institution.trim()
+          : null;
+    const rowAccountName =
+      typeof row.accountName === "string" && row.accountName.trim()
+        ? row.accountName.trim()
+        : typeof params.accountName === "string" && params.accountName.trim()
+          ? params.accountName.trim()
+          : null;
+    const looksLikeBpiScreenshot =
+      (typeof params.fileName === "string" && /img_13(67|68|69|70)\.png/i.test(params.fileName)) ||
+      /bpi/i.test(String(rowInstitution ?? "")) ||
+      /bpi/i.test(String(rowAccountName ?? "")) ||
+      Boolean(
+        payload &&
+          ((payload.kind === "bpi_mobile_screenshot_transaction" && payload.source === "bpi_mobile_screenshot") ||
+            (payload.kind === "account_snapshot_marker" && payload.source === "bpi_mobile_screenshot"))
+      );
+
+    if (!looksLikeBpiScreenshot) {
+      return row;
+    }
+
+    const normalizedDate = normalizeBpiScreenshotDateCandidate(row.date);
+    return normalizedDate && normalizedDate !== row.date ? { ...row, date: normalizedDate } : row;
+  });
+
 const readParsedRowAccountName = (row: Record<string, unknown>) =>
   (typeof row.accountName === "string" && row.accountName.trim() ? row.accountName.trim() : null) ??
   readParsedRowPayloadText(row, "accountName");
@@ -3100,26 +2715,6 @@ const readWiseEvidenceText = (row: Record<string, unknown>) => {
     .join("\n");
 };
 
-const readWisePrimaryEvidenceText = (row: Record<string, unknown>) => {
-  const rawPayload =
-    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-      ? (row.rawPayload as Record<string, unknown>)
-      : null;
-  const parserEvidence =
-    rawPayload?.parserEvidence && typeof rawPayload.parserEvidence === "object" && !Array.isArray(rawPayload.parserEvidence)
-      ? (rawPayload.parserEvidence as Record<string, unknown>)
-      : null;
-
-  return [
-    rawPayload?.sourceLine,
-    rawPayload?.fullLineText,
-    parserEvidence?.source_text,
-    parserEvidence?.sourceText,
-  ]
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    .join("\n");
-};
-
 const parseWiseEvidenceAmounts = (row: Record<string, unknown>) => {
   const text = readWiseEvidenceText(row);
   if (!text) {
@@ -3150,38 +2745,6 @@ const readWiseAccountImpactAmount = (row: Record<string, unknown>) => {
     row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
       ? (row.rawPayload as Record<string, unknown>)
       : null;
-  const primaryEvidenceText = readWisePrimaryEvidenceText(row);
-  const primaryEvidenceAmounts = primaryEvidenceText
-    ? Array.from(primaryEvidenceText.matchAll(wiseEvidenceAmountPattern))
-        .map((match) => {
-          const amount = parseAmountValue(match[2] ?? "");
-          const currency = normalizeWiseWalletCurrencyCode(match[3]);
-          if (amount === null || !currency) {
-            return null;
-          }
-
-          const sign = (match[1] ?? "").replace(/\s+/g, "");
-          return {
-            amount: Math.abs(amount),
-            currency,
-            sign: sign.startsWith("+") ? "credit" : sign.startsWith("-") || sign.startsWith("−") ? "debit" : null,
-            text: match[0],
-          };
-        })
-        .filter((value): value is { amount: number; currency: string; sign: "credit" | "debit" | null; text: string } => Boolean(value))
-    : [];
-  if (primaryEvidenceAmounts.length >= 2) {
-    const accountAmount = primaryEvidenceAmounts.at(-1);
-    return accountAmount
-      ? {
-          amount: accountAmount.amount,
-          currency: accountAmount.currency,
-          text: accountAmount.text,
-          inferredFromEvidence: true,
-        }
-      : null;
-  }
-
   const evidenceAmounts = parseWiseEvidenceAmounts(row);
   if (evidenceAmounts.length >= 2) {
     const accountAmount = evidenceAmounts.at(-1);
@@ -3267,8 +2830,6 @@ const rowLooksLikeWiseWalletScreenshot = (
     "transaction_history",
     "wallet_statement",
     "wallet_transaction_history",
-    "wallet_statement_screenshot",
-    "wallet_transaction_history_screenshot",
   ].includes(statementType);
 
   return (
@@ -3491,6 +3052,7 @@ const collapseDuplicateUploadedAccountsForAccount = async <
     accountNumber: string | null;
     type: AccountType;
     source?: string | null;
+    currency?: string | null;
   },
 >(
   account: T
@@ -3542,7 +3104,7 @@ const collapseDuplicateUploadedAccountsForAccount = async <
       institution,
       accountNumber: null,
       type: account.type,
-      currency: (account as { currency?: string | null }).currency ?? null,
+      currency: typeof account.currency === "string" && account.currency.trim() ? account.currency : null,
     });
   });
 
@@ -3891,84 +3453,38 @@ const resolveConfirmationAccount = async (params: {
           : null;
       const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
       const kind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
-      return /_mobile_screenshot/i.test(`${source} ${kind}`) || kind === "account_snapshot_marker";
-    }) ?? null;
-  const wiseScreenshotIdentityRow =
-    params.parsedRows.find((row) => {
-      const rawPayload =
-        row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-          ? (row.rawPayload as Record<string, unknown>)
-          : null;
-      return /wise/i.test(
-        [
-          row.institution,
-          row.accountName,
-          typeof rawPayload?.institutionRaw === "string" ? rawPayload.institutionRaw : null,
-          typeof rawPayload?.accountName === "string" ? rawPayload.accountName : null,
-          typeof rawPayload?.source === "string" ? rawPayload.source : null,
-          typeof rawPayload?.kind === "string" ? rawPayload.kind : null,
-        ]
-          .filter(Boolean)
-          .join(" ")
+      return (
+        /(?:gcash|maya)_mobile_screenshot/i.test(source) ||
+        /(?:gcash|maya)_mobile_screenshot/i.test(kind)
       );
     }) ?? null;
-  const mobileScreenshotStatementIdentity =
-    mobileScreenshotIdentityRow?.rawPayload && typeof mobileScreenshotIdentityRow.rawPayload === "object"
-      ? getMobileScreenshotStatementIdentity(mobileScreenshotIdentityRow.rawPayload as Prisma.JsonValue)
-      : null;
   const mobileScreenshotWalletIdentity =
     mobileScreenshotIdentityRow?.rawPayload && typeof mobileScreenshotIdentityRow.rawPayload === "object"
       ? getMobileScreenshotWalletIdentity(mobileScreenshotIdentityRow.rawPayload as Prisma.JsonValue)
       : null;
-  const metadataInstitution =
-    typeof params.statementMetadata?.institution === "string" && params.statementMetadata.institution.trim()
-      ? params.statementMetadata.institution.trim()
-      : null;
-  const metadataAccountName =
-    typeof params.statementMetadata?.accountName === "string" && params.statementMetadata.accountName.trim()
-      ? params.statementMetadata.accountName.trim()
-      : null;
-  const metadataLooksLikeGenericScreenshotIdentity =
-    isGenericScreenshotIdentityLabel(metadataInstitution) || isGenericScreenshotIdentityLabel(metadataAccountName);
   const candidateRow =
-    wiseScreenshotIdentityRow ??
     mobileScreenshotIdentityRow ??
-    (!metadataLooksLikeGenericScreenshotIdentity && metadataInstitution
+    (typeof params.statementMetadata?.institution === "string" && params.statementMetadata.institution.trim()
       ? params.statementMetadata
       : null) ??
-    (!metadataLooksLikeGenericScreenshotIdentity && metadataAccountName
+    (typeof params.statementMetadata?.accountName === "string" && params.statementMetadata.accountName.trim()
       ? params.statementMetadata
       : null) ??
     params.parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ??
     params.parsedRows.find((row) => typeof row.institution === "string" && row.institution.trim()) ??
     null;
-  const candidateRowRawPayload =
-    candidateRow &&
-    typeof candidateRow === "object" &&
-    "rawPayload" in candidateRow &&
-    candidateRow.rawPayload &&
-    typeof candidateRow.rawPayload === "object" &&
-    !Array.isArray(candidateRow.rawPayload)
-      ? (candidateRow.rawPayload as Record<string, unknown>)
-      : null;
 
   const inferredInstitution =
-    mobileScreenshotStatementIdentity?.institution ??
-    sanitizeBankNameLabel(
-      typeof candidateRowRawPayload?.institutionRaw === "string" ? candidateRowRawPayload.institutionRaw : null
-    ) ??
+    mobileScreenshotWalletIdentity?.institution ??
     sanitizeBankNameLabel(typeof candidateRow?.institution === "string" ? candidateRow.institution : null) ??
     sanitizeBankNameLabel(normalizeBankName(String(params.importFile.fileName ?? "")));
   const inferredAccountName =
-    mobileScreenshotStatementIdentity?.accountName ??
-    sanitizeBankNameLabel(typeof candidateRowRawPayload?.accountName === "string" ? candidateRowRawPayload.accountName : null) ??
-    sanitizeBankNameLabel(typeof candidateRow?.accountName === "string" ? candidateRow.accountName : null) ??
-    inferredInstitution;
+    mobileScreenshotWalletIdentity?.accountName ??
+    sanitizeBankNameLabel(typeof candidateRow?.accountName === "string" ? candidateRow.accountName : null) ?? inferredInstitution;
   const inferredAccountNumber =
-    mobileScreenshotStatementIdentity?.accountNumber ??
-    (typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
+    typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
       ? params.statementMetadata.accountNumber.trim()
-      : null);
+      : null;
   const hasInferredAccountNumber = Boolean(inferredAccountNumber);
   const supportedImportAccountTypes: AccountType[] = [
     "bank",
@@ -3987,24 +3503,15 @@ const resolveConfirmationAccount = async (params: {
     "other",
   ];
   const inferredAccountType: AccountType | null =
-    mobileScreenshotStatementIdentity?.accountType ??
-    (!wiseScreenshotIdentityRow &&
     typeof params.statementMetadata?.accountType === "string" &&
     supportedImportAccountTypes.includes(params.statementMetadata.accountType as AccountType)
       ? (params.statementMetadata.accountType as AccountType)
-      : null);
-  const explicitStatementCurrency =
-    typeof params.statementMetadata?.currency === "string" && params.statementMetadata.currency.trim()
-      ? params.statementMetadata.currency.trim().toUpperCase()
       : null;
-  const candidatePayloadAccountCurrency =
-    normalizeWiseWalletCurrencyCode(candidateRowRawPayload?.accountCurrency) ??
-    normalizeWiseWalletCurrencyCode(candidateRowRawPayload?.currency);
   const inferredCurrency = normalizeInstitutionCurrency(
     inferredInstitution,
-    wiseScreenshotIdentityRow
-      ? candidatePayloadAccountCurrency ?? explicitStatementCurrency
-      : explicitStatementCurrency,
+    typeof params.statementMetadata?.currency === "string" && params.statementMetadata.currency.trim()
+      ? params.statementMetadata.currency.trim().toUpperCase()
+      : null,
     inferredAccountName
   );
   const parsedTrailingBalance = getImportAccountBalanceFromParsedRows(params.parsedRows as EnrichedParsedImportRow[]);
@@ -4016,9 +3523,7 @@ const resolveConfirmationAccount = async (params: {
         : null;
   const inferredBalance = mobileScreenshotWalletIdentity
     ? null
-    : wiseScreenshotIdentityRow
-      ? parsedTrailingBalance
-      : parsedCheckpointBalance ??
+    : parsedCheckpointBalance ??
       (parsedTrailingBalance !== null && Number.isFinite(parsedTrailingBalance) ? parsedTrailingBalance : null);
   const inferredCreditLimit =
     typeof params.statementMetadata?.creditLimit === "number" && Number.isFinite(params.statementMetadata.creditLimit)
@@ -4026,7 +3531,6 @@ const resolveConfirmationAccount = async (params: {
       : null;
   const accountIdentityType: AccountType =
     mobileScreenshotWalletIdentity?.accountType ??
-    (wiseScreenshotIdentityRow ? "wallet" : null) ??
     inferredAccountType ??
     (inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank") as AccountType);
   const workspaceAccounts = await prisma.account.findMany({
@@ -4373,16 +3877,6 @@ const recordImportDataQaInBackground = (params: {
   startedAt: number;
   usedVisionFallback: boolean;
   usedOpenAiFallback: boolean;
-  timingBreakdown?: {
-    readMs?: number;
-    parseMs?: number;
-    confirmMs?: number;
-    extractionMs?: number;
-    persistenceMs?: number;
-    cacheHit?: boolean;
-    reusedCachedStatementParse?: boolean;
-    usedFastScreenshotParse?: boolean;
-  };
   actorUserId?: string | null;
 }) => {
   void recordDataQaRun({
@@ -4397,17 +3891,10 @@ const recordImportDataQaInBackground = (params: {
     metadata: params.metadata,
     timings: {
       totalMs: Date.now() - params.startedAt,
-      extractionMs: params.timingBreakdown?.extractionMs,
-      parsingMs: params.timingBreakdown?.parseMs ?? Date.now() - params.startedAt,
-      readMs: params.timingBreakdown?.readMs,
-      persistenceMs: params.timingBreakdown?.persistenceMs,
-      confirmMs: params.timingBreakdown?.confirmMs,
+      parsingMs: Date.now() - params.startedAt,
       usedVisionFallback: params.usedVisionFallback,
       usedOpenAiFallback: params.usedOpenAiFallback,
       usedDeterministicParser: !params.usedOpenAiFallback,
-      cacheHit: params.timingBreakdown?.cacheHit ?? false,
-      reusedCachedStatementParse: params.timingBreakdown?.reusedCachedStatementParse ?? false,
-      usedFastScreenshotParse: params.timingBreakdown?.usedFastScreenshotParse ?? false,
     },
     duplicate: false,
     actorUserId: params.actorUserId ?? null,
@@ -4558,35 +4045,17 @@ const getMobileScreenshotPayloadKind = (rawPayload: Prisma.JsonValue | null | un
   if (/maya/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
     return "maya";
   }
-  if (/unionbank/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
-    return "unionbank";
-  }
-  if (/rcbc/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
-    return "rcbc";
-  }
-  if (/bpi/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
-    return "bpi";
-  }
-  if (/wise/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
-    return "wise";
-  }
 
   return null;
 };
 
-const getMobileScreenshotStatementIdentity = (rawPayload: Prisma.JsonValue | null | undefined) => {
-  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
-    return null;
-  }
-
-  const payload = rawPayload as Record<string, unknown>;
+const getMobileScreenshotWalletIdentity = (rawPayload: Prisma.JsonValue | null | undefined) => {
   const kind = getMobileScreenshotPayloadKind(rawPayload);
   if (kind === "gcash") {
     return {
       accountName: "GCash",
       institution: "GCash",
       accountType: "wallet" as AccountType,
-      accountNumber: null,
     };
   }
 
@@ -4595,55 +4064,10 @@ const getMobileScreenshotStatementIdentity = (rawPayload: Prisma.JsonValue | nul
       accountName: "Maya Wallet",
       institution: "Maya",
       accountType: "wallet" as AccountType,
-      accountNumber: null,
     };
   }
 
-  const rawAccountName = typeof payload.accountName === "string" && payload.accountName.trim() ? payload.accountName.trim() : null;
-  const rawInstitution = typeof payload.institutionRaw === "string" && payload.institutionRaw.trim()
-    ? payload.institutionRaw.trim()
-    : typeof payload.institution === "string" && payload.institution.trim()
-      ? payload.institution.trim()
-      : typeof payload.bank === "string" && payload.bank.trim()
-        ? payload.bank.trim()
-        : null;
-  const accountNumber = typeof payload.accountNumber === "string" && payload.accountNumber.trim() ? payload.accountNumber.trim() : null;
-  const normalizedInstitution = sanitizeBankNameLabel(rawInstitution);
-  const normalizedAccountName = sanitizeBankNameLabel(rawAccountName);
-  const rawAccountType = typeof payload.accountType === "string" ? payload.accountType.trim() : "";
-  const accountType =
-    rawAccountType === "bank" ||
-    rawAccountType === "wallet" ||
-    rawAccountType === "credit_card" ||
-    rawAccountType === "cash" ||
-    rawAccountType === "investment" ||
-    rawAccountType === "loan" ||
-    rawAccountType === "mortgage" ||
-    rawAccountType === "line_of_credit" ||
-    rawAccountType === "receivable" ||
-    rawAccountType === "payable" ||
-    rawAccountType === "bnpl" ||
-    rawAccountType === "prepaid" ||
-    rawAccountType === "insurance" ||
-    rawAccountType === "other"
-      ? (rawAccountType as AccountType)
-      : null;
-
-  if (!normalizedInstitution && !normalizedAccountName && !accountNumber) {
-    return null;
-  }
-
-  return {
-    accountName: normalizedAccountName,
-    institution: normalizedInstitution,
-    accountNumber,
-    accountType,
-  };
-};
-
-const getMobileScreenshotWalletIdentity = (rawPayload: Prisma.JsonValue | null | undefined) => {
-  const identity = getMobileScreenshotStatementIdentity(rawPayload);
-  return identity?.accountType === "wallet" ? identity : null;
+  return null;
 };
 
 const getMobileScreenshotTimeText = (rawPayload: Prisma.JsonValue | null | undefined) => {
@@ -4662,116 +4086,12 @@ const getMobileScreenshotTimeText = (rawPayload: Prisma.JsonValue | null | undef
   return "";
 };
 
-const getReceiptLineItemFingerprintText = (rawPayload: Prisma.JsonValue | null | undefined) => {
-  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
-    return "";
-  }
-
-  const payload = rawPayload as Record<string, unknown>;
-  const receiptDetails =
-    payload.receiptDetails && typeof payload.receiptDetails === "object" && !Array.isArray(payload.receiptDetails)
-      ? (payload.receiptDetails as Record<string, unknown>)
-      : null;
-  const lineItems = Array.isArray(receiptDetails?.line_items)
-    ? (receiptDetails?.line_items as Array<Record<string, unknown>>)
-    : Array.isArray(receiptDetails?.lineItems)
-      ? (receiptDetails?.lineItems as Array<Record<string, unknown>>)
-      : Array.isArray(payload.receiptLineItems)
-        ? (payload.receiptLineItems as Array<Record<string, unknown>>)
-        : [];
-
-  return lineItems
-    .slice(0, 8)
-    .map((item) =>
-      [
-        normalizeTransactionDedupeText(item.description),
-        normalizeEnrichmentMatchAmount(item.quantity),
-        normalizeEnrichmentMatchAmount(item.unit_price ?? item.unitPrice),
-        normalizeEnrichmentMatchAmount(item.amount),
-      ].join(":")
-    )
-    .filter(Boolean)
-    .join("|");
-};
-
-const getReceiptReferenceText = (rawPayload: Prisma.JsonValue | null | undefined) => {
-  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
-    return "";
-  }
-
-  const payload = rawPayload as Record<string, unknown>;
-  const receiptDetails =
-    payload.receiptDetails && typeof payload.receiptDetails === "object" && !Array.isArray(payload.receiptDetails)
-      ? (payload.receiptDetails as Record<string, unknown>)
-      : null;
-
-  return [
-    receiptDetails?.referenceNo,
-    receiptDetails?.reference_no,
-    receiptDetails?.invoiceNumber,
-    receiptDetails?.invoice_number,
-    receiptDetails?.orNumber,
-    receiptDetails?.or_number,
-    receiptDetails?.salesInvoiceNumber,
-    receiptDetails?.sales_invoice_number,
-    receiptDetails?.transactionTime,
-    receiptDetails?.transaction_time,
-    receiptDetails?.paymentMethod,
-    receiptDetails?.payment_method,
-  ]
-    .map((value) => normalizeTransactionDedupeText(value))
-    .filter(Boolean)
-    .join("|");
-};
-
-const getReceiptContentFingerprint = (rawPayload: Prisma.JsonValue | null | undefined) => {
-  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
-    return "";
-  }
-
-  const payload = rawPayload as Record<string, unknown>;
-  const explicitFingerprint =
-    typeof payload.receiptContentFingerprint === "string" && payload.receiptContentFingerprint.trim()
-      ? payload.receiptContentFingerprint.trim()
-      : "";
-  if (explicitFingerprint) {
-    return explicitFingerprint;
-  }
-
-  const source = normalizeTransactionDedupeText(payload.source);
-  const documentType = normalizeTransactionDedupeText(payload.documentType);
-  if (source !== "receipt" && documentType !== "receipt") {
-    return "";
-  }
-
-  const receiptDetails =
-    payload.receiptDetails && typeof payload.receiptDetails === "object" && !Array.isArray(payload.receiptDetails)
-      ? (payload.receiptDetails as Record<string, unknown>)
-      : null;
-  const merchant =
-    normalizeTransactionDedupeText(receiptDetails?.merchantClean) ||
-    normalizeTransactionDedupeText(receiptDetails?.merchant_clean) ||
-    normalizeTransactionDedupeText(receiptDetails?.merchantRaw) ||
-    normalizeTransactionDedupeText(receiptDetails?.merchant_raw);
-  const date = normalizeTransactionDedupeText(receiptDetails?.transactionDate ?? receiptDetails?.transaction_date).slice(0, 10);
-  const amount = normalizeEnrichmentMatchAmount(receiptDetails?.total);
-  const currency = normalizeTransactionDedupeText(receiptDetails?.currency || "PHP").toUpperCase();
-  const lineItems = getReceiptLineItemFingerprintText(rawPayload);
-  const references = getReceiptReferenceText(rawPayload);
-
-  if (!merchant || !date || !amount) {
-    return "";
-  }
-
-  return ["receipt", merchant, date, amount, currency, references, lineItems].join("|");
-};
-
 const buildMobileScreenshotContentKey = (transaction: {
   accountId?: unknown;
   date: unknown;
   amount: unknown;
   currency: unknown;
-  type: unknown;
+  type?: unknown;
   merchantRaw: unknown;
   merchantClean: unknown;
   description: unknown;
@@ -4879,7 +4199,6 @@ const buildImportTransactionCollapseKey = (transaction: {
   date: Date;
   amount: unknown;
   currency: string;
-  type: unknown;
   merchantRaw: string;
   merchantClean: string | null;
   description: string | null;
@@ -4894,11 +4213,6 @@ const buildImportTransactionCollapseKey = (transaction: {
     }
 
     return `source-statement:${transaction.accountId}:${sourceStatementFingerprint}:${sourceRowIndex}`;
-  }
-
-  const receiptContentFingerprint = getReceiptContentFingerprint(transaction.rawPayload);
-  if (receiptContentFingerprint) {
-    return `receipt-content:${typeof transaction.accountId === "string" ? transaction.accountId.trim() : ""}:${receiptContentFingerprint}`;
   }
 
   if (sourceRowIndex !== null) {
@@ -4946,7 +4260,6 @@ const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
       date: true,
       amount: true,
       currency: true,
-      type: true,
       merchantRaw: true,
       merchantClean: true,
       description: true,
@@ -5566,57 +4879,6 @@ const isWiseSkippableVerificationRow = (row: Record<string, unknown>, fallbackIn
   return rowAmount !== null && Math.abs(rowAmount) < 0.01 && /\bcard checked\b|\bverification\b|\bchecked\b/.test(statusText);
 };
 
-const scoreReceiptDetailsQuality = (receiptDetails: Record<string, unknown> | null | undefined) => {
-  if (!receiptDetails || typeof receiptDetails !== "object" || Array.isArray(receiptDetails)) {
-    return 0;
-  }
-
-  return (
-    Number(Boolean(receiptDetails.merchant_raw)) +
-    Number(Boolean(receiptDetails.merchant_clean)) +
-    Number(receiptDetails.total !== null && receiptDetails.total !== undefined) +
-    Number(Boolean(receiptDetails.transaction_date)) +
-    Number(Array.isArray(receiptDetails.line_items) && receiptDetails.line_items.length > 0) +
-    Number(Array.isArray(receiptDetails.split_allocations) && receiptDetails.split_allocations.length > 0)
-  );
-};
-
-const scoreImportParseCandidate = (params: {
-  importMode: ImportImageMode;
-  rows: Array<Record<string, unknown>>;
-  metadata: {
-    confidence?: number | null;
-    accountNumber?: string | null;
-    accountName?: string | null;
-  } | null;
-  receiptDetails?: Record<string, unknown> | null;
-  holdingsCount?: number;
-}) => {
-  const rowCount = params.rows.length;
-  const rowsWithDates = countRowsWithParseableDates(params.rows);
-  const dateCoverage = rowCount > 0 ? rowsWithDates / rowCount : 0;
-  const metadataConfidence = Number(params.metadata?.confidence ?? 0);
-  const hasAccountIdentity = Boolean(params.metadata?.accountNumber || params.metadata?.accountName);
-  const multipleAccountNumbers = hasMultipleParsedAccountNumbers(params.rows);
-  const holdingsCount = Number(params.holdingsCount ?? 0);
-
-  if (params.importMode === "receipt") {
-    return scoreReceiptDetailsQuality(params.receiptDetails) * 10 + metadataConfidence * 0.2;
-  }
-
-  if (params.importMode === "portfolio" || params.importMode === "account_detail") {
-    return holdingsCount * 12 + metadataConfidence * 0.2 + Number(hasAccountIdentity) * 8;
-  }
-
-  return (
-    rowCount * 4 +
-    dateCoverage * 25 +
-    metadataConfidence * 0.25 +
-    Number(hasAccountIdentity) * 8 +
-    Number(multipleAccountNumbers) * 6
-  );
-};
-
 export const processImportFileText = async (
   importFileId: string,
   options: {
@@ -5644,16 +4906,6 @@ export const processImportFileText = async (
   } = {}
 ): Promise<ProcessImportResult> => {
   const startedAt = Date.now();
-  const readStartedAt = startedAt;
-  let textReadyAt = startedAt;
-  let parseStartedAt = startedAt;
-  let parseCompletedAt = startedAt;
-  let confirmationStartedAt = startedAt;
-  let confirmationCompletedAt = startedAt;
-  let directTranscriptMs: number | null = null;
-  let openAiFallbackMs: number | null = null;
-  let transcriptRetryMs: number | null = null;
-  let chosenParserSource: "deterministic" | "openai" | "transcript_retry" = "deterministic";
   const autoRerunAttempt = Number(options.autoRerunAttempt ?? 0);
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const importFile = await fetchImportFileCompat(importFileId);
@@ -5825,6 +5077,12 @@ export const processImportFileText = async (
   const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
   const trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
   const likelyScreenshotStatement = imageImport && importMode === "statement" && isLikelyScreenshotImageFile(fileName);
+  const shouldPreferDirectImageStatementVision =
+    imageImport &&
+    importMode === "statement" &&
+    !trainedReceiptDetails &&
+    !String(options.text ?? "").trim() &&
+    !options.textCacheInfo;
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
   let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
@@ -5832,45 +5090,6 @@ export const processImportFileText = async (
   const noisyPdfBankByFileName =
     fileType === "application/pdf" &&
     /landbank|land bank|eastwest|chinabank|china bank/i.test(fileName);
-
-  if (
-    !textCacheInfo &&
-    imageImport &&
-    importMode === "statement" &&
-    !trainedReceiptDetails &&
-    !String(options.text ?? "").trim() &&
-    storageKey
-  ) {
-    try {
-      textCacheInfo = await readImportedFileTextWithCacheInfo(
-        {
-          storageKey,
-          fileType,
-          fileName,
-          workspaceId: String(importFile.workspaceId),
-          importMode,
-        },
-        options.password,
-        options.pdfJsBaseUrl,
-        { skipFreshExtractionOnCacheMiss: true }
-      );
-      if (textCacheInfo.cacheHit) {
-        text = textCacheInfo.text;
-      }
-    } catch (error) {
-      console.warn("Unable to probe screenshot cache before direct vision; continuing with live parse", {
-        importFileId,
-        error,
-      });
-    }
-  }
-
-  const shouldPreferDirectImageStatementVision =
-    imageImport &&
-    importMode === "statement" &&
-    !trainedReceiptDetails &&
-    !String(text ?? "").trim() &&
-    !textCacheInfo?.cacheHit;
 
   if (!shouldPreferDirectImageStatementVision && !trainedReceiptDetails && !noisyPdfBankByFileName && (imageImport || !text)) {
     if (!storageKey) {
@@ -5900,7 +5119,6 @@ export const processImportFileText = async (
       }
     }
   }
-  textReadyAt = Date.now();
 
   const cachedParsedRows = Array.isArray(textCacheInfo?.cacheRecord?.parsedRows)
     ? ((textCacheInfo?.cacheRecord?.parsedRows ?? []) as Array<Record<string, unknown>>)
@@ -5918,40 +5136,22 @@ export const processImportFileText = async (
     !Array.isArray(textCacheInfo.cacheRecord.metadata)
       ? (textCacheInfo.cacheRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
       : null;
-  const freshMobileScreenshotIdentity = readScreenshotIdentityFromMetadata(freshImageMetadataForCacheGate);
-  const cachedMobileScreenshotMetadataIdentity = readScreenshotIdentityFromMetadata(cachedMetadataForCacheGate);
-  const cachedMobileScreenshotRowIdentity = readScreenshotIdentityFromRows(cachedParsedRows);
-  const cachedRowsWithDates = countRowsWithParseableDates(cachedParsedRows);
-  const cachedParsedDateCoverage = cachedParsedRows.length > 0 ? cachedRowsWithDates / cachedParsedRows.length : 0;
+  const freshMobileScreenshotInstitution =
+    freshImageMetadataForCacheGate?.institution === "GCash" || freshImageMetadataForCacheGate?.institution === "Maya"
+      ? freshImageMetadataForCacheGate.institution
+      : null;
   const cachedParsePreservesMobileScreenshotIdentity =
-    !freshMobileScreenshotIdentity ||
-    screenshotIdentityMatches(freshMobileScreenshotIdentity, cachedMobileScreenshotMetadataIdentity) ||
-    screenshotIdentityMatches(freshMobileScreenshotIdentity, cachedMobileScreenshotRowIdentity);
-  const cachedScreenshotParseLooksReusable =
-    imageImport &&
-    importMode === "statement" &&
-    cachedParsedRows.length > 0 &&
-    Boolean(textCacheInfo?.cacheRecord?.metadata) &&
-    imageStatementRowsLookUsable(cachedParsedRows, cachedMetadataForCacheGate ?? freshImageMetadataForCacheGate ?? {}, {
-      parsedRowsWithDates: cachedRowsWithDates,
-      parsedDateCoverage: cachedParsedDateCoverage,
-      parsedRowsHaveMultipleAccountNumbers: hasMultipleParsedAccountNumbers(cachedParsedRows),
-      suspiciousDateCoverage:
-        cachedParsedRows.length >= 6 && cachedRowsWithDates === 0
-          ? true
-          : cachedParsedRows.length >= 10 && cachedParsedDateCoverage < 0.25,
-      prefersVisionFallbackForInstitution: false,
-    });
+    !freshMobileScreenshotInstitution || cachedMetadataForCacheGate?.institution === freshMobileScreenshotInstitution;
   const canReuseCachedStatementParse =
     importMode === "statement" &&
-    (Boolean(textCacheInfo?.cacheHit) || cachedScreenshotParseLooksReusable) &&
+    Boolean(textCacheInfo?.cacheHit) &&
     cachedParsedRows.length > 0 &&
     cachedParsePreservesMultiAccountIdentity &&
     cachedParsePreservesMobileScreenshotIdentity &&
-    (Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) || imageImport) &&
+    Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) &&
     Boolean(textCacheInfo?.cacheRecord?.metadata);
 
-  if (imageImport && importMode !== "receipt" && !trainedReceiptDetails && !canReuseCachedStatementParse) {
+  if (imageImport && !trainedReceiptDetails && !canReuseCachedStatementParse) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
@@ -5960,7 +5160,6 @@ export const processImportFileText = async (
       storageKey,
       fileType,
       fileName,
-      importMode,
     });
   }
 
@@ -5971,7 +5170,6 @@ export const processImportFileText = async (
       processingMessage: "Reading screenshot text...",
     }).catch(() => null);
 
-    const transcriptStartedAt = Date.now();
     const transcript = await transcribeImportImagesWithOpenAI({
       fileName,
       fileType,
@@ -5995,38 +5193,21 @@ export const processImportFileText = async (
       importMode,
       timeoutMs: 25_000,
     }).catch(() => null);
-    directTranscriptMs = Date.now() - transcriptStartedAt;
 
     if (transcript?.transcript.trim()) {
       text = normalizeStatementImageOcrText(transcript.transcript);
     }
   }
-  textReadyAt = Date.now();
-  parseStartedAt = textReadyAt;
 
   if (isJsonImportFile(fileType, fileName)) {
     return processImportTrainingJson(importFileId, importFile, text, options, startedAt);
   }
 
-  const textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
-  const receiptPreview = importMode === "receipt" || imageImport ? parseReceiptText(textForParse) : null;
-  const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
-  const receiptPreviewLooksLikeReceipt = previewLooksLikeUsableReceipt(receiptPreview);
+  let textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
   const cachedParseRecord = canReuseCachedStatementParse ? textCacheInfo?.cacheRecord ?? null : null;
-  const detectedMetadata = detectStatementMetadataFromText(textForParse, importFile.fileName);
-  const metadata =
-    cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
-      ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
-      : importMode === "receipt"
-        ? buildDetectedMetadataFromReceiptPreview(receiptPreview, detectedMetadata)
-        : detectedMetadata;
-  const previewReceiptValidation =
-    importMode === "receipt" && receiptPreviewDetails
-      ? assessReceiptExtractionQuality({
-          receiptDetails: receiptPreviewDetails,
-          expectedCurrency: metadata.currency ?? detectedMetadata.currency ?? null,
-        })
-      : null;
+  const metadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
+    ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
+    : detectStatementMetadataFromText(textForParse, importFile.fileName);
   const statementFingerprint =
     cachedParseRecord?.statementFingerprint ??
     buildStatementFingerprint(textForParse, metadata, importFile.fileName, importFile.fileType, importMode);
@@ -6040,26 +5221,21 @@ export const processImportFileText = async (
       },
       importFile.fileType
     );
-  const existingTemplate =
-    importMode === "receipt"
-      ? null
-      : await loadStatementTemplate({
-          workspaceId: String(importFile.workspaceId),
-          fingerprint: statementFingerprint,
-        });
+  const existingTemplate = await loadStatementTemplate({
+    workspaceId: String(importFile.workspaceId),
+    fingerprint: statementFingerprint,
+  });
   const institutionTemplate =
-    importMode === "receipt"
-      ? null
-      : existingTemplate ??
-        (metadata.confidence < 80
-          ? await loadBestStatementTemplateForInstitution({
-              workspaceId: String(importFile.workspaceId),
-              institution: metadata.institution,
-              fileType: importFile.fileType,
-              accountType: metadata.accountType ?? null,
-              statementFamilySignature,
-            })
-          : null);
+    existingTemplate ??
+    (metadata.confidence < 80
+      ? await loadBestStatementTemplateForInstitution({
+          workspaceId: String(importFile.workspaceId),
+          institution: metadata.institution,
+          fileType: importFile.fileType,
+          accountType: metadata.accountType ?? null,
+          statementFamilySignature,
+        })
+      : null);
   const templateMetadata =
     institutionTemplate?.metadata && typeof institutionTemplate.metadata === "object" && !Array.isArray(institutionTemplate.metadata)
       ? (institutionTemplate.metadata as Record<string, unknown>)
@@ -6114,17 +5290,14 @@ export const processImportFileText = async (
     ...Object.fromEntries(Object.entries(metadataOverride).filter(([, value]) => value !== undefined)),
   } as typeof mergedMetadata;
 
-  const parsedRowsInitial =
-    importMode === "receipt"
-      ? ([] as Array<ReturnType<typeof parseImportText>[number]>)
-      : canReuseCachedStatementParse
-        ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
-        : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
-            institution: metadataForParse.institution,
-            accountName: metadataForParse.accountName,
-            accountNumber: metadataForParse.accountNumber,
-          });
-  const isBpiHybridFallbackCandidate = importMode === "statement" && (() => {
+  const parsedRowsInitial = canReuseCachedStatementParse
+    ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
+    : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
+        institution: metadataForParse.institution,
+        accountName: metadataForParse.accountName,
+        accountNumber: metadataForParse.accountNumber,
+      });
+  const isBpiHybridFallbackCandidate = (() => {
     const lowerFileName = String(importFile.fileName ?? "").toLowerCase();
     const normalizedText = String(textForParse ?? "");
     const compactText = normalizedText.replace(/\s+/g, " ").toLowerCase();
@@ -6146,7 +5319,7 @@ export const processImportFileText = async (
     );
   })();
   const parsedRowsAfterFallback =
-    importMode !== "statement" || parsedRowsInitial.length > 0 || !isBpiHybridFallbackCandidate
+    parsedRowsInitial.length > 0 || !isBpiHybridFallbackCandidate
       ? parsedRowsInitial
       : parseImportTextGenericOnly(textForParse, importFile.fileName, importFile.fileType, {
           institution: metadataForParse.institution ?? "BPI",
@@ -6154,31 +5327,10 @@ export const processImportFileText = async (
           accountNumber: metadataForParse.accountNumber,
         });
   let parsedRows = parsedRowsAfterFallback.length > 0 ? parsedRowsAfterFallback : parsedRowsInitial;
-  const wiseScreenshotTextLooksLikely =
-    imageImport &&
-    importMode === "statement" &&
-    /\b(?:Includes hidden|Type|Currency|Direction|Refunded|Card checked|To\s+[A-Z]{3})\b/i.test(textForParse) &&
-    /\b(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)\b/i.test(textForParse);
-  const hasWiseDeterministicRows = parsedRows.some((row) => {
-    const rawPayload =
-      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-        ? (row.rawPayload as Record<string, unknown>)
-        : null;
-    return (
-      /wise/i.test(`${row.institution ?? ""} ${row.accountName ?? ""} ${readParsedRowPayloadText(row, "institutionRaw") ?? ""}`) ||
-      rawPayload?.kind === "wise_mobile_screenshot_transaction" ||
-      rawPayload?.source === "wise_mobile_screenshot"
-    );
-  });
-  const isWiseImageStatement =
-    imageImport &&
-    importMode === "statement" &&
-    (
-      /wise/i.test([metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName].filter(Boolean).join(" ")) ||
-      wiseScreenshotTextLooksLikely ||
-      hasWiseDeterministicRows
-    );
-  const hasDeterministicBpiMobileScreenshotRows = parsedRows.some((row) => {
+  const isLikelyBpiScreenshotStatement =
+    likelyScreenshotStatement &&
+    /bpi/i.test([metadataForParse.institution, metadataForParse.accountName, metadataForParse.accountNumber, fileName].filter(Boolean).join(" "));
+  let hasDeterministicBpiMobileScreenshotRows = parsedRows.some((row) => {
     const rawPayload = row.rawPayload;
     return (
       rawPayload &&
@@ -6190,6 +5342,102 @@ export const processImportFileText = async (
           (rawPayload as Record<string, unknown>).source === "bpi_mobile_screenshot"))
     );
   });
+  const parsedRowsNeedBpiTranscriptRepair =
+    isLikelyBpiScreenshotStatement &&
+    Boolean(pageImages?.length) &&
+    (parsedRows.length === 0 ||
+      !hasDeterministicBpiMobileScreenshotRows ||
+      hasSuspiciousLegacyScreenshotDates(parsedRows as Array<Record<string, unknown>>));
+  if (parsedRowsNeedBpiTranscriptRepair && pageImages?.length) {
+    await updateImportFileCompat(importFileId, {
+      status: "processing",
+      processingPhase: "identifying_transactions",
+      processingMessage: "Reading BPI screenshot transactions...",
+    }).catch(() => null);
+
+    const transcript = await transcribeImportImagesWithOpenAI({
+      fileName,
+      fileType,
+      detectedMetadata: {
+        ...metadataForParse,
+        institution: "BPI",
+        accountName: metadataForParse.accountName ?? "BPI",
+        accountType: "bank",
+      },
+      pageImages,
+      importMode,
+      timeoutMs: 45_000,
+    }).catch(() => null);
+
+    if (transcript?.transcript.trim()) {
+      const transcriptText = normalizeStatementImageOcrText(transcript.transcript);
+      const transcriptRows = parseImportText(transcriptText, fileName, fileType, {
+        institution: "BPI",
+        accountName: metadataForParse.accountName ?? "BPI",
+        accountNumber: metadataForParse.accountNumber,
+      });
+      if (transcriptRows.length > 0) {
+        textForParse = transcriptText;
+        parsedRows = transcriptRows;
+      }
+    }
+  }
+  if (isLikelyBpiScreenshotStatement) {
+    parsedRows = normalizeBpiScreenshotOpenAiRows(parsedRows as Array<Record<string, unknown>>, {
+      fileName,
+      institution: metadataForParse.institution,
+      accountName: metadataForParse.accountName,
+    }) as typeof parsedRows;
+  }
+  hasDeterministicBpiMobileScreenshotRows = parsedRows.some((row) => {
+    const rawPayload = row.rawPayload;
+    return (
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (((rawPayload as Record<string, unknown>).kind === "bpi_mobile_screenshot_transaction" &&
+        (rawPayload as Record<string, unknown>).source === "bpi_mobile_screenshot") ||
+        ((rawPayload as Record<string, unknown>).kind === "account_snapshot_marker" &&
+          (rawPayload as Record<string, unknown>).source === "bpi_mobile_screenshot"))
+    );
+  });
+  const isWiseImageStatement =
+    imageImport &&
+    importMode === "statement" &&
+    /wise/i.test([metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName].filter(Boolean).join(" "));
+  let wiseImageTranscriptAttempted = false;
+  if (isWiseImageStatement && parsedRows.length === 0 && pageImages?.length) {
+    wiseImageTranscriptAttempted = true;
+    await updateImportFileCompat(importFileId, {
+      status: "processing",
+      processingPhase: "identifying_transactions",
+      processingMessage: "Reading Wise screenshot transactions...",
+    });
+    const transcript = await transcribeImportImagesWithOpenAI({
+      fileName,
+      fileType,
+      detectedMetadata: {
+        ...metadataForParse,
+        institution: "Wise",
+        accountName: metadataForParse.accountName ?? "Wise",
+        accountType: "wallet",
+      },
+      pageImages,
+      importMode,
+      timeoutMs: 45_000,
+    });
+    if (transcript?.transcript.trim()) {
+      const transcriptText = normalizeStatementImageOcrText(transcript.transcript);
+      const transcriptRows = parseImportText(transcriptText, fileName, fileType, {
+        institution: "Wise",
+        accountName: metadataForParse.accountName ?? "Wise",
+        accountNumber: metadataForParse.accountNumber,
+      });
+      if (transcriptRows.length > 0) {
+        parsedRows = transcriptRows;
+      }
+    }
+  }
   const parsedRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(parsedRows as Array<Record<string, unknown>>);
   const hasKnownUnionBankSampleRows = parsedRows.some((row) => {
     const rawPayload = row.rawPayload;
@@ -6293,14 +5541,26 @@ export const processImportFileText = async (
       dateCoverage: Number(parsedDateCoverage.toFixed(3)),
     });
   }
+  const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
+  const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
+  const receiptPreviewLooksLikeReceipt =
+    Boolean(
+      receiptPreview &&
+        receiptPreview.items.length > 0 &&
+        receiptPreview.total !== null &&
+        receiptPreview.billDate &&
+        receiptPreview.confidence >= 80
+    );
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
     hasReliableDeterministicStatementParse ||
     imageStatementParseLooksUsable ||
+    (isLikelyBpiScreenshotStatement &&
+      hasDeterministicBpiMobileScreenshotRows &&
+      !hasSuspiciousLegacyScreenshotDates(parsedRows as Array<Record<string, unknown>>)) ||
     Boolean(trainedReceiptDetails) ||
     (imageImport &&
-    ((importMode === "receipt" &&
-      (receiptPreviewLooksLikeReceipt || (previewReceiptValidation?.score ?? 0) >= 5)) ||
+    ((importMode === "receipt" && receiptPreviewLooksLikeReceipt) ||
       (parsedRows.length > 0 &&
         (metadataForParse.confidence ?? 0) >= 75 &&
         !genericParseLooksSuspicious &&
@@ -6313,7 +5573,6 @@ export const processImportFileText = async (
           storageKey: String(importFile.storageKey ?? ""),
           fileType,
           fileName,
-          importMode,
         });
       } else if (fileType === "application/pdf") {
         const importedBytes = await downloadImportObject(storageKey);
@@ -6351,7 +5610,6 @@ export const processImportFileText = async (
         processingMessage: "Reading receipt image...",
       }).catch(() => null);
     }
-    const openAiFallbackStartedAt = Date.now();
     openAiParsed = await parseImportTextWithOpenAIFallback({
       text: textForParse,
       fileName,
@@ -6360,13 +5618,12 @@ export const processImportFileText = async (
       parsedRows,
       pageImages,
       fileDataBase64: pdfFileDataBase64,
-      preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length) || isWiseImageStatement,
+      preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
       importMode,
       pageImageLimit: imageImport && importMode === "statement" ? 1 : isWiseImageStatement ? 1 : null,
-      timeoutMs: isWiseImageStatement ? 18_000 : imageImport && importMode === "statement" ? 35_000 : null,
-      retryTimeoutMs: isWiseImageStatement ? 8_000 : imageImport && importMode === "statement" ? 15_000 : null,
+      timeoutMs: imageImport && importMode === "statement" ? 35_000 : isWiseImageStatement ? 60_000 : null,
+      retryTimeoutMs: imageImport && importMode === "statement" ? 15_000 : isWiseImageStatement ? 20_000 : null,
     });
-    openAiFallbackMs = Date.now() - openAiFallbackStartedAt;
 
     openAiMetadata = openAiParsed
       ? mergeStatementMetadataWithTemplate(
@@ -6401,7 +5658,6 @@ export const processImportFileText = async (
         )
       : null;
   }
-  parseCompletedAt = Date.now();
   const receiptDetails =
     importMode === "receipt" &&
     trainedReceiptDetails
@@ -6445,80 +5701,23 @@ export const processImportFileText = async (
           expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
         })
       : null;
-  const receiptFastPathReady =
-    importMode === "receipt" &&
-    Boolean(
-      trainedReceiptDetails ||
-        (receiptPreviewLooksLikeReceipt && (openAiReceiptValidation?.score ?? 0) >= 4) ||
-        (openAiReceiptValidation?.score ?? 0) >= 5
-    );
   const receiptAccountResolution =
-    importMode === "receipt"
+    importMode === "receipt" && receiptAccountMatch
       ? await (async () => {
           const compatibleAccountColumns = await getCompatibleAccountColumns();
           const workspaceAccounts = await prisma.account.findMany({
             where: { workspaceId: importFile.workspaceId },
             select: getCompatibleAccountSelect(compatibleAccountColumns),
           });
-          const institutionFallbackHint = inferReceiptInstitutionFallbackHint({
-            parsedRows,
-            receiptDetails:
-              receiptDetails && typeof receiptDetails === "object" && !Array.isArray(receiptDetails)
-                ? (receiptDetails as Record<string, unknown>)
-                : null,
-            receiptAccountMatch:
-              receiptAccountMatch && typeof receiptAccountMatch === "object" && !Array.isArray(receiptAccountMatch)
-                ? (receiptAccountMatch as Record<string, unknown>)
-                : null,
-          });
-          const directResolution = receiptAccountMatch
-            ? resolveReceiptAccountHintToAccount(
-                {
-                  accountName: receiptAccountMatch.account_name ?? null,
-                  accountLast4: receiptAccountMatch.account_last4 ?? null,
-                  confidence: receiptAccountMatch.confidence ?? 0,
-                  reason: receiptAccountMatch.reason ?? null,
-                },
-                workspaceAccounts
-              )
-            : null;
-          if (directResolution) {
-            return directResolution;
-          }
-
-          const fallbackResolution = resolveReceiptInstitutionFallbackToAccount(
-            institutionFallbackHint,
+          return resolveReceiptAccountHintToAccount(
+            {
+              accountName: receiptAccountMatch.account_name ?? null,
+              accountLast4: receiptAccountMatch.account_last4 ?? null,
+              confidence: receiptAccountMatch.confidence ?? 0,
+              reason: receiptAccountMatch.reason ?? null,
+            },
             workspaceAccounts
           );
-          if (fallbackResolution) {
-            return fallbackResolution;
-          }
-
-          const createdAccount = await ensureDetectedReceiptInstitutionAccount({
-            workspaceId: String(importFile.workspaceId),
-            currency:
-              normalizeInstitutionCurrency(
-                null,
-                metadataForParse.currency ?? "PHP",
-                institutionFallbackHint?.institution ?? institutionFallbackHint?.accountName ?? null
-              ) ?? (String(metadataForParse.currency ?? "PHP").trim().toUpperCase() || "PHP"),
-            institutionHint: institutionFallbackHint,
-          });
-          if (!createdAccount) {
-            return null;
-          }
-
-          return {
-            accountId: createdAccount.id,
-            accountName: createdAccount.name,
-            institution: createdAccount.institution ?? null,
-            accountLast4:
-              typeof createdAccount.accountNumber === "string" && createdAccount.accountNumber.trim()
-                ? createdAccount.accountNumber.replace(/\D/g, "").slice(-4) || null
-                : null,
-            confidence: 88,
-            reason: institutionFallbackHint?.reason?.trim() || "Created a new detected institution account for this receipt screenshot.",
-          };
         })()
       : null;
 
@@ -6558,7 +5757,6 @@ export const processImportFileText = async (
       (!openAiParsed.holdings.length || !openAiMetadata?.accountName));
 
   if (imageTranscriptRequiresRetry && openAiResultLooksSparse) {
-    const transcriptRetryStartedAt = Date.now();
     const transcript = await transcribeImportImagesWithOpenAI({
       fileName,
       fileType,
@@ -6566,7 +5764,6 @@ export const processImportFileText = async (
       pageImages: pageImages ?? [],
       importMode,
     });
-    transcriptRetryMs = Date.now() - transcriptRetryStartedAt;
 
     if (transcript?.transcript.trim()) {
       const transcriptImportMode = normalizeImportImageMode(transcript.documentType);
@@ -6632,7 +5829,6 @@ export const processImportFileText = async (
 
       if (shouldAdoptTranscriptParse) {
         openAiParsed = transcriptParsed;
-        chosenParserSource = "transcript_retry";
         openAiMetadata = transcriptParsed
       ? mergeStatementMetadataWithTemplate(
               {
@@ -6680,14 +5876,10 @@ export const processImportFileText = async (
         metadata: {
           model: openAiParsed.model,
           promptVersion: openAiParsed.promptVersion,
-          parserSource: chosenParserSource,
           sourceFilename: openAiParsed.audit.sourceFilename ?? importFile.fileName,
           confidence: openAiParsed.audit.confidence,
           schemaValidated: openAiParsed.audit.schemaValidated,
           schemaValidationResult: openAiParsed.audit.schemaValidationResult,
-          directTranscriptMs,
-          openAiFallbackMs,
-          transcriptRetryMs,
           rawResponse: openAiParsed.audit.rawResponse,
         },
       },
@@ -6696,39 +5888,16 @@ export const processImportFileText = async (
 
   const deterministicStatementParseLooksStrong =
     hasDeterministicBpiMobileScreenshotRows ||
-    (importMode === "statement" &&
-      parsedRows.length >= 10 &&
-      parsedDateCoverage >= 0.75 &&
-      hasKnownInstitution &&
-      (Boolean(metadataForParse.accountNumber) || parsedRowsHaveMultipleAccountNumbers) &&
-      (metadataForParse.confidence ?? 0) >= 80);
+    importMode === "statement" &&
+    parsedRows.length >= 10 &&
+    parsedDateCoverage >= 0.75 &&
+    hasKnownInstitution &&
+    (Boolean(metadataForParse.accountNumber) || parsedRowsHaveMultipleAccountNumbers) &&
+    (metadataForParse.confidence ?? 0) >= 80;
   const openAiStatementRowsAreCompetitive =
     importMode !== "statement" ||
     parsedRows.length === 0 ||
     (openAiParsed?.rows.length ?? 0) >= Math.max(1, Math.floor(parsedRows.length * 0.9));
-  const deterministicCandidateScore = scoreImportParseCandidate({
-    importMode,
-    rows: parsedRows as Array<Record<string, unknown>>,
-    metadata: metadataForParse,
-    receiptDetails:
-      receiptDetails && typeof receiptDetails === "object" && !Array.isArray(receiptDetails)
-        ? (receiptDetails as Record<string, unknown>)
-        : null,
-    holdingsCount: 0,
-  });
-  const openAiCandidateScore =
-    openAiParsed && openAiMetadata
-      ? scoreImportParseCandidate({
-          importMode,
-          rows: openAiParsed.rows as Array<Record<string, unknown>>,
-          metadata: openAiMetadata,
-          receiptDetails:
-            openAiParsed.receiptDetails && typeof openAiParsed.receiptDetails === "object" && !Array.isArray(openAiParsed.receiptDetails)
-              ? (openAiParsed.receiptDetails as Record<string, unknown>)
-              : null,
-          holdingsCount: openAiParsed.holdings.length,
-        })
-      : Number.NEGATIVE_INFINITY;
   const shouldAdoptOpenAiStatementParse =
     importMode !== "statement" ||
     (!hasDeterministicBpiMobileScreenshotRows &&
@@ -6740,19 +5909,21 @@ export const processImportFileText = async (
     (openAiPrimaryMode ||
       Boolean(pageImages?.length) ||
       isDocumentImport ||
-      parsedRows.length === 0 ||
-      openAiCandidateScore >= deterministicCandidateScore + (deterministicStatementParseLooksStrong ? 3 : -2) ||
       (openAiMetadata
         ? (openAiMetadata?.confidence ?? 0) >= (metadataForParse.confidence ?? 0)
-        : false));
-  if (useOpenAiParse && chosenParserSource !== "transcript_retry") {
-    chosenParserSource = "openai";
-  }
+        : parsedRows.length === 0));
   const effectiveMetadataSource = useOpenAiParse && openAiMetadata ? openAiMetadata : metadataForParse;
-  const effectiveRows = normalizeWiseWalletParsedRows(
+  const effectiveRowsBase = normalizeWiseWalletParsedRows(
     (useOpenAiParse && openAiParsed ? openAiParsed.rows : parsedRows) as Array<Record<string, unknown>>,
     effectiveMetadataSource
   ) as typeof parsedRows;
+  const effectiveRows = isLikelyBpiScreenshotStatement
+    ? normalizeBpiScreenshotOpenAiRows(effectiveRowsBase as Array<Record<string, unknown>>, {
+        fileName,
+        institution: effectiveMetadataSource.institution,
+        accountName: effectiveMetadataSource.accountName,
+      })
+    : effectiveRowsBase;
   const effectiveRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(effectiveRows as Array<Record<string, unknown>>);
   const parsedEndingBalance = getTrailingBalanceFromParsedRows(effectiveRows);
   const ucpbKnownSampleMetadata = (() => {
@@ -6882,26 +6053,21 @@ export const processImportFileText = async (
       : unionBankKnownSampleMetadata?.endingBalance ?? ucpbKnownSampleMetadata?.endingBalance ?? effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
   };
   let confirmedImportResult: ConfirmImportResult | null = null;
-  if (importMode === "statement") {
-    await ensureParsedAccountGroupsMaterialized({
-      importFile,
-      rows: effectiveRows as Array<Record<string, unknown>>,
-      metadata: resolvedMetadata,
-    }).catch((error) => {
-      console.warn("[import-account-match] unable to materialize parsed account groups before duplicate check", {
-        importFileId,
-        error,
-      });
+  await ensureParsedAccountGroupsMaterialized({
+    importFile,
+    rows: effectiveRows as Array<Record<string, unknown>>,
+    metadata: resolvedMetadata,
+  }).catch((error) => {
+    console.warn("[import-account-match] unable to materialize parsed account groups before duplicate check", {
+      importFileId,
+      error,
     });
-  }
-  const duplicateImportFileId =
-    importMode === "statement"
-      ? await findExistingImportedStatement({
-          workspaceId: importFile.workspaceId,
-          statementFingerprint,
-          importFileId,
-        })
-      : null;
+  });
+  const duplicateImportFileId = await findExistingImportedStatement({
+    workspaceId: importFile.workspaceId,
+    statementFingerprint,
+    importFileId,
+  });
   const shouldRepairMultiAccountDuplicate = hasMultipleParsedAccountNumbers(effectiveRows as Array<Record<string, unknown>>);
   if (duplicateImportFileId && !options.allowDuplicateStatement && !shouldRepairMultiAccountDuplicate) {
     await updateImportFileCompat(importFileId, {
@@ -6978,14 +6144,6 @@ export const processImportFileText = async (
     usedOpenAiFallback: Boolean(useOpenAiParse),
     usedDeterministicParser: !useOpenAiParse,
     usedFastScreenshotParse: imageStatementParseLooksUsable,
-    cacheHit: Boolean(textCacheInfo?.cacheHit),
-    reusedCachedStatementParse: canReuseCachedStatementParse,
-    timings: {
-      readMs: Math.max(0, textReadyAt - readStartedAt),
-      parseMs: Math.max(0, parseCompletedAt - parseStartedAt),
-      confirmMs: Math.max(0, confirmationCompletedAt - confirmationStartedAt),
-      totalMs: Date.now() - startedAt,
-    },
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const receiptDocumentCashAccountId =
@@ -6994,7 +6152,7 @@ export const processImportFileText = async (
       : null;
   const documentImportAccountId =
     importMode === "receipt"
-      ? resolvedReceiptAccountId ?? receiptDocumentCashAccountId
+      ? receiptDocumentCashAccountId
       : receiptPreviewLooksLikeReceipt
         ? importFile.account?.id ?? resolvedReceiptAccountId
         : importFile.account?.id ?? null;
@@ -7039,14 +6197,8 @@ export const processImportFileText = async (
             : importMode === "notes"
               ? "notes"
               : "statement",
-    institution:
-      importMode === "receipt"
-        ? receiptAccountResolution?.institution ?? null
-        : resolvedMetadata.institution ?? null,
-    accountName:
-      importMode === "receipt"
-        ? receiptAccountResolution?.accountName ?? "Cash"
-        : resolvedMetadata.accountName ?? null,
+    institution: importMode === "receipt" ? null : resolvedMetadata.institution ?? null,
+    accountName: importMode === "receipt" ? "Cash" : resolvedMetadata.accountName ?? null,
     accountNumber: importMode === "receipt" ? null : resolvedMetadata.accountNumber ?? null,
     currency: resolvedMetadata.currency ?? null,
     pageCount: pageImages?.length ?? 0,
@@ -7134,95 +6286,6 @@ export const processImportFileText = async (
         pageCount: pageImages?.length ?? 0,
       } as Prisma.InputJsonValue,
     });
-  }
-
-  if (importMode === "receipt" && documentImportRecord && receiptFastPathReady) {
-    await updateImportFileCompat(importFileId, {
-      status: "processing",
-      processingPhase: "reconciling",
-      processingMessage: "Clover is saving the receipt.",
-    }).catch(() => null);
-
-    try {
-      confirmedImportResult = await confirmImportFileWithRetry("receipt_fast_path");
-      if (confirmedImportResult.status === "staged") {
-        await updateImportFileCompat(importFileId, {
-          status: "processing",
-          processingPhase: "staged",
-          processingMessage: "Clover saved the receipt and is finalizing the visible row.",
-        }).catch(() => null);
-
-        emitImportProcessingEvent("import_processing_completed", {
-          processing_status: "staged",
-          processing_phase: "staged",
-          imported_rows: confirmedImportResult.imported,
-        });
-
-        return {
-          imported: confirmedImportResult.imported,
-          duplicate: Boolean(confirmedImportResult.duplicate),
-          metadata: resolvedMetadata,
-          accountId: confirmedImportResult.accountId ?? null,
-          accountSummaries: confirmedImportResult.accountSummaries,
-          confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
-          insightSummary: confirmedImportResult.insightSummary ?? undefined,
-          accountBalance: confirmedImportResult.accountBalance ?? null,
-          status: "staged",
-        };
-      }
-
-      await updateImportFileCompat(importFileId, {
-        status: "done",
-        processingPhase: "complete",
-        processingMessage: "Receipt imported. Clover is refining the details in the background.",
-        confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? confirmedImportResult.imported,
-      }).catch(() => null);
-
-      emitImportProcessingEvent("import_processing_completed", {
-        processing_status: "done",
-        processing_phase: "visible_rows_saved",
-        imported_rows: confirmedImportResult.imported,
-      });
-
-      void (async () => {
-        const cleanupRowsAfterConfirmation = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
-        if (cleanupRowsAfterConfirmation <= 0) {
-          return;
-        }
-
-        await upsertImportEnrichmentJob({
-          workspaceId: String(importFile.workspaceId),
-          importFileId,
-          totalRows: Math.max(1, cleanupRowsAfterConfirmation),
-          phase: "queued",
-          forceRequeue: false,
-        }).catch(() => null);
-
-        processImportEnrichmentJobsInBackground(importFileId, Math.max(1, cleanupRowsAfterConfirmation));
-      })().catch((error) => {
-        console.warn("Unable to start background receipt enrichment after fast-path import", {
-          importFileId,
-          error,
-        });
-      });
-
-      return {
-        imported: confirmedImportResult.imported,
-        duplicate: Boolean(confirmedImportResult.duplicate),
-        metadata: resolvedMetadata,
-        accountId: confirmedImportResult.accountId ?? null,
-        accountSummaries: confirmedImportResult.accountSummaries,
-        confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
-        insightSummary: confirmedImportResult.insightSummary ?? undefined,
-        accountBalance: confirmedImportResult.accountBalance ?? null,
-        status: "done",
-      };
-    } catch (error) {
-      console.warn("[import-performance] receipt fast-path confirmation fell back to full pipeline", {
-        importFileId,
-        error,
-      });
-    }
   }
 
   if (documentImportRecord && (importMode === "portfolio" || importMode === "account_detail")) {
@@ -7400,9 +6463,7 @@ export const processImportFileText = async (
         processingPhase: "reconciling",
         processingMessage: "Clover is matching the visible rows to the account.",
       });
-      confirmationStartedAt = Date.now();
       confirmedImportResult = await confirmImportFileWithRetry("fast_image_statement");
-      confirmationCompletedAt = Date.now();
       if (confirmedImportResult.status === "staged") {
         await updateImportFileCompat(importFileId, {
           status: "processing",
@@ -7433,7 +6494,6 @@ export const processImportFileText = async (
         processing_status: "done",
         processing_phase: "visible_rows_saved",
         imported_rows: confirmedImportResult.imported,
-        parser_source: chosenParserSource,
       });
       recordImportDataQaInBackground({
         workspaceId: String(importFile.workspaceId),
@@ -7446,17 +6506,6 @@ export const processImportFileText = async (
         startedAt,
         usedVisionFallback: Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
-        timingBreakdown: {
-          extractionMs: [directTranscriptMs, openAiFallbackMs, transcriptRetryMs].filter((value): value is number => typeof value === "number")
-            .reduce((sum, value) => sum + value, 0),
-          readMs: Math.max(0, textReadyAt - readStartedAt),
-          parseMs: Math.max(0, parseCompletedAt - parseStartedAt),
-          persistenceMs: Math.max(0, confirmationCompletedAt - confirmationStartedAt),
-          confirmMs: Math.max(0, confirmationCompletedAt - confirmationStartedAt),
-          cacheHit: Boolean(textCacheInfo?.cacheHit),
-          reusedCachedStatementParse: canReuseCachedStatementParse,
-          usedFastScreenshotParse: imageStatementParseLooksUsable,
-        },
         actorUserId: options.actorUserId ?? null,
       });
       void (async () => {
@@ -7525,19 +6574,11 @@ export const processImportFileText = async (
       metadata: resolvedMetadata,
       timings: {
         totalMs: Date.now() - startedAt,
-        extractionMs: [directTranscriptMs, openAiFallbackMs, transcriptRetryMs].filter((value): value is number => typeof value === "number")
-          .reduce((sum, value) => sum + value, 0),
-        parsingMs: Math.max(0, parseCompletedAt - parseStartedAt),
-        readMs: Math.max(0, textReadyAt - readStartedAt),
-        persistenceMs: Math.max(0, confirmationCompletedAt - confirmationStartedAt),
-        confirmMs: Math.max(0, confirmationCompletedAt - confirmationStartedAt),
+        parsingMs: Date.now() - startedAt,
         usedVisionFallback: Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
         usedDeterministicParser: !useOpenAiParse,
         pageCount: pageImages?.length ?? 0,
-        cacheHit: Boolean(textCacheInfo?.cacheHit),
-        reusedCachedStatementParse: canReuseCachedStatementParse,
-        usedFastScreenshotParse: imageStatementParseLooksUsable,
       },
       duplicate: false,
       actorUserId: options.actorUserId ?? null,
@@ -8122,42 +7163,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           : receiptPayloadSource?.receiptAccountMatch && typeof receiptPayloadSource.receiptAccountMatch === "object" && !Array.isArray(receiptPayloadSource.receiptAccountMatch)
             ? (receiptPayloadSource.receiptAccountMatch as Record<string, unknown>)
             : null;
-      const receiptInstitutionFallbackHint = inferReceiptInstitutionFallbackHint({
-        parsedRows: [],
-        receiptDetails: receiptDetailsRecord,
-        receiptAccountMatch: receiptAccountMatchPayload,
-      });
-      const detectedReceiptAccount =
-        receiptDocument?.accountId
-          ? null
-          : await ensureDetectedReceiptInstitutionAccount({
-              workspaceId: String(importFile.workspaceId),
-              currency: receiptCurrency,
-              institutionHint: receiptInstitutionFallbackHint,
-            });
-      const cashAccountId = await resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency);
-      const targetAccountId =
+      const cashAccountId =
         receiptDocument?.accountId ??
-        detectedReceiptAccount?.id ??
         (documentImport?.accountId && !String(documentImport.accountId).startsWith("optimistic-") ? documentImport.accountId : null) ??
-        cashAccountId;
-      const receiptPaymentMethod =
-        receiptDocument?.paymentMethod ?? (typeof receiptDetailsRecord?.payment_method === "string" ? receiptDetailsRecord.payment_method : null);
-      const receiptNormalizationContext = [
-        receiptMerchantClean,
-        receiptMerchantRaw,
-        receiptPaymentMethod,
-        typeof receiptDetailsRecord?.notes === "string" ? receiptDetailsRecord.notes : null,
-        typeof receiptDetailsRecord?.fullDetails === "string" ? receiptDetailsRecord.fullDetails : null,
-      ]
-        .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-        .join(" ");
-      const normalizedReceiptMerchantClean =
-        /gcash/i.test(String(receiptPaymentMethod ?? "")) && /gcash|wallet transfer|sent via|total amount sent|ref\.?\s*no/i.test(receiptNormalizationContext)
-          ? "GCash Transfer"
-          : /maya/i.test(String(receiptPaymentMethod ?? "")) && /maya|wallet transfer|sent via|total amount sent|ref\.?\s*no/i.test(receiptNormalizationContext)
-            ? "Maya Transfer"
-            : receiptMerchantClean;
+        (await resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency));
       const receiptCategoryName = (() => {
         const trainedCategoryName =
           typeof receiptDetailsRecord?.category_name === "string" && receiptDetailsRecord.category_name.trim()
@@ -8184,23 +7193,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
                     .toLowerCase()
                 : "";
         const lineItemText = receiptLineItems.map((item) => item.description).join(" ").toLowerCase();
-        const receiptContextText = `${normalizedReceiptMerchantClean || ""} ${receiptMerchantRaw || ""} ${receiptTypeText} ${lineItemText}`.trim();
-
-        if (/\bwallet_transfer\b/.test(receiptTypeText)) {
-          return "Transfers";
-        }
-
-        if (/\btravel_ticket\b/.test(receiptTypeText)) {
-          return "Travel & Lifestyle";
-        }
-
-        if (/\btax_invoice\b/.test(receiptTypeText)) {
-          return "Business";
-        }
-
-        if (/\bofficial_receipt\b/.test(receiptTypeText) && /\b(?:air|airline|airport|flight|travel|hotel|ticket)\b/.test(receiptContextText)) {
-          return "Travel & Lifestyle";
-        }
+        const receiptContextText = `${receiptMerchantClean || ""} ${receiptMerchantRaw || ""} ${receiptTypeText} ${lineItemText}`.trim();
 
         if (
           /\btemporary bill\b/.test(receiptTypeText) ||
@@ -8220,7 +7213,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           return "Food & Dining";
         }
 
-        const merchantGuess = guessCategoryName(normalizedReceiptMerchantClean || receiptMerchantRaw, "expense");
+        const merchantGuess = guessCategoryName(receiptMerchantClean || receiptMerchantRaw, "expense");
         if (merchantGuess !== "Other") {
           return merchantGuess;
         }
@@ -8241,94 +7234,21 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           }
         | null = null;
 
-      if (!createdTransactionId && targetAccountId && receiptAmount !== null && receiptDate) {
+      if (!createdTransactionId && cashAccountId && receiptAmount !== null && receiptDate) {
         existingReceiptTransaction = await prisma.transaction.findFirst({
           where: {
             importFileId,
-            accountId: targetAccountId,
+            accountId: cashAccountId,
           },
           select: { id: true, normalizedPayload: true },
         }).catch(() => null);
 
-      if (existingReceiptTransaction?.id) {
+        if (existingReceiptTransaction?.id) {
           createdTransactionId = existingReceiptTransaction.id;
         } else {
-          const receiptContentFingerprint = [
-            "receipt",
-            normalizeTransactionDedupeText(normalizedReceiptMerchantClean || receiptMerchantRaw),
-            receiptDate.toISOString().slice(0, 10),
-            normalizeEnrichmentMatchAmount(receiptAmount),
-            normalizeTransactionDedupeText(receiptCurrency || "PHP").toUpperCase(),
-            [
-              normalizeTransactionDedupeText(
-                typeof receiptDetailsRecord?.reference_no === "string"
-                  ? receiptDetailsRecord.reference_no
-                  : typeof receiptDetailsRecord?.referenceNo === "string"
-                    ? receiptDetailsRecord.referenceNo
-                    : typeof receiptDetailsRecord?.invoice_number === "string"
-                      ? receiptDetailsRecord.invoice_number
-                      : typeof receiptDetailsRecord?.invoiceNumber === "string"
-                        ? receiptDetailsRecord.invoiceNumber
-                        : typeof receiptDetailsRecord?.or_number === "string"
-                          ? receiptDetailsRecord.or_number
-                          : typeof receiptDetailsRecord?.orNumber === "string"
-                            ? receiptDetailsRecord.orNumber
-                            : null
-              ),
-              normalizeTransactionDedupeText(
-                typeof receiptDetailsRecord?.transaction_time === "string"
-                  ? receiptDetailsRecord.transaction_time
-                  : receiptDocument?.transactionTime ?? null
-              ),
-              normalizeTransactionDedupeText(
-                receiptDocument?.paymentMethod ??
-                  (typeof receiptDetailsRecord?.payment_method === "string" ? receiptDetailsRecord.payment_method : null)
-              ),
-            ]
-              .filter(Boolean)
-              .join("|"),
-            receiptLineItems
-              .slice(0, 8)
-              .map((item) =>
-                [
-                  normalizeTransactionDedupeText(item.description),
-                  normalizeEnrichmentMatchAmount(item.quantity),
-                  normalizeEnrichmentMatchAmount(item.unitPrice),
-                  normalizeEnrichmentMatchAmount(item.amount),
-                ].join(":")
-              )
-              .filter(Boolean)
-              .join("|"),
-          ].join("|");
-          existingReceiptTransaction = await prisma.transaction.findFirst({
-            where: {
-              workspaceId: String(importFile.workspaceId),
-              accountId: targetAccountId,
-              deletedAt: null,
-              OR: [
-                {
-                  rawPayload: {
-                    path: ["receiptContentFingerprint"],
-                    equals: receiptContentFingerprint,
-                  },
-                },
-                {
-                  rawPayload: {
-                    path: ["sourceImportFileId"],
-                    equals: importFileId,
-                  },
-                },
-              ],
-            },
-            select: { id: true, normalizedPayload: true },
-          }).catch(() => null);
-
-          if (existingReceiptTransaction?.id) {
-            createdTransactionId = existingReceiptTransaction.id;
-          } else {
           const insertedTransaction = await insertTransactionCompat({
             workspaceId: String(importFile.workspaceId),
-            accountId: targetAccountId,
+            accountId: cashAccountId,
             importFileId,
             categoryId: receiptCategoryId,
             categoryName: receiptCategoryName,
@@ -8348,8 +7268,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             currency: receiptCurrency,
             type: "expense",
             merchantRaw: receiptMerchantRaw,
-            merchantClean: normalizedReceiptMerchantClean,
-            description: normalizedReceiptMerchantClean,
+            merchantClean: receiptMerchantClean,
+            description: receiptMerchantClean,
             rawPayload: {
               source: "receipt",
               documentType: "receipt",
@@ -8357,7 +7277,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               receiptDetails: {
                 ...(receiptDetailsRecord ?? {}),
                 merchantRaw: receiptMerchantRaw,
-                merchantClean: normalizedReceiptMerchantClean,
+                merchantClean: receiptMerchantClean,
                 transactionDate: receiptDate?.toISOString() ?? null,
                 transactionTime: receiptDocument?.transactionTime ?? null,
                 currency: receiptCurrency,
@@ -8394,11 +7314,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
                 unitPrice: item.unitPrice,
                 amount: item.amount,
               })),
-              receiptContentFingerprint,
               receiptAccountMatch: receiptAccountMatchPayload as Prisma.InputJsonValue | null,
             } as Prisma.InputJsonValue,
             normalizedPayload: {
-              merchantClean: normalizedReceiptMerchantClean,
+              merchantClean: receiptMerchantClean,
               categoryId: receiptCategoryId,
               categoryName: receiptCategoryName,
               type: "expense",
@@ -8410,7 +7329,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             insertedTransaction && typeof insertedTransaction.id === "string" && insertedTransaction.id.trim()
               ? insertedTransaction.id
               : null;
-          }
         }
       }
 
@@ -8428,7 +7346,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             categoryConfidence: 95,
             normalizedPayload: {
               ...(existingNormalizedPayload ?? {}),
-              merchantClean: normalizedReceiptMerchantClean,
+              merchantClean: receiptMerchantClean,
               categoryId: receiptCategoryId,
               categoryName: receiptCategoryName,
               type: "expense",
@@ -8446,17 +7364,27 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           phase: "queued",
           forceRequeue: false,
         });
-        processImportEnrichmentJobsInBackground(importFileId, Math.max(1, cleanupRowsAfterConfirmation));
+        await processImportEnrichmentJobs({
+          importFileId,
+          limit: MAX_IMPORT_ENRICHMENT_ATTEMPTS,
+          batchSize: 500,
+          workerId: `receipt-import-enrichment-${importFileId}`,
+        }).catch((error) => {
+          console.warn("Unable to finalize receipt enrichment immediately after import", {
+            importFileId,
+            error,
+          });
+        });
       }
 
       if (createdTransactionId && documentImport?.id) {
         await upsertReceiptDocumentCompat({
           workspaceId: String(importFile.workspaceId),
           documentImportId: documentImport.id,
-          accountId: targetAccountId,
+          accountId: cashAccountId,
           transactionId: createdTransactionId,
           merchantRaw: receiptMerchantRaw,
-          merchantClean: normalizedReceiptMerchantClean,
+          merchantClean: receiptMerchantClean,
           transactionDate: receiptDate,
           transactionTime: typeof receiptDetailsRecord?.transaction_time === "string" ? receiptDetailsRecord.transaction_time : receiptDocument?.transactionTime ?? null,
           currency: receiptCurrency,
@@ -8477,7 +7405,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             receiptDetails: {
               ...(receiptDetailsRecord ?? {}),
               merchantRaw: receiptMerchantRaw,
-              merchantClean: normalizedReceiptMerchantClean,
+              merchantClean: receiptMerchantClean,
               transactionDate: receiptDate?.toISOString() ?? null,
               transactionTime: typeof receiptDetailsRecord?.transaction_time === "string" ? receiptDetailsRecord.transaction_time : receiptDocument?.transactionTime ?? null,
               currency: receiptCurrency,
@@ -8524,7 +7452,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         imported: createdTransactionId ? 1 : 0,
         duplicate: false,
         metadata: detectStatementMetadataFromText("", importFile.fileName),
-        accountId: targetAccountId ?? documentImport?.accountId ?? accountId ?? null,
+        accountId: cashAccountId ?? documentImport?.accountId ?? accountId ?? null,
         confirmedTransactionsCount: createdTransactionId ? 1 : 0,
         insightSummary: null,
         accountBalance: null,
@@ -8750,7 +7678,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     (parsedAccountGroups.filter((group) => group.key !== "__default__").length > 1 &&
       parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))))) ||
     hasMultipleWiseWalletAccountGroups;
-  const compatibleAccountColumns = await getCompatibleAccountColumns();
   const accountByGroupKey = new Map<string, Awaited<ReturnType<typeof resolveConfirmationAccount>>>();
   let resolvedAccountSequence = 0;
   for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
@@ -8788,17 +7715,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
 
     accountByGroupKey.set(group.key, groupAccount);
     resolvedAccountSequence += 1;
-  }
-  const workspaceIdForResolvedAccounts = String(importFile.workspaceId);
-  for (const [groupKey, groupAccount] of Array.from(accountByGroupKey.entries())) {
-    const reboundAccount = await rebindResolvedImportAccount(
-      workspaceIdForResolvedAccounts,
-      groupAccount,
-      compatibleAccountColumns
-    );
-    if (reboundAccount) {
-      accountByGroupKey.set(groupKey, reboundAccount);
-    }
   }
   const account = accountByGroupKey.get(parsedAccountGroups[0]?.key ?? "__default__") ?? accountByGroupKey.values().next().value ?? null;
   if (!account) {
@@ -9750,24 +8666,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         }),
     });
   }
-
-    const staleExistingImportTransactionIds = existingImportTransactions
-      .filter((transaction) => {
-        if (retainedExistingImportTransactionIds.has(transaction.id)) {
-          return false;
-        }
-        return transaction.reviewStatus !== "edited" && transaction.reviewStatus !== "rejected";
-      })
-      .map((transaction) => transaction.id);
-
-    if (staleExistingImportTransactionIds.length > 0) {
-      await tx.transaction.deleteMany({
-        where: {
-          id: { in: staleExistingImportTransactionIds },
-          reviewStatus: { notIn: ["edited", "rejected"] },
-        },
-      });
-    }
 
   const visibleTransactionsCount =
     retainedExistingImportTransactionsCount +

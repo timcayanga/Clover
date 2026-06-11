@@ -56,7 +56,8 @@ const main = async () => {
       }
     }
     assert.ok(resolvedPath, `${check.fileName} should exist in one of: ${sampleRoots.join(", ")}`);
-    const text = await readImageText(resolvedPath);
+    const absoluteFilePath = resolvedPath as string;
+    const text = await readImageText(absoluteFilePath);
     const metadata = detectStatementMetadataFromText(text);
     const rows = parseImportText(text, check.fileName, "image/png", {
       institution: metadata.institution,
