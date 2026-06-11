@@ -1901,6 +1901,53 @@ const shouldRequireVisibleRowsForImport = (fileName: string) =>
   isLikelyLowQualityUnionBankStatementFilename(fileName) ||
   isGenericMobileScreenshotFileName(fileName);
 
+const importSummaryLooksWise = (summary: UploadInsightsSummary | null | undefined) => {
+  if (!summary) {
+    return false;
+  }
+
+  const identityText = [
+    summary.fileName,
+    summary.accountName,
+    summary.institution,
+    summary.accountSummaries?.map((account) => `${account.accountName ?? ""} ${account.institution ?? ""}`).join(" "),
+    summary.previewTransactions
+      ?.slice(0, 5)
+      .map((transaction) => `${transaction.accountName ?? ""} ${transaction.institution ?? ""}`)
+      .join(" "),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return /\bwise\b/i.test(identityText);
+};
+
+const importContextLooksWise = (context: {
+  fileName?: string | null;
+  fallbackAccountName?: string | null;
+  guessedAccountName?: string | null;
+  guessedInstitution?: string | null;
+  accountName?: string | null;
+  institution?: string | null;
+}) =>
+  /\bwise\b/i.test(
+    [
+      context.fileName,
+      context.fallbackAccountName,
+      context.guessedAccountName,
+      context.guessedInstitution,
+      context.accountName,
+      context.institution,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+const shouldRequireVisibleRowsForImportSummary = (
+  fileName: string,
+  summary: UploadInsightsSummary | null | undefined
+) => shouldRequireVisibleRowsForImport(fileName) || importSummaryLooksWise(summary);
+
 const importSummaryHasVisibleRows = (summary: UploadInsightsSummary | null | undefined) => {
   const rowsImported = Number(summary?.rowsImported ?? 0);
   const previewRows = Array.isArray(summary?.previewTransactions) ? summary.previewTransactions.length : 0;
@@ -1935,7 +1982,7 @@ const shouldPublishImportSummary = (
     return false;
   }
 
-  return !shouldRequireVisibleRowsForImport(fileName) || importSummaryHasVisibleRows(summary);
+  return !shouldRequireVisibleRowsForImportSummary(fileName, summary) || importSummaryHasVisibleRows(summary);
 };
 
 const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
@@ -2015,7 +2062,7 @@ const hasVisibleImportData = (
     Boolean(summary?.accountName || summary?.accountNumber || summary?.balance);
   const itemHasRows = item.importedRows !== null && item.importedRows > 0 && Boolean(item.targetAccountId);
 
-  if (shouldRequireVisibleRowsForImport(item.file.name)) {
+  if (shouldRequireVisibleRowsForImportSummary(item.file.name, summary)) {
     return itemHasRows || localHasRows;
   }
 
@@ -3831,7 +3878,8 @@ export function ImportFilesModal({
     let seededFallbackSummary = false;
     let queuedResumeAttempted = false;
     const startedAt = Date.now();
-    const requiresVisibleRows = shouldRequireVisibleRowsForImport(summaryContext.fileName);
+    const requiresVisibleRows =
+      shouldRequireVisibleRowsForImport(summaryContext.fileName) || importContextLooksWise(summaryContext);
     const allowFilenameFallbackIdentity = !isGenericMobileScreenshotFileName(summaryContext.fileName);
     const isGenericScreenshotStatement = isGenericMobileScreenshotFileName(summaryContext.fileName);
     const MAX_WAIT_MS = backgroundOnly
