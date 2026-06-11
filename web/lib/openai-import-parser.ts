@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getEnv } from "@/lib/env";
 import {
   type DetectedStatementMetadata,
+  guessCategoryName,
   inferAccountTypeFromStatement,
   type ImportedAccountType,
   type ParsedImportRow,
@@ -10,9 +11,12 @@ import { summarizeMerchantText } from "@/lib/merchant-labels";
 
 const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v1";
 const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v1";
-const OPENAI_IMPORT_IMAGE_MODEL_FALLBACK = "gpt-4.1";
-const OPENAI_IMPORT_TEXT_MODEL_FALLBACK = "gpt-4.1";
-const OPENAI_IMPORT_PDF_MODEL_FALLBACK = "gpt-4o";
+const OPENAI_IMPORT_FAST_MODEL_FALLBACK = "gpt-5.4-mini";
+const OPENAI_IMPORT_STRONG_MODEL_FALLBACK = "gpt-5.5";
+const OPENAI_IMPORT_PDF_MODEL_FALLBACK = "gpt-5.5";
+const OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK = "gpt-4.1";
+const OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK = "gpt-4.1";
+const OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK = "gpt-4o";
 
 const resolveOpenAIImportModel = (value: string | undefined, fallback: string, label: string) => {
   const model = value?.trim();
@@ -29,6 +33,41 @@ const resolveOpenAIImportModel = (value: string | undefined, fallback: string, l
   }
 
   return model;
+};
+
+const dedupeOpenAIImportModels = (models: Array<string | null | undefined>) => {
+  const seen = new Set<string>();
+  const resolved: string[] = [];
+
+  for (const candidate of models) {
+    const model = candidate?.trim();
+    if (!model || seen.has(model)) {
+      continue;
+    }
+
+    if (/^gpt-image(?:-\d+)?$/i.test(model) || /gpt-image/i.test(model)) {
+      continue;
+    }
+
+    seen.add(model);
+    resolved.push(model);
+  }
+
+  return resolved;
+};
+
+const openAIImportFailureLooksRetryable = (status: number | null, errorText: string | null | undefined) => {
+  if (status == null) {
+    return true;
+  }
+
+  if (status >= 500 || status === 408 || status === 409 || status === 429) {
+    return true;
+  }
+
+  return /model|not found|does not exist|not available|unsupported|overloaded|capacity|timeout|token|context|too large|payload/i.test(
+    errorText ?? ""
+  );
 };
 
 const GENERIC_PARSER_GUIDANCE = [
@@ -1406,6 +1445,75 @@ const responseLooksUseful = (metadata: DetectedStatementMetadata | null, rows: P
   return confidence < 75 && (!hasStrongIdentity || fileNameLike);
 };
 
+const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | undefined, hasPageImages: boolean, hasPdfInput: boolean) => {
+  const baseGuidance = [
+    "You are Clover’s financial document extraction engine.",
+    "Extract transactions from financial documents into strict JSON.",
+    "Do not invent data.",
+    "Preserve raw text and preserve uncertainty conservatively.",
+    "Classify transactions using Clover’s allowed categories and movement types.",
+    "Transfers, wallet funding, ATM withdrawals, card payments, and deposits are not spending or income by default.",
+    "Return JSON only.",
+    "Use the schema exactly as given.",
+    "Use only the allowed movement_type and category values.",
+    "If a field is unknown, use null.",
+    "Keep rows in source order.",
+    "Prefer conservative parsing over guessing.",
+    "Reconcile balances when possible and report mismatches clearly.",
+  ];
+
+  const familyGuidance =
+    importMode === "receipt"
+      ? [
+          "Treat this as a receipt-like document first: receipt, invoice, e-receipt, restaurant bill, tax invoice, booking receipt, or wallet screenshot.",
+          "Prioritize merchant, total, date, currency, payment/reference details, line items, invoice or booking numbers, and any visible wallet/account hint.",
+          "If the image is a wallet screenshot, preserve recipient/sender identity, reference number, timestamp, and transfer direction conservatively.",
+        ]
+      : importMode === "statement"
+        ? [
+            "Treat this as a statement-like document first: bank statement, wallet history, card statement, or transaction-history screenshot.",
+            "Prioritize statement rows, account identity, period coverage, and ending balance.",
+            "If OCR is partial, return only the rows supported by visible evidence instead of padding the list.",
+          ]
+        : importMode === "portfolio"
+          ? [
+              "Treat this as a holdings or portfolio document first.",
+              "Prefer holdings extraction over inventing ledger transactions.",
+            ]
+          : importMode === "account_detail"
+            ? [
+                "Treat this as an account-summary document first.",
+                "Prefer balance, product, and account identity extraction over inventing ledger transactions.",
+              ]
+            : importMode === "notes"
+              ? [
+                  "Treat this as a notes or informal transaction list first.",
+                  "Prefer conservative extraction with lower confidence when fields are incomplete.",
+                ]
+              : [];
+
+  const inputGuidance =
+    hasPdfInput
+      ? ["Use the PDF content directly and read all provided pages conservatively."]
+      : hasPageImages
+        ? [
+            "Use the provided page images directly, not just the OCR text.",
+            "For dense screenshots or noisy photos, reconstruct fragmented text conservatively before extracting rows.",
+          ]
+        : ["Use the provided text input conservatively."];
+
+  return [...baseGuidance, ...familyGuidance, ...inputGuidance].join(" ");
+};
+
+const openAITranscriptLooksWeak = (transcript: { transcript: string; confidence: number } | null) => {
+  if (!transcript) {
+    return true;
+  }
+
+  const normalizedLength = transcript.transcript.replace(/\s+/g, " ").trim().length;
+  return transcript.confidence < 72 || normalizedLength < 80;
+};
+
 const isTruthyEnvValue = (value?: string | null) => {
   if (!value) {
     return false;
@@ -1650,21 +1758,6 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   }
 
   const inputText = buildModelInputText(params.text);
-  const systemPrompt = [
-    "You are Clover’s financial document extraction engine.",
-    "Extract transactions from bank statements into strict JSON.",
-    "Do not invent data.",
-    "Preserve raw text.",
-    "Classify transactions using Clover’s allowed categories and movement types.",
-    "Transfers, wallet funding, ATM withdrawals, card payments, and deposits are not spending or income by default.",
-    "Return JSON only.",
-    "Use the schema exactly as given.",
-    "Use only the allowed movement_type and category values.",
-    "If a field is unknown, use null.",
-    "Keep rows in statement order.",
-    "Prefer conservative parsing over guessing.",
-    "Reconcile balances when possible and report mismatches clearly.",
-  ].join(" ");
 
   const userPrompt = buildOpenAIInputPayload({
     fileName: params.fileName ?? null,
@@ -1696,22 +1789,42 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     (params.importMode ?? "statement") === "statement" &&
     pageImagesToSend.length > 0 &&
     !pdfFileDataBase64;
-  const textModel = resolveOpenAIImportModel(
+  const systemPrompt = buildOpenAIBackupSystemPrompt(params.importMode ?? null, pageImagesToSend.length > 0, Boolean(pdfFileDataBase64));
+  const fastModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL,
-    OPENAI_IMPORT_TEXT_MODEL_FALLBACK,
-    "text model",
+    OPENAI_IMPORT_FAST_MODEL_FALLBACK,
+    "fast model",
   );
   const imageModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_IMAGE_MODEL?: string }).OPENAI_IMPORT_PARSER_IMAGE_MODEL,
-    OPENAI_IMPORT_IMAGE_MODEL_FALLBACK,
+    fastModel,
     "image model",
+  );
+  const textModel = fastModel;
+  const strongModel = resolveOpenAIImportModel(
+    (env as { OPENAI_IMPORT_PARSER_STRONG_MODEL?: string }).OPENAI_IMPORT_PARSER_STRONG_MODEL,
+    OPENAI_IMPORT_STRONG_MODEL_FALLBACK,
+    "strong model",
   );
   const pdfModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_PDF_MODEL?: string }).OPENAI_IMPORT_PARSER_PDF_MODEL,
     OPENAI_IMPORT_PDF_MODEL_FALLBACK,
     "pdf model",
   );
-  const model = pdfFileDataBase64 ? pdfModel : pageImagesToSend.length > 0 ? imageModel : textModel;
+  const model = pdfFileDataBase64
+    ? pdfModel
+    : pageImagesToSend.length > 0
+      ? isReceiptMode || params.importMode === "notes" || params.importMode === "account_detail"
+        ? imageModel
+        : strongModel
+      : textModel;
+  const modelFallbackChain = dedupeOpenAIImportModels(
+    pdfFileDataBase64
+      ? [model, strongModel, OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK]
+      : pageImagesToSend.length > 0
+        ? [model, imageModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
+        : [model, textModel, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
+  );
   const buildUserContent = (pageImages: Array<{ page: number; dataUrl: string }>) => {
     const userContent: Array<Record<string, unknown>> = [{ type: "input_text", text: userPrompt }];
     if (pdfFileDataBase64) {
@@ -1796,6 +1909,45 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     return /token|context|too large|payload/i.test(errorText);
   };
 
+  const callOpenAIWithFallbackModels = async (
+    models: string[],
+    pageImages: Array<{ page: number; dataUrl: string }>,
+    timeoutMs: number
+  ): Promise<{ response: Response; model: string } | null> => {
+    for (const candidateModel of models) {
+      let response = await callOpenAI(candidateModel, pageImages, timeoutMs);
+      let errorText = response ? await response.text().catch(() => "") : "timeout";
+
+      if (response && shouldRetryWithFewerImages(response.status, errorText, pageImages.length)) {
+        console.warn("OpenAI import fallback request retried with fewer page images", {
+          model: candidateModel,
+          status: response.status,
+          statusText: response.statusText,
+          imageCount: pageImages.length,
+        });
+        response = await callOpenAI(candidateModel, pageImages.slice(0, 1), timeoutMs);
+        errorText = response ? await response.text().catch(() => "") : "timeout";
+      }
+
+      if (response?.ok) {
+        return { response, model: candidateModel };
+      }
+
+      console.warn("OpenAI import fallback model attempt failed", {
+        model: candidateModel,
+        status: response?.status ?? null,
+        statusText: response?.statusText ?? null,
+        errorText: errorText.slice(0, 2_000) || null,
+      });
+
+      if (!openAIImportFailureLooksRetryable(response?.status ?? null, errorText)) {
+        break;
+      }
+    }
+
+    return null;
+  };
+
   try {
     const primaryTimeoutMs =
       typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
@@ -1819,47 +1971,22 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           : params.text.trim().length === 0
             ? 60_000
             : 45_000;
-    let response = await callOpenAI(model, pageImagesToSend, primaryTimeoutMs);
-
-    if (!response || !response.ok) {
-      const errorText = response ? await response.text().catch(() => "") : "timeout";
-      if (response && shouldRetryWithFewerImages(response.status, errorText, pageImagesToSend.length)) {
-        console.warn("OpenAI import fallback request retried with fewer page images", {
-          status: response.status,
-          statusText: response.statusText,
-          imageCount: pageImagesToSend.length,
-        });
-        response = await callOpenAI(model, pageImagesToSend.slice(0, 1), primaryTimeoutMs);
-      }
-
-      if ((!response || !response.ok) && pageImagesToSend.length > 0 && model === imageModel && imageModel !== textModel) {
-        if (response && !response.ok) {
-          const retryErrorText = await response.text().catch(() => "");
-          console.warn("OpenAI image fallback request failed, retrying with text model", {
-            status: response.status,
-            statusText: response.statusText,
-            errorText: retryErrorText.slice(0, 2_000) || null,
-          });
-        } else {
-          console.warn("OpenAI image fallback timed out, retrying with text model", {
-            imageCount: pageImagesToSend.length,
-          });
-        }
-        response = await callOpenAI(textModel, pageImagesToSend.slice(0, 1), retryTimeoutMs);
-      }
-
-      if (!response || !response.ok) {
-        const finalErrorText = response ? await response.text().catch(() => "") : errorText;
-        console.warn("OpenAI import fallback request failed", {
-          status: response?.status ?? null,
-          statusText: response?.statusText ?? null,
-          errorText: finalErrorText.slice(0, 2_000) || null,
-        });
-        return null;
-      }
+    const attempted = await callOpenAIWithFallbackModels(modelFallbackChain, pageImagesToSend, primaryTimeoutMs);
+    const attemptedResult =
+      attempted ??
+      (pageImagesToSend.length > 0 && model !== textModel
+        ? await callOpenAIWithFallbackModels(
+            dedupeOpenAIImportModels([textModel, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]),
+            pageImagesToSend.slice(0, 1),
+            retryTimeoutMs
+          )
+        : null);
+    if (!attemptedResult) {
+      return null;
     }
 
-    const payload = (await response.json()) as Record<string, unknown>;
+    const selectedModel = attemptedResult.model;
+    const payload = (await attemptedResult.response.json()) as Record<string, unknown>;
     const outputText = extractOutputText(payload);
     if (!outputText) {
       return null;
@@ -1876,7 +2003,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         receiptAccountMatch: null,
         receiptDetails: null,
         rows: [],
-        model,
+        model: selectedModel,
         promptVersion: OPENAI_PROMPT_VERSION,
         audit: {
           sourceFilename: params.fileName ?? null,
@@ -1900,7 +2027,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         receiptAccountMatch: null,
         receiptDetails: null,
         rows: [],
-        model,
+        model: selectedModel,
         promptVersion: OPENAI_PROMPT_VERSION,
         audit: {
           sourceFilename: params.fileName ?? null,
@@ -2091,7 +2218,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         confidence: Math.max(0, Math.min(100, Math.round(row.confidence_score ?? metadata.confidence ?? 0))),
         rawPayload: {
           source: "openai",
-          model,
+          model: selectedModel,
           promptVersion: OPENAI_PROMPT_VERSION,
           statementType: value.statement_type,
           documentType,
@@ -2140,7 +2267,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       receiptAccountMatch,
       receiptDetails,
       rows,
-      model,
+      model: selectedModel,
       promptVersion: OPENAI_PROMPT_VERSION,
       audit: {
         sourceFilename: params.fileName ?? null,
@@ -2192,107 +2319,154 @@ export const transcribeImportImagesWithOpenAI = async (params: {
     importMode: params.importMode ?? null,
   });
 
+  const ocrModel = resolveOpenAIImportModel(
+    (env as { OPENAI_IMPORT_PARSER_OCR_MODEL?: string }).OPENAI_IMPORT_PARSER_OCR_MODEL,
+    OPENAI_IMPORT_FAST_MODEL_FALLBACK,
+    "OCR model",
+  );
   const imageModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_IMAGE_MODEL?: string }).OPENAI_IMPORT_PARSER_IMAGE_MODEL,
-    OPENAI_IMPORT_IMAGE_MODEL_FALLBACK,
+    ocrModel,
     "image transcription model",
   );
+  const strongModel = resolveOpenAIImportModel(
+    (env as { OPENAI_IMPORT_PARSER_STRONG_MODEL?: string }).OPENAI_IMPORT_PARSER_STRONG_MODEL,
+    OPENAI_IMPORT_STRONG_MODEL_FALLBACK,
+    "strong OCR model",
+  );
+  const modelCandidates = dedupeOpenAIImportModels([
+    imageModel,
+    ocrModel,
+    strongModel,
+    OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK,
+  ]);
   const pageImagesToSend = params.pageImages.slice(0, params.importMode === "statement" ? 6 : 4);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), Math.max(10_000, params.timeoutMs ?? 120_000));
 
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: imageModel,
-        temperature: 0,
-        max_output_tokens: 6_000,
-        input: [
-          {
-            role: "system",
-            content: [{ type: "input_text", text: systemPrompt }],
-          },
-          {
-            role: "user",
-            content: [
-              { type: "input_text", text: userPrompt },
-              ...pageImagesToSend.map((pageImage) => ({
-                type: "input_image",
-                image_url: pageImage.dataUrl,
-              })),
-            ],
-          },
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "bank_image_transcription",
-            strict: true,
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                document_type: { type: "string", enum: ["statement", "receipt", "notes", "portfolio", "account_detail"] },
-                transcript: { type: "string" },
-                confidence_score: { type: "number" },
-                parser_evidence: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    page: { type: ["number", "null"] },
-                    source_text: { type: ["string", "null"] },
-                    reason: { type: "string" },
+    const fetchTranscript = async (selectedModel: string) =>
+      fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          temperature: 0,
+          max_output_tokens: 6_000,
+          input: [
+            {
+              role: "system",
+              content: [{ type: "input_text", text: systemPrompt }],
+            },
+            {
+              role: "user",
+              content: [
+                { type: "input_text", text: userPrompt },
+                ...pageImagesToSend.map((pageImage) => ({
+                  type: "input_image",
+                  image_url: pageImage.dataUrl,
+                })),
+              ],
+            },
+          ],
+          text: {
+            format: {
+              type: "json_schema",
+              name: "bank_image_transcription",
+              strict: true,
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  document_type: { type: "string", enum: ["statement", "receipt", "notes", "portfolio", "account_detail"] },
+                  transcript: { type: "string" },
+                  confidence_score: { type: "number" },
+                  parser_evidence: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                      page: { type: ["number", "null"] },
+                      source_text: { type: ["string", "null"] },
+                      reason: { type: "string" },
+                    },
+                    required: ["page", "source_text", "reason"],
                   },
-                  required: ["page", "source_text", "reason"],
                 },
+                required: ["document_type", "transcript", "confidence_score", "parser_evidence"],
               },
-              required: ["document_type", "transcript", "confidence_score", "parser_evidence"],
             },
           },
-        },
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      console.warn("OpenAI image transcription failed", {
-        status: response.status,
-        statusText: response.statusText,
-        errorText: errorText.slice(0, 1_000) || null,
+        }),
+        signal: controller.signal,
       });
-      return null;
-    }
 
-    const payload = (await response.json()) as Record<string, unknown>;
-    const outputText = extractOutputText(payload);
-    if (!outputText) {
-      return null;
-    }
+    const parseTranscriptResponse = async (response: Response, selectedModel: string) => {
+      const payload = (await response.json()) as Record<string, unknown>;
+      const outputText = extractOutputText(payload);
+      if (!outputText) {
+        return null;
+      }
 
-    const parsedJson = parseStructuredJsonText(outputText);
-    if (!parsedJson) {
-      return null;
-    }
+      const parsedJson = parseStructuredJsonText(outputText);
+      if (!parsedJson) {
+        return null;
+      }
 
-    const validation = openAIImageTranscriptSchema.safeParse(parsedJson);
-    if (!validation.success) {
-      return null;
-    }
+      const validation = openAIImageTranscriptSchema.safeParse(parsedJson);
+      if (!validation.success) {
+        return null;
+      }
 
-    const value = validation.data;
-    return {
-      documentType: value.document_type,
-      transcript: value.transcript,
-      confidence: value.confidence_score,
-      model: imageModel,
-      promptVersion: OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION,
+      const value = validation.data;
+      return {
+        documentType: value.document_type,
+        transcript: value.transcript,
+        confidence: value.confidence_score,
+        model: selectedModel,
+        promptVersion: OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION,
+      };
     };
+
+    let bestTranscript:
+      | {
+          documentType: "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
+          transcript: string;
+          confidence: number;
+          model: string;
+          promptVersion: string;
+        }
+      | null = null;
+
+    for (const candidateModel of modelCandidates) {
+      const response = await fetchTranscript(candidateModel);
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        console.warn("OpenAI image transcription failed", {
+          model: candidateModel,
+          status: response.status,
+          statusText: response.statusText,
+          errorText: errorText.slice(0, 1_000) || null,
+        });
+        if (!openAIImportFailureLooksRetryable(response.status, errorText)) {
+          break;
+        }
+        continue;
+      }
+
+      const parsed = await parseTranscriptResponse(response, candidateModel);
+      if (!parsed) {
+        continue;
+      }
+      bestTranscript = parsed;
+      if (!openAITranscriptLooksWeak(parsed) || candidateModel === strongModel) {
+        return parsed;
+      }
+    }
+
+    return bestTranscript;
   } catch (error) {
     console.warn("OpenAI image transcription threw", error);
     return null;
