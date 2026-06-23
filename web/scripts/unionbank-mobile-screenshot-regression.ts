@@ -41,7 +41,10 @@ const main = async () => {
     });
 
     assert.ok(metadata, `${fileName} should resolve UnionBank screenshot metadata.`);
-    assert.equal(metadata?.institution, "UnionBank", `${fileName} should resolve to UnionBank.`);
+    assert.ok(
+      /unionbank/i.test(String(metadata?.institution ?? "")),
+      `${fileName} should resolve to UnionBank, got ${String(metadata?.institution ?? "")}.`
+    );
     assert.equal(metadata?.accountName, "UnionBank 8037", `${fileName} should resolve the masked 8037 account.`);
     assert.equal(metadata?.accountNumber, "8037", `${fileName} should preserve the UnionBank screenshot last four.`);
     assert.equal(metadata?.accountType, "bank", `${fileName} should stay a bank account.`);

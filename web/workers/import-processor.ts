@@ -1318,7 +1318,7 @@ const imageStatementRowsLookUsable = (
     const kind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
     const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
     return (
-      /(?:gcash|maya|bpi|wise)_mobile_screenshot/i.test(`${kind} ${source}`) ||
+      /(?:gcash|maya|bpi|wise|unionbank|rcbc)_mobile_screenshot/i.test(`${kind} ${source}`) ||
       /known_mobile_wallet_screenshot_transaction/i.test(kind)
     );
   });
@@ -3683,10 +3683,7 @@ const resolveConfirmationAccount = async (params: {
           : null;
       const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
       const kind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
-      return (
-        /(?:gcash|maya)_mobile_screenshot/i.test(source) ||
-        /(?:gcash|maya)_mobile_screenshot/i.test(kind)
-      );
+      return /_mobile_screenshot/i.test(`${source} ${kind}`) || kind === "account_snapshot_marker";
     }) ?? null;
   const wiseScreenshotIdentityRow =
     params.parsedRows.find((row) => {
@@ -3707,6 +3704,10 @@ const resolveConfirmationAccount = async (params: {
           .join(" ")
       );
     }) ?? null;
+  const mobileScreenshotStatementIdentity =
+    mobileScreenshotIdentityRow?.rawPayload && typeof mobileScreenshotIdentityRow.rawPayload === "object"
+      ? getMobileScreenshotStatementIdentity(mobileScreenshotIdentityRow.rawPayload as Prisma.JsonValue)
+      : null;
   const mobileScreenshotWalletIdentity =
     mobileScreenshotIdentityRow?.rawPayload && typeof mobileScreenshotIdentityRow.rawPayload === "object"
       ? getMobileScreenshotWalletIdentity(mobileScreenshotIdentityRow.rawPayload as Prisma.JsonValue)
@@ -3744,21 +3745,22 @@ const resolveConfirmationAccount = async (params: {
       : null;
 
   const inferredInstitution =
-    mobileScreenshotWalletIdentity?.institution ??
+    mobileScreenshotStatementIdentity?.institution ??
     sanitizeBankNameLabel(
       typeof candidateRowRawPayload?.institutionRaw === "string" ? candidateRowRawPayload.institutionRaw : null
     ) ??
     sanitizeBankNameLabel(typeof candidateRow?.institution === "string" ? candidateRow.institution : null) ??
     sanitizeBankNameLabel(normalizeBankName(String(params.importFile.fileName ?? "")));
   const inferredAccountName =
-    mobileScreenshotWalletIdentity?.accountName ??
+    mobileScreenshotStatementIdentity?.accountName ??
     sanitizeBankNameLabel(typeof candidateRowRawPayload?.accountName === "string" ? candidateRowRawPayload.accountName : null) ??
     sanitizeBankNameLabel(typeof candidateRow?.accountName === "string" ? candidateRow.accountName : null) ??
     inferredInstitution;
   const inferredAccountNumber =
-    typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
+    mobileScreenshotStatementIdentity?.accountNumber ??
+    (typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
       ? params.statementMetadata.accountNumber.trim()
-      : null;
+      : null);
   const hasInferredAccountNumber = Boolean(inferredAccountNumber);
   const supportedImportAccountTypes: AccountType[] = [
     "bank",
@@ -3777,11 +3779,12 @@ const resolveConfirmationAccount = async (params: {
     "other",
   ];
   const inferredAccountType: AccountType | null =
-    !wiseScreenshotIdentityRow &&
+    mobileScreenshotStatementIdentity?.accountType ??
+    (!wiseScreenshotIdentityRow &&
     typeof params.statementMetadata?.accountType === "string" &&
     supportedImportAccountTypes.includes(params.statementMetadata.accountType as AccountType)
       ? (params.statementMetadata.accountType as AccountType)
-      : null;
+      : null);
   const explicitStatementCurrency =
     typeof params.statementMetadata?.currency === "string" && params.statementMetadata.currency.trim()
       ? params.statementMetadata.currency.trim().toUpperCase()
@@ -4347,17 +4350,35 @@ const getMobileScreenshotPayloadKind = (rawPayload: Prisma.JsonValue | null | un
   if (/maya/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
     return "maya";
   }
+  if (/unionbank/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
+    return "unionbank";
+  }
+  if (/rcbc/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
+    return "rcbc";
+  }
+  if (/bpi/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
+    return "bpi";
+  }
+  if (/wise/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
+    return "wise";
+  }
 
   return null;
 };
 
-const getMobileScreenshotWalletIdentity = (rawPayload: Prisma.JsonValue | null | undefined) => {
+const getMobileScreenshotStatementIdentity = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
   const kind = getMobileScreenshotPayloadKind(rawPayload);
   if (kind === "gcash") {
     return {
       accountName: "GCash",
       institution: "GCash",
       accountType: "wallet" as AccountType,
+      accountNumber: null,
     };
   }
 
@@ -4366,10 +4387,55 @@ const getMobileScreenshotWalletIdentity = (rawPayload: Prisma.JsonValue | null |
       accountName: "Maya Wallet",
       institution: "Maya",
       accountType: "wallet" as AccountType,
+      accountNumber: null,
     };
   }
 
-  return null;
+  const rawAccountName = typeof payload.accountName === "string" && payload.accountName.trim() ? payload.accountName.trim() : null;
+  const rawInstitution = typeof payload.institutionRaw === "string" && payload.institutionRaw.trim()
+    ? payload.institutionRaw.trim()
+    : typeof payload.institution === "string" && payload.institution.trim()
+      ? payload.institution.trim()
+      : typeof payload.bank === "string" && payload.bank.trim()
+        ? payload.bank.trim()
+        : null;
+  const accountNumber = typeof payload.accountNumber === "string" && payload.accountNumber.trim() ? payload.accountNumber.trim() : null;
+  const normalizedInstitution = sanitizeBankNameLabel(rawInstitution);
+  const normalizedAccountName = sanitizeBankNameLabel(rawAccountName);
+  const rawAccountType = typeof payload.accountType === "string" ? payload.accountType.trim() : "";
+  const accountType =
+    rawAccountType === "bank" ||
+    rawAccountType === "wallet" ||
+    rawAccountType === "credit_card" ||
+    rawAccountType === "cash" ||
+    rawAccountType === "investment" ||
+    rawAccountType === "loan" ||
+    rawAccountType === "mortgage" ||
+    rawAccountType === "line_of_credit" ||
+    rawAccountType === "receivable" ||
+    rawAccountType === "payable" ||
+    rawAccountType === "bnpl" ||
+    rawAccountType === "prepaid" ||
+    rawAccountType === "insurance" ||
+    rawAccountType === "other"
+      ? (rawAccountType as AccountType)
+      : null;
+
+  if (!normalizedInstitution && !normalizedAccountName && !accountNumber) {
+    return null;
+  }
+
+  return {
+    accountName: normalizedAccountName,
+    institution: normalizedInstitution,
+    accountNumber,
+    accountType,
+  };
+};
+
+const getMobileScreenshotWalletIdentity = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  const identity = getMobileScreenshotStatementIdentity(rawPayload);
+  return identity?.accountType === "wallet" ? identity : null;
 };
 
 const getMobileScreenshotTimeText = (rawPayload: Prisma.JsonValue | null | undefined) => {

@@ -8914,6 +8914,26 @@ const normalizeUnionBankMobileScreenshotDescription = (lines: string[]) =>
       .replace(/\s+PHP\s*[0-9][0-9,]*(?:\.\d{2})?$/i, "")
   );
 
+const looksLikeUnionBankMobileScreenshotGarbageDescription = (description: string) => {
+  const normalized = normalizeWhitespace(description);
+  if (!normalized) {
+    return true;
+  }
+
+  return (
+    /^php$/i.test(normalized) ||
+    /^premier plus savings\b/i.test(normalized) ||
+    /^available balance$/i.test(normalized) ||
+    /^(?:all|received|sent|download|account details|transaction history)$/i.test(normalized) ||
+    /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2},?$/i.test(
+      normalized
+    ) ||
+    /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{4}$/i.test(
+      normalized
+    )
+  );
+};
+
 const classifyUnionBankMobileScreenshotRow = (description: string, signedAmount: number) => {
   const normalized = normalizeWhitespace(description);
   const lower = normalized.toLowerCase();
@@ -9136,7 +9156,7 @@ const parseUnionBankMobileScreenshotImportText = (text: string, fileName: string
       .map((line, index) => (index === amountLineIndex ? line.replace(amountInfo.matchText, " ").trim() : line))
       .filter(Boolean);
     const description = normalizeUnionBankMobileScreenshotDescription(descriptionLines);
-    if (!description) {
+    if (!description || looksLikeUnionBankMobileScreenshotGarbageDescription(description)) {
       return;
     }
 
