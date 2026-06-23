@@ -347,6 +347,8 @@ type OpenAIDocumentFamily =
   | "account_summary"
   | "generic_document";
 
+type OpenAIImportDifficulty = "easy" | "medium" | "hard";
+
 type ReceiptAccountMatch = {
   account_name: string | null;
   account_last4: string | null;
@@ -1550,6 +1552,56 @@ const inferOpenAIDocumentFamily = (params: {
   return "generic_document" satisfies OpenAIDocumentFamily;
 };
 
+const inferOpenAIImportDifficulty = (params: {
+  fileName?: string | null;
+  fileType?: string | null;
+  text?: string | null;
+  detectedMetadata?: DetectedStatementMetadata | null;
+  parsedRows?: ParsedImportRow[] | null;
+  importMode?: ImportMode | null;
+  pageImagesCount?: number;
+  documentFamily?: OpenAIDocumentFamily | null;
+}) => {
+  const normalizedText = String(params.text ?? "").replace(/\s+/g, " ").trim();
+  const normalizedFileName = String(params.fileName ?? "").toLowerCase();
+  const normalizedFileType = String(params.fileType ?? "").toLowerCase();
+  const metadataConfidence = Number(params.detectedMetadata?.confidence ?? 0);
+  const parsedRowsCount = Array.isArray(params.parsedRows) ? params.parsedRows.length : 0;
+  const pageImagesCount = Math.max(0, Number(params.pageImagesCount ?? 0));
+  const documentFamily = params.documentFamily ?? null;
+  const isImageLike =
+    normalizedFileType.startsWith("image/") || /\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(normalizedFileName);
+  const looksLikeScreenshot =
+    /screenshot|screen\s*shot|img_|received|express send|\d{4}-\d{2}-\d{2}/i.test(normalizedFileName);
+  const weakText = normalizedText.length < 120;
+  const veryWeakText = normalizedText.length < 50;
+  const sparseRows = parsedRowsCount === 0;
+
+  if (
+    veryWeakText ||
+    (isImageLike && weakText && sparseRows) ||
+    (isImageLike && metadataConfidence < 55) ||
+    (params.importMode === "receipt" && weakText) ||
+    (documentFamily === "wallet_screenshot" && weakText) ||
+    pageImagesCount >= 4
+  ) {
+    return "hard" satisfies OpenAIImportDifficulty;
+  }
+
+  if (
+    looksLikeScreenshot ||
+    weakText ||
+    metadataConfidence < 75 ||
+    documentFamily === "restaurant_receipt" ||
+    documentFamily === "tax_invoice" ||
+    pageImagesCount >= 2
+  ) {
+    return "medium" satisfies OpenAIImportDifficulty;
+  }
+
+  return "easy" satisfies OpenAIImportDifficulty;
+};
+
 const buildOpenAIDocumentFamilyGuidance = (family: OpenAIDocumentFamily) => {
   switch (family) {
     case "wallet_screenshot":
@@ -1885,6 +1937,22 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   }
 
   const inputText = buildModelInputText(params.text);
+  const inferredDocumentFamily = inferOpenAIDocumentFamily({
+    fileName: params.fileName ?? null,
+    text: inputText,
+    detectedMetadata: params.detectedMetadata,
+    importMode: params.importMode ?? null,
+  });
+  const inferredDifficulty = inferOpenAIImportDifficulty({
+    fileName: params.fileName ?? null,
+    fileType: params.fileType ?? null,
+    text: inputText,
+    detectedMetadata: params.detectedMetadata,
+    parsedRows: params.parsedRows,
+    importMode: params.importMode ?? null,
+    pageImagesCount: params.pageImages?.length ?? 0,
+    documentFamily: inferredDocumentFamily,
+  });
 
   const userPrompt = buildOpenAIInputPayload({
     fileName: params.fileName ?? null,
@@ -1905,9 +1973,13 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     typeof params.pageImageLimit === "number" && Number.isFinite(params.pageImageLimit)
       ? Math.max(1, Math.floor(params.pageImageLimit))
       : isReceiptMode
-        ? 2
+        ? inferredDifficulty === "hard"
+          ? 4
+          : 2
         : params.text.trim().length === 0
-          ? 8
+          ? inferredDifficulty === "hard"
+            ? 8
+            : 6
           : isNoisyVisionInstitution
             ? 8
             : 2;
@@ -1941,17 +2013,26 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   const model = pdfFileDataBase64
     ? pdfModel
     : pageImagesToSend.length > 0
-      ? isReceiptMode || params.importMode === "notes" || params.importMode === "account_detail"
-        ? imageModel
-        : strongModel
+      ? inferredDifficulty === "hard"
+        ? strongModel
+        : isReceiptMode || params.importMode === "notes" || params.importMode === "account_detail"
+          ? imageModel
+          : strongModel
       : textModel;
   const modelFallbackChain = dedupeOpenAIImportModels(
     pdfFileDataBase64
-      ? [model, strongModel, OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK]
+      ? inferredDifficulty === "hard"
+        ? [strongModel, pdfModel, OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK]
+        : [model, strongModel, OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK]
       : pageImagesToSend.length > 0
-        ? [model, imageModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
+        ? inferredDifficulty === "hard"
+          ? [strongModel, imageModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
+          : inferredDocumentFamily === "wallet_screenshot"
+            ? [imageModel, strongModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
+            : [model, imageModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
         : [model, textModel, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
   );
+  const fallbackChain = modelFallbackChain;
   const buildUserContent = (pageImages: Array<{ page: number; dataUrl: string }>) => {
     const userContent: Array<Record<string, unknown>> = [{ type: "input_text", text: userPrompt }];
     if (pdfFileDataBase64) {
@@ -2080,25 +2161,39 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
         ? Math.max(10_000, Math.floor(params.timeoutMs))
         : isReceiptMode
-          ? model === imageModel
-            ? 35_000
-            : 25_000
+          ? inferredDifficulty === "hard"
+            ? 55_000
+            : model === imageModel
+              ? 35_000
+              : 25_000
           : model === imageModel
-            ? params.text.trim().length === 0
-              ? 120_000
-              : 60_000
+            ? inferredDifficulty === "hard"
+              ? 90_000
+              : params.text.trim().length === 0
+                ? 120_000
+                : 60_000
             : pdfFileDataBase64
-              ? 120_000
-              : 45_000;
+              ? inferredDifficulty === "hard"
+                ? 150_000
+                : 120_000
+              : inferredDifficulty === "hard"
+                ? 60_000
+                : 45_000;
     const retryTimeoutMs =
       typeof params.retryTimeoutMs === "number" && Number.isFinite(params.retryTimeoutMs)
         ? Math.max(10_000, Math.floor(params.retryTimeoutMs))
         : isReceiptMode
-          ? 20_000
+          ? inferredDifficulty === "hard"
+            ? 30_000
+            : 20_000
           : params.text.trim().length === 0
-            ? 60_000
-            : 45_000;
-    const attempted = await callOpenAIWithFallbackModels(modelFallbackChain, pageImagesToSend, primaryTimeoutMs);
+            ? inferredDifficulty === "hard"
+              ? 75_000
+              : 60_000
+            : inferredDifficulty === "hard"
+              ? 55_000
+              : 45_000;
+    const attempted = await callOpenAIWithFallbackModels(fallbackChain, pageImagesToSend, primaryTimeoutMs);
     const attemptedResult =
       attempted ??
       (pageImagesToSend.length > 0 && model !== textModel
@@ -2160,7 +2255,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           sourceFilename: params.fileName ?? null,
           confidence: params.detectedMetadata?.confidence ?? 0,
           schemaValidated: false,
-          schemaValidationResult: validationSummary,
+          schemaValidationResult: `${validationSummary}; family=${inferredDocumentFamily}; difficulty=${inferredDifficulty}; model=${selectedModel}`,
           rawResponse: outputText,
         },
       };
@@ -2408,7 +2503,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         sourceFilename: params.fileName ?? null,
         confidence: metadata.confidence,
         schemaValidated,
-        schemaValidationResult: validationSummary,
+        schemaValidationResult: `${validationSummary}; family=${inferredDocumentFamily}; difficulty=${inferredDifficulty}; model=${selectedModel}`,
         rawResponse: outputText,
       },
     };
@@ -2453,6 +2548,21 @@ export const transcribeImportImagesWithOpenAI = async (params: {
     pageImages: params.pageImages,
     importMode: params.importMode ?? null,
   });
+  const inferredDocumentFamily = inferOpenAIDocumentFamily({
+    fileName: params.fileName ?? null,
+    detectedMetadata: params.detectedMetadata,
+    importMode: params.importMode ?? null,
+  });
+  const inferredDifficulty = inferOpenAIImportDifficulty({
+    fileName: params.fileName ?? null,
+    fileType: params.fileType ?? null,
+    text: null,
+    detectedMetadata: params.detectedMetadata,
+    parsedRows: [],
+    importMode: params.importMode ?? null,
+    pageImagesCount: params.pageImages.length,
+    documentFamily: inferredDocumentFamily,
+  });
 
   const ocrModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_OCR_MODEL?: string }).OPENAI_IMPORT_PARSER_OCR_MODEL,
@@ -2470,14 +2580,25 @@ export const transcribeImportImagesWithOpenAI = async (params: {
     "strong OCR model",
   );
   const modelCandidates = dedupeOpenAIImportModels([
-    imageModel,
-    ocrModel,
-    strongModel,
+    ...(inferredDifficulty === "hard" ? [strongModel, imageModel, ocrModel] : [imageModel, ocrModel, strongModel]),
     OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK,
   ]);
-  const pageImagesToSend = params.pageImages.slice(0, params.importMode === "statement" ? 6 : 4);
+  const pageImagesToSend = params.pageImages.slice(
+    0,
+    params.importMode === "statement" ? (inferredDifficulty === "hard" ? 8 : 6) : inferredDifficulty === "hard" ? 5 : 4
+  );
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Math.max(10_000, params.timeoutMs ?? 120_000));
+  const timeout = setTimeout(
+    () => controller.abort(),
+    Math.max(
+      10_000,
+      typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
+        ? params.timeoutMs
+        : inferredDifficulty === "hard"
+          ? 150_000
+          : 120_000
+    )
+  );
 
   try {
     const fetchTranscript = async (selectedModel: string) =>
