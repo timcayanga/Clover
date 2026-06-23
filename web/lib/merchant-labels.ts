@@ -449,6 +449,102 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
   ],
   Wise: [
     {
+      patterns: [/viator(?:\.com)?/i],
+      replacement: "Viator",
+    },
+    {
+      patterns: [/7-?eleven/i],
+      replacement: "7-Eleven",
+    },
+    {
+      patterns: [/hk\s+airport/i],
+      replacement: "HK Airport",
+    },
+    {
+      patterns: [/news\s+travels?/i],
+      replacement: "News Travels",
+    },
+    {
+      patterns: [/locker\s+hire/i],
+      replacement: "Locker Hire",
+    },
+    {
+      patterns: [/great\s+ocean\s+road\s+tra/i],
+      replacement: "Great Ocean Road Travel",
+    },
+    {
+      patterns: [/great\s+ocean\s+road\s+choc/i],
+      replacement: "Great Ocean Road Chocolate",
+    },
+    {
+      patterns: [/proud\s+mary\s+cafe/i],
+      replacement: "Proud Mary Cafe",
+    },
+    {
+      patterns: [/vacation\s+cafe\s+cbd/i],
+      replacement: "Vacation Cafe CBD",
+    },
+    {
+      patterns: [/nirvana\s+restaurant/i],
+      replacement: "Nirvana Restaurant",
+    },
+    {
+      patterns: [/waterfront\s+mini\s+mart/i],
+      replacement: "Waterfront Mini Mart",
+    },
+    {
+      patterns: [/mc\s+bandara\s+inter\s+4/i],
+      replacement: "Mc Bandara Inter 4",
+    },
+    {
+      patterns: [/coco\s+dewata\s+dsm\s+2/i],
+      replacement: "Coco Dewata DSM 2",
+    },
+    {
+      patterns: [/coco\s+group/i],
+      replacement: "Coco Group",
+    },
+    {
+      patterns: [/shop\s+b1\s+gf\s+golden\s+crown/i],
+      replacement: "Shop B1 GF Golden Crown",
+    },
+    {
+      patterns: [/ned\s+kelly'?s\s+last\s+stand/i],
+      replacement: "Ned Kelly's Last Stand",
+    },
+    {
+      patterns: [/kinsman\s+12614/i],
+      replacement: "Kinsman 12614",
+    },
+    {
+      patterns: [/don\s+don\s+donki/i],
+      replacement: "Don Don Donki",
+    },
+    {
+      patterns: [/wanli\s+hu/i],
+      replacement: "Wanli Hu",
+    },
+    {
+      patterns: [/maria\s+harman/i],
+      replacement: "Maria Harman",
+    },
+    {
+      patterns: [/htg\s+ticket\s+sales/i],
+      replacement: "HTG Ticket Sales",
+    },
+    {
+      patterns: [/jacks?\s+of\s+bath/i],
+      replacement: "Jacks of Bath",
+    },
+    {
+      patterns: [/maldo\s+a\s+f/i],
+      replacement: "MALDO A F",
+    },
+    {
+      patterns: [/zehra/i],
+      replacement: "ZEHRA",
+    },
+    {
       patterns: [/gogyo(?:\s*-\s*surry\s+hills)?/i],
       replacement: "Gogyo - Surry Hills",
     },

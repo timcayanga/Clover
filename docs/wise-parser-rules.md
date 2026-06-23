@@ -44,6 +44,7 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 - Use merchant normalization before broad category fallback.
 - Use contextual cues from merchant-spend currency and travel/location terms when available. For example, `Transport for NSW`, `SkyBus`, parking, rail, and airport merchants should bias toward `Transport`; souvenir and landmark/travel merchants should bias toward `Travel & Lifestyle`; venue/ticket landmarks such as `Sydney Opera House` should bias toward `Entertainment`.
 - If the merchant text looks like a person or transfer counterparty rather than a business name, prefer `Transfers`.
+- If a Wise row status is `Withdrawn`, prefer `Cash & ATM` even when the merchant text is partially noisy.
 - For unseen screenshot merchants with readable text, prefer contextual keyword guesses over leaving the row as `Other`.
 - Restaurants, cafes, groceries, parking, transport, education, subscriptions, and shopping should use the shared category rules.
 - Refunds should be `Income` or transfer-like refund movement depending on the source row.

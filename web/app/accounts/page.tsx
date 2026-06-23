@@ -342,6 +342,9 @@ const transactionMatchesAccount = (transaction: Transaction, account: Account) =
   );
 };
 
+const hasImportedTransactionEvidence = (transactions: Transaction[]) =>
+  transactions.some((transaction) => transaction.source === "upload" || Boolean(transaction.importFileId));
+
 const inferImportedAccountTypeFromTransaction = (transaction: Transaction): SupportedAccountType => {
   const identity = `${transaction.institution ?? ""} ${transaction.accountName ?? ""}`.toLowerCase();
   if (/\bwise\b/.test(identity)) {
@@ -508,7 +511,8 @@ const mergeAccountsWithOptimisticImports = (
     return !fetchedById.has(account.id) && !visibleFetchedAccounts.some((fetchedAccount) => matchesImportedAccountIdentity(account, fetchedAccount)) && !fetchedByKey.has(accountKey);
   });
   const baseMergedAccounts = [...preservedCurrentAccounts, ...optimisticAccounts, ...mergedFetchedAccounts];
-  const shouldPreserveImportedEvidence = options?.preserveImportedEvidence ?? false;
+  const shouldPreserveImportedEvidence =
+    (options?.preserveImportedEvidence ?? false) || hasImportedTransactionEvidence(supportingTransactions);
   if (!shouldPreserveImportedEvidence || supportingTransactions.length === 0) {
     return baseMergedAccounts;
   }

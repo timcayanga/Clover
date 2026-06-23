@@ -133,9 +133,14 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
     /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
 
   if (isLikelyPersonTransferName(text)) return "Transfers";
+  if (/withdrawn|cash withdrawal|atm withdrawal/.test(lower) || /withdrawn|cashwithdrawal|atmwithdrawal/.test(compact)) return "Cash & ATM";
+  if (/\bpayments?\b/.test(lower) && !/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)) return "Shopping";
   if (/emmanuel\s+payments?/.test(lower) || /emmanuelpayments?/.test(compact)) return "Shopping";
   if (/sydney\s+opera\s+house/.test(lower) || /sydneyoperahouse/.test(compact)) return "Entertainment";
   if (/relay\b/.test(lower)) return "Shopping";
+  if (/viator(?:\.com)?|news\s+travels?|great\s+ocean\s+road|locker\s+hire/.test(lower) || /viator|newstravels?|greatoceanroad|lockerhire/.test(compact)) {
+    return "Travel & Lifestyle";
+  }
   if (/souvenir/.test(lower) || /souvenir/.test(compact)) return "Travel & Lifestyle";
   if (
     /sydney\s+harbour\s+gifts?|melbourne\s+souvenir|u\s+neek\s+souvenirs?|great\s+ocean\s+road|moonlit\s+sanctuary|parks?\s+victoria/.test(lower) ||
@@ -143,18 +148,18 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   ) {
     return "Travel & Lifestyle";
   }
-  if (/transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal/.test(lower) || /transportfornsw|skybus|parking|airport|rail|trainpal/.test(compact)) {
+  if (/transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal|hk\s+airport/.test(lower) || /transportfornsw|skybus|parking|airport|rail|trainpal|hkairport/.test(compact)) {
     return "Transport";
   }
   if (/liberty\s+oil|fuel|petrol|gas\s+station/.test(lower) || /libertyoil|fuel|petrol|gasstation/.test(compact)) return "Transport";
   if (
-    /pedro\s+the\s+grocer|grocer\b|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills/.test(lower) ||
-    /pedrothegrocer|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills/.test(compact)
+    /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills|great\s+ocean\s+road\s+choc|samyan\s+mitrtown/.test(lower) ||
+    /pedrothegrocer|grocery|supermarket|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|7eleven|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills|greatoceanroadchoc|samyanmitrtown/.test(compact)
   )
     return "Food & Dining";
   if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) return "Food & Dining";
   if (/books?\b|asia\s+books/.test(lower) || /books|asiabooks/.test(compact)) return "Education";
-  if (/samyan\s+mitrtown|paypal|convenience|mitrtown/.test(lower) || /samyanmitrtown|paypal|convenience|mitrtown/.test(compact))
+  if (/paypal|convenience|relay|amazon/.test(lower) || /paypal|convenience|relay|amazon/.test(compact))
     return "Shopping";
   if (/citibank.*\bfin\b|bank.*\bfin\b/.test(lower) || /citibank.*fin|bank.*fin/.test(compact)) return "Transfers";
   if (
@@ -18227,6 +18232,7 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
     const isPersonTransfer = isLikelyPersonTransferName(merchant);
     const isRefundOrReceive = /^(?:Refunded|Received)$/i.test(status ?? "");
     const isSent = /^(?:Sent)$/i.test(status ?? "");
+    const isWithdrawn = /^(?:Withdrawn)$/i.test(status ?? "");
     const isIncoming = sign === "credit" || isRefundOrReceive;
     const type: TransactionType =
       isWalletTransfer || isPersonTransfer ? "transfer" : isIncoming ? "income" : isSent ? "transfer" : "expense";
@@ -18235,6 +18241,8 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
       ? "Transfers"
       : /refund/i.test(status ?? "")
         ? "Income"
+        : isWithdrawn
+          ? "Cash & ATM"
         : isSent
           ? "Transfers"
           : guessCategoryName(categoryContext, type);

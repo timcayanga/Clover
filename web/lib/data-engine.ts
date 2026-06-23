@@ -547,6 +547,10 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Transfers";
   }
 
+  if (/withdrawn|cash withdrawal|atm withdrawal/.test(lower) || /withdrawn|cashwithdrawal|atmwithdrawal/.test(compact)) {
+    return "Cash & ATM";
+  }
+
   if (isStandaloneCashPaymentDescription(merchantText)) {
     return "Shopping";
   }
@@ -586,6 +590,10 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Subscriptions";
   }
 
+  if (/\bpayments?\b/.test(lower) && !/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)) {
+    return "Shopping";
+  }
+
   if (/emmanuel\s+payments?/.test(lower) || /emmanuelpayments?/.test(compact)) {
     return "Shopping";
   }
@@ -596,6 +604,10 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
 
   if (/relay\b/.test(lower)) {
     return "Shopping";
+  }
+
+  if (/viator(?:\.com)?|news\s+travels?|great\s+ocean\s+road|locker\s+hire/.test(lower) || /viator|newstravels?|greatoceanroad|lockerhire/.test(compact)) {
+    return "Travel & Lifestyle";
   }
 
   if (/souvenir/.test(lower) || /souvenir/.test(compact)) {
@@ -609,7 +621,7 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Travel & Lifestyle";
   }
 
-  if (/transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal/.test(lower) || /transportfornsw|skybus|parking|airport|rail|trainpal/.test(compact)) {
+  if (/transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal|hk\s+airport/.test(lower) || /transportfornsw|skybus|parking|airport|rail|trainpal|hkairport/.test(compact)) {
     return "Transport";
   }
 
@@ -618,8 +630,8 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
   }
 
   if (
-    /pedro\s+the\s+grocer|grocer\b|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills/.test(lower) ||
-    /pedrothegrocer|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills/.test(compact)
+    /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills|great\s+ocean\s+road\s+choc|samyan\s+mitrtown/.test(lower) ||
+    /pedrothegrocer|grocery|supermarket|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|7eleven|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills|greatoceanroadchoc|samyanmitrtown/.test(compact)
   ) {
     return "Food & Dining";
   }
@@ -632,7 +644,7 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Education";
   }
 
-  if (/samyan\s+mitrtown|paypal|convenience|mitrtown/.test(lower) || /samyanmitrtown|paypal|convenience|mitrtown/.test(compact)) {
+  if (/paypal|convenience|amazon/.test(lower) || /paypal|convenience|amazon/.test(compact)) {
     return "Shopping";
   }
 
