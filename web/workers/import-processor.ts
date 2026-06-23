@@ -6032,7 +6032,7 @@ export const processImportFileText = async (
         (openAiReceiptValidation?.score ?? 0) >= 5
     );
   const receiptAccountResolution =
-    importMode === "receipt" && receiptAccountMatch
+    importMode === "receipt"
       ? await (async () => {
           const compatibleAccountColumns = await getCompatibleAccountColumns();
           const workspaceAccounts = await prisma.account.findMany({
@@ -6573,7 +6573,7 @@ export const processImportFileText = async (
       : null;
   const documentImportAccountId =
     importMode === "receipt"
-      ? receiptDocumentCashAccountId
+      ? resolvedReceiptAccountId ?? receiptDocumentCashAccountId
       : receiptPreviewLooksLikeReceipt
         ? importFile.account?.id ?? resolvedReceiptAccountId
         : importFile.account?.id ?? null;
@@ -6618,8 +6618,14 @@ export const processImportFileText = async (
             : importMode === "notes"
               ? "notes"
               : "statement",
-    institution: importMode === "receipt" ? null : resolvedMetadata.institution ?? null,
-    accountName: importMode === "receipt" ? "Cash" : resolvedMetadata.accountName ?? null,
+    institution:
+      importMode === "receipt"
+        ? receiptAccountResolution?.institution ?? null
+        : resolvedMetadata.institution ?? null,
+    accountName:
+      importMode === "receipt"
+        ? receiptAccountResolution?.accountName ?? "Cash"
+        : resolvedMetadata.accountName ?? null,
     accountNumber: importMode === "receipt" ? null : resolvedMetadata.accountNumber ?? null,
     currency: resolvedMetadata.currency ?? null,
     pageCount: pageImages?.length ?? 0,

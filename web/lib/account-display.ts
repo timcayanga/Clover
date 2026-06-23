@@ -19,7 +19,11 @@ const isGenericScreenshotLikeName = (value?: string | null) => {
     return false;
   }
 
-  return /^(?:img|screenshot|screen\s*shot|photo|image)[_\s-]?\d{3,8}(?:\s+\d{3,8})?$/.test(normalized);
+  return (
+    /^(?:img|screenshot|screen\s*shot|photo|image|pxl|received)[_\s-]?\d{3,8}(?:\s+\d{3,8})?$/.test(normalized) ||
+    /^\d{4}-\d{2}-\d{2}(?:[ _-]\d{2}[.:]\d{2}[.:]\d{2})?(?:\s*\(\d+\))?$/.test(normalized) ||
+    /^(?:img|pxl)[_-]?\d{8}[_-]?\d{6,9}$/.test(normalized)
+  );
 };
 
 const extractLastFourDigits = (value?: string | null) => {
