@@ -13,6 +13,7 @@ import { deleteAccountsAndImportArtifacts } from "@/lib/account-deletion";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { BANK_PRIORITY, normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
+import { isWiseWalletWithoutVisibleAccountNumber, normalizeImportedCurrencyCode } from "@/lib/imported-account-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -218,39 +219,6 @@ const normalizeAccountKey = (accountName?: string | null, institution?: string |
     .replace(/\s+/g, " ")
     .trim();
 
-const normalizeIdentityCurrencyCode = (value?: string | null) => {
-  const normalized = normalizeWhitespace(String(value ?? "")).toUpperCase();
-  return normalized || null;
-};
-
-const canonicalImportInstitutionKey = (value?: string | null) =>
-  normalizeWhitespace(String(value ?? ""))
-    .toLowerCase()
-    .replace(/\s+\d{4}$/, "")
-    .trim()
-    .replace(/\bunion\s*bank(?:\s+of\s+the\s+philippines)?\b/g, "unionbank")
-    .replace(/\bchina\s+bank\b/g, "chinabank")
-    .replace(/\bmetro\s+bank\b/g, "metrobank")
-    .replace(/\bphilippine\s+national\s+bank\b/g, "pnb");
-
-const isWiseWalletWithoutVisibleAccountNumber = (account: {
-  name?: string | null;
-  institution?: string | null;
-  accountNumber?: string | null;
-  type?: string | null;
-}) => {
-  const digits = String(account.accountNumber ?? "").replace(/\D/g, "");
-  if (digits) {
-    return false;
-  }
-
-  if (String(account.type ?? "").trim().toLowerCase() !== "wallet") {
-    return false;
-  }
-
-  return canonicalImportInstitutionKey(account.institution) === "wise" || canonicalImportInstitutionKey(account.name) === "wise";
-};
-
 const buildCurrencyScopedAccountKey = (account: {
   name?: string | null;
   institution?: string | null;
@@ -263,7 +231,7 @@ const buildCurrencyScopedAccountKey = (account: {
     return "";
   }
 
-  const currencyScope = isWiseWalletWithoutVisibleAccountNumber(account) ? normalizeIdentityCurrencyCode(account.currency) : null;
+  const currencyScope = isWiseWalletWithoutVisibleAccountNumber(account) ? normalizeImportedCurrencyCode(account.currency) : null;
   return `${baseKey} ${currencyScope ?? ""}`.trim();
 };
 

@@ -3,11 +3,13 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { requireAuth } from "@/lib/auth";
 import { deleteLocalUserAccount } from "@/lib/account-management";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const { userId, isGuest } = await requireAuth();
 
     if (isGuest) {

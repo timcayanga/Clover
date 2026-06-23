@@ -4,11 +4,13 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { cancelPayPalSubscription, syncBillingSubscriptionFromPayPal } from "@/lib/paypal-billing";
 import { prisma } from "@/lib/prisma";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const session = await auth();
     if (!session.userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

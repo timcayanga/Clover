@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { isStagingHost, requireAuth } from "@/lib/auth";
 import { wipeLocalUserData } from "@/lib/account-management";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const { userId, isGuest } = await requireAuth();
     const stagingHost = await isStagingHost();
     const payload = (await request.json().catch(() => null)) as

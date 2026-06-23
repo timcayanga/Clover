@@ -1,6 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import {
+  isWiseWalletWithoutVisibleAccountNumber,
+  normalizeImportedAccountKey,
+  type ImportedAccountIdentityLike,
+} from "@/lib/imported-account-identity";
+export { normalizeImportedAccountKey } from "@/lib/imported-account-identity";
 
 type CachedRecord = Record<string, unknown>;
 
@@ -191,65 +197,6 @@ const normalizeImportedAccountNameStem = (value?: string | null) => {
   }
 
   return normalizeMerchantText(normalized.replace(/[\s\-_./]*\d{4}\s*$/u, ""));
-};
-
-export type ImportedAccountIdentityLike = {
-  name?: string | null;
-  institution?: string | null;
-  accountNumber?: string | null;
-  type?: string | null;
-  currency?: string | null;
-  source?: string | null;
-};
-
-const normalizeImportedCurrencyCode = (value?: string | null) => {
-  const normalized = normalizeWhitespace(String(value ?? "")).toUpperCase();
-  return normalized || null;
-};
-
-const isWiseWalletWithoutVisibleAccountNumber = ({
-  name,
-  institution,
-  accountNumber,
-  type,
-}: ImportedAccountIdentityLike) => {
-  const accountDigits = String(accountNumber ?? "").replace(/\D/g, "");
-  if (accountDigits) {
-    return false;
-  }
-
-  const normalizedType = normalizeWhitespace(String(type ?? "")).toLowerCase();
-  if (normalizedType !== "wallet") {
-    return false;
-  }
-
-  const bankLabel = canonicalImportedInstitutionKey(institution) || canonicalImportedInstitutionKey(name);
-  return bankLabel === "wise";
-};
-
-export const normalizeImportedAccountKey = (
-  accountName?: string | null,
-  institution?: string | null,
-  accountNumber?: string | null,
-  accountType?: string | null,
-  currency?: string | null
-) => {
-  const identityCore =
-    normalizeAccountNumberIdentityDigits(accountNumber) ??
-    extractLastFourDigits(accountName) ??
-    normalizeWhitespace(String(accountName ?? ""));
-  const currencyScope = isWiseWalletWithoutVisibleAccountNumber({
-    name: accountName,
-    institution,
-    accountNumber,
-    type: accountType,
-  })
-    ? normalizeImportedCurrencyCode(currency)
-    : null;
-
-  return normalizeMerchantText(
-    `${institution ?? ""} ${identityCore} ${normalizeWhitespace(String(accountType ?? ""))} ${currencyScope ?? ""}`
-  );
 };
 
 const normalizeImportedAccountInstitutionKey = (value?: string | null) =>

@@ -33,15 +33,9 @@ export const requireAdminAuth = async () => {
     return { userId: "local-admin" };
   }
 
-  let session;
+  const session = await auth().catch(() => null);
 
-  try {
-    session = await auth();
-  } catch {
-    return { userId: "local-admin" };
-  }
-
-  if (!session.userId) {
+  if (!session?.userId) {
     throw new Error("UNAUTHORIZED");
   }
 

@@ -15,6 +15,7 @@ import { isSupportedAccountType } from "@/lib/account-types";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { BANK_PRIORITY, normalizeBankName } from "@/lib/data-qa-banks";
+import { isWiseWalletWithoutVisibleAccountNumber, normalizeImportedCurrencyCode } from "@/lib/imported-account-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -128,29 +129,6 @@ const normalizeAccountIdentityKey = (accountName?: string | null, institution?: 
     .trim();
 };
 
-const normalizeIdentityCurrencyCode = (value?: string | null) => {
-  const normalized = String(value ?? "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim().toUpperCase();
-  return normalized || null;
-};
-
-const isWiseWalletWithoutVisibleAccountNumber = (account: {
-  name?: string | null;
-  institution?: string | null;
-  accountNumber?: string | null;
-  type?: string | null;
-}) => {
-  const digits = String(account.accountNumber ?? "").replace(/\D/g, "");
-  if (digits) {
-    return false;
-  }
-
-  if (String(account.type ?? "").trim().toLowerCase() !== "wallet") {
-    return false;
-  }
-
-  return canonicalImportInstitutionKey(account.institution) === "wise" || canonicalImportInstitutionKey(account.name) === "wise";
-};
-
 const buildCurrencyScopedAccountIdentityKey = (account: {
   name?: string | null;
   institution?: string | null;
@@ -163,7 +141,7 @@ const buildCurrencyScopedAccountIdentityKey = (account: {
     return "";
   }
 
-  const currencyScope = isWiseWalletWithoutVisibleAccountNumber(account) ? normalizeIdentityCurrencyCode(account.currency) : null;
+  const currencyScope = isWiseWalletWithoutVisibleAccountNumber(account) ? normalizeImportedCurrencyCode(account.currency) : null;
   return `${baseKey} ${currencyScope ?? ""}`.trim();
 };
 
@@ -344,7 +322,7 @@ const readImportedRunningBalance = (payload: unknown) => {
 
 const isGenericUploadedAccountForInstitution = (account: {
   name: string;
-  institution: string | null;
+  institution?: string | null;
   accountNumber?: string | null;
   source: string;
 }) => {

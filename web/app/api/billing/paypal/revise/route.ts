@@ -9,6 +9,7 @@ import {
   revisePayPalSubscription,
   syncBillingSubscriptionFromPayPal,
 } from "@/lib/paypal-billing";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ function parseInterval(value: unknown): BillingInterval | null {
 
 export async function POST(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const session = await auth();
     if (!session.userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

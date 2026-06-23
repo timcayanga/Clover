@@ -16,7 +16,6 @@ import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
 import { type ImportImageMode } from "@/lib/import-image-mode";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
-import { normalizeBankName } from "@/lib/data-qa-banks";
 import {
   detectStatementMetadata,
   getTrailingBalanceFromParsedRows,
@@ -26,13 +25,18 @@ import {
 } from "@/lib/import-parser";
 import { parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
 import { buildReceiptInstitutionAccountDraft, resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
+import {
+  buildReceiptOptimisticSummary,
+  buildReceiptPreviewTransactions,
+  buildReceiptSummaryFromReceiptDocument,
+  buildReceiptSummaryFromReceiptTransaction,
+} from "@/lib/import-receipt-summary";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { getImportErrorSpec, isResumableImportErrorCode, type ImportErrorStage, type ImportErrorSpec } from "@/lib/import-error-spec";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import {
   getCachedAccountsWorkspace,
   findCachedTransactionsForAccount,
-  normalizeImportedAccountKey,
   syncImportedWorkspaceAccountCaches,
   syncImportedWorkspaceTransactionCaches,
 } from "@/lib/workspace-cache";
@@ -47,6 +51,33 @@ import {
 } from "@/lib/import-activity";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import type { AccountType } from "@/lib/domain-types";
+import {
+  combineUploadInsightsSummaries,
+  dedupeAccountSummaries,
+  normalizeServerAccountSummaries,
+  pickStableBalance,
+  toBalanceString,
+  type UploadAccountSummary,
+} from "@/lib/import-upload-summary";
+import {
+  accountKey,
+  accountRuleKey,
+  canonicalizeSecurityBankUploadIdentity,
+  countDistinctStatementAccountsFromParsedRows,
+  deriveFallbackAccountNameFromFileName,
+  deriveStatementFallbackAccountName,
+  extractLastFourDigits,
+  guessStatementIdentity,
+  importedAccountIdentityKey,
+  inferImportModeForFile,
+  isFilenameOnlyScreenshotSummary,
+  isGenericSameInstitutionAccount,
+  normalizeStatementAccountName,
+  resolveMobileWalletIdentityFromParsedRows,
+  resolveStatementIdentityFromMetadata,
+  resolveStatementIdentityFromParsedRows,
+  type StatementIdentity,
+} from "@/lib/import-statement-identity";
 
 type AccountOption = {
   id: string;
@@ -85,13 +116,6 @@ type ImportStatus = "pending" | "needs_password" | "parsing" | "importing" | "do
 type ConfirmationState = "none" | "pending" | "staged" | "confirmed";
 
 type UploadAccountType = AccountType | null;
-
-type StatementIdentity = {
-  accountName: string | null;
-  institution: string | null;
-  accountNumber: string | null;
-  accountType: UploadAccountType;
-};
 
 type QueuedFile = {
   id: string;
@@ -297,88 +321,6 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
   };
 };
 
-const normalizeStatementAccountName = (name: string, institution?: string | null) => {
-  const trimmed = name.trim();
-  const normalizedInstitution = (institution ?? "").trim();
-  if (!normalizedInstitution) {
-    return trimmed;
-  }
-
-  const suffix = trimmed.replace(/\D/g, "").slice(-4);
-  const hasStatementWords =
-    new RegExp(`^${normalizedInstitution}\\b`, "i").test(trimmed) ||
-    /\b(savings|mastercard|signature|visa|credit\s*card|debit\s*card|passbook|current\s*account|checking|card)\b/i.test(trimmed);
-
-  if (!hasStatementWords) {
-    return trimmed;
-  }
-
-  if (suffix) {
-    return `${normalizedInstitution} ${suffix}`;
-  }
-
-  return normalizedInstitution;
-};
-
-const accountKey = (
-  name: string,
-  institution: string | null,
-  accountNumber?: string | null,
-  currency?: string | null,
-  accountType?: string | null
-) =>
-  normalizeImportedAccountKey(
-    normalizeStatementAccountName(name, institution),
-    institution ?? null,
-    accountNumber ?? null,
-    accountType ?? null,
-    currency ?? null
-  );
-
-const extractLastFourDigits = (value?: string | null) => {
-  if (!value) return null;
-  const digits = String(value).replace(/\D/g, "");
-  if (digits.length < 4) return null;
-  return digits.slice(-4);
-};
-
-const isSecurityBankStatementFileName = (fileName?: string | null) =>
-  normalizeBankName(fileName ?? "") === "Security Bank" || /\bsecurity[\s_-]*bank\b/i.test(String(fileName ?? ""));
-
-const canonicalizeSecurityBankUploadIdentity = (params: {
-  fileName?: string | null;
-  accountName?: string | null;
-  institution?: string | null;
-  accountNumber?: string | null;
-}) => {
-  const normalizedInstitution = normalizeBankName(params.institution ?? params.fileName ?? null);
-  if (normalizedInstitution !== "Security Bank" && !isSecurityBankStatementFileName(params.fileName)) {
-    return {
-      accountName: params.accountName ?? null,
-      institution: params.institution ?? null,
-      accountNumber: params.accountNumber ?? null,
-    };
-  }
-
-  const accountNumber = params.accountNumber ?? null;
-  const lastFour = extractLastFourDigits(accountNumber) ?? extractLastFourDigits(params.accountName ?? null);
-  return {
-    accountName: lastFour ? `Security Bank ${lastFour}` : params.accountName ?? "Security Bank",
-    institution: "Security Bank",
-    accountNumber,
-  };
-};
-
-const accountRuleKey = (name: string, institution: string | null) =>
-  `${(institution ?? "").trim().toLowerCase()}::${extractLastFourDigits(name) ?? name.trim().toLowerCase()}`;
-
-const importedAccountIdentityKey = (name: string | null, institution: string | null, accountNumber?: string | null) =>
-  `${normalizeStatementAccountName(name ?? "", institution).toLowerCase()}::${(institution ?? "").trim().toLowerCase()}::${(
-    accountNumber ?? ""
-  )
-    .replace(/\D/g, "")
-    .slice(-4)}`;
-
 const findKnownImportedBalance = (
   accounts: AccountOption[],
   params: {
@@ -517,207 +459,6 @@ const buildOptimisticUploadSummary = (
     topMerchantCount: null,
     previewTransactions,
   };
-};
-
-const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): UploadInsightsSummary | null => {
-  if (summaries.length === 0) {
-    return null;
-  }
-
-  if (summaries.length === 1) {
-    return summaries[0];
-  }
-
-  const first = summaries[0];
-  const sameInstitution = summaries.every((summary) => summary.institution === first.institution);
-  const sameAccountType = summaries.every((summary) => summary.accountType === first.accountType);
-  const previewTransactions = summaries.flatMap((summary) => summary.previewTransactions ?? []);
-  const rowsImported = summaries.reduce((total, summary) => total + Number(summary.rowsImported ?? 0), 0);
-  const incomeTotal = summaries.reduce((total, summary) => total + Number(summary.incomeTotal ?? 0), 0);
-  const expenseTotal = summaries.reduce((total, summary) => total + Number(summary.expenseTotal ?? 0), 0);
-  const accountSummaries = dedupeAccountSummaries(summaries.flatMap((summary) => summary.accountSummaries ?? []));
-
-  return {
-    fileName: `${summaries.length} files`,
-    rowsImported,
-    accountId: null,
-    accountName: sameInstitution ? first.accountName : null,
-    institution: sameInstitution ? first.institution : null,
-    accountNumber: null,
-    accountType: sameAccountType ? first.accountType : null,
-    balance: null,
-    accountSummaries,
-    optimistic: summaries.some((summary) => summary.optimistic),
-    optimisticAccountId: null,
-    incomeTotal,
-    expenseTotal,
-    netTotal: incomeTotal - expenseTotal,
-    topCategoryName: null,
-    topCategoryAmount: null,
-    topCategoryShare: null,
-    topMerchantName: null,
-    topMerchantCount: null,
-    previewTransactions,
-  };
-};
-
-const toBalanceString = (value: unknown): string | null => {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed ? trimmed : null;
-  }
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value.toFixed(2) : null;
-  }
-
-  try {
-    const stringified = String(value).trim();
-    return stringified ? stringified : null;
-  } catch {
-    return null;
-  }
-};
-
-const normalizeServerAccountSummaries = (value: unknown): NonNullable<UploadInsightsSummary["accountSummaries"]> => {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const summaries = value
-    .map((entry) => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-        return null;
-      }
-
-      const record = entry as Record<string, unknown>;
-      const accountId = typeof record.accountId === "string" && record.accountId.trim() ? record.accountId.trim() : null;
-      if (!accountId) {
-        return null;
-      }
-
-      return {
-        accountId,
-        accountName: typeof record.accountName === "string" && record.accountName.trim() ? record.accountName.trim() : null,
-        institution: typeof record.institution === "string" && record.institution.trim() ? record.institution.trim() : null,
-        accountNumber: typeof record.accountNumber === "string" && record.accountNumber.trim() ? record.accountNumber.trim() : null,
-        accountType:
-          typeof record.accountType === "string" && record.accountType.trim()
-            ? (record.accountType as UploadInsightsSummary["accountType"])
-            : null,
-        balance: toBalanceString(record.balance),
-        rowsImported: Number(record.rowsImported ?? 0) || 0,
-      };
-    })
-    .filter((entry): entry is NonNullable<UploadInsightsSummary["accountSummaries"]>[number] => entry !== null);
-
-  return dedupeAccountSummaries(summaries);
-};
-
-type UploadAccountSummary = NonNullable<UploadInsightsSummary["accountSummaries"]>[number];
-
-const getAccountSummaryIdentityKey = (summary: UploadAccountSummary) => {
-  const accountId = typeof summary.accountId === "string" && summary.accountId.trim() ? summary.accountId.trim() : null;
-  if (accountId) {
-    return `account:${accountId}`;
-  }
-
-  const accountNumber = typeof summary.accountNumber === "string" ? summary.accountNumber.replace(/\D/g, "").slice(-4) : "";
-  const accountName = typeof summary.accountName === "string" ? summary.accountName.trim().toLowerCase() : "";
-  const institution = typeof summary.institution === "string" ? summary.institution.trim().toLowerCase() : "";
-  const accountType = typeof summary.accountType === "string" ? summary.accountType.trim().toLowerCase() : "";
-
-  if (accountNumber || accountName || institution) {
-    return `summary:${institution}:${accountNumber}:${accountName}:${accountType}`;
-  }
-
-  return null;
-};
-
-const normalizeSummaryBalanceValue = (value: string | null | undefined) => {
-  const normalized = toBalanceString(value);
-  if (!normalized) {
-    return null;
-  }
-
-  const numeric = Number(normalized.replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(numeric) ? numeric : null;
-};
-
-const mergeAccountSummaries = (existing: UploadAccountSummary, incoming: UploadAccountSummary): UploadAccountSummary => {
-  const existingBalanceValue = normalizeSummaryBalanceValue(existing.balance);
-  const incomingBalanceValue = normalizeSummaryBalanceValue(incoming.balance);
-  const existingIsMeaningful = existingBalanceValue !== null && existingBalanceValue !== 0;
-  const incomingIsMeaningful = incomingBalanceValue !== null && incomingBalanceValue !== 0;
-  const existingRows = Number(existing.rowsImported ?? 0);
-  const incomingRows = Number(incoming.rowsImported ?? 0);
-
-  const preferred =
-    incomingIsMeaningful && !existingIsMeaningful
-      ? incoming
-      : existingIsMeaningful && !incomingIsMeaningful
-        ? existing
-        : incomingRows > existingRows
-          ? incoming
-          : existing;
-
-  return {
-    ...preferred,
-    balance: pickStableBalance(existing.balance, incoming.balance),
-    rowsImported: Math.max(existingRows, incomingRows),
-  };
-};
-
-const dedupeAccountSummaries = (summaries: UploadAccountSummary[]) => {
-  const byKey = new Map<string, UploadAccountSummary>();
-  const keyOrder: string[] = [];
-
-  for (const summary of summaries) {
-    const key = getAccountSummaryIdentityKey(summary);
-    if (!key) {
-      const fallbackKey = `anon:${keyOrder.length}`;
-      keyOrder.push(fallbackKey);
-      byKey.set(fallbackKey, summary);
-      continue;
-    }
-
-    const existing = byKey.get(key);
-    if (!existing) {
-      keyOrder.push(key);
-      byKey.set(key, summary);
-      continue;
-    }
-
-    byKey.set(key, mergeAccountSummaries(existing, summary));
-  }
-
-  return keyOrder.map((key) => byKey.get(key)).filter((summary): summary is UploadAccountSummary => Boolean(summary));
-};
-
-const pickStableBalance = (...values: Array<unknown>) => {
-  let firstMeaningful: string | null = null;
-
-  for (const value of values) {
-    const normalized = toBalanceString(value);
-    if (!normalized) {
-      continue;
-    }
-
-    if (firstMeaningful === null) {
-      firstMeaningful = normalized;
-    }
-
-    const numeric = Number(normalized.replace(/[^0-9.-]/g, ""));
-    if (Number.isFinite(numeric) && numeric !== 0) {
-      return normalized;
-    }
-  }
-
-  return firstMeaningful;
 };
 
 const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
@@ -1103,224 +844,6 @@ const resolveCashAccountOption = (accounts: AccountOption[]) =>
 const findAccountOptionById = (accounts: AccountOption[], accountId: string | null) =>
   accountId ? accounts.find((account) => account.id === accountId) ?? null : null;
 
-const buildReceiptPreviewTransactions = (
-  preview: ReceiptPreviewResult,
-  params: {
-    importFileId: string;
-    accountId: string;
-    accountName: string | null;
-    institution: string | null;
-    accountType: UploadAccountType;
-  }
-): NonNullable<UploadInsightsSummary["previewTransactions"]> => {
-  const amount = preview.total?.trim() ?? "";
-  const date = preview.billDate?.trim() ?? "";
-
-  if (!amount || !date) {
-    return [];
-  }
-
-  return [
-    {
-      id: `optimistic-${params.importFileId}-receipt`,
-      importFileId: params.importFileId,
-      sourceRowIndex: 1,
-      accountId: params.accountId,
-      accountName: params.accountName ?? "Receipt",
-      categoryId: null,
-      categoryName: null,
-      reviewStatus: "pending_review",
-      date,
-      amount,
-      currency: preview.currency?.trim().toUpperCase() || "PHP",
-      type: "expense",
-      merchantRaw: preview.merchantName?.trim() || "Receipt",
-      merchantClean: preview.merchantName?.trim() || null,
-      description: preview.merchantName?.trim() || null,
-      isTransfer: false,
-      isExcluded: false,
-      source: "upload",
-    },
-  ];
-};
-
-const buildReceiptOptimisticSummary = (
-  fileName: string,
-  importFileId: string,
-  preview: ReceiptPreviewResult,
-  account: AccountOption
-): UploadInsightsSummary => {
-  const accountType = account.type as UploadAccountType;
-  const previewTransactions = buildReceiptPreviewTransactions(preview, {
-    importFileId,
-    accountId: account.id,
-    accountName: account.name,
-    institution: account.institution ?? null,
-    accountType,
-  });
-
-  const summary = buildOptimisticUploadSummary(
-    fileName,
-    previewTransactions.length,
-    account.id,
-    account.name,
-    account.institution ?? null,
-    accountType,
-    null,
-    null,
-    previewTransactions,
-    null,
-    false
-  );
-
-  return {
-    ...summary,
-    optimistic: false,
-  };
-};
-
-const buildReceiptSummaryFromReceiptDocument = (params: {
-  fileName: string;
-  importFileId: string;
-  receiptDocument: NonNullable<ImportStatusPayload["receiptDocument"]>;
-  accountId: string | null;
-  accountType: UploadAccountType;
-  previewAccountName?: string | null;
-}): UploadInsightsSummary | null => {
-  const total = typeof params.receiptDocument.total === "string" ? params.receiptDocument.total.trim() : "";
-  const transactionDate = typeof params.receiptDocument.transactionDate === "string" ? params.receiptDocument.transactionDate.trim() : "";
-  if (!total || !transactionDate) {
-    return null;
-  }
-
-  const merchantName =
-    typeof params.receiptDocument.merchantClean === "string" && params.receiptDocument.merchantClean.trim()
-      ? params.receiptDocument.merchantClean.trim()
-      : typeof params.receiptDocument.merchantRaw === "string" && params.receiptDocument.merchantRaw.trim()
-        ? params.receiptDocument.merchantRaw.trim()
-        : "Receipt";
-
-  const normalizedAccountId = params.accountId ?? `receipt-${params.importFileId}`;
-  const previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]> = [
-    {
-      id: `optimistic-${params.importFileId}-receipt`,
-      importFileId: params.importFileId,
-      sourceRowIndex: 1,
-      accountId: normalizedAccountId,
-      accountName: params.previewAccountName ?? "Receipt",
-      categoryId: null,
-      categoryName: null,
-      reviewStatus: "pending_review",
-      date: transactionDate,
-      amount: total,
-      currency: params.receiptDocument.currency?.trim().toUpperCase() || "PHP",
-      type: "expense",
-      merchantRaw: merchantName,
-      merchantClean: merchantName,
-      description: merchantName,
-      isTransfer: false,
-      isExcluded: false,
-      source: "upload",
-    },
-  ];
-
-  return {
-    ...buildOptimisticUploadSummary(
-      params.fileName,
-      previewTransactions.length,
-      params.accountId,
-      null,
-      null,
-      params.accountType,
-      null,
-      null,
-      previewTransactions,
-      null,
-      false
-    ),
-    optimistic: false,
-  };
-};
-
-const buildReceiptSummaryFromReceiptTransaction = (params: {
-  fileName: string;
-  importFileId: string;
-  receiptTransaction: NonNullable<ImportStatusPayload["receiptTransaction"]>;
-  accountType: UploadAccountType;
-}): UploadInsightsSummary | null => {
-  const amount = typeof params.receiptTransaction.amount === "string" ? params.receiptTransaction.amount.trim() : "";
-  const date = typeof params.receiptTransaction.date === "string" ? params.receiptTransaction.date.trim() : "";
-  const accountId = typeof params.receiptTransaction.accountId === "string" ? params.receiptTransaction.accountId.trim() : "";
-  const accountName =
-    typeof params.receiptTransaction.accountName === "string" && params.receiptTransaction.accountName.trim()
-      ? params.receiptTransaction.accountName.trim()
-      : "Receipt";
-  if (!amount || !date || !accountId) {
-    return null;
-  }
-
-  const merchantName =
-    typeof params.receiptTransaction.merchantClean === "string" && params.receiptTransaction.merchantClean.trim()
-      ? params.receiptTransaction.merchantClean.trim()
-      : typeof params.receiptTransaction.merchantRaw === "string" && params.receiptTransaction.merchantRaw.trim()
-        ? params.receiptTransaction.merchantRaw.trim()
-        : typeof params.receiptTransaction.description === "string" && params.receiptTransaction.description.trim()
-          ? params.receiptTransaction.description.trim()
-          : "Receipt";
-
-  const previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]> = [
-    {
-      id: `optimistic-${params.importFileId}-receipt`,
-      importFileId: params.importFileId,
-      sourceRowIndex: 1,
-      accountId,
-      accountName,
-      categoryId:
-        typeof params.receiptTransaction.categoryId === "string" && params.receiptTransaction.categoryId.trim()
-          ? params.receiptTransaction.categoryId.trim()
-          : null,
-      categoryName:
-        typeof params.receiptTransaction.rawPayload?.receiptDetails === "object" &&
-        params.receiptTransaction.rawPayload.receiptDetails !== null &&
-        !Array.isArray(params.receiptTransaction.rawPayload.receiptDetails) &&
-        typeof (params.receiptTransaction.rawPayload.receiptDetails as Record<string, unknown>).category_name === "string"
-          ? String((params.receiptTransaction.rawPayload.receiptDetails as Record<string, unknown>).category_name)
-          : null,
-      reviewStatus: "pending_review",
-      date,
-      amount,
-      currency: params.receiptTransaction.currency?.trim().toUpperCase() || "PHP",
-      type: params.receiptTransaction.type ?? "expense",
-      merchantRaw: merchantName,
-      merchantClean: merchantName,
-      description:
-        typeof params.receiptTransaction.description === "string" && params.receiptTransaction.description.trim()
-          ? params.receiptTransaction.description.trim()
-          : merchantName,
-      isTransfer: Boolean(params.receiptTransaction.isTransfer),
-      isExcluded: Boolean(params.receiptTransaction.isExcluded),
-      source: "upload",
-    },
-  ];
-
-  return {
-    ...buildOptimisticUploadSummary(
-      params.fileName,
-      previewTransactions.length,
-      accountId,
-      accountName,
-      params.receiptTransaction.institution ?? null,
-      params.accountType,
-      null,
-      null,
-      previewTransactions,
-      params.receiptTransaction.accountNumber ?? null,
-      false
-    ),
-    optimistic: false,
-  };
-};
-
 const loadOptimisticPreviewTransactions = async (
   importFileId: string,
   accountId: string,
@@ -1398,480 +921,6 @@ const loadOptimisticPreviewTransactions = async (
   }
 
   return [];
-};
-
-const guessUcpbKnownSampleIdentity = (fileName: string) => {
-  const lowerName = fileName.toLowerCase();
-  if (!lowerName.includes("ucpb") || !lowerName.includes("bank statement") || lowerName.includes("excel")) {
-    return null;
-  }
-
-  if (lowerName.includes("word")) {
-    return {
-      accountName: "JOHN CITIZEN",
-      institution: "UCPB",
-      accountNumber: "2024600000000",
-    };
-  }
-
-  return {
-    accountName: "JOHN CITIZEN",
-    institution: "UCPB",
-    accountNumber: "202460000000",
-  };
-};
-
-const guessUnionBankKnownSampleIdentity = (fileName: string) => {
-  const lowerName = fileName.toLowerCase();
-
-  if (/^img_138[7-9]\.png$/.test(lowerName) || /^img_139[0-6]\.png$/.test(lowerName)) {
-    return {
-      accountName: "UnionBank 8037",
-      institution: "UnionBank",
-      accountNumber: "8037",
-      accountType: "bank" as const,
-    };
-  }
-
-  if (/771487697.*soa.*union.*bank|soa-union-bank/i.test(lowerName)) {
-    return {
-      accountName: "UnionBank 3912",
-      institution: "UnionBank",
-      accountNumber: "1056827763912",
-      accountType: "credit_card" as const,
-    };
-  }
-
-  if (/philippines\s+unionbank\s+excel/i.test(lowerName)) {
-    return {
-      accountName: "UnionBank 1235",
-      institution: "UnionBank of the Philippines",
-      accountNumber: "1093551235",
-      accountType: "bank" as const,
-    };
-  }
-
-  if (/philippines\s+unionbank\s+word/i.test(lowerName)) {
-    return {
-      accountName: "UnionBank 3597",
-      institution: "UnionBank of the Philippines",
-      accountNumber: "109355123597",
-      accountType: "bank" as const,
-    };
-  }
-
-  if (/business_statement|word_and_pdf_template|union_bank_of_the_philippines_business/i.test(lowerName)) {
-    return {
-      accountName: "UnionBank 6789",
-      institution: "UnionBank of the Philippines",
-      accountNumber: "123456789",
-      accountType: "bank" as const,
-    };
-  }
-
-  return null;
-};
-
-const guessRcbcKnownScreenshotIdentity = (fileName: string) => {
-  const normalized = fileName.trim().replace(/^.*[\\/]/, "").toLowerCase();
-
-  if (/^img_137[1-3]\.png$/.test(normalized)) {
-    return {
-      accountName: "RCBC 0272",
-      institution: "RCBC",
-      accountNumber: "0000009048500272",
-      accountType: "bank" as const,
-    };
-  }
-
-  if (/^img_137[4-6]\.png$/.test(normalized)) {
-    return {
-      accountName: "RCBC 1014",
-      institution: "RCBC",
-      accountNumber: "1014",
-      accountType: "credit_card" as const,
-    };
-  }
-
-  return null;
-};
-
-const guessStatementIdentity = (fileName: string) => {
-  const lowerName = fileName.toLowerCase();
-  const ucpbKnownSampleIdentity = guessUcpbKnownSampleIdentity(fileName);
-  if (ucpbKnownSampleIdentity) {
-    return ucpbKnownSampleIdentity;
-  }
-
-  const unionBankKnownSampleIdentity = guessUnionBankKnownSampleIdentity(fileName);
-  if (unionBankKnownSampleIdentity) {
-    return unionBankKnownSampleIdentity;
-  }
-
-  const rcbcKnownScreenshotIdentity = guessRcbcKnownScreenshotIdentity(fileName);
-  if (rcbcKnownScreenshotIdentity) {
-    return rcbcKnownScreenshotIdentity;
-  }
-
-  if (lowerName.includes("gcash")) {
-    return { accountName: "GCash", institution: "GCash", accountNumber: null };
-  }
-
-  if (lowerName.includes("rcbc")) {
-    const match = lowerName.match(/(\d{4})(?:_unlocked)?\.pdf$/i) ?? lowerName.match(/(\d{4})/);
-    return {
-      accountName: match ? `RCBC ${match[1]}` : "RCBC",
-      institution: "RCBC",
-      accountNumber: null,
-    };
-  }
-
-  if (lowerName.includes("unionbank") || lowerName.includes("union bank")) {
-    return { accountName: "UnionBank", institution: "UnionBank", accountNumber: null };
-  }
-
-  if (isSecurityBankStatementFileName(fileName)) {
-    return { accountName: "Security Bank", institution: "Security Bank", accountNumber: null };
-  }
-
-  if (lowerName.includes("bpi")) {
-    return { accountName: "BPI", institution: "BPI", accountNumber: null };
-  }
-
-  if (lowerName.includes("metrobank") || lowerName.includes("mb-online") || lowerName.includes("msoa")) {
-    const match = lowerName.match(/(\d{4})(?=[^\d]*$)/) ?? lowerName.match(/(\d{4})/);
-    return {
-      accountName: match ? `Metrobank ${match[1]}` : "Metrobank",
-      institution: "Metrobank",
-      accountNumber: null,
-    };
-  }
-
-  return null;
-};
-
-const trainedReceiptImportFileNames = new Set([
-  "2026-05-01 22.01.12.jpg",
-  "2026-05-01 22.01.22.jpg",
-  "2026-05-01 22.02.02.jpg",
-  "2026-05-01 22.02.11.jpg",
-  "2026-05-01 22.02.15.jpg",
-]);
-
-const normalizeTrainedReceiptImportFileName = (fileName: string) => {
-  const baseName = fileName.trim().toLowerCase().replace(/^.*[\\/]/, "");
-  return baseName
-    .replace(/\s*\(\d+\)(?=\.[^.]+$)/, "")
-    .replace(/\s*-\s*copy(?=\.[^.]+$)/, "")
-    .replace(/\s+copy(?=\.[^.]+$)/, "");
-};
-
-const isTrainedReceiptImportFileName = (fileName: string) =>
-  trainedReceiptImportFileNames.has(normalizeTrainedReceiptImportFileName(fileName));
-
-const inferImportModeForFile = (file: File, defaultMode: ImportImageMode): ImportImageMode => {
-  if (!isImageImportFile(file)) {
-    return defaultMode;
-  }
-
-  const lowerName = file.name.toLowerCase();
-  if (isTrainedReceiptImportFileName(lowerName)) {
-    return "receipt";
-  }
-
-  const guessedIdentity = guessStatementIdentity(file.name);
-
-  if (guessedIdentity) {
-    return "statement";
-  }
-
-  if (/\b(statement|bank|balance|account|history|ledger|transaction)\b/i.test(lowerName)) {
-    return "statement";
-  }
-
-  return defaultMode;
-};
-
-const resolveStatementIdentityFromMetadata = (metadata: unknown) => {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return null;
-  }
-
-  const source = metadata as Record<string, unknown>;
-  const accountName = typeof source.accountName === "string" && source.accountName.trim() ? source.accountName.trim() : null;
-  const institution = typeof source.institution === "string" && source.institution.trim() ? source.institution.trim() : null;
-  const accountNumber =
-    typeof source.accountNumber === "string" && source.accountNumber.trim() ? source.accountNumber.trim() : null;
-
-  if (!accountName && !institution && !accountNumber) {
-    return null;
-  }
-
-  const rawAccountType = typeof source.accountType === "string" ? source.accountType.trim() : "";
-  const accountType =
-    rawAccountType === "bank" ||
-    rawAccountType === "wallet" ||
-    rawAccountType === "credit_card" ||
-    rawAccountType === "cash" ||
-    rawAccountType === "investment" ||
-    rawAccountType === "other"
-      ? rawAccountType
-      : inferAccountTypeFromStatement(institution, accountName, "bank");
-
-  return {
-    accountName,
-    institution,
-    accountNumber,
-    accountType,
-  };
-};
-
-const deriveFallbackAccountNameFromFileName = (fileName: string) => {
-  const stem = fileName.replace(/\.[^.]+$/, "").trim();
-  return stem || "Imported statement";
-};
-
-const isGenericMobileScreenshotFileName = (fileName: string) => {
-  const normalized = fileName.trim().replace(/^.*[\\/]/, "").toLowerCase();
-  return /^(?:img|screenshot|screen\s*shot|photo|image)[_\s-]?\d{3,8}(?:\s*\(\d+\))?\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(normalized);
-};
-
-const deriveStatementFallbackAccountName = (
-  fileName: string,
-  institution?: string | null,
-  accountNumber?: string | null,
-  accountType?: UploadInsightsSummary["accountType"] | null,
-) => {
-  if (!isGenericMobileScreenshotFileName(fileName)) {
-    return deriveFallbackAccountNameFromFileName(fileName);
-  }
-
-  const normalizedInstitution = typeof institution === "string" && institution.trim() ? institution.trim() : null;
-  if (!normalizedInstitution) {
-    return null;
-  }
-
-  return formatUploadAccountDisplayName(
-    normalizedInstitution,
-    normalizedInstitution,
-    accountNumber ?? null,
-    accountType ?? null,
-  );
-};
-
-const isFilenameOnlyScreenshotSummary = (
-  fileName: string,
-  summary: UploadInsightsSummary | null | undefined
-) => {
-  if (!summary || !isGenericMobileScreenshotFileName(fileName)) {
-    return false;
-  }
-
-  const fallbackName = deriveFallbackAccountNameFromFileName(fileName).trim().toLowerCase();
-  const accountName = String(summary.accountName ?? "").trim().toLowerCase();
-  const institution = String(summary.institution ?? "").trim();
-  return Boolean(accountName && accountName === fallbackName && !institution);
-};
-
-const readParsedRowString = (row: Record<string, unknown>, key: string) => {
-  const direct = row[key];
-  if (typeof direct === "string" && direct.trim()) {
-    return direct.trim();
-  }
-
-  const rawPayload =
-    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-      ? (row.rawPayload as Record<string, unknown>)
-      : null;
-  const payloadValue = rawPayload?.[key];
-  return typeof payloadValue === "string" && payloadValue.trim() ? payloadValue.trim() : null;
-};
-
-const readParsedRowAccountType = (row: Record<string, unknown>) => {
-  const direct = row.accountType;
-  if (
-    direct === "bank" ||
-    direct === "wallet" ||
-    direct === "credit_card" ||
-    direct === "cash" ||
-    direct === "investment" ||
-    direct === "other"
-  ) {
-    return direct;
-  }
-
-  const rawPayload =
-    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-      ? (row.rawPayload as Record<string, unknown>)
-      : null;
-  const payloadValue = rawPayload?.accountType;
-  return payloadValue === "bank" ||
-    payloadValue === "wallet" ||
-    payloadValue === "credit_card" ||
-    payloadValue === "cash" ||
-    payloadValue === "investment" ||
-    payloadValue === "other"
-    ? payloadValue
-    : null;
-};
-
-const weakStatementIdentityLabelPattern =
-  /^(?:php|accounts?|account details|transaction history|all|received|sent|download|view all)$/i;
-const monthOnlyIdentityPattern =
-  /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2},?$/i;
-
-const isWeakParsedStatementIdentity = (params: {
-  accountName?: string | null;
-  institution?: string | null;
-  accountNumber?: string | null;
-}) => {
-  if (params.accountNumber?.trim()) {
-    return false;
-  }
-
-  const accountName = params.accountName?.trim() ?? "";
-  const institution = params.institution?.trim() ?? "";
-  const combined = [accountName, institution].filter(Boolean).join(" ").trim();
-  if (!combined) {
-    return true;
-  }
-
-  return (
-    weakStatementIdentityLabelPattern.test(combined) ||
-    monthOnlyIdentityPattern.test(combined) ||
-    /^premier plus savings\b/i.test(combined) ||
-    /^available balance$/i.test(combined) ||
-    /^\*{2,}\d{4}\b/.test(combined) ||
-    isGenericMobileScreenshotFileName(combined)
-  );
-};
-
-const resolveStatementIdentityFromParsedRows = (rows: Array<Record<string, unknown>>) => {
-  const selectIdentity = (predicate: (row: Record<string, unknown>) => boolean) => {
-    for (const row of rows) {
-      if (!predicate(row)) {
-        continue;
-      }
-
-      const accountName = readParsedRowString(row, "accountName");
-      const institution = readParsedRowString(row, "institution");
-      const accountNumber = readParsedRowString(row, "accountNumber");
-      const accountType = readParsedRowAccountType(row);
-      if (isWeakParsedStatementIdentity({ accountName, institution, accountNumber })) {
-        continue;
-      }
-
-      if (accountName || institution || accountNumber) {
-        return {
-          accountName,
-          institution,
-          accountNumber,
-          accountType,
-        };
-      }
-    }
-
-    return null;
-  };
-
-  const screenshotIdentity = selectIdentity((row) => {
-    const rawPayload =
-      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-        ? (row.rawPayload as Record<string, unknown>)
-        : null;
-    const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
-    const kind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
-    return /_mobile_screenshot/i.test(`${source} ${kind}`) || kind === "account_snapshot_marker";
-  });
-  if (screenshotIdentity) {
-    return screenshotIdentity;
-  }
-
-  const numberedIdentity = selectIdentity((row) => Boolean(readParsedRowString(row, "accountNumber")));
-  if (numberedIdentity) {
-    return numberedIdentity;
-  }
-
-  for (const row of rows) {
-    const accountName = readParsedRowString(row, "accountName");
-    const institution = readParsedRowString(row, "institution");
-    const accountNumber = readParsedRowString(row, "accountNumber");
-    if (accountName || institution || accountNumber) {
-      return {
-        accountName,
-        institution,
-        accountNumber,
-        accountType: readParsedRowAccountType(row),
-      };
-    }
-  }
-
-  return null;
-};
-
-const countDistinctStatementAccountsFromParsedRows = (rows: Array<Record<string, unknown>>) => {
-  const keys = new Set<string>();
-  for (const row of rows) {
-    const accountNumber = readParsedRowString(row, "accountNumber");
-    const institution = readParsedRowString(row, "institution") ?? "";
-    const accountName = readParsedRowString(row, "accountName") ?? "";
-    if (accountNumber) {
-      keys.add(`number:${accountNumber.replace(/\D/g, "")}`);
-      continue;
-    }
-    if (institution || accountName) {
-      keys.add(`name:${institution.toLowerCase()}::${accountName.toLowerCase()}`);
-    }
-  }
-
-  return keys.size;
-};
-
-const resolveMobileWalletIdentityFromParsedRows = (rows: Array<Record<string, unknown>>) => {
-  for (const row of rows) {
-    const rawPayload =
-      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-        ? (row.rawPayload as Record<string, unknown>)
-        : null;
-    const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
-    const kind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
-    const bank = typeof rawPayload?.bank === "string" ? rawPayload.bank : "";
-    const rowInstitution = typeof row.institution === "string" ? row.institution : "";
-    const identityText = `${source} ${kind} ${bank} ${rowInstitution}`;
-
-    if (/maya/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
-      return {
-        accountName: "Maya Wallet",
-        institution: "Maya",
-        accountType: "wallet" as const,
-        accountNumber: null,
-      };
-    }
-
-    if (/gcash/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
-      return {
-        accountName: "GCash",
-        institution: "GCash",
-        accountType: "wallet" as const,
-        accountNumber: null,
-      };
-    }
-  }
-
-  return null;
-};
-
-const hasStatementSuffix = (name?: string | null) => /\b\d{4}\b/.test(name ?? "");
-
-const isGenericSameInstitutionAccount = (account: AccountOption, institution: string | null) => {
-  if (!institution) {
-    return false;
-  }
-
-  return (
-    account.institution?.trim().toLowerCase() === institution.trim().toLowerCase() &&
-    !hasStatementSuffix(account.name)
-  );
 };
 
 const friendlyImportPhaseLabel = (label: string, fileName?: string | null, importMode?: ImportImageMode | null) => {
@@ -2030,7 +1079,7 @@ const importSummaryLooksWise = (summary: UploadInsightsSummary | null | undefine
     summary.accountSummaries?.map((account) => `${account.accountName ?? ""} ${account.institution ?? ""}`).join(" "),
     summary.previewTransactions
       ?.slice(0, 5)
-      .map((transaction) => `${transaction.accountName ?? ""} ${transaction.institution ?? ""}`)
+      .map((transaction) => `${transaction.accountName ?? ""} ${transaction.merchantRaw ?? ""}`)
       .join(" "),
   ]
     .filter(Boolean)
@@ -2711,7 +1760,7 @@ export function ImportFilesModal({
             errorCode: null,
             errorTitle: null,
             errorNextSteps: null,
-            progress: Math.max(item.progress, IMPORT_PROGRESS.pending),
+            progress: item.progress,
             progressLabel: "Queued in background",
           };
         }
@@ -2754,10 +1803,7 @@ export function ImportFilesModal({
         fileIndex: Math.max(1, outcome.successful.length),
         fileTotal: currentItems.length,
         completedFiles: outcome.successful.length,
-        progress: Math.min(
-          99,
-          Math.max(IMPORT_PROGRESS.uploading, Math.round((outcome.successful.length / currentItems.length) * 100))
-        ),
+        progress: Math.min(99, Math.max(IMPORT_PROGRESS.uploading, Math.round((outcome.successful.length / currentItems.length) * 100))),
         detail: "Import timed out",
         summary: completedSummary,
         errorCode: "I-107",
@@ -3478,7 +2524,7 @@ export function ImportFilesModal({
         return {
           ...item,
           ...patch,
-          ...(patch.error === null || patch.status === "done" || patch.status === "pending" || patch.status === "importing" || patch.status === "needs_password"
+      ...(patch.error === null || patch.status === "done" || patch.status === "pending" || patch.status === "importing" || patch.status === "needs_password"
             ? { errorCode: null, errorTitle: null, errorNextSteps: null }
             : {}),
           ...(nextProgress === undefined ? {} : { progress: nextProgress }),
@@ -5807,7 +4853,26 @@ export function ImportFilesModal({
           return;
         }
 
-        const summary = buildReceiptOptimisticSummary(item.file.name, item.importFileId ?? item.id, receiptPreview, targetAccount);
+        const summary = buildReceiptOptimisticSummary(
+          item.file.name,
+          item.importFileId ?? item.id,
+          receiptPreview,
+          targetAccount,
+          (params) =>
+            buildOptimisticUploadSummary(
+              params.fileName,
+              params.importedRows,
+              params.accountId,
+              params.accountName,
+              params.institution,
+              params.accountType,
+              params.optimisticAccountId ?? null,
+              params.balance ?? null,
+              params.previewTransactions,
+              params.accountNumber ?? null,
+              params.showBalanceEvenIfEmpty ?? false
+            )
+        );
         localPreparseSummaryByItemIdRef.current.set(itemId, summary);
         return;
       }
@@ -5827,24 +4892,31 @@ export function ImportFilesModal({
       const parsedAccountGroupCount = countDistinctStatementAccountsFromParsedRows(parsedRows as Array<Record<string, unknown>>);
       const statementScreenshotPreparse =
         item.file.type.startsWith("image/") || /^image$/i.test(fileTypeLabel(item.file));
-      const preferredStatementIdentity = statementScreenshotPreparse ? parsedRowIdentity ?? localMetadata : localMetadata ?? parsedRowIdentity;
 
       if (!localMetadata && parsedRows.length === 0) {
         return;
       }
 
+      const shouldPreferParsedRowIdentity =
+        statementScreenshotPreparse && Boolean(parsedRowIdentity?.accountName || parsedRowIdentity?.institution || parsedRowIdentity?.accountNumber);
+      const preferredStatementIdentity = shouldPreferParsedRowIdentity ? parsedRowIdentity : localMetadata;
+      const fallbackStatementIdentity = shouldPreferParsedRowIdentity ? localMetadata : parsedRowIdentity;
+
       const rawAccountName =
         mobileWalletIdentity?.accountName ??
         preferredStatementIdentity?.accountName ??
+        fallbackStatementIdentity?.accountName ??
         guessedIdentity?.accountName ??
         deriveStatementFallbackAccountName(
           item.file.name,
           mobileWalletIdentity?.institution ??
             preferredStatementIdentity?.institution ??
+            fallbackStatementIdentity?.institution ??
             guessedIdentity?.institution ??
             null,
           mobileWalletIdentity?.accountNumber ??
             preferredStatementIdentity?.accountNumber ??
+            fallbackStatementIdentity?.accountNumber ??
             guessedIdentity?.accountNumber ??
             null,
           (mobileWalletIdentity?.accountType ?? localMetadata?.accountType ?? null) as UploadInsightsSummary["accountType"] | null
@@ -5857,11 +4929,13 @@ export function ImportFilesModal({
       const institution =
         mobileWalletIdentity?.institution ??
         preferredStatementIdentity?.institution ??
+        fallbackStatementIdentity?.institution ??
         guessedIdentity?.institution ??
         null;
       const accountNumber =
         mobileWalletIdentity?.accountNumber ??
         preferredStatementIdentity?.accountNumber ??
+        fallbackStatementIdentity?.accountNumber ??
         guessedIdentity?.accountNumber ??
         null;
       if (/^UCPB$/i.test(institution ?? "") && !accountNumber) {
@@ -6166,24 +5240,56 @@ export function ImportFilesModal({
         const localReceiptSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
         const receiptTransactionSummary =
           payload.receiptTransaction
-            ? buildReceiptSummaryFromReceiptTransaction({
-                fileName,
-                importFileId,
-                receiptTransaction: payload.receiptTransaction,
-                accountType: (accountOption?.type as UploadAccountType) ?? null,
-              })
+            ? buildReceiptSummaryFromReceiptTransaction(
+                {
+                  fileName,
+                  importFileId,
+                  receiptTransaction: payload.receiptTransaction,
+                  accountType: (accountOption?.type as UploadAccountType) ?? null,
+                },
+                (params) =>
+                  buildOptimisticUploadSummary(
+                    params.fileName,
+                    params.importedRows,
+                    params.accountId,
+                    params.accountName,
+                    params.institution,
+                    params.accountType,
+                    params.optimisticAccountId ?? null,
+                    params.balance ?? null,
+                    params.previewTransactions,
+                    params.accountNumber ?? null,
+                    params.showBalanceEvenIfEmpty ?? false
+                  )
+              )
             : null;
         const receiptSummary =
           receiptTransactionSummary ??
           (payload.receiptDocument
-            ? buildReceiptSummaryFromReceiptDocument({
-                fileName,
-                importFileId,
-                receiptDocument: payload.receiptDocument,
-                accountId: receiptAccountId,
-                accountType: (accountOption?.type as UploadAccountType) ?? null,
-                previewAccountName: accountOption?.name ?? null,
-              })
+            ? buildReceiptSummaryFromReceiptDocument(
+                {
+                  fileName,
+                  importFileId,
+                  receiptDocument: payload.receiptDocument,
+                  accountId: receiptAccountId,
+                  accountType: (accountOption?.type as UploadAccountType) ?? null,
+                  previewAccountName: accountOption?.name ?? null,
+                },
+                (params) =>
+                  buildOptimisticUploadSummary(
+                    params.fileName,
+                    params.importedRows,
+                    params.accountId,
+                    params.accountName,
+                    params.institution,
+                    params.accountType,
+                    params.optimisticAccountId ?? null,
+                    params.balance ?? null,
+                    params.previewTransactions,
+                    params.accountNumber ?? null,
+                    params.showBalanceEvenIfEmpty ?? false
+                  )
+              )
             : null) ??
           localReceiptSummary;
 
@@ -6711,21 +5817,53 @@ export function ImportFilesModal({
 
             const inlineReceiptSummary =
               processPayload?.receiptTransaction
-                ? buildReceiptSummaryFromReceiptTransaction({
-                    fileName: item.file.name,
-                    importFileId,
-                    receiptTransaction: processPayload.receiptTransaction,
-                    accountType: null,
-                  })
-                : processPayload?.receiptDocument
-                  ? buildReceiptSummaryFromReceiptDocument({
+                ? buildReceiptSummaryFromReceiptTransaction(
+                    {
                       fileName: item.file.name,
                       importFileId,
-                      receiptDocument: processPayload.receiptDocument,
-                      accountId: typeof processPayload.accountId === "string" ? processPayload.accountId : null,
+                      receiptTransaction: processPayload.receiptTransaction,
                       accountType: null,
-                      previewAccountName: null,
-                    })
+                    },
+                    (params) =>
+                      buildOptimisticUploadSummary(
+                        params.fileName,
+                        params.importedRows,
+                        params.accountId,
+                        params.accountName,
+                        params.institution,
+                        params.accountType,
+                        params.optimisticAccountId ?? null,
+                        params.balance ?? null,
+                        params.previewTransactions,
+                        params.accountNumber ?? null,
+                        params.showBalanceEvenIfEmpty ?? false
+                      )
+                  )
+                : processPayload?.receiptDocument
+                  ? buildReceiptSummaryFromReceiptDocument(
+                      {
+                        fileName: item.file.name,
+                        importFileId,
+                        receiptDocument: processPayload.receiptDocument,
+                        accountId: typeof processPayload.accountId === "string" ? processPayload.accountId : null,
+                        accountType: null,
+                        previewAccountName: null,
+                      },
+                      (params) =>
+                        buildOptimisticUploadSummary(
+                          params.fileName,
+                          params.importedRows,
+                          params.accountId,
+                          params.accountName,
+                          params.institution,
+                          params.accountType,
+                          params.optimisticAccountId ?? null,
+                          params.balance ?? null,
+                          params.previewTransactions,
+                          params.accountNumber ?? null,
+                          params.showBalanceEvenIfEmpty ?? false
+                        )
+                    )
                   : null;
 
             if (inlineReceiptSummary) {

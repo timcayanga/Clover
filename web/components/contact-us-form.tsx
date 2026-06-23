@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { ContactInquiryAttachment } from "@/lib/contact-inquiries";
 
 export function ContactUsForm() {
+  const maxAttachmentBytes = 2 * 1024 * 1024;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
@@ -31,9 +32,9 @@ export function ContactUsForm() {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
+    if (file.size > maxAttachmentBytes) {
       setAttachment(null);
-      setAttachmentLabel("Please choose an image under 10 MB.");
+      setAttachmentLabel("Please choose an image under 2 MB.");
       event.target.value = "";
       return;
     }

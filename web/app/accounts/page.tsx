@@ -37,7 +37,6 @@ import {
   markDeletingWorkspaceAccount,
   clearDeletingWorkspaceAccount,
   normalizeImportedAccountKey,
-  findBestImportedAccountMatch as findBestImportedAccountIdentityMatch,
   matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
   deletingAccountsWorkspaceCacheKey,
 } from "@/lib/workspace-cache";
@@ -66,13 +65,16 @@ import {
 import type { InstitutionSuggestion } from "@/lib/institution-suggestions";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
+import { clearImportActivity, getCompletedImportActivitySummary, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
+import { importActivityHasCompletedRows } from "@/lib/import-activity";
 import {
-  clearImportActivity,
-  getCompletedImportActivitySummary,
-  importActivityHasCompletedRows,
-  readImportActivity,
-  subscribeImportActivity,
-} from "@/lib/import-activity";
+  isGenericUploadedAccountShadowed,
+  isTransientUploadedAccountPlaceholder,
+  mergeAccountsWithOptimisticImports as mergeAccountsWithOptimisticImportsShared,
+  mergeImportedPreviewTransactions,
+  resolvePersistedImportedAccountId as resolvePersistedImportedAccountIdShared,
+  transactionMatchesImportedAccount,
+} from "@/lib/imported-account-ui";
 
 type PlanUsage = {
   accountCount: number;
@@ -236,18 +238,12 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
 };
 
 const resolvePersistedImportedAccountId = (summary: UploadInsightsSummary, accounts: Account[]) => {
-  const importedAccount = findBestImportedAccountIdentityMatch(
-    accounts.filter((account) => !account.id.startsWith("optimistic-")),
-    {
-      name: summary.accountName,
-      institution: summary.institution,
-      accountNumber: summary.accountNumber ?? null,
-      type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
-      currency: summary.previewTransactions?.[0]?.currency ?? null,
-    }
+  return resolvePersistedImportedAccountIdShared(
+    summary,
+    accounts,
+    summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+    true
   );
-
-  return importedAccount?.id ?? null;
 };
 
 const getImportedAccountKey = (
@@ -258,88 +254,12 @@ const getImportedAccountKey = (
   currency?: string | null
 ) => normalizeImportedAccountKey(name, institution, accountNumber ?? null, accountType ?? null, currency ?? null);
 
-const getImportedAccountLastFour = (value?: string | null) => {
-  const digits = String(value ?? "").replace(/\D/g, "");
-  return digits.length >= 4 ? digits.slice(-4) : null;
-};
-
 const matchesImportedAccountIdentity = (left: Account, right: Account) => {
   return isImportedAccountIdentityMatch(left, right);
 };
 
-const normalizeImportedInstitutionKey = (value?: string | null) =>
-  String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase()
-    .replace(/\bunion\s*bank(?:\s+of\s+the\s+philippines)?\b/g, "unionbank")
-    .replace(/\bchina\s+bank\b/g, "chinabank")
-    .replace(/\bmetro\s+bank\b/g, "metrobank")
-    .replace(/\bphilippine\s+national\s+bank\b/g, "pnb")
-    .replace(/\s+\d{4}$/, "")
-    .trim();
-
-const getImportedInstitutionShadowKey = (account: Account) =>
-  normalizeImportedInstitutionKey(account.institution) || normalizeImportedInstitutionKey(account.name);
-
-const isGenericUploadedImportAccount = (account: Account) => {
-  if (account.source !== "upload" || getImportedAccountLastFour(account.accountNumber)) {
-    return false;
-  }
-
-  const institution = getImportedInstitutionShadowKey(account);
-  const name = normalizeImportedInstitutionKey(account.name);
-  return Boolean(institution && (name === institution || name === `${institution} account` || !name));
-};
-
-const isGenericUploadedAccountShadowed = (account: Account, numberedAccounts: Account[]) => {
-  if (!isGenericUploadedImportAccount(account)) {
-    return false;
-  }
-
-  const institution = getImportedInstitutionShadowKey(account);
-  return numberedAccounts.some(
-    (numberedAccount) =>
-      numberedAccount.source === "upload" &&
-      getImportedAccountLastFour(numberedAccount.accountNumber) &&
-      getImportedInstitutionShadowKey(numberedAccount) === institution
-  );
-};
-
-const isTransientUploadedAccountPlaceholder = (account: Account) => {
-  if (account.source !== "upload" || getImportedAccountLastFour(account.accountNumber)) {
-    return false;
-  }
-
-  return account.type === "bank" || account.type === "credit_card" || account.type === "line_of_credit";
-};
-
-const mergeImportedPreviewTransactions = (
-  currentTransactions: Transaction[],
-  previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]>
-) => {
-  if (previewTransactions.length === 0) {
-    return currentTransactions;
-  }
-
-  return mergeImportedWorkspaceTransactions(currentTransactions, previewTransactions);
-};
-
 const transactionMatchesAccount = (transaction: Transaction, account: Account) => {
-  if (transaction.accountId === account.id) {
-    return true;
-  }
-
-  return (
-    normalizeImportedAccountKey(
-      transaction.accountName,
-      transaction.institution,
-      transaction.accountNumber,
-      account.type,
-      transaction.currency
-    ) ===
-    normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency)
-  );
+  return transactionMatchesImportedAccount(transaction, account);
 };
 
 const hasImportedTransactionEvidence = (transactions: Transaction[]) =>
@@ -450,67 +370,14 @@ const mergeAccountsWithOptimisticImports = (
   supportingTransactions: Transaction[] = [],
   options?: { preserveImportedEvidence?: boolean }
 ) => {
-  const visibleFetchedAccounts = fetchedAccounts.filter((account) => !deletedAccountIds.has(account.id));
-  const visibleCurrentAccounts = currentAccounts.filter((account) => !deletedAccountIds.has(account.id));
-  const fetchedById = new Map(visibleFetchedAccounts.map((account) => [account.id, account] as const));
-  const fetchedByKey = new Map(
-    visibleFetchedAccounts.map(
-      (account) =>
-        [getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency), account] as const
-    )
+  const baseMergedAccounts = mergeAccountsWithOptimisticImportsShared(
+    fetchedAccounts,
+    currentAccounts,
+    {
+      deletedAccountIds,
+      preserveNonZeroOptimisticBalance: true,
+    }
   );
-  const mergedFetchedAccounts = visibleFetchedAccounts.map((account) => {
-    const optimistic = visibleCurrentAccounts.find((currentAccount) => {
-      if (currentAccount.source !== "upload") {
-        return false;
-      }
-
-      return matchesImportedAccountIdentity(currentAccount, account);
-    });
-    if (!optimistic) {
-      return account;
-    }
-
-    const optimisticBalance = typeof optimistic.balance === "string" ? optimistic.balance.trim() : "";
-    const accountBalance = typeof account.balance === "string" ? account.balance.trim() : "";
-    const optimisticBalanceValue = optimisticBalance ? Number(optimisticBalance) : Number.NaN;
-    const accountBalanceValue = accountBalance ? Number(accountBalance) : Number.NaN;
-    const shouldPreserveExistingBalance =
-      Number.isFinite(optimisticBalanceValue) && optimisticBalanceValue !== 0 && (!Number.isFinite(accountBalanceValue) || accountBalanceValue === 0);
-
-    return {
-      ...account,
-      balance: shouldPreserveExistingBalance ? optimistic.balance : account.balance && Number(account.balance) !== 0 ? account.balance : optimistic.balance ?? account.balance,
-      source: optimistic.source ?? account.source,
-    };
-  });
-
-  const preservedCurrentAccounts = visibleCurrentAccounts.filter((account) => {
-    if (account.source === "upload") {
-      return false;
-    }
-
-    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
-    return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
-  });
-
-  const optimisticAccounts = visibleCurrentAccounts.filter((account) => {
-    if (account.source !== "upload") {
-      return false;
-    }
-
-    if (isTransientUploadedAccountPlaceholder(account)) {
-      return false;
-    }
-
-    if (isGenericUploadedAccountShadowed(account, visibleFetchedAccounts)) {
-      return false;
-    }
-
-    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
-    return !fetchedById.has(account.id) && !visibleFetchedAccounts.some((fetchedAccount) => matchesImportedAccountIdentity(account, fetchedAccount)) && !fetchedByKey.has(accountKey);
-  });
-  const baseMergedAccounts = [...preservedCurrentAccounts, ...optimisticAccounts, ...mergedFetchedAccounts];
   const shouldPreserveImportedEvidence =
     (options?.preserveImportedEvidence ?? false) || hasImportedTransactionEvidence(supportingTransactions);
   if (!shouldPreserveImportedEvidence || supportingTransactions.length === 0) {
@@ -1740,7 +1607,7 @@ function AccountsPageContent() {
         route: "accounts.data",
         workspaceId,
         detail: options?.awaitHydration ? "awaitHydration" : options?.silent ? "silent" : "foreground",
-        input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&cleanupImportedAccounts=1`,
+        input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&repairImportedAccounts=1&cleanupImportedAccounts=1`,
         timeoutMs: options?.silent ? null : 6500,
       });
       if (workspaceLoadSeqRef.current !== loadSeq) {

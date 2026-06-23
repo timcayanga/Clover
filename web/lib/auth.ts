@@ -24,7 +24,7 @@ const isKnownStagingHost = (hostname: string) => {
 const getHostname = async () => {
   try {
     const headerList = await headers();
-    const rawHost = headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "";
+    const rawHost = headerList.get("host") ?? headerList.get("x-forwarded-host") ?? "";
     return rawHost.split(",")[0].split(":")[0].toLowerCase();
   } catch {
     return "";

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { assertTrustedRequestOrigin, getRequestClientIp } from "@/lib/request-security";
+import { assertRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +14,9 @@ const cookieName = "clover_staging_access";
 
 export async function POST(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
+    assertRateLimit(`staging-access:${getRequestClientIp(request)}`, 10, 15 * 60_000);
+
     const payload = schema.parse(await request.json());
     const expectedUsername = process.env.STAGING_BASIC_AUTH_USERNAME ?? "staging";
     const expectedPassword = process.env.STAGING_BASIC_AUTH_PASSWORD ?? "";
@@ -23,14 +29,20 @@ export async function POST(request: Request) {
       ? payload.password.split(":", 2)
       : [expectedUsername, payload.password];
 
-    if (providedUsername !== expectedUsername || providedPassword !== expectedPassword) {
+    const matchesCredential = (provided: string, expected: string) => {
+      const providedBuffer = Buffer.from(provided);
+      const expectedBuffer = Buffer.from(expected);
+      return providedBuffer.length === expectedBuffer.length && timingSafeEqual(providedBuffer, expectedBuffer);
+    };
+
+    if (!matchesCredential(providedUsername, expectedUsername) || !matchesCredential(providedPassword, expectedPassword)) {
       return NextResponse.json({ error: "Invalid password" }, { status: 401 });
     }
 
     const response = NextResponse.json({ ok: true });
     response.cookies.set(cookieName, "1", {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: "strict",
       secure: process.env.NODE_ENV === "production",
       path: "/",
       maxAge: 60 * 60 * 8,
