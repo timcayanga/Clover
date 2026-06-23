@@ -186,6 +186,22 @@ const main = async () => {
       "Expected the Mar 2, 2026 Xendit row on UnionBank 8037."
     );
 
+    const duplicateContentKeys = new Map<string, number>();
+    for (const row of transactionRows) {
+      const key = [
+        row.date.toISOString().slice(0, 10),
+        row.amount.toString(),
+        String(row.description ?? row.merchantRaw ?? row.merchantClean ?? "").trim().toLowerCase(),
+      ].join("|");
+      duplicateContentKeys.set(key, (duplicateContentKeys.get(key) ?? 0) + 1);
+    }
+    const repeatedKeys = [...duplicateContentKeys.entries()].filter(([, count]) => count > 1);
+    assert.equal(
+      repeatedKeys.length,
+      0,
+      `UnionBank screenshot import should dedupe overlapping screenshot rows, got ${JSON.stringify(repeatedKeys)}`
+    );
+
     const screenshotJunkRows = transactionRows.filter((row) =>
       /^(?:php|premier plus savings|available balance|april \d{1,2},?|may \d{1,2},?|download|account details|transaction history)$/i.test(
         String(row.description ?? row.merchantRaw ?? row.merchantClean ?? "").trim()

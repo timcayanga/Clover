@@ -8937,6 +8937,10 @@ const looksLikeUnionBankMobileScreenshotGarbageDescription = (description: strin
 const classifyUnionBankMobileScreenshotRow = (description: string, signedAmount: number) => {
   const normalized = normalizeWhitespace(description);
   const lower = normalized.toLowerCase();
+  const sentToPayee =
+    normalized.match(/^sent to\s+(.+?)(?:\s+[A-Z]{2,5}\s+\d{4,})?$/i)?.[1]?.trim() ?? null;
+  const xenditReference = normalized.match(/^xendit\s*-\s*(.+)$/i)?.[1]?.trim() ?? null;
+  const billsPaymentContext = normalized.match(/^bills payment\b\s*(.+)$/i)?.[1]?.trim() ?? null;
 
   if (/^interest\b/.test(lower)) {
     return {
@@ -8982,7 +8986,7 @@ const classifyUnionBankMobileScreenshotRow = (description: string, signedAmount:
     return {
       type: "expense" as TransactionType,
       categoryName: "Transfers",
-      merchantClean: summarizeMerchantText(normalized, "UnionBank"),
+      merchantClean: sentToPayee || summarizeMerchantText(normalized, "UnionBank"),
     };
   }
 
@@ -8990,7 +8994,7 @@ const classifyUnionBankMobileScreenshotRow = (description: string, signedAmount:
     return {
       type: "expense" as TransactionType,
       categoryName: "Transfers",
-      merchantClean: summarizeMerchantText(normalized, "UnionBank"),
+      merchantClean: xenditReference ? `Xendit ${xenditReference}` : "Xendit Transfer",
     };
   }
 
@@ -8998,7 +9002,7 @@ const classifyUnionBankMobileScreenshotRow = (description: string, signedAmount:
     return {
       type: "expense" as TransactionType,
       categoryName: "Transfers",
-      merchantClean: "Bills Payment",
+      merchantClean: /bankard visa/i.test(billsPaymentContext ?? "") ? "Bills Payment - Bankard Visa" : "Bills Payment",
     };
   }
 
