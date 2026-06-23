@@ -1299,6 +1299,207 @@ const countRowsWithParseableAmounts = (rows: Array<{ amount?: unknown }>) =>
     return parseAmountValue(amountText) !== null ? count + 1 : count;
   }, 0);
 
+const screenshotWeakRowLabelPattern =
+  /^(?:php|accounts?|account details|transaction history|download|view all|all|received|sent|available balance|premier plus savings(?:\s+e[pb].*)?|unionbank account snapshot)$/i;
+const screenshotWeakMonthHeaderPattern =
+  /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{4}$/i;
+const screenshotWeakDateOnlyPattern =
+  /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2},?\s*\d{4}?-?$/i;
+const screenshotWeakIsoDateOnlyPattern = /^(?:\d{2}|\d{4})[-/]\d{2}[-/]\d{2,4}$/i;
+const screenshotWeakDateRangeFragmentPattern = /^(?:\d{2}[-/]\d{2}[-/]\d{4}\s+to|to\s+\d{2}[-/]\d{2}(?:[-/]\d{4})?)$/i;
+const screenshotSupportedInstitutionPattern = /^(?:GCash|Maya|UnionBank|RCBC|BPI|Wise)$/i;
+
+const normalizeScreenshotIdentityNumber = (value: unknown) => String(value ?? "").replace(/\D/g, "");
+
+const getScreenshotRowDescription = (row: Record<string, unknown>) => {
+  const description =
+    typeof row.description === "string" && row.description.trim()
+      ? row.description.trim()
+      : typeof row.merchantRaw === "string" && row.merchantRaw.trim()
+        ? row.merchantRaw.trim()
+        : typeof row.merchantClean === "string" && row.merchantClean.trim()
+          ? row.merchantClean.trim()
+          : "";
+  return normalizeWhitespace(description);
+};
+
+const isWeakScreenshotRowDescription = (description: string) => {
+  const normalized = normalizeWhitespace(description);
+  if (!normalized) {
+    return true;
+  }
+
+  return (
+    screenshotWeakRowLabelPattern.test(normalized) ||
+    screenshotWeakMonthHeaderPattern.test(normalized) ||
+    screenshotWeakDateOnlyPattern.test(normalized) ||
+    screenshotWeakIsoDateOnlyPattern.test(normalized) ||
+    screenshotWeakDateRangeFragmentPattern.test(normalized)
+  );
+};
+
+const rowLooksLikeWeakScreenshotParse = (row: Record<string, unknown>) => {
+  if (isWeakScreenshotRowDescription(getScreenshotRowDescription(row))) {
+    return true;
+  }
+
+  const accountName = typeof row.accountName === "string" ? row.accountName.trim() : "";
+  if (accountName && /^(?:img|screenshot|screen\s*shot|photo|image)[_\s-]?\d{3,8}\b/i.test(accountName)) {
+    return true;
+  }
+
+  return false;
+};
+
+const readScreenshotIdentityFromMetadata = (
+  metadata:
+    | { institution?: unknown; accountName?: unknown; accountNumber?: unknown; accountType?: unknown }
+    | null
+    | undefined
+) => {
+  const institution =
+    typeof metadata?.institution === "string" && metadata.institution.trim() ? metadata.institution.trim() : null;
+  if (!institution || !screenshotSupportedInstitutionPattern.test(institution)) {
+    return null;
+  }
+
+  const accountName =
+    typeof metadata?.accountName === "string" && metadata.accountName.trim() ? metadata.accountName.trim() : null;
+  const accountNumber =
+    typeof metadata?.accountNumber === "string" && metadata.accountNumber.trim() ? metadata.accountNumber.trim() : null;
+  const accountType =
+    metadata?.accountType === "bank" ||
+    metadata?.accountType === "wallet" ||
+    metadata?.accountType === "credit_card" ||
+    metadata?.accountType === "cash" ||
+    metadata?.accountType === "investment" ||
+    metadata?.accountType === "loan" ||
+    metadata?.accountType === "mortgage" ||
+    metadata?.accountType === "line_of_credit" ||
+    metadata?.accountType === "receivable" ||
+    metadata?.accountType === "payable" ||
+    metadata?.accountType === "bnpl" ||
+    metadata?.accountType === "prepaid" ||
+    metadata?.accountType === "insurance" ||
+    metadata?.accountType === "other"
+      ? (metadata.accountType as AccountType)
+      : null;
+
+  return {
+    institution,
+    accountName,
+    accountNumber,
+    accountType,
+  };
+};
+
+const readScreenshotIdentityFromRows = (rows: Array<Record<string, unknown>>) => {
+  for (const row of rows) {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    const kind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
+    const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
+    if (!/_mobile_screenshot/i.test(`${kind} ${source}`) && kind !== "account_snapshot_marker") {
+      continue;
+    }
+
+    const institution =
+      typeof row.institution === "string" && row.institution.trim()
+        ? row.institution.trim()
+        : typeof rawPayload?.bank === "string" && rawPayload.bank.trim()
+          ? rawPayload.bank.trim()
+          : null;
+    if (!institution || !screenshotSupportedInstitutionPattern.test(institution)) {
+      continue;
+    }
+
+    const accountName =
+      typeof row.accountName === "string" && row.accountName.trim()
+        ? row.accountName.trim()
+        : typeof rawPayload?.accountName === "string" && rawPayload.accountName.trim()
+          ? rawPayload.accountName.trim()
+          : null;
+    const accountNumber =
+      typeof row.accountNumber === "string" && row.accountNumber.trim()
+        ? row.accountNumber.trim()
+        : typeof rawPayload?.accountNumber === "string" && rawPayload.accountNumber.trim()
+          ? rawPayload.accountNumber.trim()
+          : null;
+    const accountType =
+      row.accountType === "bank" ||
+      row.accountType === "wallet" ||
+      row.accountType === "credit_card" ||
+      row.accountType === "cash" ||
+      row.accountType === "investment" ||
+      row.accountType === "loan" ||
+      row.accountType === "mortgage" ||
+      row.accountType === "line_of_credit" ||
+      row.accountType === "receivable" ||
+      row.accountType === "payable" ||
+      row.accountType === "bnpl" ||
+      row.accountType === "prepaid" ||
+      row.accountType === "insurance" ||
+      row.accountType === "other"
+        ? (row.accountType as AccountType)
+        : rawPayload?.accountType === "bank" ||
+            rawPayload?.accountType === "wallet" ||
+            rawPayload?.accountType === "credit_card" ||
+            rawPayload?.accountType === "cash" ||
+            rawPayload?.accountType === "investment" ||
+            rawPayload?.accountType === "loan" ||
+            rawPayload?.accountType === "mortgage" ||
+            rawPayload?.accountType === "line_of_credit" ||
+            rawPayload?.accountType === "receivable" ||
+            rawPayload?.accountType === "payable" ||
+            rawPayload?.accountType === "bnpl" ||
+            rawPayload?.accountType === "prepaid" ||
+            rawPayload?.accountType === "insurance" ||
+            rawPayload?.accountType === "other"
+          ? (rawPayload.accountType as AccountType)
+          : null;
+
+    return {
+      institution,
+      accountName,
+      accountNumber,
+      accountType,
+    };
+  }
+
+  return null;
+};
+
+const screenshotIdentityMatches = (
+  expected: ReturnType<typeof readScreenshotIdentityFromMetadata>,
+  actual: ReturnType<typeof readScreenshotIdentityFromMetadata> | ReturnType<typeof readScreenshotIdentityFromRows>
+) => {
+  if (!expected) {
+    return true;
+  }
+  if (!actual) {
+    return false;
+  }
+  if ((actual.institution ?? "").toLowerCase() !== (expected.institution ?? "").toLowerCase()) {
+    return false;
+  }
+  if (expected.accountType && actual.accountType && actual.accountType !== expected.accountType) {
+    return false;
+  }
+
+  const expectedDigits = normalizeScreenshotIdentityNumber(expected.accountNumber);
+  const actualDigits = normalizeScreenshotIdentityNumber(actual.accountNumber);
+  if (expectedDigits && actualDigits && expectedDigits !== actualDigits) {
+    return false;
+  }
+  if (expectedDigits && !actualDigits && expected.accountType !== "wallet") {
+    return false;
+  }
+
+  return true;
+};
+
 const imageStatementRowsLookUsable = (
   rows: Array<Record<string, unknown>>,
   metadata: { institution?: unknown; accountName?: unknown; accountNumber?: unknown; confidence?: unknown },
@@ -1339,6 +1540,7 @@ const imageStatementRowsLookUsable = (
         : "";
     return /_mobile_screenshot/i.test(source);
   });
+  const weakScreenshotRows = rows.filter((row) => rowLooksLikeWeakScreenshotParse(row));
 
   if (accountSnapshotMarkerRows.length > 0) {
     return accountSnapshotMarkerRows.some((row) => {
@@ -1354,6 +1556,9 @@ const imageStatementRowsLookUsable = (
   }
 
   if ((mobileScreenshotRows.length === 0 && rows.length < 3) || options.suspiciousDateCoverage) {
+    return false;
+  }
+  if (rows.length > 0 && weakScreenshotRows.length / rows.length > 0.2) {
     return false;
   }
 
@@ -5708,17 +5913,30 @@ export const processImportFileText = async (
     !Array.isArray(textCacheInfo.cacheRecord.metadata)
       ? (textCacheInfo.cacheRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
       : null;
-  const freshMobileScreenshotInstitution =
-    freshImageMetadataForCacheGate?.institution === "GCash" || freshImageMetadataForCacheGate?.institution === "Maya"
-      ? freshImageMetadataForCacheGate.institution
-      : null;
+  const freshMobileScreenshotIdentity = readScreenshotIdentityFromMetadata(freshImageMetadataForCacheGate);
+  const cachedMobileScreenshotMetadataIdentity = readScreenshotIdentityFromMetadata(cachedMetadataForCacheGate);
+  const cachedMobileScreenshotRowIdentity = readScreenshotIdentityFromRows(cachedParsedRows);
+  const cachedRowsWithDates = countRowsWithParseableDates(cachedParsedRows);
+  const cachedParsedDateCoverage = cachedParsedRows.length > 0 ? cachedRowsWithDates / cachedParsedRows.length : 0;
   const cachedParsePreservesMobileScreenshotIdentity =
-    !freshMobileScreenshotInstitution || cachedMetadataForCacheGate?.institution === freshMobileScreenshotInstitution;
+    !freshMobileScreenshotIdentity ||
+    screenshotIdentityMatches(freshMobileScreenshotIdentity, cachedMobileScreenshotMetadataIdentity) ||
+    screenshotIdentityMatches(freshMobileScreenshotIdentity, cachedMobileScreenshotRowIdentity);
   const cachedScreenshotParseLooksReusable =
     imageImport &&
     importMode === "statement" &&
     cachedParsedRows.length > 0 &&
-    Boolean(textCacheInfo?.cacheRecord?.metadata);
+    Boolean(textCacheInfo?.cacheRecord?.metadata) &&
+    imageStatementRowsLookUsable(cachedParsedRows, cachedMetadataForCacheGate ?? freshImageMetadataForCacheGate ?? {}, {
+      parsedRowsWithDates: cachedRowsWithDates,
+      parsedDateCoverage: cachedParsedDateCoverage,
+      parsedRowsHaveMultipleAccountNumbers: hasMultipleParsedAccountNumbers(cachedParsedRows),
+      suspiciousDateCoverage:
+        cachedParsedRows.length >= 6 && cachedRowsWithDates === 0
+          ? true
+          : cachedParsedRows.length >= 10 && cachedParsedDateCoverage < 0.25,
+      prefersVisionFallbackForInstitution: false,
+    });
   const canReuseCachedStatementParse =
     importMode === "statement" &&
     (Boolean(textCacheInfo?.cacheHit) || cachedScreenshotParseLooksReusable) &&

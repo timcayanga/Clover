@@ -263,6 +263,30 @@ export const inferAccountTypeFromStatement = (
   return fallback;
 };
 
+const screenshotChromeOnlyLinePattern =
+  /^(?:account details|transaction history|download|view all|all|received|sent|available balance|premier plus savings(?:\s+e[pb].*)?|php)$/i;
+const screenshotMonthHeaderPattern =
+  /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{4}$/i;
+const screenshotDateOnlyPattern =
+  /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2},?\s*\d{4}?$/i;
+const screenshotIsoDateOnlyPattern = /^(?:\d{2}|\d{4})[-/]\d{2}[-/]\d{2,4}$/i;
+const screenshotDateRangeFragmentPattern = /^(?:\d{2}[-/]\d{2}[-/]\d{4}\s+to|to\s+\d{2}[-/]\d{2}(?:[-/]\d{4})?)$/i;
+
+const isLikelyScreenshotChromeLine = (line: string) => {
+  const normalized = normalizeWhitespace(line);
+  if (!normalized) {
+    return true;
+  }
+
+  return (
+    screenshotChromeOnlyLinePattern.test(normalized) ||
+    screenshotMonthHeaderPattern.test(normalized) ||
+    screenshotDateOnlyPattern.test(normalized.replace(/\s+/g, " ")) ||
+    screenshotIsoDateOnlyPattern.test(normalized) ||
+    screenshotDateRangeFragmentPattern.test(normalized)
+  );
+};
+
 const splitLine = (line: string, delimiter: string) => {
   const cells: string[] = [];
   let current = "";
@@ -18807,6 +18831,10 @@ const isHeuristicBoilerplateLine = (line: string, institution?: string | null) =
     /^ending\s+balance/i.test(line) ||
     /^beginning\s+balance/i.test(line)
   ) {
+    return true;
+  }
+
+  if (isLikelyScreenshotChromeLine(line)) {
     return true;
   }
 
