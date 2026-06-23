@@ -4388,6 +4388,110 @@ const getMobileScreenshotTimeText = (rawPayload: Prisma.JsonValue | null | undef
   return "";
 };
 
+const getReceiptLineItemFingerprintText = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return "";
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const receiptDetails =
+    payload.receiptDetails && typeof payload.receiptDetails === "object" && !Array.isArray(payload.receiptDetails)
+      ? (payload.receiptDetails as Record<string, unknown>)
+      : null;
+  const lineItems = Array.isArray(receiptDetails?.line_items)
+    ? (receiptDetails?.line_items as Array<Record<string, unknown>>)
+    : Array.isArray(receiptDetails?.lineItems)
+      ? (receiptDetails?.lineItems as Array<Record<string, unknown>>)
+      : Array.isArray(payload.receiptLineItems)
+        ? (payload.receiptLineItems as Array<Record<string, unknown>>)
+        : [];
+
+  return lineItems
+    .slice(0, 8)
+    .map((item) =>
+      [
+        normalizeTransactionDedupeText(item.description),
+        normalizeEnrichmentMatchAmount(item.quantity),
+        normalizeEnrichmentMatchAmount(item.unit_price ?? item.unitPrice),
+        normalizeEnrichmentMatchAmount(item.amount),
+      ].join(":")
+    )
+    .filter(Boolean)
+    .join("|");
+};
+
+const getReceiptReferenceText = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return "";
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const receiptDetails =
+    payload.receiptDetails && typeof payload.receiptDetails === "object" && !Array.isArray(payload.receiptDetails)
+      ? (payload.receiptDetails as Record<string, unknown>)
+      : null;
+
+  return [
+    receiptDetails?.referenceNo,
+    receiptDetails?.reference_no,
+    receiptDetails?.invoiceNumber,
+    receiptDetails?.invoice_number,
+    receiptDetails?.orNumber,
+    receiptDetails?.or_number,
+    receiptDetails?.salesInvoiceNumber,
+    receiptDetails?.sales_invoice_number,
+    receiptDetails?.transactionTime,
+    receiptDetails?.transaction_time,
+    receiptDetails?.paymentMethod,
+    receiptDetails?.payment_method,
+  ]
+    .map((value) => normalizeTransactionDedupeText(value))
+    .filter(Boolean)
+    .join("|");
+};
+
+const getReceiptContentFingerprint = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return "";
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const explicitFingerprint =
+    typeof payload.receiptContentFingerprint === "string" && payload.receiptContentFingerprint.trim()
+      ? payload.receiptContentFingerprint.trim()
+      : "";
+  if (explicitFingerprint) {
+    return explicitFingerprint;
+  }
+
+  const source = normalizeTransactionDedupeText(payload.source);
+  const documentType = normalizeTransactionDedupeText(payload.documentType);
+  if (source !== "receipt" && documentType !== "receipt") {
+    return "";
+  }
+
+  const receiptDetails =
+    payload.receiptDetails && typeof payload.receiptDetails === "object" && !Array.isArray(payload.receiptDetails)
+      ? (payload.receiptDetails as Record<string, unknown>)
+      : null;
+  const merchant =
+    normalizeTransactionDedupeText(receiptDetails?.merchantClean) ||
+    normalizeTransactionDedupeText(receiptDetails?.merchant_clean) ||
+    normalizeTransactionDedupeText(receiptDetails?.merchantRaw) ||
+    normalizeTransactionDedupeText(receiptDetails?.merchant_raw);
+  const date = normalizeTransactionDedupeText(receiptDetails?.transactionDate ?? receiptDetails?.transaction_date).slice(0, 10);
+  const amount = normalizeEnrichmentMatchAmount(receiptDetails?.total);
+  const currency = normalizeTransactionDedupeText(receiptDetails?.currency || "PHP").toUpperCase();
+  const lineItems = getReceiptLineItemFingerprintText(rawPayload);
+  const references = getReceiptReferenceText(rawPayload);
+
+  if (!merchant || !date || !amount) {
+    return "";
+  }
+
+  return ["receipt", merchant, date, amount, currency, references, lineItems].join("|");
+};
+
 const buildMobileScreenshotContentKey = (transaction: {
   accountId?: unknown;
   date: unknown;
@@ -4515,6 +4619,11 @@ const buildImportTransactionCollapseKey = (transaction: {
     }
 
     return `source-statement:${transaction.accountId}:${sourceStatementFingerprint}:${sourceRowIndex}`;
+  }
+
+  const receiptContentFingerprint = getReceiptContentFingerprint(transaction.rawPayload);
+  if (receiptContentFingerprint) {
+    return `receipt-content:${typeof transaction.accountId === "string" ? transaction.accountId.trim() : ""}:${receiptContentFingerprint}`;
   }
 
   if (sourceRowIndex !== null) {
@@ -7829,9 +7938,82 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           select: { id: true, normalizedPayload: true },
         }).catch(() => null);
 
-        if (existingReceiptTransaction?.id) {
+      if (existingReceiptTransaction?.id) {
           createdTransactionId = existingReceiptTransaction.id;
         } else {
+          const receiptContentFingerprint = [
+            "receipt",
+            normalizeTransactionDedupeText(normalizedReceiptMerchantClean || receiptMerchantRaw),
+            receiptDate.toISOString().slice(0, 10),
+            normalizeEnrichmentMatchAmount(receiptAmount),
+            normalizeTransactionDedupeText(receiptCurrency || "PHP").toUpperCase(),
+            [
+              normalizeTransactionDedupeText(
+                typeof receiptDetailsRecord?.reference_no === "string"
+                  ? receiptDetailsRecord.reference_no
+                  : typeof receiptDetailsRecord?.referenceNo === "string"
+                    ? receiptDetailsRecord.referenceNo
+                    : typeof receiptDetailsRecord?.invoice_number === "string"
+                      ? receiptDetailsRecord.invoice_number
+                      : typeof receiptDetailsRecord?.invoiceNumber === "string"
+                        ? receiptDetailsRecord.invoiceNumber
+                        : typeof receiptDetailsRecord?.or_number === "string"
+                          ? receiptDetailsRecord.or_number
+                          : typeof receiptDetailsRecord?.orNumber === "string"
+                            ? receiptDetailsRecord.orNumber
+                            : null
+              ),
+              normalizeTransactionDedupeText(
+                typeof receiptDetailsRecord?.transaction_time === "string"
+                  ? receiptDetailsRecord.transaction_time
+                  : receiptDocument?.transactionTime ?? null
+              ),
+              normalizeTransactionDedupeText(
+                receiptDocument?.paymentMethod ??
+                  (typeof receiptDetailsRecord?.payment_method === "string" ? receiptDetailsRecord.payment_method : null)
+              ),
+            ]
+              .filter(Boolean)
+              .join("|"),
+            receiptLineItems
+              .slice(0, 8)
+              .map((item) =>
+                [
+                  normalizeTransactionDedupeText(item.description),
+                  normalizeEnrichmentMatchAmount(item.quantity),
+                  normalizeEnrichmentMatchAmount(item.unitPrice),
+                  normalizeEnrichmentMatchAmount(item.amount),
+                ].join(":")
+              )
+              .filter(Boolean)
+              .join("|"),
+          ].join("|");
+          existingReceiptTransaction = await prisma.transaction.findFirst({
+            where: {
+              workspaceId: String(importFile.workspaceId),
+              accountId: targetAccountId,
+              deletedAt: null,
+              OR: [
+                {
+                  rawPayload: {
+                    path: ["receiptContentFingerprint"],
+                    equals: receiptContentFingerprint,
+                  },
+                },
+                {
+                  rawPayload: {
+                    path: ["sourceImportFileId"],
+                    equals: importFileId,
+                  },
+                },
+              ],
+            },
+            select: { id: true, normalizedPayload: true },
+          }).catch(() => null);
+
+          if (existingReceiptTransaction?.id) {
+            createdTransactionId = existingReceiptTransaction.id;
+          } else {
           const insertedTransaction = await insertTransactionCompat({
             workspaceId: String(importFile.workspaceId),
             accountId: targetAccountId,
@@ -7900,6 +8082,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
                 unitPrice: item.unitPrice,
                 amount: item.amount,
               })),
+              receiptContentFingerprint,
               receiptAccountMatch: receiptAccountMatchPayload as Prisma.InputJsonValue | null,
             } as Prisma.InputJsonValue,
             normalizedPayload: {
@@ -7915,6 +8098,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             insertedTransaction && typeof insertedTransaction.id === "string" && insertedTransaction.id.trim()
               ? insertedTransaction.id
               : null;
+          }
         }
       }
 
