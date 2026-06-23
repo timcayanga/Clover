@@ -19597,38 +19597,80 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .clover-loading-screen {
+  --splash-logo-mark-size: clamp(118px, 16vw, 152px);
+  position: relative;
   min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 32px 20px;
+  overflow: hidden;
+  isolation: isolate;
+  background: transparent;
 }
 
 .clover-loading-screen__card {
   position: relative;
-  width: min(100%, 460px);
+  z-index: 1;
+  width: min(100%, 560px);
   display: grid;
   justify-items: center;
   gap: 18px;
-  padding: 26px 24px 24px;
-  border-radius: 28px;
-  overflow: hidden;
+  padding: 0;
+  overflow: visible;
   text-align: center;
-}
-
-.clover-loading-screen__card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 50% 10%, rgba(3, 168, 192, 0.08), transparent 34%),
-    radial-gradient(circle at 50% 90%, rgba(110, 231, 183, 0.05), transparent 36%);
-  pointer-events: none;
+  background: transparent;
 }
 
 .clover-loading-screen__logo {
   position: relative;
-  width: 124px;
-  height: 148px;
+  width: var(--splash-logo-mark-size);
+  height: var(--splash-logo-mark-size);
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  background: transparent;
+}
+
+.clover-loading-screen__orbit {
+  position: absolute;
+  inset: 50%;
+  border-radius: 999px;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.clover-loading-screen__orbit--outer {
+  width: calc(var(--splash-logo-mark-size) + 36px);
+  height: calc(var(--splash-logo-mark-size) + 36px);
+  border: 1px solid rgba(3, 168, 192, 0.1);
+  animation: clover-loading-orbit 2.2s linear infinite;
+}
+
+.clover-loading-screen__orbit--inner {
+  width: calc(var(--splash-logo-mark-size) + 12px);
+  height: calc(var(--splash-logo-mark-size) + 12px);
+  border: 1px solid rgba(110, 231, 183, 0.2);
+  animation: clover-loading-orbit 1.6s linear infinite reverse;
+}
+
+.clover-loading-screen__orbit::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: rgba(3, 168, 192, 0.75);
+  box-shadow: 0 0 10px rgba(3, 168, 192, 0.22);
+}
+
+.clover-loading-screen__orbit--inner::after {
+  width: 6px;
+  height: 6px;
+  background: rgba(110, 231, 183, 0.82);
+  box-shadow: 0 0 10px rgba(110, 231, 183, 0.24);
 }
 
 .clover-loading-screen__mark {
@@ -19638,49 +19680,23 @@ input.transaction-inline-edit--amount::placeholder {
   width: 100%;
   height: 100%;
   overflow: visible;
-  filter: drop-shadow(0 12px 18px rgba(3, 168, 192, 0.1));
-}
-
-.clover-loading-screen__leaf,
-.clover-loading-screen__stem {
-  transform-box: fill-box;
-  transform-origin: center;
-  transition:
-    opacity 320ms ease,
-    transform 320ms ease,
-    filter 320ms ease;
+  animation: clover-loading-mark-breathe 1.8s ease-in-out infinite;
+  will-change: transform, opacity, filter;
 }
 
 .clover-loading-screen__leaf {
-  opacity: 0.14;
-  transform: scale(0.78) translateY(5px);
-}
-
-.clover-loading-screen__leaf--pulse {
-  animation: clover-loading-screen-pulse 1.6s ease-in-out infinite;
-}
-
-.clover-loading-screen__leaf--accent {
-  fill: var(--accent-mint);
-}
-
-.clover-loading-screen__leaf:not(.clover-loading-screen__leaf--accent) {
-  fill: var(--accent);
-}
-
-.clover-loading-screen__stem {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.84;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: clover-loading-screen-pulse 1.8s ease-in-out infinite;
+  will-change: transform, opacity, filter;
 }
 
 .clover-loading-screen__copy {
   display: grid;
-  gap: 8px;
   justify-items: center;
+  width: min(100%, 520px);
+  min-height: 1.6rem;
+  overflow: visible;
 }
 
 .clover-loading-screen__copy .eyebrow {
@@ -19688,30 +19704,108 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .clover-loading-screen__copy h2 {
+  position: relative;
   margin: 0;
-  font-size: clamp(1.45rem, 3vw, 1.9rem);
-  line-height: 1.15;
-  letter-spacing: -0.04em;
+  width: 100%;
+  max-width: 34ch;
+  min-height: 1.6rem;
+  color: rgba(31, 41, 51, 0.72);
+  font-size: clamp(0.98rem, 1.8vw, 1.2rem);
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: -0.012em;
 }
 
-.clover-loading-screen__copy p {
-  max-width: 32ch;
-  color: var(--muted);
-  line-height: 1.6;
+.clover-loading-screen__meter {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.clover-loading-screen__meter span {
+  width: 18px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.14);
+  animation: clover-loading-meter 1.1s ease-in-out infinite;
+}
+
+.clover-loading-screen__meter span:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.clover-loading-screen__meter span:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.clover-loading-screen__meter span:nth-child(4) {
+  animation-delay: 360ms;
+}
+
+@keyframes clover-loading-mark-breathe {
+  0% {
+    opacity: 0.94;
+    transform: scale(0.97);
+    filter: saturate(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+    filter: saturate(1.12);
+  }
+
+  100% {
+    opacity: 0.94;
+    transform: scale(0.97);
+    filter: saturate(0.96);
+  }
 }
 
 @keyframes clover-loading-screen-pulse {
   0%,
   100% {
-    opacity: 0.28;
-    transform: scale(0.82) translateY(4px);
-    filter: saturate(0.92);
+    opacity: 0.94;
+    transform: scale(0.985);
+    filter: saturate(0.96);
   }
 
   50% {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: scale(1.015);
     filter: saturate(1.08);
+  }
+}
+
+@keyframes clover-loading-orbit {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+    opacity: 0.65;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+    opacity: 0.65;
+  }
+}
+
+@keyframes clover-loading-meter {
+  0%,
+  100% {
+    background: rgba(3, 168, 192, 0.14);
+    transform: scaleX(0.88);
+  }
+
+  50% {
+    background: rgba(3, 168, 192, 0.62);
+    transform: scaleX(1.16);
   }
 }
 

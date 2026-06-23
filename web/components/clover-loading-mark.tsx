@@ -22,16 +22,16 @@ export function CloverLoadingMark({ className }: CloverLoadingMarkProps) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <g className="clover-loading-screen__leaf clover-loading-screen__leaf--1" style={{ animationDelay: "0ms" }}>
+      <g className="clover-loading-screen__leaf clover-loading-screen__leaf--1">
         <path d={markPaths.topLeft} fill="url(#clover-loading-screen-top-left)" />
       </g>
-      <g className="clover-loading-screen__leaf clover-loading-screen__leaf--2" style={{ animationDelay: "180ms" }} transform="translate(64 0)">
+      <g className="clover-loading-screen__leaf clover-loading-screen__leaf--2" transform="translate(64 0)">
         <path d={markPaths.topRight} fill="url(#clover-loading-screen-top-right)" />
       </g>
-      <g className="clover-loading-screen__leaf clover-loading-screen__leaf--3" style={{ animationDelay: "360ms" }} transform="translate(64 64)">
+      <g className="clover-loading-screen__leaf clover-loading-screen__leaf--3" transform="translate(64 64)">
         <path d={markPaths.bottomRight} fill="url(#clover-loading-screen-bottom-right)" />
       </g>
-      <g className="clover-loading-screen__leaf clover-loading-screen__leaf--4" style={{ animationDelay: "540ms" }} transform="translate(0 64)">
+      <g className="clover-loading-screen__leaf clover-loading-screen__leaf--4" transform="translate(0 64)">
         <path d={markPaths.bottomLeft} fill="url(#clover-loading-screen-bottom-left)" />
       </g>
       <defs>
