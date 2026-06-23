@@ -13,10 +13,15 @@ export type DataQaTiming = {
   parsingMs?: number;
   enrichmentMs?: number;
   persistenceMs?: number;
+  readMs?: number;
+  confirmMs?: number;
   pageCount?: number;
   usedVisionFallback?: boolean;
   usedOpenAiFallback?: boolean;
   usedDeterministicParser?: boolean;
+  cacheHit?: boolean;
+  reusedCachedStatementParse?: boolean;
+  usedFastScreenshotParse?: boolean;
 };
 
 export type DataQaStatementSnapshot = {

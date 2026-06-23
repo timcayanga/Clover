@@ -4166,6 +4166,8 @@ const recordImportDataQaInBackground = (params: {
     readMs?: number;
     parseMs?: number;
     confirmMs?: number;
+    extractionMs?: number;
+    persistenceMs?: number;
     cacheHit?: boolean;
     reusedCachedStatementParse?: boolean;
     usedFastScreenshotParse?: boolean;
@@ -4184,9 +4186,11 @@ const recordImportDataQaInBackground = (params: {
     metadata: params.metadata,
     timings: {
       totalMs: Date.now() - params.startedAt,
+      extractionMs: params.timingBreakdown?.extractionMs,
       parsingMs: params.timingBreakdown?.parseMs ?? Date.now() - params.startedAt,
-      readMs: params.timingBreakdown?.readMs ?? null,
-      confirmMs: params.timingBreakdown?.confirmMs ?? null,
+      readMs: params.timingBreakdown?.readMs,
+      persistenceMs: params.timingBreakdown?.persistenceMs,
+      confirmMs: params.timingBreakdown?.confirmMs,
       usedVisionFallback: params.usedVisionFallback,
       usedOpenAiFallback: params.usedOpenAiFallback,
       usedDeterministicParser: !params.usedOpenAiFallback,
@@ -5177,6 +5181,57 @@ const isWiseSkippableVerificationRow = (row: Record<string, unknown>, fallbackIn
   return rowAmount !== null && Math.abs(rowAmount) < 0.01 && /\bcard checked\b|\bverification\b|\bchecked\b/.test(statusText);
 };
 
+const scoreReceiptDetailsQuality = (receiptDetails: Record<string, unknown> | null | undefined) => {
+  if (!receiptDetails || typeof receiptDetails !== "object" || Array.isArray(receiptDetails)) {
+    return 0;
+  }
+
+  return (
+    Number(Boolean(receiptDetails.merchant_raw)) +
+    Number(Boolean(receiptDetails.merchant_clean)) +
+    Number(receiptDetails.total !== null && receiptDetails.total !== undefined) +
+    Number(Boolean(receiptDetails.transaction_date)) +
+    Number(Array.isArray(receiptDetails.line_items) && receiptDetails.line_items.length > 0) +
+    Number(Array.isArray(receiptDetails.split_allocations) && receiptDetails.split_allocations.length > 0)
+  );
+};
+
+const scoreImportParseCandidate = (params: {
+  importMode: ImportImageMode;
+  rows: Array<Record<string, unknown>>;
+  metadata: {
+    confidence?: number | null;
+    accountNumber?: string | null;
+    accountName?: string | null;
+  } | null;
+  receiptDetails?: Record<string, unknown> | null;
+  holdingsCount?: number;
+}) => {
+  const rowCount = params.rows.length;
+  const rowsWithDates = countRowsWithParseableDates(params.rows);
+  const dateCoverage = rowCount > 0 ? rowsWithDates / rowCount : 0;
+  const metadataConfidence = Number(params.metadata?.confidence ?? 0);
+  const hasAccountIdentity = Boolean(params.metadata?.accountNumber || params.metadata?.accountName);
+  const multipleAccountNumbers = hasMultipleParsedAccountNumbers(params.rows);
+  const holdingsCount = Number(params.holdingsCount ?? 0);
+
+  if (params.importMode === "receipt") {
+    return scoreReceiptDetailsQuality(params.receiptDetails) * 10 + metadataConfidence * 0.2;
+  }
+
+  if (params.importMode === "portfolio" || params.importMode === "account_detail") {
+    return holdingsCount * 12 + metadataConfidence * 0.2 + Number(hasAccountIdentity) * 8;
+  }
+
+  return (
+    rowCount * 4 +
+    dateCoverage * 25 +
+    metadataConfidence * 0.25 +
+    Number(hasAccountIdentity) * 8 +
+    Number(multipleAccountNumbers) * 6
+  );
+};
+
 export const processImportFileText = async (
   importFileId: string,
   options: {
@@ -5210,6 +5265,10 @@ export const processImportFileText = async (
   let parseCompletedAt = startedAt;
   let confirmationStartedAt = startedAt;
   let confirmationCompletedAt = startedAt;
+  let directTranscriptMs: number | null = null;
+  let openAiFallbackMs: number | null = null;
+  let transcriptRetryMs: number | null = null;
+  let chosenParserSource: "deterministic" | "openai" | "transcript_retry" = "deterministic";
   const autoRerunAttempt = Number(options.autoRerunAttempt ?? 0);
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const importFile = await fetchImportFileCompat(importFileId);
@@ -5514,6 +5573,7 @@ export const processImportFileText = async (
       processingMessage: "Reading screenshot text...",
     }).catch(() => null);
 
+    const transcriptStartedAt = Date.now();
     const transcript = await transcribeImportImagesWithOpenAI({
       fileName,
       fileType,
@@ -5522,6 +5582,7 @@ export const processImportFileText = async (
       importMode,
       timeoutMs: 25_000,
     }).catch(() => null);
+    directTranscriptMs = Date.now() - transcriptStartedAt;
 
     if (transcript?.transcript.trim()) {
       text = normalizeStatementImageOcrText(transcript.transcript);
@@ -5869,6 +5930,7 @@ export const processImportFileText = async (
         processingMessage: "Reading receipt image...",
       }).catch(() => null);
     }
+    const openAiFallbackStartedAt = Date.now();
     openAiParsed = await parseImportTextWithOpenAIFallback({
       text: textForParse,
       fileName,
@@ -5883,6 +5945,7 @@ export const processImportFileText = async (
       timeoutMs: isWiseImageStatement ? 18_000 : imageImport && importMode === "statement" ? 35_000 : null,
       retryTimeoutMs: isWiseImageStatement ? 8_000 : imageImport && importMode === "statement" ? 15_000 : null,
     });
+    openAiFallbackMs = Date.now() - openAiFallbackStartedAt;
 
     openAiMetadata = openAiParsed
       ? mergeStatementMetadataWithTemplate(
@@ -6074,6 +6137,7 @@ export const processImportFileText = async (
       (!openAiParsed.holdings.length || !openAiMetadata?.accountName));
 
   if (imageTranscriptRequiresRetry && openAiResultLooksSparse) {
+    const transcriptRetryStartedAt = Date.now();
     const transcript = await transcribeImportImagesWithOpenAI({
       fileName,
       fileType,
@@ -6081,6 +6145,7 @@ export const processImportFileText = async (
       pageImages: pageImages ?? [],
       importMode,
     });
+    transcriptRetryMs = Date.now() - transcriptRetryStartedAt;
 
     if (transcript?.transcript.trim()) {
       const transcriptImportMode = normalizeImportImageMode(transcript.documentType);
@@ -6146,6 +6211,7 @@ export const processImportFileText = async (
 
       if (shouldAdoptTranscriptParse) {
         openAiParsed = transcriptParsed;
+        chosenParserSource = "transcript_retry";
         openAiMetadata = transcriptParsed
       ? mergeStatementMetadataWithTemplate(
               {
@@ -6193,10 +6259,14 @@ export const processImportFileText = async (
         metadata: {
           model: openAiParsed.model,
           promptVersion: openAiParsed.promptVersion,
+          parserSource: chosenParserSource,
           sourceFilename: openAiParsed.audit.sourceFilename ?? importFile.fileName,
           confidence: openAiParsed.audit.confidence,
           schemaValidated: openAiParsed.audit.schemaValidated,
           schemaValidationResult: openAiParsed.audit.schemaValidationResult,
+          directTranscriptMs,
+          openAiFallbackMs,
+          transcriptRetryMs,
           rawResponse: openAiParsed.audit.rawResponse,
         },
       },
@@ -6215,6 +6285,29 @@ export const processImportFileText = async (
     importMode !== "statement" ||
     parsedRows.length === 0 ||
     (openAiParsed?.rows.length ?? 0) >= Math.max(1, Math.floor(parsedRows.length * 0.9));
+  const deterministicCandidateScore = scoreImportParseCandidate({
+    importMode,
+    rows: parsedRows as Array<Record<string, unknown>>,
+    metadata: metadataForParse,
+    receiptDetails:
+      receiptDetails && typeof receiptDetails === "object" && !Array.isArray(receiptDetails)
+        ? (receiptDetails as Record<string, unknown>)
+        : null,
+    holdingsCount: 0,
+  });
+  const openAiCandidateScore =
+    openAiParsed && openAiMetadata
+      ? scoreImportParseCandidate({
+          importMode,
+          rows: openAiParsed.rows as Array<Record<string, unknown>>,
+          metadata: openAiMetadata,
+          receiptDetails:
+            openAiParsed.receiptDetails && typeof openAiParsed.receiptDetails === "object" && !Array.isArray(openAiParsed.receiptDetails)
+              ? (openAiParsed.receiptDetails as Record<string, unknown>)
+              : null,
+          holdingsCount: openAiParsed.holdings.length,
+        })
+      : Number.NEGATIVE_INFINITY;
   const shouldAdoptOpenAiStatementParse =
     importMode !== "statement" ||
     (!hasDeterministicBpiMobileScreenshotRows &&
@@ -6226,9 +6319,14 @@ export const processImportFileText = async (
     (openAiPrimaryMode ||
       Boolean(pageImages?.length) ||
       isDocumentImport ||
+      parsedRows.length === 0 ||
+      openAiCandidateScore >= deterministicCandidateScore + (deterministicStatementParseLooksStrong ? 3 : -2) ||
       (openAiMetadata
         ? (openAiMetadata?.confidence ?? 0) >= (metadataForParse.confidence ?? 0)
-        : parsedRows.length === 0));
+        : false));
+  if (useOpenAiParse && chosenParserSource !== "transcript_retry") {
+    chosenParserSource = "openai";
+  }
   const effectiveMetadataSource = useOpenAiParse && openAiMetadata ? openAiMetadata : metadataForParse;
   const effectiveRows = normalizeWiseWalletParsedRows(
     (useOpenAiParse && openAiParsed ? openAiParsed.rows : parsedRows) as Array<Record<string, unknown>>,
@@ -6908,6 +7006,7 @@ export const processImportFileText = async (
         processing_status: "done",
         processing_phase: "visible_rows_saved",
         imported_rows: confirmedImportResult.imported,
+        parser_source: chosenParserSource,
       });
       recordImportDataQaInBackground({
         workspaceId: String(importFile.workspaceId),
@@ -6921,8 +7020,11 @@ export const processImportFileText = async (
         usedVisionFallback: Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
         timingBreakdown: {
+          extractionMs: [directTranscriptMs, openAiFallbackMs, transcriptRetryMs].filter((value): value is number => typeof value === "number")
+            .reduce((sum, value) => sum + value, 0),
           readMs: Math.max(0, textReadyAt - readStartedAt),
           parseMs: Math.max(0, parseCompletedAt - parseStartedAt),
+          persistenceMs: Math.max(0, confirmationCompletedAt - confirmationStartedAt),
           confirmMs: Math.max(0, confirmationCompletedAt - confirmationStartedAt),
           cacheHit: Boolean(textCacheInfo?.cacheHit),
           reusedCachedStatementParse: canReuseCachedStatementParse,
@@ -6996,8 +7098,11 @@ export const processImportFileText = async (
       metadata: resolvedMetadata,
       timings: {
         totalMs: Date.now() - startedAt,
+        extractionMs: [directTranscriptMs, openAiFallbackMs, transcriptRetryMs].filter((value): value is number => typeof value === "number")
+          .reduce((sum, value) => sum + value, 0),
         parsingMs: Math.max(0, parseCompletedAt - parseStartedAt),
         readMs: Math.max(0, textReadyAt - readStartedAt),
+        persistenceMs: Math.max(0, confirmationCompletedAt - confirmationStartedAt),
         confirmMs: Math.max(0, confirmationCompletedAt - confirmationStartedAt),
         usedVisionFallback: Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),

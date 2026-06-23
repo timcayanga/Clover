@@ -338,6 +338,15 @@ type OpenAIImageTranscript = {
 
 type ImportMode = "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
 
+type OpenAIDocumentFamily =
+  | "wallet_screenshot"
+  | "restaurant_receipt"
+  | "tax_invoice"
+  | "travel_ticket"
+  | "bank_statement"
+  | "account_summary"
+  | "generic_document";
+
 type ReceiptAccountMatch = {
   account_name: string | null;
   account_last4: string | null;
@@ -1505,6 +1514,80 @@ const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | undefined
   return [...baseGuidance, ...familyGuidance, ...inputGuidance].join(" ");
 };
 
+const inferOpenAIDocumentFamily = (params: {
+  fileName?: string | null;
+  text?: string | null;
+  detectedMetadata?: DetectedStatementMetadata | null;
+  importMode?: ImportMode | null;
+}) => {
+  const combinedText = [params.fileName, params.text, params.detectedMetadata?.institution, params.detectedMetadata?.accountName]
+    .filter(Boolean)
+    .join("\n");
+
+  if (params.importMode === "receipt" || /sent via gcash|sent via maya|wallet transfer|express send|ref\.?\s*no/i.test(combinedText)) {
+    if (/gcash|maya|wise|wallet/i.test(combinedText)) {
+      return "wallet_screenshot" satisfies OpenAIDocumentFamily;
+    }
+    if (/invoice|tax invoice|sales invoice|official receipt/i.test(combinedText)) {
+      return "tax_invoice" satisfies OpenAIDocumentFamily;
+    }
+    if (/ticket|booking|itinerary|electronic ticket/i.test(combinedText)) {
+      return "travel_ticket" satisfies OpenAIDocumentFamily;
+    }
+    if (/subtotal|vat|service charge|table:|cashier|guest|amount due/i.test(combinedText)) {
+      return "restaurant_receipt" satisfies OpenAIDocumentFamily;
+    }
+  }
+
+  if (params.importMode === "statement") {
+    return "bank_statement" satisfies OpenAIDocumentFamily;
+  }
+
+  if (params.importMode === "account_detail" || params.importMode === "portfolio") {
+    return "account_summary" satisfies OpenAIDocumentFamily;
+  }
+
+  return "generic_document" satisfies OpenAIDocumentFamily;
+};
+
+const buildOpenAIDocumentFamilyGuidance = (family: OpenAIDocumentFamily) => {
+  switch (family) {
+    case "wallet_screenshot":
+      return [
+        "This is likely a wallet or payment-app screenshot.",
+        "Prioritize recipient/sender name, phone, amount, transfer direction, reference number, timestamp, and wallet identity.",
+        "Do not turn long screenshot text into the transaction title if a cleaner transfer label is supported by the evidence.",
+      ].join(" ");
+    case "restaurant_receipt":
+      return [
+        "This is likely an itemized restaurant or merchant receipt.",
+        "Prioritize merchant name, line items, subtotal, taxes, service charge, discount, payment method, and final total.",
+      ].join(" ");
+    case "tax_invoice":
+      return [
+        "This is likely an invoice or official receipt.",
+        "Prioritize supplier, invoice/document number, subtotal, VAT/tax, discounts, and final payable amount.",
+      ].join(" ");
+    case "travel_ticket":
+      return [
+        "This is likely a travel or ticket receipt.",
+        "Prioritize booking reference, carrier/provider, route, travel date, passenger/account identifiers, and total paid.",
+      ].join(" ");
+    case "bank_statement":
+      return [
+        "This is likely a statement or transaction-history document.",
+        "Prioritize account identity, date coverage, transaction rows, and ending balance reconciliation.",
+      ].join(" ");
+    case "account_summary":
+      return [
+        "This is likely an account summary, balance screen, or holdings screen.",
+        "Prefer balance and product identity extraction over inventing ledger transactions.",
+      ].join(" ");
+    default:
+      return "This is a generic financial document. Prefer conservative extraction and preserve uncertainty.";
+  }
+};
+
 const openAITranscriptLooksWeak = (transcript: { transcript: string; confidence: number } | null) => {
   if (!transcript) {
     return true;
@@ -1512,6 +1595,35 @@ const openAITranscriptLooksWeak = (transcript: { transcript: string; confidence:
 
   const normalizedLength = transcript.transcript.replace(/\s+/g, " ").trim().length;
   return transcript.confidence < 72 || normalizedLength < 80;
+};
+
+const buildOpenAiReviewReasons = (params: {
+  confidenceScore: number;
+  category: AllowedCategory;
+  movementType: AllowedMovementType;
+  parserEvidenceText?: string | null;
+  notes?: string | null;
+}) => {
+  const reasons = new Set<string>();
+  const evidenceText = `${params.parserEvidenceText ?? ""} ${params.notes ?? ""}`.trim();
+
+  if (params.confidenceScore < 85) {
+    reasons.add("Low-confidence OCR or parser evidence");
+  }
+
+  if (params.category === "Other") {
+    reasons.add("Needs category review");
+  }
+
+  if (params.movementType === "internal_movement") {
+    reasons.add("Needs transfer direction review");
+  }
+
+  if (/\b(?:unclear|partial|blurry|cropped|fragmented)\b/i.test(evidenceText)) {
+    reasons.add("Import evidence is partial");
+  }
+
+  return Array.from(reasons);
 };
 
 const isTruthyEnvValue = (value?: string | null) => {
@@ -1534,6 +1646,12 @@ const buildOpenAIInputPayload = (params: {
 }) => {
   const institution = params.detectedMetadata?.institution ?? null;
   const accountType = params.detectedMetadata?.accountType ?? null;
+  const documentFamily = inferOpenAIDocumentFamily({
+    fileName: params.fileName ?? null,
+    text: params.text,
+    detectedMetadata: params.detectedMetadata,
+    importMode: params.importMode ?? null,
+  });
   const bankInstructionJson = buildBankInstructionJson({
     institution,
     accountType,
@@ -1546,10 +1664,12 @@ const buildOpenAIInputPayload = (params: {
     `File name: ${params.fileName ?? "unknown"}`,
     `File type: ${params.fileType ?? "unknown"}`,
     `Import mode: ${params.importMode ?? "statement"}`,
+    `Inferred document family: ${documentFamily}`,
     "",
     `Known institution: ${institution ?? "null"}`,
     `Known parser result: ${JSON.stringify(buildDeterministicParserSummary({ detectedMetadata: params.detectedMetadata, parsedRows: params.parsedRows }))}`,
     `Bank-specific instructions: ${JSON.stringify(bankInstructionJson)}`,
+    `Document-family guidance: ${buildOpenAIDocumentFamilyGuidance(documentFamily)}`,
     GENERIC_PARSER_GUIDANCE,
     GENERIC_NORMALIZATION_GUIDANCE,
     "Generic few-shot examples:",
@@ -1626,6 +1746,11 @@ const buildImageTranscriptionInputPayload = (params: {
 }) => {
   const institution = params.detectedMetadata?.institution ?? null;
   const accountType = params.detectedMetadata?.accountType ?? null;
+  const documentFamily = inferOpenAIDocumentFamily({
+    fileName: params.fileName ?? null,
+    detectedMetadata: params.detectedMetadata,
+    importMode: params.importMode ?? null,
+  });
   const bankInstructionJson = buildBankInstructionJson({
     institution,
     accountType,
@@ -1638,10 +1763,12 @@ const buildImageTranscriptionInputPayload = (params: {
     `File name: ${params.fileName ?? "unknown"}`,
     `File type: ${params.fileType ?? "unknown"}`,
     `Import mode: ${params.importMode ?? "statement"}`,
+    `Inferred document family: ${documentFamily}`,
     "",
     `Known institution: ${institution ?? "null"}`,
     `Known parser result: ${JSON.stringify(buildDeterministicParserSummary({ detectedMetadata: params.detectedMetadata, parsedRows: [] }))}`,
     `Bank-specific instructions: ${JSON.stringify(bankInstructionJson)}`,
+    `Document-family guidance: ${buildOpenAIDocumentFamilyGuidance(documentFamily)}`,
     GENERIC_PARSER_GUIDANCE,
     "Transcription guidance:",
     "- Produce a faithful OCR-style transcription in reading order.",
@@ -2202,6 +2329,13 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       const merchantBase = row.normalized_name ?? row.raw_name ?? description;
       const merchantClean = summarizeMerchantText(merchantBase, rowInstitution);
       const reviewRequired = row.review_required || row.confidence_score < 85 || category === "Other" || movementType === "internal_movement";
+      const genericReviewReasons = buildOpenAiReviewReasons({
+        confidenceScore: row.confidence_score,
+        category,
+        movementType,
+        parserEvidenceText: row.parser_evidence.source_text ?? null,
+        notes: row.notes ?? null,
+      });
 
       return {
         date: rowDate ?? undefined,
@@ -2243,6 +2377,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           movementType,
           category,
           reviewRequired,
+          genericReviewReasons,
           notes: row.notes ?? null,
           amountType: row.type,
           balanceReconciled,
