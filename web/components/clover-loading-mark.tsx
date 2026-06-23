@@ -1,12 +1,12 @@
 const markPaths = {
   topLeft:
-    "M-8.74228e-07 40C-1.35705e-06 28.9543 8.9543 20 20 20C20 8.9543 28.9543 -1.26563e-06 40 -1.74846e-06C51.0457 -2.23128e-06 60 8.9543 60 20L60 60L20 60C8.9543 60 -3.91405e-07 51.0457 -8.74228e-07 40Z",
+    "M0 40C0 28.9543 8.9543 20 20 20C20 8.9543 28.9543 0 40 0C51.0457 0 60 8.9543 60 20V60H20C8.95431 60 0 51.0457 0 40Z",
   topRight:
-    "M124 40C124 51.0457 112.807 60 99 60C94.5563 60 90.3837 59.0716 86.7676 57.4453L84.0713 60.1426L75.4639 51.5352L88 39L85.1719 36.1719L72.6357 48.707L64 40.0713L66.6416 37.4287C64.9604 33.7678 64 29.524 64 25C64 11.1929 72.9543 8.05776e-07 84 0H124V40Z",
-  bottomRight:
-    "M124 84C124 95.0457 115.046 104 104 104C104 115.046 95.0457 124 84 124C72.9543 124 64 115.046 64 104L64 64L104 64C115.046 64 124 72.9543 124 84Z",
+    "M60 40C60 51.0457 48.8071 60 35 60C30.5563 60 26.3837 59.0716 22.7676 57.4453L20.0713 60.1426L11.4639 51.5352L24 39L21.1719 36.1719L8.63574 48.707L0 40.0713L2.6416 37.4287C0.960359 33.7678 0 29.524 0 25C0 11.1929 8.95431 0 20 0H60V40Z",
   bottomLeft:
-    "M40 124C28.9543 124 20 115.046 20 104C8.9543 104 -2.53127e-06 95.0457 -3.49691e-06 84C-4.46256e-06 72.9543 8.9543 64 20 64L60 64L60 104C60 115.046 51.0457 124 40 124Z",
+    "M40 60C28.9543 60 20 51.0457 20 40C8.9543 40 0 31.0457 0 20C0 8.95431 8.9543 0 20 0H60V40C60 51.0457 51.0457 60 40 60Z",
+  bottomRight:
+    "M60 20C60 31.0457 51.0457 40 40 40C40 51.0457 31.0457 60 20 60C8.9543 60 0 51.0457 0 40V0H40C51.0457 0 60 8.95431 60 20Z",
 } as const;
 
 type CloverLoadingMarkProps = {
@@ -22,24 +22,32 @@ export function CloverLoadingMark({ className }: CloverLoadingMarkProps) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <path className="clover-loading-screen__leaf clover-loading-screen__leaf--1" style={{ animationDelay: "0ms" }} d={markPaths.topLeft} fill="url(#clover-loading-screen-top-left)" />
-      <path className="clover-loading-screen__leaf clover-loading-screen__leaf--2" style={{ animationDelay: "700ms" }} d={markPaths.topRight} fill="url(#clover-loading-screen-top-right)" />
-      <path className="clover-loading-screen__leaf clover-loading-screen__leaf--3" style={{ animationDelay: "1400ms" }} d={markPaths.bottomRight} fill="url(#clover-loading-screen-bottom-right)" />
-      <path className="clover-loading-screen__leaf clover-loading-screen__leaf--4" style={{ animationDelay: "2100ms" }} d={markPaths.bottomLeft} fill="url(#clover-loading-screen-bottom-left)" />
+      <g className="clover-loading-screen__leaf clover-loading-screen__leaf--1" style={{ animationDelay: "0ms" }}>
+        <path d={markPaths.topLeft} fill="url(#clover-loading-screen-top-left)" />
+      </g>
+      <g className="clover-loading-screen__leaf clover-loading-screen__leaf--2" style={{ animationDelay: "180ms" }} transform="translate(64 0)">
+        <path d={markPaths.topRight} fill="url(#clover-loading-screen-top-right)" />
+      </g>
+      <g className="clover-loading-screen__leaf clover-loading-screen__leaf--3" style={{ animationDelay: "360ms" }} transform="translate(64 64)">
+        <path d={markPaths.bottomRight} fill="url(#clover-loading-screen-bottom-right)" />
+      </g>
+      <g className="clover-loading-screen__leaf clover-loading-screen__leaf--4" style={{ animationDelay: "540ms" }} transform="translate(0 64)">
+        <path d={markPaths.bottomLeft} fill="url(#clover-loading-screen-bottom-left)" />
+      </g>
       <defs>
         <linearGradient id="clover-loading-screen-top-left" x1="0" y1="0" x2="60" y2="60" gradientUnits="userSpaceOnUse">
           <stop offset="0.5" stopColor="#03A8C0" />
           <stop offset="1" stopColor="#00DFFF" />
         </linearGradient>
-        <linearGradient id="clover-loading-screen-top-right" x1="124" y1="0" x2="64" y2="60" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#ECFDF5" />
-          <stop offset="1" stopColor="#34D399" />
+        <linearGradient id="clover-loading-screen-top-right" x1="60" y1="0" x2="0" y2="60" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#6EE7B7" />
+          <stop offset="1" stopColor="#7EF0C2" />
         </linearGradient>
-        <linearGradient id="clover-loading-screen-bottom-right" x1="64" y1="64" x2="124" y2="124" gradientUnits="userSpaceOnUse">
+        <linearGradient id="clover-loading-screen-bottom-right" x1="0" y1="0" x2="60" y2="60" gradientUnits="userSpaceOnUse">
           <stop stopColor="#00DFFF" />
           <stop offset="0.5" stopColor="#03A8C0" />
         </linearGradient>
-        <linearGradient id="clover-loading-screen-bottom-left" x1="60" y1="64" x2="0" y2="124" gradientUnits="userSpaceOnUse">
+        <linearGradient id="clover-loading-screen-bottom-left" x1="60" y1="0" x2="0" y2="60" gradientUnits="userSpaceOnUse">
           <stop stopColor="#00DFFF" />
           <stop offset="0.5" stopColor="#03A8C0" />
         </linearGradient>
