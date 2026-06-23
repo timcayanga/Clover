@@ -1975,6 +1975,9 @@ const IMPORT_VISIBILITY_MAX_TIMEOUT_MS = 2 * 60_000;
 const IMPORT_IMAGE_HEAVY_VISIBILITY_BASE_TIMEOUT_MS = 60_000;
 const IMPORT_IMAGE_HEAVY_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 20_000;
 const IMPORT_IMAGE_HEAVY_VISIBILITY_MAX_TIMEOUT_MS = 5 * 60_000;
+const IMPORT_SCREENSHOT_STATEMENT_VISIBILITY_BASE_TIMEOUT_MS = 90_000;
+const IMPORT_SCREENSHOT_STATEMENT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 25_000;
+const IMPORT_SCREENSHOT_STATEMENT_VISIBILITY_MAX_TIMEOUT_MS = 8 * 60_000;
 const IMPORT_SERVER_HEAVY_VISIBILITY_BASE_TIMEOUT_MS = 60_000;
 const IMPORT_SERVER_HEAVY_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 30_000;
 const IMPORT_SERVER_HEAVY_VISIBILITY_MAX_TIMEOUT_MS = 4 * 60_000;
@@ -2128,13 +2131,26 @@ const isServerHeavyStatementBatchItem = (item: Pick<QueuedFile, "file" | "import
   );
 };
 
+const isScreenshotStatementBatchItem = (item: Pick<QueuedFile, "file" | "importMode">) => {
+  const mode = inferImportModeForFile(item.file, item.importMode ?? "statement");
+  return mode === "statement" && isImageImportFile(item.file) && shouldRequireVisibleRowsForImport(item.file.name);
+};
+
 const getImportVisibilityTimeoutMsForItems = (items: Array<Pick<QueuedFile, "file" | "importMode">>) => {
   const fileCount = Math.max(1, items.length);
   const hasServerHeavyBatch = items.some(isServerHeavyStatementBatchItem);
+  const hasScreenshotStatementBatch = items.some(isScreenshotStatementBatchItem);
   const hasOnlyFastImages = items.length > 0 && items.every((item) => {
     const mode = inferImportModeForFile(item.file, item.importMode ?? "statement");
     return isImageImportFile(item.file) && (mode === "statement" || mode === "receipt");
   });
+  if (hasScreenshotStatementBatch) {
+    return Math.min(
+      IMPORT_SCREENSHOT_STATEMENT_VISIBILITY_MAX_TIMEOUT_MS,
+      IMPORT_SCREENSHOT_STATEMENT_VISIBILITY_BASE_TIMEOUT_MS +
+        Math.max(0, fileCount - 1) * IMPORT_SCREENSHOT_STATEMENT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS
+    );
+  }
   if (hasOnlyFastImages) {
     return Math.min(
       IMPORT_IMAGE_HEAVY_VISIBILITY_MAX_TIMEOUT_MS,
@@ -4002,7 +4018,8 @@ export function ImportFilesModal({
         ? 4 * 60_000
         : 180_000;
     let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
-    for (let attempt = 0; attempt < 120; attempt += 1) {
+    let scheduledVisibleRefresh = false;
+    for (let attempt = 0; Date.now() - startedAt < MAX_WAIT_MS || attempt === 0; attempt += 1) {
       try {
         const visibilityDeadline = visibilityDeadlineRef.current;
         if (!backgroundOnly && visibilityDeadline && Date.now() >= visibilityDeadline) {
@@ -4134,6 +4151,10 @@ export function ImportFilesModal({
         );
         const hasRowBackedVisibility = parsedRowsCount > 0 || confirmedTransactionsCount > 0 || visibleImportComplete;
         const visibleProgressSignal = requiresVisibleRows ? hasRowBackedVisibility : hasVisibleImportDataSignal;
+        if (!scheduledVisibleRefresh && hasVisibleImportDataSignal) {
+          scheduledVisibleRefresh = true;
+          scheduleBackgroundRouterRefresh(0);
+        }
 
         if (processingPhase === "account_match_needs_confirmation") {
           closeImportAfterError(
@@ -6087,7 +6108,8 @@ export function ImportFilesModal({
               ? "Notes screenshot imported"
               : "Screenshot imported";
 
-    for (let attempt = 0; attempt < 240; attempt += 1) {
+    let scheduledVisibleRefresh = false;
+    for (let attempt = 0; Date.now() - startedAt < MAX_WAIT_MS || attempt === 0; attempt += 1) {
       const response = await fetch(`/api/imports/${importFileId}/status`, {
         cache: "no-store",
       });
@@ -6106,6 +6128,13 @@ export function ImportFilesModal({
       const telemetryLabel = typeof payload.telemetryLabel === "string" ? payload.telemetryLabel : null;
       const telemetryMessage = typeof payload.telemetryMessage === "string" ? payload.telemetryMessage : null;
       const resumeReason = typeof payload.resumeReason === "string" ? payload.resumeReason : null;
+      const hasVisibleImportPresence = Boolean(
+        payload.visibleImportComplete || parsedRowsCount > 0 || confirmedTransactionsCount > 0
+      );
+      if (!scheduledVisibleRefresh && hasVisibleImportPresence) {
+        scheduledVisibleRefresh = true;
+        scheduleBackgroundRouterRefresh(0);
+      }
 
       if (importStatus === "failed") {
         if (parsedRowsCount > 0 || confirmedTransactionsCount > 0) {
@@ -8505,7 +8534,19 @@ export function ImportFilesModal({
       const results: Array<{ itemId: string; result: ImportProcessResult }> = [];
       let nextIndex = 0;
       const shouldRefreshDuringBatch = queue.some(isFastImageBatchItem);
-      const workerCount = Math.min(queue.every(isServerHeavyStatementBatchItem) ? 4 : queue.every(isFastImageBatchItem) ? 10 : 8, queue.length);
+      const isScreenshotStatementBatch = queue.every(isScreenshotStatementBatchItem);
+      const workerCount = Math.min(
+        queue.every(isServerHeavyStatementBatchItem)
+          ? 4
+          : isScreenshotStatementBatch
+            ? queue.length >= 12
+              ? 3
+              : 4
+            : queue.every(isFastImageBatchItem)
+              ? 6
+              : 8,
+        queue.length
+      );
 
       const runWorker = async () => {
         while (!uploadCancelRequestedRef.current) {
