@@ -67,6 +67,7 @@ import {
 import {
   isLiabilityAccountType,
 } from "@/lib/account-types";
+import { uploadSummaryMatchesImportedAccount } from "@/lib/imported-account-ui";
 
 type Account = {
   id: string;
@@ -130,9 +131,6 @@ type Transaction = {
   normalizedPayload?: unknown;
 };
 
-const normalizeLooseImportedValue = (value: string | null | undefined) =>
-  String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-
 const accountNumbersMayMatch = (left?: string | null, right?: string | null, requireExactMatch = false) => {
   const leftDigits = String(left ?? "").replace(/\D/g, "");
   const rightDigits = String(right ?? "").replace(/\D/g, "");
@@ -157,50 +155,7 @@ const uploadSummaryMatchesAccount = (
   summary: NonNullable<ReturnType<typeof getCompletedImportActivitySummary>>,
   account: Account
 ) => {
-  if (summary.accountId === account.id || summary.optimisticAccountId === account.id) {
-    return true;
-  }
-
-  const summaryKey = normalizeImportedAccountKey(
-    summary.accountName,
-    summary.institution,
-    summary.accountNumber ?? null,
-    summary.accountType ?? account.type,
-    summary.previewTransactions?.[0]?.currency ?? null
-  );
-  const accountKey = normalizeImportedAccountKey(
-    account.name,
-    account.institution,
-    account.accountNumber,
-    account.type,
-    account.currency
-  );
-  if (summaryKey === accountKey) {
-    return true;
-  }
-
-  if (!summary.optimistic && !account.id.startsWith("optimistic-")) {
-    return false;
-  }
-
-  const summaryInstitution = normalizeLooseImportedValue(summary.institution);
-  const accountInstitution = normalizeLooseImportedValue(account.institution);
-  if (!summaryInstitution || !accountInstitution || summaryInstitution !== accountInstitution) {
-    return false;
-  }
-
-  const summaryAccountNumber = normalizeLooseImportedValue(summary.accountNumber);
-  const accountAccountNumber = normalizeLooseImportedValue(account.accountNumber);
-  const accountName = normalizeLooseImportedValue(account.name);
-  const summaryLastFour = summaryAccountNumber.slice(-4);
-  const accountLastFour = accountAccountNumber.slice(-4);
-
-  return Boolean(
-    (summaryAccountNumber && accountAccountNumber && summaryAccountNumber === accountAccountNumber) ||
-      (summaryLastFour.length === 4 && accountName.includes(summaryLastFour)) ||
-      (accountLastFour.length === 4 && normalizeLooseImportedValue(summary.accountName).includes(accountLastFour)) ||
-      (!summaryAccountNumber && !accountAccountNumber)
-  );
+  return uploadSummaryMatchesImportedAccount(summary, account);
 };
 
 const buildImportedSummaryDedupKey = (

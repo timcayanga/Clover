@@ -70,12 +70,12 @@ import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-n
 import { clearImportActivity, getCompletedImportActivitySummary, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
 import { importActivityHasCompletedRows } from "@/lib/import-activity";
 import {
-  isGenericUploadedAccountShadowed,
-  isTransientUploadedAccountPlaceholder,
   mergeAccountsWithOptimisticImports as mergeAccountsWithOptimisticImportsShared,
   mergeImportedPreviewTransactions,
+  mergeOptimisticImportedAccount as mergeOptimisticImportedAccountShared,
   resolvePersistedImportedAccountId as resolvePersistedImportedAccountIdShared,
   transactionMatchesImportedAccount,
+  uploadSummaryMatchesImportedAccount,
 } from "@/lib/imported-account-ui";
 
 type PlanUsage = {
@@ -109,54 +109,8 @@ const WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS = 2_500;
 const isImageImportFile = (file: File) =>
   /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) || file.type.startsWith("image/");
 
-const normalizeLooseImportedValue = (value: string | null | undefined) =>
-  String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-
 const uploadSummaryMatchesAccount = (summary: UploadInsightsSummary, account: Account) => {
-  if (summary.accountId === account.id || summary.optimisticAccountId === account.id) {
-    return true;
-  }
-
-  const summaryKey = normalizeImportedAccountKey(
-    summary.accountName,
-    summary.institution,
-    summary.accountNumber ?? null,
-    summary.accountType ?? account.type,
-    summary.previewTransactions?.[0]?.currency ?? null
-  );
-  const accountKey = normalizeImportedAccountKey(
-    account.name,
-    account.institution,
-    account.accountNumber,
-    account.type,
-    account.currency
-  );
-  if (summaryKey === accountKey) {
-    return true;
-  }
-
-  if (!summary.optimistic && !account.id.startsWith("optimistic-")) {
-    return false;
-  }
-
-  const summaryInstitution = normalizeLooseImportedValue(summary.institution);
-  const accountInstitution = normalizeLooseImportedValue(account.institution);
-  if (!summaryInstitution || !accountInstitution || summaryInstitution !== accountInstitution) {
-    return false;
-  }
-
-  const summaryAccountNumber = normalizeLooseImportedValue(summary.accountNumber);
-  const accountAccountNumber = normalizeLooseImportedValue(account.accountNumber);
-  const accountName = normalizeLooseImportedValue(account.name);
-  const summaryLastFour = summaryAccountNumber.slice(-4);
-  const accountLastFour = accountAccountNumber.slice(-4);
-
-  return Boolean(
-    (summaryAccountNumber && accountAccountNumber && summaryAccountNumber === accountAccountNumber) ||
-      (summaryLastFour.length === 4 && accountName.includes(summaryLastFour)) ||
-      (accountLastFour.length === 4 && normalizeLooseImportedValue(summary.accountName).includes(accountLastFour)) ||
-      (!summaryAccountNumber && !accountAccountNumber)
-  );
+  return uploadSummaryMatchesImportedAccount(summary, account);
 };
 
 type Workspace = {
@@ -405,57 +359,15 @@ const mergeAccountsWithOptimisticImports = (
 };
 
 const mergeOptimisticImportedAccount = (currentAccounts: Account[], optimisticAccount: Account) => {
-  if (isTransientUploadedAccountPlaceholder(optimisticAccount)) {
-    return currentAccounts.filter((account) => !isGenericUploadedAccountShadowed(account, [optimisticAccount]));
-  }
-
-  const matchedAccounts = currentAccounts.filter((account) => {
-    if (account.id === optimisticAccount.id) {
-      return true;
-    }
-
-    if (account.source !== "upload") {
-      return false;
-    }
-
-    return matchesImportedAccountIdentity(account, optimisticAccount);
+  return mergeOptimisticImportedAccountShared(currentAccounts, optimisticAccount, {
+    mergeMatchedAccount: (matchedAccount, nextOptimisticAccount, shouldPreserveExistingBalance) => ({
+      ...matchedAccount,
+      ...nextOptimisticAccount,
+      balance: shouldPreserveExistingBalance ? matchedAccount.balance : nextOptimisticAccount.balance ?? matchedAccount.balance,
+      updatedAt: nextOptimisticAccount.updatedAt ?? matchedAccount.updatedAt,
+      createdAt: matchedAccount.createdAt ?? nextOptimisticAccount.createdAt,
+    }),
   });
-
-  const matchedAccount = matchedAccounts[0] ?? null;
-  const existingBalance = typeof matchedAccount?.balance === "string" ? matchedAccount.balance.trim() : "";
-  const optimisticBalance = typeof optimisticAccount.balance === "string" ? optimisticAccount.balance.trim() : "";
-  const shouldPreserveExistingBalance =
-    existingBalance !== "" &&
-    Number(existingBalance) !== 0 &&
-    (optimisticBalance === "" || Number(optimisticBalance) === 0);
-
-  const mergedAccount: Account = matchedAccount
-    ? {
-        ...matchedAccount,
-        ...optimisticAccount,
-        balance: shouldPreserveExistingBalance ? matchedAccount.balance : optimisticAccount.balance ?? matchedAccount.balance,
-        updatedAt: optimisticAccount.updatedAt ?? matchedAccount.updatedAt,
-        createdAt: matchedAccount.createdAt ?? optimisticAccount.createdAt,
-      }
-    : optimisticAccount;
-
-  const remainingAccounts = currentAccounts.filter((account) => {
-    if (account.id === optimisticAccount.id) {
-      return false;
-    }
-
-    if (account.source !== "upload") {
-      return true;
-    }
-
-    if (isGenericUploadedAccountShadowed(account, [optimisticAccount])) {
-      return false;
-    }
-
-    return !matchesImportedAccountIdentity(account, optimisticAccount);
-  });
-
-  return [mergedAccount, ...remainingAccounts];
 };
 
 const getCachedWorkspaceHydration = (workspaceId: string) => {

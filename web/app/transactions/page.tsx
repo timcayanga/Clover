@@ -80,10 +80,9 @@ import {
   isWiseWalletWithoutVisibleAccountNumber,
 } from "@/lib/imported-account-identity";
 import {
-  isGenericUploadedAccountShadowed,
-  isTransientUploadedAccountPlaceholder,
   mergeAccountsWithOptimisticImports as mergeAccountsWithOptimisticImportsShared,
   mergeImportedPreviewTransactions,
+  mergeOptimisticImportedAccount as mergeOptimisticImportedAccountShared,
   resolvePersistedImportedAccountId as resolvePersistedImportedAccountIdShared,
 } from "@/lib/imported-account-ui";
 
@@ -279,55 +278,7 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
 };
 
 const mergeOptimisticImportedAccount = (currentAccounts: Account[], optimisticAccount: Account) => {
-  if (isTransientUploadedAccountPlaceholder(optimisticAccount)) {
-    return currentAccounts.filter((account) => !isGenericUploadedAccountShadowed(account, [optimisticAccount]));
-  }
-
-  const matchedAccounts = currentAccounts.filter((account) => {
-    if (account.id === optimisticAccount.id) {
-      return true;
-    }
-
-    if (account.source !== "upload") {
-      return false;
-    }
-
-    return matchesImportedAccountIdentity(account, optimisticAccount);
-  });
-
-  const matchedAccount = matchedAccounts[0] ?? null;
-  const existingBalance = typeof matchedAccount?.balance === "string" ? matchedAccount.balance.trim() : "";
-  const optimisticBalance = typeof optimisticAccount.balance === "string" ? optimisticAccount.balance.trim() : "";
-  const shouldPreserveExistingBalance =
-    existingBalance !== "" &&
-    Number(existingBalance) !== 0 &&
-    (optimisticBalance === "" || Number(optimisticBalance) === 0);
-
-  const mergedAccount: Account = matchedAccount
-    ? {
-        ...matchedAccount,
-        ...optimisticAccount,
-        balance: shouldPreserveExistingBalance ? matchedAccount.balance : optimisticAccount.balance ?? matchedAccount.balance,
-      }
-    : optimisticAccount;
-
-  const remainingAccounts = currentAccounts.filter((account) => {
-    if (account.id === optimisticAccount.id) {
-      return false;
-    }
-
-    if (account.source !== "upload") {
-      return true;
-    }
-
-    if (isGenericUploadedAccountShadowed(account, [optimisticAccount])) {
-      return false;
-    }
-
-    return !matchesImportedAccountIdentity(account, optimisticAccount);
-  });
-
-  return [mergedAccount, ...remainingAccounts];
+  return mergeOptimisticImportedAccountShared(currentAccounts, optimisticAccount);
 };
 
 const accountMatchesTransaction = (transaction: Transaction, account: Account) =>
