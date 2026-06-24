@@ -6,6 +6,14 @@ export type ImportActivityStatus = "active" | "done" | "error";
 export type ImportActivitySurface = "modal" | "background";
 export type ImportActivityLocation = ImportActivitySurface;
 
+export type ImportActivityTiming = {
+  startedAt: number;
+  firstVisibleAt: number | null;
+  completedAt: number | null;
+  visibilityLatencyMs: number | null;
+  totalLatencyMs: number | null;
+};
+
 export type ImportActivitySnapshot = {
   workspaceId: string;
   surface: ImportActivitySurface;
@@ -22,6 +30,7 @@ export type ImportActivitySnapshot = {
   errorMessage: string | null;
   errorTitle: string | null;
   errorNextSteps: string[] | null;
+  timing: ImportActivityTiming | null;
   updatedAt: number;
 };
 
@@ -73,6 +82,10 @@ const readSnapshotFromStorage = (storage: Storage | null): ImportActivitySnapsho
     const workspaceId = typeof parsed.workspaceId === "string" ? parsed.workspaceId : "";
     const status = parsed.status === "active" || parsed.status === "done" || parsed.status === "error" ? parsed.status : null;
     const surface = parsed.surface === "modal" || parsed.surface === "background" ? parsed.surface : null;
+    const parsedTiming =
+      parsed.timing && typeof parsed.timing === "object" && !Array.isArray(parsed.timing)
+        ? (parsed.timing as Partial<ImportActivityTiming>)
+        : null;
     if (!workspaceId || !status || !surface) {
       return null;
     }
@@ -98,6 +111,24 @@ const readSnapshotFromStorage = (storage: Storage | null): ImportActivitySnapsho
       errorNextSteps: Array.isArray(parsed.errorNextSteps)
         ? parsed.errorNextSteps.filter((step): step is string => typeof step === "string" && step.trim().length > 0)
         : null,
+      timing:
+        parsedTiming && Number.isFinite(Number(parsedTiming.startedAt))
+          ? {
+              startedAt: Number(parsedTiming.startedAt),
+              firstVisibleAt: Number.isFinite(Number(parsedTiming.firstVisibleAt))
+                ? Number(parsedTiming.firstVisibleAt)
+                : null,
+              completedAt: Number.isFinite(Number(parsedTiming.completedAt))
+                ? Number(parsedTiming.completedAt)
+                : null,
+              visibilityLatencyMs: Number.isFinite(Number(parsedTiming.visibilityLatencyMs))
+                ? Number(parsedTiming.visibilityLatencyMs)
+                : null,
+              totalLatencyMs: Number.isFinite(Number(parsedTiming.totalLatencyMs))
+                ? Number(parsedTiming.totalLatencyMs)
+                : null,
+            }
+          : null,
       updatedAt: Number.isFinite(Number(parsed.updatedAt)) ? Number(parsed.updatedAt) : Date.now(),
     };
   } catch {
@@ -150,10 +181,11 @@ const broadcastImportActivityChange = () => {
 
 export const setImportActivity = (
   snapshot:
-    | (Omit<ImportActivitySnapshot, "updatedAt" | "errorCode" | "errorTitle" | "errorNextSteps"> & {
+    | (Omit<ImportActivitySnapshot, "updatedAt" | "errorCode" | "errorTitle" | "errorNextSteps" | "timing"> & {
         errorCode?: string | null;
         errorTitle?: string | null;
         errorNextSteps?: string[] | null;
+        timing?: ImportActivityTiming | null;
       })
     | ImportActivitySnapshot
 ) => {
@@ -166,6 +198,7 @@ export const setImportActivity = (
     errorCode: snapshot.errorCode ?? null,
     errorTitle: snapshot.errorTitle ?? null,
     errorNextSteps: snapshot.errorNextSteps ?? null,
+    timing: snapshot.timing ?? null,
     updatedAt: "updatedAt" in snapshot && Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now(),
   };
   writeSnapshotToStorage(nextSnapshot);

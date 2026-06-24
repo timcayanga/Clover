@@ -49,6 +49,7 @@ import {
   type ImportActivityLocation,
   type ImportActivitySnapshot,
   type ImportActivityStatus,
+  type ImportActivityTiming,
 } from "@/lib/import-activity";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import type { AccountType } from "@/lib/domain-types";
@@ -1462,6 +1463,15 @@ export function ImportFilesModal({
     }
 
     const previousSnapshot = lastImportActivityRef.current;
+    const summaryRowsVisible = (() => {
+      const summary = snapshot.summary ?? null;
+      const rowsImported = Number(summary?.rowsImported ?? 0);
+      const previewRows = Array.isArray(summary?.previewTransactions) ? summary.previewTransactions.length : 0;
+      return Math.max(rowsImported, previewRows) > 0;
+    })();
+    const detailSuggestsVisibleData = /accounts and transactions are visible|visible in clover|receipt imported$|all set$/i.test(
+      snapshot.detail ?? ""
+    );
     const liveItems = itemsRef.current;
     const liveFileTotal = liveItems.length;
     const snapshotFileTotal = Number(snapshot.fileTotal ?? 0);
@@ -1547,8 +1557,29 @@ export function ImportFilesModal({
       errorMessage: snapshot.errorMessage ?? null,
       errorTitle: snapshot.errorTitle ?? null,
       errorNextSteps: snapshot.errorNextSteps ?? null,
+      timing: null,
       updatedAt: Date.now(),
     };
+    const now = nextSnapshot.updatedAt;
+    const previousTiming = previousSnapshot?.timing ?? null;
+    const startedAt =
+      previousTiming?.startedAt ??
+      (previousSnapshot?.workspaceId === nextSnapshot.workspaceId &&
+      previousSnapshot?.fileName === (snapshot.fileName ?? null)
+        ? previousSnapshot.updatedAt
+        : now);
+    const firstVisibleAt =
+      previousTiming?.firstVisibleAt ??
+      (summaryRowsVisible || detailSuggestsVisibleData ? now : null);
+    const completedAt = nextSnapshot.status === "done" ? previousTiming?.completedAt ?? now : null;
+    const nextTiming: ImportActivityTiming = {
+      startedAt,
+      firstVisibleAt,
+      completedAt,
+      visibilityLatencyMs: firstVisibleAt !== null ? Math.max(0, firstVisibleAt - startedAt) : null,
+      totalLatencyMs: completedAt !== null ? Math.max(0, completedAt - startedAt) : null,
+    };
+    nextSnapshot.timing = nextTiming;
     const isVisiblePrimaryCompletion =
       nextSnapshot.status === "done" &&
       nextSnapshot.progress >= 100 &&
