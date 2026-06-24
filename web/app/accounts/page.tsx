@@ -1199,6 +1199,7 @@ function AccountsPageContent() {
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountsLoadFailed, setAccountsLoadFailed] = useState(false);
+  const [accountsHydrationPending, setAccountsHydrationPending] = useState(false);
   const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(Boolean(initialCachedWorkspace));
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
@@ -1501,6 +1502,7 @@ function AccountsPageContent() {
     let visibleFetchedAccounts: Account[] = [];
     let visibleCachedWorkspaceAccounts: Account[] = [];
     const backgroundTasks: Promise<void>[] = [];
+    const shouldGuardEmptyStateDuringHydration = !options?.silent && accounts.length === 0;
     const hasResilientFallbackEvidence = () =>
       hasCachedWorkspaceDataEvidence(workspaceId) ||
       hasRecentWorkspaceImportEvidence(workspaceId, importActivitySnapshot);
@@ -1511,12 +1513,16 @@ function AccountsPageContent() {
       setTransactions([]);
       setAccountsLoading(false);
       setAccountsLoadFailed(false);
+      setAccountsHydrationPending(false);
       setHasInitialWorkspaceDataLoaded(true);
       return;
     }
 
     if (!options?.silent) {
       setAccountsLoading(true);
+    }
+    if (shouldGuardEmptyStateDuringHydration) {
+      setAccountsHydrationPending(true);
     }
 
     try {
@@ -1559,6 +1565,9 @@ function AccountsPageContent() {
         );
         setAccountRules(Array.isArray(payload?.accountRules) ? payload.accountRules : []);
         setStatementCheckpoints(Array.isArray(payload?.statementCheckpoints) ? (payload.statementCheckpoints as StatementCheckpoint[]) : []);
+        if (visibleFetchedAccounts.length > 0) {
+          setAccountsHydrationPending(false);
+        }
       } else {
         if (!options?.silent) {
           if (hasResilientFallbackEvidence()) {
@@ -1573,6 +1582,7 @@ function AccountsPageContent() {
           }
           setHasInitialWorkspaceDataLoaded(true);
         }
+        setAccountsHydrationPending(false);
       }
 
       if (!options?.silent) {
@@ -1672,6 +1682,10 @@ function AccountsPageContent() {
           }
         } catch {
           // Background transaction hydration is best-effort.
+        } finally {
+          if (workspaceLoadSeqRef.current === loadSeq) {
+            setAccountsHydrationPending(false);
+          }
         }
       })());
 
@@ -1695,6 +1709,7 @@ function AccountsPageContent() {
           }, WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS);
         }
       }
+      setAccountsHydrationPending(false);
     } finally {
       if (!options?.silent) {
         setAccountsLoading(false);
@@ -1799,6 +1814,7 @@ function AccountsPageContent() {
       setTransactions([]);
       setStatementCheckpoints([]);
       setAccountsLoading(false);
+      setAccountsHydrationPending(false);
       setHasInitialWorkspaceDataLoaded(true);
       return;
     }
@@ -1821,6 +1837,7 @@ function AccountsPageContent() {
       setStatementCheckpoints([]);
     }
     setAccountsLoading(true);
+    setAccountsHydrationPending(!hydratedFromCache && accounts.length === 0);
     setHasInitialWorkspaceDataLoaded(hydratedFromCache);
     void loadWorkspaceData(selectedWorkspaceId, { silent: hydratedFromCache });
   }, [selectedWorkspaceId, workspacesLoading, workspaces.length]);
@@ -3338,7 +3355,7 @@ function AccountsPageContent() {
     accounts.length === 0 &&
     !accountsLoadFailed &&
     !accountsLoading &&
-    hasWorkspaceDataEvidence;
+    (hasWorkspaceDataEvidence || accountsHydrationPending);
 
   useEffect(() => {
     if (!selectedWorkspaceId || !shouldShowSyncingInsteadOfEmpty) {
