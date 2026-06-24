@@ -130,6 +130,25 @@ const isImageUploadFile = (fileName: string, fileType: string) =>
   fileType.toLowerCase().startsWith("image/") ||
   /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(fileName.toLowerCase());
 
+const shouldProcessReceiptInline = (params: {
+  fileName: string;
+  fileType: string;
+  bytesLength: number;
+  forceInlineProcessing: boolean;
+}) => {
+  if (params.forceInlineProcessing) {
+    return true;
+  }
+
+  const isImageReceipt = isImageUploadFile(params.fileName, params.fileType);
+  const isPdfReceipt = isPdfUpload(params.fileName, params.fileType);
+  if (!isImageReceipt && !isPdfReceipt) {
+    return false;
+  }
+
+  return params.bytesLength <= 8_000_000;
+};
+
 const isLikelyLowQualityPnbStatementFile = (fileName: string, bankHint: string) => {
   if (bankHint !== "PNB") {
     return false;
@@ -1168,7 +1187,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               processingMessage:
                 confirmationResult.status === "done"
                   ? "Receipt imported."
-                  : "Receipt document saved. Clover is still linking it to Cash.",
+                  : "Receipt document saved. Clover is still linking it to the detected account.",
               confirmedTransactionsCount: confirmationResult.confirmedTransactionsCount ?? confirmationResult.imported,
             }).catch(() => null);
           }
@@ -1458,6 +1477,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         });
       }
 
+      const shouldInlineReceiptProcessing =
+        importMode === "receipt" &&
+        shouldProcessReceiptInline({
+          fileName: effectiveFileName,
+          fileType: effectiveFileType,
+          bytesLength: bytes.length,
+          forceInlineProcessing,
+        });
+
       const hasInlineStatementImageText = isStatementImageUpload && formExtractedText.trim().length > 0;
 
       if (hasInlineStatementImageText) {
@@ -1519,6 +1547,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return processInline({
           bankName: processingBankName || null,
           progressMessage: "Importing trained receipt...",
+        });
+      }
+
+      if (importMode === "receipt" && shouldInlineReceiptProcessing) {
+        return processInline({
+          bankName: processingBankName || null,
+          progressMessage: "Reading receipt image...",
         });
       }
 
