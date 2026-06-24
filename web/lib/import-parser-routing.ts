@@ -143,6 +143,8 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
   const screenshotNoiseRatio = Math.max(0, Math.min(1, Number(params.screenshotNoiseRatio ?? 0)));
   const weakText = textLength < 120;
   const veryWeakText = textLength < 50;
+  const weakScreenshotText = textLength < 220;
+  const weakStructuredDocumentText = textLength < 180;
   const noisyScreenshotText = imageImport && screenshotNoiseRatio >= 0.35;
   const extremelyNoisyScreenshotText = imageImport && screenshotNoiseRatio >= 0.5;
   const shouldRenderPageImages = imageImport || isPdf;
@@ -182,7 +184,7 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
 
   if (
     surfaceFingerprint.kind === "wallet_screenshot" &&
-    (parsedRowsCount === 0 || weakText || noisyScreenshotText || metadataConfidence < 75 || genericParseLooksSuspicious)
+    (parsedRowsCount === 0 || weakScreenshotText || noisyScreenshotText || metadataConfidence < 75 || genericParseLooksSuspicious)
   ) {
     return {
       route: "backup_openai",
@@ -245,7 +247,7 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
   if (
     surfaceFingerprint.kind === "statement_screenshot" &&
     (parsedRowsCount === 0 ||
-      weakText ||
+      weakScreenshotText ||
       noisyScreenshotText ||
       metadataConfidence < 76 ||
       weakStatementIdentity ||
@@ -307,7 +309,7 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
   if (
     (imageImport || isPdf) &&
     (parsedRowsCount === 0 ||
-      weakText ||
+      (surfaceFingerprint.kind === "structured_statement" ? weakStructuredDocumentText : weakScreenshotText) ||
       extremelyNoisyScreenshotText ||
       metadataConfidence < 70 ||
       weakStatementIdentity ||

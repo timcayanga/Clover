@@ -97,6 +97,10 @@ const GENERIC_NORMALIZATION_GUIDANCE = [
   "- Normalize only when the merchant or code is clearly the same canonical entity.",
   "- Use these canonical categories when they fit the row: Income, Transfers, Food & Dining, Transport, Housing, Bills & Utilities, Travel & Lifestyle, Entertainment, Shopping, Subscriptions, Health & Wellness, Education, Gifts & Donations, Business, Financial, Cash & ATM, Opening Balance, Other.",
   "- Use keyword and context clues before falling back to Other: grocery, grocer, market, supermarket, mart, cafe, coffee, bar, restaurant, dumpling, sushi, burger -> Food & Dining; airport, parking, skybus, train, rail, fuel, petrol, transport -> Transport; opera house, theater, theatre, concert, museum, ticket sales -> Entertainment; souvenir, tourism, harbour gifts, sanctuary, tour, parks, travel desk -> Travel & Lifestyle; relay, convenience store, amazon, paypal, shopping mall, camera, marketplace -> Shopping.",
+  "- Use stronger transfer heuristics before defaulting to Other: if the row looks like a person's full name, payee alias, or handle and the statement does not clearly show a store or institution, prefer Transfers. Examples: Wanli Hu, Maria Harman, Maldo A F, Citibank Ire Fin S.",
+  "- If a row says Payments, Paid, Sent, Received, Transfer, Bank Transfer, Remit, Remittance, Top Up, Cash In, Cash Out, Added, Refunded, Deposit, Withdrawal, or ATM, prefer Transfers or Cash & ATM based on the visible direction and wording instead of Other.",
+  "- If the merchant implies groceries, convenience, or daily food retail such as grocer, groceries, supermarket, woolworths, puregold, 7-eleven, convenience, market, or price club, prefer Food & Dining unless the screenshot clearly labels it as a non-food store.",
+  "- If the merchant implies travel, attractions, tourism, souvenirs, parks, opera, harbour, airport, or ticketing, prefer Travel & Lifestyle or Entertainment before Other based on the venue.",
   "- If the merchant looks like a person's full name or payee handle, prefer Transfers.",
   "- If the row is an ATM withdrawal, cash withdrawal, withdrawal, cash-out, or cash advance, prefer Cash & ATM unless the statement explicitly labels it as a fee.",
   "- Common merchant/code normalizations include ATM WDL/ATMWD/W/D FR SAV/ET WDL/Cash Withdrawal/ATM Cash Withdrawal -> ATM Withdrawal; IBFT/Instapay/InstaPay/Interbank Fund Transfer/PESONet -> Bank Transfer; Cash Payment/Payment - Thank You/Card Payment -> Credit Card Payment; Service Charge/Finance Charge -> Service Charge or Finance Charge; Credit Interest -> Interest Earned; Discord Nitro/Google One -> Subscriptions; MLBB Top Up -> Entertainment.",
@@ -132,6 +136,46 @@ const GENERIC_FEW_SHOT_EXAMPLES = [
       amount: 0.96,
       type: "Credit",
       categoryName: "Income",
+    },
+  },
+  {
+    source: "WANLI HU +77.50 GBP",
+    parsed: {
+      transactionName: "WANLI HU",
+      normalizedName: "Wanli Hu",
+      amount: 77.5,
+      type: "Credit",
+      categoryName: "Transfers",
+    },
+  },
+  {
+    source: "PEDRO THE GROCER MAKAT 295.00",
+    parsed: {
+      transactionName: "PEDRO THE GROCER MAKAT",
+      normalizedName: "Pedro the Grocer Makat",
+      amount: 295,
+      type: "Debit",
+      categoryName: "Food & Dining",
+    },
+  },
+  {
+    source: "SYDNEY OPERA HOUSE 2,983.48 PHP",
+    parsed: {
+      transactionName: "SYDNEY OPERA HOUSE",
+      normalizedName: "Sydney Opera House",
+      amount: 2983.48,
+      type: "Debit",
+      categoryName: "Entertainment",
+    },
+  },
+  {
+    source: "LS MELBOURNE SOUVENIR 252.31 PHP",
+    parsed: {
+      transactionName: "LS MELBOURNE SOUVENIR",
+      normalizedName: "Ls Melbourne Souvenir",
+      amount: 252.31,
+      type: "Debit",
+      categoryName: "Travel & Lifestyle",
     },
   },
   {
@@ -2045,7 +2089,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         ? inferredDifficulty === "hard"
           ? [strongModel, imageModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
           : inferredDocumentFamily === "wallet_screenshot"
-            ? [imageModel, strongModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
+            ? [strongModel, imageModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
             : [model, imageModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
         : [model, textModel, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
   );
@@ -2597,7 +2641,9 @@ export const transcribeImportImagesWithOpenAI = async (params: {
     "strong OCR model",
   );
   const modelCandidates = dedupeOpenAIImportModels([
-    ...(inferredDifficulty === "hard" ? [strongModel, imageModel, ocrModel] : [imageModel, ocrModel, strongModel]),
+    ...(inferredDifficulty === "hard" || params.importMode === "statement"
+      ? [strongModel, imageModel, ocrModel]
+      : [imageModel, ocrModel, strongModel]),
     OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK,
   ]);
   const pageImagesToSend = params.pageImages.slice(
