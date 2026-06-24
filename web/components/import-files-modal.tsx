@@ -3963,6 +3963,7 @@ export function ImportFilesModal({
     fileName: string,
     options?: {
       deliverSummary?: boolean;
+      keepWatchingAfterVisible?: boolean;
     }
   ): Promise<{ completed: boolean; summary: UploadInsightsSummary | null }> => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -3973,6 +3974,7 @@ export function ImportFilesModal({
         ? `${Math.round(MAX_WAIT_MS / 60_000)} minute${Math.round(MAX_WAIT_MS / 60_000) === 1 ? "" : "s"}`
         : `${Math.round(MAX_WAIT_MS / 1000)} seconds`;
     const deliverSummary = options?.deliverSummary ?? true;
+    const keepWatchingAfterVisible = options?.keepWatchingAfterVisible ?? false;
     const progressLabel =
       importMode === "receipt"
         ? "Reading receipt in background"
@@ -4097,7 +4099,13 @@ export function ImportFilesModal({
             : null) ??
           localReceiptSummary;
 
-        if (receiptSummary && (importStatus === "done" || confirmedTransactionsCount > 0)) {
+        const receiptHasStructuredVisibility =
+          Boolean(payload.receiptTransaction) ||
+          Boolean(payload.receiptDocument) ||
+          parsedRowsCount > 0 ||
+          confirmedTransactionsCount > 0;
+
+        if (receiptSummary && (receiptHasStructuredVisibility || importStatus === "done")) {
           updateItem(itemId, {
             status: "done",
             confirmationState: "confirmed",
@@ -4122,7 +4130,14 @@ export function ImportFilesModal({
             summary: deliverSummary ? receiptSummary : null,
             errorMessage: null,
           });
-          router.refresh();
+          if (keepWatchingAfterVisible && !payload.receiptTransaction && importStatus !== "done") {
+            void monitorQueuedDocumentImport(itemId, importFileId, importMode, fileName, {
+              deliverSummary: false,
+              keepWatchingAfterVisible: false,
+            }).finally(() => router.refresh());
+          } else {
+            router.refresh();
+          }
           return { completed: true, summary: receiptSummary };
         }
 

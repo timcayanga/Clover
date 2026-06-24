@@ -511,7 +511,7 @@ type UpdateTransactionOptions = {
 };
 
 const todayIso = new Date().toISOString().slice(0, 10);
-const importedTransactionsRefreshDelays = [0, 750, 1_500, 3_000, 6_000];
+const importedTransactionsRefreshDelays = [0, 200, 600, 1_200, 2_500, 5_000];
 
 const wait = (milliseconds: number) =>
   new Promise<void>((resolve) => {
