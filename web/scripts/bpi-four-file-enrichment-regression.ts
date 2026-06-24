@@ -15,6 +15,13 @@ const files = [
   "Samples/BPI/583720503-BPI-BANK-STATEMENT.pdf",
 ];
 
+const expectedRowsByFileName = new Map<string, number>([
+  ["289783509-Statement-Bpi.pdf", 13],
+  ["432739654-Statement.pdf", 5],
+  ["527005183-9595490-e-79.pdf", 1],
+  ["583720503-BPI-BANK-STATEMENT.pdf", 36],
+]);
+
 const readStatementText = async (relativePath: string) => {
   const absolutePath = join(statementRoot, relativePath);
   const bytes = await readFile(absolutePath);
@@ -51,12 +58,17 @@ const main = async () => {
     const otherRows = enrichedRows.filter((row) => row.categoryName === "Other").length;
 
     summaries.push({ fileName, rows: enrichedRows.length, otherRows });
+    assert.equal(
+      enrichedRows.length,
+      expectedRowsByFileName.get(fileName),
+      `${fileName} should keep the validated BPI parser row count.`
+    );
     totalRows += enrichedRows.length;
     totalOtherRows += otherRows;
   }
 
   console.table(summaries);
-  assert.equal(totalRows, 64, `Expected the four BPI samples to produce 64 rows, got ${totalRows}.`);
+  assert.equal(totalRows, 55, `Expected the four BPI samples to produce 55 rows, got ${totalRows}.`);
   assert.equal(totalOtherRows, 0, `Expected deterministic enrichment to leave 0 BPI rows in Other, got ${totalOtherRows}.`);
   console.log("BPI four-file enrichment regression passed");
 };

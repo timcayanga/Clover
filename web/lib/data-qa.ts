@@ -13,15 +13,10 @@ export type DataQaTiming = {
   parsingMs?: number;
   enrichmentMs?: number;
   persistenceMs?: number;
-  readMs?: number;
-  confirmMs?: number;
   pageCount?: number;
   usedVisionFallback?: boolean;
   usedOpenAiFallback?: boolean;
   usedDeterministicParser?: boolean;
-  cacheHit?: boolean;
-  reusedCachedStatementParse?: boolean;
-  usedFastScreenshotParse?: boolean;
 };
 
 export type DataQaStatementSnapshot = {
@@ -208,6 +203,9 @@ const loadDataQaGuidanceSnapshot = async (): Promise<DataQaGuidanceSnapshot> => 
     };
   }
 };
+
+const isMissingReferenceDuringAncillaryWrite = (error: unknown) =>
+  error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003";
 
 export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
   const rows = input.parsedRows ?? [];
@@ -631,36 +629,48 @@ export const recordDataQaRun = async (input: DataQaRunInput) => {
   });
 
   if (evaluation.findings.length > 0 && run) {
-    await prismaAny.dataQaFinding?.createMany({
-      data: evaluation.findings.map((finding) => ({
-        workspaceId: input.workspaceId,
-        dataQaRunId: run.id,
-        importFileId: input.importFileId ?? null,
-        transactionId: finding.transactionId ?? null,
-        code: finding.code,
-        severity: finding.severity,
-        field: finding.field ?? null,
-        message: finding.message,
-        observedValue: finding.observedValue ?? Prisma.DbNull,
-        expectedValue: finding.expectedValue ?? Prisma.DbNull,
-        suggestion: finding.suggestion ?? null,
-        confidence: finding.confidence ?? 0,
-        metadata: finding.metadata ?? Prisma.DbNull,
-      })),
-    });
+    try {
+      await prismaAny.dataQaFinding?.createMany({
+        data: evaluation.findings.map((finding) => ({
+          workspaceId: input.workspaceId,
+          dataQaRunId: run.id,
+          importFileId: input.importFileId ?? null,
+          transactionId: finding.transactionId ?? null,
+          code: finding.code,
+          severity: finding.severity,
+          field: finding.field ?? null,
+          message: finding.message,
+          observedValue: finding.observedValue ?? Prisma.DbNull,
+          expectedValue: finding.expectedValue ?? Prisma.DbNull,
+          suggestion: finding.suggestion ?? null,
+          confidence: finding.confidence ?? 0,
+          metadata: finding.metadata ?? Prisma.DbNull,
+        })),
+      });
+    } catch (error) {
+      if (!isMissingReferenceDuringAncillaryWrite(error)) {
+        throw error;
+      }
+    }
   }
 
   if (input.actorUserId && run) {
-    await prisma.auditLog.create({
-      data: {
-        workspaceId: input.workspaceId,
-        actorUserId: input.actorUserId,
-        action: "data_qa.run_completed",
-        entity: "DataQaRun",
-        entityId: run.id,
-        metadata: evaluation.feedbackPayload,
-      },
-    });
+    try {
+      await prisma.auditLog.create({
+        data: {
+          workspaceId: input.workspaceId,
+          actorUserId: input.actorUserId,
+          action: "data_qa.run_completed",
+          entity: "DataQaRun",
+          entityId: run.id,
+          metadata: evaluation.feedbackPayload,
+        },
+      });
+    } catch (error) {
+      if (!isMissingReferenceDuringAncillaryWrite(error)) {
+        throw error;
+      }
+    }
   }
 
   return {

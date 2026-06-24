@@ -3,7 +3,9 @@ import { basename, join } from "node:path";
 import { strict as assert } from "node:assert";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { detectStatementMetadataFromText } from "@/lib/data-engine";
 import { readUploadedFileText } from "@/lib/import-file-text.server";
+import { parseImportText } from "@/lib/import-parser";
 import { upsertImportEnrichmentJob } from "@/lib/import-enrichment-jobs";
 import { uploadObject } from "@/lib/s3";
 import { confirmImportFile, processImportEnrichmentJobs, processImportFileText } from "@/workers/import-processor";
@@ -58,8 +60,18 @@ const main = async () => {
 
   try {
     const importIds: string[] = [];
+    const expectedRowsByFileName = new Map<string, number>();
     for (const relativePath of files) {
       const fileName = basename(relativePath);
+      const text = await readStatementText(relativePath);
+      const metadata = detectStatementMetadataFromText(text);
+      const parsedRows = parseImportText(text, fileName, "application/pdf", {
+        institution: metadata.institution,
+        accountName: metadata.accountName,
+        accountNumber: metadata.accountNumber,
+      });
+      expectedRowsByFileName.set(fileName, parsedRows.length);
+
       const importFile = await prisma.importFile.create({
         data: {
           workspaceId,
@@ -72,7 +84,6 @@ const main = async () => {
       importIds.push(importFile.id);
       const bytes = await readStatementBytes(relativePath);
       await uploadObject(importFile.storageKey, bytes, "application/pdf");
-      const text = await readStatementText(relativePath);
       const result = await processImportFileText(importFile.id, {
         text,
         actorUserId: user.clerkUserId,
@@ -94,7 +105,12 @@ const main = async () => {
         rawPayload: true,
       },
     });
-    assert.equal(initialTransactions.length, 64, `Initial upload should keep 64 raw rows visible, got ${initialTransactions.length}.`);
+    const expectedInitialTransactions = Array.from(expectedRowsByFileName.values()).reduce((total, count) => total + count, 0);
+    assert.equal(
+      initialTransactions.length,
+      expectedInitialTransactions,
+      `Initial upload should keep ${expectedInitialTransactions} raw rows visible, got ${initialTransactions.length}.`
+    );
 
     const initialTransactionIds = new Set(initialTransactions.map((transaction) => transaction.id));
     for (const importFileId of importIds) {
@@ -201,9 +217,20 @@ const main = async () => {
     });
 
     for (const importFileId of importIds) {
+      const importFile = await prisma.importFile.findUnique({
+        where: { id: importFileId },
+        select: { fileName: true },
+      });
+      assert.ok(importFile?.fileName, `Import file ${importFileId} should still exist.`);
       const totalRows = await prisma.transaction.count({
         where: { workspaceId, importFileId, deletedAt: null },
       });
+      const expectedRows = expectedRowsByFileName.get(importFile.fileName);
+      assert.equal(
+        totalRows,
+        expectedRows,
+        `${importFile.fileName} should retain ${expectedRows ?? "the expected number of"} visible rows before enrichment, got ${totalRows}.`
+      );
       await upsertImportEnrichmentJob({
         workspaceId,
         importFileId,
@@ -318,7 +345,11 @@ const main = async () => {
       }))
     );
 
-    assert.equal(transactions.length, 64, `Expected 64 visible BPI transactions, got ${transactions.length}.`);
+    assert.equal(
+      transactions.length,
+      expectedInitialTransactions,
+      `Expected ${expectedInitialTransactions} visible BPI transactions, got ${transactions.length}.`
+    );
     assert.equal(missingInitialRows.length, 0, `Expected enrichment to preserve every initial row, lost ${missingInitialRows.length}.`);
     assert.equal(otherRows.length, 0, `Expected 0 BPI rows in Other, got ${otherRows.length}.`);
     assert.equal(

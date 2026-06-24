@@ -6,7 +6,11 @@ import {
   mergeImportedWorkspaceTransactions,
   normalizeImportedAccountKey,
 } from "@/lib/workspace-cache";
-import { getImportedAccountLastFour } from "@/lib/imported-account-identity";
+import {
+  canonicalImportedInstitutionKey,
+  getImportedAccountLastFour,
+  type ImportedAccountIdentityLike,
+} from "@/lib/imported-account-identity";
 
 type SupportedAccountType = AccountType | string;
 
@@ -30,17 +34,19 @@ export type ImportedTransactionLike<TType extends SupportedAccountType = Support
   type?: TType | null;
 };
 
-export const normalizeImportedInstitutionKey = (value?: string | null) =>
-  String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase()
-    .replace(/\bunion\s*bank(?:\s+of\s+the\s+philippines)?\b/g, "unionbank")
-    .replace(/\bchina\s+bank\b/g, "chinabank")
-    .replace(/\bmetro\s+bank\b/g, "metrobank")
-    .replace(/\bphilippine\s+national\s+bank\b/g, "pnb")
-    .replace(/\s+\d{4}$/, "")
-    .trim();
+type ImportedAccountBalanceLike = {
+  balance?: string | null;
+};
+
+type UploadSummaryAccountLike = Pick<
+  UploadInsightsSummary,
+  "accountId" | "optimisticAccountId" | "accountName" | "institution" | "accountNumber" | "accountType" | "previewTransactions" | "optimistic"
+>;
+
+const normalizeLooseImportedValue = (value: string | null | undefined) =>
+  String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+export const normalizeImportedInstitutionKey = canonicalImportedInstitutionKey;
 
 export const getImportedInstitutionShadowKey = (account: Pick<ImportedAccountLike, "institution" | "name">) =>
   normalizeImportedInstitutionKey(account.institution) || normalizeImportedInstitutionKey(account.name);
@@ -134,6 +140,124 @@ export const transactionMatchesImportedAccount = <
     ) ===
     normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency)
   );
+};
+
+export const uploadSummaryMatchesImportedAccount = <
+  TSummary extends UploadSummaryAccountLike,
+  TAccount extends ImportedAccountLike
+>(
+  summary: TSummary,
+  account: TAccount
+) => {
+  if (summary.accountId === account.id || summary.optimisticAccountId === account.id) {
+    return true;
+  }
+
+  const summaryKey = normalizeImportedAccountKey(
+    summary.accountName,
+    summary.institution,
+    summary.accountNumber ?? null,
+    summary.accountType ?? account.type,
+    summary.previewTransactions?.[0]?.currency ?? null
+  );
+  const accountKey = normalizeImportedAccountKey(
+    account.name,
+    account.institution,
+    account.accountNumber,
+    account.type,
+    account.currency
+  );
+  if (summaryKey === accountKey) {
+    return true;
+  }
+
+  if (!summary.optimistic && !account.id.startsWith("optimistic-")) {
+    return false;
+  }
+
+  const summaryInstitution = normalizeImportedInstitutionKey(summary.institution);
+  const accountInstitution = normalizeImportedInstitutionKey(account.institution);
+  if (!summaryInstitution || !accountInstitution || summaryInstitution !== accountInstitution) {
+    return false;
+  }
+
+  const summaryAccountNumber = normalizeLooseImportedValue(summary.accountNumber);
+  const accountAccountNumber = normalizeLooseImportedValue(account.accountNumber);
+  const accountName = normalizeLooseImportedValue(account.name);
+  const summaryLastFour = summaryAccountNumber.slice(-4);
+  const accountLastFour = accountAccountNumber.slice(-4);
+
+  return Boolean(
+    (summaryAccountNumber && accountAccountNumber && summaryAccountNumber === accountAccountNumber) ||
+      (summaryLastFour.length === 4 && accountName.includes(summaryLastFour)) ||
+      (accountLastFour.length === 4 && normalizeLooseImportedValue(summary.accountName).includes(accountLastFour)) ||
+      (!summaryAccountNumber && !accountAccountNumber)
+  );
+};
+
+export const mergeOptimisticImportedAccount = <
+  TAccount extends ImportedAccountLike & ImportedAccountBalanceLike
+>(
+  currentAccounts: TAccount[],
+  optimisticAccount: TAccount,
+  options?: {
+    mergeMatchedAccount?: (
+      matchedAccount: TAccount,
+      optimisticAccount: TAccount,
+      shouldPreserveExistingBalance: boolean
+    ) => TAccount;
+  }
+) => {
+  if (isTransientUploadedAccountPlaceholder(optimisticAccount)) {
+    return currentAccounts.filter((account) => !isGenericUploadedAccountShadowed(account, [optimisticAccount]));
+  }
+
+  const matchedAccounts = currentAccounts.filter((account) => {
+    if (account.id === optimisticAccount.id) {
+      return true;
+    }
+
+    if (account.source !== "upload") {
+      return false;
+    }
+
+    return matchesImportedAccountIdentity(account as ImportedAccountIdentityLike, optimisticAccount as ImportedAccountIdentityLike);
+  });
+
+  const matchedAccount = matchedAccounts[0] ?? null;
+  const existingBalance = typeof matchedAccount?.balance === "string" ? matchedAccount.balance.trim() : "";
+  const optimisticBalance = typeof optimisticAccount.balance === "string" ? optimisticAccount.balance.trim() : "";
+  const shouldPreserveExistingBalance =
+    existingBalance !== "" &&
+    Number(existingBalance) !== 0 &&
+    (optimisticBalance === "" || Number(optimisticBalance) === 0);
+
+  const mergedAccount = matchedAccount
+    ? options?.mergeMatchedAccount?.(matchedAccount, optimisticAccount, shouldPreserveExistingBalance) ??
+      ({
+        ...matchedAccount,
+        ...optimisticAccount,
+        balance: shouldPreserveExistingBalance ? matchedAccount.balance : optimisticAccount.balance ?? matchedAccount.balance,
+      } as TAccount)
+    : optimisticAccount;
+
+  const remainingAccounts = currentAccounts.filter((account) => {
+    if (account.id === optimisticAccount.id) {
+      return false;
+    }
+
+    if (account.source !== "upload") {
+      return true;
+    }
+
+    if (isGenericUploadedAccountShadowed(account, [optimisticAccount])) {
+      return false;
+    }
+
+    return !matchesImportedAccountIdentity(account as ImportedAccountIdentityLike, optimisticAccount as ImportedAccountIdentityLike);
+  });
+
+  return [mergedAccount, ...remainingAccounts];
 };
 
 export const mergeAccountsWithOptimisticImports = <TAccount extends ImportedAccountLike>(
