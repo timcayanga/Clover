@@ -31959,6 +31959,126 @@ button.accounts-detail__transaction-head-cell {
   justify-content: space-between;
 }
 
+.settings-data-shell {
+  padding: 24px;
+  background: rgba(247, 249, 250, 0.82);
+}
+
+.settings-data-shell__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.settings-data-zone {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  padding: 20px;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.settings-data-zone--export,
+.settings-data-zone--delete {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.settings-data-zone__header {
+  display: block;
+  min-width: 0;
+}
+
+.settings-data-zone__header h6 {
+  font-size: 20px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.settings-data-export-actions,
+.settings-data-danger-list {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-data-export-card,
+.settings-data-danger-item {
+  display: grid;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.settings-data-export-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-data-export-card strong,
+.settings-data-danger-copy strong {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-data-danger-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-data-danger-item--history {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.settings-data-danger-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.settings-data-danger-copy span {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.settings-data-danger-controls {
+  display: flex;
+  gap: 12px;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  width: auto;
+  max-width: 100%;
+}
+
+.settings-data-export-card > .button,
+.settings-data-danger-item > .button,
+.settings-data-danger-controls > .button {
+  max-width: 100%;
+}
+
+.settings-data-danger-item .button-danger {
+  min-width: 180px;
+  padding-inline: 16px;
+  justify-content: center;
+  white-space: normal;
+  text-align: center;
+}
+
+.settings-data-danger-item .button-danger--history {
+  min-width: 180px;
+}
+
 .settings-data-download {
   display: grid;
   gap: 14px;
@@ -32397,6 +32517,15 @@ button.accounts-detail__transaction-head-cell {
   background: rgba(255, 255, 255, 0.84);
 }
 
+.settings-inline-field--history {
+  min-width: min(100%, 190px);
+}
+
+.settings-inline-field--history input {
+  min-height: 38px;
+  padding-inline: 12px;
+}
+
 .settings-plan-grid {
   align-items: stretch;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -32821,6 +32950,29 @@ html[data-helper-text="hidden"] .settings-helper {
   color: #b45309;
 }
 
+@media (max-width: 1360px) {
+  .settings-data-shell__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-data-danger-item--history {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+    text-align: left;
+  }
+
+  .settings-data-danger-controls {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .settings-data-danger-item .button-danger--history {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
 @media (max-width: 1100px) {
   .settings-hub {
     grid-template-columns: 1fr;
@@ -32886,6 +33038,33 @@ html[data-helper-text="hidden"] .settings-helper {
   .settings-data-download__item {
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
+  }
+
+  .settings-data-shell__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-data-export-card,
+  .settings-data-danger-item {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .settings-data-danger-item--history {
+    justify-items: stretch;
+    text-align: left;
+  }
+
+  .settings-data-danger-controls {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .settings-data-danger-item .button-danger {
+    min-width: 0;
+    width: 100%;
   }
 
   .settings-data-download__item-copy,
