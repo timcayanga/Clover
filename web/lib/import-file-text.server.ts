@@ -182,6 +182,7 @@ type NormalizedImageBytes = {
 };
 
 type ImageNormalizationProfile = "generic" | "receipt" | "wallet_screenshot";
+type ReceiptOcrFamily = "generic" | "wallet_transfer" | "restaurant_receipt" | "invoice_receipt" | "paper_receipt";
 
 const IMPORT_FILE_TEXT_CACHE_LIMIT = 24;
 const importedFileTextCache = new Map<string, Promise<string>>();
@@ -484,6 +485,42 @@ const extractTextFromImageBufferWithOcrBestEffort = async (
   );
 };
 
+const detectReceiptOcrFamilyFromText = (text: string, profile: ImageNormalizationProfile): ReceiptOcrFamily => {
+  const normalized = String(text ?? "").toLowerCase();
+
+  if (profile === "wallet_screenshot") {
+    return "wallet_transfer";
+  }
+
+  if (
+    /\b(?:sent via gcash|sent via maya|express send|total amount sent|ref\.?\s*no|reference\s*:\s*\d{6,}|gcash|maya|wise)\b/.test(
+      normalized
+    )
+  ) {
+    return "wallet_transfer";
+  }
+
+  if (/\b(?:tax invoice|invoice no\.?|sales invoice|official receipt|or no\.?|cash slip)\b/.test(normalized)) {
+    return "invoice_receipt";
+  }
+
+  if (
+    /\b(?:dine in|table\s*:?|guest|server|cashier|subtotal|service charge|vat item|temporary bill|bar|restaurant|cafe)\b/.test(
+      normalized
+    )
+  ) {
+    return "restaurant_receipt";
+  }
+
+  if (
+    /\b(?:amount due|total|subtotal|vat|tax|item|qty|price|address|tin|official receipt|thank you)\b/.test(normalized)
+  ) {
+    return "paper_receipt";
+  }
+
+  return profile === "receipt" ? "paper_receipt" : "generic";
+};
+
 const shouldRetryImageOcrBestEffort = (params: {
   firstPassText: string;
   fileType?: string | null;
@@ -510,13 +547,19 @@ const shouldRetryImageOcrBestEffort = (params: {
     return false;
   }
 
+  const family = detectReceiptOcrFamilyFromText(firstPassText, profile);
+
   const compact = firstPassText.replace(/\s+/g, " ").trim();
   const lineCount = firstPassText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).length;
   const hasCurrencyOrAmount = /(?:₱|PHP|\$|€|£|¥)|\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/.test(firstPassText);
   const hasReceiptKeywords = /\b(?:total|amount|subtotal|vat|tax|ref\.?\s*no|sales invoice|official receipt|sent via|cashier|guest|table|service charge)\b/i.test(firstPassText);
+  const minCompactLength =
+    family === "wallet_transfer" ? 55 : family === "restaurant_receipt" ? 95 : family === "invoice_receipt" ? 110 : profile === "wallet_screenshot" ? 80 : 140;
+  const minLineCount =
+    family === "wallet_transfer" ? 3 : family === "restaurant_receipt" ? 5 : family === "invoice_receipt" ? 6 : profile === "wallet_screenshot" ? 4 : 7;
   const looksStrongEnough =
-    compact.length >= (profile === "wallet_screenshot" ? 80 : 140) &&
-    lineCount >= (profile === "wallet_screenshot" ? 4 : 7) &&
+    compact.length >= minCompactLength &&
+    lineCount >= minLineCount &&
     (hasCurrencyOrAmount || hasReceiptKeywords);
 
   return !looksStrongEnough;
@@ -524,7 +567,8 @@ const shouldRetryImageOcrBestEffort = (params: {
 
 const buildReceiptAwareOcrCandidates = async (
   normalizedBuffer: Buffer,
-  profile: ImageNormalizationProfile
+  profile: ImageNormalizationProfile,
+  family: ReceiptOcrFamily
 ) => {
   if (profile === "generic") {
     return [] as Array<{ label: string; dataUrl: string }>;
@@ -545,7 +589,7 @@ const buildReceiptAwareOcrCandidates = async (
     const candidates: Array<{ label: string; dataUrl: string }> = [];
     const overlap = Math.max(24, Math.round(Math.min(width, height) * 0.04));
 
-    if (width >= Math.round(height * 1.2)) {
+    if (family !== "wallet_transfer" && width >= Math.round(height * 1.2)) {
       const halfWidth = Math.max(1, Math.round(width / 2));
       const leftWidth = Math.min(width, halfWidth + overlap);
       const rightLeft = Math.max(0, width - (halfWidth + overlap));
@@ -566,7 +610,7 @@ const buildReceiptAwareOcrCandidates = async (
       );
     }
 
-    if (height >= Math.round(width * 1.6)) {
+    if (height >= Math.round(width * 1.4)) {
       const halfHeight = Math.max(1, Math.round(height / 2));
       const topHeight = Math.min(height, halfHeight + overlap);
       const bottomTop = Math.max(0, height - (halfHeight + overlap));
@@ -585,6 +629,16 @@ const buildReceiptAwareOcrCandidates = async (
         { label: "ocr-top", dataUrl: `data:image/jpeg;base64,${top.toString("base64")}` },
         { label: "ocr-bottom", dataUrl: `data:image/jpeg;base64,${bottom.toString("base64")}` }
       );
+    }
+
+    if (family === "paper_receipt" || family === "invoice_receipt") {
+      const middleHeight = Math.max(1, Math.round(height * 0.58));
+      const middleTop = Math.max(0, Math.round((height - middleHeight) / 2));
+      const middle = await sharp(normalizedBuffer)
+        .extract({ left: 0, top: middleTop, width, height: Math.min(height - middleTop, middleHeight) })
+        .jpeg({ quality: 88, chromaSubsampling: "4:4:4" })
+        .toBuffer();
+      candidates.push({ label: "ocr-middle", dataUrl: `data:image/jpeg;base64,${middle.toString("base64")}` });
     }
 
     return candidates;
@@ -617,14 +671,17 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     fileName: params.fileName,
     importMode: params.importMode,
   });
-  const candidates = await buildReceiptAwareOcrCandidates(params.normalizedBuffer, profile);
+  const family = detectReceiptOcrFamilyFromText(firstPassText, profile);
+  const candidates = await buildReceiptAwareOcrCandidates(params.normalizedBuffer, profile, family);
+  const candidatePageSegMode =
+    family === "wallet_transfer" ? "11" : family === "restaurant_receipt" ? "6" : family === "invoice_receipt" ? "4" : profile === "wallet_screenshot" ? "11" : "6";
 
   const candidateTexts = await Promise.all(
     candidates.map(async (candidate) => ({
       label: candidate.label,
       text: await extractTextFromImageBufferWithOcr(
         candidate.dataUrl,
-        profile === "wallet_screenshot" ? "11" : "6"
+        candidatePageSegMode
       ),
     }))
   );
