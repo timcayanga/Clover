@@ -1551,6 +1551,119 @@ const buildReceiptDetailsFromTrainingFixture = (fixture: TrainedReceiptFixture) 
   },
 });
 
+const buildParsedRowsFromReceiptDetails = (params: {
+  receiptDetails:
+    | ReturnType<typeof buildReceiptDetailsFromPreview>
+    | ReturnType<typeof buildReceiptDetailsFromTrainingFixture>
+    | null;
+  receiptPreview: ReturnType<typeof parseReceiptText> | null;
+  receiptAccountMatch:
+    | {
+        account_name?: string | null;
+        account_last4?: string | null;
+        confidence?: number | null;
+        reason?: string | null;
+      }
+    | null
+    | undefined;
+}) => {
+  const details = params.receiptDetails;
+  if (!details) {
+    return [] as ParsedImportRow[];
+  }
+  const detailsRecord = details as Record<string, unknown>;
+
+  const merchantRaw =
+    typeof details.merchant_raw === "string" && details.merchant_raw.trim()
+      ? details.merchant_raw.trim()
+      : typeof details.merchant_clean === "string" && details.merchant_clean.trim()
+        ? details.merchant_clean.trim()
+        : null;
+  const merchantClean =
+    typeof details.merchant_clean === "string" && details.merchant_clean.trim()
+      ? details.merchant_clean.trim()
+      : merchantRaw;
+  const amount =
+    typeof details.total === "number" && Number.isFinite(details.total)
+      ? Number(details.total.toFixed(2))
+      : null;
+  const date = typeof details.transaction_date === "string" && details.transaction_date.trim() ? details.transaction_date.trim() : null;
+  const currency =
+    typeof details.currency === "string" && details.currency.trim() ? details.currency.trim().toUpperCase() : "PHP";
+  const receiptType =
+    typeof details.receipt_type === "string" && details.receipt_type.trim()
+      ? details.receipt_type.trim().toLowerCase()
+      : params.receiptPreview?.receiptType ?? "receipt";
+  const paymentMethod =
+    typeof details.payment_method === "string" && details.payment_method.trim() ? details.payment_method.trim() : null;
+  const lineItems = Array.isArray(details.line_items) ? details.line_items : [];
+  const lineItemText = lineItems
+    .map((item) =>
+      item && typeof item === "object" && !Array.isArray(item) && typeof (item as Record<string, unknown>).description === "string"
+        ? String((item as Record<string, unknown>).description).trim()
+        : ""
+    )
+    .filter(Boolean)
+    .join(" ");
+  const contextText = [merchantClean, merchantRaw, receiptType, paymentMethod, lineItemText].filter(Boolean).join(" ");
+  const explicitCategoryName =
+    typeof detailsRecord.category_name === "string" && detailsRecord.category_name.trim()
+      ? detailsRecord.category_name.trim()
+      : receiptType === "wallet_transfer"
+        ? "Transfers"
+        : guessCategoryName(contextText || merchantClean || merchantRaw || "Receipt", "expense");
+  const categoryName = explicitCategoryName && explicitCategoryName !== "Other"
+    ? explicitCategoryName
+    : receiptType === "wallet_transfer"
+      ? "Transfers"
+      : "Food & Dining";
+  const type: TransactionType = receiptType === "wallet_transfer" ? "transfer" : "expense";
+  const confidence =
+    typeof details.confidence_score === "number" && Number.isFinite(details.confidence_score)
+      ? Math.max(0, Math.min(100, Math.round(details.confidence_score)))
+      : Math.max(0, Math.min(100, Math.round(params.receiptPreview?.confidence ?? 90)));
+
+  if (!merchantRaw && !merchantClean && amount === null && !date) {
+    return [] as ParsedImportRow[];
+  }
+
+  return [
+    {
+      date: date ?? undefined,
+      amount: amount !== null ? amount.toFixed(2) : undefined,
+      currency,
+      institution:
+        typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
+          ? params.receiptAccountMatch.account_name.trim()
+          : undefined,
+      accountName:
+        typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
+          ? params.receiptAccountMatch.account_name.trim()
+          : "Cash",
+      accountNumber:
+        typeof params.receiptAccountMatch?.account_last4 === "string" && params.receiptAccountMatch.account_last4.trim()
+          ? params.receiptAccountMatch.account_last4.trim()
+          : undefined,
+      merchantRaw: merchantRaw ?? undefined,
+      merchantClean: merchantClean ?? undefined,
+      description: merchantClean ?? merchantRaw ?? "Receipt",
+      categoryName,
+      type,
+      confidence,
+      categoryConfidence: confidence,
+      parserConfidence: confidence,
+      rawPayload: {
+        source: "receipt_preview",
+        kind: "receipt_preview_transaction",
+        receiptType,
+        paymentMethod,
+        lineItems,
+        receiptDetails: details,
+      },
+    } satisfies ParsedImportRow,
+  ];
+};
+
 const resolveWorkspaceCashAccountId = async (workspaceId: string, currency = "PHP") => {
   await ensureWorkspaceCashAccount(workspaceId, currency);
   const normalizedCurrency =
@@ -5895,6 +6008,26 @@ export const processImportFileText = async (
   }
   let receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
   let receiptPreviewLooksLikeReceipt = previewLooksLikeUsableReceipt(receiptPreview);
+  const earlyReceiptAccountMatch =
+    importMode === "receipt"
+      ? trainedReceiptFixture?.accountMatch ??
+        (receiptPreview?.receiptAccountMatch
+          ? {
+              account_name: receiptPreview.receiptAccountMatch.accountName,
+              account_last4: receiptPreview.receiptAccountMatch.accountLast4,
+              confidence: receiptPreview.receiptAccountMatch.confidence,
+              reason: receiptPreview.receiptAccountMatch.reason,
+            }
+          : null)
+      : null;
+  const receiptPreviewRows =
+    importMode === "receipt"
+      ? buildParsedRowsFromReceiptDetails({
+          receiptDetails: trainedReceiptDetails ?? receiptPreviewDetails,
+          receiptPreview,
+          receiptAccountMatch: earlyReceiptAccountMatch,
+        })
+      : [];
   const cachedParseRecord = canReuseCachedStatementParse ? textCacheInfo?.cacheRecord ?? null : null;
   const metadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
     ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
@@ -5919,13 +6052,15 @@ export const processImportFileText = async (
       },
       importFile.fileType
     );
-  const existingTemplate = await loadStatementTemplate({
-    workspaceId: String(importFile.workspaceId),
-    fingerprint: statementFingerprint,
-  });
+  const shouldUseStatementTemplateMemory = importMode === "statement";
+  const existingTemplate = shouldUseStatementTemplateMemory
+    ? await loadStatementTemplate({
+        workspaceId: String(importFile.workspaceId),
+        fingerprint: statementFingerprint,
+      })
+    : null;
   const institutionTemplate =
-    existingTemplate ??
-    (metadata.confidence < 80
+    shouldUseStatementTemplateMemory && !existingTemplate && metadata.confidence < 80
       ? await loadBestStatementTemplateForInstitution({
           workspaceId: String(importFile.workspaceId),
           institution: metadata.institution,
@@ -5933,7 +6068,7 @@ export const processImportFileText = async (
           accountType: metadata.accountType ?? null,
           statementFamilySignature,
         })
-      : null);
+      : existingTemplate;
   const templateMetadata =
     institutionTemplate?.metadata && typeof institutionTemplate.metadata === "object" && !Array.isArray(institutionTemplate.metadata)
       ? (institutionTemplate.metadata as Record<string, unknown>)
@@ -5988,13 +6123,15 @@ export const processImportFileText = async (
     ...Object.fromEntries(Object.entries(metadataOverride).filter(([, value]) => value !== undefined)),
   } as typeof mergedMetadata;
 
-  const parsedRowsInitial = canReuseCachedStatementParse
-    ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
-    : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
-        institution: metadataForParse.institution,
-        accountName: metadataForParse.accountName,
-        accountNumber: metadataForParse.accountNumber,
-      });
+  const parsedRowsInitial = importMode === "receipt"
+    ? receiptPreviewRows
+    : canReuseCachedStatementParse
+      ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
+      : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
+          institution: metadataForParse.institution,
+          accountName: metadataForParse.accountName,
+          accountNumber: metadataForParse.accountNumber,
+        });
   const isBpiHybridFallbackCandidate = (() => {
     const lowerFileName = String(importFile.fileName ?? "").toLowerCase();
     const normalizedText = String(textForParse ?? "");
@@ -7267,86 +7404,88 @@ export const processImportFileText = async (
   }
 
   let template: Awaited<ReturnType<typeof upsertStatementTemplate>> | null = null;
-  try {
-    template = await upsertStatementTemplate({
-      workspaceId: importFile.workspaceId,
-      fingerprint: statementFingerprint,
-      metadata: resolvedMetadata,
-      fileType: importFile.fileType,
-      parserConfig: {
-        accountType: resolvedMetadata.accountType ?? inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
-        rowCount: rows.length,
-        statementFamilySignature: buildStatementFamilySignatureFromText(
-          textForParse,
-          {
-            institution: resolvedMetadata.institution ?? null,
-            accountType: resolvedMetadata.accountType ?? null,
-          },
-          importFile.fileType
-        ),
-        firstMerchant:
-          typeof rows[0]?.merchantClean === "string"
-            ? rows[0]?.merchantClean
-            : typeof rows[0]?.merchantRaw === "string"
-              ? rows[0]?.merchantRaw
-              : null,
-        lastMerchant:
-          typeof rows.at(-1)?.merchantClean === "string"
-            ? rows.at(-1)?.merchantClean
-            : typeof rows.at(-1)?.merchantRaw === "string"
-              ? rows.at(-1)?.merchantRaw
-              : null,
-      } as Prisma.InputJsonValue,
-    });
-  } catch (error) {
-    console.warn("Statement template upsert failed; continuing import", {
-      importFileId,
-      error,
-    });
-  }
-
-  if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+  if (importMode === "statement") {
     try {
-      const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
-      const metadataEndDate = resolvedMetadata.endDate ? new Date(resolvedMetadata.endDate) : null;
-      const checkpointSourceMetadata = {
-        ...resolvedMetadata,
-        importMode,
-        documentType: importMode,
-        workflowStage: "identifying_transactions",
-        statementFingerprint,
-        statementFamilySignature,
-      } as Prisma.InputJsonValue;
-      await prisma.accountStatementCheckpoint.upsert({
-        where: { importFileId },
-        update: {
-          workspaceId: importFile.workspaceId,
-          statementStartDate: metadataStartDate,
-          statementEndDate: metadataEndDate,
-          openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
-          endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
-          status: "pending",
-          mismatchReason: null,
-          sourceMetadata: checkpointSourceMetadata,
+      template = await upsertStatementTemplate({
+        workspaceId: importFile.workspaceId,
+        fingerprint: statementFingerprint,
+        metadata: resolvedMetadata,
+        fileType: importFile.fileType,
+        parserConfig: {
+          accountType: resolvedMetadata.accountType ?? inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
           rowCount: rows.length,
-        },
-        create: {
-          workspaceId: importFile.workspaceId,
-          importFileId,
-          statementStartDate: metadataStartDate,
-          statementEndDate: metadataEndDate,
-          openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
-          endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
-          status: "pending",
-          sourceMetadata: checkpointSourceMetadata,
-          rowCount: rows.length,
-        },
+          statementFamilySignature: buildStatementFamilySignatureFromText(
+            textForParse,
+            {
+              institution: resolvedMetadata.institution ?? null,
+              accountType: resolvedMetadata.accountType ?? null,
+            },
+            importFile.fileType
+          ),
+          firstMerchant:
+            typeof rows[0]?.merchantClean === "string"
+              ? rows[0]?.merchantClean
+              : typeof rows[0]?.merchantRaw === "string"
+                ? rows[0]?.merchantRaw
+                : null,
+          lastMerchant:
+            typeof rows.at(-1)?.merchantClean === "string"
+              ? rows.at(-1)?.merchantClean
+              : typeof rows.at(-1)?.merchantRaw === "string"
+                ? rows.at(-1)?.merchantRaw
+                : null,
+        } as Prisma.InputJsonValue,
       });
     } catch (error) {
-      console.warn("Statement checkpoint upsert failed; continuing import", {
+      console.warn("Statement template upsert failed; continuing import", {
         importFileId,
         error,
       });
+    }
+
+    if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+      try {
+        const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
+        const metadataEndDate = resolvedMetadata.endDate ? new Date(resolvedMetadata.endDate) : null;
+        const checkpointSourceMetadata = {
+          ...resolvedMetadata,
+          importMode,
+          documentType: importMode,
+          workflowStage: "identifying_transactions",
+          statementFingerprint,
+          statementFamilySignature,
+        } as Prisma.InputJsonValue;
+        await prisma.accountStatementCheckpoint.upsert({
+          where: { importFileId },
+          update: {
+            workspaceId: importFile.workspaceId,
+            statementStartDate: metadataStartDate,
+            statementEndDate: metadataEndDate,
+            openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
+            endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
+            status: "pending",
+            mismatchReason: null,
+            sourceMetadata: checkpointSourceMetadata,
+            rowCount: rows.length,
+          },
+          create: {
+            workspaceId: importFile.workspaceId,
+            importFileId,
+            statementStartDate: metadataStartDate,
+            statementEndDate: metadataEndDate,
+            openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
+            endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
+            status: "pending",
+            sourceMetadata: checkpointSourceMetadata,
+            rowCount: rows.length,
+          },
+        });
+      } catch (error) {
+        console.warn("Statement checkpoint upsert failed; continuing import", {
+          importFileId,
+          error,
+        });
+      }
     }
   }
 
