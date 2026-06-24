@@ -31,6 +31,10 @@ import {
   capturePostHogClientEventOnce,
 } from "@/components/posthog-analytics";
 import {
+  buildTransactionCategoryUpdatedMessage,
+  resolveTransactionCategoryChange,
+} from "@/lib/transaction-category-feedback";
+import {
   buildTransactionDetailDraft,
   type TransactionDetailDraftValue,
 } from "@/lib/transaction-detail-draft";
@@ -5497,9 +5501,19 @@ function TransactionsPageContent() {
         setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
       });
       if (field === "categoryId") {
-        const previousCategoryName = transaction.categoryName ?? categoryNameById.get(transaction.categoryId ?? "") ?? "Other";
-        const nextCategoryName = nextPatch.categoryName ?? categoryNameById.get(value) ?? "Other";
-        setMessage(`Category updated: ${previousCategoryName} → ${nextCategoryName}. We'll remember this next time.`);
+        const categoryChange = resolveTransactionCategoryChange({
+          previousCategoryId: transaction.categoryId ?? "",
+          previousCategoryName: transaction.categoryName ?? null,
+          nextCategoryId: value,
+          nextCategoryName: nextPatch.categoryName ?? null,
+          lookupCategoryName: (categoryId) => categoryNameById.get(categoryId) ?? null,
+        });
+        setMessage(
+          buildTransactionCategoryUpdatedMessage({
+            previousCategoryName: categoryChange.previousCategoryName,
+            nextCategoryName: categoryChange.nextCategoryName,
+          })
+        );
       } else {
         setMessage("Transaction updated.");
       }
@@ -5771,11 +5785,12 @@ function TransactionsPageContent() {
 
     setIsSaving(true);
     try {
-      const previousCategoryId = selectedTransaction.categoryId ?? "";
-      const nextCategoryId = detailDraft.categoryId || "";
-      const categoryChanged = previousCategoryId !== nextCategoryId;
-      const previousCategoryName = selectedTransaction.categoryName ?? categoryNameById.get(previousCategoryId) ?? "Other";
-      const nextCategoryName = categoryNameById.get(nextCategoryId) ?? (nextCategoryId ? selectedTransaction.categoryName ?? "Other" : "Other");
+      const categoryChange = resolveTransactionCategoryChange({
+        previousCategoryId: selectedTransaction.categoryId ?? "",
+        previousCategoryName: selectedTransaction.categoryName ?? null,
+        nextCategoryId: detailDraft.categoryId || "",
+        lookupCategoryName: (categoryId) => categoryNameById.get(categoryId) ?? null,
+      });
       const payload = buildTransactionUpdatePayload(detailDraft, selectedTransaction);
 
       await updateTransaction(selectedTransaction.id, payload);
@@ -5785,13 +5800,21 @@ function TransactionsPageContent() {
       });
       if (closeAfterSave) {
         setMessage(
-          categoryChanged
-            ? `Category updated: ${previousCategoryName} → ${nextCategoryName}. We'll remember this next time.`
+          categoryChange.categoryChanged
+            ? buildTransactionCategoryUpdatedMessage({
+                previousCategoryName: categoryChange.previousCategoryName,
+                nextCategoryName: categoryChange.nextCategoryName,
+              })
             : "Transaction details updated."
         );
         closeTransactionDetail();
-      } else if (categoryChanged) {
-        setMessage(`Category updated: ${previousCategoryName} → ${nextCategoryName}. We'll remember this next time.`);
+      } else if (categoryChange.categoryChanged) {
+        setMessage(
+          buildTransactionCategoryUpdatedMessage({
+            previousCategoryName: categoryChange.previousCategoryName,
+            nextCategoryName: categoryChange.nextCategoryName,
+          })
+        );
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to update transaction.");

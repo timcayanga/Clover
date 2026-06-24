@@ -24,6 +24,10 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
+import {
+  buildTransactionCategoryUpdatedMessage,
+  resolveTransactionCategoryChange,
+} from "@/lib/transaction-category-feedback";
 import { hasTransactionDetailDraftChanges } from "@/lib/transaction-detail-draft-changes";
 import {
   buildTransactionDetailDraft,
@@ -3029,11 +3033,12 @@ function AccountDetailPageContent() {
 
     setIsSavingTransactionDetail(true);
     try {
-      const previousCategoryId = selectedTransaction.categoryId ?? "";
-      const nextCategoryId = detailDraft.categoryId || "";
-      const categoryChanged = previousCategoryId !== nextCategoryId;
-      const previousCategoryName = selectedTransaction.categoryName ?? categories.find((category) => category.id === previousCategoryId)?.name ?? "Other";
-      const nextCategoryName = categories.find((category) => category.id === nextCategoryId)?.name ?? (nextCategoryId ? selectedTransaction.categoryName ?? "Other" : "Other");
+      const categoryChange = resolveTransactionCategoryChange({
+        previousCategoryId: selectedTransaction.categoryId ?? "",
+        previousCategoryName: selectedTransaction.categoryName ?? null,
+        nextCategoryId: detailDraft.categoryId || "",
+        lookupCategoryName: (categoryId) => categories.find((category) => category.id === categoryId)?.name ?? null,
+      });
       await updateTransaction(
         selectedTransaction.id,
         buildTransactionUpdatePayload(detailDraft, selectedTransaction, {
@@ -3041,8 +3046,11 @@ function AccountDetailPageContent() {
         })
       );
       setMessage(
-        categoryChanged
-          ? `Category updated: ${previousCategoryName} → ${nextCategoryName}. We'll remember this next time.`
+        categoryChange.categoryChanged
+          ? buildTransactionCategoryUpdatedMessage({
+              previousCategoryName: categoryChange.previousCategoryName,
+              nextCategoryName: categoryChange.nextCategoryName,
+            })
           : "Transaction details updated."
       );
       if (closeAfterSave) {
