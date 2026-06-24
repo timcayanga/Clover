@@ -885,6 +885,62 @@ const assessVisibleImportCompleteness = (params: {
   };
 };
 
+const assessImportHealthSummary = (params: {
+  parserRoute: "deterministic" | "hybrid_openai" | "backup_openai";
+  rows: ParsedImportRow[];
+  completeness: ReturnType<typeof assessVisibleImportCompleteness>;
+  screenshotNoiseRatio: number;
+  parserConfidence?: number | null;
+  imageImport: boolean;
+}) => {
+  const fallbackQuality = assessFallbackRowsQuality(params.rows);
+  const parserConfidence = Math.max(0, Math.min(100, Number(params.parserConfidence ?? 0)));
+  const reasons: string[] = [];
+  let score = 100;
+
+  if (params.completeness.likelyIncomplete) {
+    score -= 30;
+    reasons.push(...params.completeness.reasons);
+  }
+
+  if (fallbackQuality.weakCategoryShare >= 0.5) {
+    score -= 12;
+    reasons.push("high_weak_category_share");
+  }
+
+  if (fallbackQuality.suspiciousNameShare >= 0.15) {
+    score -= 12;
+    reasons.push("high_suspicious_name_share");
+  }
+
+  if (params.imageImport && params.screenshotNoiseRatio >= 0.35) {
+    score -= params.screenshotNoiseRatio >= 0.5 ? 18 : 10;
+    reasons.push("high_screenshot_noise_ratio");
+  }
+
+  if (params.parserRoute !== "deterministic") {
+    score -= params.parserRoute === "backup_openai" ? 8 : 4;
+    reasons.push(params.parserRoute === "backup_openai" ? "backup_parser_route" : "hybrid_parser_route");
+  }
+
+  if (parserConfidence > 0 && parserConfidence < 75) {
+    score -= 10;
+    reasons.push("low_parser_confidence");
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  const status = score >= 85 ? "healthy" : score >= 65 ? "watch" : "at_risk";
+
+  return {
+    score,
+    status,
+    reasons: Array.from(new Set(reasons)),
+    weakCategoryShare: Number(fallbackQuality.weakCategoryShare.toFixed(3)),
+    suspiciousNameShare: Number(fallbackQuality.suspiciousNameShare.toFixed(3)),
+    datedShare: Number(fallbackQuality.datedShare.toFixed(3)),
+  } as const;
+};
+
 const inferParserRowConfidence = (params: {
   confidence?: unknown;
   parserConfidence?: unknown;
@@ -6649,6 +6705,14 @@ export const processImportFileText = async (
     institution: resolvedMetadata.institution ?? metadataForParse.institution ?? null,
     parserRoute: parserRouteDecision.route,
   });
+  const importHealthSummary = assessImportHealthSummary({
+    parserRoute: parserRouteDecision.route,
+    rows,
+    completeness: visibleImportCompleteness,
+    screenshotNoiseRatio,
+    parserConfidence: openAiParsed?.audit?.confidence ?? resolvedMetadata.confidence ?? null,
+    imageImport,
+  });
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
@@ -6659,6 +6723,10 @@ export const processImportFileText = async (
           ? "Clover is reusing the cached parse and saving the results."
           : visibleImportCompleteness.likelyIncomplete
             ? `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} and is checking whether the screenshot batch is complete.`
+          : importHealthSummary.status === "watch"
+            ? `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} and is verifying import quality before finalizing.`
+          : importHealthSummary.status === "at_risk"
+            ? `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} but the import still looks risky, so it is running extra checks.`
           : parserRouteDecision.route === "deterministic"
             ? `Fast parser found ${rows.length} visible row${rows.length === 1 ? "" : "s"}. Clover is saving them now.`
             : `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} and is finishing the ${parserRouteDecision.route === "hybrid_openai" ? "hybrid" : "backup"} parse.`
@@ -6759,6 +6827,12 @@ export const processImportFileText = async (
       statementImageOcrCleanup.originalLineCount > 0
         ? Number((statementImageOcrCleanup.removedLineCount / statementImageOcrCleanup.originalLineCount).toFixed(3))
         : 0,
+    importHealthScore: importHealthSummary.score,
+    importHealthStatus: importHealthSummary.status,
+    importHealthReasons: importHealthSummary.reasons,
+    importHealthWeakCategoryShare: importHealthSummary.weakCategoryShare,
+    importHealthSuspiciousNameShare: importHealthSummary.suspiciousNameShare,
+    importHealthDatedShare: importHealthSummary.datedShare,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const receiptDocumentCashAccountId =
