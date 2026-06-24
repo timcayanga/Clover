@@ -2036,6 +2036,89 @@ const AUTO_REPARSE_PLATEAU_WINDOW = 3;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
+const resolveImportQaTargetScore = (params: {
+  importMode: ImportMode | null | undefined;
+  imageImport: boolean;
+  surfaceFingerprintKind: ImportSurfaceFingerprintKind;
+  rowsCount: number;
+  completeness: ReturnType<typeof assessVisibleImportCompleteness>;
+}) => {
+  if (params.importMode !== "statement") {
+    return AUTO_REPARSE_SCORE_TARGET;
+  }
+
+  if (!params.imageImport) {
+    return AUTO_REPARSE_SCORE_TARGET;
+  }
+
+  if (params.completeness.likelyIncomplete) {
+    return 93;
+  }
+
+  if (params.surfaceFingerprintKind === "wallet_screenshot") {
+    return params.rowsCount >= 8 ? 88 : 90;
+  }
+
+  if (params.surfaceFingerprintKind === "statement_screenshot") {
+    return params.rowsCount >= 8 ? 90 : 92;
+  }
+
+  return 92;
+};
+
+const resolveFallbackPageImageLimit = (params: {
+  importMode: ImportMode | null | undefined;
+  imageImport: boolean;
+  fileType: string;
+  parserRoute: "deterministic" | "hybrid_openai" | "backup_openai";
+  surfaceFingerprintKind: ImportSurfaceFingerprintKind;
+  parsedRowsCount: number;
+  screenshotNoiseRatio: number;
+  genericParseLooksSuspicious: boolean;
+  pageImagesAvailable: number;
+  isWiseImageStatement: boolean;
+}) => {
+  if (params.pageImagesAvailable <= 0) {
+    return null;
+  }
+
+  if (params.imageImport) {
+    return 1;
+  }
+
+  if (params.importMode !== "statement") {
+    return null;
+  }
+
+  if (String(params.fileType).toLowerCase() !== "application/pdf") {
+    return null;
+  }
+
+  if (params.isWiseImageStatement) {
+    return Math.min(params.pageImagesAvailable, 2);
+  }
+
+  if (params.parserRoute === "backup_openai") {
+    if (
+      params.surfaceFingerprintKind === "wallet_screenshot" ||
+      params.surfaceFingerprintKind === "statement_screenshot" ||
+      params.screenshotNoiseRatio >= 0.35 ||
+      params.genericParseLooksSuspicious ||
+      params.parsedRowsCount < 4
+    ) {
+      return Math.min(params.pageImagesAvailable, 4);
+    }
+
+    return Math.min(params.pageImagesAvailable, 3);
+  }
+
+  if (params.parserRoute === "hybrid_openai") {
+    return Math.min(params.pageImagesAvailable, 2);
+  }
+
+  return null;
+};
+
 const isJsonImportFile = (fileType: string | null | undefined, fileName: string | null | undefined) =>
   /\.json$/i.test(fileName ?? "") || /(?:^|\/)json$/i.test(fileType ?? "") || /\bjson\b/i.test(fileType ?? "");
 
@@ -6462,6 +6545,18 @@ export const processImportFileText = async (
     parserRouteDecision.shouldRenderPageImages &&
     !trainedReceiptDetails &&
     !canReuseCachedStatementParse;
+  const fallbackPageImageLimit = resolveFallbackPageImageLimit({
+    importMode,
+    imageImport,
+    fileType,
+    parserRoute: parserRouteDecision.route,
+    surfaceFingerprintKind: surfaceFingerprint.kind,
+    parsedRowsCount: parsedRows.length,
+    screenshotNoiseRatio,
+    genericParseLooksSuspicious,
+    pageImagesAvailable: pageImages?.length ?? 0,
+    isWiseImageStatement,
+  });
   if (imageStatementParseLooksUsable) {
     console.info("[import-performance] using fast screenshot statement parse", {
       importFileId,
@@ -6564,7 +6659,7 @@ export const processImportFileText = async (
       fileDataBase64: pdfFileDataBase64,
       preferPrimary: openAiPrimaryMode || parserRouteDecision.shouldPreferOpenAiPrimary || Boolean(pageImages?.length),
       importMode,
-      pageImageLimit: imageImport && importMode === "statement" ? 1 : isWiseImageStatement ? 1 : null,
+      pageImageLimit: fallbackPageImageLimit,
       timeoutMs:
         imageImport && importMode === "statement"
           ? parserRouteDecision.route === "backup_openai"
@@ -7076,6 +7171,13 @@ export const processImportFileText = async (
     institution: resolvedMetadata.institution ?? metadataForParse.institution ?? null,
     parserRoute: parserRouteDecision.route,
   });
+  const qaTargetScore = resolveImportQaTargetScore({
+    importMode,
+    imageImport,
+    surfaceFingerprintKind: surfaceFingerprint.kind,
+    rowsCount: rows.length,
+    completeness: visibleImportCompleteness,
+  });
   const importHealthSummary = assessImportHealthSummary({
     parserRoute: parserRouteDecision.route,
     rows,
@@ -7088,6 +7190,7 @@ export const processImportFileText = async (
   await updateImportFileCompat(importFileId, {
     status: "processing",
     processingPhase: rows.length > 0 ? "reconciling" : "identifying_transactions",
+    processingTargetScore: autoRerunEnabled ? qaTargetScore : null,
     processingMessage:
       rows.length > 0
         ? canReuseCachedStatementParse
@@ -7721,7 +7824,7 @@ export const processImportFileText = async (
       autoRerunEnabled &&
       !isDocumentImport &&
       !plateaued &&
-      (qaRunResult.evaluation.score < AUTO_REPARSE_SCORE_TARGET || needsCompletenessFollowup) &&
+      (qaRunResult.evaluation.score < qaTargetScore || needsCompletenessFollowup) &&
       autoRerunAttempt < AUTO_REPARSE_MAX_ATTEMPTS &&
       !allowWarningFinalizeForImageStatement &&
       !shouldFinalizeUsableRowsWithWarnings;
@@ -7762,7 +7865,7 @@ export const processImportFileText = async (
         status: "processing",
         processingPhase: "auto_rerunning",
         processingAttempt: autoRerunAttempt + 1,
-        processingTargetScore: AUTO_REPARSE_SCORE_TARGET,
+        processingTargetScore: qaTargetScore,
         processingCurrentScore: qaRunResult.evaluation.score,
         processingMessage: needsCompletenessFollowup
           ? visibleImportCompleteness.reasons.includes("large_chronological_gap")
@@ -7819,7 +7922,7 @@ export const processImportFileText = async (
       });
     }
 
-    const shouldMarkDone = isDocumentImport ? Boolean(documentImportRecord) : qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET || canFinalizeWithWarnings;
+    const shouldMarkDone = isDocumentImport ? Boolean(documentImportRecord) : qaRunResult.evaluation.score >= qaTargetScore || canFinalizeWithWarnings;
     if (shouldMarkDone) {
       try {
         confirmedImportResult = await confirmImportFileWithRetry("qa_finalize");
@@ -7918,7 +8021,7 @@ export const processImportFileText = async (
                 ? `Automatic reruns plateaued while Clover was still checking a likely timeline gap in the screenshot batch. Manual parser fixes are needed before rerunning again.`
                 : `Automatic reruns plateaued while Clover was still checking for missing screenshot rows. Manual parser fixes are needed before rerunning again.`
               : `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}. Manual parser fixes are needed before rerunning again.`
-            : `Automatic reruns stopped below the ${AUTO_REPARSE_SCORE_TARGET} target. Latest score ${qaRunResult.evaluation.score}.`,
+            : `Automatic reruns stopped below the ${qaTargetScore} target. Latest score ${qaRunResult.evaluation.score}.`,
     });
     if (shouldMarkDone) {
       emitImportProcessingEvent("import_processing_completed", {
