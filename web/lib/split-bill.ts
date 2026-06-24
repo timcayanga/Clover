@@ -1473,6 +1473,49 @@ const detectReceiptPaymentMethodFromText = (lines: string[], receiptAccountMatch
     : receiptAccountMatch.accountName;
 };
 
+const detectWalletTransferCounterpartyFromText = (lines: string[]) => {
+  const normalizedLines = lines.map((line) => normalizeWhitespace(line)).filter(Boolean);
+  if (normalizedLines.length === 0) {
+    return null;
+  }
+
+  const phonePattern = /(?:\+?63|0)\s?\d{3}\s?\d{3}\s?\d{4}/;
+  const sentViaIndex = normalizedLines.findIndex((line) => /\bsent via\b/i.test(line));
+  const providerIndex = normalizedLines.findIndex((line) => /\b(?:gcash|maya|wise)\b/i.test(line) && /\bsent via\b/i.test(line));
+  const anchorIndex = sentViaIndex >= 0 ? sentViaIndex : providerIndex;
+
+  if (anchorIndex > 0) {
+    for (let index = Math.max(0, anchorIndex - 3); index < anchorIndex; index += 1) {
+      const candidate = normalizedLines[index] ?? "";
+      if (!candidate || phonePattern.test(candidate) || /\b(?:amount|total|ref\.?\s*no|reference|sent via)\b/i.test(candidate)) {
+        continue;
+      }
+      const cleaned = cleanReceiptDescription(candidate).replace(/[•.]{2,}/g, " ").replace(/\s+/g, " ").trim();
+      if (cleaned.length >= 3) {
+        return cleaned;
+      }
+    }
+  }
+
+  for (let index = 0; index < normalizedLines.length; index += 1) {
+    const line = normalizedLines[index] ?? "";
+    if (!phonePattern.test(line)) {
+      continue;
+    }
+    const previous = normalizedLines[index - 1] ?? "";
+    const cleaned = cleanReceiptDescription(previous).replace(/[•.]{2,}/g, " ").replace(/\s+/g, " ").trim();
+    if (
+      cleaned &&
+      cleaned.length >= 3 &&
+      !/\b(?:amount|total|ref\.?\s*no|reference|sent via)\b/i.test(cleaned)
+    ) {
+      return cleaned;
+    }
+  }
+
+  return null;
+};
+
 const detectReceiptPayerNameFromText = (lines: string[]) => {
   const payerPatterns = [
     /^(?:paid\s+by|paid\s+for\s+by|settled\s+by|payer|payor|paid\s+on\s+behalf\s+of|bill\s+paid\s+by|guest\s+paid\s+by)\s*[:\-]?\s*(.+)$/i,
@@ -1564,10 +1607,11 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const currencyMentions = detectCurrencyMentionsFromText(normalized);
   const currencyWarning =
     currencyMentions.length > 1 ? `Mixed currencies detected: ${currencyMentions.join(", ")}` : null;
+  const walletCounterparty = detectWalletTransferCounterpartyFromText(lines);
   const isMainBarReceipt = /\b(?:rice\s+is\s+nice|dirty\s+sorbetes?|dounua|total\s+amount\s+2004\.29)\b/i.test(normalized);
   const billDate = isMainBarReceipt ? "2024-12-23T00:00:00.000Z" : parseBillDateFromText(normalized);
   const tableBounds = findReceiptTableBounds(lines);
-  const merchantName = isMainBarReceipt
+  const detectedMerchantName = isMainBarReceipt
     ? "Main Bar"
     : sanitizeReceiptMerchantName(detectReceiptMerchantNameFromLines(tableBounds ? lines.slice(0, tableBounds.startIndex) : lines) ?? "") ??
       lines.find((line) => line.length > 2 && !isSummaryLine(line) && !isNoiseLine(line) && parseAmountFromLine(line) === null) ??
@@ -1586,8 +1630,11 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const tip = tipLine ? parseAmountFromLine(tipLine) : null;
   const rounding = roundingLine ? parseAmountFromLine(roundingLine) : null;
   const discount = discountLine ? parseAmountFromLine(discountLine) : null;
-  const tableItems = extractReceiptTableItems(lines, merchantName);
-  const items = repairReceiptItemsWithSubtotal(tableItems.length > 0 ? tableItems : itemCandidatesFromText(lines, merchantName), subtotal);
+  const tableItems = extractReceiptTableItems(lines, detectedMerchantName);
+  const items = repairReceiptItemsWithSubtotal(
+    tableItems.length > 0 ? tableItems : itemCandidatesFromText(lines, detectedMerchantName),
+    subtotal
+  );
   const total =
     totalLine && parseAmountFromLine(totalLine) !== null
       ? parseAmountFromLine(totalLine)
@@ -1608,6 +1655,15 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const paymentMethod = detectReceiptPaymentMethodFromText(lines, receiptAccountMatch);
   const receiptPayerName = detectReceiptPayerNameFromText(lines);
   const receiptType = classifyReceiptTypeFromText(normalized, paymentMethod);
+  const merchantName =
+    receiptType === "wallet_transfer"
+      ? walletCounterparty ??
+        (receiptAccountMatch?.accountName && !/^(?:gcash|maya|wise|wallet|card)$/i.test(receiptAccountMatch.accountName)
+          ? receiptAccountMatch.accountName
+          : null) ??
+        detectedMerchantName ??
+        (/\bgcash\b/i.test(normalized) ? "GCash Transfer" : /\bmaya\b/i.test(normalized) ? "Maya Transfer" : /\bwise\b/i.test(normalized) ? "Wise Transfer" : null)
+      : detectedMerchantName;
   const invoiceNumber = extractReceiptField(normalized, [
     /\b(?:invoice\s*(?:no\.?|number|#)|sales invoice\s*(?:no\.?|#)|tax invoice\s*(?:no\.?|#))\s*[:#-]?\s*([A-Z0-9-]{4,})/i,
   ]);
