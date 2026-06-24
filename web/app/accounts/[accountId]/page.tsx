@@ -24,6 +24,11 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
+import {
+  getTransactionParsedNoteValue,
+  getTransactionUserNoteValue,
+  normalizeTransactionNoteValue,
+} from "@/lib/transaction-notes";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { clearImportActivity, getCompletedImportActivitySummary, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
 import { subscribeImportedSummary } from "@/lib/imported-summary-events";
@@ -678,29 +683,6 @@ const formatTransactionAmount = (value: number, currency?: string | null) => for
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
-const looksLikeJsonBlob = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed || !/^[\[{]/.test(trimmed)) {
-    return false;
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed);
-    return parsed !== null && typeof parsed === "object";
-  } catch {
-    return true;
-  }
-};
-
-const normalizeTransactionNotes = (value: string | null | undefined) => {
-  if (!value) {
-    return "";
-  }
-
-  const trimmed = value.trim();
-  return trimmed && !looksLikeJsonBlob(trimmed) ? trimmed : "";
-};
-
 const getRawPayloadTextCandidate = (rawPayload: unknown, keys: string[]) => {
   if (!isRecord(rawPayload)) {
     return "";
@@ -716,94 +698,34 @@ const getRawPayloadTextCandidate = (rawPayload: unknown, keys: string[]) => {
   return "";
 };
 
-const getNestedPayloadTextCandidate = (payload: unknown, path: string[]) => {
-  let current: unknown = payload;
-  for (const key of path) {
-    if (!isRecord(current)) {
-      return "";
-    }
-
-    current = current[key];
-  }
-
-  return typeof current === "string" && current.trim() ? current.trim() : "";
-};
-
-const getNormalizedPayloadTextCandidate = (normalizedPayload: unknown, keys: string[]) => {
-  if (!isRecord(normalizedPayload)) {
-    return "";
-  }
-
-  for (const key of keys) {
-    const candidate = normalizedPayload[key];
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  return "";
-};
-
 const getTransactionUserNote = (
   transaction:
     | Pick<Transaction, "description" | "source" | "importFileId" | "normalizedPayload">
     | null
     | undefined
-) => {
-  const normalizedUserNote = getNormalizedPayloadTextCandidate(transaction?.normalizedPayload, ["userNote", "user_note"]);
-  if (normalizedUserNote) {
-    return normalizeTransactionNotes(normalizedUserNote);
-  }
-
-  if ((transaction?.source ?? null) === "manual" && !transaction?.importFileId) {
-    return normalizeTransactionNotes(transaction?.description);
-  }
-
-  return "";
-};
+) =>
+  getTransactionUserNoteValue({
+    normalizedPayload: transaction?.normalizedPayload,
+    description: transaction?.description,
+    source: transaction?.source,
+    importFileId: transaction?.importFileId,
+  });
 
 const getTransactionParsedNote = (
   transaction:
-    | Pick<Transaction, "rawPayload" | "description" | "source" | "importFileId">
+    | Pick<Transaction, "rawPayload" | "normalizedPayload" | "description" | "merchantRaw" | "merchantClean" | "source" | "importFileId">
     | null
     | undefined
-) => {
-  const parsedNote = getRawPayloadTextCandidate(transaction?.rawPayload, [
-    "fullDetails",
-    "parsedDetails",
-    "transactionDetails",
-    "transactionDetail",
-    "counterpartyDetails",
-    "counterparty",
-    "recipient",
-    "sender",
-    "notes",
-    "note",
-    "detail",
-    "details",
-    "trailingDetails",
-  ]);
-  if (parsedNote) {
-    return parsedNote;
-  }
-
-  const parserEvidenceNote =
-    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parserEvidence", "sourceText"]) ||
-    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parserEvidence", "source_text"]) ||
-    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parserEvidence", "reason"]) ||
-    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parser_evidence", "source_text"]) ||
-    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parser_evidence", "sourceText"]) ||
-    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parser_evidence", "reason"]);
-  if (parserEvidenceNote) {
-    return parserEvidenceNote;
-  }
-
-  if ((transaction?.source ?? null) === "upload" || transaction?.importFileId) {
-    return normalizeTransactionNotes(transaction?.description);
-  }
-
-  return "";
-};
+) =>
+  getTransactionParsedNoteValue({
+    rawPayload: transaction?.rawPayload,
+    normalizedPayload: transaction?.normalizedPayload,
+    description: transaction?.description,
+    merchantRaw: transaction?.merchantRaw,
+    merchantClean: transaction?.merchantClean,
+    source: transaction?.source,
+    importFileId: transaction?.importFileId,
+  });
 
 const createEmptyReceiptLineItem = (): ReceiptLineItemDraft => ({
   description: "",
@@ -3060,7 +2982,7 @@ function AccountDetailPageContent() {
       detailDraft.amount !== selectedTransaction.amount ||
       detailDraft.currency !== (selectedTransaction.currency ?? account?.currency ?? "PHP") ||
       detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
-      normalizeTransactionNotes(detailDraft.description) !== getTransactionUserNote(selectedTransaction) ||
+      normalizeTransactionNoteValue(detailDraft.description) !== getTransactionUserNote(selectedTransaction) ||
       detailDraft.isExcluded !== selectedTransaction.isExcluded ||
       detailDraft.isTransfer !== Boolean(selectedTransaction.isTransfer || selectedTransaction.type === "transfer") ||
       receiptLineItemSignature(detailDraft.receiptLineItems) !==

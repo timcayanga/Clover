@@ -38,6 +38,11 @@ import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/import-p
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { getTransactionReviewReason, getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
+import {
+  getTransactionParsedNoteValue,
+  getTransactionUserNoteValue,
+  normalizeTransactionNoteValue,
+} from "@/lib/transaction-notes";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName, inferTransactionTypeFromAmount } from "@/lib/transaction-directions";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -1464,36 +1469,18 @@ const persistTransactionsWorkspaceCache = (
   return nextSnapshot.updatedAt;
 };
 
-const looksLikeJsonBlob = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed || !/^[\[{]/.test(trimmed)) {
-    return false;
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed);
-    return parsed !== null && typeof parsed === "object";
-  } catch {
-    return true;
-  }
-};
-
-const normalizeTransactionNotes = (value: string | null | undefined) => {
-  if (!value) {
-    return "";
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return "";
-  }
-
-  if (looksLikeJsonBlob(trimmed)) {
-    return "";
-  }
-
-  return trimmed;
-};
+const getTransactionUserNote = (
+  transaction:
+    | Pick<Transaction, "description" | "source" | "importFileId" | "normalizedPayload">
+    | null
+    | undefined
+) =>
+  getTransactionUserNoteValue({
+    normalizedPayload: transaction?.normalizedPayload,
+    description: transaction?.description,
+    source: transaction?.source,
+    importFileId: transaction?.importFileId,
+  });
 
 const getRawPayloadTextCandidate = (rawPayload: unknown, keys: string[]) => {
   if (!isRecord(rawPayload)) {
@@ -1510,94 +1497,21 @@ const getRawPayloadTextCandidate = (rawPayload: unknown, keys: string[]) => {
   return "";
 };
 
-const getNestedPayloadTextCandidate = (payload: unknown, path: string[]) => {
-  let current: unknown = payload;
-  for (const key of path) {
-    if (!isRecord(current)) {
-      return "";
-    }
-
-    current = current[key];
-  }
-
-  return typeof current === "string" && current.trim() ? current.trim() : "";
-};
-
-const getNormalizedPayloadTextCandidate = (normalizedPayload: unknown, keys: string[]) => {
-  if (!isRecord(normalizedPayload)) {
-    return "";
-  }
-
-  for (const key of keys) {
-    const candidate = normalizedPayload[key];
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  return "";
-};
-
-const getTransactionUserNote = (
-  transaction:
-    | Pick<Transaction, "description" | "source" | "importFileId" | "normalizedPayload">
-    | null
-    | undefined
-) => {
-  const normalizedUserNote = getNormalizedPayloadTextCandidate(transaction?.normalizedPayload, ["userNote", "user_note"]);
-  if (normalizedUserNote) {
-    return normalizeTransactionNotes(normalizedUserNote);
-  }
-
-  if ((transaction?.source ?? null) === "manual" && !transaction?.importFileId) {
-    return normalizeTransactionNotes(transaction?.description);
-  }
-
-  return "";
-};
-
 const getTransactionParsedNote = (
   transaction:
-    | Pick<Transaction, "rawPayload" | "description" | "source" | "importFileId">
+    | Pick<Transaction, "rawPayload" | "normalizedPayload" | "description" | "merchantRaw" | "merchantClean" | "source" | "importFileId">
     | null
     | undefined
-) => {
-  const parsedNote = getRawPayloadTextCandidate(transaction?.rawPayload, [
-    "fullDetails",
-    "parsedDetails",
-    "transactionDetails",
-    "transactionDetail",
-    "counterpartyDetails",
-    "counterparty",
-    "recipient",
-    "sender",
-    "notes",
-    "note",
-    "detail",
-    "details",
-    "trailingDetails",
-  ]);
-  if (parsedNote) {
-    return parsedNote;
-  }
-
-  const parserEvidenceNote =
-    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parserEvidence", "sourceText"]) ||
-    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parserEvidence", "source_text"]) ||
-    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parserEvidence", "reason"]) ||
-    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parser_evidence", "source_text"]) ||
-    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parser_evidence", "sourceText"]) ||
-    getNestedPayloadTextCandidate(transaction?.rawPayload, ["parser_evidence", "reason"]);
-  if (parserEvidenceNote) {
-    return parserEvidenceNote;
-  }
-
-  if ((transaction?.source ?? null) === "upload" || transaction?.importFileId) {
-    return normalizeTransactionNotes(transaction?.description);
-  }
-
-  return "";
-};
+) =>
+  getTransactionParsedNoteValue({
+    rawPayload: transaction?.rawPayload,
+    normalizedPayload: transaction?.normalizedPayload,
+    description: transaction?.description,
+    merchantRaw: transaction?.merchantRaw,
+    merchantClean: transaction?.merchantClean,
+    source: transaction?.source,
+    importFileId: transaction?.importFileId,
+  });
 
 const createEmptyReceiptLineItem = (): ReceiptLineItemDraft => ({
   description: "",
@@ -4478,7 +4392,7 @@ function TransactionsPageContent() {
       detailDraft.amount !== selectedTransaction.amount ||
       detailDraft.currency !== selectedTransaction.currency ||
       detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
-      normalizeTransactionNotes(detailDraft.description) !== getTransactionUserNote(selectedTransaction) ||
+      normalizeTransactionNoteValue(detailDraft.description) !== getTransactionUserNote(selectedTransaction) ||
       detailDraft.isExcluded !== selectedTransaction.isExcluded ||
       detailDraft.isTransfer !== selectedTransaction.isTransfer ||
       receiptLineItemSignature(detailDraft.receiptLineItems) !==

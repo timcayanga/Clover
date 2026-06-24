@@ -14,6 +14,15 @@ const PARSED_NOTE_KEYS = [
   "trailingDetails",
 ] as const;
 
+const PARSER_EVIDENCE_PATHS = [
+  ["parserEvidence", "sourceText"],
+  ["parserEvidence", "source_text"],
+  ["parserEvidence", "reason"],
+  ["parser_evidence", "sourceText"],
+  ["parser_evidence", "source_text"],
+  ["parser_evidence", "reason"],
+] as const;
+
 const normalizeTextValue = (value: unknown) => {
   if (typeof value === "number") {
     return Number.isFinite(value) ? String(value).trim() : "";
@@ -30,6 +39,20 @@ const normalizeComparableText = (value: unknown) =>
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+
+const readNestedTextValue = (value: unknown, path: readonly string[]) => {
+  let current: unknown = value;
+  for (const key of path) {
+    const record = asRecord(current);
+    if (!record) {
+      return "";
+    }
+
+    current = record[key];
+  }
+
+  return normalizeTextValue(current);
+};
 
 const looksLikeJsonBlob = (value: string) => {
   const trimmed = value.trim();
@@ -63,6 +86,11 @@ const readNormalizedUserNote = (normalizedPayload: unknown) => {
   }
 
   return "";
+};
+
+export const normalizeTransactionNoteValue = (value: unknown) => {
+  const normalized = normalizeTextValue(value);
+  return normalized && !looksLikeJsonBlob(normalized) ? normalized : "";
 };
 
 const getImportedParsedNoteFallback = (params: {
@@ -113,11 +141,11 @@ export const getTransactionUserNoteValue = (params: {
 }) => {
   const normalizedUserNote = readNormalizedUserNote(params.normalizedPayload);
   if (normalizedUserNote) {
-    return normalizedUserNote;
+    return normalizeTransactionNoteValue(normalizedUserNote);
   }
 
   if (params.source === "manual" && !params.importFileId) {
-    return normalizeTextValue(params.description);
+    return normalizeTransactionNoteValue(params.description);
   }
 
   return "";
@@ -135,6 +163,13 @@ export const getTransactionParsedNoteValue = (params: {
   const parsedNote = extractRawParsedTransactionNote(params.rawPayload);
   if (parsedNote) {
     return parsedNote;
+  }
+
+  for (const path of PARSER_EVIDENCE_PATHS) {
+    const parserEvidenceNote = normalizeTransactionNoteValue(readNestedTextValue(params.rawPayload, path));
+    if (parserEvidenceNote) {
+      return parserEvidenceNote;
+    }
   }
 
   if ((params.source === "upload" || params.importFileId) && !readNormalizedUserNote(params.normalizedPayload)) {
