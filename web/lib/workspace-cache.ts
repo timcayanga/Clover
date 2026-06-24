@@ -4,6 +4,7 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import {
   isWiseWalletWithoutVisibleAccountNumber,
   normalizeImportedAccountKey,
+  normalizeImportedCurrencyCode,
   type ImportedAccountIdentityLike,
 } from "@/lib/imported-account-identity";
 export { normalizeImportedAccountKey } from "@/lib/imported-account-identity";

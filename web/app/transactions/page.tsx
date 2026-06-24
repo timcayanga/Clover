@@ -149,35 +149,6 @@ const resolvePersistedImportedAccountId = (summary: UploadInsightsSummary, accou
   );
 };
 
-const isWiseWalletWithoutVisibleAccountNumber = (account: {
-  name?: string | null;
-  institution?: string | null;
-  accountNumber?: string | null;
-  type?: string | null;
-  source?: string | null;
-}) => {
-  const identity = `${account.institution ?? ""} ${account.name ?? ""}`.trim();
-  return (
-    /\bwise\b/i.test(identity) &&
-    !getImportedAccountLastFour(account.accountNumber) &&
-    (account.type === "wallet" || account.source === "upload")
-  );
-};
-
-const appendWiseWalletCurrency = (label: string, currency?: string | null) => {
-  const normalizedLabel = label.replace(/\s+/g, " ").trim();
-  const currencyCode = formatCurrencyCode(currency || "");
-  if (!normalizedLabel || !currencyCode) {
-    return normalizedLabel;
-  }
-
-  if (new RegExp(`\\b${currencyCode}$`, "i").test(normalizedLabel)) {
-    return normalizedLabel;
-  }
-
-  return `${normalizedLabel} ${currencyCode}`.trim();
-};
-
 const formatTransactionAccountName = (account: Account) => {
   if (account.type === "cash") {
     return getAccountDisplayName(account);
