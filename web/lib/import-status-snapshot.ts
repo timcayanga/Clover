@@ -362,15 +362,21 @@ export const loadImportStatusSnapshot = async (
           typeof statementCheckpoint.sourceMetadata === "object" &&
           !Array.isArray(statementCheckpoint.sourceMetadata))
     );
-  const visibleImportComplete = confirmedTransactionsCount > 0 || hasConfirmedRows || accountDetailOnlyImport;
-  const hasVisibleImportData = visibleImportComplete || parsedRowsCount > 0 || checkpointRowCount > 0;
+  const receiptHasVisibleTransaction = Boolean(receiptTransaction);
+  const receiptHasVisibleDocument = Boolean(receiptDocument);
+  const visibleImportComplete =
+    confirmedTransactionsCount > 0 || hasConfirmedRows || accountDetailOnlyImport || receiptHasVisibleTransaction;
+  const hasVisibleImportData =
+    visibleImportComplete || parsedRowsCount > 0 || checkpointRowCount > 0 || receiptHasVisibleDocument;
   const accountSummaries = visibleImportComplete
-    ? confirmedTransactionsCount > 0 || hasConfirmedRows
+    ? confirmedTransactionsCount > 0 || hasConfirmedRows || receiptHasVisibleTransaction
       ? await loadVisibleImportAccountSummaries(importFileId)
       : await buildCheckpointAccountSummary(statementCheckpoint, importFile.accountId ?? null)
     : [];
   const resolvedAccountId =
     importFile.accountId ??
+    receiptTransaction?.accountId ??
+    receiptDocument?.accountId ??
     statementCheckpoint?.accountId ??
     (accountSummaries.length === 1 ? accountSummaries[0]?.accountId ?? null : null);
 
@@ -412,7 +418,7 @@ export const loadImportStatusSnapshot = async (
     (enrichmentJob?.status === "failed" ||
       (Number(enrichmentJob?.attempts ?? 0) >= MAX_IMPORT_ENRICHMENT_ATTEMPTS && finalizationRemainingRows > 0));
   const confirmationStatus =
-    confirmedTransactionsCount > 0
+    confirmedTransactionsCount > 0 || receiptHasVisibleTransaction
       ? "confirmed"
       : importFile.status === "failed"
         ? "failed"
