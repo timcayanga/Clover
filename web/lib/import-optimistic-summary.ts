@@ -2,6 +2,8 @@ import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import type { AccountType } from "@/lib/domain-types";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { findKnownImportedBalance, getKnownPreviewTransactions } from "@/lib/import-preview-cache";
+import { pickStableBalance } from "@/lib/import-upload-summary";
 import {
   getCachedAccountsWorkspace,
   syncImportedWorkspaceAccountCaches,
@@ -15,6 +17,28 @@ import {
 } from "@/lib/import-statement-identity";
 
 export type UploadAccountType = AccountType | null;
+
+export type ImportSummaryAccountOption = {
+  id: string;
+  name: string;
+  institution: string | null;
+  accountNumber?: string | null;
+  balance?: string | null;
+  currency?: string | null;
+  type: string;
+};
+
+type UploadInsightMetrics = Pick<
+  UploadInsightsSummary,
+  | "incomeTotal"
+  | "expenseTotal"
+  | "netTotal"
+  | "topCategoryName"
+  | "topCategoryAmount"
+  | "topCategoryShare"
+  | "topMerchantName"
+  | "topMerchantCount"
+>;
 
 export const buildOptimisticUploadSummary = (
   fileName: string,
@@ -58,6 +82,92 @@ export const buildOptimisticUploadSummary = (
     topMerchantCount: null,
     previewTransactions,
   };
+};
+
+export const buildResolvedOptimisticUploadSummary = (params: {
+  accounts: ImportSummaryAccountOption[];
+  workspaceId: string;
+  fileName: string;
+  importedRows: number;
+  accountId: string | null;
+  accountName: string | null;
+  institution: string | null;
+  accountType: UploadAccountType;
+  optimisticAccountId: string | null;
+  accountNumber?: string | null;
+  balanceSources?: Array<unknown>;
+  previewTransactions?: UploadInsightsSummary["previewTransactions"];
+  showBalanceEvenIfEmpty?: boolean;
+  insightMetrics?: Partial<UploadInsightMetrics> | null;
+  accountSummaries?: UploadInsightsSummary["accountSummaries"];
+  optimistic?: boolean;
+}) => {
+  const resolvedBalance = pickStableBalance(
+    ...(params.balanceSources ?? []),
+    findKnownImportedBalance(params.accounts, {
+      workspaceId: params.workspaceId,
+      accountId: params.accountId,
+      accountName: params.accountName,
+      institution: params.institution,
+      accountNumber: params.accountNumber ?? null,
+      accountType: params.accountType,
+    })
+  );
+  const resolvedPreviewTransactions = getKnownPreviewTransactions({
+    workspaceId: params.workspaceId,
+    accountId: params.accountId,
+    optimisticAccountId: params.optimisticAccountId,
+    accountName: params.accountName,
+    institution: params.institution,
+    accountNumber: params.accountNumber ?? null,
+    accountType: params.accountType,
+    previewTransactions: params.previewTransactions,
+  });
+
+  const summary = buildOptimisticUploadSummary(
+    params.fileName,
+    params.importedRows,
+    params.accountId,
+    params.accountName,
+    params.institution,
+    params.accountType,
+    params.optimisticAccountId,
+    resolvedBalance,
+    resolvedPreviewTransactions,
+    params.accountNumber ?? null,
+    params.showBalanceEvenIfEmpty ?? false
+  );
+
+  const baseSummary = {
+    ...summary,
+    accountSummaries: params.accountSummaries ?? summary.accountSummaries,
+    optimistic: params.optimistic ?? summary.optimistic,
+  };
+
+  if (!params.insightMetrics) {
+    return baseSummary;
+  }
+
+  return {
+    ...baseSummary,
+    incomeTotal: Number(params.insightMetrics.incomeTotal ?? 0),
+    expenseTotal: Number(params.insightMetrics.expenseTotal ?? 0),
+    netTotal: Number(params.insightMetrics.netTotal ?? 0),
+    topCategoryName: params.insightMetrics.topCategoryName ?? null,
+    topCategoryAmount:
+      params.insightMetrics.topCategoryAmount === null || params.insightMetrics.topCategoryAmount === undefined
+        ? null
+        : Number(params.insightMetrics.topCategoryAmount),
+    topCategoryShare:
+      params.insightMetrics.topCategoryShare === null || params.insightMetrics.topCategoryShare === undefined
+        ? null
+        : Number(params.insightMetrics.topCategoryShare),
+    topMerchantName: params.insightMetrics.topMerchantName ?? null,
+    topMerchantCount:
+      params.insightMetrics.topMerchantCount === null || params.insightMetrics.topMerchantCount === undefined
+        ? null
+        : Number(params.insightMetrics.topMerchantCount),
+  } satisfies UploadInsightsSummary;
 };
 
 export const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {

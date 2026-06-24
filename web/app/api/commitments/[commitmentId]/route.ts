@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +16,11 @@ const resolveCommitmentRouteUserId = async () => {
 };
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ commitmentId: string }> }
 ) {
   try {
+    assertTrustedRequestOrigin(request);
     const userId = await resolveCommitmentRouteUserId();
     const { commitmentId } = await params;
     const commitment = await prisma.financialCommitment.findUnique({

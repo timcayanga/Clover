@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,11 @@ const toRawPayloadObject = (value: unknown) => {
 };
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ patternId: string }> }
 ) {
   try {
+    assertTrustedRequestOrigin(request);
     const userId = await resolveRecurringPatternRouteUserId();
     const { patternId } = await params;
     const pattern = await prisma.recurringPattern.findUnique({

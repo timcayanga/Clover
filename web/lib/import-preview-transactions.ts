@@ -1,4 +1,6 @@
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
+import { getKnownPreviewTransactions } from "@/lib/import-preview-cache";
+import type { UploadAccountType } from "@/lib/import-optimistic-summary";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 
 export const buildOptimisticPreviewTransactions = (
@@ -142,4 +144,50 @@ export const loadOptimisticPreviewTransactions = async (
   }
 
   return [];
+};
+
+export const loadOrGetKnownPreviewTransactions = async (params: {
+  workspaceId: string;
+  importFileId?: string | null;
+  accountId: string | null;
+  optimisticAccountId?: string | null;
+  accountName?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+  accountType?: UploadAccountType;
+  previewTransactions?: NonNullable<UploadInsightsSummary["previewTransactions"]>;
+}) => {
+  const directPreviewTransactions =
+    Array.isArray(params.previewTransactions) && params.previewTransactions.length > 0 ? params.previewTransactions : null;
+  if (directPreviewTransactions) {
+    return directPreviewTransactions;
+  }
+
+  const canLoadFreshPreview =
+    Boolean(params.importFileId && params.accountId && params.accountName);
+
+  if (canLoadFreshPreview) {
+    const loadedRows = await loadOptimisticPreviewTransactions(
+      params.importFileId!,
+      params.accountId!,
+      params.accountName!,
+      params.institution ?? null,
+      params.accountNumber ?? null
+    ).catch(() => []);
+
+    if (loadedRows.length > 0) {
+      return loadedRows;
+    }
+  }
+
+  return getKnownPreviewTransactions({
+    workspaceId: params.workspaceId,
+    accountId: params.accountId,
+    optimisticAccountId: params.optimisticAccountId ?? null,
+    accountName: params.accountName ?? null,
+    institution: params.institution ?? null,
+    accountNumber: params.accountNumber ?? null,
+    accountType: params.accountType ?? null,
+    previewTransactions: params.previewTransactions,
+  });
 };

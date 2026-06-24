@@ -188,6 +188,7 @@ const importedFileTextCache = new Map<string, Promise<string>>();
 const importedFileTextCacheRecordMap = new Map<string, ImportFileTextCacheRecord>();
 const importedFilePageImageCache = new Map<string, Promise<Array<{ page: number; dataUrl: string }>>>();
 const importedFileImageDataUrlCache = new Map<string, Promise<Array<{ page: number; dataUrl: string }>>>();
+const nodeRequire = createRequire(import.meta.url);
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(Buffer.from(bytes)).digest("hex");
 
@@ -1541,7 +1542,7 @@ const getPdfJsStandardFontDataUrl = (baseUrl?: string | null) => {
     return new URL("/pdfjs/standard_fonts/", resolvedBaseUrl).toString();
   }
 
-  const pdfJsPackagePath = join(process.cwd(), "node_modules", "pdfjs-dist", "package.json");
+  const pdfJsPackagePath = nodeRequire.resolve("pdfjs-dist/package.json");
   return `${pathToFileURL(join(dirname(pdfJsPackagePath), "standard_fonts")).toString().replace(/\/?$/, "")}/`;
 };
 

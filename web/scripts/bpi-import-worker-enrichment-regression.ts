@@ -1,9 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { strict as assert } from "node:assert";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { readUploadedFileText } from "@/lib/import-file-text.server";
 import { upsertImportEnrichmentJob } from "@/lib/import-enrichment-jobs";
+import { uploadObject } from "@/lib/s3";
 import { confirmImportFile, processImportEnrichmentJobs, processImportFileText } from "@/workers/import-processor";
 
 const statementRoot = process.env.CLOVER_STATEMENT_ROOT ?? "/Users/TimCayanga1/Documents/Bank Statements";
@@ -15,9 +17,14 @@ const files = [
   "Samples/BPI/583720503-BPI-BANK-STATEMENT.pdf",
 ];
 
+const readStatementBytes = async (relativePath: string) => {
+  const absolutePath = join(statementRoot, relativePath);
+  return readFile(absolutePath);
+};
+
 const readStatementText = async (relativePath: string) => {
   const absolutePath = join(statementRoot, relativePath);
-  const bytes = await readFile(absolutePath);
+  const bytes = await readStatementBytes(relativePath);
   return readUploadedFileText({
     name: basename(absolutePath),
     type: "application/pdf",
@@ -30,7 +37,7 @@ const readStatementText = async (relativePath: string) => {
 };
 
 const main = async () => {
-  const runId = `bpi-enrichment-${Date.now()}`;
+  const runId = `bpi-enrichment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const user = await prisma.user.create({
     data: {
       clerkUserId: `qa-${runId}`,
@@ -63,6 +70,8 @@ const main = async () => {
         },
       });
       importIds.push(importFile.id);
+      const bytes = await readStatementBytes(relativePath);
+      await uploadObject(importFile.storageKey, bytes, "application/pdf");
       const text = await readStatementText(relativePath);
       const result = await processImportFileText(importFile.id, {
         text,
@@ -186,8 +195,8 @@ const main = async () => {
         parserConfidence: 45,
         categoryConfidence: 0,
         reviewStatus: "suggested",
-        normalizedPayload: null,
-        learnedRuleIdsApplied: null,
+        normalizedPayload: Prisma.JsonNull,
+        learnedRuleIdsApplied: Prisma.JsonNull,
       },
     });
 

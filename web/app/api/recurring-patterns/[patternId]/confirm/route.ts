@@ -4,6 +4,7 @@ import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { commitmentRecurrenceLabels, serializeFinancialCommitment } from "@/lib/commitments";
 import type { CommitmentRecurrence } from "@prisma/client";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,7 @@ export async function POST(
   { params }: { params: Promise<{ patternId: string }> }
 ) {
   try {
+    assertTrustedRequestOrigin(request);
     const userId = await resolveRecurringPatternRouteUserId();
     const { patternId } = await params;
     const payload = (await request.json().catch(() => ({}))) as Record<string, unknown>;

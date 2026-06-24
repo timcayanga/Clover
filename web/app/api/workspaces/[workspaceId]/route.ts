@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ const isDefaultPersonalWorkspace = async (workspace: { id: string; userId: strin
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
   try {
+    assertTrustedRequestOrigin(request);
     const userId = await resolveWorkspaceRouteUserId();
     const { workspaceId } = await params;
     const body = updateWorkspaceSchema.parse(await request.json());
@@ -78,8 +80,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ wo
   }
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
   try {
+    assertTrustedRequestOrigin(request);
     const userId = await resolveWorkspaceRouteUserId();
     const { workspaceId } = await params;
 
