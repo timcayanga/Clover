@@ -1583,14 +1583,37 @@ const readCheckpointStatementFamilySignature = (sourceMetadata: unknown): string
   return candidate ? candidate.trim() : null;
 };
 
-const normalizeStatementImageOcrText = (text: string) => {
+const sanitizeStatementImageOcrText = (text: string) => {
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
   const isStatementUiNoiseLine = (line: string) => {
+    const normalized = line.trim();
+    const lower = normalized.toLowerCase();
     if (/^(Transactions?|Transaction History|Wallet History|Portfolio|Accounts?|Today|Yesterday|Home|Inbox|QR|Pay|Cards?|Save & Invest|More)$/i.test(line)) {
+      return true;
+    }
+
+    if (
+      /^(?:search|search\.\.\.|includes hidden|type|currency|direction|status|amount|all currencies|rows|prev|next|filters?)$/i.test(normalized)
+    ) {
+      return true;
+    }
+
+    if (
+      /^(?:search\.\.\.\s*)?(?:includes hidden\s+)?type\s+currency\s+direction$/i.test(normalized) ||
+      /^(?:all currencies\s+)?add transaction$/i.test(normalized)
+    ) {
+      return true;
+    }
+
+    if (
+      /\b(?:search|includes hidden|type|currency|direction|all currencies|rows|prev|next)\b/i.test(normalized) &&
+      !/\b(?:received|sent|cash|card|transfer|deposit|withdraw|refund|purchase|payment|balance|account|transactions?|history|buy|sell)\b/i.test(normalized) &&
+      normalized.split(/\s+/).length <= 8
+    ) {
       return true;
     }
 
@@ -1615,11 +1638,48 @@ const normalizeStatementImageOcrText = (text: string) => {
       return true;
     }
 
+    if (/^(?:lte|5g|4g|wifi|wi-fi|\d{1,3}%|silent|muted)$/i.test(normalized)) {
+      return true;
+    }
+
+    if (
+      /^\d{1,2}:\d{2}.*(?:lte|5g|4g|wifi|wi-fi).*\d{1,3}%$/i.test(normalized) ||
+      /^(?:lte|5g|4g|wifi|wi-fi).*\d{1,3}%$/i.test(normalized)
+    ) {
+      return true;
+    }
+
+    if (
+      /^(?:showing filtered|mixed currencies|spending|transfers|net cash flow)$/i.test(lower)
+    ) {
+      return true;
+    }
+
+    if (/^[+<>•·]+$/.test(normalized)) {
+      return true;
+    }
+
     return false;
   };
 
-  return lines.filter((line) => !isStatementUiNoiseLine(line)).join("\n");
+  const keptLines: string[] = [];
+  let removedLineCount = 0;
+  for (const line of lines) {
+    if (isStatementUiNoiseLine(line)) {
+      removedLineCount += 1;
+      continue;
+    }
+    keptLines.push(line);
+  }
+
+  return {
+    text: keptLines.join("\n"),
+    removedLineCount,
+    originalLineCount: lines.length,
+  };
 };
+
+const normalizeStatementImageOcrText = (text: string) => sanitizeStatementImageOcrText(text).text;
 
 const detectGenericTrainingBundle = (root: Record<string, unknown>, fileName: string) => {
   const bundleType =
@@ -5471,6 +5531,10 @@ export const processImportFileText = async (
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
   let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
+  let statementImageOcrCleanup = {
+    removedLineCount: 0,
+    originalLineCount: 0,
+  };
   const storageKey = String(importFile.storageKey ?? "");
   const noisyPdfBankByFileName =
     fileType === "application/pdf" &&
@@ -5513,7 +5577,17 @@ export const processImportFileText = async (
     !textHasMultipleCimbAccountSections || hasMultipleParsedAccountNumbers(cachedParsedRows);
   const freshImageMetadataForCacheGate =
     imageImport && importMode === "statement"
-      ? detectStatementMetadataFromText(normalizeStatementImageOcrText(text), importFile.fileName)
+      ? detectStatementMetadataFromText(
+          (() => {
+            const sanitized = sanitizeStatementImageOcrText(text);
+            statementImageOcrCleanup = {
+              removedLineCount: Math.max(statementImageOcrCleanup.removedLineCount, sanitized.removedLineCount),
+              originalLineCount: Math.max(statementImageOcrCleanup.originalLineCount, sanitized.originalLineCount),
+            };
+            return sanitized.text;
+          })(),
+          importFile.fileName
+        )
       : null;
   const cachedMetadataForCacheGate =
     textCacheInfo?.cacheRecord?.metadata &&
@@ -5580,7 +5654,12 @@ export const processImportFileText = async (
     }).catch(() => null);
 
     if (transcript?.transcript.trim()) {
-      text = normalizeStatementImageOcrText(transcript.transcript);
+      const sanitizedTranscript = sanitizeStatementImageOcrText(transcript.transcript);
+      statementImageOcrCleanup = {
+        removedLineCount: Math.max(statementImageOcrCleanup.removedLineCount, sanitizedTranscript.removedLineCount),
+        originalLineCount: Math.max(statementImageOcrCleanup.originalLineCount, sanitizedTranscript.originalLineCount),
+      };
+      text = sanitizedTranscript.text;
     }
   }
 
@@ -5588,7 +5667,15 @@ export const processImportFileText = async (
     return processImportTrainingJson(importFileId, importFile, text, options, startedAt);
   }
 
-  let textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
+  let textForParse = text;
+  if (imageImport && importMode === "statement") {
+    const sanitizedParseText = sanitizeStatementImageOcrText(text);
+    statementImageOcrCleanup = {
+      removedLineCount: Math.max(statementImageOcrCleanup.removedLineCount, sanitizedParseText.removedLineCount),
+      originalLineCount: Math.max(statementImageOcrCleanup.originalLineCount, sanitizedParseText.originalLineCount),
+    };
+    textForParse = sanitizedParseText.text;
+  }
   let receiptPreview = importMode === "receipt" || imageImport ? parseReceiptText(textForParse) : null;
   if (importMode === "receipt" && !trainedReceiptFixture) {
     trainedReceiptFixture = getTrainedReceiptFixtureFromPreview(receiptPreview);
@@ -5769,7 +5856,12 @@ export const processImportFileText = async (
     }).catch(() => null);
 
     if (transcript?.transcript.trim()) {
-      const transcriptText = normalizeStatementImageOcrText(transcript.transcript);
+      const sanitizedTranscript = sanitizeStatementImageOcrText(transcript.transcript);
+      statementImageOcrCleanup = {
+        removedLineCount: Math.max(statementImageOcrCleanup.removedLineCount, sanitizedTranscript.removedLineCount),
+        originalLineCount: Math.max(statementImageOcrCleanup.originalLineCount, sanitizedTranscript.originalLineCount),
+      };
+      const transcriptText = sanitizedTranscript.text;
       const transcriptRows = parseImportText(transcriptText, fileName, fileType, {
         institution: "BPI",
         accountName: metadataForParse.accountName ?? "BPI",
@@ -5826,7 +5918,12 @@ export const processImportFileText = async (
       timeoutMs: 45_000,
     });
     if (transcript?.transcript.trim()) {
-      const transcriptText = normalizeStatementImageOcrText(transcript.transcript);
+      const sanitizedTranscript = sanitizeStatementImageOcrText(transcript.transcript);
+      statementImageOcrCleanup = {
+        removedLineCount: Math.max(statementImageOcrCleanup.removedLineCount, sanitizedTranscript.removedLineCount),
+        originalLineCount: Math.max(statementImageOcrCleanup.originalLineCount, sanitizedTranscript.originalLineCount),
+      };
+      const transcriptText = sanitizedTranscript.text;
       const transcriptRows = parseImportText(transcriptText, fileName, fileType, {
         institution: "Wise",
         accountName: metadataForParse.accountName ?? "Wise",
@@ -6650,6 +6747,8 @@ export const processImportFileText = async (
     visibleImportMaxDateGapDays: visibleImportCompleteness.maxDateGapDays,
     visibleImportEarliestDate: visibleImportCompleteness.earliestDate,
     visibleImportLatestDate: visibleImportCompleteness.latestDate,
+    screenshotOcrNoiseLinesRemoved: statementImageOcrCleanup.removedLineCount,
+    screenshotOcrOriginalLineCount: statementImageOcrCleanup.originalLineCount,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const receiptDocumentCashAccountId =
