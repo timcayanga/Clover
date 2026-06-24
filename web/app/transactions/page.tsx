@@ -98,7 +98,8 @@ const ImportFilesModal = dynamic(
   { ssr: false }
 );
 
-const IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS = 10 * 60 * 1000;
+const IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS = 2 * 60 * 1000;
+const SYNCING_EMPTY_STATE_REFRESH_DELAY_MS = 250;
 const WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS = 2_500;
 
 type Workspace = {
@@ -1401,9 +1402,7 @@ const hasCachedTransactionsWorkspaceEvidence = (workspaceId: string) => {
       : 0;
 
   return Boolean(
-    snapshot.accounts.length > 0 ||
-      snapshot.transactions.length > 0 ||
-      snapshot.imports.length > 0 ||
+    snapshot.transactions.length > 0 ||
       (snapshot.totalCount ?? 0) > 0 ||
       summaryTotalCount > 0
   );
@@ -6838,14 +6837,14 @@ function TransactionsPageContent() {
     }
 
     const timeout = window.setTimeout(() => {
-      void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: false, background: true });
+      void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
       void loadTransactionsPage(selectedWorkspaceId, {
         background: true,
         pageOverride: transactionsPage,
         pageSizeOverride: transactionsPageSize,
         summaryMode: "light",
       });
-    }, 1200);
+    }, SYNCING_EMPTY_STATE_REFRESH_DELAY_MS);
 
     return () => {
       window.clearTimeout(timeout);
@@ -7624,8 +7623,8 @@ function TransactionsPageContent() {
               })
             ) : shouldShowSyncingInsteadOfEmpty ? (
               <div className="empty-state">
-                <strong>Still syncing your transactions.</strong>
-                <p>Clover found recent import or cached transaction activity, so this workspace does not look truly empty. We&apos;re refreshing the latest rows now.</p>
+                <strong>Your latest transactions are on the way.</strong>
+                <p>Clover is pulling in your recent activity now.</p>
               </div>
             ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
               <EmptyDataCta
@@ -7814,8 +7813,8 @@ function TransactionsPageContent() {
               </div>
             ) : shouldShowSyncingInsteadOfEmpty ? (
               <div className="empty-state">
-                <strong>Still syncing your transactions.</strong>
-                <p>Clover found recent import or cached transaction activity, so this workspace does not look truly empty. We&apos;re refreshing the latest rows now.</p>
+                <strong>Your latest transactions are on the way.</strong>
+                <p>Clover is pulling in your recent activity now.</p>
               </div>
             ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
               <EmptyDataCta

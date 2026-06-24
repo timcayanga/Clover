@@ -84,6 +84,9 @@ type PlanUsage = {
   transactionCount: number;
 };
 
+const IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS = 2 * 60 * 1000;
+const SYNCING_EMPTY_STATE_REFRESH_DELAY_MS = 250;
+
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
   { ssr: false }
@@ -509,7 +512,7 @@ const hasRecentWorkspaceImportEvidence = (
     return false;
   }
 
-  const isFresh = Date.now() - Number(activity.updatedAt ?? 0) <= 10 * 60 * 1000;
+  const isFresh = Date.now() - Number(activity.updatedAt ?? 0) <= IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS;
   if (!isFresh) {
     return false;
   }
@@ -3431,7 +3434,7 @@ function AccountsPageContent() {
 
     const timeout = window.setTimeout(() => {
       void loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true });
-    }, 1200);
+    }, SYNCING_EMPTY_STATE_REFRESH_DELAY_MS);
 
     return () => {
       window.clearTimeout(timeout);
@@ -3546,8 +3549,8 @@ function AccountsPageContent() {
                 </div>
               ) : shouldShowSyncingInsteadOfEmpty ? (
                 <div className="empty-state accounts-empty-state">
-                  <strong>Still syncing your accounts.</strong>
-                  <p>Clover found recent account or import activity, so this workspace does not look truly empty. We&apos;re refreshing the latest account data now.</p>
+                  <strong>Your latest accounts are on the way.</strong>
+                  <p>Clover is pulling in your latest balances and account details now.</p>
                   <div className="accounts-empty-state__actions">
                     <button className="button button-primary button-small" type="button" onClick={() => void loadWorkspaceData(selectedWorkspaceId, { awaitHydration: true })}>
                       Refresh accounts
