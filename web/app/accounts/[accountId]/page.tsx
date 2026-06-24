@@ -36,6 +36,7 @@ import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
   applyOptimisticWorkspaceAccountDeletion,
+  accountsWorkspaceCacheKey,
   clearDeletedWorkspaceAccount,
   clearDeletingWorkspaceAccount,
   getCachedAccountsWorkspace,
@@ -47,6 +48,9 @@ import {
   deriveCachedCategoriesFromTransactions,
   markDeletedWorkspaceAccount,
   normalizeImportedAccountKey,
+  transactionsWorkspaceCacheKey,
+  workspaceCacheUpdatedEventName,
+  type WorkspaceCacheUpdatedEventDetail,
   findBestImportedAccountMatch as findBestImportedAccountIdentityMatch,
   mergeImportedWorkspaceTransactions,
   type ImportedWorkspaceTransaction,
@@ -1349,6 +1353,7 @@ function AccountDetailPageContent() {
   const [purchaseDeleteBusy, setPurchaseDeleteBusy] = useState<string | null>(null);
   const [dividendDeleteBusy, setDividendDeleteBusy] = useState<string | null>(null);
   const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState(false);
+  const [cacheRefreshTick, setCacheRefreshTick] = useState(0);
   const [importActivitySnapshot, setImportActivitySnapshot] = useState(() => readImportActivity());
   const handledImportedSummaryKeysRef = useRef(new Set<string>());
   const loadedAccountIdRef = useRef<string | null>(null);
@@ -1380,6 +1385,49 @@ function AccountDetailPageContent() {
     return subscribeImportActivity(() => {
       setImportActivitySnapshot(readImportActivity());
     });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const shouldReactToCacheKey = (key: string | null) =>
+      key === accountsWorkspaceCacheKey ||
+      key === transactionsWorkspaceCacheKey ||
+      key === "clover.selected-workspace-id.v1";
+
+    const triggerRefresh = () => {
+      setCacheRefreshTick((current) => current + 1);
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.storageArea !== window.localStorage) {
+        return;
+      }
+
+      if (!shouldReactToCacheKey(event.key)) {
+        return;
+      }
+
+      triggerRefresh();
+    };
+
+    const handleWorkspaceCacheUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<WorkspaceCacheUpdatedEventDetail>;
+      if (!shouldReactToCacheKey(customEvent.detail?.key ?? null)) {
+        return;
+      }
+
+      triggerRefresh();
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(workspaceCacheUpdatedEventName, handleWorkspaceCacheUpdated as EventListener);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(workspaceCacheUpdatedEventName, handleWorkspaceCacheUpdated as EventListener);
+    };
   }, []);
 
   useEffect(() => {
@@ -1998,7 +2046,7 @@ function AccountDetailPageContent() {
       cancelled = true;
       window.clearTimeout(fallbackRenderTimer);
     };
-  }, [accountId]);
+  }, [accountId, cacheRefreshTick]);
 
   const accountCheckpointKey = useMemo(
     () => normalizeImportedAccountKey(account?.name, account?.institution, account?.accountNumber, account?.type, account?.currency),
