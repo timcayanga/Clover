@@ -7291,11 +7291,12 @@ export const processImportFileText = async (
     imageImport,
     uploadedAt: importFile.uploadedAt ?? importFile.createdAt ?? null,
   });
+  const effectiveDocumentPageCount = pageImages?.length ?? (imageImport ? 1 : 0);
   const visibleImportCompleteness = assessVisibleImportCompleteness({
     rows,
     importMode,
     imageImport,
-    pageCount: pageImages?.length ?? 0,
+    pageCount: effectiveDocumentPageCount,
     institution: resolvedMetadata.institution ?? metadataForParse.institution ?? null,
     parserRoute: parserRouteDecision.route,
   });
@@ -7351,7 +7352,7 @@ export const processImportFileText = async (
       statementFamilySignature,
       metadata: resolvedMetadata,
       parsedRows: rows as unknown as Prisma.InputJsonValue,
-      pageCount: pageImages?.length ?? 0,
+      pageCount: effectiveDocumentPageCount,
       confidence: resolvedMetadata.confidence ?? 0,
       hitCount: (textCacheInfo?.cacheRecord?.hitCount ?? 0) + 1,
     }).catch((error) => {
@@ -7405,8 +7406,8 @@ export const processImportFileText = async (
     fileName,
     fileType,
     rowCount: rows.length,
-    pageCount: pageImages?.length ?? 0,
-    usedVisionFallback: Boolean(pageImages?.length),
+    pageCount: effectiveDocumentPageCount,
+    usedVisionFallback: imageImport || Boolean(pageImages?.length),
     usedOpenAiFallback: Boolean(useOpenAiParse),
     usedDeterministicParser: !useOpenAiParse,
     usedFastScreenshotParse: imageStatementParseLooksUsable,
@@ -7503,32 +7504,38 @@ export const processImportFileText = async (
     accountName: importMode === "receipt" ? "Cash" : resolvedMetadata.accountName ?? null,
     accountNumber: importMode === "receipt" ? null : resolvedMetadata.accountNumber ?? null,
     currency: resolvedMetadata.currency ?? null,
-    pageCount: pageImages?.length ?? 0,
+    pageCount: effectiveDocumentPageCount,
     confidence: resolvedMetadata.confidence ?? 0,
     sourceMetadata: documentImportSourceMetadata,
     rawPayload: documentImportExtractedPayload,
     extractedPayload: documentImportExtractedPayload,
   });
 
-  if (documentImportRecord && !pageImages?.length && imageImport && storageKey) {
-    try {
-      pageImages = await readImportedFileImageDataUrls({
-        storageKey,
-        fileType,
-        fileName,
-      });
-    } catch (error) {
-      console.warn("Unable to lazily load document import page images", {
-        importFileId,
-        error,
-      });
+  const persistDocumentImportPages = async () => {
+    if (!documentImportRecord) {
+      return;
     }
-  }
-
-  if (documentImportRecord && pageImages?.length) {
+    let persistedPageImages = pageImages;
+    if (!persistedPageImages?.length && imageImport && storageKey) {
+      try {
+        persistedPageImages = await readImportedFileImageDataUrls({
+          storageKey,
+          fileType,
+          fileName,
+        });
+      } catch (error) {
+        console.warn("Unable to lazily load document import page images", {
+          importFileId,
+          error,
+        });
+      }
+    }
+    if (!persistedPageImages?.length) {
+      return;
+    }
     await replaceDocumentImportPagesCompat({
       documentImportId: documentImportRecord.id,
-      pages: pageImages.map(({ page }) => ({
+      pages: persistedPageImages.map(({ page }) => ({
         pageNumber: page,
         imageName: `${fileName || "import"}-page-${page}`,
         pageType:
@@ -7563,6 +7570,19 @@ export const processImportFileText = async (
         } as Prisma.InputJsonValue,
       })),
     });
+  };
+
+  if (documentImportRecord) {
+    if (isDocumentImport) {
+      void persistDocumentImportPages().catch((error) => {
+        console.warn("Unable to persist document import pages in background", {
+          importFileId,
+          error,
+        });
+      });
+    } else {
+      await persistDocumentImportPages();
+    }
   }
 
   if (documentImportRecord && (importMode === "receipt" || receiptDetails)) {
@@ -7600,7 +7620,7 @@ export const processImportFileText = async (
         receiptDetails: receiptDetailsPayload,
         receiptValidation,
         rowCount: rows.length,
-        pageCount: pageImages?.length ?? 0,
+        pageCount: effectiveDocumentPageCount,
       } as Prisma.InputJsonValue,
     });
   }
@@ -7622,7 +7642,7 @@ export const processImportFileText = async (
         documentType: importMode,
         metadata: resolvedMetadata,
         rowCount: rows.length,
-        pageCount: pageImages?.length ?? 0,
+        pageCount: effectiveDocumentPageCount,
       } as Prisma.InputJsonValue,
     });
 
@@ -7827,7 +7847,7 @@ export const processImportFileText = async (
         rows,
         metadata: resolvedMetadata,
         startedAt,
-        usedVisionFallback: Boolean(pageImages?.length),
+        usedVisionFallback: imageImport || Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
         actorUserId: options.actorUserId ?? null,
       });
@@ -7939,7 +7959,7 @@ export const processImportFileText = async (
         rows,
         metadata: resolvedMetadata,
         startedAt,
-        usedVisionFallback: Boolean(pageImages?.length),
+        usedVisionFallback: imageImport || Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
         actorUserId: options.actorUserId ?? null,
       });
@@ -7984,10 +8004,10 @@ export const processImportFileText = async (
       timings: {
         totalMs: Date.now() - startedAt,
         parsingMs: Date.now() - startedAt,
-        usedVisionFallback: Boolean(pageImages?.length),
+        usedVisionFallback: imageImport || Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
         usedDeterministicParser: !useOpenAiParse,
-        pageCount: pageImages?.length ?? 0,
+        pageCount: effectiveDocumentPageCount,
       },
       duplicate: false,
       actorUserId: options.actorUserId ?? null,
