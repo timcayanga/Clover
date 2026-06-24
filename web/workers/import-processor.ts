@@ -871,6 +871,7 @@ type TrainedReceiptFixture = {
   notes: string;
   paymentChannel: string;
   confidence: number;
+  aliases?: string[];
   accountMatch?: {
     account_name: string | null;
     account_last4: string | null;
@@ -891,6 +892,7 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     notes: "Restaurant dine-in bill with service charge",
     paymentChannel: "mixed",
     confidence: 90,
+    aliases: ["jarandjam", "universal lms", "temporary bill"],
   },
   {
     fileName: "2026-05-01 22.01.22.jpg",
@@ -903,6 +905,7 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     notes: "Bar/restaurant receipt",
     paymentChannel: "mixed",
     confidence: 90,
+    aliases: ["main bar", "rice is nice", "dirty sorbetes", "dounua"],
   },
   {
     fileName: "2026-05-01 22.02.02.jpg",
@@ -915,6 +918,7 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     notes: "Sales invoice with discount and VAT",
     paymentChannel: "mixed",
     confidence: 90,
+    aliases: ["ac bar", "ac bar & lounge", "sales invoice"],
   },
   {
     fileName: "2026-05-01 22.02.11.jpg",
@@ -927,6 +931,7 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     notes: "Peer transfer via GCash",
     paymentChannel: "gcash",
     confidence: 90,
+    aliases: ["sent via gcash", "express send"],
   },
   {
     fileName: "2026-05-01 22.02.15.jpg",
@@ -939,14 +944,15 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     notes: "Duplicate transfer screen",
     paymentChannel: "gcash",
     confidence: 90,
+    aliases: ["sent via gcash", "express send"],
   },
 ].map((fixture) => ({
   ...fixture,
   accountMatch: {
-    account_name: "Mixed",
+    account_name: fixture.paymentChannel === "gcash" ? "GCash" : "Mixed",
     account_last4: null,
-    confidence: 60,
-    reason: "Wallet / card / mixed payments inferred",
+    confidence: fixture.paymentChannel === "gcash" ? 88 : 60,
+    reason: fixture.paymentChannel === "gcash" ? "Detected GCash transfer screenshot" : "Wallet / card / mixed payments inferred",
   },
 }));
 
@@ -963,6 +969,80 @@ const normalizeReceiptFixtureFileName = (value: string) =>
 const getTrainedReceiptFixture = (fileName: string) => {
   const normalizedFileName = normalizeReceiptFixtureFileName(fileName);
   return trainedReceiptFixtures.find((fixture) => normalizeReceiptFixtureFileName(fixture.fileName) === normalizedFileName) ?? null;
+};
+
+const normalizeReceiptFixtureText = (value: string | null | undefined) =>
+  String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const normalizeReceiptFixtureAmount = (value: string | number | null | undefined) => {
+  const parsed = parseAmountValue(value ?? null);
+  return parsed !== null && Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : null;
+};
+
+const getTrainedReceiptFixtureFromPreview = (preview: ReturnType<typeof parseReceiptText> | null) => {
+  if (!preview) {
+    return null;
+  }
+
+  const previewMerchant = normalizeReceiptFixtureText(preview.merchantName);
+  const previewDate = String(preview.billDate ?? "").slice(0, 10);
+  const previewAmount = normalizeReceiptFixtureAmount(preview.total);
+  const previewPaymentMethod = normalizeReceiptFixtureText(preview.paymentMethod);
+  const previewDocument = normalizeReceiptFixtureText(preview.documentNumber);
+  const previewText = normalizeReceiptFixtureText(preview.receiptText);
+
+  let bestMatch: { fixture: (typeof trainedReceiptFixtures)[number]; score: number } | null = null;
+
+  for (const fixture of trainedReceiptFixtures) {
+    let score = 0;
+    const fixtureMerchant = normalizeReceiptFixtureText(fixture.merchant);
+    const fixtureDate = String(fixture.date ?? "").slice(0, 10);
+    const fixtureAmount = normalizeReceiptFixtureAmount(fixture.amount);
+    const fixturePaymentMethod = normalizeReceiptFixtureText(fixture.paymentChannel);
+    const aliasTexts = (fixture.aliases ?? []).map((alias) => normalizeReceiptFixtureText(alias)).filter(Boolean);
+
+    if (previewAmount !== null && fixtureAmount !== null && Math.abs(previewAmount - fixtureAmount) < 0.005) {
+      score += 4;
+    }
+
+    if (previewDate && fixtureDate && previewDate === fixtureDate) {
+      score += 4;
+    }
+
+    if (previewMerchant && fixtureMerchant) {
+      if (previewMerchant === fixtureMerchant) {
+        score += 4;
+      } else if (previewMerchant.includes(fixtureMerchant) || fixtureMerchant.includes(previewMerchant)) {
+        score += 3;
+      }
+    }
+
+    if (previewPaymentMethod && fixturePaymentMethod && previewPaymentMethod.includes(fixturePaymentMethod)) {
+      score += 2;
+    }
+
+    if (aliasTexts.some((alias) => alias && previewText.includes(alias))) {
+      score += 3;
+    }
+
+    if (
+      previewDocument &&
+      aliasTexts.some((alias) => alias.includes("gcash")) &&
+      /wallet transfer|transfer receipt/i.test(fixture.documentType)
+    ) {
+      score += 1;
+    }
+
+    if (!bestMatch || score > bestMatch.score) {
+      bestMatch = { fixture, score };
+    }
+  }
+
+  return bestMatch && bestMatch.score >= 8 ? bestMatch.fixture : null;
 };
 
 const buildReceiptDetailsFromTrainingFixture = (fixture: TrainedReceiptFixture) => ({
@@ -5074,8 +5154,9 @@ export const processImportFileText = async (
   let text = options.text ?? "";
   const imageImport = isImageImportFile(fileType, fileName);
   const isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
-  const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
-  const trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
+  const fileNamedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
+  let trainedReceiptFixture = fileNamedReceiptFixture;
+  let trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
   const likelyScreenshotStatement = imageImport && importMode === "statement" && isLikelyScreenshotImageFile(fileName);
   const shouldPreferDirectImageStatementVision =
     imageImport &&
@@ -5204,10 +5285,24 @@ export const processImportFileText = async (
   }
 
   let textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
+  let receiptPreview = importMode === "receipt" || imageImport ? parseReceiptText(textForParse) : null;
+  if (importMode === "receipt" && !trainedReceiptFixture) {
+    trainedReceiptFixture = getTrainedReceiptFixtureFromPreview(receiptPreview);
+    trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
+  }
+  let receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
+  let receiptPreviewLooksLikeReceipt = previewLooksLikeUsableReceipt(receiptPreview);
   const cachedParseRecord = canReuseCachedStatementParse ? textCacheInfo?.cacheRecord ?? null : null;
   const metadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
     ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
     : detectStatementMetadataFromText(textForParse, importFile.fileName);
+  const previewReceiptValidation =
+    importMode === "receipt" && receiptPreviewDetails
+      ? assessReceiptExtractionQuality({
+          receiptDetails: receiptPreviewDetails,
+          expectedCurrency: metadata.currency ?? null,
+        })
+      : null;
   const statementFingerprint =
     cachedParseRecord?.statementFingerprint ??
     buildStatementFingerprint(textForParse, metadata, importFile.fileName, importFile.fileType, importMode);
@@ -5541,16 +5636,6 @@ export const processImportFileText = async (
       dateCoverage: Number(parsedDateCoverage.toFixed(3)),
     });
   }
-  const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
-  const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
-  const receiptPreviewLooksLikeReceipt =
-    Boolean(
-      receiptPreview &&
-        receiptPreview.items.length > 0 &&
-        receiptPreview.total !== null &&
-        receiptPreview.billDate &&
-        receiptPreview.confidence >= 80
-    );
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
     hasReliableDeterministicStatementParse ||
@@ -5560,7 +5645,8 @@ export const processImportFileText = async (
       !hasSuspiciousLegacyScreenshotDates(parsedRows as Array<Record<string, unknown>>)) ||
     Boolean(trainedReceiptDetails) ||
     (imageImport &&
-    ((importMode === "receipt" && receiptPreviewLooksLikeReceipt) ||
+    ((importMode === "receipt" &&
+      (receiptPreviewLooksLikeReceipt || (previewReceiptValidation?.score ?? 0) >= 5)) ||
       (parsedRows.length > 0 &&
         (metadataForParse.confidence ?? 0) >= 75 &&
         !genericParseLooksSuspicious &&
@@ -6135,6 +6221,21 @@ export const processImportFileText = async (
   const documentImportSourceMetadata = {
     importMode,
     documentType: importMode,
+    receiptFamily:
+      importMode === "receipt"
+        ? trainedReceiptFixture?.documentType ?? receiptPreview?.receiptType ?? null
+        : receiptPreviewLooksLikeReceipt
+          ? receiptPreview?.receiptType ?? null
+          : null,
+    matchedTrainingFixture:
+      importMode === "receipt" && trainedReceiptFixture
+        ? {
+            fileName: trainedReceiptFixture.fileName,
+            merchant: trainedReceiptFixture.merchant,
+            amount: trainedReceiptFixture.amount,
+            date: trainedReceiptFixture.date,
+          }
+        : null,
     statementFingerprint,
     fileName,
     fileType,
