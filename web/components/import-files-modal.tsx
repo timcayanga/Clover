@@ -11,6 +11,14 @@ import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { capturePostHogClientEvent, capturePostHogClientEventOnce, analyticsOnceKey } from "@/components/posthog-analytics";
 import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
+import {
+  fileAnalyticsBase,
+  fileKey,
+  findAccountOptionById,
+  fileTypeLabel,
+  isImageImportFile,
+  resolveCashAccountOption,
+} from "@/lib/import-file-helpers";
 import { extractTextFromFile } from "@/lib/import-file-text";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
@@ -25,32 +33,30 @@ import {
   parseImportText,
 } from "@/lib/import-parser";
 import { parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
-import { buildReceiptInstitutionAccountDraft, resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
+import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import {
   buildReceiptOptimisticSummary,
   buildReceiptPreviewTransactions,
   buildReceiptSummaryFromReceiptDocument,
   buildReceiptSummaryFromReceiptTransaction,
 } from "@/lib/import-receipt-summary";
+import {
+  buildOptimisticPreviewTransactions,
+  loadOrGetKnownPreviewTransactions,
+  loadOptimisticPreviewTransactions,
+} from "@/lib/import-preview-transactions";
+import { friendlyImportPhaseLabel, friendlyImportProgressLabel, IMPORT_PROGRESS } from "@/lib/import-progress";
+import { waitForImportSettledVisibility } from "@/lib/import-settled-visibility";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { getImportErrorSpec, isResumableImportErrorCode, type ImportErrorStage, type ImportErrorSpec } from "@/lib/import-error-spec";
-import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
-import {
-  getCachedAccountsWorkspace,
-  findCachedTransactionsForAccount,
-  syncImportedWorkspaceAccountCaches,
-  syncImportedWorkspaceTransactionCaches,
-} from "@/lib/workspace-cache";
 import {
   clearImportActivity,
-  getImportActivityTimingSummary,
   readImportActivity,
   setImportActivity,
   subscribeImportActivity,
   type ImportActivityLocation,
   type ImportActivitySnapshot,
   type ImportActivityStatus,
-  type ImportActivityTiming,
 } from "@/lib/import-activity";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import type { AccountType } from "@/lib/domain-types";
@@ -62,10 +68,15 @@ import {
   toBalanceString,
   type UploadAccountSummary,
 } from "@/lib/import-upload-summary";
+import { findKnownImportedBalance, getKnownPreviewTransactions } from "@/lib/import-preview-cache";
+import {
+  buildOptimisticUploadSummary,
+  buildResolvedOptimisticUploadSummary,
+  seedImportedWorkspaceCaches,
+} from "@/lib/import-optimistic-summary";
 import {
   accountKey,
   accountRuleKey,
-  canonicalizeSecurityBankUploadIdentity,
   countDistinctStatementAccountsFromParsedRows,
   deriveFallbackAccountNameFromFileName,
   deriveStatementFallbackAccountName,
@@ -74,7 +85,6 @@ import {
   hasStatementSuffix,
   importedAccountIdentityKey,
   inferImportModeForFile,
-  isFilenameOnlyScreenshotSummary,
   isGenericMobileScreenshotFileName,
   isGenericSameInstitutionAccount,
   normalizeStatementAccountName,
@@ -83,6 +93,21 @@ import {
   resolveStatementIdentityFromParsedRows,
   type StatementIdentity,
 } from "@/lib/import-statement-identity";
+import {
+  getImportVisibilityTimeoutMsForItems,
+  hasVisibleImportData,
+  importContextLooksWise,
+  isExplicitLowQualityUnionBankStatementFilename,
+  isKnownUnionBankSampleStatementFilename,
+  isLikelyLowQualityUnionBankStatementFile,
+  isLikelyLowQualityUnionBankStatementFilename,
+  isLikelyLowQualityPnbStatementFile,
+  isServerHeavyStatementBatchItem,
+  shouldPublishImportSummary,
+  shouldRequireVisibleRowsForImport,
+  shouldSkipClientStatementPreparse,
+  summarizeVisibilityOutcome,
+} from "@/lib/import-visibility-rules";
 
 type AccountOption = {
   id: string;
@@ -245,8 +270,6 @@ const isPasswordError = (error: unknown) => {
   return /password/i.test(name) || /password/i.test(message);
 };
 
-const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
-
 const requestedImportEnrichmentIds = new Set<string>();
 
 const triggerImportEnrichment = (importFileId: string) => {
@@ -270,34 +293,6 @@ const triggerImportEnrichment = (importFileId: string) => {
       requestedImportEnrichmentIds.delete(importFileId);
     });
 };
-
-const fileTypeLabel = (file: File) => {
-  const lowerName = file.name.toLowerCase();
-  if (lowerName.endsWith(".pdf") || file.type === "application/pdf") return "PDF";
-  if (lowerName.endsWith(".csv")) return "CSV";
-  if (
-    lowerName.endsWith(".jpg") ||
-    lowerName.endsWith(".jpeg") ||
-    lowerName.endsWith(".png") ||
-    lowerName.endsWith(".webp") ||
-    lowerName.endsWith(".heic") ||
-    lowerName.endsWith(".heif")
-  ) {
-    return "Image";
-  }
-  return "File";
-};
-
-const isImageImportFile = (file: File) =>
-  /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) ||
-  file.type.startsWith("image/");
-
-const fileAnalyticsBase = (file: File, workspaceId: string) => ({
-  workspace_id: workspaceId || null,
-  file_name: file.name,
-  file_type: fileTypeLabel(file),
-  file_size_bytes: file.size,
-});
 
 const clearImportInteractionLocks = () => {
   if (typeof document === "undefined") {
@@ -328,1016 +323,8 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
   };
 };
 
-const findKnownImportedBalance = (
-  accounts: AccountOption[],
-  params: {
-    workspaceId?: string | null;
-    accountId?: string | null;
-    accountName?: string | null;
-    institution?: string | null;
-    accountNumber?: string | null;
-    accountType?: UploadAccountType;
-  }
-) => {
-  const cachedAccounts: AccountOption[] = params.workspaceId
-    ? ((getCachedAccountsWorkspace(params.workspaceId)?.accounts ?? []) as AccountOption[])
-    : [];
-  const candidateAccounts = [...cachedAccounts, ...accounts];
-  const normalizedName = params.accountName
-    ? formatUploadAccountDisplayName(
-        params.accountName,
-        params.institution ?? null,
-        params.accountNumber ?? null,
-        params.accountType ?? null
-      )
-    : null;
-  const targetIdentityKey = normalizedName
-    ? importedAccountIdentityKey(normalizedName, params.institution ?? null, params.accountNumber ?? null)
-    : null;
-  const targetInstitution = (params.institution ?? "").trim().toLowerCase();
-  const targetLastFour = extractLastFourDigits(params.accountNumber ?? normalizedName ?? null);
-
-  const matched = candidateAccounts.find((account) => {
-    if (params.accountId && account.id === params.accountId) {
-      return true;
-    }
-
-    const accountIdentityKey = importedAccountIdentityKey(
-      typeof account.name === "string" ? account.name : null,
-      typeof account.institution === "string" ? account.institution : null,
-      typeof account.accountNumber === "string" ? account.accountNumber : null
-    );
-    if (targetIdentityKey && accountIdentityKey === targetIdentityKey) {
-      return true;
-    }
-
-    const accountInstitution = String(account.institution ?? "").trim().toLowerCase();
-    const accountLastFour = extractLastFourDigits(
-      typeof account.accountNumber === "string" ? account.accountNumber : typeof account.name === "string" ? account.name : null
-    );
-
-    return Boolean(
-      targetInstitution &&
-        accountInstitution &&
-        targetInstitution === accountInstitution &&
-        targetLastFour &&
-        accountLastFour &&
-        targetLastFour === accountLastFour
-    );
-  });
-
-  return pickStableBalance((matched as { balance?: unknown } | undefined)?.balance ?? null);
-};
-
-const getKnownPreviewTransactions = (params: {
-  workspaceId: string;
-  accountId: string | null;
-  optimisticAccountId?: string | null;
-  accountName?: string | null;
-  institution?: string | null;
-  accountNumber?: string | null;
-  accountType?: UploadAccountType;
-  previewTransactions?: NonNullable<UploadInsightsSummary["previewTransactions"]>;
-}) => {
-  if (Array.isArray(params.previewTransactions) && params.previewTransactions.length > 0) {
-    return params.previewTransactions;
-  }
-
-  if (!params.workspaceId || !params.accountId) {
-    return [];
-  }
-
-  const cached = findCachedTransactionsForAccount(params.accountId, {
-    workspaceId: params.workspaceId,
-    optimisticAccountId: params.optimisticAccountId ?? null,
-    name: params.accountName ?? null,
-    institution: params.institution ?? null,
-    accountNumber: params.accountNumber ?? null,
-    type: params.accountType ?? null,
-    currency: params.previewTransactions?.[0]?.currency ?? null,
-  });
-
-  if (!cached || !Array.isArray(cached.transactions) || cached.transactions.length === 0) {
-    return [];
-  }
-
-  return cached.transactions as NonNullable<UploadInsightsSummary["previewTransactions"]>;
-};
-
-const buildOptimisticUploadSummary = (
-  fileName: string,
-  importedRows: number,
-  accountId: string | null,
-  accountName: string | null,
-  institution: string | null,
-  accountType: UploadAccountType = null,
-  optimisticAccountId: string | null,
-  balance: string | null = null,
-  previewTransactions: UploadInsightsSummary["previewTransactions"] = [],
-  accountNumber: string | null = null,
-  showBalanceEvenIfEmpty = false
-): UploadInsightsSummary => {
-  const canonicalIdentity = canonicalizeSecurityBankUploadIdentity({
-    fileName,
-    accountName,
-    institution,
-    accountNumber,
-  });
-
-  return {
-    fileName,
-    rowsImported: importedRows,
-    accountId,
-    accountName: canonicalIdentity.accountName,
-    institution: canonicalIdentity.institution,
-    accountNumber: canonicalIdentity.accountNumber,
-    accountType,
-    balance: showBalanceEvenIfEmpty || importedRows > 0 ? balance : null,
-    accountSummaries: undefined,
-    optimistic: true,
-    optimisticAccountId,
-    incomeTotal: 0,
-    expenseTotal: 0,
-    netTotal: 0,
-    topCategoryName: null,
-    topCategoryAmount: null,
-    topCategoryShare: null,
-    topMerchantName: null,
-    topMerchantCount: null,
-    previewTransactions,
-  };
-};
-
-const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
-  const accountId = summary.accountId ?? summary.optimisticAccountId ?? null;
-  if (!accountId || !summary.accountName) {
-    return null;
-  }
-  if (isFilenameOnlyScreenshotSummary(summary.fileName, summary)) {
-    return null;
-  }
-
-  const normalizedAccountName = formatUploadAccountDisplayName(
-    summary.accountName,
-    summary.institution,
-    summary.accountNumber ?? null,
-    summary.accountType ?? null
-  );
-  const accountType =
-    summary.accountType ??
-    inferAccountTypeFromStatement(summary.institution, normalizedAccountName, "bank");
-  const transactionCount = Math.max(
-    Number(summary.rowsImported ?? 0) || 0,
-    Array.isArray(summary.previewTransactions) ? summary.previewTransactions.length : 0
-  );
-
-  return {
-    id: accountId,
-    optimisticAccountId: summary.optimisticAccountId ?? null,
-    name: normalizedAccountName,
-    institution: summary.institution,
-    accountNumber: summary.accountNumber ?? null,
-    type: accountType,
-    currency: summary.previewTransactions?.[0]?.currency ?? "PHP",
-    source: "upload",
-    balance: summary.balance,
-    transactionCount,
-    updatedAt: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-  };
-};
-
-const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsightsSummary) => {
-  const importedAccount = buildImportedWorkspaceAccount(summary);
-  if (importedAccount) {
-    const currentAccount = getCachedAccountsWorkspace(workspaceId)?.accounts.find((entry) => {
-      const entryId = typeof entry.id === "string" ? entry.id : "";
-      const optimisticId = typeof (entry as { optimisticAccountId?: string | null }).optimisticAccountId === "string"
-        ? (entry as { optimisticAccountId?: string | null }).optimisticAccountId
-        : "";
-      const entryName = typeof entry.name === "string" ? normalizeStatementAccountName(entry.name, typeof entry.institution === "string" ? entry.institution : null) : "";
-      const importedName = formatUploadAccountDisplayName(
-        summary.accountName ?? "",
-        summary.institution ?? null,
-        summary.accountNumber ?? null,
-        summary.accountType ?? null
-      );
-      const entryInstitution = typeof entry.institution === "string" ? entry.institution : null;
-      const entryAccountNumber = typeof (entry as { accountNumber?: unknown }).accountNumber === "string" ? (entry as { accountNumber?: string }).accountNumber : null;
-      return (
-        entryId === importedAccount.id ||
-        optimisticId === importedAccount.id ||
-        importedAccountIdentityKey(entryName, entryInstitution, entryAccountNumber) ===
-          importedAccountIdentityKey(importedName, summary.institution ?? null, summary.accountNumber ?? null)
-      );
-    });
-
-    if (!importedAccount.accountNumber && typeof currentAccount?.accountNumber === "string" && currentAccount.accountNumber.trim()) {
-      importedAccount.accountNumber = currentAccount.accountNumber.trim();
-    }
-    const currentBalance = typeof currentAccount?.balance === "string" ? currentAccount.balance.trim() : "";
-    const importedBalance = typeof importedAccount.balance === "string" ? importedAccount.balance.trim() : "";
-    const importedIsZeroish = importedBalance !== "" && Number(importedBalance) === 0;
-    const currentIsNonZero = currentBalance !== "" && Number(currentBalance) !== 0;
-    if ((!importedBalance || importedIsZeroish) && currentIsNonZero) {
-      importedAccount.balance = currentBalance;
-    }
-
-    syncImportedWorkspaceAccountCaches(workspaceId, importedAccount);
-  }
-
-  if (Array.isArray(summary.previewTransactions) && summary.previewTransactions.length > 0) {
-    syncImportedWorkspaceTransactionCaches(workspaceId, summary.previewTransactions);
-  }
-};
-
-const waitForImportSettledVisibility = async (params: {
-  workspaceId: string;
-  importFileId?: string | null;
-  accountId: string | null;
-  importedRows: number;
-  expectedBalance: string | null;
-  timeoutMs?: number;
-}) => {
-  const accountId = params.accountId && !params.accountId.startsWith("optimistic-") ? params.accountId : null;
-  if (!accountId) {
-    return true;
-  }
-
-  const expectedBalance = toBalanceString(params.expectedBalance);
-  const timeoutMs = params.timeoutMs ?? 10_000;
-  const startedAt = Date.now();
-  const pollDelayMs = 250;
-
-  const normalizeBalance = (value: unknown) => {
-    const text = toBalanceString(value);
-    if (!text) {
-      return null;
-    }
-
-    const numeric = Number(text.replace(/[^0-9.-]/g, ""));
-    return Number.isFinite(numeric) ? numeric : null;
-  };
-
-  const waitWithStatusStream = async () => {
-    if (!params.importFileId || typeof EventSource === "undefined") {
-      return null;
-    }
-
-    const eventUrl = `/api/imports/${encodeURIComponent(params.importFileId)}/events`;
-    const latestStatusRef = { current: null as null | { confirmedTransactionsCount?: number; parsedRowsCount?: number } };
-
-    return await new Promise<boolean | null>((resolve) => {
-      let cleanup = () => undefined;
-      const timeout = window.setTimeout(() => {
-        cleanup();
-        resolve(null);
-      }, timeoutMs);
-      const source = new EventSource(eventUrl);
-      let finished = false;
-
-      cleanup = () => {
-        if (finished) {
-          return;
-        }
-        finished = true;
-        window.clearTimeout(timeout);
-        window.clearInterval(accountPoll);
-        try {
-          source.close();
-        } catch {
-          // ignore close errors
-        }
-      };
-
-      const evaluate = (account: { id?: unknown; balance?: unknown } | null) => {
-        if (!account || account.id !== accountId) {
-          return false;
-        }
-
-        const accountBalance = normalizeBalance(account.balance);
-        const balanceLooksReady =
-          expectedBalance === null ? true : accountBalance !== null && normalizeBalance(expectedBalance) === accountBalance;
-        if (!balanceLooksReady) {
-          return false;
-        }
-
-        if (params.importedRows > 0 && params.importFileId) {
-          const confirmedTransactionsCount = Number(latestStatusRef.current?.confirmedTransactionsCount ?? 0);
-          const parsedRowsCount = Number(latestStatusRef.current?.parsedRowsCount ?? 0);
-          return confirmedTransactionsCount >= params.importedRows || parsedRowsCount >= params.importedRows;
-        }
-
-        return true;
-      };
-
-      source.addEventListener("snapshot", (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent<string>).data) as {
-            importFile?: { accountId?: string | null } | null;
-            confirmedTransactionsCount?: number | null;
-            parsedRowsCount?: number | null;
-          };
-          latestStatusRef.current = {
-            confirmedTransactionsCount: Number(payload.confirmedTransactionsCount ?? 0),
-            parsedRowsCount: Number(payload.parsedRowsCount ?? 0),
-          };
-        } catch {
-          // ignore malformed payloads and keep the fallback poll running
-        }
-      });
-
-      source.addEventListener("complete", (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent<string>).data) as {
-            confirmedTransactionsCount?: number | null;
-            parsedRowsCount?: number | null;
-          };
-          latestStatusRef.current = {
-            confirmedTransactionsCount: Number(payload.confirmedTransactionsCount ?? 0),
-            parsedRowsCount: Number(payload.parsedRowsCount ?? 0),
-          };
-        } catch {
-          // ignore malformed payloads
-        }
-      });
-
-      source.onerror = () => {
-        cleanup();
-        resolve(null);
-      };
-
-      const accountPoll = window.setInterval(async () => {
-        try {
-          const response = await fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
-            cache: "no-store",
-          });
-          if (!response.ok) {
-            return;
-          }
-
-          const payload = (await response.json().catch(() => null)) as { account?: { id?: string; balance?: unknown } } | null;
-          if (evaluate(payload?.account ?? null)) {
-            cleanup();
-            resolve(true);
-          }
-        } catch {
-          // keep waiting until timeout or a later poll succeeds
-        }
-      }, pollDelayMs);
-    });
-  };
-
-  const streamResult = await waitWithStatusStream();
-  if (streamResult !== null) {
-    return streamResult;
-  }
-
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      const accountResponsePromise = fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
-        cache: "no-store",
-      });
-      const statusResponsePromise =
-        params.importedRows > 0 && params.importFileId
-          ? fetch(`/api/imports/${encodeURIComponent(params.importFileId)}/status`, {
-              cache: "no-store",
-            })
-          : null;
-      const transactionsResponsePromise =
-        params.importedRows > 0 && !params.importFileId
-          ? fetch(
-              `/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=${Math.min(Math.max(params.importedRows, 25), 100)}`,
-              {
-                cache: "no-store",
-              }
-            )
-          : null;
-
-      const [accountResponse, statusResponse, transactionsResponse] = await Promise.all([
-        accountResponsePromise,
-        statusResponsePromise ?? Promise.resolve(null),
-        transactionsResponsePromise ?? Promise.resolve(null),
-      ]);
-
-      if (!accountResponse.ok) {
-        await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
-        continue;
-      }
-
-      const [accountPayload, statusPayload, transactionPayload] = await Promise.all([
-        accountResponse.json().catch(() => null),
-        statusResponse && statusResponse.ok ? statusResponse.json().catch(() => null) : Promise.resolve(null),
-        transactionsResponse && transactionsResponse.ok ? transactionsResponse.json().catch(() => null) : Promise.resolve(null),
-      ]);
-      const account = accountPayload?.account ?? null;
-      const accountBalance = normalizeBalance(account?.balance);
-      const accountLooksReady = Boolean(account && typeof account.id === "string" && account.id === accountId);
-      const balanceLooksReady =
-        expectedBalance === null
-          ? true
-          : accountBalance !== null && normalizeBalance(expectedBalance) === accountBalance;
-
-      if (!accountLooksReady || !balanceLooksReady) {
-        await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
-        continue;
-      }
-
-      if (params.importedRows > 0 && params.importFileId) {
-        const confirmedTransactionsCount = Number(statusPayload?.confirmedTransactionsCount ?? 0);
-        const parsedRowsCount = Number(statusPayload?.parsedRowsCount ?? 0);
-        if (confirmedTransactionsCount < params.importedRows && parsedRowsCount < params.importedRows) {
-          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
-          continue;
-        }
-      } else if (params.importedRows > 0) {
-        const totalCount = Number(transactionPayload?.totalCount ?? 0);
-        if (totalCount < params.importedRows) {
-          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
-          continue;
-        }
-      }
-
-      return true;
-    } catch {
-      await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs));
-    }
-  }
-
-  return false;
-};
-
-const waitForReceiptSettledVisibility = async (params: {
-  workspaceId: string;
-  importFileId?: string | null;
-  summary: UploadInsightsSummary;
-  timeoutMs?: number;
-}) => {
-  const settledVisible = await waitForImportSettledVisibility({
-    workspaceId: params.workspaceId,
-    importFileId: params.importFileId ?? null,
-    accountId: params.summary.accountId ?? params.summary.optimisticAccountId ?? null,
-    importedRows: Math.max(
-      Number(params.summary.rowsImported ?? 0) || 0,
-      Array.isArray(params.summary.previewTransactions) ? params.summary.previewTransactions.length : 0
-    ),
-    expectedBalance: params.summary.balance ?? null,
-    timeoutMs: params.timeoutMs ?? 4_000,
-  });
-
-  if (!settledVisible) {
-    console.warn("Receipt import finished before the settled data became visible", {
-      importFileId: params.importFileId ?? null,
-      accountId: params.summary.accountId ?? params.summary.optimisticAccountId ?? null,
-    });
-  }
-
-  return settledVisible;
-};
-
-const buildOptimisticPreviewTransactions = (
-  rows: Array<Record<string, unknown>>,
-  params: {
-    importFileId: string;
-    accountId: string;
-    accountName: string;
-    institution: string | null;
-    accountNumber?: string | null;
-  }
-): NonNullable<UploadInsightsSummary["previewTransactions"]> => {
-  const previewTransactions = rows
-    .map((row, index) => {
-      const rawPayload =
-        row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-          ? (row.rawPayload as Record<string, unknown>)
-          : null;
-      const rowKind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
-      if (rowKind === "account_snapshot_marker" || rowKind === "opening_balance") {
-        return null;
-      }
-
-      const date = typeof row.date === "string" ? row.date : "";
-      const amount = typeof row.amount === "string" || typeof row.amount === "number" ? String(row.amount) : "";
-      const merchantRaw =
-        typeof row.merchantRaw === "string" && row.merchantRaw.trim()
-          ? row.merchantRaw.trim()
-          : typeof row.description === "string" && row.description.trim()
-            ? row.description.trim()
-            : "Imported transaction";
-      const merchantClean =
-        typeof row.merchantClean === "string" && row.merchantClean.trim()
-          ? row.merchantClean.trim()
-          : merchantRaw;
-      const parsedType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
-      const categoryName = typeof row.categoryName === "string" && row.categoryName.trim() ? row.categoryName.trim() : null;
-      const description = typeof row.description === "string" && row.description.trim() ? row.description.trim() : null;
-      const type = coerceTransactionTypeFromCategoryName(categoryName, parsedType);
-      const isTransfer = type === "transfer";
-
-      if (!date || !amount) {
-        return null;
-      }
-
-      return {
-        id: `optimistic-${params.importFileId}-${index}`,
-        importFileId: params.importFileId,
-        sourceRowIndex: index + 1,
-        accountId: params.accountId,
-        accountName: params.accountName,
-        institution: params.institution,
-        accountNumber: params.accountNumber ?? null,
-        accountType: null,
-        categoryId: null,
-        categoryName,
-        reviewStatus: "pending_review" as const,
-        date,
-        amount,
-        currency:
-          typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : "PHP",
-        type,
-        merchantRaw,
-        merchantClean,
-        description,
-        isTransfer,
-        isExcluded: false,
-        source: "upload" as const,
-      };
-    })
-    .filter((row) => row !== null) as NonNullable<UploadInsightsSummary["previewTransactions"]>;
-
-  return previewTransactions;
-};
-
-const resolveCashAccountOption = (accounts: AccountOption[]) =>
-  accounts.find((account) => {
-    const name = account.name.trim().toLowerCase();
-    const institution = (account.institution ?? "").trim().toLowerCase();
-    const type = account.type.trim().toLowerCase();
-    return name === "cash" || institution === "cash" || type === "cash";
-  }) ?? null;
-
-const findAccountOptionById = (accounts: AccountOption[], accountId: string | null) =>
-  accountId ? accounts.find((account) => account.id === accountId) ?? null : null;
-
-const loadOptimisticPreviewTransactions = async (
-  importFileId: string,
-  accountId: string,
-  accountName: string,
-  institution: string | null,
-  accountNumber?: string | null
-) => {
-  const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
-  const normalizeAccountNumber = (value: unknown) => String(value ?? "").replace(/\D/g, "");
-  const requestedAccountNumber = normalizeAccountNumber(accountNumber);
-  const accountNumbersMatch = (candidate: string | null) => {
-    const normalizedCandidate = normalizeAccountNumber(candidate);
-    if (!requestedAccountNumber || !normalizedCandidate) {
-      return false;
-    }
-
-    return (
-      normalizedCandidate === requestedAccountNumber ||
-      (requestedAccountNumber.length === 4 && normalizedCandidate.endsWith(requestedAccountNumber)) ||
-      (normalizedCandidate.length === 4 && requestedAccountNumber.endsWith(normalizedCandidate))
-    );
-  };
-  const getRowAccountNumber = (row: Record<string, unknown>) => {
-    if (typeof row.accountNumber === "string" && row.accountNumber.trim()) {
-      return row.accountNumber.trim();
-    }
-
-    if (row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)) {
-      const rawAccountNumber = (row.rawPayload as Record<string, unknown>).accountNumber;
-      if (typeof rawAccountNumber === "string" && rawAccountNumber.trim()) {
-        return rawAccountNumber.trim();
-      }
-    }
-
-    return null;
-  };
-
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    const response = await fetch(`/api/imports/${importFileId}/preview`);
-    if (response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      const parsedRows: Record<string, unknown>[] = Array.isArray(payload.parsedRows)
-        ? payload.parsedRows.filter((row: unknown): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row)))
-        : [];
-      const scopedRows = accountNumber
-        ? (() => {
-            const rowsWithAccountNumbers = parsedRows
-              .map((row) => ({ row, accountNumber: getRowAccountNumber(row) }))
-              .filter((entry) => entry.accountNumber);
-            const matchedRows = rowsWithAccountNumbers
-              .filter((entry) => accountNumbersMatch(entry.accountNumber))
-              .map((entry) => entry.row);
-
-            if (matchedRows.length > 0) {
-              return matchedRows;
-            }
-
-            return rowsWithAccountNumbers.length === 0 ? parsedRows : [];
-          })()
-        : parsedRows;
-      if (scopedRows.length > 0) {
-        return buildOptimisticPreviewTransactions(scopedRows, {
-          importFileId,
-          accountId,
-          accountName,
-          institution,
-          accountNumber: accountNumber ?? null,
-        });
-      }
-    }
-
-    if (attempt < 5) {
-      await sleep(250 + attempt * 100);
-    }
-  }
-
-  return [];
-};
-
-const friendlyImportPhaseLabel = (label: string, fileName?: string | null, importMode?: ImportImageMode | null) => {
-  const fileSuffix = fileName ? ` ${fileName}` : "";
-
-  switch (label) {
-    case "Starting upload":
-    case "Uploading the file":
-      return "Uploading file";
-    case "Password needed":
-      return "Password needed";
-    case "Waiting for account details":
-    case "Waiting for statement identity":
-    case "Reading locally":
-    case "Reading statement details":
-    case "Clover is getting your file ready":
-    case "Loading account":
-    case "Reading account details":
-      return "Reading file details";
-    case "Preview ready":
-      return "File details ready";
-    case "Queued for background processing":
-      return "Queued for background processing";
-    case "Finalizing in background":
-    case "Finalizing import":
-      return "Applying names and categories";
-    case "Loading transactions":
-    case "Parsing in background":
-      return "Identifying transactions";
-    case "Clover is reading the document":
-      return "Reading document";
-    case "Import failed":
-      return "Import failed";
-    case "Done":
-      return "Import complete";
-    case "Queued":
-      return "Queued";
-    default:
-      return `${label}${fileSuffix}`.trim();
-  }
-};
-
-const friendlyImportProgressLabel = (label: string, fileName?: string | null, importMode?: ImportImageMode | null) => {
-  const fileSuffix = fileName ? ` ${fileName}` : "";
-
-  switch (label) {
-    case "Starting upload":
-      return "Clover is checking the file format";
-    case "Clover is getting your file ready":
-      return "Clover is checking the file format";
-    case "Uploading the file":
-      return "Clover is securely reading the statement";
-    case "Password needed":
-      return "This file needs a password before Clover can continue";
-    case "Waiting for account details":
-      return "Clover is reading the file details";
-    case "Waiting for statement identity":
-      return "Clover is reading the document layout";
-    case "Reading locally":
-      return "Clover is scanning the file locally";
-    case "Preview ready":
-      return "Clover found the file details and is ready to show them";
-    case "Queued for background processing":
-      return "Clover will finish the remaining work in the background";
-    case "Finalizing in background":
-    case "Finalizing import":
-      return "Clover is applying normalized names, categories, and duplicate checks";
-    case "Loading account":
-      return "Clover already found the details and is matching them to your workspace";
-    case "Loading transactions":
-      return "Clover is identifying transactions and assigning categories";
-    case "Parsing in background":
-      return "Clover is identifying transactions and categories";
-    case "Reading account details":
-      return "Clover is pulling the file details into preview";
-    case "Reading statement details":
-      return "Clover is reading the file details";
-    case "Import failed":
-      return "Clover couldn't finish the import";
-    case "Done":
-      return "The file is imported and ready";
-    case "Queued":
-      return "Clover is waiting to start";
-    default:
-      return label;
-  }
-};
-
-const IMPORT_PROGRESS = {
-  preparing: 20,
-  uploading: 40,
-  parsing: 60,
-  loadingAccount: 80,
-  finalizing: 90,
-  done: 100,
-} as const;
 const MAX_IMPORT_FILES_PER_BATCH = 5;
-const IMPORT_VISIBILITY_BASE_TIMEOUT_MS = 30_000;
-const IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 15_000;
-const IMPORT_VISIBILITY_MAX_TIMEOUT_MS = 2 * 60_000;
-const IMPORT_IMAGE_HEAVY_VISIBILITY_BASE_TIMEOUT_MS = 60_000;
-const IMPORT_IMAGE_HEAVY_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 20_000;
-const IMPORT_IMAGE_HEAVY_VISIBILITY_MAX_TIMEOUT_MS = 5 * 60_000;
-const IMPORT_SCREENSHOT_STATEMENT_VISIBILITY_BASE_TIMEOUT_MS = 90_000;
-const IMPORT_SCREENSHOT_STATEMENT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 25_000;
-const IMPORT_SCREENSHOT_STATEMENT_VISIBILITY_MAX_TIMEOUT_MS = 8 * 60_000;
-const IMPORT_SERVER_HEAVY_VISIBILITY_BASE_TIMEOUT_MS = 60_000;
-const IMPORT_SERVER_HEAVY_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 30_000;
-const IMPORT_SERVER_HEAVY_VISIBILITY_MAX_TIMEOUT_MS = 4 * 60_000;
 const IMPORT_BACKGROUND_HARD_STOP_MS = 10 * 60_000;
-
-const getImportVisibilityTimeoutMs = (fileCount: number) =>
-  Math.min(
-    IMPORT_VISIBILITY_MAX_TIMEOUT_MS,
-    IMPORT_VISIBILITY_BASE_TIMEOUT_MS +
-      Math.max(0, fileCount - 1) * IMPORT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS
-  );
-
-const isLikelyLowQualityUnionBankStatementFilename = (fileName: string) => {
-  const lower = fileName.toLowerCase();
-  return /union[\s_-]*bank/i.test(lower) && /(?:word|excel|template|business_statement)/i.test(lower);
-};
-
-const isExplicitLowQualityUnionBankStatementFilename = (fileName: string) =>
-  /union[\s_-]*bank/i.test(fileName.toLowerCase()) && /(?:word|excel|template|business_statement)/i.test(fileName.toLowerCase());
-
-const isKnownUnionBankSampleStatementFilename = (fileName: string) =>
-  /(?:771487697.*soa.*union.*bank|soa-union-bank|philippines\s+unionbank\s+(?:excel|word)|business_statement|word_and_pdf_template|union_bank_of_the_philippines_business)/i.test(
-    fileName.toLowerCase()
-  );
-
-const isNoisyVisibilityBank = (fileName: string) => {
-  return (
-    ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(normalizeBankName(fileName)) ||
-    isLikelyLowQualityUnionBankStatementFilename(fileName)
-  );
-};
-
-const isLikelyLowQualityUnionBankStatementFile = (fileName: string) =>
-  isLikelyLowQualityUnionBankStatementFilename(fileName) || normalizeBankName(fileName) === "UnionBank";
-
-const shouldRequireVisibleRowsForImport = (fileName: string) =>
-  normalizeBankName(fileName) === "UnionBank" ||
-  isLikelyLowQualityUnionBankStatementFilename(fileName) ||
-  isGenericMobileScreenshotFileName(fileName);
-
-const importSummaryLooksWise = (summary: UploadInsightsSummary | null | undefined) => {
-  if (!summary) {
-    return false;
-  }
-
-  const identityText = [
-    summary.fileName,
-    summary.accountName,
-    summary.institution,
-    summary.accountSummaries?.map((account) => `${account.accountName ?? ""} ${account.institution ?? ""}`).join(" "),
-    summary.previewTransactions
-      ?.slice(0, 5)
-      .map((transaction) => `${transaction.accountName ?? ""} ${transaction.merchantRaw ?? ""}`)
-      .join(" "),
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  return /\bwise\b/i.test(identityText);
-};
-
-const importContextLooksWise = (context: {
-  fileName?: string | null;
-  fallbackAccountName?: string | null;
-  guessedAccountName?: string | null;
-  guessedInstitution?: string | null;
-  accountName?: string | null;
-  institution?: string | null;
-}) =>
-  /\bwise\b/i.test(
-    [
-      context.fileName,
-      context.fallbackAccountName,
-      context.guessedAccountName,
-      context.guessedInstitution,
-      context.accountName,
-      context.institution,
-    ]
-      .filter(Boolean)
-      .join(" ")
-  );
-
-const shouldRequireVisibleRowsForImportSummary = (
-  fileName: string,
-  summary: UploadInsightsSummary | null | undefined
-) => shouldRequireVisibleRowsForImport(fileName) || importSummaryLooksWise(summary);
-
-const importSummaryHasVisibleRows = (summary: UploadInsightsSummary | null | undefined) => {
-  const rowsImported = Number(summary?.rowsImported ?? 0);
-  const previewRows = Array.isArray(summary?.previewTransactions) ? summary.previewTransactions.length : 0;
-  return Math.max(rowsImported, previewRows) > 0 && Boolean(summary?.accountId);
-};
-
-const importSummaryHasAccountNumber = (summary: UploadInsightsSummary | null | undefined) => {
-  if (typeof summary?.accountNumber === "string" && summary.accountNumber.replace(/\D/g, "").length >= 4) {
-    return true;
-  }
-
-  return Boolean(
-    summary?.accountSummaries?.some(
-      (account) => typeof account.accountNumber === "string" && account.accountNumber.replace(/\D/g, "").length >= 4
-    )
-  );
-};
-
-const shouldPublishImportSummary = (
-  fileName: string,
-  summary: UploadInsightsSummary | null | undefined
-) => {
-  if (!summary) {
-    return false;
-  }
-
-  if (isFilenameOnlyScreenshotSummary(fileName, summary)) {
-    return false;
-  }
-
-  if ((normalizeBankName(fileName) === "UnionBank" || isLikelyLowQualityUnionBankStatementFilename(fileName)) && !importSummaryHasAccountNumber(summary)) {
-    return false;
-  }
-
-  return !shouldRequireVisibleRowsForImportSummary(fileName, summary) || importSummaryHasVisibleRows(summary);
-};
-
-const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
-  if (normalizeBankName(fileName) !== "PNB") {
-    return false;
-  }
-
-  const normalized = fileName.toLowerCase();
-  return (
-    normalized.includes("philippines pnb") ||
-    normalized.includes("pnb 4 pages excel") ||
-    normalized.includes("bank st") ||
-    normalized.includes("template-in-word-and-pdf")
-  );
-};
-
-const shouldSkipClientStatementPreparse = (fileName: string) =>
-  isNoisyVisibilityBank(fileName) ||
-  isExplicitLowQualityUnionBankStatementFilename(fileName) ||
-  isLikelyLowQualityPnbStatementFile(fileName);
-
-const isServerHeavyStatementBatchItem = (item: Pick<QueuedFile, "file" | "importMode">) => {
-  const mode = inferImportModeForFile(item.file, item.importMode ?? "statement");
-  const lowerName = item.file.name.toLowerCase();
-  return (
-    mode === "statement" &&
-    (lowerName.endsWith(".pdf") || lowerName.endsWith(".csv")) &&
-    (shouldSkipClientStatementPreparse(item.file.name) || shouldRequireVisibleRowsForImport(item.file.name))
-  );
-};
-
-const isScreenshotStatementBatchItem = (item: Pick<QueuedFile, "file" | "importMode">) => {
-  const mode = inferImportModeForFile(item.file, item.importMode ?? "statement");
-  return mode === "statement" && isImageImportFile(item.file) && shouldRequireVisibleRowsForImport(item.file.name);
-};
-
-const getImportVisibilityTimeoutMsForItems = (items: Array<Pick<QueuedFile, "file" | "importMode">>) => {
-  const fileCount = Math.max(1, items.length);
-  const hasServerHeavyBatch = items.some(isServerHeavyStatementBatchItem);
-  const hasScreenshotStatementBatch = items.some(isScreenshotStatementBatchItem);
-  const hasOnlyFastImages = items.length > 0 && items.every((item) => {
-    const mode = inferImportModeForFile(item.file, item.importMode ?? "statement");
-    return isImageImportFile(item.file) && (mode === "statement" || mode === "receipt");
-  });
-  if (hasScreenshotStatementBatch) {
-    return Math.min(
-      IMPORT_SCREENSHOT_STATEMENT_VISIBILITY_MAX_TIMEOUT_MS,
-      IMPORT_SCREENSHOT_STATEMENT_VISIBILITY_BASE_TIMEOUT_MS +
-        Math.max(0, fileCount - 1) * IMPORT_SCREENSHOT_STATEMENT_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS
-    );
-  }
-  if (hasOnlyFastImages) {
-    return Math.min(
-      IMPORT_IMAGE_HEAVY_VISIBILITY_MAX_TIMEOUT_MS,
-      IMPORT_IMAGE_HEAVY_VISIBILITY_BASE_TIMEOUT_MS +
-        Math.max(0, fileCount - 1) * IMPORT_IMAGE_HEAVY_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS
-    );
-  }
-  if (!hasServerHeavyBatch) {
-    return getImportVisibilityTimeoutMs(fileCount);
-  }
-
-  return Math.min(
-    IMPORT_SERVER_HEAVY_VISIBILITY_MAX_TIMEOUT_MS,
-    IMPORT_SERVER_HEAVY_VISIBILITY_BASE_TIMEOUT_MS +
-      Math.max(0, fileCount - 1) * IMPORT_SERVER_HEAVY_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS
-  );
-};
-
-const hasVisibleImportData = (
-  item: QueuedFile,
-  summary: UploadInsightsSummary | null | undefined
-) => {
-  if (item.status === "error" || item.status === "needs_password") {
-    return false;
-  }
-
-  const localRows = Number(summary?.rowsImported ?? 0);
-  const localPreviewRows = Array.isArray(summary?.previewTransactions)
-    ? summary.previewTransactions.length
-    : 0;
-  const localSummaryIsServerBacked = summary?.optimistic !== true;
-  const localHasRows =
-    localSummaryIsServerBacked &&
-    Math.max(localRows, localPreviewRows) > 0 &&
-    Boolean(summary?.accountId);
-  const localHasAccountDetails =
-    localSummaryIsServerBacked &&
-    Boolean(summary?.accountId) &&
-    Boolean(summary?.accountName || summary?.accountNumber || summary?.balance);
-  const itemHasRows = item.importedRows !== null && item.importedRows > 0 && Boolean(item.targetAccountId);
-
-  if (shouldRequireVisibleRowsForImportSummary(item.file.name, summary)) {
-    return itemHasRows || localHasRows;
-  }
-
-  return itemHasRows || localHasRows || localHasAccountDetails;
-};
-
-const summarizeVisibilityOutcome = (
-  items: QueuedFile[],
-  getSummary: (item: QueuedFile) => UploadInsightsSummary | null | undefined
-) => {
-  const successful = items.filter(
-    (item) => hasVisibleImportData(item, getSummary(item))
-  );
-  const failed = items.filter((item) => item.status === "error" || item.status === "needs_password");
-  const partial = items.filter(
-    (item) =>
-      !successful.includes(item) &&
-      !failed.includes(item) &&
-      (item.importFileId ||
-        item.targetAccountId ||
-        item.importedRows !== null ||
-        item.confirmationState === "staged" ||
-        item.progress >= IMPORT_PROGRESS.uploading)
-  );
-
-  const blocked = items.filter(
-    (item) => !successful.includes(item) && !failed.includes(item) && !partial.includes(item)
-  );
-
-  const queued = blocked.filter((item) => item.status === "pending" && !item.importFileId && item.progress < IMPORT_PROGRESS.uploading);
-  const blockedFailures = blocked.filter((item) => !queued.includes(item));
-  const retryNeeded = [...partial, ...queued, ...failed, ...blockedFailures];
-
-  const listNames = (label: string, entries: QueuedFile[]) =>
-    entries.length > 0 ? `${label}: ${entries.map((entry) => entry.file.name).join(", ")}.` : "";
-  const failureCount = failed.length + blockedFailures.length;
-
-  return {
-    successful,
-    partial,
-    failed,
-    blocked,
-    queued,
-    retryNeeded,
-    failureCount,
-    message: [
-      `${successful.length} visible, ${partial.length} partially parsed, ${queued.length} queued, ${failed.length + blockedFailures.length} failed.`,
-      listNames("Partial", partial),
-      listNames("Queued", queued),
-      listNames("Failed", [...failed, ...blockedFailures]),
-      retryNeeded.length > 0
-        ? `Try uploading again: ${retryNeeded.map((entry) => entry.file.name).join(", ")}.`
-        : "",
-      partial.length > 0 || queued.length > 0
-        ? `Clover will keep working in the background for up to ${Math.round(IMPORT_BACKGROUND_HARD_STOP_MS / 60_000)} minutes.`
-        : "",
-    ]
-      .filter(Boolean)
-      .join(" "),
-  };
-};
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
@@ -1395,8 +382,6 @@ export function ImportFilesModal({
   const activeUploadAbortControllersRef = useRef<Set<AbortController>>(new Set());
   const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
-  const backgroundRouterRefreshTimerRef = useRef<number | null>(null);
-  const lastBackgroundRouterRefreshAtRef = useRef(0);
 
   useEffect(() => {
     itemsRef.current = items;
@@ -1405,38 +390,6 @@ export function ImportFilesModal({
   useEffect(() => {
     uploadPausedRef.current = uploadPaused;
   }, [uploadPaused]);
-
-  useEffect(() => {
-    return () => {
-      if (backgroundRouterRefreshTimerRef.current) {
-        window.clearTimeout(backgroundRouterRefreshTimerRef.current);
-        backgroundRouterRefreshTimerRef.current = null;
-      }
-    };
-  }, []);
-
-  const scheduleBackgroundRouterRefresh = useCallback(
-    (delayMs = 250) => {
-      const minimumRefreshGapMs = 2_000;
-      const now = Date.now();
-      const elapsedSinceLastRefresh = now - lastBackgroundRouterRefreshAtRef.current;
-      const effectiveDelayMs =
-        elapsedSinceLastRefresh >= minimumRefreshGapMs
-          ? delayMs
-          : Math.max(delayMs, minimumRefreshGapMs - elapsedSinceLastRefresh);
-
-      if (backgroundRouterRefreshTimerRef.current) {
-        return;
-      }
-
-      backgroundRouterRefreshTimerRef.current = window.setTimeout(() => {
-        backgroundRouterRefreshTimerRef.current = null;
-        lastBackgroundRouterRefreshAtRef.current = Date.now();
-        router.refresh();
-      }, effectiveDelayMs);
-    },
-    [router]
-  );
 
   const publishImportActivity = (
     snapshot:
@@ -1464,15 +417,6 @@ export function ImportFilesModal({
     }
 
     const previousSnapshot = lastImportActivityRef.current;
-    const summaryRowsVisible = (() => {
-      const summary = snapshot.summary ?? null;
-      const rowsImported = Number(summary?.rowsImported ?? 0);
-      const previewRows = Array.isArray(summary?.previewTransactions) ? summary.previewTransactions.length : 0;
-      return Math.max(rowsImported, previewRows) > 0;
-    })();
-    const detailSuggestsVisibleData = /accounts and transactions are visible|visible in clover|receipt imported$|all set$/i.test(
-      snapshot.detail ?? ""
-    );
     const liveItems = itemsRef.current;
     const liveFileTotal = liveItems.length;
     const snapshotFileTotal = Number(snapshot.fileTotal ?? 0);
@@ -1558,29 +502,8 @@ export function ImportFilesModal({
       errorMessage: snapshot.errorMessage ?? null,
       errorTitle: snapshot.errorTitle ?? null,
       errorNextSteps: snapshot.errorNextSteps ?? null,
-      timing: null,
       updatedAt: Date.now(),
     };
-    const now = nextSnapshot.updatedAt;
-    const previousTiming = previousSnapshot?.timing ?? null;
-    const startedAt =
-      previousTiming?.startedAt ??
-      (previousSnapshot?.workspaceId === nextSnapshot.workspaceId &&
-      previousSnapshot?.fileName === (snapshot.fileName ?? null)
-        ? previousSnapshot.updatedAt
-        : now);
-    const firstVisibleAt =
-      previousTiming?.firstVisibleAt ??
-      (summaryRowsVisible || detailSuggestsVisibleData ? now : null);
-    const completedAt = nextSnapshot.status === "done" ? previousTiming?.completedAt ?? now : null;
-    const nextTiming: ImportActivityTiming = {
-      startedAt,
-      firstVisibleAt,
-      completedAt,
-      visibilityLatencyMs: firstVisibleAt !== null ? Math.max(0, firstVisibleAt - startedAt) : null,
-      totalLatencyMs: completedAt !== null ? Math.max(0, completedAt - startedAt) : null,
-    };
-    nextSnapshot.timing = nextTiming;
     const isVisiblePrimaryCompletion =
       nextSnapshot.status === "done" &&
       nextSnapshot.progress >= 100 &&
@@ -1892,8 +815,6 @@ export function ImportFilesModal({
     }
 
     if (outcome.partial.length > 0 || outcome.queued.length > 0) {
-      clearImportInteractionLocks();
-      setLaunchInBackground(true);
       publishImportActivity({
         workspaceId,
         surface: "background",
@@ -1906,15 +827,11 @@ export function ImportFilesModal({
         detail: outcomeMessage,
         summary: completedSummary,
         errorMessage: null,
-        errorTitle: null,
-        errorNextSteps: null,
       });
       return;
     }
 
     if (outcome.failureCount === 0) {
-      clearImportInteractionLocks();
-      setLaunchInBackground(true);
       publishImportActivity({
         workspaceId,
         surface: "background",
@@ -1963,12 +880,6 @@ export function ImportFilesModal({
     return hasVisibleImportData(item, localPreparseSummaryByItemIdRef.current.get(item.id));
   };
 
-  const countPrimaryVisibleItems = (itemsToCheck: QueuedFile[]) => {
-    return itemsToCheck.reduce((count, item) => {
-      return count + (hasPrimaryDataForItem(item) ? 1 : 0);
-    }, 0);
-  };
-
   const waitForLocalPrimaryVisibility = async (timeoutMs: number) => {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
@@ -1985,31 +896,6 @@ export function ImportFilesModal({
     return itemsRef.current
       .filter((item) => item.confirmationState !== "confirmed")
       .every(hasPrimaryDataForItem);
-  };
-
-  const waitForLocalMinimumPrimaryVisibility = async (minimumVisibleItems: number, timeoutMs: number) => {
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < timeoutMs) {
-      const currentItems = itemsRef.current.filter((item) => item.confirmationState !== "confirmed");
-      if (
-        currentItems.length === 0 ||
-        currentItems.every(hasPrimaryDataForItem) ||
-        countPrimaryVisibleItems(currentItems) >= Math.min(minimumVisibleItems, currentItems.length)
-      ) {
-        closeVisibleImportModalIfPrimaryDataReady();
-        return true;
-      }
-
-      await new Promise((resolve) => window.setTimeout(resolve, 150));
-    }
-
-    closeVisibleImportModalIfPrimaryDataReady();
-    const currentItems = itemsRef.current.filter((item) => item.confirmationState !== "confirmed");
-    return (
-      currentItems.length === 0 ||
-      currentItems.every(hasPrimaryDataForItem) ||
-      countPrimaryVisibleItems(currentItems) >= Math.min(minimumVisibleItems, currentItems.length)
-    );
   };
 
   useEffect(() => {
@@ -2102,7 +988,6 @@ export function ImportFilesModal({
       autoLoadedQaIdsRef.current.clear();
       localPreparseStartedRef.current.clear();
       localPreparseSummaryByItemIdRef.current.clear();
-      clearImportInteractionLocks();
       autoCloseAfterStartRef.current = false;
       visibilityDeadlineRef.current = null;
       if (visibilityHardStopTimerRef.current) {
@@ -2854,46 +1739,21 @@ export function ImportFilesModal({
           accounts.find((account) => account.id === resolvedAccountId)?.type ??
           inferAccountTypeFromStatement(summaryContext.institution, summaryContext.accountName, "bank")
         ) as UploadInsightsSummary["accountType"];
-        const resolvedBalance = pickStableBalance(
-          accountBalance,
-          findKnownImportedBalance(accounts, {
-            workspaceId,
-            accountId: resolvedAccountId,
-            accountName: resolvedSummaryAccountName,
-            institution: summaryContext.institution ?? null,
-            accountNumber: summaryContext.accountNumber ?? null,
-            accountType: resolvedAccountType,
-          })
-        );
-          const summary = {
+        const summary = buildResolvedOptimisticUploadSummary({
+          accounts,
+          workspaceId,
           fileName: summaryContext.fileName,
-          rowsImported: importedRows,
+          importedRows,
           accountId: resolvedAccountId,
           accountName: resolvedSummaryAccountName,
           institution: summaryContext.institution ?? null,
           accountNumber: summaryContext.accountNumber ?? null,
-          accountType: resolvedAccountType,
-          balance: resolvedBalance,
+          accountType: resolvedAccountType ?? null,
           optimisticAccountId: resolvedAccountId.startsWith("optimistic-") ? summaryContext.optimisticAccountId ?? resolvedAccountId : null,
-          previewTransactions: getKnownPreviewTransactions({
-            workspaceId,
-            accountId: resolvedAccountId,
-            optimisticAccountId: summaryContext.optimisticAccountId ?? null,
-            accountName: resolvedSummaryAccountName,
-            institution: summaryContext.institution ?? null,
-            accountNumber: summaryContext.accountNumber ?? null,
-            accountType: resolvedAccountType,
-            previewTransactions: summaryContext.previewTransactions,
-          }),
-          incomeTotal: Number(insightSummary?.incomeTotal ?? 0),
-          expenseTotal: Number(insightSummary?.expenseTotal ?? 0),
-          netTotal: Number(insightSummary?.netTotal ?? 0),
-          topCategoryName: insightSummary?.topCategoryName ?? null,
-          topCategoryAmount: insightSummary?.topCategoryAmount === null ? null : Number(insightSummary?.topCategoryAmount ?? 0),
-          topCategoryShare: insightSummary?.topCategoryShare === null ? null : Number(insightSummary?.topCategoryShare ?? 0),
-          topMerchantName: insightSummary?.topMerchantName ?? null,
-          topMerchantCount: insightSummary?.topMerchantCount === null ? null : Number(insightSummary?.topMerchantCount ?? 0),
-        } satisfies UploadInsightsSummary;
+          balanceSources: [accountBalance],
+          previewTransactions: summaryContext.previewTransactions,
+          insightMetrics: insightSummary,
+        });
         seedImportedWorkspaceCaches(workspaceId, summary);
         await Promise.resolve(onImported(summary));
 
@@ -2921,22 +1781,13 @@ export function ImportFilesModal({
           errorMessage: null,
         });
         triggerImportEnrichment(importFileId);
-        void waitForImportSettledVisibility({
-          workspaceId,
+        queueSettledVisibilityCheck(
           importFileId,
-          accountId: resolvedAccountId,
+          resolvedAccountId,
           importedRows,
-          expectedBalance: summary.balance ?? null,
-          timeoutMs: 10_000,
-        }).then((settledVisible) => {
-          if (!settledVisible) {
-            console.warn("Import confirmation succeeded before settled data became visible", {
-              importFileId,
-              accountId: resolvedAccountId,
-              importedRows,
-            });
-          }
-        });
+          summary.balance ?? null,
+          "Import confirmation succeeded before settled data became visible"
+        );
         capturePostHogClientEvent("import_confirmed", {
           workspace_id: workspaceId || null,
           file_name: summaryContext.fileName,
@@ -2961,37 +1812,20 @@ export function ImportFilesModal({
           inferAccountTypeFromStatement(summaryContext.institution, summaryContext.accountName, "bank")
         ) as UploadInsightsSummary["accountType"];
         const rowsImported = Math.max(lastKnownConfirmedRows, summaryContext.previewTransactions?.length ?? 0);
-        const summary = buildOptimisticUploadSummary(
-          summaryContext.fileName,
-          rowsImported,
-          resolvedAccountId,
-          resolvedSummaryAccountName,
-          summaryContext.institution ?? null,
-          resolvedAccountType,
-          resolvedAccountId.startsWith("optimistic-") ? summaryContext.optimisticAccountId ?? resolvedAccountId : null,
-          pickStableBalance(
-            lastKnownAccountBalance,
-            findKnownImportedBalance(accounts, {
-              workspaceId,
-              accountId: resolvedAccountId,
-              accountName: resolvedSummaryAccountName,
-              institution: summaryContext.institution ?? null,
-              accountNumber: summaryContext.accountNumber ?? null,
-              accountType: resolvedAccountType,
-            })
-          ),
-          getKnownPreviewTransactions({
-            workspaceId,
-            accountId: resolvedAccountId,
-            optimisticAccountId: summaryContext.optimisticAccountId ?? null,
-            accountName: resolvedSummaryAccountName,
-            institution: summaryContext.institution ?? null,
-            accountNumber: summaryContext.accountNumber ?? null,
-            accountType: resolvedAccountType,
-            previewTransactions: summaryContext.previewTransactions,
-          }),
-          summaryContext.accountNumber ?? null
-        );
+        const summary = buildResolvedOptimisticUploadSummary({
+          accounts,
+          workspaceId,
+          fileName: summaryContext.fileName,
+          importedRows: rowsImported,
+          accountId: resolvedAccountId,
+          accountName: resolvedSummaryAccountName,
+          institution: summaryContext.institution ?? null,
+          accountNumber: summaryContext.accountNumber ?? null,
+          accountType: resolvedAccountType ?? null,
+          optimisticAccountId: resolvedAccountId.startsWith("optimistic-") ? summaryContext.optimisticAccountId ?? resolvedAccountId : null,
+          balanceSources: [lastKnownAccountBalance],
+          previewTransactions: summaryContext.previewTransactions,
+        });
         seedImportedWorkspaceCaches(workspaceId, summary);
         await Promise.resolve(onImported(summary));
         emitItemUpdate({
@@ -3070,6 +1904,30 @@ export function ImportFilesModal({
     return telemetryMessage?.trim() || telemetryLabel?.trim() || resumeReason?.trim() || fallback;
   };
 
+  const queueSettledVisibilityCheck = (
+    importFileId: string,
+    accountId: string | null,
+    importedRows: number,
+    expectedBalance: string | null,
+    warningMessage: string
+  ) => {
+    void waitForImportSettledVisibility({
+      importFileId,
+      accountId,
+      importedRows,
+      expectedBalance,
+      timeoutMs: 10_000,
+    }).then((settledVisible) => {
+      if (!settledVisible) {
+        console.warn(warningMessage, {
+          importFileId,
+          accountId,
+          importedRows,
+        });
+      }
+    });
+  };
+
   const monitorQueuedImportAndConfirm = async (
     itemId: string,
     importFileId: string,
@@ -3122,15 +1980,9 @@ export function ImportFilesModal({
     const requiresVisibleRows =
       shouldRequireVisibleRowsForImport(summaryContext.fileName) || importContextLooksWise(summaryContext);
     const allowFilenameFallbackIdentity = !isGenericMobileScreenshotFileName(summaryContext.fileName);
-    const isGenericScreenshotStatement = isGenericMobileScreenshotFileName(summaryContext.fileName);
-    const MAX_WAIT_MS = backgroundOnly
-      ? IMPORT_BACKGROUND_HARD_STOP_MS
-      : requiresVisibleRows || isGenericScreenshotStatement
-        ? 4 * 60_000
-        : 180_000;
+    const MAX_WAIT_MS = backgroundOnly ? IMPORT_BACKGROUND_HARD_STOP_MS : requiresVisibleRows ? 75_000 : 180_000;
     let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
-    let scheduledVisibleRefresh = false;
-    for (let attempt = 0; Date.now() - startedAt < MAX_WAIT_MS || attempt === 0; attempt += 1) {
+    for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
         const visibilityDeadline = visibilityDeadlineRef.current;
         if (!backgroundOnly && visibilityDeadline && Date.now() >= visibilityDeadline) {
@@ -3171,10 +2023,6 @@ export function ImportFilesModal({
         if (!latestResolvedAccountId && primaryStatusAccountSummary?.accountId) {
           latestResolvedAccountId = primaryStatusAccountSummary.accountId;
         }
-        const hasVisibleImportPresence =
-          Boolean(payload.visibleImportComplete) ||
-          confirmedTransactionsCount > 0 ||
-          statusAccountSummaries.some((summary) => Boolean(summary.accountId) && Number(summary.rowsImported ?? 0) > 0);
         const telemetryPhase = typeof payload.telemetryPhase === "string" ? payload.telemetryPhase : null;
         const telemetryLabel = typeof payload.telemetryLabel === "string" ? payload.telemetryLabel : null;
         const telemetryMessage = typeof payload.telemetryMessage === "string" ? payload.telemetryMessage : null;
@@ -3262,10 +2110,6 @@ export function ImportFilesModal({
         );
         const hasRowBackedVisibility = parsedRowsCount > 0 || confirmedTransactionsCount > 0 || visibleImportComplete;
         const visibleProgressSignal = requiresVisibleRows ? hasRowBackedVisibility : hasVisibleImportDataSignal;
-        if (!scheduledVisibleRefresh && hasVisibleImportDataSignal) {
-          scheduledVisibleRefresh = true;
-          scheduleBackgroundRouterRefresh(0);
-        }
 
         if (processingPhase === "account_match_needs_confirmation") {
           closeImportAfterError(
@@ -3360,7 +2204,7 @@ export function ImportFilesModal({
             (processingPhase === "queued_retry" || telemetryPhase === "queued") &&
             parsedRowsCount === 0 &&
             confirmedTransactionsCount === 0 &&
-            Date.now() - startedAt >= 1_500;
+            Date.now() - startedAt >= 5_000;
 
           if (shouldAutoResumeQueuedImport) {
             queuedResumeAttempted = true;
@@ -3551,18 +2395,20 @@ export function ImportFilesModal({
                   })
                 : [];
               if (previewAccountId && previewTransactions.length > 0) {
-                const previewSummary = buildOptimisticUploadSummary(
-                  summaryContext.fileName,
-                  Math.max(parsedRowsCount, previewTransactions.length),
-                  previewAccountId,
-                  previewAccountName,
-                  previewInstitution,
-                  previewAccountType,
-                  summaryContext.optimisticAccountId,
-                  stableOptimisticBalance,
+                const previewSummary = buildResolvedOptimisticUploadSummary({
+                  accounts,
+                  workspaceId,
+                  fileName: summaryContext.fileName,
+                  importedRows: Math.max(parsedRowsCount, previewTransactions.length),
+                  accountId: previewAccountId,
+                  accountName: previewAccountName,
+                  institution: previewInstitution,
+                  accountNumber: previewAccountNumber,
+                  accountType: previewAccountType ?? null,
+                  optimisticAccountId: summaryContext.optimisticAccountId,
+                  balanceSources: [stableOptimisticBalance],
                   previewTransactions,
-                  previewAccountNumber
-                );
+                });
 
                 seededFallbackSummary = true;
                 latestResolvedAccountId = previewAccountId;
@@ -3650,7 +2496,7 @@ export function ImportFilesModal({
                     .then((rows) =>
                       rows.length > 0
                         ? rows
-                        : getKnownPreviewTransactions({
+                        : loadOrGetKnownPreviewTransactions({
                             workspaceId,
                             accountId: fallbackAccountId,
                             optimisticAccountId: summaryContext.optimisticAccountId,
@@ -3661,18 +2507,20 @@ export function ImportFilesModal({
                             previewTransactions: summaryContext.previewTransactions,
                           })
                     );
-            const fallbackSummary = buildOptimisticUploadSummary(
-              summaryContext.fileName,
-              parsedRowsCount || 0,
-              fallbackAccountId,
-              resolvedAccountDisplayName,
-              processingIdentity?.institution ?? null,
-              processingIdentity?.accountType ?? summaryContext.accountType ?? null,
-              summaryContext.optimisticAccountId,
-              stableOptimisticBalance,
-              fallbackPreviewTransactions,
-              processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
-            );
+            const fallbackSummary = buildResolvedOptimisticUploadSummary({
+              accounts,
+              workspaceId,
+              fileName: summaryContext.fileName,
+              importedRows: parsedRowsCount || 0,
+              accountId: fallbackAccountId,
+              accountName: resolvedAccountDisplayName,
+              institution: processingIdentity?.institution ?? null,
+              accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
+              accountType: processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+              optimisticAccountId: summaryContext.optimisticAccountId,
+              balanceSources: [stableOptimisticBalance],
+              previewTransactions: fallbackPreviewTransactions,
+            });
 
             seededFallbackSummary = true;
             seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
@@ -3845,45 +2693,33 @@ export function ImportFilesModal({
                 accountSummary.institution ?? processingIdentity?.institution ?? summaryContext.institution ?? null;
               const summaryAccountType =
                 accountSummary.accountType ?? processingIdentity?.accountType ?? summaryContext.accountType ?? null;
-              const summaryPreviewTransactions = await loadOptimisticPreviewTransactions(
+              const summaryPreviewTransactions = await loadOrGetKnownPreviewTransactions({
+                workspaceId,
                 importFileId,
-                accountSummary.accountId,
-                summaryAccountName,
-                summaryInstitution,
-                accountSummary.accountNumber
-              )
-                .catch(() => [])
-                .then((rows) =>
-                  rows.length > 0
-                    ? rows
-                    : getKnownPreviewTransactions({
-                        workspaceId,
-                        accountId: accountSummary.accountId,
-                        optimisticAccountId: summaryContext.optimisticAccountId,
-                        accountName: summaryAccountName,
-                        institution: summaryInstitution,
-                        accountNumber: accountSummary.accountNumber,
-                        accountType: summaryAccountType,
-                        previewTransactions: summaryContext.previewTransactions,
-                      })
-                );
-              const accountFinalizedSummary: UploadInsightsSummary = {
-                ...buildOptimisticUploadSummary(
-                  summaryContext.fileName,
-                  accountSummary.rowsImported || summaryPreviewTransactions.length,
-                  accountSummary.accountId,
-                  summaryAccountName,
-                  summaryInstitution,
-                  summaryAccountType,
-                  summaryContext.optimisticAccountId,
-                  pickStableBalance(accountSummary.balance, stableOptimisticBalance),
-                  summaryPreviewTransactions,
-                  accountSummary.accountNumber
-                ),
+                accountId: accountSummary.accountId,
+                optimisticAccountId: summaryContext.optimisticAccountId,
+                accountName: summaryAccountName,
+                institution: summaryInstitution,
+                accountNumber: accountSummary.accountNumber,
+                accountType: summaryAccountType,
+                previewTransactions: summaryContext.previewTransactions,
+              });
+              const accountFinalizedSummary = buildResolvedOptimisticUploadSummary({
+                accounts,
+                workspaceId,
+                fileName: summaryContext.fileName,
+                importedRows: accountSummary.rowsImported || summaryPreviewTransactions.length,
+                accountId: accountSummary.accountId,
+                accountName: summaryAccountName,
+                institution: summaryInstitution,
+                accountNumber: accountSummary.accountNumber,
+                accountType: summaryAccountType,
+                optimisticAccountId: summaryContext.optimisticAccountId,
+                balanceSources: [accountSummary.balance, stableOptimisticBalance],
+                previewTransactions: summaryPreviewTransactions,
                 accountSummaries: [accountSummary],
                 optimistic: false,
-                optimisticAccountId: summaryContext.optimisticAccountId,
-              };
+              });
 
               finalizedSummaries.push(accountFinalizedSummary);
               seedImportedWorkspaceCaches(workspaceId, accountFinalizedSummary);
@@ -3939,47 +2775,38 @@ export function ImportFilesModal({
             summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
               ? summaryContext.previewTransactions
               : completedAccountId
-                ? await loadOptimisticPreviewTransactions(
+                ? await loadOrGetKnownPreviewTransactions({
+                    workspaceId,
                     importFileId,
-                    completedAccountId,
-                    resolvedAccountDisplayName,
-                    processingIdentity?.institution ?? summaryContext.institution ?? null,
-                    processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
-                  )
-                    .catch(() => [])
-                    .then((rows) =>
-                      rows.length > 0
-                        ? rows
-                        : getKnownPreviewTransactions({
-                            workspaceId,
-                            accountId: completedAccountId,
-                            optimisticAccountId: summaryContext.optimisticAccountId,
-                            accountName:
-                              resolvedAccountDisplayName,
-                            institution: processingIdentity?.institution ?? summaryContext.institution ?? null,
-                            accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
-                            accountType: processingIdentity?.accountType ?? summaryContext.accountType,
-                            previewTransactions: summaryContext.previewTransactions,
-                          })
-                    )
+                    accountId: completedAccountId,
+                    optimisticAccountId: summaryContext.optimisticAccountId,
+                    accountName: resolvedAccountDisplayName,
+                    institution: processingIdentity?.institution ?? summaryContext.institution ?? null,
+                    accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
+                    accountType: processingIdentity?.accountType ?? summaryContext.accountType,
+                    previewTransactions: summaryContext.previewTransactions,
+                  })
                 : [];
-          const completedSummary = buildOptimisticUploadSummary(
-            summaryContext.fileName,
-            primaryStatusAccountSummary?.rowsImported ||
-              (confirmedTransactionsCount > 0 ? confirmedTransactionsCount : parsedRowsCount),
-            primaryStatusAccountSummary?.accountId ?? completedAccountId,
-            primaryStatusAccountSummary?.accountName ?? resolvedAccountDisplayName,
-            primaryStatusAccountSummary?.institution ?? processingIdentity?.institution ?? summaryContext.institution ?? null,
-            primaryStatusAccountSummary?.accountType ?? processingIdentity?.accountType ?? summaryContext.accountType ?? null,
-            summaryContext.optimisticAccountId,
-            pickStableBalance(primaryStatusAccountSummary?.balance, stableOptimisticBalance),
-            fallbackPreviewTransactions,
-            primaryStatusAccountSummary?.accountNumber ?? processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
-          );
           const finalizedSummary: UploadInsightsSummary = {
-            ...completedSummary,
-            accountSummaries: statusAccountSummaries.length > 0 ? statusAccountSummaries : completedSummary.accountSummaries,
-            optimistic: false,
+            ...buildResolvedOptimisticUploadSummary({
+              accounts,
+              workspaceId,
+              fileName: summaryContext.fileName,
+              importedRows:
+                primaryStatusAccountSummary?.rowsImported ||
+                (confirmedTransactionsCount > 0 ? confirmedTransactionsCount : parsedRowsCount),
+              accountId: primaryStatusAccountSummary?.accountId ?? completedAccountId,
+              accountName: primaryStatusAccountSummary?.accountName ?? resolvedAccountDisplayName,
+              institution: primaryStatusAccountSummary?.institution ?? processingIdentity?.institution ?? summaryContext.institution ?? null,
+              accountNumber:
+                primaryStatusAccountSummary?.accountNumber ?? processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
+              accountType: primaryStatusAccountSummary?.accountType ?? processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+              optimisticAccountId: summaryContext.optimisticAccountId,
+              balanceSources: [primaryStatusAccountSummary?.balance, stableOptimisticBalance],
+              previewTransactions: fallbackPreviewTransactions,
+              accountSummaries: statusAccountSummaries.length > 0 ? statusAccountSummaries : undefined,
+              optimistic: false,
+            }),
             optimisticAccountId: null,
           };
           seedImportedWorkspaceCaches(workspaceId, finalizedSummary);
@@ -4345,43 +3172,23 @@ export function ImportFilesModal({
             continue;
           }
 
-          const previewSummary = buildOptimisticUploadSummary(
-            summaryContext.fileName,
-            Math.max(parsedRowsCount, summaryContext.previewTransactions?.length ?? 0),
-            resolvedAccountId,
-            resolvedAccountDisplayName,
-            resolvedIdentity.institution ?? null,
-            resolvedAccountType ??
+          const previewSummary = buildResolvedOptimisticUploadSummary({
+            accounts,
+            workspaceId,
+            fileName: summaryContext.fileName,
+            importedRows: Math.max(parsedRowsCount, summaryContext.previewTransactions?.length ?? 0),
+            accountId: resolvedAccountId,
+            accountName: resolvedAccountDisplayName,
+            institution: resolvedIdentity.institution ?? null,
+            accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
+            accountType:
+              resolvedAccountType ??
               inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
-            summaryContext.optimisticAccountId,
-            pickStableBalance(
-              findKnownImportedBalance(accounts, {
-                workspaceId,
-                accountId: resolvedAccountId,
-                accountName: resolvedIdentity.accountName ?? null,
-                institution: resolvedIdentity.institution ?? null,
-                accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
-                accountType:
-                  resolvedAccountType ??
-                  inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
-              }),
-              summaryContext.initialBalance
-            ),
-            getKnownPreviewTransactions({
-              workspaceId,
-              accountId: resolvedAccountId,
-              optimisticAccountId: summaryContext.optimisticAccountId,
-              accountName: resolvedIdentity.accountName ?? null,
-              institution: resolvedIdentity.institution ?? null,
-              accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
-              accountType:
-                resolvedAccountType ??
-                inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
-              previewTransactions: summaryContext.previewTransactions,
-            }),
-            resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
-            true
-          );
+            optimisticAccountId: summaryContext.optimisticAccountId,
+            balanceSources: [summaryContext.initialBalance],
+            previewTransactions: summaryContext.previewTransactions,
+            showBalanceEvenIfEmpty: true,
+          });
 
           if (!suppressUnionBankPreview) {
             emitItemUpdate({
@@ -4452,37 +3259,20 @@ export function ImportFilesModal({
               }
 
               if (result.status === "staged" && Number(result.importedRows ?? 0) > 0) {
-                const completedSummary = buildOptimisticUploadSummary(
-                  summaryContext.fileName,
-                  Number(result.importedRows ?? 0),
-                  resolvedAccountId,
-                  resolvedAccountDisplayName,
-                  resolvedIdentity.institution ?? summaryContext.institution ?? null,
-                  resolvedAccountType,
-                  null,
-                  pickStableBalance(
-                    findKnownImportedBalance(accounts, {
-                      workspaceId,
-                      accountId: resolvedAccountId,
-                      accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
-                      institution: resolvedIdentity.institution ?? summaryContext.institution ?? null,
-                      accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
-                      accountType: resolvedAccountType,
-                    }),
-                    summaryContext.initialBalance
-                  ),
-                  getKnownPreviewTransactions({
-                    workspaceId,
-                    accountId: resolvedAccountId,
-                    optimisticAccountId: summaryContext.optimisticAccountId,
-                    accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
-                    institution: resolvedIdentity.institution ?? summaryContext.institution ?? null,
-                    accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
-                    accountType: resolvedAccountType,
-                    previewTransactions: summaryContext.previewTransactions,
-                  }),
-                  resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null
-                );
+                const completedSummary = buildResolvedOptimisticUploadSummary({
+                  accounts,
+                  workspaceId,
+                  fileName: summaryContext.fileName,
+                  importedRows: Number(result.importedRows ?? 0),
+                  accountId: resolvedAccountId,
+                  accountName: resolvedAccountDisplayName,
+                  institution: resolvedIdentity.institution ?? summaryContext.institution ?? null,
+                  accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
+                  accountType: resolvedAccountType ?? null,
+                  optimisticAccountId: null,
+                  balanceSources: [summaryContext.initialBalance],
+                  previewTransactions: summaryContext.previewTransactions,
+                });
                 seedImportedWorkspaceCaches(workspaceId, completedSummary);
                 await Promise.resolve(onImported(completedSummary));
                 emitItemUpdate({
@@ -4875,45 +3665,8 @@ export function ImportFilesModal({
         const matchedReceiptAccount = receiptHint
           ? accounts.find((account) => account.id === receiptHint.accountId) ?? null
           : null;
-        const detectedReceiptInstitutionAccount =
-          !matchedReceiptAccount
-            ? buildReceiptInstitutionAccountDraft(
-                /gcash/i.test(String(receiptPreview.paymentMethod ?? ""))
-                  ? {
-                      institution: "GCash",
-                      accountName: "GCash",
-                      accountType: "wallet",
-                      reason: "Receipt payment channel was identified as GCash.",
-                    }
-                  : /maya/i.test(String(receiptPreview.paymentMethod ?? ""))
-                    ? {
-                        institution: "Maya",
-                        accountName: "Maya Wallet",
-                        accountType: "wallet",
-                        reason: "Receipt payment channel was identified as Maya.",
-                      }
-                    : null
-              )
-            : null;
         const cashAccount = resolveCashAccountOption(accounts);
-        const targetAccount =
-          matchedReceiptAccount ??
-          (detectedReceiptInstitutionAccount
-            ? {
-                id: `optimistic-${crypto.randomUUID()}`,
-                name: formatUploadAccountDisplayName(
-                  detectedReceiptInstitutionAccount.accountName,
-                  detectedReceiptInstitutionAccount.institution,
-                  null,
-                  detectedReceiptInstitutionAccount.accountType
-                ),
-                institution: detectedReceiptInstitutionAccount.institution,
-                accountNumber: null,
-                type: detectedReceiptInstitutionAccount.accountType,
-                currency: receiptPreview.currency ?? "PHP",
-              }
-            : null) ??
-          cashAccount;
+        const targetAccount = matchedReceiptAccount ?? cashAccount;
         if (!targetAccount) {
           return;
         }
@@ -4955,19 +3708,17 @@ export function ImportFilesModal({
       const mobileWalletIdentity = resolveMobileWalletIdentityFromParsedRows(parsedRows as Array<Record<string, unknown>>);
       const parsedRowIdentity = resolveStatementIdentityFromParsedRows(parsedRows as Array<Record<string, unknown>>);
       const parsedAccountGroupCount = countDistinctStatementAccountsFromParsedRows(parsedRows as Array<Record<string, unknown>>);
-      const statementScreenshotPreparse =
-        item.file.type.startsWith("image/") || /^image$/i.test(fileTypeLabel(item.file));
 
       if (!localMetadata && parsedRows.length === 0) {
         return;
       }
 
       const shouldPreferParsedRowIdentity =
-        statementScreenshotPreparse && Boolean(parsedRowIdentity?.accountName || parsedRowIdentity?.institution || parsedRowIdentity?.accountNumber);
+        isImageImportFile(item.file) && Boolean(parsedRowIdentity?.accountName || parsedRowIdentity?.institution || parsedRowIdentity?.accountNumber);
       const preferredStatementIdentity = shouldPreferParsedRowIdentity ? parsedRowIdentity : localMetadata;
       const fallbackStatementIdentity = shouldPreferParsedRowIdentity ? localMetadata : parsedRowIdentity;
 
-      const rawAccountName =
+      const accountName =
         mobileWalletIdentity?.accountName ??
         preferredStatementIdentity?.accountName ??
         fallbackStatementIdentity?.accountName ??
@@ -4986,11 +3737,6 @@ export function ImportFilesModal({
             null,
           (mobileWalletIdentity?.accountType ?? localMetadata?.accountType ?? null) as UploadInsightsSummary["accountType"] | null
         );
-      const suppressFilenameAccountName =
-        isGenericMobileScreenshotFileName(item.file.name) &&
-        Boolean(rawAccountName) &&
-        rawAccountName.trim().toLowerCase() === deriveFallbackAccountNameFromFileName(item.file.name).trim().toLowerCase();
-      const accountName = suppressFilenameAccountName ? null : rawAccountName;
       const institution =
         mobileWalletIdentity?.institution ??
         preferredStatementIdentity?.institution ??
@@ -5022,27 +3768,22 @@ export function ImportFilesModal({
       const endingBalance = mobileWalletIdentity
         ? null
         : toBalanceString(localMetadata?.endingBalance ?? getTrailingBalanceFromParsedRows(parsedRows) ?? null);
-      const resolvedAccountName =
-        accountName ??
-        (institution || accountNumber
-          ? formatUploadAccountDisplayName(institution ?? "Imported account", institution, accountNumber, accountType)
-          : null);
 
       const currentItem = itemsRef.current.find((entry) => entry.id === itemId);
       if (!currentItem || currentItem.status === "done" || currentItem.status === "error" || currentItem.confirmationState === "confirmed") {
         return;
       }
 
-      const resolvedAccountId = resolveLocalAccountId(resolvedAccountName, institution, accountNumber);
+      const resolvedAccountId = resolveLocalAccountId(accountName, institution, accountNumber);
       const optimisticAccountId = resolvedAccountId.startsWith("optimistic-") ? resolvedAccountId : null;
       const localImportFileId = item.importFileId ?? item.id;
-      const previewAccountName = resolvedAccountName ?? institution ?? "Imported account";
+      const previewAccountName = accountName ?? institution ?? "Imported account";
 
       const summary = buildOptimisticUploadSummary(
         item.file.name,
         parsedRows.length,
         resolvedAccountId,
-        previewAccountName,
+        accountName,
         institution,
         accountType,
         optimisticAccountId,
@@ -5069,9 +3810,9 @@ export function ImportFilesModal({
       });
       window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
 
-      if (resolvedAccountName || institution || accountNumber) {
+      if (accountName || institution || accountNumber) {
         void ensureTargetAccountId(
-          resolvedAccountName,
+          accountName,
           institution,
           accountType,
           accountNumber,
@@ -5245,33 +3986,9 @@ export function ImportFilesModal({
             ? "File details imported"
             : importMode === "notes"
               ? "Notes screenshot imported"
-            : "Screenshot imported";
-    const getReceiptPollDelayMs = (params: {
-      attempt: number;
-      importStatus: string | null;
-      processingPhase: string | null;
-      parsedRowsCount: number;
-      confirmedTransactionsCount: number;
-      hasVisibleImportPresence: boolean;
-    }) => {
-      if (params.importStatus === "done" || params.confirmedTransactionsCount > 0) {
-        return 120;
-      }
+              : "Screenshot imported";
 
-      if (
-        params.processingPhase === "reconciling" ||
-        params.processingPhase === "staged" ||
-        params.parsedRowsCount > 0 ||
-        params.hasVisibleImportPresence
-      ) {
-        return 180;
-      }
-
-      return params.attempt < 6 ? 300 : 400;
-    };
-
-    let scheduledVisibleRefresh = false;
-    for (let attempt = 0; Date.now() - startedAt < MAX_WAIT_MS || attempt === 0; attempt += 1) {
+    for (let attempt = 0; attempt < 240; attempt += 1) {
       const response = await fetch(`/api/imports/${importFileId}/status`, {
         cache: "no-store",
       });
@@ -5290,13 +4007,6 @@ export function ImportFilesModal({
       const telemetryLabel = typeof payload.telemetryLabel === "string" ? payload.telemetryLabel : null;
       const telemetryMessage = typeof payload.telemetryMessage === "string" ? payload.telemetryMessage : null;
       const resumeReason = typeof payload.resumeReason === "string" ? payload.resumeReason : null;
-      const hasVisibleImportPresence = Boolean(
-        payload.visibleImportComplete || parsedRowsCount > 0 || confirmedTransactionsCount > 0
-      );
-      if (!scheduledVisibleRefresh && hasVisibleImportPresence) {
-        scheduledVisibleRefresh = true;
-        scheduleBackgroundRouterRefresh(0);
-      }
 
       if (importStatus === "failed") {
         if (parsedRowsCount > 0 || confirmedTransactionsCount > 0) {
@@ -5393,11 +4103,6 @@ export function ImportFilesModal({
             seedImportedWorkspaceCaches(workspaceId, receiptSummary);
             await Promise.resolve(onImported(receiptSummary));
           }
-          await waitForReceiptSettledVisibility({
-            workspaceId,
-            importFileId,
-            summary: receiptSummary,
-          });
           publishImportActivity({
             workspaceId,
             surface: importActivitySurfaceRef.current,
@@ -5416,7 +4121,7 @@ export function ImportFilesModal({
         }
 
         if (importStatus === "failed") {
-          if (hasVisibleImportPresence) {
+          if (parsedRowsCount > 0 || confirmedTransactionsCount > 0) {
             closeImportAsRecoverable(
               itemId,
               fileName,
@@ -5455,16 +4160,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(
-            getReceiptPollDelayMs({
-              attempt,
-              importStatus,
-              processingPhase,
-              parsedRowsCount,
-              confirmedTransactionsCount,
-              hasVisibleImportPresence,
-            })
-          );
+          await sleep(500);
           continue;
         }
 
@@ -5499,7 +4195,8 @@ export function ImportFilesModal({
         });
 
         if (Date.now() - startedAt >= MAX_WAIT_MS) {
-          const hasRecoverableProgress = hasVisibleImportPresence;
+          const hasRecoverableProgress =
+            Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0;
           if (hasRecoverableProgress) {
             closeImportAsRecoverable(
               itemId,
@@ -5515,16 +4212,7 @@ export function ImportFilesModal({
           return { completed: false, summary: null };
         }
 
-        await sleep(
-          getReceiptPollDelayMs({
-            attempt,
-            importStatus,
-            processingPhase,
-            parsedRowsCount,
-            confirmedTransactionsCount,
-            hasVisibleImportPresence,
-          })
-        );
+        await sleep(500);
         continue;
       }
 
@@ -5584,7 +4272,8 @@ export function ImportFilesModal({
       });
 
       if (Date.now() - startedAt >= MAX_WAIT_MS) {
-        const hasRecoverableProgress = hasVisibleImportPresence;
+        const hasRecoverableProgress =
+          Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0;
         if (hasRecoverableProgress) {
           closeImportAsRecoverable(
             itemId,
@@ -5600,10 +4289,10 @@ export function ImportFilesModal({
         return { completed: false, summary: null };
       }
 
-      await sleep(importMode === "receipt" ? 250 : 500);
+      await sleep(500);
     }
 
-    const hasRecoverableFinalProgress = false;
+    const hasRecoverableFinalProgress = Boolean(importFileId);
 
     if (hasRecoverableFinalProgress) {
       closeImportAsRecoverable(
@@ -5715,7 +4404,7 @@ export function ImportFilesModal({
         !shouldSkipLocalStatementPreparse &&
         !extractedTextForUpload &&
         itemImportMode === "statement" &&
-        ((lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv")) || isImageImportFile(item.file))
+        (lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv"))
       ) {
         updateItem(itemId, {
           progress: IMPORT_PROGRESS.preparing,
@@ -5891,11 +4580,6 @@ export function ImportFilesModal({
             if (precomputedReceiptSummary) {
               seedImportedWorkspaceCaches(workspaceId, precomputedReceiptSummary);
               await Promise.resolve(onImported(precomputedReceiptSummary));
-              await waitForReceiptSettledVisibility({
-                workspaceId,
-                importFileId,
-                summary: precomputedReceiptSummary,
-              });
 
               updateItem(itemId, {
                 status: "done",
@@ -5985,11 +4669,6 @@ export function ImportFilesModal({
             if (inlineReceiptSummary) {
               seedImportedWorkspaceCaches(workspaceId, inlineReceiptSummary);
               await Promise.resolve(onImported(inlineReceiptSummary));
-              await waitForReceiptSettledVisibility({
-                workspaceId,
-                importFileId,
-                summary: inlineReceiptSummary,
-              });
 
               updateItem(itemId, {
                 status: "done",
@@ -6060,8 +4739,8 @@ export function ImportFilesModal({
         router.refresh();
         return {
           status: "done",
-          importedRows: completedReceiptSummary?.rowsImported ?? (Number(processPayload?.imported ?? 0) || 0),
-          summary: completedReceiptSummary,
+          importedRows: Number(processPayload?.imported ?? 0) || 0,
+          summary: null,
         };
       }
 
@@ -6271,68 +4950,34 @@ export function ImportFilesModal({
             statementIdentity?.accountType ??
             statementAccountType ??
             inferAccountTypeFromStatement(confirmedInstitution, confirmedAccountName, "bank");
-          const confirmedPreviewTransactions = await loadOptimisticPreviewTransactions(
+          const confirmedPreviewTransactions = await loadOrGetKnownPreviewTransactions({
+            workspaceId,
             importFileId,
-            accountSummary.accountId,
-            confirmedAccountName ?? "",
-            confirmedInstitution,
-            accountSummary.accountNumber
-          )
-            .catch(() => [])
-            .then((rows) =>
-              rows.length > 0
-                ? rows
-                : getKnownPreviewTransactions({
-                    workspaceId,
-                    accountId: accountSummary.accountId,
-                    optimisticAccountId: item.optimisticAccountId ?? null,
-                    accountName: confirmedAccountName ?? null,
-                    institution: confirmedInstitution,
-                    accountNumber: accountSummary.accountNumber,
-                    accountType: confirmedAccountType,
-                  })
-            );
+            accountId: accountSummary.accountId,
+            optimisticAccountId: item.optimisticAccountId ?? null,
+            accountName: confirmedAccountName ?? null,
+            institution: confirmedInstitution,
+            accountNumber: accountSummary.accountNumber,
+            accountType: confirmedAccountType,
+          });
           const settledRows = Math.max(Number(accountSummary.rowsImported ?? 0), confirmedPreviewTransactions.length);
-          const accountUploadSummary = ({
+          const accountUploadSummary = buildResolvedOptimisticUploadSummary({
+            accounts,
+            workspaceId,
             fileName: item.file.name,
-            rowsImported: settledRows,
+            importedRows: settledRows,
             accountId: accountSummary.accountId,
             accountName: confirmedAccountName ?? null,
             institution: confirmedInstitution,
             accountNumber: accountSummary.accountNumber,
             accountType: confirmedAccountType,
-            balance: pickStableBalance(
-              accountSummary.balance,
-              findKnownImportedBalance(accounts, {
-                workspaceId,
-                accountId: accountSummary.accountId,
-                accountName: confirmedAccountName ?? null,
-                institution: confirmedInstitution,
-                accountNumber: accountSummary.accountNumber,
-                accountType: confirmedAccountType,
-              })
-            ),
-            accountSummaries: [accountSummary],
             optimisticAccountId: null,
+            balanceSources: [accountSummary.balance],
             previewTransactions: confirmedPreviewTransactions,
-            incomeTotal: Number(confirmedInsightSummary.incomeTotal ?? 0),
-            expenseTotal: Number(confirmedInsightSummary.expenseTotal ?? 0),
-            netTotal: Number(confirmedInsightSummary.netTotal ?? 0),
-            topCategoryName: confirmedInsightSummary.topCategoryName ?? null,
-            topCategoryAmount:
-              confirmedInsightSummary.topCategoryAmount === null
-                ? null
-                : Number(confirmedInsightSummary.topCategoryAmount),
-            topCategoryShare:
-              confirmedInsightSummary.topCategoryShare === null
-                ? null
-                : Number(confirmedInsightSummary.topCategoryShare),
-            topMerchantName: confirmedInsightSummary.topMerchantName ?? null,
-            topMerchantCount:
-              confirmedInsightSummary.topMerchantCount === null
-                ? null
-                : Number(confirmedInsightSummary.topMerchantCount),
-          } satisfies UploadInsightsSummary);
+            insightMetrics: confirmedInsightSummary,
+            accountSummaries: [accountSummary],
+            optimistic: false,
+          });
 
           seedImportedWorkspaceCaches(workspaceId, accountUploadSummary);
           emittedSummaries.push(accountUploadSummary);
@@ -6383,39 +5028,16 @@ export function ImportFilesModal({
           statementIdentity?.accountType ??
           statementAccountType ??
           inferAccountTypeFromStatement(confirmedInstitution, confirmedAccountName, "bank");
-        const confirmedBalance = pickStableBalance(
-          serverAccountSummary?.balance ?? null,
-          typeof processPayload.accountBalance === "string" ? processPayload.accountBalance : null,
-          findKnownImportedBalance(accounts, {
-            workspaceId,
-            accountId: serverConfirmedAccountId,
-            accountName: confirmedAccountName ?? null,
-            institution: confirmedInstitution,
-            accountNumber: confirmedAccountNumber,
-            accountType: confirmedAccountType,
-          })
-        );
-        const confirmedPreviewTransactions = await loadOptimisticPreviewTransactions(
+        const confirmedPreviewTransactions = await loadOrGetKnownPreviewTransactions({
+          workspaceId,
           importFileId,
-          serverConfirmedAccountId,
-          confirmedAccountName ?? "",
-          confirmedInstitution,
-          confirmedAccountNumber
-        )
-          .catch(() => [])
-          .then((rows) =>
-            rows.length > 0
-              ? rows
-              : getKnownPreviewTransactions({
-                  workspaceId,
-                  accountId: serverConfirmedAccountId,
-                  optimisticAccountId: item.optimisticAccountId ?? null,
-                  accountName: confirmedAccountName ?? null,
-                  institution: confirmedInstitution,
-                  accountNumber: confirmedAccountNumber,
-                  accountType: confirmedAccountType,
-                })
-          );
+          accountId: serverConfirmedAccountId,
+          optimisticAccountId: item.optimisticAccountId ?? null,
+          accountName: confirmedAccountName ?? null,
+          institution: confirmedInstitution,
+          accountNumber: confirmedAccountNumber,
+          accountType: confirmedAccountType,
+        });
         const confirmedInsightSummary =
           processPayload?.insightSummary ??
           {
@@ -6429,57 +5051,36 @@ export function ImportFilesModal({
             topMerchantCount: null,
           };
         const settledRows = Math.max(confirmedRows, confirmedPreviewTransactions.length);
-        const confirmedSummary = ({
+        const confirmedSummary = buildResolvedOptimisticUploadSummary({
+          accounts,
+          workspaceId,
           fileName: item.file.name,
-          rowsImported: settledRows,
+          importedRows: settledRows,
           accountId: serverConfirmedAccountId,
           accountName: confirmedAccountName ?? null,
           institution: confirmedInstitution,
           accountNumber: confirmedAccountNumber,
           accountType: confirmedAccountType,
-          balance: confirmedBalance,
-          accountSummaries: serverAccountSummary ? [serverAccountSummary] : undefined,
           optimisticAccountId: null,
+          balanceSources: [serverAccountSummary?.balance ?? null, typeof processPayload.accountBalance === "string" ? processPayload.accountBalance : null],
           previewTransactions: confirmedPreviewTransactions,
-          incomeTotal: Number(confirmedInsightSummary.incomeTotal ?? 0),
-          expenseTotal: Number(confirmedInsightSummary.expenseTotal ?? 0),
-          netTotal: Number(confirmedInsightSummary.netTotal ?? 0),
-          topCategoryName: confirmedInsightSummary.topCategoryName ?? null,
-          topCategoryAmount:
-            confirmedInsightSummary.topCategoryAmount === null
-              ? null
-              : Number(confirmedInsightSummary.topCategoryAmount),
-          topCategoryShare:
-            confirmedInsightSummary.topCategoryShare === null
-              ? null
-              : Number(confirmedInsightSummary.topCategoryShare),
-          topMerchantName: confirmedInsightSummary.topMerchantName ?? null,
-          topMerchantCount:
-            confirmedInsightSummary.topMerchantCount === null
-              ? null
-              : Number(confirmedInsightSummary.topMerchantCount),
-        } satisfies UploadInsightsSummary);
+          insightMetrics: confirmedInsightSummary,
+          accountSummaries: serverAccountSummary ? [serverAccountSummary] : undefined,
+          optimistic: false,
+        });
 
         if (confirmedSummary) {
           seedImportedWorkspaceCaches(workspaceId, confirmedSummary);
           await Promise.resolve(onImported(confirmedSummary));
         }
 
-        void waitForImportSettledVisibility({
-          workspaceId,
+        queueSettledVisibilityCheck(
           importFileId,
-          accountId: serverConfirmedAccountId,
-          importedRows: settledRows,
-          expectedBalance: confirmedSummary.balance ?? null,
-          timeoutMs: 10_000,
-        }).then((settledVisible) => {
-          if (!settledVisible) {
-            console.warn("Import finished before the settled data became visible", {
-              importFileId,
-              accountId: serverConfirmedAccountId,
-            });
-          }
-        });
+          serverConfirmedAccountId,
+          settledRows,
+          confirmedSummary.balance ?? null,
+          "Import finished before the settled data became visible"
+        );
 
         updateItem(itemId, {
           status: "done",
@@ -6542,25 +5143,16 @@ export function ImportFilesModal({
             : null;
         const previewTransactions =
           optimisticAccountId && statementIdentity?.accountName
-            ? await loadOptimisticPreviewTransactions(
+            ? await loadOrGetKnownPreviewTransactions({
+                workspaceId,
                 importFileId,
-                optimisticAccountId,
-                statementIdentity.accountName ?? "",
-                statementIdentity?.institution ?? null,
-                statementIdentity?.accountNumber ?? null
-              ).then((rows) =>
-                rows.length > 0
-                  ? rows
-                  : getKnownPreviewTransactions({
-                      workspaceId,
-                      accountId: optimisticAccountId,
-                      optimisticAccountId: item.optimisticAccountId ?? null,
-                      accountName: statementIdentity.accountName ?? null,
-                      institution: statementIdentity?.institution ?? null,
-                      accountNumber: statementIdentity?.accountNumber ?? null,
-                      accountType: statementIdentity?.accountType ?? statementAccountType,
-                    })
-              )
+                accountId: optimisticAccountId,
+                optimisticAccountId: item.optimisticAccountId ?? null,
+                accountName: statementIdentity.accountName ?? null,
+                institution: statementIdentity?.institution ?? null,
+                accountNumber: statementIdentity?.accountNumber ?? null,
+                accountType: statementIdentity?.accountType ?? statementAccountType,
+              })
             : [];
         const visibleRows = Math.max(Number(processPayload?.imported ?? 0) || 0, previewTransactions.length);
         const optimisticIdentity =
@@ -6574,21 +5166,21 @@ export function ImportFilesModal({
                 }
               : null;
         const optimisticSummary = optimisticIdentity
-          ? ({
-              ...buildOptimisticUploadSummary(
-                item.file.name,
-                visibleRows,
-                optimisticAccountId,
-                optimisticIdentity.accountName ?? null,
-                optimisticIdentity.institution ?? null,
-                optimisticIdentity.accountType ?? statementAccountType,
-                optimisticAccountId,
-                knownOptimisticBalance,
-                previewTransactions,
-                statementIdentity?.accountNumber ?? null,
-                true
-              ),
-            } satisfies UploadInsightsSummary)
+          ? buildResolvedOptimisticUploadSummary({
+              accounts,
+              workspaceId,
+              fileName: item.file.name,
+              importedRows: visibleRows,
+              accountId: optimisticAccountId,
+              accountName: optimisticIdentity.accountName ?? null,
+              institution: optimisticIdentity.institution ?? null,
+              accountNumber: statementIdentity?.accountNumber ?? null,
+              accountType: optimisticIdentity.accountType ?? statementAccountType,
+              optimisticAccountId,
+              balanceSources: [knownOptimisticBalance],
+              previewTransactions,
+              showBalanceEvenIfEmpty: true,
+            })
           : null;
         const localPreparseSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
         const rawQueuedVisibleSummary = optimisticSummary ?? localPreparseSummary;
@@ -6636,21 +5228,13 @@ export function ImportFilesModal({
           seedImportedWorkspaceCaches(workspaceId, queuedVisibleSummary);
           await Promise.resolve(onImported(queuedVisibleSummary));
 
-          void waitForImportSettledVisibility({
-            workspaceId,
+          queueSettledVisibilityCheck(
             importFileId,
-            accountId: queuedVisibleSummary.accountId ?? optimisticAccountId,
-            importedRows: queuedVisibleRows,
-            expectedBalance: queuedVisibleSummary.balance ?? null,
-            timeoutMs: 10_000,
-          }).then((settledVisible) => {
-            if (!settledVisible) {
-              console.warn("Import finished before the settled data became visible", {
-                importFileId,
-                accountId: queuedVisibleSummary.accountId ?? optimisticAccountId,
-              });
-            }
-          });
+            queuedVisibleSummary.accountId ?? optimisticAccountId,
+            queuedVisibleRows,
+            queuedVisibleSummary.balance ?? null,
+            "Import finished before the settled data became visible"
+          );
 
           updateItem(itemId, {
             status: "done",
@@ -6876,51 +5460,33 @@ export function ImportFilesModal({
 
       const previewTransactions =
         targetAccountId && statementIdentity?.accountName
-          ? await loadOptimisticPreviewTransactions(
+          ? await loadOrGetKnownPreviewTransactions({
+              workspaceId,
               importFileId,
-              targetAccountId,
-              statementIdentity.accountName ?? "",
-              statementIdentity?.institution ?? null,
-              statementIdentity?.accountNumber ?? null
-            ).then((rows) =>
-              rows.length > 0
-                ? rows
-                : getKnownPreviewTransactions({
-                    workspaceId,
-                    accountId: targetAccountId,
-                    optimisticAccountId: item.optimisticAccountId ?? null,
-                    accountName: statementIdentity.accountName ?? null,
-                    institution: statementIdentity?.institution ?? null,
-                    accountNumber: statementIdentity?.accountNumber ?? null,
-                    accountType: statementAccountType,
-                  })
-            )
+              accountId: targetAccountId,
+              optimisticAccountId: item.optimisticAccountId ?? null,
+              accountName: statementIdentity.accountName ?? null,
+              institution: statementIdentity?.institution ?? null,
+              accountNumber: statementIdentity?.accountNumber ?? null,
+              accountType: statementAccountType,
+            })
           : [];
-      const knownPreviewBalance = findKnownImportedBalance(accounts, {
-        workspaceId,
-        accountId: targetAccountId,
-        accountName: statementIdentity?.accountName ?? null,
-        institution: statementIdentity?.institution ?? null,
-        accountNumber: statementIdentity?.accountNumber ?? null,
-        accountType: statementAccountType,
-      });
       const optimisticPreviewSummary =
         targetAccountId
-          ? ({
-              ...buildOptimisticUploadSummary(
-                item.file.name,
-                Number(processPayload?.imported ?? 0) || 0,
-                targetAccountId,
-                statementIdentity?.accountName ?? null,
-                statementIdentity?.institution ?? null,
-                statementAccountType,
-                targetAccountId.startsWith("optimistic-") ? targetAccountId : null,
-                knownPreviewBalance,
-                previewTransactions,
-                statementIdentity?.accountNumber ?? null,
-                true
-              ),
-            } satisfies UploadInsightsSummary)
+          ? buildResolvedOptimisticUploadSummary({
+              accounts,
+              workspaceId,
+              fileName: item.file.name,
+              importedRows: Number(processPayload?.imported ?? 0) || 0,
+              accountId: targetAccountId,
+              accountName: statementIdentity?.accountName ?? null,
+              institution: statementIdentity?.institution ?? null,
+              accountNumber: statementIdentity?.accountNumber ?? null,
+              accountType: statementAccountType,
+              optimisticAccountId: targetAccountId.startsWith("optimistic-") ? targetAccountId : null,
+              previewTransactions,
+              showBalanceEvenIfEmpty: true,
+            })
           : null;
 
       updateItem(itemId, {
@@ -6993,21 +5559,13 @@ export function ImportFilesModal({
           });
         }
 
-        void waitForImportSettledVisibility({
-          workspaceId,
+        queueSettledVisibilityCheck(
           importFileId,
-          accountId: targetAccountId,
-          importedRows: Number(processPayload?.imported ?? 0) || 0,
-          expectedBalance: optimisticPreviewSummary?.balance ?? null,
-          timeoutMs: 10_000,
-        }).then((settledVisible) => {
-          if (!settledVisible) {
-            console.warn("Import finished before the settled data became visible", {
-              importFileId,
-              accountId: targetAccountId,
-            });
-          }
-        });
+          targetAccountId,
+          Number(processPayload?.imported ?? 0) || 0,
+          optimisticPreviewSummary?.balance ?? null,
+          "Import finished before the settled data became visible"
+        );
 
         updateItem(itemId, {
           status: "done",
@@ -7222,31 +5780,22 @@ export function ImportFilesModal({
           recoverableParsedRowsCount,
           recoverablePreviewTransactions.length
         );
-        const recoveredSummary = buildOptimisticUploadSummary(
-          item.file.name,
-          recoveredRowsCount,
-          fallbackAccountId,
-          recoverableIdentity?.accountName ?? item.file.name,
-          recoverableIdentity?.institution ?? null,
-          recoverableIdentity?.accountType ??
+        const recoveredSummary = buildResolvedOptimisticUploadSummary({
+          accounts,
+          workspaceId,
+          fileName: item.file.name,
+          importedRows: recoveredRowsCount,
+          accountId: fallbackAccountId,
+          accountName: recoverableIdentity?.accountName ?? item.file.name,
+          institution: recoverableIdentity?.institution ?? null,
+          accountNumber: recoverableIdentity?.accountNumber ?? null,
+          accountType:
+            recoverableIdentity?.accountType ??
             inferAccountTypeFromStatement(recoverableIdentity?.institution, recoverableIdentity?.accountName, "bank"),
-          item.optimisticAccountId ?? null,
-          pickStableBalance(
-            toBalanceString(recoverableStatus?.statementCheckpoint?.endingBalance),
-            findKnownImportedBalance(accounts, {
-              workspaceId,
-              accountId: fallbackAccountId,
-              accountName: recoverableIdentity?.accountName ?? item.file.name,
-              institution: recoverableIdentity?.institution ?? null,
-              accountNumber: recoverableIdentity?.accountNumber ?? null,
-              accountType:
-                recoverableIdentity?.accountType ??
-                inferAccountTypeFromStatement(recoverableIdentity?.institution, recoverableIdentity?.accountName, "bank"),
-            })
-          ),
-          recoverablePreviewTransactions,
-          recoverableIdentity?.accountNumber ?? null
-        );
+          optimisticAccountId: item.optimisticAccountId ?? null,
+          balanceSources: [toBalanceString(recoverableStatus?.statementCheckpoint?.endingBalance)],
+          previewTransactions: recoverablePreviewTransactions,
+        });
         const finalizedRecoveredSummary: UploadInsightsSummary = {
           ...recoveredSummary,
           optimistic: false,
@@ -7570,15 +6119,15 @@ export function ImportFilesModal({
       return;
     }
 
+    const body = document.body;
     if (open && (backgroundOnly || launchInBackground || showCompactProgress)) {
-      clearImportInteractionLocks();
-      delete document.body.dataset.cloverImportModalVisibleCount;
-      delete document.body.dataset.cloverImportModalVisible;
+      delete body.dataset.cloverImportModalLocks;
+      delete body.dataset.cloverImportModalOpen;
     }
   }, [backgroundOnly, launchInBackground, open, shouldLockPageInteraction, showCompactProgress]);
 
   useEffect(() => {
-    if (typeof document === "undefined" || !open || backgroundOnly || launchInBackground || showCompactProgress) {
+    if (typeof document === "undefined" || !open || backgroundOnly || launchInBackground) {
       return;
     }
 
@@ -7599,7 +6148,7 @@ export function ImportFilesModal({
       delete body.dataset.cloverImportModalVisibleCount;
       delete body.dataset.cloverImportModalVisible;
     };
-  }, [backgroundOnly, launchInBackground, open, showCompactProgress]);
+  }, [backgroundOnly, launchInBackground, open]);
 
   useEffect(() => {
     if (!open || !workspaceId) {
@@ -7789,20 +6338,7 @@ export function ImportFilesModal({
 
       const results: Array<{ itemId: string; result: ImportProcessResult }> = [];
       let nextIndex = 0;
-      const shouldRefreshDuringBatch = queue.some(isFastImageBatchItem);
-      const isScreenshotStatementBatch = queue.every(isScreenshotStatementBatchItem);
-      const workerCount = Math.min(
-        queue.every(isServerHeavyStatementBatchItem)
-          ? 4
-          : isScreenshotStatementBatch
-            ? queue.length >= 12
-              ? 3
-              : 4
-            : queue.every(isFastImageBatchItem)
-              ? 6
-              : 8,
-        queue.length
-      );
+      const workerCount = Math.min(queue.every(isServerHeavyStatementBatchItem) ? 4 : 6, queue.length);
 
       const runWorker = async () => {
         while (!uploadCancelRequestedRef.current) {
@@ -7820,14 +6356,10 @@ export function ImportFilesModal({
           const controller = new AbortController();
           activeUploadAbortControllersRef.current.add(controller);
           try {
-            const result = await processFile(item.id, { signal: controller.signal });
             results.push({
               itemId: item.id,
-              result,
+              result: await processFile(item.id, { signal: controller.signal }),
             });
-            if (shouldRefreshDuringBatch && (result.status === "done" || result.status === "staged")) {
-              scheduleBackgroundRouterRefresh();
-            }
           } finally {
             activeUploadAbortControllersRef.current.delete(controller);
           }
@@ -7837,17 +6369,17 @@ export function ImportFilesModal({
       await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
       return results;
     };
-    const isFastImageBatch = itemsToProcess.length > 0 && itemsToProcess.every(isFastImageBatchItem);
-    const canContinueBatchInBackground = itemsToProcess.length <= 1 || isFastImageBatch;
     const hasBrowserParsableStatements = itemsToProcess.some((item) => {
       const mode = item.importMode ?? "statement";
       const lowerName = item.file.name.toLowerCase();
       return (
         mode === "statement" &&
-        ((lowerName.endsWith(".pdf") || lowerName.endsWith(".csv")) || isImageImportFile(item.file)) &&
+        (lowerName.endsWith(".pdf") || lowerName.endsWith(".csv")) &&
         !shouldSkipClientStatementPreparse(item.file.name)
       );
     });
+
+    const canContinueBatchInBackground = itemsToProcess.length <= 1;
 
     if (hasBrowserParsableStatements) {
       for (const item of itemsToProcess) {
@@ -7857,19 +6389,28 @@ export function ImportFilesModal({
         void preparsePendingItemLocally(item.id);
       }
 
-      await waitForLocalPrimaryVisibility(
-        isFastImageBatch ? Math.min(6_000, 2_500 + items.length * 350) : Math.min(3_000, 1_200 + items.length * 450)
-      );
+      const preUploadVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(3_000, 1_200 + items.length * 450));
+      if (
+        canContinueBatchInBackground &&
+        preUploadVisibilityReady &&
+        !uploadPausedRef.current &&
+        !uploadCancelRequestedRef.current
+      ) {
+        void processItemsForBatch(itemsToProcess).finally(() => {
+          router.refresh();
+        });
+        setBusy(false);
+        visibilityDeadlineRef.current = null;
+        if (visibilityHardStopTimerRef.current) {
+          window.clearTimeout(visibilityHardStopTimerRef.current);
+          visibilityHardStopTimerRef.current = null;
+        }
+        return;
+      }
     }
 
     const processResultsPromise = processItemsForBatch(itemsToProcess);
-    const minimumVisibleItemsForBackground = isFastImageBatch ? Math.min(2, itemsToProcess.length) : itemsToProcess.length;
-    const localVisibilityReady = isFastImageBatch
-      ? await waitForLocalMinimumPrimaryVisibility(
-          minimumVisibleItemsForBackground,
-          Math.min(35_000, 10_000 + items.length * 2_000)
-        )
-      : await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
+    const localVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
 
     if (
       canContinueBatchInBackground &&
@@ -7878,7 +6419,6 @@ export function ImportFilesModal({
       !uploadPausedRef.current &&
       !uploadCancelRequestedRef.current
     ) {
-      scheduleBackgroundRouterRefresh(0);
       void processResultsPromise.finally(() => {
         router.refresh();
       });
@@ -8343,7 +6883,6 @@ export function ImportFilesModal({
                 activeProgressItem?.importMode ?? null
               ))
         }
-        timingSummary={getImportActivityTimingSummary(activitySnapshotForDisplay)}
         errorCode={currentErrorItem?.errorCode ?? null}
         errorTitle={currentErrorItem?.errorTitle ?? null}
         errorNextSteps={currentErrorItem?.errorNextSteps ?? null}

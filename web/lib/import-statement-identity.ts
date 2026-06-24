@@ -139,15 +139,6 @@ const guessUcpbKnownSampleIdentity = (fileName: string) => {
 const guessUnionBankKnownSampleIdentity = (fileName: string) => {
   const lowerName = fileName.toLowerCase();
 
-  if (/^img_138[7-9]\.png$/.test(lowerName) || /^img_139[0-6]\.png$/.test(lowerName)) {
-    return {
-      accountName: "UnionBank 8037",
-      institution: "UnionBank",
-      accountNumber: "8037",
-      accountType: "bank" as const,
-    };
-  }
-
   if (/771487697.*soa.*union.*bank|soa-union-bank/i.test(lowerName)) {
     return {
       accountName: "UnionBank 3912",
@@ -187,30 +178,6 @@ const guessUnionBankKnownSampleIdentity = (fileName: string) => {
   return null;
 };
 
-const guessRcbcKnownScreenshotIdentity = (fileName: string) => {
-  const normalized = fileName.trim().replace(/^.*[\\/]/, "").toLowerCase();
-
-  if (/^img_137[1-3]\.png$/.test(normalized)) {
-    return {
-      accountName: "RCBC 0272",
-      institution: "RCBC",
-      accountNumber: "0000009048500272",
-      accountType: "bank" as const,
-    };
-  }
-
-  if (/^img_137[4-6]\.png$/.test(normalized)) {
-    return {
-      accountName: "RCBC 1014",
-      institution: "RCBC",
-      accountNumber: "1014",
-      accountType: "credit_card" as const,
-    };
-  }
-
-  return null;
-};
-
 export const guessStatementIdentity = (fileName: string) => {
   const lowerName = fileName.toLowerCase();
   const ucpbKnownSampleIdentity = guessUcpbKnownSampleIdentity(fileName);
@@ -221,11 +188,6 @@ export const guessStatementIdentity = (fileName: string) => {
   const unionBankKnownSampleIdentity = guessUnionBankKnownSampleIdentity(fileName);
   if (unionBankKnownSampleIdentity) {
     return unionBankKnownSampleIdentity;
-  }
-
-  const rcbcKnownScreenshotIdentity = guessRcbcKnownScreenshotIdentity(fileName);
-  if (rcbcKnownScreenshotIdentity) {
-    return rcbcKnownScreenshotIdentity;
   }
 
   if (lowerName.includes("gcash")) {
@@ -395,111 +357,7 @@ const readParsedRowString = (row: ParsedImportRow, key: string) => {
   return typeof payloadValue === "string" && payloadValue.trim() ? payloadValue.trim() : null;
 };
 
-const readParsedRowAccountType = (row: ParsedImportRow): UploadAccountType => {
-  const direct = row.accountType;
-  if (
-    direct === "bank" ||
-    direct === "wallet" ||
-    direct === "credit_card" ||
-    direct === "cash" ||
-    direct === "investment" ||
-    direct === "other"
-  ) {
-    return direct;
-  }
-
-  const rawPayload =
-    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-      ? (row.rawPayload as Record<string, unknown>)
-      : null;
-  const payloadValue = rawPayload?.accountType;
-  return payloadValue === "bank" ||
-    payloadValue === "wallet" ||
-    payloadValue === "credit_card" ||
-    payloadValue === "cash" ||
-    payloadValue === "investment" ||
-    payloadValue === "other"
-    ? payloadValue
-    : null;
-};
-
-const weakStatementIdentityLabelPattern =
-  /^(?:php|accounts?|account details|transaction history|all|received|sent|download|view all)$/i;
-const monthOnlyIdentityPattern =
-  /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2},?$/i;
-
-const isWeakParsedStatementIdentity = (params: {
-  accountName?: string | null;
-  institution?: string | null;
-  accountNumber?: string | null;
-}) => {
-  if (params.accountNumber?.trim()) {
-    return false;
-  }
-
-  const accountName = params.accountName?.trim() ?? "";
-  const institution = params.institution?.trim() ?? "";
-  const combined = [accountName, institution].filter(Boolean).join(" ").trim();
-  if (!combined) {
-    return true;
-  }
-
-  return (
-    weakStatementIdentityLabelPattern.test(combined) ||
-    monthOnlyIdentityPattern.test(combined) ||
-    /^premier plus savings\b/i.test(combined) ||
-    /^available balance$/i.test(combined) ||
-    /^\*{2,}\d{4}\b/.test(combined) ||
-    isGenericMobileScreenshotFileName(combined)
-  );
-};
-
 export const resolveStatementIdentityFromParsedRows = (rows: ParsedImportRow[]) => {
-  const selectIdentity = (predicate: (row: ParsedImportRow) => boolean) => {
-    for (const row of rows) {
-      if (!predicate(row)) {
-        continue;
-      }
-
-      const accountName = readParsedRowString(row, "accountName");
-      const institution = readParsedRowString(row, "institution");
-      const accountNumber = readParsedRowString(row, "accountNumber");
-      const accountType = readParsedRowAccountType(row);
-      if (isWeakParsedStatementIdentity({ accountName, institution, accountNumber })) {
-        continue;
-      }
-
-      if (accountName || institution || accountNumber) {
-        return {
-          accountName,
-          institution,
-          accountNumber,
-          accountType,
-        };
-      }
-    }
-
-    return null;
-  };
-
-  const screenshotIdentity = selectIdentity((row) => {
-    const rawPayload =
-      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-        ? (row.rawPayload as Record<string, unknown>)
-        : null;
-    const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
-    const kind = typeof rawPayload?.kind === "string" ? rawPayload.kind : "";
-    return /_mobile_screenshot/i.test(`${source} ${kind}`) || kind === "account_snapshot_marker";
-  });
-  if (screenshotIdentity) {
-    return screenshotIdentity;
-  }
-
-  const numberedIdentity = selectIdentity((row) => Boolean(readParsedRowString(row, "accountNumber")));
-  if (numberedIdentity) {
-    return numberedIdentity;
-  }
-
   for (const row of rows) {
     const accountName = readParsedRowString(row, "accountName");
     const institution = readParsedRowString(row, "institution");
@@ -509,7 +367,6 @@ export const resolveStatementIdentityFromParsedRows = (rows: ParsedImportRow[]) 
         accountName,
         institution,
         accountNumber,
-        accountType: readParsedRowAccountType(row),
       };
     }
   }
