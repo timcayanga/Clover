@@ -941,6 +941,40 @@ const assessImportHealthSummary = (params: {
   } as const;
 };
 
+const buildNoRowsImportFailureMessage = (params: {
+  institution?: string | null;
+  surfaceFingerprintKind: ImportSurfaceFingerprintKind;
+  imageImport: boolean;
+  importMode: ImportMode | null | undefined;
+}) => {
+  const institution = typeof params.institution === "string" ? params.institution.trim() : "";
+
+  if (params.imageImport && params.importMode === "statement") {
+    if (/wise/i.test(institution)) {
+      return "Clover recognized this as Wise, but could not read enough visible transaction rows from the screenshot.";
+    }
+    if (params.surfaceFingerprintKind === "wallet_screenshot") {
+      return "Clover recognized a wallet-style screenshot, but could not read enough visible transaction rows.";
+    }
+    if (params.surfaceFingerprintKind === "statement_screenshot") {
+      return "Clover recognized a statement-style screenshot, but could not read enough visible transaction rows.";
+    }
+    if (params.surfaceFingerprintKind === "receipt_like") {
+      return "This image looked more like a receipt or non-ledger document than a bank statement, so Clover could not import transactions from it.";
+    }
+    if (params.surfaceFingerprintKind === "generic_document") {
+      return "Clover could not verify that this image contains a readable transaction ledger.";
+    }
+    return "Clover could not read enough visible transaction rows from this screenshot.";
+  }
+
+  if (params.importMode === "statement" && params.surfaceFingerprintKind === "generic_document") {
+    return "Clover could not verify that this file contains a readable statement or transaction ledger.";
+  }
+
+  return "Clover could not finish reading the file.";
+};
+
 const assessLocalParseRisk = (params: {
   rows: ParsedImportRow[];
   importMode: ImportMode | null | undefined;
@@ -5645,6 +5679,38 @@ export const processImportFileText = async (
       status: "done",
     };
   }
+  if (previouslyVisibleRows > 0 && !isDocumentImportMode) {
+    const cleanupRows = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
+    if (cleanupRows > 0) {
+      await upsertImportEnrichmentJob({
+        workspaceId: String(importFile.workspaceId),
+        importFileId,
+        totalRows: Math.max(previouslyVisibleRows, cleanupRows),
+        phase: "queued",
+        forceRequeue: false,
+      }).catch(() => null);
+      processImportEnrichmentJobsInBackground(importFileId, Math.max(previouslyVisibleRows, cleanupRows));
+    }
+    await updateImportFileCompat(importFileId, {
+      status: "done",
+      processingPhase: "complete",
+      processingMessage:
+        cleanupRows > 0
+          ? "The file is visible in Clover. Clover is cleaning up names and categories in the background."
+          : "The file is imported and ready.",
+      confirmedTransactionsCount: Math.max(Number(importFile.confirmedTransactionsCount ?? 0), previouslyVisibleRows),
+    }).catch(() => null);
+    return {
+      imported: previouslyVisibleRows,
+      duplicate: false,
+      metadata: detectStatementMetadataFromText("", importFile.fileName),
+      accountId: typeof importFile.accountId === "string" ? importFile.accountId : null,
+      confirmedTransactionsCount: previouslyVisibleRows,
+      insightSummary: undefined,
+      accountBalance: null,
+      status: "done",
+    };
+  }
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
@@ -6184,6 +6250,14 @@ export const processImportFileText = async (
     screenshotNoiseRatio,
     surfaceFingerprintKind: surfaceFingerprint.kind,
   });
+  const fastFailureLooksUnsupported =
+    importMode === "statement" &&
+    imageImport &&
+    parsedRows.length === 0 &&
+    !hasKnownInstitution &&
+    surfaceFingerprint.kind === "generic_document" &&
+    text.trim().length < 80 &&
+    screenshotNoiseRatio >= 0.35;
   const parserRouteDecision = decideImportParserRoute({
     importMode,
     fileType: importFile.fileType,
@@ -6207,6 +6281,39 @@ export const processImportFileText = async (
     trainedReceiptDetails: Boolean(trainedReceiptDetails),
     surfaceFingerprint,
   });
+  if (fastFailureLooksUnsupported) {
+    const processingMessage = buildNoRowsImportFailureMessage({
+      institution: metadataForParse.institution ?? null,
+      surfaceFingerprintKind: surfaceFingerprint.kind,
+      imageImport,
+      importMode,
+    });
+    await updateImportFileCompat(importFileId, {
+      status: "failed",
+      processingPhase: "repair_needed",
+      processingMessage,
+      parsedRowsCount: 0,
+      confirmedTransactionsCount: 0,
+    }).catch(() => null);
+    emitImportProcessingEvent("import_processing_stalled", {
+      processing_status: "failed",
+      processing_phase: "repair_needed",
+      reason: "fast_unsupported_surface",
+      institution: metadataForParse.institution ?? null,
+      error_code: "I-104",
+    });
+    return {
+      imported: 0,
+      duplicate: false,
+      metadata: metadataForParse,
+      accountId: null,
+      accountSummaries: [],
+      confirmedTransactionsCount: 0,
+      insightSummary: undefined,
+      accountBalance: null,
+      status: "error",
+    };
+  }
   const shouldUseVisionFallback =
     parserRouteDecision.route !== "deterministic" &&
     parserRouteDecision.shouldRenderPageImages &&
@@ -7245,12 +7352,16 @@ export const processImportFileText = async (
 
   if (!isDocumentImport && imageImport && rows.length === 0) {
     const stalledInstitution = resolvedMetadata.institution ?? checkpointBankName ?? null;
+    const processingMessage = buildNoRowsImportFailureMessage({
+      institution: stalledInstitution,
+      surfaceFingerprintKind: surfaceFingerprint.kind,
+      imageImport,
+      importMode,
+    });
     await updateImportFileCompat(importFileId, {
       status: "failed",
       processingPhase: "repair_needed",
-      processingMessage: stalledInstitution && /wise/i.test(stalledInstitution)
-        ? "Clover recognized this as Wise, but could not read enough visible transaction rows from the screenshot."
-        : "Clover could not read enough visible transaction rows from this screenshot.",
+      processingMessage,
       parsedRowsCount: 0,
       confirmedTransactionsCount: 0,
     });
