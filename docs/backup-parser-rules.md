@@ -28,6 +28,7 @@ The backup parser exists to keep Clover usable when the deterministic parser is 
 ## Generic Categorization Rules
 
 - Use keyword and context clues before falling back to `Other`.
+- Combine merchant text with visible currency, account currency, travel/location clues, and note text before deciding that a category is unknown.
 - Person-like names usually map to `Transfers`.
 - Grocery, market, supermarket, cafe, restaurant, sushi, dumplings, coffee, and bar merchants usually map to `Food & Dining`.
 - Airport, train, bus, parking, transport agencies, and transit merchants usually map to `Transport`.
@@ -39,3 +40,8 @@ The backup parser exists to keep Clover usable when the deterministic parser is 
 - Lower confidence when the file is blurry, OCR is fragmented, rows cannot be reconciled, or the source is only partially visible.
 - Keep low-confidence rows reviewable instead of forcing aggressive normalization.
 - Do not override confirmed user data.
+
+## Validation And Retry
+
+- If fallback rows are mostly `Other`, mostly UI noise, or mostly missing dates, retry with the screenshot/transcript path instead of finalizing immediately.
+- Treat low-quality fallback output as incomplete work, not a successful parse.

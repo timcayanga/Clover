@@ -603,6 +603,115 @@ const normalizeImportConfidenceScore = (value: unknown) => {
   return Math.max(0, Math.min(100, Math.round(scaled)));
 };
 
+const isWeakCategoryName = (value: unknown) => {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return !normalized || normalized === "other" || normalized === "needs category review";
+};
+
+const looksLikeUiNoiseTransactionName = (value: unknown) => {
+  const normalized = typeof value === "string" ? normalizeWhitespace(value).trim() : "";
+  if (!normalized) {
+    return true;
+  }
+
+  return (
+    /\b(?:search|includes hidden|type|currency|direction|rows|next|prev|all currencies)\b/i.test(normalized) ||
+    /^(?:\d{1,3}|[A-Z]{3}|\d{4}-\d{2}-\d{2}|[A-Z][a-z]{2}\s+\d{1,2},?\s+\d{4})$/.test(normalized)
+  );
+};
+
+const applyContextualCategoryHeuristics = <TRow extends EnrichedParsedImportRow>(
+  row: TRow,
+  context?: {
+    parsedRow?: EnrichedParsedImportRow | undefined;
+    institution?: string | null;
+    accountCurrency?: string | null;
+    attempt?: number;
+  }
+) => {
+  const fallbackType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
+  const sourceTexts = [
+    row.merchantRaw,
+    row.merchantClean,
+    row.description,
+    row.accountName,
+    row.institution,
+    context?.institution,
+    context?.accountCurrency,
+    typeof row.currency === "string" ? row.currency : null,
+    context?.parsedRow?.merchantRaw,
+    context?.parsedRow?.merchantClean,
+    context?.parsedRow?.description,
+    extractHumanReadableDescription(row.rawPayload ?? null),
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+  const guessedCategory = sourceTexts ? guessCategoryName(sourceTexts, fallbackType) : "Other";
+  const existingCategory = typeof row.categoryName === "string" ? row.categoryName.trim() : "";
+  const existingConfidence = normalizeImportConfidenceScore(row.categoryConfidence);
+  const existingIsWeak = isWeakCategoryName(existingCategory) || existingConfidence < 70;
+  const shouldUseGuessedCategory =
+    guessedCategory !== "Other" &&
+    (existingIsWeak ||
+      (guessedCategory === "Transfers" && existingCategory !== "Transfers" && existingConfidence < 85) ||
+      ((guessedCategory === "Food & Dining" || guessedCategory === "Travel & Lifestyle" || guessedCategory === "Shopping") &&
+        looksLikeUiNoiseTransactionName(existingCategory) &&
+        existingConfidence < 80));
+
+  if (!shouldUseGuessedCategory) {
+    return row;
+  }
+
+  const nextType =
+    guessedCategory === "Transfers"
+      ? "transfer"
+      : coerceTransactionTypeFromCategoryName(
+          guessedCategory,
+          fallbackType as "income" | "expense" | "transfer"
+        );
+  const appliedConfidence = Math.max(existingConfidence, context?.attempt && context.attempt >= 2 ? 86 : 78);
+
+  return {
+    ...row,
+    categoryName: guessedCategory,
+    type: nextType,
+    categoryConfidence: appliedConfidence,
+    confidence: Math.max(normalizeImportConfidenceScore(row.confidence), appliedConfidence),
+    normalizedPayload: {
+      ...((row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
+        ? row.normalizedPayload
+        : {}) as Record<string, unknown>),
+      contextualCategoryHeuristic: guessedCategory,
+    },
+  };
+};
+
+const assessFallbackRowsQuality = (rows: ParsedImportRow[]) => {
+  const transactionRows = rows.filter((row) => {
+    const rawPayload = row.rawPayload;
+    return !(
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (((rawPayload as Record<string, unknown>).kind === "opening_balance") ||
+        ((rawPayload as Record<string, unknown>).kind === "account_snapshot_marker"))
+    );
+  });
+  const total = transactionRows.length;
+  const weakCategoryCount = transactionRows.filter((row) => isWeakCategoryName(row.categoryName)).length;
+  const suspiciousNameCount = transactionRows.filter((row) =>
+    looksLikeUiNoiseTransactionName(row.merchantClean ?? row.merchantRaw ?? row.description ?? null)
+  ).length;
+  const datedCount = transactionRows.filter((row) => parseDateValue(row.date ?? null)).length;
+
+  return {
+    total,
+    weakCategoryShare: total > 0 ? weakCategoryCount / total : 0,
+    suspiciousNameShare: total > 0 ? suspiciousNameCount / total : 0,
+    datedShare: total > 0 ? datedCount / total : 0,
+  };
+};
+
 const inferParserRowConfidence = (params: {
   confidence?: unknown;
   parserConfidence?: unknown;
@@ -4491,15 +4600,22 @@ const strengthenEnrichmentRowForAttempt = (
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
     .join(" ");
   const fallbackType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
+  const contextuallyRecategorizedRow = applyContextualCategoryHeuristics(row, {
+    parsedRow,
+    attempt,
+  });
   const guessedCategory = merchantText ? guessCategoryName(merchantText, fallbackType) : "Other";
-  const rowCategory = typeof row.categoryName === "string" && row.categoryName.trim() ? row.categoryName.trim() : "";
+  const rowCategory =
+    typeof contextuallyRecategorizedRow.categoryName === "string" && contextuallyRecategorizedRow.categoryName.trim()
+      ? contextuallyRecategorizedRow.categoryName.trim()
+      : "";
   const shouldUseGuessedCategory =
     guessedCategory &&
     guessedCategory !== "Other" &&
     (!rowCategory || rowCategory.toLowerCase() === "other");
-  const categoryName = shouldUseGuessedCategory ? guessedCategory : row.categoryName;
+  const categoryName = shouldUseGuessedCategory ? guessedCategory : contextuallyRecategorizedRow.categoryName;
   const parserDirection =
-    resolveUnionBankExternalTransferDirection(row, parsedRow) ??
+    resolveUnionBankExternalTransferDirection(contextuallyRecategorizedRow, parsedRow) ??
     (parsedRow?.type === "income" || parsedRow?.type === "expense" ? parsedRow.type : null);
   const type =
     parserDirection && shouldPreserveParserTransferDirection(row, parsedRow)
@@ -4517,19 +4633,21 @@ const strengthenEnrichmentRowForAttempt = (
           : row.merchantClean;
 
   return {
-    ...row,
+    ...contextuallyRecategorizedRow,
     categoryName,
     type,
     merchantClean,
     categoryConfidence: shouldUseGuessedCategory
-      ? Math.max(normalizeImportConfidenceScore(row.categoryConfidence), attempt >= 3 ? 85 : 75)
-      : row.categoryConfidence,
+      ? Math.max(normalizeImportConfidenceScore(contextuallyRecategorizedRow.categoryConfidence), attempt >= 3 ? 85 : 75)
+      : contextuallyRecategorizedRow.categoryConfidence,
     confidence: shouldUseGuessedCategory
-      ? Math.max(normalizeImportConfidenceScore(row.confidence), attempt >= 3 ? 85 : 75)
-      : row.confidence,
+      ? Math.max(normalizeImportConfidenceScore(contextuallyRecategorizedRow.confidence), attempt >= 3 ? 85 : 75)
+      : contextuallyRecategorizedRow.confidence,
     normalizedPayload: {
-      ...((row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
-        ? row.normalizedPayload
+      ...((contextuallyRecategorizedRow.normalizedPayload &&
+      typeof contextuallyRecategorizedRow.normalizedPayload === "object" &&
+      !Array.isArray(contextuallyRecategorizedRow.normalizedPayload)
+        ? contextuallyRecategorizedRow.normalizedPayload
         : {}) as Record<string, unknown>),
       enrichmentAttempt: attempt,
       enrichmentFallback: shouldUseGuessedCategory ? "deterministic-category" : "training",
@@ -5878,11 +5996,25 @@ export const processImportFileText = async (
         .filter(Boolean)
         .join(" ")
     );
+  const openAiRowsQuality =
+    openAiParsed && importMode === "statement" ? assessFallbackRowsQuality(openAiParsed.rows as ParsedImportRow[]) : null;
+  const openAiResultLooksLowQuality =
+    imageImport &&
+    importMode === "statement" &&
+    Boolean(openAiRowsQuality) &&
+    Boolean(
+      openAiRowsQuality &&
+        openAiRowsQuality.total >= 6 &&
+        (openAiRowsQuality.suspiciousNameShare >= 0.2 ||
+          openAiRowsQuality.weakCategoryShare >= 0.7 ||
+          openAiRowsQuality.datedShare < 0.7)
+    );
   const openAiResultLooksSparse =
     !openAiParsed ||
     (importMode === "statement" &&
       !openAiParseIsUsableWiseScreenshot &&
       (openAiParsed.rows.length === 0 || !openAiMetadata?.accountNumber)) ||
+    openAiResultLooksLowQuality ||
     (importMode === "receipt" &&
       (!openAiParsed.receiptDetails ||
         (openAiReceiptValidation !== null && openAiReceiptValidation.score < 3) ||
@@ -5892,6 +6024,16 @@ export const processImportFileText = async (
           openAiParsed.receiptDetails.split_allocations.length === 0))) ||
     ((importMode === "portfolio" || importMode === "account_detail") &&
       (!openAiParsed.holdings.length || !openAiMetadata?.accountName));
+
+  if (openAiResultLooksLowQuality && openAiRowsQuality) {
+    console.warn("[import-fallback] openai fallback result looked low quality; retrying transcript path", {
+      importFileId,
+      weakCategoryShare: Number(openAiRowsQuality.weakCategoryShare.toFixed(3)),
+      suspiciousNameShare: Number(openAiRowsQuality.suspiciousNameShare.toFixed(3)),
+      datedShare: Number(openAiRowsQuality.datedShare.toFixed(3)),
+      rowCount: openAiRowsQuality.total,
+    });
+  }
 
   if (imageTranscriptRequiresRetry && openAiResultLooksSparse) {
     const transcript = await transcribeImportImagesWithOpenAI({
@@ -8459,7 +8601,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   const currentMobileScreenshotOverlapCounts = new Map<string, number>();
 
   for (const [index, originalRow] of parsedRows.entries()) {
-    const row = normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
+    const normalizedRow = normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
+    const row = applyContextualCategoryHeuristics(normalizedRow as EnrichedParsedImportRow, {
+      institution: statementInstitution,
+      accountCurrency: resolvedAccount.currency,
+    });
     const rowAccount = rowAccountFor(row as Record<string, unknown>);
     const rowResolvedAccountId = rowAccount.id;
     const rowType =

@@ -131,15 +131,21 @@ const isLikelyPersonTransferName = (value: string) => {
 export const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
+  if (/visa\s+provisioning\s+service|card\s+checked|verification/.test(lower) || /visaprovisioningservice|cardchecked|verification/.test(compact)) {
+    return "Financial";
+  }
   if (/google\s+play|googleplay/.test(lower) || /googleplay/.test(compact)) return "Entertainment";
   const hasTravelContext =
-    /(?:sydney|melbourne|nsw|harbour|opera\s+house|great\s+ocean\s+road|skybus|airport|tourism|leura|surry\s+hills|george\s+st|circular|bath|victoria|apollo\s+bay)/.test(lower) ||
-    /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
+    /(?:sydney|melbourne|nsw|harbour|opera\s+house|great\s+ocean\s+road|skybus|airport|tourism|leura|surry\s+hills|george\s+st|circular|bath|victoria|apollo\s+bay|darwin|bandara|mitrtown|hk\s+airport|samyan|black\s+cabin|little\s+india|don\s+don\s+donki)/.test(lower) ||
+    /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay|darwin|bandara|mitrtown|hkairport|samyan|blackcabin|littleindia|dondondonki)/.test(compact);
   const hasForeignMerchantCurrencyContext =
-    /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
+    /\b(?:aud|hkd|thb|idr|usd|gbp)\b/.test(lower) || /(?:aud|hkd|thb|idr|usd|gbp)/.test(compact);
 
   if (isLikelyPersonTransferName(text)) return "Transfers";
   if (/withdrawn|cash withdrawal|atm withdrawal/.test(lower) || /withdrawn|cashwithdrawal|atmwithdrawal/.test(compact)) return "Cash & ATM";
+  if (/ticket\s+sales|htg\s+ticket\s+sales|opera\s+house|theatre|theater/.test(lower) || /ticketsales|htgticketsales|operahouse|theatre|theater/.test(compact)) {
+    return "Entertainment";
+  }
   if (/\bpayments?\b/.test(lower) && !/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)) return "Shopping";
   if (/emmanuel\s+payments?/.test(lower) || /emmanuelpayments?/.test(compact)) return "Shopping";
   if (/sydney\s+opera\s+house/.test(lower) || /sydneyoperahouse/.test(compact)) return "Entertainment";
@@ -159,13 +165,13 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   }
   if (/liberty\s+oil|fuel|petrol|gas\s+station/.test(lower) || /libertyoil|fuel|petrol|gasstation/.test(compact)) return "Transport";
   if (
-    /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills|great\s+ocean\s+road\s+choc|samyan\s+mitrtown/.test(lower) ||
-    /pedrothegrocer|grocery|supermarket|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|7eleven|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills|greatoceanroadchoc|samyanmitrtown/.test(compact)
+    /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills|great\s+ocean\s+road\s+choc|samyan\s+mitrtown|jacks\s+of\s+bath|vesper|black\s+cabin\s+bar|coco\s+group|coco\s+dewata|nat'?s\s+rustic|moonlit\s+sanctuary/.test(lower) ||
+    /pedrothegrocer|grocery|supermarket|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|7eleven|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills|greatoceanroadchoc|samyanmitrtown|jacksofbath|vesper|blackcabinbar|cocogroup|cocodewata|natsrustic|moonlitsanctuary/.test(compact)
   )
     return "Food & Dining";
   if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) return "Food & Dining";
   if (/books?\b|asia\s+books/.test(lower) || /books|asiabooks/.test(compact)) return "Education";
-  if (/paypal|convenience|relay|amazon/.test(lower) || /paypal|convenience|relay|amazon/.test(compact))
+  if (/paypal|convenience|relay|amazon|alibaba|camera/.test(lower) || /paypal|convenience|relay|amazon|alibaba|camera/.test(compact))
     return "Shopping";
   if (/citibank.*\bfin\b|bank.*\bfin\b/.test(lower) || /citibank.*fin|bank.*fin/.test(compact)) return "Transfers";
   if (
@@ -198,7 +204,7 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
   if (/bill|utilities|electric|water|internet|phone|subscription|openai|netflix|spotify|load purchase|pay\s*maya\s*load purchase|paymaya\s*load purchase|mobile load/.test(lower))
     return "Bills & Utilities";
-  if (/travel|airbnb|hotel|airline|flight|tour|holiday/.test(lower)) return "Travel & Lifestyle";
+  if (/travel|airbnb|hotel|airline|flight|tour|holiday|tourism|souvenir|viator|harbour|sanctuary|great\s+ocean\s+road|parks?\s+victoria/.test(lower)) return "Travel & Lifestyle";
   if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox/.test(lower))
     return "Entertainment";
   if (/puregold|shop|shopping|mall|amazon|alibaba|lazada|shopee|retail|camera/.test(lower)) return "Shopping";
