@@ -34,6 +34,7 @@ import {
   buildTransactionCategoryUpdatedMessage,
   resolveTransactionCategoryChange,
 } from "@/lib/transaction-category-feedback";
+import { buildTransactionInlineRelationPatches } from "@/lib/transaction-inline-relation-patches";
 import {
   buildTransactionDetailDraft,
   type TransactionDetailDraftValue,
@@ -5472,28 +5473,13 @@ function TransactionsPageContent() {
     }
 
     if (field === "accountId" || field === "categoryId") {
-      const nextPatch: Partial<Transaction> = {};
-      const rollbackPatch: Partial<Transaction> = {
-        accountId: transaction.accountId,
-        accountName: transaction.accountName,
-        categoryId: transaction.categoryId,
-        categoryName: transaction.categoryName,
-      };
-
-      if (field === "accountId") {
-        nextPatch.accountId = value;
-        nextPatch.accountName = accounts.find((account) => account.id === value)?.name ?? transaction.accountName;
-        rollbackPatch.categoryId = transaction.categoryId;
-        rollbackPatch.categoryName = transaction.categoryName;
-      }
-
-      if (field === "categoryId") {
-        nextPatch.categoryId = value || null;
-        nextPatch.categoryName =
-          categories.find((category) => category.id === value)?.name ?? (value ? transaction.categoryName : null);
-        rollbackPatch.accountId = transaction.accountId;
-        rollbackPatch.accountName = transaction.accountName;
-      }
+      const { nextPatch, rollbackPatch } = buildTransactionInlineRelationPatches({
+        transaction,
+        field,
+        value,
+        accounts,
+        categories,
+      });
 
       applyTransactionPatchLocally(transaction.id, nextPatch);
       void updateTransaction(transaction.id, payload).catch((error) => {
