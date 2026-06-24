@@ -27,6 +27,7 @@ type DecideImportParserRouteParams = {
   genericParseLooksSuspicious?: boolean;
   suspiciousDateCoverage?: boolean;
   textLength?: number;
+  screenshotNoiseRatio?: number;
   detectedMetadata?: DetectedStatementMetadata | null;
   trainedReceiptDetails?: boolean;
 };
@@ -48,8 +49,11 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
   const suspiciousDateCoverage = Boolean(params.suspiciousDateCoverage);
   const weakStatementIdentity = !hasAccountIdentity && !hasMultiAccountIdentity;
   const textLength = Math.max(0, Number(params.textLength ?? 0));
+  const screenshotNoiseRatio = Math.max(0, Math.min(1, Number(params.screenshotNoiseRatio ?? 0)));
   const weakText = textLength < 120;
   const veryWeakText = textLength < 50;
+  const noisyScreenshotText = imageImport && screenshotNoiseRatio >= 0.35;
+  const extremelyNoisyScreenshotText = imageImport && screenshotNoiseRatio >= 0.5;
   const shouldRenderPageImages = imageImport || isPdf;
 
   if (params.canReuseCachedStatementParse) {
@@ -122,7 +126,7 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
 
   if (
     params.prefersVisionFallbackForInstitution &&
-    (imageImport || isPdf || veryWeakText || parsedRowsCount === 0 || genericParseLooksSuspicious)
+    (imageImport || isPdf || veryWeakText || parsedRowsCount === 0 || genericParseLooksSuspicious || noisyScreenshotText)
   ) {
     return {
       route: "backup_openai",
@@ -138,6 +142,7 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
     (imageImport || isPdf) &&
     (parsedRowsCount === 0 ||
       weakText ||
+      extremelyNoisyScreenshotText ||
       metadataConfidence < 70 ||
       weakStatementIdentity ||
       !hasKnownInstitution ||
@@ -156,7 +161,12 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
 
   if (
     params.likelyScreenshotStatement &&
-    (parsedRowsCount < 4 || weakText || metadataConfidence < 75 || weakStatementIdentity || suspiciousDateCoverage)
+    (parsedRowsCount < 4 ||
+      weakText ||
+      noisyScreenshotText ||
+      metadataConfidence < 75 ||
+      weakStatementIdentity ||
+      suspiciousDateCoverage)
   ) {
     return {
       route: "backup_openai",

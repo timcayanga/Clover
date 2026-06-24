@@ -5953,6 +5953,10 @@ export const processImportFileText = async (
   const hasKnownInstitution = Boolean(metadataForParse.institution && metadataForParse.institution !== "Unknown");
   const parsedRowsWithDates = countRowsWithParseableDates(parsedRows);
   const parsedDateCoverage = parsedRows.length > 0 ? parsedRowsWithDates / parsedRows.length : 0;
+  const screenshotNoiseRatio =
+    imageImport && importMode === "statement" && statementImageOcrCleanup.originalLineCount > 0
+      ? statementImageOcrCleanup.removedLineCount / statementImageOcrCleanup.originalLineCount
+      : 0;
   const gcashLooksStructurallyReadable =
     metadataForParse.institution === "GCash" &&
     parsedRows.length >= 6 &&
@@ -6030,6 +6034,7 @@ export const processImportFileText = async (
     genericParseLooksSuspicious: genericParseLooksSuspicious || gcashSuspiciouslySparse,
     suspiciousDateCoverage,
     textLength: text.trim().length,
+    screenshotNoiseRatio,
     detectedMetadata: metadataForParse,
     trainedReceiptDetails: Boolean(trainedReceiptDetails),
   });
@@ -6055,6 +6060,7 @@ export const processImportFileText = async (
     institution: metadataForParse.institution ?? null,
     rowCount: parsedRows.length,
     metadataConfidence: metadataForParse.confidence ?? 0,
+    screenshotNoiseRatio: Number(screenshotNoiseRatio.toFixed(3)),
   });
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
@@ -6749,6 +6755,10 @@ export const processImportFileText = async (
     visibleImportLatestDate: visibleImportCompleteness.latestDate,
     screenshotOcrNoiseLinesRemoved: statementImageOcrCleanup.removedLineCount,
     screenshotOcrOriginalLineCount: statementImageOcrCleanup.originalLineCount,
+    screenshotOcrNoiseRatio:
+      statementImageOcrCleanup.originalLineCount > 0
+        ? Number((statementImageOcrCleanup.removedLineCount / statementImageOcrCleanup.originalLineCount).toFixed(3))
+        : 0,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const receiptDocumentCashAccountId =
