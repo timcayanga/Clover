@@ -5935,7 +5935,13 @@ export const processImportFileText = async (
     Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) &&
     Boolean(textCacheInfo?.cacheRecord?.metadata);
 
-  if (imageImport && !trainedReceiptDetails && !canReuseCachedStatementParse) {
+  const shouldEagerLoadImagePages =
+    imageImport &&
+    importMode === "statement" &&
+    !trainedReceiptDetails &&
+    !canReuseCachedStatementParse;
+
+  if (shouldEagerLoadImagePages) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
@@ -7270,6 +7276,21 @@ export const processImportFileText = async (
     rawPayload: documentImportExtractedPayload,
     extractedPayload: documentImportExtractedPayload,
   });
+
+  if (documentImportRecord && !pageImages?.length && imageImport && storageKey) {
+    try {
+      pageImages = await readImportedFileImageDataUrls({
+        storageKey,
+        fileType,
+        fileName,
+      });
+    } catch (error) {
+      console.warn("Unable to lazily load document import page images", {
+        importFileId,
+        error,
+      });
+    }
+  }
 
   if (documentImportRecord && pageImages?.length) {
     await replaceDocumentImportPagesCompat({
