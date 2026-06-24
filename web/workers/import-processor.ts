@@ -7884,6 +7884,92 @@ export const processImportFileText = async (
     }
   }
 
+  if (isDocumentImport) {
+    try {
+      confirmedImportResult = await confirmImportFileWithRetry("document_import_finalize");
+      if (confirmedImportResult.status === "staged") {
+        await updateImportFileCompat(importFileId, {
+          status: "processing",
+          processingPhase: "staged",
+          processingMessage: "Clover is still lining things up.",
+        });
+        emitImportProcessingEvent("import_processing_completed", {
+          processing_status: "staged",
+          processing_phase: "staged",
+          imported_rows: confirmedImportResult.imported,
+        });
+
+        return {
+          imported: confirmedImportResult.imported,
+          duplicate: Boolean(confirmedImportResult.duplicate),
+          metadata: resolvedMetadata,
+          accountId: confirmedImportResult.accountId ?? null,
+          accountSummaries: confirmedImportResult.accountSummaries,
+          confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
+          insightSummary: confirmedImportResult.insightSummary ?? undefined,
+          accountBalance: confirmedImportResult.accountBalance ?? null,
+          status: "staged",
+        };
+      }
+
+      await updateImportFileCompat(importFileId, {
+        status: "done",
+        processingPhase: "complete",
+        processingMessage:
+          importMode === "receipt"
+            ? "Receipt document saved."
+            : importMode === "portfolio"
+              ? "Portfolio snapshot saved."
+              : importMode === "account_detail"
+                ? "Account detail snapshot saved."
+                : "Document import saved.",
+        confirmedTransactionsCount: confirmedImportResult.imported,
+      });
+      emitImportProcessingEvent("import_processing_completed", {
+        processing_status: "done",
+        processing_phase: "complete",
+        imported_rows: rows.length,
+      });
+      recordImportDataQaInBackground({
+        workspaceId: String(importFile.workspaceId),
+        importFileId,
+        fileName: String(importFile.fileName ?? "imported-file"),
+        fileType: String(importFile.fileType ?? "unknown"),
+        importMode,
+        rows,
+        metadata: resolvedMetadata,
+        startedAt,
+        usedVisionFallback: Boolean(pageImages?.length),
+        usedOpenAiFallback: Boolean(useOpenAiParse),
+        actorUserId: options.actorUserId ?? null,
+      });
+
+      return {
+        imported: rows.length,
+        duplicate: false,
+        metadata: resolvedMetadata,
+        accountId: confirmedImportResult.accountId ?? null,
+        accountSummaries: confirmedImportResult.accountSummaries,
+        confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
+        insightSummary: confirmedImportResult.insightSummary ?? undefined,
+        accountBalance: confirmedImportResult.accountBalance ?? null,
+        status: "done",
+      };
+    } catch (error) {
+      await updateImportFileCompat(importFileId, {
+        status: "failed",
+        processingPhase: "repair_needed",
+        processingMessage: "Clover couldn't finish saving the import.",
+      });
+      emitImportProcessingEvent("import_processing_stalled", {
+        processing_status: "failed",
+        processing_phase: "repair_needed",
+        reason: "confirm_import_failed",
+      });
+      throw error;
+    }
+  }
+
   try {
     const qaRunResult = await recordDataQaRun({
       workspaceId: String(importFile.workspaceId),
