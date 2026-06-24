@@ -774,16 +774,47 @@ const assessVisibleImportCompleteness = (params: {
       reasons: [] as string[],
       rowsPerPage: params.pageCount > 0 ? params.rows.length / params.pageCount : params.rows.length,
       distinctDateCount: 0,
+      dateSpanDays: 0,
+      maxDateGapDays: 0,
+      earliestDate: null as string | null,
+      latestDate: null as string | null,
     };
   }
 
   const rowsPerPage = params.pageCount > 0 ? params.rows.length / params.pageCount : params.rows.length;
+  const distinctDateValues = Array.from(
+    new Set(
+      params.rows
+        .map((row) => parseDateValue(row.date ?? row.transactionDate ?? row.postedDate ?? null))
+        .filter((value): value is Date => Boolean(value && !Number.isNaN(value.getTime())))
+        .map((date) => date.toISOString().slice(0, 10))
+    )
+  ).sort();
   const distinctDates = new Set(
     params.rows
       .map((row) => parseDateValue(row.date ?? row.transactionDate ?? row.postedDate ?? null))
       .filter((value): value is Date => Boolean(value && !Number.isNaN(value.getTime())))
       .map((date) => date.toISOString().slice(0, 10))
   );
+  const earliestDate = distinctDateValues[0] ?? null;
+  const latestDate = distinctDateValues[distinctDateValues.length - 1] ?? null;
+  const dateSpanDays =
+    earliestDate && latestDate
+      ? Math.max(
+          0,
+          Math.round(
+            (new Date(`${latestDate}T12:00:00.000Z`).getTime() - new Date(`${earliestDate}T12:00:00.000Z`).getTime()) /
+              86_400_000
+          )
+        )
+      : 0;
+  let maxDateGapDays = 0;
+  for (let index = 1; index < distinctDateValues.length; index += 1) {
+    const previous = new Date(`${distinctDateValues[index - 1]}T12:00:00.000Z`).getTime();
+    const current = new Date(`${distinctDateValues[index]}T12:00:00.000Z`).getTime();
+    const gapDays = Math.max(0, Math.round((current - previous) / 86_400_000));
+    maxDateGapDays = Math.max(maxDateGapDays, gapDays);
+  }
   const quality = assessFallbackRowsQuality(params.rows);
   const reasons: string[] = [];
   let score = 100;
@@ -804,6 +835,18 @@ const assessVisibleImportCompleteness = (params: {
   if (params.pageCount >= 3 && distinctDates.size <= 1) {
     score -= 18;
     reasons.push("single_date_cluster");
+  }
+
+  if (
+    params.pageCount >= 6 &&
+    distinctDates.size >= 3 &&
+    rowsPerPage < 4.5 &&
+    maxDateGapDays >= 21 &&
+    dateSpanDays > 0 &&
+    maxDateGapDays / dateSpanDays >= 0.55
+  ) {
+    score -= 16;
+    reasons.push("large_chronological_gap");
   }
 
   if (quality.suspiciousNameShare >= 0.18) {
@@ -835,6 +878,10 @@ const assessVisibleImportCompleteness = (params: {
     reasons,
     rowsPerPage,
     distinctDateCount: distinctDates.size,
+    dateSpanDays,
+    maxDateGapDays,
+    earliestDate,
+    latestDate,
   };
 };
 
@@ -6599,6 +6646,10 @@ export const processImportFileText = async (
     visibleImportCompletenessReasons: visibleImportCompleteness.reasons,
     visibleImportRowsPerPage: Number(visibleImportCompleteness.rowsPerPage.toFixed(2)),
     visibleImportDistinctDateCount: visibleImportCompleteness.distinctDateCount,
+    visibleImportDateSpanDays: visibleImportCompleteness.dateSpanDays,
+    visibleImportMaxDateGapDays: visibleImportCompleteness.maxDateGapDays,
+    visibleImportEarliestDate: visibleImportCompleteness.earliestDate,
+    visibleImportLatestDate: visibleImportCompleteness.latestDate,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const receiptDocumentCashAccountId =
@@ -7130,7 +7181,9 @@ export const processImportFileText = async (
         processingTargetScore: AUTO_REPARSE_SCORE_TARGET,
         processingCurrentScore: qaRunResult.evaluation.score,
         processingMessage: needsCompletenessFollowup
-          ? `Auto-rerun ${autoRerunAttempt + 1}/${AUTO_REPARSE_MAX_ATTEMPTS} queued. Clover is checking for missing screenshot rows.`
+          ? visibleImportCompleteness.reasons.includes("large_chronological_gap")
+            ? `Auto-rerun ${autoRerunAttempt + 1}/${AUTO_REPARSE_MAX_ATTEMPTS} queued. Clover detected a likely timeline gap and is checking for missing screenshot rows.`
+            : `Auto-rerun ${autoRerunAttempt + 1}/${AUTO_REPARSE_MAX_ATTEMPTS} queued. Clover is checking for missing screenshot rows.`
           : `Auto-rerun ${autoRerunAttempt + 1}/${AUTO_REPARSE_MAX_ATTEMPTS} queued. Current score ${qaRunResult.evaluation.score}.`,
       });
 
@@ -7277,7 +7330,9 @@ export const processImportFileText = async (
             : null
           : plateaued
             ? needsCompletenessFollowup
-              ? `Automatic reruns plateaued while Clover was still checking for missing screenshot rows. Manual parser fixes are needed before rerunning again.`
+              ? visibleImportCompleteness.reasons.includes("large_chronological_gap")
+                ? `Automatic reruns plateaued while Clover was still checking a likely timeline gap in the screenshot batch. Manual parser fixes are needed before rerunning again.`
+                : `Automatic reruns plateaued while Clover was still checking for missing screenshot rows. Manual parser fixes are needed before rerunning again.`
               : `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}. Manual parser fixes are needed before rerunning again.`
             : `Automatic reruns stopped below the ${AUTO_REPARSE_SCORE_TARGET} target. Latest score ${qaRunResult.evaluation.score}.`,
     });
