@@ -16,6 +16,7 @@ import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
 import { type ImportImageMode } from "@/lib/import-image-mode";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
+import { normalizeBankName } from "@/lib/data-qa-banks";
 import {
   detectStatementMetadata,
   getTrailingBalanceFromParsedRows,
