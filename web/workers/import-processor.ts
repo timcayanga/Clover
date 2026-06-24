@@ -1664,6 +1664,60 @@ const buildParsedRowsFromReceiptDetails = (params: {
   ];
 };
 
+const buildDetectedMetadataFromReceipt = (params: {
+  receiptDetails:
+    | ReturnType<typeof buildReceiptDetailsFromPreview>
+    | ReturnType<typeof buildReceiptDetailsFromTrainingFixture>
+    | null;
+  receiptPreview: ReturnType<typeof parseReceiptText> | null;
+  receiptAccountMatch:
+    | {
+        account_name?: string | null;
+        account_last4?: string | null;
+      }
+    | null
+    | undefined;
+}): DetectedStatementMetadata => {
+  const details = params.receiptDetails;
+  const inferredInstitution =
+    typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
+      ? params.receiptAccountMatch.account_name.trim()
+      : params.receiptPreview?.receiptType === "wallet_transfer"
+        ? "Cash"
+        : null;
+  const inferredCurrency =
+    typeof details?.currency === "string" && details.currency.trim()
+      ? details.currency.trim().toUpperCase()
+      : params.receiptPreview?.currency ?? "PHP";
+  const total =
+    typeof details?.total === "number" && Number.isFinite(details.total)
+      ? Number(details.total.toFixed(2))
+      : params.receiptPreview?.total ?? null;
+  const transactionDate =
+    typeof details?.transaction_date === "string" && details.transaction_date.trim()
+      ? details.transaction_date.trim()
+      : params.receiptPreview?.billDate ?? null;
+
+  return {
+    institution: inferredInstitution,
+    accountNumber:
+      typeof params.receiptAccountMatch?.account_last4 === "string" && params.receiptAccountMatch.account_last4.trim()
+        ? params.receiptAccountMatch.account_last4.trim()
+        : null,
+    accountName: inferredInstitution ?? "Cash",
+    accountType: params.receiptPreview?.receiptType === "wallet_transfer" ? "cash" : "cash",
+    currency: inferredCurrency,
+    openingBalance: null,
+    endingBalance: total,
+    creditLimit: null,
+    paymentDueDate: null,
+    totalAmountDue: total,
+    startDate: transactionDate,
+    endDate: transactionDate,
+    confidence: Math.max(75, Math.min(99, Math.round(params.receiptPreview?.confidence ?? 90))),
+  };
+};
+
 const resolveWorkspaceCashAccountId = async (workspaceId: string, currency = "PHP") => {
   await ensureWorkspaceCashAccount(workspaceId, currency);
   const normalizedCurrency =
@@ -6117,10 +6171,20 @@ export const processImportFileText = async (
           receiptAccountMatch: earlyReceiptAccountMatch,
         })
       : [];
+  const receiptDerivedMetadata =
+    importMode === "receipt"
+      ? buildDetectedMetadataFromReceipt({
+          receiptDetails: trainedReceiptDetails ?? receiptPreviewDetails,
+          receiptPreview,
+          receiptAccountMatch: earlyReceiptAccountMatch,
+        })
+      : null;
   const cachedParseRecord = canReuseCachedStatementParse ? textCacheInfo?.cacheRecord ?? null : null;
-  const metadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
-    ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
-    : detectStatementMetadataFromText(textForParse, importFile.fileName);
+  const metadata =
+    receiptDerivedMetadata ??
+    (cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
+      ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
+      : detectStatementMetadataFromText(textForParse, importFile.fileName));
   const previewReceiptValidation =
     importMode === "receipt" && receiptPreviewDetails
       ? assessReceiptExtractionQuality({
