@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { deleteAccountsAndImportArtifacts, deleteOrphanedWorkspaceTransactions, deleteWorkspaceTransactions } from "@/lib/account-deletion";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ type DeleteScope = "transactions" | "balances" | "accounts";
 
 export async function DELETE(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const { userId } = await requireAuth();
     const payload = (await request.json().catch(() => null)) as {
       workspaceId?: string;

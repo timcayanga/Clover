@@ -7,6 +7,7 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { GOAL_OPTIONS } from "@/lib/goals";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,7 @@ export async function GET() {
 
 const saveGoal = async (request: Request) => {
   try {
+    assertTrustedRequestOrigin(request);
     const { userId } = await requireAuth();
     const user = await getOrCreateCurrentUser(userId);
     const workspace = await prisma.workspace.findFirst({

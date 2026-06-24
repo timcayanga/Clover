@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { buildBudgetHistory } from "@/lib/budgeting";
 import { resolveBudgetingWorkspace } from "@/lib/budgeting-context";
 import { isMissingBudgetTableError, loadBudgetWorkspaceData } from "@/lib/budgeting-data";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 const budgetUpdateSchema = z
   .object({
@@ -182,6 +183,7 @@ export async function GET(_request: Request, { params }: Params) {
 }
 
 export async function PATCH(request: Request, { params }: Params) {
+  assertTrustedRequestOrigin(request);
   const context = await resolveBudgetingWorkspace();
   if (!context.workspaceId) {
     return NextResponse.json({ error: "Workspace unavailable" }, { status: 400 });

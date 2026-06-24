@@ -5,6 +5,7 @@ import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-dat
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const { userId } = await requireAuth();
     const clerkUser = await syncClerkUser(userId);
     const currentEnvironment = getCurrentUserEnvironment();

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ const normalizeName = (value: string | null | undefined) => {
 
 export async function PATCH(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const { userId } = await requireAuth();
     const user = await getOrCreateCurrentUser(userId);
     const payload = accountSchema.parse(await request.json());

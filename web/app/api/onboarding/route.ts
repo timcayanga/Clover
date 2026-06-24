@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ const onboardingSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const { userId } = await requireAuth();
     const payload = onboardingSchema.parse(await request.json());
     const user = await getOrCreateCurrentUser(userId);

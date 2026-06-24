@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { parseCommitmentPayload, serializeFinancialCommitment } from "@/lib/commitments";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ const resolveCommitmentsRouteUserId = async () => {
 
 export async function POST(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const userId = await resolveCommitmentsRouteUserId();
     const payload = parseCommitmentPayload((await request.json()) as Record<string, unknown>);
 

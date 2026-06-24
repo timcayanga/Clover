@@ -6,6 +6,7 @@ import { z } from "zod";
 import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 import type { TransactionType } from "@/lib/domain-types";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +110,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const userId = await resolveCategoriesRouteUserId();
     const payload = createCategorySchema.parse(await request.json());
 
@@ -189,6 +191,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const userId = await resolveCategoriesRouteUserId();
     const payload = updateCategorySchema.parse(await request.json());
 
@@ -247,6 +250,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const userId = await resolveCategoriesRouteUserId();
     const body = (await request.json().catch(() => ({}))) as { id?: string };
     const id = typeof body.id === "string" ? body.id : "";

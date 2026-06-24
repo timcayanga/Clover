@@ -15,6 +15,7 @@ import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import {
   buildTransactionQueryWhere,
   buildTransactionQueryOrderBy,
@@ -1432,6 +1433,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    assertTrustedRequestOrigin(request);
     const userId = await resolveTransactionsRouteUserId();
     const payload = transactionSchema.parse(await request.json());
 
