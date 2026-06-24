@@ -198,6 +198,8 @@ type QaRunSummary = {
   findings: QaFinding[];
 };
 
+const MIN_FULLSCREEN_IMPORT_MODAL_MS = 1200;
+
 type ImportStatusPayload = {
   importFile?: {
     status?: string;
@@ -362,6 +364,7 @@ export function ImportFilesModal({
   const [qaLoadingByItemId, setQaLoadingByItemId] = useState<Record<string, boolean>>({});
   const [qaErrorByItemId, setQaErrorByItemId] = useState<Record<string, string | null>>({});
   const [displayedOverallProgress, setDisplayedOverallProgress] = useState(0);
+  const [compactProgressUnlocked, setCompactProgressUnlocked] = useState(false);
   const [uploadPaused, setUploadPaused] = useState(false);
   const autoLoadedQaIdsRef = useRef(new Set<string>());
   const localPreparseStartedRef = useRef(new Set<string>());
@@ -374,6 +377,8 @@ export function ImportFilesModal({
   const retiredImportActivityFileNamesRef = useRef(new Set<string>());
   const autoCloseAfterStartRef = useRef(false);
   const autoCloseCompletedBatchTimerRef = useRef<number | null>(null);
+  const compactProgressUnlockTimerRef = useRef<number | null>(null);
+  const compactProgressStartedAtRef = useRef<number | null>(null);
   const visibilityDeadlineRef = useRef<number | null>(null);
   const visibilityHardStopTimerRef = useRef<number | null>(null);
   const uploadPausedRef = useRef(false);
@@ -5956,7 +5961,8 @@ export function ImportFilesModal({
   const displayedCompletedFileCount = Math.max(progressSettledFileCount, activityCompletedFileCount);
   const activityProgressFloor = Math.max(0, Math.min(100, Number(activitySnapshotForDisplay?.progress ?? 0)));
   const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
-  const showCompactProgress = busy || Boolean(activeItem) || hasCompletedBatch || Boolean(currentErrorItem);
+  const progressSessionActive = busy || Boolean(activeItem) || hasCompletedBatch || Boolean(currentErrorItem);
+  const showCompactProgress = compactProgressUnlocked && progressSessionActive;
   const targetDisplayProgress = showCompactProgress ? Math.max(overallProgress, activityProgressFloor) : 0;
   const shouldLockPageInteraction =
     open && !backgroundOnly && !launchInBackground && (Boolean(activePasswordItem) || !showCompactProgress);
@@ -6055,6 +6061,41 @@ export function ImportFilesModal({
   };
 
   useEffect(() => {
+    if (compactProgressUnlockTimerRef.current) {
+      window.clearTimeout(compactProgressUnlockTimerRef.current);
+      compactProgressUnlockTimerRef.current = null;
+    }
+
+    if (!open || backgroundOnly || launchInBackground || !progressSessionActive) {
+      compactProgressStartedAtRef.current = null;
+      setCompactProgressUnlocked(false);
+      return;
+    }
+
+    const startedAt = compactProgressStartedAtRef.current ?? Date.now();
+    compactProgressStartedAtRef.current = startedAt;
+    const remainingMs = Math.max(0, MIN_FULLSCREEN_IMPORT_MODAL_MS - (Date.now() - startedAt));
+
+    if (remainingMs === 0) {
+      setCompactProgressUnlocked(true);
+      return;
+    }
+
+    setCompactProgressUnlocked(false);
+    compactProgressUnlockTimerRef.current = window.setTimeout(() => {
+      compactProgressUnlockTimerRef.current = null;
+      setCompactProgressUnlocked(true);
+    }, remainingMs);
+
+    return () => {
+      if (compactProgressUnlockTimerRef.current) {
+        window.clearTimeout(compactProgressUnlockTimerRef.current);
+        compactProgressUnlockTimerRef.current = null;
+      }
+    };
+  }, [backgroundOnly, launchInBackground, open, progressSessionActive]);
+
+  useEffect(() => {
     if (!showCompactProgress) {
       setDisplayedOverallProgress(0);
       return;
@@ -6130,7 +6171,7 @@ export function ImportFilesModal({
   }, [backgroundOnly, launchInBackground, open, shouldLockPageInteraction, showCompactProgress]);
 
   useEffect(() => {
-    if (typeof document === "undefined" || !open || backgroundOnly || launchInBackground) {
+    if (typeof document === "undefined" || !open || backgroundOnly || launchInBackground || showCompactProgress) {
       return;
     }
 
@@ -6151,7 +6192,7 @@ export function ImportFilesModal({
       delete body.dataset.cloverImportModalVisibleCount;
       delete body.dataset.cloverImportModalVisible;
     };
-  }, [backgroundOnly, launchInBackground, open]);
+  }, [backgroundOnly, launchInBackground, open, showCompactProgress]);
 
   useEffect(() => {
     if (!open || !workspaceId) {
