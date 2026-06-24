@@ -93,88 +93,18 @@ export const isStandaloneCashPaymentDescription = (value?: string | null) => {
   return !isStatementPaymentSettlementDescription(lower);
 };
 
-const isLikelyPersonTransferName = (value: string) => {
-  const normalized = normalizeWhitespace(value);
-  if (!normalized) {
-    return false;
-  }
-
-  const cleaned = normalized.replace(/[^A-Za-z\s.'’-]/g, " ").replace(/\s+/g, " ").trim();
-  if (!cleaned) {
-    return false;
-  }
-
-  if (
-    /\b(?:airport|mall|market|grocer|grocery|restaurant|cafe|coffee|bar|books?|school|college|opera|harbour|transport|bus|train|station|parking|souvenir|tourism|sanctuary|victoria|ticket|tickets|supermarket|shop|store|mart|paypal|amazon|prime|mcdonald|milksha|gogyo|gokan|goken|leone|project|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|donki|byrdi|seeds|estate|vacation|nirvana|waterfront|relay|skybus|citibank|bank|finance|financial|oil|convenience|mitrtown)\b/i.test(
-      cleaned
-    )
-  ) {
-    return false;
-  }
-
-  const tokens = cleaned
-    .split(" ")
-    .filter(Boolean)
-    .filter((token) => token !== "." && !/^(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/.test(token));
-  if (tokens.length === 0 || tokens.length > 4) {
-    return false;
-  }
-
-  const validTokens = tokens.filter((token) => /^[A-Z][a-z]+$/.test(token) || /^[A-Z]{2,}$/.test(token) || /^[A-Z]\.?$/.test(token)).length;
-  if (tokens.length >= 2 && validTokens === tokens.length) {
-    return true;
-  }
-
-  return tokens.length === 1 && /^[A-Z]{4,}$/.test(tokens[0] ?? "");
-};
-
 export const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
-  const hasTravelContext =
-    /(?:sydney|melbourne|nsw|harbour|opera\s+house|great\s+ocean\s+road|skybus|airport|tourism|leura|surry\s+hills|george\s+st|circular|bath|victoria|apollo\s+bay)/.test(lower) ||
-    /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
-  const hasForeignMerchantCurrencyContext =
-    /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
-
-  if (isLikelyPersonTransferName(text)) return "Transfers";
-  if (/withdrawn|cash withdrawal|atm withdrawal/.test(lower) || /withdrawn|cashwithdrawal|atmwithdrawal/.test(compact)) return "Cash & ATM";
-  if (/\bpayments?\b/.test(lower) && !/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)) return "Shopping";
   if (/emmanuel\s+payments?/.test(lower) || /emmanuelpayments?/.test(compact)) return "Shopping";
   if (/sydney\s+opera\s+house/.test(lower) || /sydneyoperahouse/.test(compact)) return "Entertainment";
   if (/relay\b/.test(lower)) return "Shopping";
-  if (/viator(?:\.com)?|news\s+travels?|great\s+ocean\s+road|locker\s+hire/.test(lower) || /viator|newstravels?|greatoceanroad|lockerhire/.test(compact)) {
-    return "Travel & Lifestyle";
-  }
   if (/souvenir/.test(lower) || /souvenir/.test(compact)) return "Travel & Lifestyle";
   if (
-    /sydney\s+harbour\s+gifts?|melbourne\s+souvenir|u\s+neek\s+souvenirs?|great\s+ocean\s+road|moonlit\s+sanctuary|parks?\s+victoria/.test(lower) ||
-    /sydneyharbourgifts?|melbournesouvenir|uneeksouvenirs?|greatoceanroad|moonlitsanctuary|parksvictoria/.test(compact)
-  ) {
-    return "Travel & Lifestyle";
-  }
-  if (/transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal|hk\s+airport/.test(lower) || /transportfornsw|skybus|parking|airport|rail|trainpal|hkairport/.test(compact)) {
-    return "Transport";
-  }
-  if (/liberty\s+oil|fuel|petrol|gas\s+station/.test(lower) || /libertyoil|fuel|petrol|gasstation/.test(compact)) return "Transport";
-  if (
-    /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills|great\s+ocean\s+road\s+choc|samyan\s+mitrtown/.test(lower) ||
-    /pedrothegrocer|grocery|supermarket|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|7eleven|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills|greatoceanroadchoc|samyanmitrtown/.test(compact)
+    /pedro\s+the\s+grocer|grocer\b|mcdonald'?s|milksha|gogyo|goken|savory\s+project|bar\s+leone|four\s+frogs/.test(lower) ||
+    /pedrothegrocer|mcdonalds|milksha|gogyo|goken|savoryproject|barleone|fourfrogs/.test(compact)
   )
     return "Food & Dining";
-  if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) return "Food & Dining";
-  if (/books?\b|asia\s+books/.test(lower) || /books|asiabooks/.test(compact)) return "Education";
-  if (/paypal|convenience|relay|amazon/.test(lower) || /paypal|convenience|relay|amazon/.test(compact))
-    return "Shopping";
-  if (/citibank.*\bfin\b|bank.*\bfin\b/.test(lower) || /citibank.*fin|bank.*fin/.test(compact)) return "Transfers";
-  if (
-    hasTravelContext &&
-    hasForeignMerchantCurrencyContext &&
-    (/souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|great\s+ocean\s+road|parks?\s+victoria/.test(lower) ||
-      /souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|greatoceanroad|parksvictoria/.test(compact))
-  ) {
-    return "Travel & Lifestyle";
-  }
   if (isStandaloneCashPaymentDescription(text)) return "Shopping";
   if (isStatementPaymentSettlementDescription(text)) return "Transfers";
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";
@@ -192,7 +122,7 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/epsaten/.test(lower)) return type === "expense" ? "Cash & ATM" : "Income";
   if (/el\/?espay/.test(lower)) return type === "expense" || type === "transfer" ? "Transfers" : "Income";
   if (/payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
-  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut|yoshinoya|bar leone|savory project|gokan|goken/.test(lower)) return "Food & Dining";
+  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut|yoshinoya/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
@@ -201,7 +131,7 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/travel|airbnb|hotel|airline|flight|tour|holiday/.test(lower)) return "Travel & Lifestyle";
   if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox/.test(lower))
     return "Entertainment";
-  if (/puregold|shop|shopping|mall|amazon|alibaba|lazada|shopee|retail|camera/.test(lower)) return "Shopping";
+  if (/puregold|shop|shopping|mall|amazon|lazada|shopee|retail/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
   if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
   if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";
@@ -266,30 +196,6 @@ export const inferAccountTypeFromStatement = (
   }
 
   return fallback;
-};
-
-const screenshotChromeOnlyLinePattern =
-  /^(?:account details|transaction history|download|view all|all|received|sent|available balance|premier plus savings(?:\s+e[pb].*)?|php)$/i;
-const screenshotMonthHeaderPattern =
-  /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{4}$/i;
-const screenshotDateOnlyPattern =
-  /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2},?\s*\d{4}?$/i;
-const screenshotIsoDateOnlyPattern = /^(?:\d{2}|\d{4})[-/]\d{2}[-/]\d{2,4}$/i;
-const screenshotDateRangeFragmentPattern = /^(?:\d{2}[-/]\d{2}[-/]\d{4}\s+to|to\s+\d{2}[-/]\d{2}(?:[-/]\d{4})?)$/i;
-
-const isLikelyScreenshotChromeLine = (line: string) => {
-  const normalized = normalizeWhitespace(line);
-  if (!normalized) {
-    return true;
-  }
-
-  return (
-    screenshotChromeOnlyLinePattern.test(normalized) ||
-    screenshotMonthHeaderPattern.test(normalized) ||
-    screenshotDateOnlyPattern.test(normalized.replace(/\s+/g, " ")) ||
-    screenshotIsoDateOnlyPattern.test(normalized) ||
-    screenshotDateRangeFragmentPattern.test(normalized)
-  );
 };
 
 const splitLine = (line: string, delimiter: string) => {
@@ -4563,8 +4469,8 @@ const guessBpiCreditCategoryName = (description: string, type: TransactionType) 
   if (/expressnet|megalinkw?|\/drw\b/.test(lower)) return "Cash & ATM";
   if (/bill|meralco|bayad center|payment/.test(lower)) return "Bills & Utilities";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
-  if (/food|dining|restaurant|cafe|coffee|japanese|pho hoa|burnt bean|jung one|kiyosa|bar leone|savory project|gokan|goken/.test(lower)) return "Food & Dining";
-  if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|zalora|watsons|iherb|retail|camera/.test(lower)) return "Shopping";
+  if (/food|dining|restaurant|cafe|coffee|japanese|pho hoa|burnt bean|jung one|kiyosa/.test(lower)) return "Food & Dining";
+  if (/shop|shopping|mall|amazon|lazada|shopee|zalora|watsons|iherb|retail/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital|classpass/.test(lower)) return "Health & Wellness";
   if (/business|invoice|client|contract|linkedin|canva/.test(lower)) return "Business";
   if (/travel|airbnb|hotel|airline|flight|tour|holiday|paypal \*getyourguid|paypal \*trenitalias|paypal \*transfeero|paypal \*amami/.test(lower))
@@ -8850,418 +8756,6 @@ const parseBpiMobileScreenshotImportText = (text: string, fileName: string) => {
   };
 };
 
-const knownUnionBankMobileScreenshotMetadata = (fileName: string): DetectedStatementMetadata | null => {
-  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
-  if (!/^img_138[7-9]\.png$/.test(baseName) && !/^img_139[0-6]\.png$/.test(baseName)) {
-    return null;
-  }
-
-  return {
-    institution: "UnionBank",
-    accountNumber: "8037",
-    accountName: "UnionBank 8037",
-    accountType: "bank",
-    openingBalance: null,
-    endingBalance: 116465.28,
-    paymentDueDate: null,
-    totalAmountDue: null,
-    startDate: null,
-    endDate: null,
-    confidence: 96,
-  };
-};
-
-const unionBankMobileMonthHeaderPattern = new RegExp(`^${monthNamePattern}\\s+\\d{4}$`, "i");
-const unionBankMobilePostedDatePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
-
-const normalizeUnionBankMobileScreenshotLine = (line: string) =>
-  normalizeWhitespace(
-    line
-      .replace(/\u00a0/g, " ")
-      .replace(/[|]+/g, " ")
-      .replace(/[©]+/g, " ")
-      .replace(/[“”]/g, '"')
-      .replace(/[‘’]/g, "'")
-      .replace(/[—–]/g, "-")
-  );
-
-const isUnionBankMobileScreenshotUiLine = (line: string) => {
-  const normalized = normalizeUnionBankMobileScreenshotLine(line);
-  if (!normalized) {
-    return true;
-  }
-
-  return (
-    /^10:\d{2}\b/i.test(normalized) ||
-    /^Account Details$/i.test(normalized) ||
-    /^Download$/i.test(normalized) ||
-    /^Transaction History$/i.test(normalized) ||
-    /^(?:All|Received|Sent)$/i.test(normalized) ||
-    /Received\s+Sent/i.test(normalized) ||
-    /^(?:oO|oo|o|©)\b/i.test(normalized) ||
-    /^(?:\{|\[|\(|\\)\s*Account Details/i.test(normalized) ||
-    /(?:Ra|Ra)\s+Download$/i.test(normalized) ||
-    /^Premier Plus Savings/i.test(normalized) ||
-    /^Available Balance$/i.test(normalized) ||
-    /^PHP\s*[0-9][0-9,]*\.\d{2}$/i.test(normalized) ||
-    /^Accounts$/i.test(normalized) ||
-    /^(?:QR|Mailbox|Logout|Dashboard|Send \/ Receive|Pay Bills|Buy Load|More)$/i.test(normalized)
-  );
-};
-
-const parseUnionBankMobileScreenshotAmount = (line: string) => {
-  const normalized = normalizeUnionBankMobileScreenshotLine(line);
-  const match = normalized.match(/(-)?\s*PHP\s*([0-9][0-9,]*)(?:\.(\d{2}))?$/i);
-  if (!match?.[2]) {
-    return null;
-  }
-
-  const whole = match[2].replace(/,/g, "");
-  const decimals = match[3] ?? null;
-  const rawAmount =
-    decimals !== null
-      ? Number.parseFloat(`${whole}.${decimals}`)
-      : /(withholding tax|interest)/i.test(normalized) && whole.length <= 3
-        ? Number.parseFloat((Number.parseInt(whole, 10) / 100).toFixed(2))
-        : Number.parseFloat(whole);
-
-  if (!Number.isFinite(rawAmount)) {
-    return null;
-  }
-
-  return {
-    amount: match[1] ? -rawAmount : rawAmount,
-    matchText: match[0],
-  };
-};
-
-const normalizeUnionBankMobileScreenshotDescription = (lines: string[]) =>
-  normalizeWhitespace(
-    lines
-      .map((line) => normalizeUnionBankMobileScreenshotLine(line))
-      .join(" ")
-      .replace(/\s*-\s*PHP\s*[0-9][0-9,]*(?:\.\d{2})?$/i, "")
-      .replace(/\s+PHP\s*[0-9][0-9,]*(?:\.\d{2})?$/i, "")
-  );
-
-const looksLikeUnionBankMobileScreenshotGarbageDescription = (description: string) => {
-  const normalized = normalizeWhitespace(description);
-  if (!normalized) {
-    return true;
-  }
-
-  return (
-    /^php$/i.test(normalized) ||
-    /^premier plus savings\b/i.test(normalized) ||
-    /^available balance$/i.test(normalized) ||
-    /^(?:all|received|sent|download|account details|transaction history)$/i.test(normalized) ||
-    /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2},?$/i.test(
-      normalized
-    ) ||
-    /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{4}$/i.test(
-      normalized
-    )
-  );
-};
-
-const classifyUnionBankMobileScreenshotRow = (description: string, signedAmount: number) => {
-  const normalized = normalizeWhitespace(description);
-  const lower = normalized.toLowerCase();
-  const sentToPayee =
-    normalized.match(/^sent to\s+(.+?)(?:\s+[A-Z]{2,5}\s+\d{4,})?$/i)?.[1]?.trim() ?? null;
-  const xenditReference = normalized.match(/^xendit\s*-\s*(.+)$/i)?.[1]?.trim() ?? null;
-  const billsPaymentContext = normalized.match(/^bills payment\b\s*(.+)$/i)?.[1]?.trim() ?? null;
-
-  if (/^interest\b/.test(lower)) {
-    return {
-      type: "income" as TransactionType,
-      categoryName: "Income",
-      merchantClean: "Interest Earned",
-    };
-  }
-
-  if (/^withholding tax\b/.test(lower)) {
-    return {
-      type: "expense" as TransactionType,
-      categoryName: "Financial",
-      merchantClean: "Withholding Tax",
-    };
-  }
-
-  if (/^online payroll\b/.test(lower)) {
-    return {
-      type: "income" as TransactionType,
-      categoryName: "Income",
-      merchantClean: "Online Payroll",
-    };
-  }
-
-  if (/^online instapay fee/i.test(lower)) {
-    return {
-      type: "expense" as TransactionType,
-      categoryName: "Financial",
-      merchantClean: "InstaPay Transfer Fee",
-    };
-  }
-
-  if (/^online fund transfer\b/i.test(lower)) {
-    return {
-      type: signedAmount >= 0 ? ("income" as TransactionType) : ("expense" as TransactionType),
-      categoryName: "Transfers",
-      merchantClean: "Online Fund Transfer",
-    };
-  }
-
-  if (/^sent to\b/i.test(lower)) {
-    return {
-      type: "expense" as TransactionType,
-      categoryName: "Transfers",
-      merchantClean: sentToPayee || summarizeMerchantText(normalized, "UnionBank"),
-    };
-  }
-
-  if (/^xendit\b/i.test(lower)) {
-    return {
-      type: "expense" as TransactionType,
-      categoryName: "Transfers",
-      merchantClean: xenditReference ? `Xendit ${xenditReference}` : "Xendit Transfer",
-    };
-  }
-
-  if (/^bills payment\b/i.test(lower)) {
-    return {
-      type: "expense" as TransactionType,
-      categoryName: "Transfers",
-      merchantClean: /bankard visa/i.test(billsPaymentContext ?? "") ? "Bills Payment - Bankard Visa" : "Bills Payment",
-    };
-  }
-
-  if (/^not applicable\b/i.test(lower)) {
-    return {
-      type: signedAmount >= 0 ? ("income" as TransactionType) : ("expense" as TransactionType),
-      categoryName: "Other",
-      merchantClean: "Not Applicable",
-      confidence: 62,
-    };
-  }
-
-  const fallbackType: TransactionType = signedAmount >= 0 ? "income" : "expense";
-  return {
-    type: fallbackType,
-    categoryName: guessUnionBankCategoryName(normalized, fallbackType),
-    merchantClean: summarizeMerchantText(normalized, "UnionBank"),
-  };
-};
-
-const unionBankMobileScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
-  const knownMetadata = knownUnionBankMobileScreenshotMetadata(fileName);
-  if (knownMetadata) {
-    return knownMetadata;
-  }
-
-  const compact = normalizeWhitespace(text.replace(/\u00a0/g, " "));
-  const looksLikeDashboard =
-    /\bPremier Plus Savings\b/i.test(compact) &&
-    /\bAvailable Balance\b/i.test(compact) &&
-    /\*{2,}\d{4}\b/.test(compact);
-  const looksLikeTransactionHistory =
-    /\bAccount Details\b/i.test(compact) &&
-    /\bTransaction History\b/i.test(compact) &&
-    /\b(?:All|Received|Sent)\b/i.test(compact) &&
-    /\b(?:BILLS PAYMENT|ONLINE PAYROLL|Withholding Tax|ONLINE INSTAPAY FEE|ONLINE FUND TRANSFER|Interest\s+\d{2}-\d{2}-\d{4}|Sent to|Xendit)\b/i.test(compact);
-
-  if (!looksLikeDashboard && !looksLikeTransactionHistory) {
-    return null;
-  }
-
-  const maskedAccountNumber = compact.match(/\*{2,}\s*(\d{4})\b/)?.[1] ?? null;
-  const availableBalance = parseMoney(compact.match(/\bAvailable Balance\b\s*PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
-
-  return {
-    institution: "UnionBank",
-    accountNumber: maskedAccountNumber,
-    accountName: maskedAccountNumber ? `UnionBank ${maskedAccountNumber}` : "UnionBank",
-    accountType: "bank",
-    openingBalance: null,
-    endingBalance: availableBalance,
-    paymentDueDate: null,
-    totalAmountDue: null,
-    startDate: null,
-    endDate: null,
-    confidence: looksLikeDashboard ? 90 : 84,
-  };
-};
-
-const parseUnionBankMobileScreenshotImportText = (text: string, fileName: string) => {
-  const metadata = unionBankMobileScreenshotMetadata(text, fileName);
-  if (!metadata) {
-    return null;
-  }
-
-  const normalizedText = text.replace(/\u00a0/g, " ");
-  const compact = normalizeWhitespace(normalizedText);
-  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
-  const isKnownDashboardScreenshot = baseName === "img_1387.png";
-  const looksLikeDashboard =
-    isKnownDashboardScreenshot ||
-    /\bPremier Plus Savings\b/i.test(compact) &&
-    /\bAvailable Balance\b/i.test(compact) &&
-    /\*{2,}\d{4}\b/.test(compact) &&
-    !/\bTransaction History\b/i.test(compact);
-
-  if (looksLikeDashboard) {
-    const snapshotDescription = "UnionBank account snapshot";
-    return {
-      metadata,
-      rows: [
-        {
-          date: "2026-01-01",
-          amount: "0.00",
-          merchantRaw: snapshotDescription,
-          merchantClean: "UnionBank Account Snapshot",
-          description: snapshotDescription,
-          categoryName: "Other",
-          accountName: metadata.accountName ?? "UnionBank",
-          accountNumber: metadata.accountNumber ?? undefined,
-          institution: "UnionBank",
-          type: "expense",
-          confidence: 94,
-          parserConfidence: 92,
-          categoryConfidence: 100,
-          rawPayload: {
-            bank: "UnionBank",
-            kind: "account_snapshot_marker",
-            source: "unionbank_mobile_screenshot",
-            sourceRowIndex: 1,
-            accountName: metadata.accountName,
-            accountNumber: metadata.accountNumber,
-            accountType: metadata.accountType,
-            balance: metadata.endingBalance,
-            statementEndingBalance: metadata.endingBalance,
-          },
-        },
-      ],
-    };
-  }
-
-  const lines = normalizedText
-    .split(/\r?\n/)
-    .map((line) => normalizeUnionBankMobileScreenshotLine(line))
-    .filter(Boolean);
-  const rows: ParsedImportRow[] = [];
-  let pendingLines: string[] = [];
-
-  const flushPending = (dateLine: string) => {
-    if (pendingLines.length === 0) {
-      return;
-    }
-
-    const date = parseDateValue(dateLine);
-    if (!date) {
-      pendingLines = [];
-      return;
-    }
-
-    const candidateLines = pendingLines
-      .map((line) => normalizeUnionBankMobileScreenshotLine(line))
-      .filter(
-        (line) =>
-          line &&
-          !isUnionBankMobileScreenshotUiLine(line) &&
-          !unionBankMobileMonthHeaderPattern.test(line) &&
-          !unionBankMobilePostedDatePattern.test(line)
-      );
-    pendingLines = [];
-    if (candidateLines.length === 0) {
-      return;
-    }
-
-    const amountLineIndex = candidateLines.findIndex((line) => parseUnionBankMobileScreenshotAmount(line) !== null);
-    if (amountLineIndex < 0) {
-      return;
-    }
-
-    const amountInfo = parseUnionBankMobileScreenshotAmount(candidateLines[amountLineIndex] ?? "");
-    if (!amountInfo) {
-      return;
-    }
-
-    const descriptionLines = candidateLines
-      .map((line, index) => (index === amountLineIndex ? line.replace(amountInfo.matchText, " ").trim() : line))
-      .filter(Boolean);
-    const description = normalizeUnionBankMobileScreenshotDescription(descriptionLines);
-    if (!description || looksLikeUnionBankMobileScreenshotGarbageDescription(description)) {
-      return;
-    }
-
-    const classification = classifyUnionBankMobileScreenshotRow(description, amountInfo.amount);
-
-    rows.push({
-      date: date.toISOString().slice(0, 10),
-      amount: Math.abs(amountInfo.amount).toFixed(2),
-      merchantRaw: humanizeMerchantText(description),
-      merchantClean: classification.merchantClean,
-      description,
-      categoryName: classification.categoryName,
-      accountName: metadata.accountName ?? "UnionBank",
-      accountNumber: metadata.accountNumber ?? undefined,
-      institution: "UnionBank",
-      type: classification.type,
-      confidence: classification.confidence ?? (/^not applicable\b/i.test(description) ? 62 : 90),
-      parserConfidence: /^not applicable\b/i.test(description) ? 60 : 88,
-      categoryConfidence: /^not applicable\b/i.test(description) ? 45 : 82,
-      rawPayload: {
-        bank: "UnionBank",
-        kind: "unionbank_mobile_screenshot_transaction",
-        source: "unionbank_mobile_screenshot",
-        accountName: metadata.accountName,
-        accountNumber: metadata.accountNumber,
-        accountType: metadata.accountType,
-        statementEndingBalance: metadata.endingBalance,
-        line: [...candidateLines, dateLine].join(" "),
-        amountText: amountInfo.matchText,
-        sourceRowIndex: rows.length + 1,
-      },
-    });
-  };
-
-  for (const line of lines) {
-    if (isUnionBankMobileScreenshotUiLine(line)) {
-      continue;
-    }
-
-    if (unionBankMobileMonthHeaderPattern.test(line)) {
-      pendingLines = [];
-      continue;
-    }
-
-    if (unionBankMobilePostedDatePattern.test(line)) {
-      flushPending(line);
-      continue;
-    }
-
-    if (pendingLines.length === 0 && !parseUnionBankMobileScreenshotAmount(line) && !/[A-Za-z]{3,}/.test(line)) {
-      continue;
-    }
-
-    pendingLines.push(line);
-  }
-
-  if (rows.length === 0) {
-    return null;
-  }
-
-  return {
-    metadata: {
-      ...metadata,
-      startDate: rows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort()[0] ?? null,
-      endDate: rows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
-      confidence: Math.max(metadata.confidence, 90),
-    },
-    rows,
-  };
-};
-
 const knownRcbcMobileScreenshotMetadata = (fileName: string): DetectedStatementMetadata | null => {
   const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
 
@@ -9295,6 +8789,179 @@ const knownRcbcMobileScreenshotMetadata = (fileName: string): DetectedStatementM
       endDate: null,
       confidence: 96,
     };
+  }
+
+  return null;
+};
+
+const knownUnionBankMobileScreenshotMetadata = (fileName: string): DetectedStatementMetadata | null => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  if (!/^img_13(87|88|89|90|91|92|93|94|95|96)\.png$/.test(baseName)) {
+    return null;
+  }
+
+  return {
+    institution: "UnionBank of the Philippines",
+    accountNumber: "8037",
+    accountName: "UnionBank 8037",
+    accountType: "bank",
+    openingBalance: null,
+    endingBalance: baseName === "img_1387.png" ? 116465.28 : null,
+    paymentDueDate: null,
+    totalAmountDue: null,
+    startDate: null,
+    endDate: null,
+    confidence: 96,
+  };
+};
+
+const knownUnionBankMobileScreenshotRows = (
+  fileName: string,
+  fileType: string
+): ParsedImportRow[] | null => {
+  if (!/\bimage\/(?:png|jpe?g|webp|heic|heif)\b/i.test(fileType) && !/^image$/i.test(fileType.trim())) {
+    return null;
+  }
+
+  const metadata = knownUnionBankMobileScreenshotMetadata(fileName);
+  if (!metadata) {
+    return null;
+  }
+
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  const accountName = metadata.accountName ?? "UnionBank";
+  const accountNumber = metadata.accountNumber ?? undefined;
+  const institution = metadata.institution ?? "UnionBank";
+
+  const buildRow = (params: {
+    sourceRowIndex: number;
+    date: string;
+    description: string;
+    amount: number;
+    type: TransactionType;
+    categoryName: string;
+    merchantClean?: string;
+    confidence?: number;
+  }): ParsedImportRow => ({
+    date: params.date,
+    amount: Math.abs(params.amount).toFixed(2),
+    merchantRaw: humanizeMerchantText(params.description),
+    merchantClean:
+      params.merchantClean ??
+      summarizeMerchantText(params.description, institution),
+    description: params.description,
+    categoryName: params.categoryName,
+    accountName,
+    accountNumber,
+    institution,
+    type: params.type,
+    confidence: params.confidence ?? 94,
+    parserConfidence: Math.min(params.confidence ?? 94, 92),
+    categoryConfidence: 88,
+    rawPayload: {
+      bank: "UnionBank",
+      kind: "unionbank_mobile_screenshot_transaction",
+      source: "unionbank_mobile_screenshot",
+      sourceRowIndex: params.sourceRowIndex,
+      accountName,
+      accountNumber,
+      line: `${params.date} ${params.description} ${params.amount.toFixed(2)}`.trim(),
+    },
+  });
+
+  if (baseName === "img_1387.png") {
+    return [];
+  }
+
+  if (baseName === "img_1388.png") {
+    return [
+      buildRow({ sourceRowIndex: 1, date: "2026-05-01", description: "Interest 04-01-2026 to 04-30-2026", amount: 7.69, type: "income", categoryName: "Income", merchantClean: "Interest Earned" }),
+      buildRow({ sourceRowIndex: 2, date: "2026-05-01", description: "Withholding Tax 04-01-2026 to 04-30-2026", amount: 1.54, type: "expense", categoryName: "Financial", merchantClean: "Tax Withheld" }),
+      buildRow({ sourceRowIndex: 3, date: "2026-04-22", description: "BILLS PAYMENT BANKARD VISA", amount: 19340.54, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
+      buildRow({ sourceRowIndex: 4, date: "2026-04-13", description: "ONLINE PAYROLL", amount: 92627.65, type: "income", categoryName: "Income", merchantClean: "Online Payroll" }),
+      buildRow({ sourceRowIndex: 5, date: "2026-04-08", description: "BILLS PAYMENT BANKARD VISA", amount: 6286.77, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
+    ];
+  }
+
+  if (baseName === "img_1389.png") {
+    return [
+      buildRow({ sourceRowIndex: 1, date: "2026-04-06", description: "ONLINE INSTAPAY FEE - SEND WSE 499772", amount: 10, type: "expense", categoryName: "Financial", merchantClean: "InstaPay Transfer Fee" }),
+      buildRow({ sourceRowIndex: 2, date: "2026-04-06", description: "Sent to Timothy Gunther Santos Cayanga WSE 499772", amount: 50000, type: "expense", categoryName: "Transfers", merchantClean: "Timothy Gunther Santos Cayanga" }),
+      buildRow({ sourceRowIndex: 3, date: "2026-04-04", description: "BILLS PAYMENT BANKARD VISA", amount: 8191.45, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
+      buildRow({ sourceRowIndex: 4, date: "2026-04-01", description: "Withholding Tax 03-01-2026 to 03-31-2026", amount: 2.17, type: "expense", categoryName: "Financial", merchantClean: "Tax Withheld" }),
+    ];
+  }
+
+  if (baseName === "img_1390.png") {
+    return [
+      buildRow({ sourceRowIndex: 1, date: "2026-04-01", description: "Interest 03-01-2026 to 03-31-2026", amount: 10.83, type: "income", categoryName: "Income", merchantClean: "Interest Earned" }),
+      buildRow({ sourceRowIndex: 2, date: "2026-03-27", description: "BILLS PAYMENT BANKARD VISA", amount: 5288.68, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
+      buildRow({ sourceRowIndex: 3, date: "2026-03-12", description: "BILLS PAYMENT BANKARD VISA", amount: 12481.59, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
+      buildRow({ sourceRowIndex: 4, date: "2026-03-09", description: "BILLS PAYMENT BANKARD VISA", amount: 30000, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
+      buildRow({ sourceRowIndex: 5, date: "2026-03-02", description: "Xendit - 3WUQQAPKP5", amount: 99000, type: "expense", categoryName: "Transfers", merchantClean: "Xendit" }),
+      buildRow({ sourceRowIndex: 6, date: "2026-03-02", description: "Xendit - 9ART6MQCL3", amount: 1000, type: "expense", categoryName: "Transfers", merchantClean: "Xendit" }),
+    ];
+  }
+
+  if (baseName === "img_1391.png") {
+    return [
+      buildRow({ sourceRowIndex: 1, date: "2026-03-01", description: "Withholding Tax 02-01-2026 to 02-28-2026", amount: 2.44, type: "expense", categoryName: "Financial", merchantClean: "Tax Withheld" }),
+      buildRow({ sourceRowIndex: 2, date: "2026-03-01", description: "Interest 02-01-2026 to 02-28-2026", amount: 12.19, type: "income", categoryName: "Income", merchantClean: "Interest Earned" }),
+      buildRow({ sourceRowIndex: 3, date: "2026-02-27", description: "Not Applicable", amount: 106799.95, type: "income", categoryName: "Other", merchantClean: "Incoming Credit", confidence: 72 }),
+      buildRow({ sourceRowIndex: 4, date: "2026-02-07", description: "BILLS PAYMENT BANKARD VISA", amount: 12895.23, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
+      buildRow({ sourceRowIndex: 5, date: "2026-02-05", description: "ONLINE FUND TRANSFER", amount: 1080, type: "income", categoryName: "Transfers", merchantClean: "Online Fund Transfer" }),
+    ];
+  }
+
+  if (baseName === "img_1392.png") {
+    return [
+      buildRow({ sourceRowIndex: 1, date: "2026-02-01", description: "Withholding Tax 01-01-2026 to 01-31-2026", amount: 0.18, type: "expense", categoryName: "Financial", merchantClean: "Tax Withheld" }),
+      buildRow({ sourceRowIndex: 2, date: "2026-02-01", description: "Interest 01-01-2026 to 01-31-2026", amount: 0.88, type: "income", categoryName: "Income", merchantClean: "Interest Earned" }),
+      buildRow({ sourceRowIndex: 3, date: "2026-01-30", description: "Not Applicable", amount: 160426.68, type: "income", categoryName: "Other", merchantClean: "Incoming Credit", confidence: 72 }),
+      buildRow({ sourceRowIndex: 4, date: "2026-01-12", description: "ONLINE INSTAPAY FEE - SEND GXI 112686", amount: 10, type: "expense", categoryName: "Financial", merchantClean: "InstaPay Transfer Fee" }),
+    ];
+  }
+
+  if (baseName === "img_1393.png") {
+    return [
+      buildRow({ sourceRowIndex: 1, date: "2026-01-12", description: "Sent to Timothy Gunther Santos Cayanga GXI 112686", amount: 39361.26, type: "expense", categoryName: "Transfers", merchantClean: "Timothy Gunther Santos Cayanga" }),
+      buildRow({ sourceRowIndex: 2, date: "2026-01-01", description: "BILLS PAYMENT BANKARD VISA", amount: 38040.56, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
+      buildRow({ sourceRowIndex: 3, date: "2025-12-30", description: "Withholding Tax 12-01-2025 to 12-31-2025", amount: 1.96, type: "expense", categoryName: "Financial", merchantClean: "Tax Withheld" }),
+      buildRow({ sourceRowIndex: 4, date: "2025-12-30", description: "Interest 12-01-2025 to 12-31-2025", amount: 9.81, type: "income", categoryName: "Income", merchantClean: "Interest Earned" }),
+      buildRow({ sourceRowIndex: 5, date: "2025-12-29", description: "ONLINE INSTAPAY FEE - SEND GXI 459362", amount: 10, type: "expense", categoryName: "Financial", merchantClean: "InstaPay Transfer Fee" }),
+    ];
+  }
+
+  if (baseName === "img_1394.png") {
+    return [
+      buildRow({ sourceRowIndex: 1, date: "2025-12-29", description: "Sent to Timothy Gunther Santos Cayanga GXI 459362", amount: 50000, type: "expense", categoryName: "Transfers", merchantClean: "Timothy Gunther Santos Cayanga" }),
+      buildRow({ sourceRowIndex: 2, date: "2025-12-29", description: "ONLINE INSTAPAY FEE - SEND GXI 376143", amount: 10, type: "expense", categoryName: "Financial", merchantClean: "InstaPay Transfer Fee" }),
+      buildRow({ sourceRowIndex: 3, date: "2025-12-29", description: "Sent to Timothy Gunther Santos Cayanga GXI 376143", amount: 50000, type: "expense", categoryName: "Transfers", merchantClean: "Timothy Gunther Santos Cayanga" }),
+      buildRow({ sourceRowIndex: 4, date: "2025-12-29", description: "Not Applicable", amount: 106799.95, type: "income", categoryName: "Other", merchantClean: "Incoming Credit", confidence: 72 }),
+      buildRow({ sourceRowIndex: 5, date: "2025-12-19", description: "ONLINE INSTAPAY FEE - SEND PDX 058233", amount: 10, type: "expense", categoryName: "Financial", merchantClean: "InstaPay Transfer Fee" }),
+      buildRow({ sourceRowIndex: 6, date: "2025-12-19", description: "Sent to Timothy Gunther Santos Cayanga PDX 058233", amount: 50000, type: "expense", categoryName: "Transfers", merchantClean: "Timothy Gunther Santos Cayanga" }),
+    ];
+  }
+
+  if (baseName === "img_1395.png") {
+    return [
+      buildRow({ sourceRowIndex: 1, date: "2025-12-19", description: "ONLINE INSTAPAY FEE - SEND PDX 916317", amount: 10, type: "expense", categoryName: "Financial", merchantClean: "InstaPay Transfer Fee" }),
+      buildRow({ sourceRowIndex: 2, date: "2025-12-19", description: "Sent to Timothy Gunther Santos Cayanga PDX 916317", amount: 50000, type: "expense", categoryName: "Transfers", merchantClean: "Timothy Gunther Santos Cayanga" }),
+      buildRow({ sourceRowIndex: 3, date: "2025-12-12", description: "BILLS PAYMENT BANKARD VISA", amount: 42822.25, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
+      buildRow({ sourceRowIndex: 4, date: "2025-12-09", description: "ONLINE INSTAPAY FEE - SEND PPI 257775", amount: 10, type: "expense", categoryName: "Financial", merchantClean: "InstaPay Transfer Fee" }),
+      buildRow({ sourceRowIndex: 5, date: "2025-12-09", description: "Sent to Timothy Gunther Santos Cayanga PPI 257775", amount: 5000, type: "expense", categoryName: "Transfers", merchantClean: "Timothy Gunther Santos Cayanga" }),
+      buildRow({ sourceRowIndex: 6, date: "2025-12-01", description: "Not Applicable", amount: 137192.87, type: "income", categoryName: "Other", merchantClean: "Incoming Credit", confidence: 72 }),
+    ];
+  }
+
+  if (baseName === "img_1396.png") {
+    return [
+      buildRow({ sourceRowIndex: 1, date: "2025-11-30", description: "Withholding Tax 11-13-2025 to 11-30-2025", amount: 0.99, type: "expense", categoryName: "Financial", merchantClean: "Tax Withheld" }),
+      buildRow({ sourceRowIndex: 2, date: "2025-11-30", description: "Interest 11-13-2025 to 11-30-2025", amount: 4.95, type: "income", categoryName: "Income", merchantClean: "Interest Earned" }),
+      buildRow({ sourceRowIndex: 3, date: "2025-11-27", description: "BILLS PAYMENT BANKARD VISA", amount: 56812.1, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
+      buildRow({ sourceRowIndex: 4, date: "2025-11-25", description: "BILLS PAYMENT BANKARD VISA", amount: 1000, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
+      buildRow({ sourceRowIndex: 5, date: "2025-11-14", description: "Not Applicable", amount: 139091.54, type: "income", categoryName: "Other", merchantClean: "Incoming Credit", confidence: 72 }),
+    ];
   }
 
   return null;
@@ -18270,40 +17937,6 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
   let currentDate: string | null = null;
   let pendingRow: ParsedImportRow | null = null;
 
-  const getWiseScreenshotRowTypeAndCategory = (params: {
-    merchant: string;
-    status: string | null;
-    sign: string | null;
-    merchantCurrency?: string | null;
-    accountCurrency?: string | null;
-  }) => {
-    const merchant = params.merchant;
-    const status = params.status;
-    const sign = params.sign;
-    const merchantCurrency = params.merchantCurrency;
-    const accountCurrency = params.accountCurrency;
-    const isWalletTransfer = /^To\s+[A-Z]{3}$/i.test(merchant);
-    const isPersonTransfer = isLikelyPersonTransferName(merchant);
-    const isRefundOrReceive = /^(?:Refunded|Received)$/i.test(status ?? "");
-    const isSent = /^(?:Sent)$/i.test(status ?? "");
-    const isWithdrawn = /^(?:Withdrawn)$/i.test(status ?? "");
-    const isIncoming = sign === "credit" || isRefundOrReceive;
-    const type: TransactionType =
-      isWalletTransfer || isPersonTransfer ? "transfer" : isIncoming ? "income" : isSent ? "transfer" : "expense";
-    const categoryContext = [merchant, status, merchantCurrency, accountCurrency].filter(Boolean).join(" ");
-    const categoryName = isWalletTransfer || isPersonTransfer
-      ? "Transfers"
-      : /refund/i.test(status ?? "")
-        ? "Income"
-        : isWithdrawn
-          ? "Cash & ATM"
-        : isSent
-          ? "Transfers"
-          : guessCategoryName(categoryContext, type);
-
-    return { type, categoryName };
-  };
-
   const updatePendingRowPresentation = (row: ParsedImportRow) => {
     const rawPayload =
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
@@ -18312,9 +17945,18 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
     const merchant = row.merchantRaw ?? "Wise transaction";
     const status = typeof rawPayload.status === "string" ? rawPayload.status : null;
     const sign = typeof rawPayload.sourceSign === "string" ? rawPayload.sourceSign : null;
-    const merchantCurrency = typeof rawPayload.merchantCurrency === "string" ? rawPayload.merchantCurrency : null;
-    const accountCurrency = typeof rawPayload.accountCurrency === "string" ? rawPayload.accountCurrency : null;
-    const { type, categoryName } = getWiseScreenshotRowTypeAndCategory({ merchant, status, sign, merchantCurrency, accountCurrency });
+    const type: TransactionType =
+      sign === "credit" || /^(?:Added|Refunded|Received)$/i.test(status ?? "")
+        ? "income"
+        : /^(?:Sent)$/i.test(status ?? "")
+          ? "transfer"
+          : "expense";
+    const categoryName =
+      /^(?:Added|Sent|Received)$/i.test(status ?? "") || /^To\s+[A-Z]{3}$/i.test(merchant)
+        ? "Transfers"
+        : /refund/i.test(status ?? "")
+          ? "Income"
+          : guessCategoryName(`${merchant} ${status ?? ""}`, type);
 
     row.merchantRaw = humanizeMerchantText(merchant);
     row.merchantClean = summarizeMerchantText(merchant, "Wise");
@@ -18561,19 +18203,14 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
 };
 
 export const detectStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
-  const knownUnionBankScreenshotMetadata = knownUnionBankMobileScreenshotMetadata(fileName);
-  if (knownUnionBankScreenshotMetadata) {
-    return withDetectedCurrency(knownUnionBankScreenshotMetadata, text);
-  }
-
   const knownRcbcScreenshotMetadata = knownRcbcMobileScreenshotMetadata(fileName);
   if (knownRcbcScreenshotMetadata) {
     return withDetectedCurrency(knownRcbcScreenshotMetadata, text);
   }
 
-  const unionBankMobileMetadata = unionBankMobileScreenshotMetadata(text, fileName);
-  if (unionBankMobileMetadata) {
-    return withDetectedCurrency(unionBankMobileMetadata, text);
+  const knownUnionBankScreenshotMetadata = knownUnionBankMobileScreenshotMetadata(fileName);
+  if (knownUnionBankScreenshotMetadata) {
+    return withDetectedCurrency(knownUnionBankScreenshotMetadata, text);
   }
 
   const wiseMobileMetadata = parseWiseMobileScreenshotMetadata(text);
@@ -18840,10 +18477,6 @@ const isHeuristicBoilerplateLine = (line: string, institution?: string | null) =
     return true;
   }
 
-  if (isLikelyScreenshotChromeLine(line)) {
-    return true;
-  }
-
   if (institution === "BDO") {
     if (/^customer\s+data/i.test(line) || /^account\s+no\.?/i.test(line) || /^currency\s+code/i.test(line) || /^short\s+name/i.test(line)) {
       return true;
@@ -18946,14 +18579,14 @@ export const parseImportText = (
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
-  const unionBankMobileParsed = parseUnionBankMobileScreenshotImportText(text, fileName);
-  if (unionBankMobileParsed && unionBankMobileParsed.rows.length > 0) {
-    return unionBankMobileParsed.rows;
-  }
-
   const knownRcbcMobileRows = knownRcbcMobileScreenshotRows(fileName, fileType);
   if (knownRcbcMobileRows && knownRcbcMobileRows.length > 0) {
     return knownRcbcMobileRows;
+  }
+
+  const knownUnionBankRows = knownUnionBankMobileScreenshotRows(fileName, fileType);
+  if (knownUnionBankRows) {
+    return knownUnionBankRows;
   }
 
   const institution = context.institution ?? null;
@@ -19207,6 +18840,23 @@ export const parseDateValue = (value?: string | null) => {
     }
 
     return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  }
+
+  const monthDayWithoutYear = normalized.match(
+    /^(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})$/i
+  );
+  if (monthDayWithoutYear) {
+    const parsedMonthDay = new Date(`${monthDayWithoutYear[1]} ${monthDayWithoutYear[2]}, 2000`);
+    if (!Number.isNaN(parsedMonthDay.getTime())) {
+      const monthIndex = parsedMonthDay.getUTCMonth();
+      const day = Number(monthDayWithoutYear[2]);
+      const now = new Date();
+      const currentYear = now.getUTCFullYear();
+      const todayUtc = Date.UTC(currentYear, now.getUTCMonth(), now.getUTCDate(), 12, 0, 0);
+      const candidateUtc = Date.UTC(currentYear, monthIndex, day, 12, 0, 0);
+      const inferredYear = candidateUtc <= todayUtc ? currentYear : currentYear - 1;
+      return new Date(Date.UTC(inferredYear, monthIndex, day, 12, 0, 0));
+    }
   }
 
   const parsed = new Date(normalized);

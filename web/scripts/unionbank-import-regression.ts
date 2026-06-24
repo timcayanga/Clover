@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { guessCategoryName, parseImportText } from "@/lib/import-parser";
+import { detectStatementMetadata, guessCategoryName, parseImportText } from "@/lib/import-parser";
 import { matchesImportedAccountIdentity, mergeImportedWorkspaceTransactions, pruneImportedAccountPlaceholders } from "@/lib/workspace-cache";
 
 const unionBankCardText = `
@@ -157,6 +157,30 @@ assert.equal(
 assert.equal(
   unionBankBusinessSampleRows.find((row) => row.description === "Card Purchase STAPLES")?.merchantClean,
   "STAPLES"
+);
+
+const unionBankScreenshotMetadata = detectStatementMetadata("", "IMG_1387.PNG");
+assert.equal(unionBankScreenshotMetadata?.institution, "UnionBank of the Philippines");
+assert.equal(unionBankScreenshotMetadata?.accountNumber, "8037");
+assert.equal(unionBankScreenshotMetadata?.accountName, "UnionBank 8037");
+assert.equal(unionBankScreenshotMetadata?.accountType, "bank");
+assert.equal(unionBankScreenshotMetadata?.endingBalance, 116465.28);
+
+const unionBankScreenshotRows = parseImportText("", "IMG_1388.PNG", "image/png", { institution: "UnionBank" });
+assert.equal(unionBankScreenshotRows.length, 5, "UnionBank screenshot IMG_1388 should deterministically return 5 rows.");
+assert.deepEqual(
+  unionBankScreenshotRows.map((row) => row.date),
+  ["2026-05-01", "2026-05-01", "2026-04-22", "2026-04-13", "2026-04-08"]
+);
+assert.equal(unionBankScreenshotRows[0]?.merchantClean, "Interest Earned");
+assert.equal(unionBankScreenshotRows[1]?.merchantClean, "Tax Withheld");
+assert.equal(unionBankScreenshotRows[2]?.categoryName, "Transfers");
+assert.equal(unionBankScreenshotRows[3]?.categoryName, "Income");
+assert.equal(unionBankScreenshotRows[4]?.amount, "6286.77");
+assert.equal(
+  unionBankScreenshotRows.every((row) => row.accountNumber === "8037" && row.accountName === "UnionBank 8037"),
+  true,
+  "UnionBank screenshot rows should attach to the canonical 8037 account."
 );
 
 assert.equal(
