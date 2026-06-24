@@ -502,6 +502,7 @@ export function ImportFilesModal({
       errorMessage: snapshot.errorMessage ?? null,
       errorTitle: snapshot.errorTitle ?? null,
       errorNextSteps: snapshot.errorNextSteps ?? null,
+      timing: snapshot.timing ?? previousSnapshot?.timing ?? null,
       updatedAt: Date.now(),
     };
     const isVisiblePrimaryCompletion =
@@ -6197,6 +6198,7 @@ export function ImportFilesModal({
       errorMessage: activeErrorItem?.error ?? validationNotice ?? null,
       errorTitle: activeErrorItem?.errorTitle ?? null,
       errorNextSteps: activeErrorItem?.errorNextSteps ?? null,
+      timing: lastImportActivityRef.current?.timing ?? null,
       updatedAt: Date.now(),
     };
     if (

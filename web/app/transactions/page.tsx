@@ -7052,7 +7052,6 @@ function TransactionsPageContent() {
     <CloverShell
       active="transactions"
       title="Transactions"
-      mobileLeadingActions={transactionsMobileLeadingActions}
       actions={transactionsShellActions}
     >
       {mobileSearchOpen && typeof document !== "undefined"

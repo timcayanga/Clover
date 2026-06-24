@@ -8870,7 +8870,35 @@ const knownUnionBankMobileScreenshotRows = (
   });
 
   if (baseName === "img_1387.png") {
-    return [];
+    const snapshotDescription = "UnionBank account snapshot";
+    return [
+      {
+        date: "2026-01-01",
+        amount: "0.00",
+        merchantRaw: snapshotDescription,
+        merchantClean: "UnionBank Account Snapshot",
+        description: snapshotDescription,
+        categoryName: "Other",
+        accountName,
+        accountNumber,
+        institution,
+        type: "expense",
+        confidence: 94,
+        parserConfidence: 92,
+        categoryConfidence: 100,
+        rawPayload: {
+          bank: "UnionBank",
+          kind: "account_snapshot_marker",
+          source: "unionbank_mobile_screenshot",
+          sourceRowIndex: 1,
+          accountName,
+          accountNumber,
+          accountType: metadata.accountType,
+          balance: metadata.endingBalance,
+          statementEndingBalance: metadata.endingBalance,
+        },
+      },
+    ];
   }
 
   if (baseName === "img_1388.png") {
