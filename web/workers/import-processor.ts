@@ -2171,7 +2171,7 @@ const parseTrainingJsonPayload = (jsonText: string, params: { fileName: string; 
     readCandidateString(objects, ["statementText", "sourceText", "rawText", "ocrText", "rawStatementText"]) ??
     jsonText;
 
-  const detectedMetadata = detectStatementMetadataFromText(sourceText, fileName);
+  const detectedMetadata = detectStatementMetadataFromText(sourceText, params.fileName);
   const metadata = {
     ...detectedMetadata,
     institution: institution ?? detectedMetadata.institution ?? null,
@@ -3539,7 +3539,7 @@ const collapseDuplicateUploadedAccountsForAccount = async <
       institution,
       accountNumber: null,
       type: account.type,
-      currency: "currency" in account ? account.currency ?? null : null,
+      currency: (account as { currency?: string | null }).currency ?? null,
     });
   });
 
@@ -4876,6 +4876,7 @@ const buildImportTransactionCollapseKey = (transaction: {
   date: Date;
   amount: unknown;
   currency: string;
+  type: unknown;
   merchantRaw: string;
   merchantClean: string | null;
   description: string | null;
@@ -4942,6 +4943,7 @@ const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
       date: true,
       amount: true,
       currency: true,
+      type: true,
       merchantRaw: true,
       merchantClean: true,
       description: true,
@@ -5970,7 +5972,22 @@ export const processImportFileText = async (
     const transcript = await transcribeImportImagesWithOpenAI({
       fileName,
       fileType,
-      detectedMetadata: checkpointBankName ? { institution: checkpointBankName } : null,
+      detectedMetadata: checkpointBankName
+        ? {
+            institution: checkpointBankName,
+            accountNumber: null,
+            accountName: checkpointBankName,
+            accountType: null,
+            openingBalance: null,
+            endingBalance: null,
+            creditLimit: null,
+            paymentDueDate: null,
+            totalAmountDue: null,
+            startDate: null,
+            endDate: null,
+            confidence: 0,
+          }
+        : null,
       pageImages,
       importMode,
       timeoutMs: 25_000,

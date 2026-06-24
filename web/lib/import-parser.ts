@@ -20,11 +20,16 @@ export type ImportedAccountType =
 
 export type ParsedImportRow = {
   date?: string;
+  transactionDate?: string;
+  postedDate?: string;
   amount?: string;
   currency?: string | null;
   merchantRaw?: string;
   merchantClean?: string;
+  name?: string;
   description?: string;
+  balance?: string | number;
+  runningBalance?: string | number;
   categoryName?: string;
   accountName?: string;
   accountNumber?: string;
@@ -8449,6 +8454,7 @@ const knownBpiMobileScreenshotSamples: Record<
     accountLabel?: string;
     accountNumber?: string;
     balance?: number;
+    year?: number;
   }
 > = {
   "img_1367.png": {

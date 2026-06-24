@@ -137,6 +137,7 @@ export type EnrichedParsedImportRow = ParsedImportRow & {
   transferConfidence?: number;
   rowShapeConfidence?: number;
   rowTeachabilityConfidence?: number;
+  rowAnomalyConfidence?: number;
   rawPayload?: Prisma.InputJsonValue | null;
   normalizedPayload?: Prisma.InputJsonValue | null;
   learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
@@ -3967,6 +3968,7 @@ export const applyDataQaReviewLearning = async (params: {
       readReviewString(output, "transactionName") ??
       readReviewString(output, "normalizedName") ??
       "";
+    const normalizedName = readReviewString(output, "normalizedName") ?? null;
     const type = normalizeTransactionType(
       readReviewString(output, "type") ?? "expense",
       output && isRecord(output) ? output.amount : null,
@@ -4154,6 +4156,7 @@ export const enrichParsedRowsWithTraining = async (params: {
           categoryName: row.categoryName && row.categoryName.trim().toLowerCase() !== "other" ? row.categoryName : null,
           confidence: Math.max(20, rowTeachability.score),
           categoryReason: "row_teachability_blocked",
+          categorySource: null,
           merchantKey: normalizeMerchantText(classificationMerchantText),
           merchantTokens: tokenizeMerchant(classificationMerchantText),
           normalizedName: deterministicMerchantName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null),
