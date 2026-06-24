@@ -8042,6 +8042,10 @@ export const processImportFileText = async (
       needsCompletenessFollowup &&
       recentScreenshotBatchContext.activeSiblingCount > 0 &&
       rows.length > 0;
+    const canFinalizeWhileSiblingScreenshotsContinue =
+      shouldDeferCompletenessRerunToSiblingBatch &&
+      qaRunResult.evaluation.score >= Math.max(80, qaTargetScore - 8) &&
+      importHealthSummary.status !== "at_risk";
     const shouldAutoRerun =
       autoRerunEnabled &&
       !isDocumentImport &&
@@ -8145,7 +8149,9 @@ export const processImportFileText = async (
       });
     }
 
-    const shouldMarkDone = isDocumentImport ? Boolean(documentImportRecord) : qaRunResult.evaluation.score >= qaTargetScore || canFinalizeWithWarnings;
+    const shouldMarkDone = isDocumentImport
+      ? Boolean(documentImportRecord)
+      : qaRunResult.evaluation.score >= qaTargetScore || canFinalizeWithWarnings || canFinalizeWhileSiblingScreenshotsContinue;
     if (shouldMarkDone) {
       try {
         confirmedImportResult = await confirmImportFileWithRetry("qa_finalize");
@@ -8236,7 +8242,11 @@ export const processImportFileText = async (
           ? autoRerunEnabled && autoRerunAttempt > 0
             ? plateaued && canFinalizeWithWarnings
               ? `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}, but Clover finalized the import with the available statement data.`
+              : canFinalizeWhileSiblingScreenshotsContinue
+                ? `Clover finalized the available rows at score ${qaRunResult.evaluation.score} while ${recentScreenshotBatchContext.activeSiblingCount} related screenshot file${recentScreenshotBatchContext.activeSiblingCount === 1 ? "" : "s"} continue processing.`
               : `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} complete. Final score ${qaRunResult.evaluation.score}.`
+            : canFinalizeWhileSiblingScreenshotsContinue
+              ? `Clover finalized the available rows at score ${qaRunResult.evaluation.score} while ${recentScreenshotBatchContext.activeSiblingCount} related screenshot file${recentScreenshotBatchContext.activeSiblingCount === 1 ? "" : "s"} continue processing.`
             : null
           : plateaued
             ? needsCompletenessFollowup
