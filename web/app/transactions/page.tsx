@@ -32,15 +32,14 @@ import {
 } from "@/components/posthog-analytics";
 import {
   buildTransactionDetailDraft,
-  detailDraftTypeToTransactionType,
   type TransactionDetailDraftValue,
 } from "@/lib/transaction-detail-draft";
 import { hasTransactionDetailDraftChanges } from "@/lib/transaction-detail-draft-changes";
+import { buildTransactionUpdatePayload } from "@/lib/transaction-update-payload";
 import {
   createEmptyReceiptLineItem,
   getManualReceiptLineItemTotal,
   getReceiptLineItemComputedAmount,
-  mergeReceiptLineItemsIntoPayload,
   parseReceiptLineItemsFromPayload,
   receiptLineItemToDraft,
   sanitizeReceiptLineItems,
@@ -5777,24 +5776,7 @@ function TransactionsPageContent() {
       const categoryChanged = previousCategoryId !== nextCategoryId;
       const previousCategoryName = selectedTransaction.categoryName ?? categoryNameById.get(previousCategoryId) ?? "Other";
       const nextCategoryName = categoryNameById.get(nextCategoryId) ?? (nextCategoryId ? selectedTransaction.categoryName ?? "Other" : "Other");
-      const payload = {
-        merchantRaw: detailDraft.merchantRaw,
-        merchantClean: detailDraft.merchantClean || null,
-        date: detailDraft.date,
-        accountId: detailDraft.accountId,
-        categoryId: detailDraft.categoryId || null,
-        amount: detailDraft.amount,
-        currency: detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency,
-        type: detailDraftTypeToTransactionType(detailDraft.type),
-        userNote: detailDraft.description || null,
-        isExcluded: detailDraft.isExcluded,
-        isTransfer: detailDraft.isTransfer,
-        rawPayload: mergeReceiptLineItemsIntoPayload(
-          selectedTransaction.rawPayload,
-          detailDraft.receiptLineItems,
-          detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency
-        ),
-      };
+      const payload = buildTransactionUpdatePayload(detailDraft, selectedTransaction);
 
       await updateTransaction(selectedTransaction.id, payload);
       capturePostHogClientEvent("feature_used", {

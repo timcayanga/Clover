@@ -27,14 +27,13 @@ import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } fr
 import { hasTransactionDetailDraftChanges } from "@/lib/transaction-detail-draft-changes";
 import {
   buildTransactionDetailDraft,
-  detailDraftTypeToTransactionType,
   type TransactionDetailDraftValue,
 } from "@/lib/transaction-detail-draft";
+import { buildTransactionUpdatePayload } from "@/lib/transaction-update-payload";
 import {
   createEmptyReceiptLineItem,
   getManualReceiptLineItemTotal,
   getReceiptLineItemComputedAmount,
-  mergeReceiptLineItemsIntoPayload,
   parseReceiptLineItemsFromPayload,
   receiptLineItemToDraft,
 } from "@/lib/receipt-line-items";
@@ -3035,24 +3034,12 @@ function AccountDetailPageContent() {
       const categoryChanged = previousCategoryId !== nextCategoryId;
       const previousCategoryName = selectedTransaction.categoryName ?? categories.find((category) => category.id === previousCategoryId)?.name ?? "Other";
       const nextCategoryName = categories.find((category) => category.id === nextCategoryId)?.name ?? (nextCategoryId ? selectedTransaction.categoryName ?? "Other" : "Other");
-      await updateTransaction(selectedTransaction.id, {
-        merchantRaw: detailDraft.merchantRaw,
-        merchantClean: detailDraft.merchantClean.trim() || null,
-        date: detailDraft.date,
-        accountId: detailDraft.accountId,
-        categoryId: detailDraft.categoryId || null,
-        amount: detailDraft.amount,
-        currency: detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency || account?.currency || "PHP",
-        type: detailDraftTypeToTransactionType(detailDraft.type),
-        userNote: detailDraft.description || null,
-        isExcluded: detailDraft.isExcluded,
-        isTransfer: detailDraft.isTransfer,
-        rawPayload: mergeReceiptLineItemsIntoPayload(
-          selectedTransaction.rawPayload,
-          detailDraft.receiptLineItems,
-          detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency || account?.currency || "PHP"
-        ),
-      });
+      await updateTransaction(
+        selectedTransaction.id,
+        buildTransactionUpdatePayload(detailDraft, selectedTransaction, {
+          fallbackCurrency: account?.currency ?? "PHP",
+        })
+      );
       setMessage(
         categoryChanged
           ? `Category updated: ${previousCategoryName} → ${nextCategoryName}. We'll remember this next time.`
