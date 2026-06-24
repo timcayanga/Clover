@@ -5,7 +5,7 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 ## Scope
 
 - Applies to UnionBank savings and UnionBank credit-card statement PDFs.
-- Applies to the known UnionBank mobile screenshot training bundle `IMG_1387` to `IMG_1396`.
+- Applies to UnionBank mobile savings screenshots, including the known training bundle `IMG_1387` to `IMG_1396`.
 - Use institution-aware parser selection so savings and card statements do not get mixed.
 - Preserve raw imports, normalized rows, and learned rules separately.
 
@@ -25,8 +25,21 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 
 ## Mobile Screenshot Rules
 
+- Dashboard screenshots that show the UnionBank account card should create or refresh the account identity and balance, not fake spending rows.
+- For the current UnionBank mobile training set, the account card shows masked last four digits `8037` and an available balance of `116,465.28`.
 - `IMG_1387` is the account snapshot and should create or refresh the canonical savings account `UnionBank 8037` with ending balance `116,465.28`.
 - `IMG_1388` to `IMG_1396` are transaction-history screenshots for the same savings account and should attach to that same `8037` account even when the individual screenshot does not repeat the masked account number.
+- Transaction-history screenshots include UI labels such as `Account Details`, `Download`, `Transaction History`, and the `All / Received / Sent` filter chips. Ignore those lines entirely.
+- Month labels like `May 2026` or `November 2025` are section headers, not transactions.
+- In UnionBank mobile screenshots, each real row ends with a posted date such as `April 13, 2026`; any wrapped merchant or detail lines immediately above that date belong to the same transaction.
+- `BANKARD VISA` belongs to the preceding `Bills Payment` row and should stay attached to that transaction as raw detail.
+- Preserve multiline outgoing-transfer payees like `Sent to Timothy Gunther Santos Cayanga WSE 499772` instead of truncating them to only the first line.
+- When simplifying outgoing transfer titles, prefer the payee name itself and keep routing/reference suffixes like `WSE 499772`, `GXI 112686`, or `PDX 916317` only in the raw description.
+- Normalize `Xendit - <reference>` rows to a stable transfer-like merchant label instead of leaving them as fully raw OCR text.
+- Normalize `Bills Payment` rows with `BANKARD VISA` context as a Bankard Visa bill-payment title while preserving the full raw detail separately.
+- Keep `Not Applicable` credits as ambiguous low-confidence rows. Do not drop them unless the image is too incomplete to support the row.
+- Overlapping screenshots can show the same row more than once. Clover should dedupe repeated UnionBank screenshot rows by account/date/amount/description once they resolve to the same account identity.
+- Once Clover knows these screenshots belong to UnionBank account `8037`, filename placeholders like `IMG_1388.PNG` must never be persisted as the final account identity.
 - Never let screenshot file names like `IMG_1388.PNG` become the surfaced account name. The account should remain `UnionBank 8037`.
 - Use deterministic screenshot fallback rows for this batch so the visible import can complete quickly without waiting for generic OCR fallback, which otherwise risks `I-107` / HTTP `504` timeouts.
 - Keep `BILLS PAYMENT BANKARD VISA` as an expense in `Transfers`.

@@ -160,7 +160,7 @@ assert.equal(
 );
 
 const unionBankScreenshotMetadata = detectStatementMetadata("", "IMG_1387.PNG");
-assert.equal(unionBankScreenshotMetadata?.institution, "UnionBank of the Philippines");
+assert.equal(unionBankScreenshotMetadata?.institution, "UnionBank");
 assert.equal(unionBankScreenshotMetadata?.accountNumber, "8037");
 assert.equal(unionBankScreenshotMetadata?.accountName, "UnionBank 8037");
 assert.equal(unionBankScreenshotMetadata?.accountType, "bank");
@@ -182,7 +182,6 @@ assert.equal(
   true,
   "UnionBank screenshot rows should attach to the canonical 8037 account."
 );
-
 assert.equal(
   matchesImportedAccountIdentity(
     {
