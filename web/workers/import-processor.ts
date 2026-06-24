@@ -8629,18 +8629,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           totalRows: Math.max(1, cleanupRowsAfterConfirmation),
           phase: "queued",
           forceRequeue: false,
-        });
-        await processImportEnrichmentJobs({
-          importFileId,
-          limit: MAX_IMPORT_ENRICHMENT_ATTEMPTS,
-          batchSize: 500,
-          workerId: `receipt-import-enrichment-${importFileId}`,
         }).catch((error) => {
-          console.warn("Unable to finalize receipt enrichment immediately after import", {
+          console.warn("Unable to queue receipt enrichment immediately after import", {
             importFileId,
             error,
           });
         });
+        processImportEnrichmentJobsInBackground(importFileId, Math.max(1, cleanupRowsAfterConfirmation));
       }
 
       if (createdTransactionId && documentImport?.id) {
