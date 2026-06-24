@@ -25,6 +25,16 @@ import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 import {
+  createEmptyReceiptLineItem,
+  getManualReceiptLineItemTotal,
+  getReceiptLineItemComputedAmount,
+  mergeReceiptLineItemsIntoPayload,
+  parseReceiptLineItemNumber,
+  parseReceiptLineItemsFromPayload,
+  receiptLineItemSignature,
+  receiptLineItemToDraft,
+} from "@/lib/receipt-line-items";
+import {
   getTransactionParsedNoteValue,
   getTransactionUserNoteValue,
   normalizeTransactionNoteValue,
@@ -726,155 +736,6 @@ const getTransactionParsedNote = (
     source: transaction?.source,
     importFileId: transaction?.importFileId,
   });
-
-const createEmptyReceiptLineItem = (): ReceiptLineItemDraft => ({
-  description: "",
-  quantity: "",
-  currency: "",
-  unitPrice: "",
-  amount: "",
-});
-
-const normalizeReceiptLineItemText = (value: unknown) => {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? String(value) : "";
-  }
-
-  return typeof value === "string" ? value.trim() : "";
-};
-
-const parseReceiptLineItemsFromPayload = (rawPayload: unknown): ReceiptLineItem[] => {
-  if (!isRecord(rawPayload)) {
-    return [];
-  }
-
-  const candidateSources: unknown[] = [];
-  if (Array.isArray(rawPayload.receiptLineItems)) {
-    candidateSources.push(rawPayload.receiptLineItems);
-  }
-
-  const receiptDetails = isRecord(rawPayload.receiptDetails) ? rawPayload.receiptDetails : null;
-  if (receiptDetails) {
-    if (Array.isArray(receiptDetails.lineItems)) {
-      candidateSources.push(receiptDetails.lineItems);
-    }
-
-    if (Array.isArray(receiptDetails.line_items)) {
-      candidateSources.push(receiptDetails.line_items);
-    }
-  }
-
-  for (const source of candidateSources) {
-    const lineItems = (source as unknown[]).flatMap((entry) => {
-      if (!isRecord(entry)) {
-        return [];
-      }
-
-      const description = normalizeReceiptLineItemText(entry.description ?? entry.name ?? entry.label);
-      if (!description) {
-        return [];
-      }
-
-      return [
-        {
-          description,
-          quantity: normalizeReceiptLineItemText(entry.quantity) || null,
-          currency: normalizeReceiptLineItemText(entry.currency) || null,
-          unitPrice: normalizeReceiptLineItemText(entry.unitPrice ?? entry.unit_price) || null,
-          amount: normalizeReceiptLineItemText(entry.amount ?? entry.total) || null,
-        },
-      ];
-    });
-
-    if (lineItems.length > 0) {
-      return lineItems;
-    }
-  }
-
-  return [];
-};
-
-const parseReceiptLineItemNumber = (value: string | null | undefined) => {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = Number(String(value).replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const getReceiptLineItemComputedAmount = (item: ReceiptLineItemDraft | ReceiptLineItem) => {
-  const amount = parseReceiptLineItemNumber(item.amount);
-  if (amount !== null) {
-    return amount;
-  }
-
-  const unitPrice = parseReceiptLineItemNumber(item.unitPrice);
-  const quantity = parseReceiptLineItemNumber(item.quantity);
-  return unitPrice !== null && quantity !== null ? unitPrice * quantity : null;
-};
-
-const getManualReceiptLineItemTotal = (lineItems: ReceiptLineItemDraft[]) =>
-  lineItems.reduce((total, item) => total + (getReceiptLineItemComputedAmount(item) ?? 0), 0);
-
-const sanitizeReceiptLineItems = (lineItems: ReceiptLineItemDraft[]) =>
-  lineItems
-    .map((item) => ({
-      description: item.description.trim(),
-      quantity: item.quantity.trim(),
-      currency: item.currency.trim(),
-      unitPrice: item.unitPrice.trim(),
-      amount: item.amount.trim(),
-    }))
-    .filter((item) => Boolean(item.description))
-    .map((item) => ({
-      description: item.description,
-      quantity: item.quantity || null,
-      currency: item.currency || null,
-      unitPrice: item.unitPrice || null,
-      amount: item.amount || null,
-    }));
-
-const receiptLineItemToDraft = (lineItem: ReceiptLineItem): ReceiptLineItemDraft => ({
-  description: lineItem.description ?? "",
-  quantity: lineItem.quantity ?? "",
-  currency: lineItem.currency ?? "",
-  unitPrice: lineItem.unitPrice ?? "",
-  amount: lineItem.amount ?? "",
-});
-
-const receiptLineItemSignature = (lineItems: ReceiptLineItemDraft[] | ReceiptLineItem[]) =>
-  JSON.stringify(
-    sanitizeReceiptLineItems(
-      lineItems.map((lineItem) => ({
-        description: lineItem.description ?? "",
-        quantity: lineItem.quantity ?? "",
-        currency: lineItem.currency ?? "",
-        unitPrice: lineItem.unitPrice ?? "",
-        amount: lineItem.amount ?? "",
-      }))
-    )
-  );
-
-const mergeReceiptLineItemsIntoPayload = (rawPayload: unknown, lineItems: ReceiptLineItemDraft[], fallbackCurrency: string) => {
-  const sanitizedLineItems = sanitizeReceiptLineItems(
-    lineItems.map((lineItem) => ({
-      ...lineItem,
-      currency: lineItem.currency.trim() || fallbackCurrency,
-    }))
-  );
-  const nextPayload: Record<string, unknown> = isRecord(rawPayload) ? { ...rawPayload } : {};
-  nextPayload.receiptLineItems = sanitizedLineItems;
-
-  if (isRecord(nextPayload.receiptDetails)) {
-    nextPayload.receiptDetails = {
-      ...nextPayload.receiptDetails,
-      lineItems: sanitizedLineItems,
-    };
-  }
-
-  return nextPayload;
-};
 
 const normalizeConfidenceScore = (value: number | null | undefined) => {
   if (typeof value !== "number" || !Number.isFinite(value)) {
