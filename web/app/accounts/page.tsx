@@ -74,6 +74,7 @@ import {
   mergeImportedPreviewTransactions,
   mergeOptimisticImportedAccount as mergeOptimisticImportedAccountShared,
   resolvePersistedImportedAccountId as resolvePersistedImportedAccountIdShared,
+  isTransientUploadedAccountPlaceholder,
   transactionMatchesImportedAccount,
   uploadSummaryMatchesImportedAccount,
 } from "@/lib/imported-account-ui";

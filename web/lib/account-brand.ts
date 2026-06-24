@@ -292,7 +292,8 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     match: /\b(UNIONBANK|UNION BANK)\b/i,
     brand: makeBrand({
       label: "UnionBank",
-      logoSrcs: philippinesLogoWithVariants("unionbank"),
+      logoSrc: philippinesLogoPath("unionbank.jpg"),
+      logoSrcs: [philippinesLogoPath("unionbank.jpg")],
       fallbackIconSrc: bankIcon,
       accent: "#FF6A00",
       background: "linear-gradient(135deg, rgba(255, 106, 0, 0.18), rgba(255, 106, 0, 0.06))",
