@@ -39,6 +39,7 @@ import {
   buildTransactionDetailDraft,
   type TransactionDetailDraftValue,
 } from "@/lib/transaction-detail-draft";
+import { applyTransactionPatchToDetailDraft } from "@/lib/transaction-detail-draft-patch";
 import { hasTransactionDetailDraftChanges } from "@/lib/transaction-detail-draft-changes";
 import { buildTransactionUpdatePayload } from "@/lib/transaction-update-payload";
 import {
@@ -5287,25 +5288,7 @@ function TransactionsPageContent() {
         return current;
       }
 
-      return {
-        ...current,
-        merchantRaw: patch.merchantRaw ?? current.merchantRaw,
-        merchantClean: patch.merchantClean ?? current.merchantClean,
-        date: patch.date ? patch.date.slice(0, 10) : current.date,
-        accountId: patch.accountId ?? current.accountId,
-        categoryId: patch.categoryId ?? current.categoryId,
-        amount: patch.amount ?? current.amount,
-        currency: patch.currency ?? current.currency,
-        type:
-          patch.type === "income"
-            ? "credit"
-            : patch.type === "expense"
-              ? "debit"
-              : current.type,
-        description: patch.description !== undefined ? patch.description ?? "" : current.description,
-        isExcluded: patch.isExcluded ?? current.isExcluded,
-        isTransfer: patch.isTransfer ?? current.isTransfer,
-      };
+      return applyTransactionPatchToDetailDraft(current, patch);
     });
   };
 
@@ -5342,25 +5325,7 @@ function TransactionsPageContent() {
         return current;
       }
 
-      return {
-        ...current,
-        merchantRaw: patch.merchantRaw ?? current.merchantRaw,
-        merchantClean: patch.merchantClean ?? current.merchantClean,
-        date: patch.date ? patch.date.slice(0, 10) : current.date,
-        accountId: patch.accountId ?? current.accountId,
-        categoryId: patch.categoryId ?? current.categoryId,
-        amount: patch.amount ?? current.amount,
-        currency: patch.currency ?? current.currency,
-        type:
-          patch.type === "income"
-            ? "credit"
-            : patch.type === "expense"
-              ? "debit"
-              : current.type,
-        description: patch.description !== undefined ? patch.description ?? "" : current.description,
-        isExcluded: patch.isExcluded ?? current.isExcluded,
-        isTransfer: patch.isTransfer ?? current.isTransfer,
-      };
+      return applyTransactionPatchToDetailDraft(current, patch);
     });
   };
 
