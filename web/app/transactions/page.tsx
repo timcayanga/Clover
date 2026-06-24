@@ -3681,22 +3681,7 @@ function TransactionsPageContent() {
         case "account":
           return accountNameById.get(transaction.accountId) ?? transaction.accountName;
         case "category": {
-          const categoryValue = transaction.categoryId ?? otherCategoryId;
-          const categoryLabel =
-            getEffectiveTransactionCategoryName({
-              categoryName: transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? null,
-              rawPayload: transaction.rawPayload as never,
-              merchantRaw: transaction.merchantRaw,
-              merchantClean: transaction.merchantClean,
-              institution: accountInstitutionById.get(transaction.accountId) ?? null,
-              source: transaction.source ?? null,
-              type: transaction.type,
-            }) ??
-            guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
-            "Other";
-          return (
-            categoryLabel
-          );
+          return getDisplayCategoryNameForTransaction(transaction);
         }
         case "amount":
           return Number(transaction.amount);
@@ -5833,18 +5818,7 @@ function TransactionsPageContent() {
             accountNumberById.get(transaction.accountId) ?? null,
             workspaceAccountNumbers
           );
-          const categoryLabel =
-            getEffectiveTransactionCategoryName({
-              categoryName: transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? null,
-              rawPayload: transaction.rawPayload as never,
-              merchantRaw: transaction.merchantRaw,
-              merchantClean: transaction.merchantClean,
-              institution: accountInstitutionById.get(transaction.accountId) ?? null,
-              source: transaction.source ?? null,
-              type: transaction.type,
-            }) ??
-            guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
-            "Other";
+          const categoryLabel = getDisplayCategoryNameForTransaction(transaction);
           const categoryTone = getCategoryIconTone(categoryLabel);
           const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
           const merchantSummary = summarizeTransactionMerchantText(
@@ -7070,18 +7044,7 @@ function TransactionsPageContent() {
                       accountNumberById.get(transaction.accountId) ?? null,
                       workspaceAccountNumbers
                     );
-                    const categoryLabel =
-                      getEffectiveTransactionCategoryName({
-                        categoryName: transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? null,
-                    rawPayload: transaction.rawPayload as never,
-                    merchantRaw: transaction.merchantRaw,
-                    merchantClean: transaction.merchantClean,
-                    institution: accountInstitution,
-                    source: transaction.source ?? null,
-                    type: transaction.type,
-                      }) ??
-                      guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
-                      "Other";
+                    const categoryLabel = getDisplayCategoryNameForTransaction(transaction);
                     const effectiveCategoryValue = getCategoryIdByName(categories, categoryLabel) || categoryValue;
                     const isTransferTransaction = effectiveType === "transfer";
                 const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
@@ -7355,18 +7318,7 @@ function TransactionsPageContent() {
                           accountNumberById.get(transaction.accountId) ?? null,
                           workspaceAccountNumbers
                         );
-                        const categoryLabel =
-                          getEffectiveTransactionCategoryName({
-                            categoryName: transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? null,
-                            rawPayload: transaction.rawPayload as never,
-                            merchantRaw: transaction.merchantRaw,
-                            merchantClean: transaction.merchantClean,
-                            institution: accountInstitution,
-                            source: transaction.source ?? null,
-                            type: transaction.type,
-                          }) ??
-                          guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
-                          "Other";
+                        const categoryLabel = getDisplayCategoryNameForTransaction(transaction);
                         const isTransferTransaction = effectiveType === "transfer";
                         const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
                         const merchantSummary = summarizeTransactionMerchantText(
