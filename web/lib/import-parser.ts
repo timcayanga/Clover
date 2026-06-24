@@ -131,6 +131,9 @@ const isLikelyPersonTransferName = (value: string) => {
 export const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
+  const addHeuristicScore = (scores: Map<string, number>, categoryName: string, score: number) => {
+    scores.set(categoryName, (scores.get(categoryName) ?? 0) + score);
+  };
   if (/visa\s+provisioning\s+service|card\s+checked|verification/.test(lower) || /visaprovisioningservice|cardchecked|verification/.test(compact)) {
     return "Financial";
   }
@@ -213,6 +216,67 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";
   if (/business|invoice|client|contract/.test(lower)) return "Business";
   if (/\bfee\b|interest|loan|financial|bank charge/.test(lower)) return "Financial";
+
+  const heuristicScores = new Map<string, number>();
+  if (
+    /\b(?:grocer|grocery|supermarket|market|metro|mart|bakery|cafe|coffee|tea|bistro|kitchen|eatery|ramen|sushi|burger|seafood|dining|dumpling|dumplings|restaurant|bar|foods?|foods?)\b/.test(
+      lower
+    ) ||
+    /(?:grocer|grocery|supermarket|market|metro|mart|bakery|cafe|coffee|tea|bistro|kitchen|eatery|ramen|sushi|burger|seafood|dining|dumpling|dumplings|restaurant|bar|foods?)/.test(
+      compact
+    )
+  ) {
+    addHeuristicScore(heuristicScores, "Food & Dining", 4);
+  }
+  if (
+    /\b(?:airport|parking|rail|train|tram|bus|skybus|station|transport|taxi|uber|grab|fuel|petrol|gas|oil)\b/.test(lower) ||
+    /(?:airport|parking|rail|train|tram|bus|skybus|station|transport|taxi|uber|grab|fuel|petrol|gas|oil)/.test(compact)
+  ) {
+    addHeuristicScore(heuristicScores, "Transport", 4);
+  }
+  if (
+    /\b(?:souvenir|tour|tourism|travel|harbour|sanctuary|victoria|great\s+ocean\s+road|holiday|vacation|park|parks)\b/.test(lower) ||
+    /(?:souvenir|tour|tourism|travel|harbour|sanctuary|victoria|greatoceanroad|holiday|vacation|park|parks)/.test(compact)
+  ) {
+    addHeuristicScore(heuristicScores, "Travel & Lifestyle", 4);
+  }
+  if (
+    /\b(?:opera|theatre|theater|ticket|tickets|concert|cinema|movie|museum|gallery|show)\b/.test(lower) ||
+    /(?:opera|theatre|theater|ticket|tickets|concert|cinema|movie|museum|gallery|show)/.test(compact)
+  ) {
+    addHeuristicScore(heuristicScores, "Entertainment", 4);
+  }
+  if (
+    /\b(?:shop|shopping|retail|convenience|mall|amazon|alibaba|shopee|lazada|store|camera|paypal|prime|relay)\b/.test(lower) ||
+    /(?:shop|shopping|retail|convenience|mall|amazon|alibaba|shopee|lazada|store|camera|paypal|prime|relay)/.test(compact)
+  ) {
+    addHeuristicScore(heuristicScores, "Shopping", 4);
+  }
+  if (
+    /\b(?:college|school|tuition|course|learning|book|books|bookshop|bookstore)\b/.test(lower) ||
+    /(?:college|school|tuition|course|learning|book|books|bookshop|bookstore)/.test(compact)
+  ) {
+    addHeuristicScore(heuristicScores, "Education", 4);
+  }
+  if (/\b(?:payment|payments)\b/.test(lower) && !/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)) {
+    addHeuristicScore(heuristicScores, "Shopping", 2);
+  }
+  if (hasTravelContext && hasForeignMerchantCurrencyContext) {
+    addHeuristicScore(heuristicScores, "Travel & Lifestyle", 1);
+  }
+
+  let bestHeuristicCategory: string | null = null;
+  let bestHeuristicScore = 0;
+  for (const [categoryName, score] of heuristicScores.entries()) {
+    if (score > bestHeuristicScore) {
+      bestHeuristicCategory = categoryName;
+      bestHeuristicScore = score;
+    }
+  }
+  if (bestHeuristicCategory && bestHeuristicScore >= 4) {
+    return bestHeuristicCategory;
+  }
+
   return "Other";
 };
 

@@ -2069,6 +2069,24 @@ const main = async () => {
   if (guessCategoryName("ATM Withdrawal", "expense") !== "Cash & ATM") {
     throw new Error(`expected guessCategoryName to classify ATM Withdrawal as Cash & ATM`);
   }
+  const categoryGuessExpectations: Array<[string, "income" | "expense" | "transfer", string]> = [
+    ["Pedro the Grocer Makat", "expense", "Food & Dining"],
+    ["McDonald's", "expense", "Food & Dining"],
+    ["Milksha Sydney", "expense", "Food & Dining"],
+    ["Gogyo - Surry Hills", "expense", "Food & Dining"],
+    ["Sydney Opera House", "expense", "Entertainment"],
+    ["Relay", "expense", "Shopping"],
+    ["Sydney Harbour Gifts", "expense", "Travel & Lifestyle"],
+    ["Wanli Hu", "income", "Transfers"],
+    ["Maria Harman", "income", "Transfers"],
+    ["MALDO A F", "income", "Transfers"],
+  ];
+  for (const [description, type, expectedCategory] of categoryGuessExpectations) {
+    const actualCategory = guessCategoryName(description, type);
+    if (actualCategory !== expectedCategory) {
+      throw new Error(`expected guessCategoryName ${description} to classify as ${expectedCategory}, got ${actualCategory}`);
+    }
+  }
   const aubDisplayedCategory = getEffectiveTransactionCategoryName({
     categoryName: "Financial",
     rawPayload: { categoryName: "Financial", merchantRaw: "ATM Withdrawal" },
