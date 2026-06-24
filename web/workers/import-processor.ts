@@ -477,6 +477,51 @@ const buildConfirmedTransactionContentKey = (params: {
   ].join("|");
 };
 
+const collapseParsedScreenshotOverlapRows = <TRow extends ParsedImportRow>(rows: TRow[]) => {
+  const seen = new Set<string>();
+  const collapsed: TRow[] = [];
+  let removed = 0;
+
+  for (const row of rows) {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
+    if (!/_mobile_screenshot/i.test(source)) {
+      collapsed.push(row);
+      continue;
+    }
+
+    const contentKey = buildConfirmedTransactionContentKey({
+      accountId: null,
+      date: row.date ?? null,
+      amount: row.amount ?? null,
+      currency: row.currency ?? null,
+      merchantRaw: row.merchantRaw ?? null,
+      merchantClean: row.merchantClean ?? null,
+      description: row.description ?? null,
+    });
+    const accountScopedContentKey = [
+      normalizeTransactionDedupeText(row.institution ?? rawPayload?.bank ?? ""),
+      normalizeTransactionDedupeText(row.accountName ?? rawPayload?.accountName ?? ""),
+      normalizeTransactionDedupeText(row.accountNumber ?? rawPayload?.accountNumber ?? ""),
+      normalizeTransactionDedupeText(row.type ?? ""),
+      contentKey,
+    ].join("|");
+
+    if (!contentKey.replace(/\|/g, "") || seen.has(accountScopedContentKey)) {
+      removed += 1;
+      continue;
+    }
+
+    seen.add(accountScopedContentKey);
+    collapsed.push(row);
+  }
+
+  return { rows: collapsed, removed };
+};
+
 const extractWiseScreenshotSequenceNumber = (fileName: unknown) => {
   if (typeof fileName !== "string") {
     return null;
@@ -6203,10 +6248,20 @@ export const processImportFileText = async (
         accountName: effectiveMetadataSource.accountName,
       })
     : effectiveRowsBase;
-  const effectiveRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(effectiveRows as Array<Record<string, unknown>>);
-  const parsedEndingBalance = getTrailingBalanceFromParsedRows(effectiveRows);
+  const screenshotOverlapCollapse = collapseParsedScreenshotOverlapRows(effectiveRows as ParsedImportRow[]);
+  const effectiveRowsCollapsed = screenshotOverlapCollapse.rows as typeof effectiveRows;
+  if (screenshotOverlapCollapse.removed > 0) {
+    console.info("[import-screenshot] collapsed overlapping screenshot rows", {
+      importFileId,
+      removed: screenshotOverlapCollapse.removed,
+      before: effectiveRows.length,
+      after: effectiveRowsCollapsed.length,
+    });
+  }
+  const effectiveRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(effectiveRowsCollapsed as Array<Record<string, unknown>>);
+  const parsedEndingBalance = getTrailingBalanceFromParsedRows(effectiveRowsCollapsed);
   const ucpbKnownSampleMetadata = (() => {
-    const sampleRows = (effectiveRows as Array<Record<string, unknown>>).filter((row) => {
+    const sampleRows = (effectiveRowsCollapsed as Array<Record<string, unknown>>).filter((row) => {
       const rawPayload = row.rawPayload;
       return (
         rawPayload &&
@@ -6261,7 +6316,7 @@ export const processImportFileText = async (
     };
   })();
   const unionBankKnownSampleMetadata = (() => {
-    const sampleRows = (effectiveRows as Array<Record<string, unknown>>).filter((row) => {
+    const sampleRows = (effectiveRowsCollapsed as Array<Record<string, unknown>>).filter((row) => {
       const rawPayload = row.rawPayload;
       return (
         rawPayload &&
@@ -6334,7 +6389,7 @@ export const processImportFileText = async (
   let confirmedImportResult: ConfirmImportResult | null = null;
   await ensureParsedAccountGroupsMaterialized({
     importFile,
-    rows: effectiveRows as Array<Record<string, unknown>>,
+    rows: effectiveRowsCollapsed as Array<Record<string, unknown>>,
     metadata: resolvedMetadata,
   }).catch((error) => {
     console.warn("[import-account-match] unable to materialize parsed account groups before duplicate check", {
@@ -6347,14 +6402,14 @@ export const processImportFileText = async (
     statementFingerprint,
     importFileId,
   });
-  const shouldRepairMultiAccountDuplicate = hasMultipleParsedAccountNumbers(effectiveRows as Array<Record<string, unknown>>);
+  const shouldRepairMultiAccountDuplicate = hasMultipleParsedAccountNumbers(effectiveRowsCollapsed as Array<Record<string, unknown>>);
   if (duplicateImportFileId && !options.allowDuplicateStatement && !shouldRepairMultiAccountDuplicate) {
     await updateImportFileCompat(importFileId, {
       status: "done",
     });
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
-  const rows = effectiveRows as EnrichedParsedImportRow[];
+  const rows = effectiveRowsCollapsed as EnrichedParsedImportRow[];
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
@@ -6363,8 +6418,12 @@ export const processImportFileText = async (
       rows.length > 0
         ? canReuseCachedStatementParse
           ? "Clover is reusing the cached parse and saving the results."
-          : "Clover is saving the visible rows."
-        : "Clover is identifying transactions.",
+          : parserRouteDecision.route === "deterministic"
+            ? `Fast parser found ${rows.length} visible row${rows.length === 1 ? "" : "s"}. Clover is saving them now.`
+            : `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} and is finishing the ${parserRouteDecision.route === "hybrid_openai" ? "hybrid" : "backup"} parse.`
+        : parserRouteDecision.route === "backup_openai"
+          ? "Clover is identifying transactions with the AI backup parser."
+          : "Clover is identifying transactions.",
   });
 
   const extractedTextFileFingerprint = textCacheInfo?.cacheRecord?.fileFingerprint ?? null;
@@ -6438,6 +6497,12 @@ export const processImportFileText = async (
     usedOpenAiFallback: Boolean(useOpenAiParse),
     usedDeterministicParser: !useOpenAiParse,
     usedFastScreenshotParse: imageStatementParseLooksUsable,
+    parserRoute: parserRouteDecision.route,
+    parserRouteConfidence: parserRouteDecision.confidence,
+    parserRouteReason: parserRouteDecision.reason,
+    parserRouteDecisionWindowMs: parserRouteDecision.targetDecisionWindowMs,
+    screenshotOverlapRowsRemoved: screenshotOverlapCollapse.removed,
+    extractionCacheHit: Boolean(textCacheInfo?.cacheHit),
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const receiptDocumentCashAccountId =
