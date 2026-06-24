@@ -8040,6 +8040,12 @@ export const processImportFileText = async (
     const needsCompletenessFollowup = visibleImportCompleteness.likelyIncomplete;
     const allowWarningFinalizeForImageStatement = false;
     const canFinalizeWithWarnings = hasUsableParsedRows && !hasCriticalFindings && !needsCompletenessFollowup;
+    const canFinalizeStableScreenshotImport =
+      imageImport &&
+      importMode === "statement" &&
+      hasUsableParsedRows &&
+      !hasCriticalFindings &&
+      qaRunResult.evaluation.score >= Math.max(80, qaTargetScore - 8);
     if (statementFingerprint && (hasCriticalFindings || qaRunResult.evaluation.score < 75)) {
       await recordStatementTemplateOutcome({
         workspaceId: String(importFile.workspaceId),
@@ -8073,6 +8079,7 @@ export const processImportFileText = async (
       (qaRunResult.evaluation.score < qaTargetScore || needsCompletenessFollowup) &&
       autoRerunAttempt < AUTO_REPARSE_MAX_ATTEMPTS &&
       !allowWarningFinalizeForImageStatement &&
+      !canFinalizeStableScreenshotImport &&
       !shouldDeferCompletenessRerunToSiblingBatch &&
       !shouldFinalizeUsableRowsWithWarnings;
 
@@ -8171,7 +8178,10 @@ export const processImportFileText = async (
 
     const shouldMarkDone = isDocumentImport
       ? Boolean(documentImportRecord)
-      : qaRunResult.evaluation.score >= qaTargetScore || canFinalizeWithWarnings || canFinalizeWhileSiblingScreenshotsContinue;
+      : qaRunResult.evaluation.score >= qaTargetScore ||
+        canFinalizeWithWarnings ||
+        canFinalizeStableScreenshotImport ||
+        canFinalizeWhileSiblingScreenshotsContinue;
     if (shouldMarkDone) {
       try {
         confirmedImportResult = await confirmImportFileWithRetry("qa_finalize");
@@ -8262,9 +8272,13 @@ export const processImportFileText = async (
           ? autoRerunEnabled && autoRerunAttempt > 0
             ? plateaued && canFinalizeWithWarnings
               ? `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}, but Clover finalized the import with the available statement data.`
+              : canFinalizeStableScreenshotImport
+                ? `Clover finalized the visible screenshot rows at score ${qaRunResult.evaluation.score} because the import looked stable enough to publish.`
               : canFinalizeWhileSiblingScreenshotsContinue
                 ? `Clover finalized the available rows at score ${qaRunResult.evaluation.score} while ${recentScreenshotBatchContext.activeSiblingCount} related screenshot file${recentScreenshotBatchContext.activeSiblingCount === 1 ? "" : "s"} continue processing.`
               : `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} complete. Final score ${qaRunResult.evaluation.score}.`
+            : canFinalizeStableScreenshotImport
+              ? `Clover finalized the visible screenshot rows at score ${qaRunResult.evaluation.score} because the import looked stable enough to publish.`
             : canFinalizeWhileSiblingScreenshotsContinue
               ? `Clover finalized the available rows at score ${qaRunResult.evaluation.score} while ${recentScreenshotBatchContext.activeSiblingCount} related screenshot file${recentScreenshotBatchContext.activeSiblingCount === 1 ? "" : "s"} continue processing.`
             : null
