@@ -24,6 +24,7 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
+import { hasTransactionDetailDraftChanges } from "@/lib/transaction-detail-draft-changes";
 import {
   buildTransactionDetailDraft,
   detailDraftTypeToTransactionType,
@@ -34,9 +35,7 @@ import {
   getManualReceiptLineItemTotal,
   getReceiptLineItemComputedAmount,
   mergeReceiptLineItemsIntoPayload,
-  parseReceiptLineItemNumber,
   parseReceiptLineItemsFromPayload,
-  receiptLineItemSignature,
   receiptLineItemToDraft,
 } from "@/lib/receipt-line-items";
 import {
@@ -2812,24 +2811,12 @@ function AccountDetailPageContent() {
     [detailReceiptLineItems]
   );
   const hasDetailDraftChanges = useMemo(() => {
-    if (!selectedTransaction || !detailDraft) {
-      return false;
-    }
-
-    return (
-      (detailDraft.merchantClean.trim() || "") !== (selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw).trim() ||
-      detailDraft.date !== selectedTransaction.date.slice(0, 10) ||
-      detailDraft.accountId !== selectedTransaction.accountId ||
-      detailDraft.categoryId !== (getDisplayCategoryIdForTransaction(selectedTransaction) || "") ||
-      detailDraft.amount !== selectedTransaction.amount ||
-      detailDraft.currency !== (selectedTransaction.currency ?? account?.currency ?? "PHP") ||
-      detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
-      normalizeTransactionNoteValue(detailDraft.description) !== getTransactionUserNote(selectedTransaction) ||
-      detailDraft.isExcluded !== selectedTransaction.isExcluded ||
-      detailDraft.isTransfer !== Boolean(selectedTransaction.isTransfer || selectedTransaction.type === "transfer") ||
-      receiptLineItemSignature(detailDraft.receiptLineItems) !==
-        receiptLineItemSignature(parseReceiptLineItemsFromPayload(selectedTransaction.rawPayload))
-    );
+    const baselineCategoryId = selectedTransaction ? getDisplayCategoryIdForTransaction(selectedTransaction) || "" : "";
+    return hasTransactionDetailDraftChanges(detailDraft, selectedTransaction, {
+      baselineCategoryId,
+      baselineCurrency: selectedTransaction?.currency ?? account?.currency ?? "PHP",
+      baselineTransfer: Boolean(selectedTransaction?.isTransfer || selectedTransaction?.type === "transfer"),
+    });
   }, [account?.currency, detailDraft, getDisplayCategoryIdForTransaction, selectedTransaction]);
 
   const hasMoreTransactions = transactionTotalCount > transactions.length;

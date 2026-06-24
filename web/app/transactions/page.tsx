@@ -35,14 +35,13 @@ import {
   detailDraftTypeToTransactionType,
   type TransactionDetailDraftValue,
 } from "@/lib/transaction-detail-draft";
+import { hasTransactionDetailDraftChanges } from "@/lib/transaction-detail-draft-changes";
 import {
   createEmptyReceiptLineItem,
   getManualReceiptLineItemTotal,
   getReceiptLineItemComputedAmount,
   mergeReceiptLineItemsIntoPayload,
-  parseReceiptLineItemNumber,
   parseReceiptLineItemsFromPayload,
-  receiptLineItemSignature,
   receiptLineItemToDraft,
   sanitizeReceiptLineItems,
 } from "@/lib/receipt-line-items";
@@ -4213,26 +4212,12 @@ function TransactionsPageContent() {
       detailTransactionRawName.toLowerCase() !== detailTransactionSummary.toLowerCase()
   );
   const hasDetailDraftChanges = useMemo(() => {
-    if (!selectedTransaction || !detailDraft) {
-      return false;
-    }
-
-    const baselineCategoryId = getDisplayCategoryIdForTransaction(selectedTransaction);
-
-    return (
-      (detailDraft.merchantClean.trim() || "") !== (selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw).trim() ||
-      detailDraft.date !== selectedTransaction.date.slice(0, 10) ||
-      detailDraft.accountId !== selectedTransaction.accountId ||
-      (detailDraft.categoryId || otherCategoryId) !== baselineCategoryId ||
-      detailDraft.amount !== selectedTransaction.amount ||
-      detailDraft.currency !== selectedTransaction.currency ||
-      detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
-      normalizeTransactionNoteValue(detailDraft.description) !== getTransactionUserNote(selectedTransaction) ||
-      detailDraft.isExcluded !== selectedTransaction.isExcluded ||
-      detailDraft.isTransfer !== selectedTransaction.isTransfer ||
-      receiptLineItemSignature(detailDraft.receiptLineItems) !==
-        receiptLineItemSignature(parseReceiptLineItemsFromPayload(selectedTransaction.rawPayload))
-    );
+    const baselineCategoryId = selectedTransaction ? getDisplayCategoryIdForTransaction(selectedTransaction) : "";
+    return hasTransactionDetailDraftChanges(detailDraft, selectedTransaction, {
+      baselineCategoryId: baselineCategoryId || otherCategoryId,
+      baselineCurrency: selectedTransaction?.currency ?? "PHP",
+      baselineTransfer: Boolean(selectedTransaction?.isTransfer),
+    });
   }, [detailDraft, getDisplayCategoryIdForTransaction, otherCategoryId, selectedTransaction]);
 
   useEffect(() => {
