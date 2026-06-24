@@ -2173,6 +2173,63 @@ const resolveFallbackPageImageLimit = (params: {
   return null;
 };
 
+const loadRecentScreenshotBatchContext = async (params: {
+  workspaceId: string;
+  importFileId: string;
+  importMode: ImportMode | null | undefined;
+  imageImport: boolean;
+  uploadedAt?: Date | null;
+}) => {
+  if (params.importMode !== "statement" || !params.imageImport) {
+    return {
+      siblingCount: 0,
+      activeSiblingCount: 0,
+      visibleSiblingCount: 0,
+    };
+  }
+
+  const anchorTime = params.uploadedAt ? new Date(params.uploadedAt).getTime() : Date.now();
+  const windowStart = new Date(anchorTime - 20 * 60_000);
+  const windowEnd = new Date(anchorTime + 5 * 60_000);
+  const siblings = await prisma.importFile.findMany({
+    where: {
+      workspaceId: params.workspaceId,
+      id: { not: params.importFileId },
+      createdAt: {
+        gte: windowStart,
+        lte: windowEnd,
+      },
+      status: {
+        not: "deleted",
+      },
+      OR: [
+        { fileType: { startsWith: "image/" } },
+        { fileName: { endsWith: ".png" } },
+        { fileName: { endsWith: ".jpg" } },
+        { fileName: { endsWith: ".jpeg" } },
+        { fileName: { endsWith: ".webp" } },
+        { fileName: { endsWith: ".heic" } },
+      ],
+    },
+    select: {
+      id: true,
+      status: true,
+      parsedRowsCount: true,
+      confirmedTransactionsCount: true,
+      processingPhase: true,
+    },
+    take: 40,
+  }).catch(() => []);
+
+  return {
+    siblingCount: siblings.length,
+    activeSiblingCount: siblings.filter((file) => String(file.status ?? "").toLowerCase() === "processing").length,
+    visibleSiblingCount: siblings.filter(
+      (file) => Math.max(Number(file.parsedRowsCount ?? 0), Number(file.confirmedTransactionsCount ?? 0)) > 0
+    ).length,
+  };
+};
+
 const isJsonImportFile = (fileType: string | null | undefined, fileName: string | null | undefined) =>
   /\.json$/i.test(fileName ?? "") || /(?:^|\/)json$/i.test(fileType ?? "") || /\bjson\b/i.test(fileType ?? "");
 
@@ -7227,6 +7284,13 @@ export const processImportFileText = async (
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
   const rows = effectiveRowsCollapsed as EnrichedParsedImportRow[];
+  const recentScreenshotBatchContext = await loadRecentScreenshotBatchContext({
+    workspaceId: String(importFile.workspaceId),
+    importFileId,
+    importMode,
+    imageImport,
+    uploadedAt: importFile.uploadedAt ?? importFile.createdAt ?? null,
+  });
   const visibleImportCompleteness = assessVisibleImportCompleteness({
     rows,
     importMode,
@@ -7259,6 +7323,8 @@ export const processImportFileText = async (
       rows.length > 0
         ? canReuseCachedStatementParse
           ? "Clover is reusing the cached parse and saving the results."
+          : recentScreenshotBatchContext.activeSiblingCount > 0 && visibleImportCompleteness.likelyIncomplete
+            ? `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} and is waiting for ${recentScreenshotBatchContext.activeSiblingCount} related screenshot file${recentScreenshotBatchContext.activeSiblingCount === 1 ? "" : "s"} to finish processing.`
           : visibleImportCompleteness.likelyIncomplete
             ? `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} and is checking whether the screenshot batch is complete.`
           : importHealthSummary.status === "watch"
@@ -7884,6 +7950,12 @@ export const processImportFileText = async (
     // QA warnings should feed review/learning, not keep a usable statement in a
     // long auto-rerun loop after the account and transaction rows are ready.
     const shouldFinalizeUsableRowsWithWarnings = canFinalizeWithWarnings;
+    const shouldDeferCompletenessRerunToSiblingBatch =
+      imageImport &&
+      importMode === "statement" &&
+      needsCompletenessFollowup &&
+      recentScreenshotBatchContext.activeSiblingCount > 0 &&
+      rows.length > 0;
     const shouldAutoRerun =
       autoRerunEnabled &&
       !isDocumentImport &&
@@ -7891,6 +7963,7 @@ export const processImportFileText = async (
       (qaRunResult.evaluation.score < qaTargetScore || needsCompletenessFollowup) &&
       autoRerunAttempt < AUTO_REPARSE_MAX_ATTEMPTS &&
       !allowWarningFinalizeForImageStatement &&
+      !shouldDeferCompletenessRerunToSiblingBatch &&
       !shouldFinalizeUsableRowsWithWarnings;
 
     if (shouldAutoRerun) {
