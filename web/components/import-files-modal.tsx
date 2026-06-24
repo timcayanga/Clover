@@ -5244,7 +5244,30 @@ export function ImportFilesModal({
             ? "File details imported"
             : importMode === "notes"
               ? "Notes screenshot imported"
-              : "Screenshot imported";
+            : "Screenshot imported";
+    const getReceiptPollDelayMs = (params: {
+      attempt: number;
+      importStatus: string | null;
+      processingPhase: string | null;
+      parsedRowsCount: number;
+      confirmedTransactionsCount: number;
+      hasVisibleImportPresence: boolean;
+    }) => {
+      if (params.importStatus === "done" || params.confirmedTransactionsCount > 0) {
+        return 120;
+      }
+
+      if (
+        params.processingPhase === "reconciling" ||
+        params.processingPhase === "staged" ||
+        params.parsedRowsCount > 0 ||
+        params.hasVisibleImportPresence
+      ) {
+        return 180;
+      }
+
+      return params.attempt < 6 ? 300 : 400;
+    };
 
     let scheduledVisibleRefresh = false;
     for (let attempt = 0; Date.now() - startedAt < MAX_WAIT_MS || attempt === 0; attempt += 1) {
@@ -5431,7 +5454,16 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(500);
+          await sleep(
+            getReceiptPollDelayMs({
+              attempt,
+              importStatus,
+              processingPhase,
+              parsedRowsCount,
+              confirmedTransactionsCount,
+              hasVisibleImportPresence,
+            })
+          );
           continue;
         }
 
@@ -5482,7 +5514,16 @@ export function ImportFilesModal({
           return { completed: false, summary: null };
         }
 
-        await sleep(500);
+        await sleep(
+          getReceiptPollDelayMs({
+            attempt,
+            importStatus,
+            processingPhase,
+            parsedRowsCount,
+            confirmedTransactionsCount,
+            hasVisibleImportPresence,
+          })
+        );
         continue;
       }
 
@@ -5558,7 +5599,7 @@ export function ImportFilesModal({
         return { completed: false, summary: null };
       }
 
-      await sleep(500);
+      await sleep(importMode === "receipt" ? 250 : 500);
     }
 
     const hasRecoverableFinalProgress = false;
