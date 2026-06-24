@@ -65,6 +65,8 @@ import {
   normalizeImportedAccountKey,
   matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
   transactionsWorkspaceCacheKey,
+  workspaceCacheUpdatedEventName,
+  type WorkspaceCacheUpdatedEventDetail,
   type ImportedWorkspaceTransaction,
 } from "@/lib/workspace-cache";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
@@ -3527,15 +3529,33 @@ function TransactionsPageContent() {
       return;
     }
 
+    const shouldReactToCacheKey = (key: string | null) =>
+      key === transactionsWorkspaceCacheKey || key === selectedWorkspaceKey;
+
     const handleStorage = (event: StorageEvent) => {
       if (event.storageArea !== window.localStorage) {
         return;
       }
 
-      if (
-        event.key !== transactionsWorkspaceCacheKey &&
-        event.key !== selectedWorkspaceKey
-      ) {
+      if (!shouldReactToCacheKey(event.key)) {
+        return;
+      }
+
+      const activeWorkspaceId = readSelectedWorkspaceId() || selectedWorkspaceId;
+      if (!activeWorkspaceId || activeWorkspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      if (!hydrateWorkspaceFromCache(activeWorkspaceId) && shouldHydrateTransactionsSnapshot(activeWorkspaceId)) {
+        setIsWorkspaceDataReady(false);
+        void loadWorkspaceMetadata(activeWorkspaceId, { skipImports: true, background: true });
+        void loadTransactionsPage(activeWorkspaceId, { background: true });
+      }
+    };
+
+    const handleWorkspaceCacheUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<WorkspaceCacheUpdatedEventDetail>;
+      if (!shouldReactToCacheKey(customEvent.detail?.key ?? null)) {
         return;
       }
 
@@ -3552,7 +3572,11 @@ function TransactionsPageContent() {
     };
 
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    window.addEventListener(workspaceCacheUpdatedEventName, handleWorkspaceCacheUpdated as EventListener);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(workspaceCacheUpdatedEventName, handleWorkspaceCacheUpdated as EventListener);
+    };
   }, [loadTransactionsPage, loadWorkspaceMetadata, selectedWorkspaceId, shouldHydrateTransactionsSnapshot]);
 
   useEffect(() => {

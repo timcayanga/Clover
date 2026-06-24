@@ -763,6 +763,34 @@ const waitForImportSettledVisibility = async (params: {
   return false;
 };
 
+const waitForReceiptSettledVisibility = async (params: {
+  workspaceId: string;
+  importFileId?: string | null;
+  summary: UploadInsightsSummary;
+  timeoutMs?: number;
+}) => {
+  const settledVisible = await waitForImportSettledVisibility({
+    workspaceId: params.workspaceId,
+    importFileId: params.importFileId ?? null,
+    accountId: params.summary.accountId ?? params.summary.optimisticAccountId ?? null,
+    importedRows: Math.max(
+      Number(params.summary.rowsImported ?? 0) || 0,
+      Array.isArray(params.summary.previewTransactions) ? params.summary.previewTransactions.length : 0
+    ),
+    expectedBalance: params.summary.balance ?? null,
+    timeoutMs: params.timeoutMs ?? 4_000,
+  });
+
+  if (!settledVisible) {
+    console.warn("Receipt import finished before the settled data became visible", {
+      importFileId: params.importFileId ?? null,
+      accountId: params.summary.accountId ?? params.summary.optimisticAccountId ?? null,
+    });
+  }
+
+  return settledVisible;
+};
+
 const buildOptimisticPreviewTransactions = (
   rows: Array<Record<string, unknown>>,
   params: {
@@ -5308,6 +5336,11 @@ export function ImportFilesModal({
             seedImportedWorkspaceCaches(workspaceId, receiptSummary);
             await Promise.resolve(onImported(receiptSummary));
           }
+          await waitForReceiptSettledVisibility({
+            workspaceId,
+            importFileId,
+            summary: receiptSummary,
+          });
           publishImportActivity({
             workspaceId,
             surface: importActivitySurfaceRef.current,
@@ -5783,6 +5816,11 @@ export function ImportFilesModal({
             if (precomputedReceiptSummary) {
               seedImportedWorkspaceCaches(workspaceId, precomputedReceiptSummary);
               await Promise.resolve(onImported(precomputedReceiptSummary));
+              await waitForReceiptSettledVisibility({
+                workspaceId,
+                importFileId,
+                summary: precomputedReceiptSummary,
+              });
 
               updateItem(itemId, {
                 status: "done",
@@ -5872,6 +5910,11 @@ export function ImportFilesModal({
             if (inlineReceiptSummary) {
               seedImportedWorkspaceCaches(workspaceId, inlineReceiptSummary);
               await Promise.resolve(onImported(inlineReceiptSummary));
+              await waitForReceiptSettledVisibility({
+                workspaceId,
+                importFileId,
+                summary: inlineReceiptSummary,
+              });
 
               updateItem(itemId, {
                 status: "done",

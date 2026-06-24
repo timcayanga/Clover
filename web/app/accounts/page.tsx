@@ -39,6 +39,8 @@ import {
   normalizeImportedAccountKey,
   matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
   deletingAccountsWorkspaceCacheKey,
+  workspaceCacheUpdatedEventName,
+  type WorkspaceCacheUpdatedEventDetail,
 } from "@/lib/workspace-cache";
 import { getAccountBrand } from "@/lib/account-brand";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
@@ -1912,17 +1914,35 @@ function AccountsPageContent() {
       return;
     }
 
+    const shouldReactToCacheKey = (key: string | null) =>
+      key === accountsWorkspaceCacheKey ||
+      key === deletedAccountsWorkspaceCacheKey ||
+      key === deletingAccountsWorkspaceCacheKey ||
+      key === "clover.selected-workspace-id.v1";
+
     const handleStorage = (event: StorageEvent) => {
       if (event.storageArea !== window.localStorage) {
         return;
       }
 
-      if (
-        event.key !== accountsWorkspaceCacheKey &&
-        event.key !== deletedAccountsWorkspaceCacheKey &&
-        event.key !== deletingAccountsWorkspaceCacheKey &&
-        event.key !== "clover.selected-workspace-id.v1"
-      ) {
+      if (!shouldReactToCacheKey(event.key)) {
+        return;
+      }
+
+      const activeWorkspaceId = readSelectedWorkspaceId() || selectedWorkspaceId;
+      if (!activeWorkspaceId || activeWorkspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      if (!hydrateWorkspaceFromCache(activeWorkspaceId) && shouldHydrateWorkspaceSnapshot(activeWorkspaceId)) {
+        setAccountsLoading(true);
+        void loadWorkspaceData(activeWorkspaceId);
+      }
+    };
+
+    const handleWorkspaceCacheUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<WorkspaceCacheUpdatedEventDetail>;
+      if (!shouldReactToCacheKey(customEvent.detail?.key ?? null)) {
         return;
       }
 
@@ -1938,7 +1958,11 @@ function AccountsPageContent() {
     };
 
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    window.addEventListener(workspaceCacheUpdatedEventName, handleWorkspaceCacheUpdated as EventListener);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(workspaceCacheUpdatedEventName, handleWorkspaceCacheUpdated as EventListener);
+    };
   }, [loadWorkspaceData, selectedWorkspaceId, shouldHydrateWorkspaceSnapshot]);
 
   useEffect(() => {
