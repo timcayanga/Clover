@@ -757,6 +757,87 @@ const assessFallbackRowsQuality = (rows: ParsedImportRow[]) => {
   };
 };
 
+const assessVisibleImportCompleteness = (params: {
+  rows: ParsedImportRow[];
+  importMode: ImportMode | null | undefined;
+  imageImport: boolean;
+  pageCount: number;
+  institution?: string | null;
+  parserRoute: "deterministic" | "hybrid_openai" | "backup_openai";
+}) => {
+  const normalizedInstitution = typeof params.institution === "string" ? params.institution.trim().toLowerCase() : "";
+  const isScreenshotStatement = params.imageImport && params.importMode === "statement";
+  if (!isScreenshotStatement) {
+    return {
+      score: 100,
+      likelyIncomplete: false,
+      reasons: [] as string[],
+      rowsPerPage: params.pageCount > 0 ? params.rows.length / params.pageCount : params.rows.length,
+      distinctDateCount: 0,
+    };
+  }
+
+  const rowsPerPage = params.pageCount > 0 ? params.rows.length / params.pageCount : params.rows.length;
+  const distinctDates = new Set(
+    params.rows
+      .map((row) => parseDateValue(row.date ?? row.transactionDate ?? row.postedDate ?? null))
+      .filter((value): value is Date => Boolean(value && !Number.isNaN(value.getTime())))
+      .map((date) => date.toISOString().slice(0, 10))
+  );
+  const quality = assessFallbackRowsQuality(params.rows);
+  const reasons: string[] = [];
+  let score = 100;
+
+  if (params.pageCount >= 3 && rowsPerPage < 2) {
+    score -= 40;
+    reasons.push("very_low_rows_per_page");
+  } else if (params.pageCount >= 3 && rowsPerPage < 3) {
+    score -= 24;
+    reasons.push("low_rows_per_page");
+  }
+
+  if (params.pageCount >= 5 && params.rows.length < params.pageCount * 2.5) {
+    score -= 20;
+    reasons.push("batch_sparse_for_page_count");
+  }
+
+  if (params.pageCount >= 3 && distinctDates.size <= 1) {
+    score -= 18;
+    reasons.push("single_date_cluster");
+  }
+
+  if (quality.suspiciousNameShare >= 0.18) {
+    score -= 12;
+    reasons.push("suspicious_name_share");
+  }
+
+  if (quality.weakCategoryShare >= 0.75) {
+    score -= 10;
+    reasons.push("weak_category_share");
+  }
+
+  if (/wise/.test(normalizedInstitution)) {
+    if (params.pageCount >= 4 && rowsPerPage < 3.2) {
+      score -= 18;
+      reasons.push("wise_sparse_batch");
+    }
+    if (params.parserRoute !== "deterministic" && params.pageCount >= 4 && distinctDates.size < Math.min(4, params.pageCount)) {
+      score -= 10;
+      reasons.push("wise_low_date_spread");
+    }
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  return {
+    score,
+    likelyIncomplete: score < 70,
+    reasons,
+    rowsPerPage,
+    distinctDateCount: distinctDates.size,
+  };
+};
+
 const inferParserRowConfidence = (params: {
   confidence?: unknown;
   parserConfidence?: unknown;
@@ -6410,6 +6491,14 @@ export const processImportFileText = async (
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
   const rows = effectiveRowsCollapsed as EnrichedParsedImportRow[];
+  const visibleImportCompleteness = assessVisibleImportCompleteness({
+    rows,
+    importMode,
+    imageImport,
+    pageCount: pageImages?.length ?? 0,
+    institution: resolvedMetadata.institution ?? metadataForParse.institution ?? null,
+    parserRoute: parserRouteDecision.route,
+  });
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
@@ -6418,6 +6507,8 @@ export const processImportFileText = async (
       rows.length > 0
         ? canReuseCachedStatementParse
           ? "Clover is reusing the cached parse and saving the results."
+          : visibleImportCompleteness.likelyIncomplete
+            ? `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} and is checking whether the screenshot batch is complete.`
           : parserRouteDecision.route === "deterministic"
             ? `Fast parser found ${rows.length} visible row${rows.length === 1 ? "" : "s"}. Clover is saving them now.`
             : `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} and is finishing the ${parserRouteDecision.route === "hybrid_openai" ? "hybrid" : "backup"} parse.`
@@ -6503,6 +6594,11 @@ export const processImportFileText = async (
     parserRouteDecisionWindowMs: parserRouteDecision.targetDecisionWindowMs,
     screenshotOverlapRowsRemoved: screenshotOverlapCollapse.removed,
     extractionCacheHit: Boolean(textCacheInfo?.cacheHit),
+    visibleImportCompletenessScore: visibleImportCompleteness.score,
+    visibleImportLikelyIncomplete: visibleImportCompleteness.likelyIncomplete,
+    visibleImportCompletenessReasons: visibleImportCompleteness.reasons,
+    visibleImportRowsPerPage: Number(visibleImportCompleteness.rowsPerPage.toFixed(2)),
+    visibleImportDistinctDateCount: visibleImportCompleteness.distinctDateCount,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const receiptDocumentCashAccountId =
@@ -6967,8 +7063,9 @@ export const processImportFileText = async (
 
     const hasCriticalFindings = qaRunResult.evaluation.findings.some((finding) => finding.severity === "critical");
     const hasUsableParsedRows = rows.length > 0;
+    const needsCompletenessFollowup = visibleImportCompleteness.likelyIncomplete;
     const allowWarningFinalizeForImageStatement = false;
-    const canFinalizeWithWarnings = hasUsableParsedRows && !hasCriticalFindings;
+    const canFinalizeWithWarnings = hasUsableParsedRows && !hasCriticalFindings && !needsCompletenessFollowup;
     if (statementFingerprint && (hasCriticalFindings || qaRunResult.evaluation.score < 75)) {
       await recordStatementTemplateOutcome({
         workspaceId: String(importFile.workspaceId),
@@ -6989,7 +7086,7 @@ export const processImportFileText = async (
       autoRerunEnabled &&
       !isDocumentImport &&
       !plateaued &&
-      qaRunResult.evaluation.score < AUTO_REPARSE_SCORE_TARGET &&
+      (qaRunResult.evaluation.score < AUTO_REPARSE_SCORE_TARGET || needsCompletenessFollowup) &&
       autoRerunAttempt < AUTO_REPARSE_MAX_ATTEMPTS &&
       !allowWarningFinalizeForImageStatement &&
       !shouldFinalizeUsableRowsWithWarnings;
@@ -7032,7 +7129,9 @@ export const processImportFileText = async (
         processingAttempt: autoRerunAttempt + 1,
         processingTargetScore: AUTO_REPARSE_SCORE_TARGET,
         processingCurrentScore: qaRunResult.evaluation.score,
-        processingMessage: `Auto-rerun ${autoRerunAttempt + 1}/${AUTO_REPARSE_MAX_ATTEMPTS} queued. Current score ${qaRunResult.evaluation.score}.`,
+        processingMessage: needsCompletenessFollowup
+          ? `Auto-rerun ${autoRerunAttempt + 1}/${AUTO_REPARSE_MAX_ATTEMPTS} queued. Clover is checking for missing screenshot rows.`
+          : `Auto-rerun ${autoRerunAttempt + 1}/${AUTO_REPARSE_MAX_ATTEMPTS} queued. Current score ${qaRunResult.evaluation.score}.`,
       });
 
       await applyDataQaReviewLearning({
@@ -7177,7 +7276,9 @@ export const processImportFileText = async (
               : `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} complete. Final score ${qaRunResult.evaluation.score}.`
             : null
           : plateaued
-            ? `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}. Manual parser fixes are needed before rerunning again.`
+            ? needsCompletenessFollowup
+              ? `Automatic reruns plateaued while Clover was still checking for missing screenshot rows. Manual parser fixes are needed before rerunning again.`
+              : `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}. Manual parser fixes are needed before rerunning again.`
             : `Automatic reruns stopped below the ${AUTO_REPARSE_SCORE_TARGET} target. Latest score ${qaRunResult.evaluation.score}.`,
     });
     if (shouldMarkDone) {
