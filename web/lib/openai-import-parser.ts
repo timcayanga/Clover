@@ -9,14 +9,14 @@ import {
 } from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 
-const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v1";
+const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v2";
 const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v1";
 const OPENAI_IMPORT_FAST_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_STRONG_MODEL_FALLBACK = "gpt-5.5";
 const OPENAI_IMPORT_PDF_MODEL_FALLBACK = "gpt-5.5";
-const OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK = "gpt-4.1";
-const OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK = "gpt-4.1";
-const OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK = "gpt-4o";
+const OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK = "gpt-5.5";
+const OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK = "gpt-5.4-mini";
+const OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK = "gpt-5.5";
 
 const resolveOpenAIImportModel = (value: string | undefined, fallback: string, label: string) => {
   const model = value?.trim();
@@ -73,11 +73,18 @@ const openAIImportFailureLooksRetryable = (status: number | null, errorText: str
 const GENERIC_PARSER_GUIDANCE = [
   "Generic parser guidance:",
   "- Use the shared Clover parser system: local rules first, OpenAI fallback for unknown banks or OCR failures, then validation.",
+  "- The backup parser is a fallback, not a replacement for the local parser. Preserve the same Clover contract when local parsing is weak or unsupported.",
   "- Preserve raw transaction text and only normalize names/categories when the statement layout makes the meaning clear.",
+  "- Keep auditability: preserve source descriptions, account hints, visible balances, notes, and OCR uncertainty instead of hiding them.",
   "- If the statement looks like a bank, wallet, credit card, loan, or certificate-style account but no bank-specific rule exists, still extract the rows conservatively.",
   "- Keep account number, opening balance, ending balance, payment due date, and amount due when visible.",
   "- Preserve each transaction's visible currency separately from the account currency when the source is multi-currency.",
+  "- For multi-currency wallet screenshots, treat the amount debited from the user's wallet as the canonical transaction amount and preserve any merchant currency amount separately in notes or evidence.",
+  "- If a screenshot shows an inbound marker like +, Added, Received, Refunded, Deposit, or Cash In, treat it as money in. Otherwise do not infer income unless the evidence is explicit.",
+  "- If a counterparty looks like a person's name, prefer Transfers unless the screenshot clearly shows a merchant or institution.",
   "- Reject page headers, footers, legal text, reward banners, and summary noise as transactions.",
+  "- Ignore mobile status bars, search bars, filter chips, pagination chrome, and overlapping screenshot edges.",
+  "- If multiple screenshots overlap, avoid duplicating the same transaction unless the evidence clearly shows two separate rows.",
   "- Lower confidence when the OCR is blurry or when a balance cannot be reconciled cleanly.",
   "- When OCR is character-spaced or fragmented, reconstruct the intended words first, then extract metadata and rows conservatively.",
   "- If the statement summary and the detailed rows disagree, prefer the rows that are visibly tied to dates and amounts, and mark low confidence instead of inventing extra activity.",
@@ -89,6 +96,9 @@ const GENERIC_NORMALIZATION_GUIDANCE = [
   "- Keep raw_name separate from normalized_name and preserve the original statement text when it carries useful detail.",
   "- Normalize only when the merchant or code is clearly the same canonical entity.",
   "- Use these canonical categories when they fit the row: Income, Transfers, Food & Dining, Transport, Housing, Bills & Utilities, Travel & Lifestyle, Entertainment, Shopping, Subscriptions, Health & Wellness, Education, Gifts & Donations, Business, Financial, Cash & ATM, Opening Balance, Other.",
+  "- Use keyword and context clues before falling back to Other: grocery, market, supermarket, cafe, coffee, bar, restaurant, dumpling, sushi, burger -> Food & Dining; airport, parking, skybus, train, opera house tickets, transport -> Transport or Entertainment based on the venue; souvenir, tourism, relay, convenience store, amazon, paypal, shopping mall -> Shopping or Travel & Lifestyle based on the merchant intent.",
+  "- If the merchant looks like a person's full name or payee handle, prefer Transfers.",
+  "- If the row is an ATM withdrawal, cash withdrawal, withdrawal, cash-out, or cash advance, prefer Cash & ATM unless the statement explicitly labels it as a fee.",
   "- Common merchant/code normalizations include ATM WDL/ATMWD/W/D FR SAV/ET WDL/Cash Withdrawal/ATM Cash Withdrawal -> ATM Withdrawal; IBFT/Instapay/InstaPay/Interbank Fund Transfer/PESONet -> Bank Transfer; Cash Payment/Payment - Thank You/Card Payment -> Credit Card Payment; Service Charge/Finance Charge -> Service Charge or Finance Charge; Credit Interest -> Interest Earned; Discord Nitro/Google One -> Subscriptions; MLBB Top Up -> Entertainment.",
   "- If a row is real but the category is ambiguous, prefer Other with lower confidence rather than guessing.",
 ].join(" ");
@@ -1459,11 +1469,17 @@ const responseLooksUseful = (metadata: DetectedStatementMetadata | null, rows: P
 const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | undefined, hasPageImages: boolean, hasPdfInput: boolean) => {
   const baseGuidance = [
     "You are Clover’s financial document extraction engine.",
+    "You are acting as Clover’s backup parser because the deterministic parser was unsupported, weak, or incomplete.",
     "Extract transactions from financial documents into strict JSON.",
     "Do not invent data.",
     "Preserve raw text and preserve uncertainty conservatively.",
+    "Mirror Clover's local parser contract: keep raw values separate from normalized values, preserve account identity, preserve transaction notes/evidence, and preserve confidence signals.",
     "Classify transactions using Clover’s allowed categories and movement types.",
     "Transfers, wallet funding, ATM withdrawals, card payments, and deposits are not spending or income by default.",
+    "If a screenshot shows both a merchant currency amount and the user's wallet/account currency amount, use the wallet/account currency amount as the canonical amount when it is clearly the debited account amount.",
+    "If the screenshot uses a + prefix, Added, Received, Deposit, Cash In, or Refunded, treat it as inbound movement. Otherwise default to outbound movement unless the document clearly says otherwise.",
+    "If a visible counterparty looks like a person instead of a merchant, prefer Transfers.",
+    "Never copy filename fragments, page numbers, mobile status text, search bars, or filter chips into transaction names or account numbers.",
     "Return JSON only.",
     "Use the schema exactly as given.",
     "Use only the allowed movement_type and category values.",
@@ -1484,6 +1500,7 @@ const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | undefined
         ? [
             "Treat this as a statement-like document first: bank statement, wallet history, card statement, or transaction-history screenshot.",
             "Prioritize statement rows, account identity, period coverage, and ending balance.",
+            "For screenshots, focus on the visible transaction list and ignore app chrome or overlapping rows from stitched captures.",
             "If OCR is partial, return only the rows supported by visible evidence instead of padding the list.",
           ]
         : importMode === "portfolio"

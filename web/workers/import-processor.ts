@@ -66,6 +66,7 @@ import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
+import { decideImportParserRoute } from "@/lib/import-parser-routing";
 import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
 import { findBestImportedAccountMatch, matchesImportedAccountIdentity, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
@@ -979,8 +980,20 @@ const normalizeReceiptFixtureText = (value: string | null | undefined) =>
     .trim();
 
 const normalizeReceiptFixtureAmount = (value: string | number | null | undefined) => {
-  const parsed = parseAmountValue(value ?? null);
+  const parsed = parseAmountValue(typeof value === "number" ? String(value) : value ?? null);
   return parsed !== null && Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : null;
+};
+
+const previewLooksLikeUsableReceipt = (preview: ReturnType<typeof parseReceiptText> | null) => {
+  if (!preview) {
+    return false;
+  }
+
+  if (preview.total !== null || preview.items.length > 0) {
+    return true;
+  }
+
+  return Boolean(preview.merchantName || preview.billDate || preview.paymentMethod || preview.receiptText.trim().length >= 60);
 };
 
 const getTrainedReceiptFixtureFromPreview = (preview: ReturnType<typeof parseReceiptText> | null) => {
@@ -5613,21 +5626,30 @@ export const processImportFileText = async (
       !prefersVisionFallbackForInstitution &&
       !genericParseLooksSuspicious &&
       !suspiciousDateCoverage);
+  const parserRouteDecision = decideImportParserRoute({
+    importMode,
+    fileType: importFile.fileType,
+    imageImport,
+    likelyScreenshotStatement,
+    canReuseCachedStatementParse,
+    hasReliableDeterministicStatementParse,
+    imageStatementParseLooksUsable,
+    prefersVisionFallbackForInstitution,
+    hasKnownInstitution,
+    parsedRowsCount: parsedRows.length,
+    parsedDateCoverage,
+    parsedRowsHaveMultipleAccountNumbers,
+    genericParseLooksSuspicious: genericParseLooksSuspicious || gcashSuspiciouslySparse,
+    suspiciousDateCoverage,
+    textLength: text.trim().length,
+    detectedMetadata: metadataForParse,
+    trainedReceiptDetails: Boolean(trainedReceiptDetails),
+  });
   const shouldUseVisionFallback =
-    (importFile.fileType === "application/pdf" || imageImport) &&
+    parserRouteDecision.route !== "deterministic" &&
+    parserRouteDecision.shouldRenderPageImages &&
     !trainedReceiptDetails &&
-    !canReuseCachedStatementParse &&
-    !hasReliableDeterministicStatementParse &&
-    !imageStatementParseLooksUsable &&
-    (!text.trim() ||
-      parsedRows.length === 0 ||
-      prefersVisionFallbackForInstitution ||
-      (metadataForParse.confidence ?? 0) < 70 ||
-      (!metadataForParse.accountNumber && !parsedRowsHaveMultipleAccountNumbers) ||
-      !hasKnownInstitution ||
-      genericParseLooksSuspicious ||
-      gcashSuspiciouslySparse ||
-      suspiciousDateCoverage);
+    !canReuseCachedStatementParse;
   if (imageStatementParseLooksUsable) {
     console.info("[import-performance] using fast screenshot statement parse", {
       importFileId,
@@ -5636,10 +5658,19 @@ export const processImportFileText = async (
       dateCoverage: Number(parsedDateCoverage.toFixed(3)),
     });
   }
+  console.info("[import-routing] parser route decision", {
+    importFileId,
+    route: parserRouteDecision.route,
+    confidence: parserRouteDecision.confidence,
+    reason: parserRouteDecision.reason,
+    targetDecisionWindowMs: parserRouteDecision.targetDecisionWindowMs,
+    institution: metadataForParse.institution ?? null,
+    rowCount: parsedRows.length,
+    metadataConfidence: metadataForParse.confidence ?? 0,
+  });
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
-    hasReliableDeterministicStatementParse ||
-    imageStatementParseLooksUsable ||
+    parserRouteDecision.route === "deterministic" ||
     (isLikelyBpiScreenshotStatement &&
       hasDeterministicBpiMobileScreenshotRows &&
       !hasSuspiciousLegacyScreenshotDates(parsedRows as Array<Record<string, unknown>>)) ||
@@ -5695,6 +5726,12 @@ export const processImportFileText = async (
         processingPhase: "reading_receipt_vision",
         processingMessage: "Reading receipt image...",
       }).catch(() => null);
+    } else if (parserRouteDecision.route === "backup_openai") {
+      await updateImportFileCompat(importFileId, {
+        status: "processing",
+        processingPhase: "identifying_transactions",
+        processingMessage: "Switching to AI backup parser...",
+      }).catch(() => null);
     }
     openAiParsed = await parseImportTextWithOpenAIFallback({
       text: textForParse,
@@ -5704,11 +5741,25 @@ export const processImportFileText = async (
       parsedRows,
       pageImages,
       fileDataBase64: pdfFileDataBase64,
-      preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
+      preferPrimary: openAiPrimaryMode || parserRouteDecision.shouldPreferOpenAiPrimary || Boolean(pageImages?.length),
       importMode,
       pageImageLimit: imageImport && importMode === "statement" ? 1 : isWiseImageStatement ? 1 : null,
-      timeoutMs: imageImport && importMode === "statement" ? 35_000 : isWiseImageStatement ? 60_000 : null,
-      retryTimeoutMs: imageImport && importMode === "statement" ? 15_000 : isWiseImageStatement ? 20_000 : null,
+      timeoutMs:
+        imageImport && importMode === "statement"
+          ? parserRouteDecision.route === "backup_openai"
+            ? 20_000
+            : 15_000
+          : isWiseImageStatement
+            ? 25_000
+            : null,
+      retryTimeoutMs:
+        imageImport && importMode === "statement"
+          ? parserRouteDecision.route === "backup_openai"
+            ? 10_000
+            : 8_000
+          : isWiseImageStatement
+            ? 12_000
+            : null,
     });
 
     openAiMetadata = openAiParsed
