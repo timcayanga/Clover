@@ -31,6 +31,11 @@ import {
   capturePostHogClientEventOnce,
 } from "@/components/posthog-analytics";
 import {
+  buildTransactionDetailDraft,
+  detailDraftTypeToTransactionType,
+  type TransactionDetailDraftValue,
+} from "@/lib/transaction-detail-draft";
+import {
   createEmptyReceiptLineItem,
   getManualReceiptLineItemTotal,
   getReceiptLineItemComputedAmount,
@@ -418,20 +423,7 @@ type BulkEditForm = {
   type: "" | "debit" | "credit";
 };
 
-type TransactionDetailDraft = {
-  merchantRaw: string;
-  merchantClean: string;
-  date: string;
-  accountId: string;
-  categoryId: string;
-  amount: string;
-  currency: string;
-  type: "debit" | "credit";
-  description: string;
-  isExcluded: boolean;
-  isTransfer: boolean;
-  receiptLineItems: ReceiptLineItemDraft[];
-};
+type TransactionDetailDraft = TransactionDetailDraftValue;
 
 type ReceiptLineItemDraft = {
   description: string;
@@ -1716,23 +1708,13 @@ const createDetailDraft = (
   const effectiveType =
     options.type ?? coerceTransactionTypeFromCategoryName(effectiveCategoryName, transaction.type, transaction.amount, transaction.isTransfer);
 
-  return {
-    merchantRaw: transaction.merchantRaw,
+  return buildTransactionDetailDraft(transaction, {
     merchantClean: transaction.merchantClean ?? transaction.merchantRaw,
-    date: transaction.date.slice(0, 10),
-    accountId: transaction.accountId,
-    categoryId: options.categoryId ?? transaction.categoryId ?? "",
-    amount: transaction.amount,
-    currency: transaction.currency,
-    type: effectiveType === "income" ? "credit" : "debit",
-    description: getTransactionUserNote(transaction),
-    isExcluded: transaction.isExcluded,
+    effectiveType,
+    categoryId: options.categoryId,
     isTransfer: transaction.isTransfer,
-    receiptLineItems: parseReceiptLineItemsFromPayload(transaction.rawPayload).map(receiptLineItemToDraft),
-  };
+  });
 };
-
-const detailDraftTypeToTransactionType = (type: TransactionDetailDraft["type"]) => (type === "credit" ? "income" : "expense");
 
 const toolbarChipStyle = {
   backgroundColor: "var(--surface-2)",

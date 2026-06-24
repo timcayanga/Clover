@@ -25,6 +25,11 @@ import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 import {
+  buildTransactionDetailDraft,
+  detailDraftTypeToTransactionType,
+  type TransactionDetailDraftValue,
+} from "@/lib/transaction-detail-draft";
+import {
   createEmptyReceiptLineItem,
   getManualReceiptLineItemTotal,
   getReceiptLineItemComputedAmount,
@@ -216,20 +221,7 @@ type InlineEditableCellProps = {
   className?: string;
 };
 
-type TransactionDetailDraft = {
-  merchantRaw: string;
-  merchantClean: string;
-  date: string;
-  accountId: string;
-  categoryId: string;
-  amount: string;
-  currency: string;
-  type: "debit" | "credit";
-  description: string;
-  isExcluded: boolean;
-  isTransfer: boolean;
-  receiptLineItems: ReceiptLineItemDraft[];
-};
+type TransactionDetailDraft = TransactionDetailDraftValue;
 
 type ReceiptLineItemDraft = {
   description: string;
@@ -919,29 +911,18 @@ const createDetailDraft = (
     }) ?? transaction.categoryName ?? null;
   const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount);
 
-  return {
-    merchantRaw: transaction.merchantRaw,
+  return buildTransactionDetailDraft(transaction, {
     merchantClean:
       getEffectiveTransactionMerchantName({
         merchantClean: transaction.merchantClean,
         merchantRaw: transaction.merchantRaw,
         rawPayload: transaction.rawPayload as never,
       }) ?? transaction.merchantRaw,
-    date: transaction.date.slice(0, 10),
-    accountId: transaction.accountId,
-    categoryId: options.categoryId ?? transaction.categoryId ?? "",
-    amount: transaction.amount,
-    currency: transaction.currency ?? "PHP",
-    type: effectiveType === "income" ? "credit" : "debit",
-    description: getTransactionUserNote(transaction),
-    isExcluded: transaction.isExcluded,
-    isTransfer: Boolean(transaction.isTransfer || effectiveType === "transfer"),
-    receiptLineItems: parseReceiptLineItemsFromPayload(transaction.rawPayload).map(receiptLineItemToDraft),
-  };
+    effectiveType,
+    categoryId: options.categoryId,
+    currencyFallback: "PHP",
+  });
 };
-
-const detailDraftTypeToTransactionType = (type: TransactionDetailDraft["type"]) =>
-  type === "credit" ? "income" : "expense";
 
 const getDisplayTransactionCategoryName = (
   transaction: Transaction,
