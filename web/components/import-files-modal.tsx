@@ -5229,39 +5229,31 @@ export function ImportFilesModal({
           seedImportedWorkspaceCaches(workspaceId, queuedVisibleSummary);
           await Promise.resolve(onImported(queuedVisibleSummary));
 
-          queueSettledVisibilityCheck(
-            importFileId,
-            queuedVisibleSummary.accountId ?? optimisticAccountId,
-            queuedVisibleRows,
-            queuedVisibleSummary.balance ?? null,
-            "Import finished before the settled data became visible"
-          );
-
           updateItem(itemId, {
-            status: "done",
-            confirmationState: "confirmed",
+            status: "importing",
+            confirmationState: "staged",
             error: null,
             importFileId,
             targetAccountId: queuedVisibleSummary.accountId ?? optimisticAccountId,
             importedRows: queuedVisibleRows,
-            progress: 100,
-            progressLabel: "Done",
+            progress: Math.max(IMPORT_PROGRESS.loadingAccount, 99),
+            progressLabel: "Saving visible rows",
           });
           publishImportActivity({
             workspaceId,
             surface: importActivitySurfaceRef.current,
-            status: "done",
+            status: "active",
             fileName: item.file.name,
             fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
             fileTotal: items.length,
-            completedFiles: completedFileCount + 1,
-            progress: 100,
-            detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
+            completedFiles: completedFileCount,
+            progress: Math.max(IMPORT_PROGRESS.loadingAccount, 99),
+            detail: "Accounts and transactions are visible. Clover is saving them so they stay visible after refresh.",
             summary: queuedVisibleSummary,
             errorMessage: null,
           });
 
-          void monitorQueuedImportAndConfirm(
+          await monitorQueuedImportAndConfirm(
             itemId,
             importFileId,
             optimisticAccountId,
@@ -5292,8 +5284,18 @@ export function ImportFilesModal({
               password: item.password.trim() || undefined,
               previewTransactions: queuedVisibleSummary.previewTransactions ?? previewTransactions,
             },
-            { backgroundOnly: true }
-          ).finally(() => router.refresh());
+            { backgroundOnly: false }
+          );
+
+          queueSettledVisibilityCheck(
+            importFileId,
+            queuedVisibleSummary.accountId ?? optimisticAccountId,
+            queuedVisibleRows,
+            queuedVisibleSummary.balance ?? null,
+            "Import confirmation succeeded before settled data became visible"
+          );
+
+          router.refresh();
 
           return {
             status: "done",
