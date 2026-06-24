@@ -992,9 +992,12 @@ const previewLooksLikeUsableReceipt = (preview: ReturnType<typeof parseReceiptTe
   Boolean(
     preview &&
       preview.total !== null &&
-      preview.billDate &&
-      preview.confidence >= 65 &&
-      (preview.items.length > 0 || Boolean(preview.merchantName) || Boolean(preview.paymentMethod))
+      preview.confidence >= 55 &&
+      (
+        (Boolean(preview.billDate) && (preview.items.length > 0 || Boolean(preview.merchantName) || Boolean(preview.paymentMethod))) ||
+        (preview.receiptType === "wallet_transfer" &&
+          (Boolean(preview.paymentMethod) || Boolean(preview.documentNumber) || Boolean(preview.merchantName)))
+      )
   );
 
 type TrainedReceiptFixture = {
@@ -5948,7 +5951,7 @@ export const processImportFileText = async (
     (Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) || imageImport) &&
     Boolean(textCacheInfo?.cacheRecord?.metadata);
 
-  if (imageImport && !trainedReceiptDetails && !canReuseCachedStatementParse) {
+  if (imageImport && importMode !== "receipt" && !trainedReceiptDetails && !canReuseCachedStatementParse) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
@@ -6017,6 +6020,13 @@ export const processImportFileText = async (
       : importMode === "receipt"
         ? buildDetectedMetadataFromReceiptPreview(receiptPreview, detectedMetadata)
         : detectedMetadata;
+  const previewReceiptValidation =
+    importMode === "receipt" && receiptPreviewDetails
+      ? assessReceiptExtractionQuality({
+          receiptDetails: receiptPreviewDetails,
+          expectedCurrency: metadata.currency ?? detectedMetadata.currency ?? null,
+        })
+      : null;
   const statementFingerprint =
     cachedParseRecord?.statementFingerprint ??
     buildStatementFingerprint(textForParse, metadata, importFile.fileName, importFile.fileType, importMode);
@@ -6289,7 +6299,8 @@ export const processImportFileText = async (
     imageStatementParseLooksUsable ||
     Boolean(trainedReceiptDetails) ||
     (imageImport &&
-    ((importMode === "receipt" && receiptPreviewLooksLikeReceipt) ||
+    ((importMode === "receipt" &&
+      (receiptPreviewLooksLikeReceipt || (previewReceiptValidation?.score ?? 0) >= 5)) ||
       (parsedRows.length > 0 &&
         (metadataForParse.confidence ?? 0) >= 75 &&
         !genericParseLooksSuspicious &&

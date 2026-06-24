@@ -1974,8 +1974,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       ? Math.max(1, Math.floor(params.pageImageLimit))
       : isReceiptMode
         ? inferredDifficulty === "hard"
-          ? 4
-          : 2
+          ? 3
+          : 1
         : params.text.trim().length === 0
           ? inferredDifficulty === "hard"
             ? 8
@@ -2162,10 +2162,10 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         ? Math.max(10_000, Math.floor(params.timeoutMs))
         : isReceiptMode
           ? inferredDifficulty === "hard"
-            ? 55_000
+            ? 40_000
             : model === imageModel
-              ? 35_000
-              : 25_000
+              ? 28_000
+              : 18_000
           : model === imageModel
             ? inferredDifficulty === "hard"
               ? 90_000
@@ -2184,8 +2184,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         ? Math.max(10_000, Math.floor(params.retryTimeoutMs))
         : isReceiptMode
           ? inferredDifficulty === "hard"
-            ? 30_000
-            : 20_000
+            ? 24_000
+            : 16_000
           : params.text.trim().length === 0
             ? inferredDifficulty === "hard"
               ? 75_000
@@ -2594,9 +2594,13 @@ export const transcribeImportImagesWithOpenAI = async (params: {
       10_000,
       typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
         ? params.timeoutMs
-        : inferredDifficulty === "hard"
-          ? 150_000
-          : 120_000
+        : params.importMode === "receipt"
+          ? inferredDifficulty === "hard"
+            ? 45_000
+            : 30_000
+          : inferredDifficulty === "hard"
+            ? 150_000
+            : 120_000
     )
   );
 

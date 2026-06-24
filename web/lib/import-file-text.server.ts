@@ -460,16 +460,27 @@ const extractTextFromImageBufferWithOcr = async (
   }
 };
 
-const extractTextFromImageBufferWithOcrBestEffort = async (imageSource: Buffer | Uint8Array | string) => {
-  const firstPass = await extractTextFromImageBufferWithOcr(imageSource, "6");
-  const secondPass = await extractTextFromImageBufferWithOcr(imageSource, "11");
-  const thirdPass = await extractTextFromImageBufferWithOcr(imageSource, "4");
+const extractTextFromImageBufferWithOcrBestEffort = async (
+  imageSource: Buffer | Uint8Array | string,
+  options?: {
+    profile?: ImageNormalizationProfile;
+  }
+) => {
+  const profile = options?.profile ?? "generic";
+  const pageSegModes =
+    profile === "wallet_screenshot"
+      ? ["11", "6"]
+      : profile === "receipt"
+        ? ["6", "4"]
+        : ["6", "11", "4"];
+  const passes = await Promise.all(pageSegModes.map((mode) => extractTextFromImageBufferWithOcr(imageSource, mode)));
 
-  return pickBestStatementTextCandidate([
-    { text: firstPass, label: "ocr-psm-6" },
-    { text: secondPass, label: "ocr-psm-11" },
-    { text: thirdPass, label: "ocr-psm-4" },
-  ]);
+  return pickBestStatementTextCandidate(
+    passes.map((text, index) => ({
+      text,
+      label: `ocr-psm-${pageSegModes[index] ?? "6"}`,
+    }))
+  );
 };
 
 const shouldRetryImageOcrBestEffort = (params: {
@@ -610,7 +621,10 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   const candidateTexts = await Promise.all(
     candidates.map(async (candidate) => ({
       label: candidate.label,
-      text: await extractTextFromImageBufferWithOcrBestEffort(candidate.dataUrl),
+      text: await extractTextFromImageBufferWithOcr(
+        candidate.dataUrl,
+        profile === "wallet_screenshot" ? "11" : "6"
+      ),
     }))
   );
 
@@ -623,7 +637,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     return bestText;
   }
 
-  return extractTextFromImageBufferWithOcrBestEffort(params.normalizedDataUrl);
+  return extractTextFromImageBufferWithOcrBestEffort(params.normalizedDataUrl, { profile });
 };
 
 type PdfOcrProfile = "standard" | "aggressive";
