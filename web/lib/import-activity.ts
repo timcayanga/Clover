@@ -162,6 +162,69 @@ export const getCompletedImportActivitySummary = (activity: ImportActivitySnapsh
   return importActivityHasCompletedRows(activity) ? activity?.summary ?? null : null;
 };
 
+const formatImportActivityDuration = (durationMs: number) => {
+  if (!Number.isFinite(durationMs) || durationMs < 0) {
+    return null;
+  }
+
+  if (durationMs < 1000) {
+    return `${Math.max(0, Math.round(durationMs))}ms`;
+  }
+
+  if (durationMs < 10_000) {
+    return `${(durationMs / 1000).toFixed(1)}s`;
+  }
+
+  if (durationMs < 60_000) {
+    return `${Math.round(durationMs / 1000)}s`;
+  }
+
+  const minutes = Math.floor(durationMs / 60_000);
+  const seconds = Math.round((durationMs % 60_000) / 1000);
+  return `${minutes}m${seconds > 0 ? ` ${seconds}s` : ""}`;
+};
+
+export const getImportActivityTimingSummary = (activity: ImportActivitySnapshot | null) => {
+  if (!activity?.timing) {
+    return null;
+  }
+
+  const visibilityDuration = formatImportActivityDuration(activity.timing.visibilityLatencyMs ?? Number.NaN);
+  const totalDuration = formatImportActivityDuration(activity.timing.totalLatencyMs ?? Number.NaN);
+
+  if (activity.status === "done") {
+    if (visibilityDuration && totalDuration && visibilityDuration !== totalDuration) {
+      return `Visible in ${visibilityDuration} · Complete in ${totalDuration}`;
+    }
+
+    if (totalDuration) {
+      return `Complete in ${totalDuration}`;
+    }
+
+    if (visibilityDuration) {
+      return `Visible in ${visibilityDuration}`;
+    }
+
+    return null;
+  }
+
+  if (activity.status === "error") {
+    if (totalDuration) {
+      return `Stopped after ${totalDuration}`;
+    }
+
+    const elapsedDuration = formatImportActivityDuration(Math.max(0, activity.updatedAt - activity.timing.startedAt));
+    return elapsedDuration ? `Stopped after ${elapsedDuration}` : null;
+  }
+
+  if (visibilityDuration) {
+    return `Visible in ${visibilityDuration}`;
+  }
+
+  const elapsedDuration = formatImportActivityDuration(Math.max(0, activity.updatedAt - activity.timing.startedAt));
+  return elapsedDuration ? `Running for ${elapsedDuration}` : null;
+};
+
 const writeSnapshotToStorage = (snapshot: ImportActivitySnapshot) => {
   const serialized = JSON.stringify(snapshot);
   const localStorageRef = getLocalStorage();

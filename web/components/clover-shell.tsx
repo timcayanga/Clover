@@ -14,6 +14,7 @@ import { ImportFilesModal } from "@/components/import-files-modal";
 import { signOutToLanding } from "@/lib/sign-out";
 import {
   clearImportActivity,
+  getImportActivityTimingSummary,
   readImportActivity,
   subscribeImportActivity,
   type ImportActivitySnapshot,
@@ -509,11 +510,15 @@ const formatRelativeNotificationTime = (updatedAt: number) => {
 };
 
 const getImportNotificationCopy = (activity: ImportActivitySnapshot) => {
+  const timingSummary = getImportActivityTimingSummary(activity);
+
   if (activity.status === "error") {
     return {
       tone: "Needs attention",
       title: activity.errorTitle ?? "Import needs attention",
-      detail: activity.errorMessage ?? activity.detail ?? "Clover could not finish this import automatically.",
+      detail: [activity.errorMessage ?? activity.detail ?? "Clover could not finish this import automatically.", timingSummary]
+        .filter(Boolean)
+        .join(" · "),
     };
   }
 
@@ -521,10 +526,14 @@ const getImportNotificationCopy = (activity: ImportActivitySnapshot) => {
     return {
       tone: "Complete",
       title: "Import complete",
-      detail:
+      detail: [
         (activity.summary ? formatImportResultHeadline(activity.summary) : "") ||
-        activity.detail ||
-        "Your import is ready in Clover.",
+          activity.detail ||
+          "Your import is ready in Clover.",
+        timingSummary,
+      ]
+        .filter(Boolean)
+        .join(" · "),
     };
   }
 
@@ -537,7 +546,7 @@ const getImportNotificationCopy = (activity: ImportActivitySnapshot) => {
   return {
     tone: "In progress",
     title: "Import in progress",
-    detail: [activity.detail, `${fileProgress} · ${percent}`].filter(Boolean).join(" · "),
+    detail: [activity.detail, timingSummary, `${fileProgress} · ${percent}`].filter(Boolean).join(" · "),
   };
 };
 

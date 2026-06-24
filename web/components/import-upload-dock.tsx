@@ -12,6 +12,7 @@ type ImportUploadDockProps = {
   completedFiles: number;
   progress: number;
   detail: string;
+  timingSummary?: string | null;
   phaseLabel?: string | null;
   summary?: UploadInsightsSummary | null;
   tone?: "default" | "error" | "success";
@@ -35,6 +36,7 @@ export function ImportUploadDock({
   completedFiles,
   progress,
   detail,
+  timingSummary = null,
   phaseLabel = null,
   summary = null,
   tone = "default",
@@ -118,6 +120,7 @@ export function ImportUploadDock({
             <strong>{tone === "error" && errorTitle ? errorTitle : fileLabel}</strong>
             {phaseLabel ? <p className="import-upload-dock__phase">{phaseLabel}</p> : null}
             <p>{statusDetail}</p>
+            {timingSummary ? <p className="import-upload-dock__phase">{timingSummary}</p> : null}
             {tone === "error" && errorCode ? <p className="import-upload-dock__phase">Import code {errorCode}</p> : null}
           </div>
           <div className="import-upload-dock__header-actions">

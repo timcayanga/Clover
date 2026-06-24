@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CloverShell } from "@/components/clover-shell";
 import {
   clearImportActivity,
+  getImportActivityTimingSummary,
   readImportActivity,
   subscribeImportActivity,
   type ImportActivitySnapshot,
@@ -58,12 +59,18 @@ const getImportNotificationTitle = (activity: ImportActivitySnapshot) => {
 };
 
 const getImportNotificationBody = (activity: ImportActivitySnapshot) => {
+  const timingSummary = getImportActivityTimingSummary(activity);
+
   if (activity.status === "error") {
-    return activity.errorMessage ?? activity.detail ?? "Clover could not finish this import automatically.";
+    return [activity.errorMessage ?? activity.detail ?? "Clover could not finish this import automatically.", timingSummary]
+      .filter(Boolean)
+      .join(" · ");
   }
 
   if (activity.status === "done" && activity.summary) {
-    return formatImportResultHeadline(activity.summary) || activity.detail || "Your import is ready in Clover.";
+    return [formatImportResultHeadline(activity.summary) || activity.detail || "Your import is ready in Clover.", timingSummary]
+      .filter(Boolean)
+      .join(" · ");
   }
 
   const fileProgress =
@@ -71,7 +78,7 @@ const getImportNotificationBody = (activity: ImportActivitySnapshot) => {
       ? `${Math.min(activity.completedFiles, activity.fileTotal)} of ${activity.fileTotal} files ready`
       : "Import queued";
   const percent = `${Math.round(Math.max(0, Math.min(100, activity.progress)))}%`;
-  return [activity.detail, `${fileProgress} · ${percent}`].filter(Boolean).join(" · ");
+  return [activity.detail, timingSummary, `${fileProgress} · ${percent}`].filter(Boolean).join(" · ");
 };
 
 export function NotificationsClient() {

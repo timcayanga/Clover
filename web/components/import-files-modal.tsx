@@ -43,6 +43,7 @@ import {
 } from "@/lib/workspace-cache";
 import {
   clearImportActivity,
+  getImportActivityTimingSummary,
   readImportActivity,
   setImportActivity,
   subscribeImportActivity,
@@ -8342,6 +8343,7 @@ export function ImportFilesModal({
                 activeProgressItem?.importMode ?? null
               ))
         }
+        timingSummary={getImportActivityTimingSummary(activitySnapshotForDisplay)}
         errorCode={currentErrorItem?.errorCode ?? null}
         errorTitle={currentErrorItem?.errorTitle ?? null}
         errorNextSteps={currentErrorItem?.errorNextSteps ?? null}

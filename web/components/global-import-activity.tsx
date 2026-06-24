@@ -7,6 +7,7 @@ import { ImportUploadDock } from "@/components/import-upload-dock";
 import { UploadInsightsToast } from "@/components/upload-insights-toast";
 import {
   clearImportActivity,
+  getImportActivityTimingSummary,
   readImportActivity,
   setImportActivity,
   subscribeImportActivity,
@@ -289,6 +290,7 @@ export function GlobalImportActivity() {
           completedFiles={activity.completedFiles}
           progress={activity.progress}
           detail={activity.errorMessage ?? spec.message}
+          timingSummary={getImportActivityTimingSummary(activity)}
           errorCode={code}
           errorTitle={activity.errorTitle || spec.title || "File not readable"}
           errorNextSteps={activity.errorNextSteps ?? getImportErrorNextSteps(code)}
