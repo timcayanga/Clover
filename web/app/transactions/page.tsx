@@ -2301,6 +2301,12 @@ function TransactionsPageContent() {
   );
   const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account] as const)), [accounts]);
   const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, formatTransactionAccountName(account)] as const)), [accounts]);
+  const getDisplayAccountNameForTransaction = useCallback(
+    (transaction: Transaction) =>
+      accountNameById.get(transaction.accountId) ??
+      formatTransactionAccountDisplayName(transaction, accountById.get(transaction.accountId) ?? null),
+    [accountById, accountNameById]
+  );
   const getAccountOptionsForTransaction = useCallback(
     (transaction: Transaction) => {
       const options = accounts.map((account) => ({
@@ -2315,12 +2321,12 @@ function TransactionsPageContent() {
       return [
         {
           value: transaction.accountId,
-          label: formatTransactionAccountDisplayName(transaction, null),
+          label: getDisplayAccountNameForTransaction(transaction),
         },
         ...options,
       ];
     },
-    [accounts]
+    [accounts, getDisplayAccountNameForTransaction]
   );
   const accountBrandById = useMemo(
     () => {
@@ -7036,21 +7042,19 @@ function TransactionsPageContent() {
             ) : hasVisibleTransactions ? (
               desktopPageTransactions.map((transaction, index) => {
                 const warningReason = warningReasonFor(transaction);
-                    const amount = Number(transaction.amount);
-                    const categoryValue = transaction.categoryId ?? otherCategoryId;
-                    const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
-                    const effectiveType = getTransactionDisplayType(
-                      transaction,
-                      accountNumberById.get(transaction.accountId) ?? null,
-                      workspaceAccountNumbers
-                    );
-                    const categoryLabel = getDisplayCategoryNameForTransaction(transaction);
-                    const effectiveCategoryValue = getCategoryIdByName(categories, categoryLabel) || categoryValue;
-                    const isTransferTransaction = effectiveType === "transfer";
+                const amount = Number(transaction.amount);
+                const categoryValue = transaction.categoryId ?? otherCategoryId;
+                const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
+                const effectiveType = getTransactionDisplayType(
+                  transaction,
+                  accountNumberById.get(transaction.accountId) ?? null,
+                  workspaceAccountNumbers
+                );
+                const categoryLabel = getDisplayCategoryNameForTransaction(transaction);
+                const effectiveCategoryValue = getCategoryIdByName(categories, categoryLabel) || categoryValue;
+                const isTransferTransaction = effectiveType === "transfer";
                 const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
-                const accountDisplayName =
-                  accountNameById.get(transaction.accountId) ??
-                  formatTransactionAccountDisplayName(transaction, accountById.get(transaction.accountId) ?? null);
+                const accountDisplayName = getDisplayAccountNameForTransaction(transaction);
                 const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
                   institution: accountInstitution,
                   name: accountDisplayName,
@@ -7325,9 +7329,7 @@ function TransactionsPageContent() {
                           transaction.merchantClean ?? transaction.merchantRaw,
                           accountInstitution
                         );
-                        const accountDisplayName =
-                          accountNameById.get(transaction.accountId) ??
-                          formatTransactionAccountDisplayName(transaction, accountById.get(transaction.accountId) ?? null);
+                        const accountDisplayName = getDisplayAccountNameForTransaction(transaction);
                         const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
                           institution: accountInstitution,
                           name: accountDisplayName,
