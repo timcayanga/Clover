@@ -66,7 +66,7 @@ import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
-import { decideImportParserRoute } from "@/lib/import-parser-routing";
+import { decideImportParserRoute, fingerprintImportSurface, type ImportSurfaceFingerprintKind } from "@/lib/import-parser-routing";
 import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
 import { findBestImportedAccountMatch, matchesImportedAccountIdentity, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
@@ -938,6 +938,96 @@ const assessImportHealthSummary = (params: {
     weakCategoryShare: Number(fallbackQuality.weakCategoryShare.toFixed(3)),
     suspiciousNameShare: Number(fallbackQuality.suspiciousNameShare.toFixed(3)),
     datedShare: Number(fallbackQuality.datedShare.toFixed(3)),
+  } as const;
+};
+
+const assessLocalParseRisk = (params: {
+  rows: ParsedImportRow[];
+  importMode: ImportMode | null | undefined;
+  imageImport: boolean;
+  fileName: string;
+  institution?: string | null;
+  parsedRowsWithDates: number;
+  parsedDateCoverage: number;
+  screenshotNoiseRatio: number;
+  surfaceFingerprintKind: ImportSurfaceFingerprintKind;
+}) => {
+  const quality = assessFallbackRowsQuality(params.rows);
+  const transactionRows = params.rows.filter((row) => {
+    const rawPayload = row.rawPayload;
+    return !(
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (((rawPayload as Record<string, unknown>).kind === "opening_balance") ||
+        ((rawPayload as Record<string, unknown>).kind === "account_snapshot_marker"))
+    );
+  });
+  const normalizedFileStem = params.fileName.replace(/\.[^.]+$/, "").trim().toLowerCase();
+  const filenameLeakShare =
+    transactionRows.length > 0
+      ? transactionRows.filter((row) => {
+          const label = normalizeWhitespace(String(row.merchantClean ?? row.merchantRaw ?? row.description ?? "")).toLowerCase();
+          return (
+            (normalizedFileStem.length >= 4 && label.includes(normalizedFileStem)) ||
+            /^(?:img[_\s-]?\d+|\d{3,4}|wallet|account|file)$/i.test(label)
+          );
+        }).length / transactionRows.length
+      : 0;
+  const zeroAmountShare =
+    transactionRows.length > 0
+      ? transactionRows.filter((row) => Number.parseFloat(String(row.amount ?? "0")) === 0).length / transactionRows.length
+      : 0;
+
+  const reasons: string[] = [];
+  let score = 0;
+  const screenshotLike =
+    params.imageImport &&
+    params.importMode === "statement" &&
+    (params.surfaceFingerprintKind === "statement_screenshot" || params.surfaceFingerprintKind === "wallet_screenshot");
+
+  if (quality.suspiciousNameShare >= 0.18) {
+    score += quality.suspiciousNameShare >= 0.35 ? 35 : 22;
+    reasons.push("high_ui_noise_share");
+  }
+
+  if (filenameLeakShare >= 0.1) {
+    score += filenameLeakShare >= 0.25 ? 30 : 18;
+    reasons.push("filename_leakage");
+  }
+
+  if (screenshotLike && transactionRows.length >= 4 && params.parsedRowsWithDates === 0) {
+    score += 28;
+    reasons.push("missing_dates_for_screenshot_rows");
+  } else if (screenshotLike && transactionRows.length >= 6 && params.parsedDateCoverage < 0.35) {
+    score += 18;
+    reasons.push("weak_date_coverage");
+  }
+
+  if (screenshotLike && params.screenshotNoiseRatio >= 0.45) {
+    score += params.screenshotNoiseRatio >= 0.6 ? 24 : 14;
+    reasons.push("high_screenshot_noise");
+  }
+
+  if (zeroAmountShare >= 0.3) {
+    score += zeroAmountShare >= 0.5 ? 20 : 10;
+    reasons.push("zero_amount_share");
+  }
+
+  if (quality.weakCategoryShare >= 0.9 && transactionRows.length >= 5) {
+    score += 8;
+    reasons.push("nearly_all_rows_need_category_review");
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  return {
+    score,
+    reasons,
+    filenameLeakShare: Number(filenameLeakShare.toFixed(3)),
+    zeroAmountShare: Number(zeroAmountShare.toFixed(3)),
+    rejectFastPath: score >= 35,
+    rejectSeedRowsForFallback: score >= 55,
   } as const;
 };
 
@@ -6074,9 +6164,30 @@ export const processImportFileText = async (
       !prefersVisionFallbackForInstitution &&
       !genericParseLooksSuspicious &&
       !suspiciousDateCoverage);
+  const surfaceFingerprint = fingerprintImportSurface({
+    importMode,
+    fileType: importFile.fileType,
+    fileName,
+    imageImport,
+    likelyScreenshotStatement,
+    textPreview: textForParse,
+    detectedMetadata: metadataForParse,
+  });
+  const localParseRisk = assessLocalParseRisk({
+    rows: parsedRows,
+    importMode,
+    imageImport,
+    fileName,
+    institution: metadataForParse.institution ?? null,
+    parsedRowsWithDates,
+    parsedDateCoverage,
+    screenshotNoiseRatio,
+    surfaceFingerprintKind: surfaceFingerprint.kind,
+  });
   const parserRouteDecision = decideImportParserRoute({
     importMode,
     fileType: importFile.fileType,
+    fileName,
     imageImport,
     likelyScreenshotStatement,
     canReuseCachedStatementParse,
@@ -6087,12 +6198,14 @@ export const processImportFileText = async (
     parsedRowsCount: parsedRows.length,
     parsedDateCoverage,
     parsedRowsHaveMultipleAccountNumbers,
-    genericParseLooksSuspicious: genericParseLooksSuspicious || gcashSuspiciouslySparse,
+    genericParseLooksSuspicious: genericParseLooksSuspicious || gcashSuspiciouslySparse || localParseRisk.rejectFastPath,
     suspiciousDateCoverage,
     textLength: text.trim().length,
+    textPreview: textForParse,
     screenshotNoiseRatio,
     detectedMetadata: metadataForParse,
     trainedReceiptDetails: Boolean(trainedReceiptDetails),
+    surfaceFingerprint,
   });
   const shouldUseVisionFallback =
     parserRouteDecision.route !== "deterministic" &&
@@ -6114,9 +6227,14 @@ export const processImportFileText = async (
     reason: parserRouteDecision.reason,
     targetDecisionWindowMs: parserRouteDecision.targetDecisionWindowMs,
     institution: metadataForParse.institution ?? null,
+    surfaceFingerprintKind: surfaceFingerprint.kind,
+    surfaceFingerprintConfidence: surfaceFingerprint.confidence,
+    surfaceFingerprintReason: surfaceFingerprint.reason,
     rowCount: parsedRows.length,
     metadataConfidence: metadataForParse.confidence ?? 0,
     screenshotNoiseRatio: Number(screenshotNoiseRatio.toFixed(3)),
+    localParseRiskScore: localParseRisk.score,
+    localParseRiskReasons: localParseRisk.reasons,
   });
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
@@ -6169,6 +6287,7 @@ export const processImportFileText = async (
   let openAiParsed: Awaited<ReturnType<typeof parseImportTextWithOpenAIFallback>> | null = null;
   let openAiMetadata: typeof metadataForParse | null = null;
   const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
+  const fallbackSeedRows = localParseRisk.rejectSeedRowsForFallback ? [] : parsedRows;
   if (!canUseFastImageParse) {
     if (importMode === "receipt") {
       await updateImportFileCompat(importFileId, {
@@ -6180,7 +6299,9 @@ export const processImportFileText = async (
       await updateImportFileCompat(importFileId, {
         status: "processing",
         processingPhase: "identifying_transactions",
-        processingMessage: "Switching to AI backup parser...",
+        processingMessage: localParseRisk.rejectSeedRowsForFallback
+          ? "Discarding an unreliable local parse and switching to the AI backup parser..."
+          : "Switching to AI backup parser...",
       }).catch(() => null);
     }
     openAiParsed = await parseImportTextWithOpenAIFallback({
@@ -6188,7 +6309,7 @@ export const processImportFileText = async (
       fileName,
       fileType,
       detectedMetadata: metadataForParse,
-      parsedRows,
+      parsedRows: fallbackSeedRows,
       pageImages,
       fileDataBase64: pdfFileDataBase64,
       preferPrimary: openAiPrimaryMode || parserRouteDecision.shouldPreferOpenAiPrimary || Boolean(pageImages?.length),
@@ -6827,6 +6948,15 @@ export const processImportFileText = async (
       statementImageOcrCleanup.originalLineCount > 0
         ? Number((statementImageOcrCleanup.removedLineCount / statementImageOcrCleanup.originalLineCount).toFixed(3))
         : 0,
+    surfaceFingerprintKind: surfaceFingerprint.kind,
+    surfaceFingerprintConfidence: surfaceFingerprint.confidence,
+    surfaceFingerprintReason: surfaceFingerprint.reason,
+    localParseRiskScore: localParseRisk.score,
+    localParseRiskReasons: localParseRisk.reasons,
+    localParseRiskFilenameLeakShare: localParseRisk.filenameLeakShare,
+    localParseRiskZeroAmountShare: localParseRisk.zeroAmountShare,
+    localParseRiskRejectedFastPath: localParseRisk.rejectFastPath,
+    localParseRiskRejectedSeedRowsForFallback: localParseRisk.rejectSeedRowsForFallback,
     importHealthScore: importHealthSummary.score,
     importHealthStatus: importHealthSummary.status,
     importHealthReasons: importHealthSummary.reasons,
