@@ -15,6 +15,7 @@ import {
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
+import { getSharedMerchantCategoryHint, isLikelyPersonTransferName } from "@/lib/merchant-category-hints";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
@@ -488,41 +489,6 @@ const fnv1a = (value: string) => {
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
-const isLikelyPersonTransferName = (value: string) => {
-  const normalized = normalizeWhitespace(value);
-  if (!normalized) {
-    return false;
-  }
-
-  const cleaned = normalized.replace(/[^A-Za-z\s.'’-]/g, " ").replace(/\s+/g, " ").trim();
-  if (!cleaned) {
-    return false;
-  }
-
-  if (
-    /\b(?:airport|mall|market|grocer|grocery|restaurant|cafe|coffee|bar|books?|school|college|opera|harbour|transport|bus|train|station|parking|souvenir|tourism|travel|travels|sanctuary|victoria|ticket|tickets|supermarket|shop|store|mart|paypal|amazon|prime|mcdonald|milksha|gogyo|gokan|goken|leone|project|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|donki|byrdi|seeds|estate|vacation|nirvana|waterfront|relay|skybus|citibank|bank|finance|financial|oil|convenience|mitrtown|payments?)\b/i.test(
-      cleaned
-    )
-  ) {
-    return false;
-  }
-
-  const tokens = cleaned
-    .split(" ")
-    .filter(Boolean)
-    .filter((token) => token !== "." && !/^(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/.test(token));
-  if (tokens.length === 0 || tokens.length > 4) {
-    return false;
-  }
-
-  const validTokens = tokens.filter((token) => /^[A-Z][a-z]+$/.test(token) || /^[A-Z]{2,}$/.test(token) || /^[A-Z]\.?$/.test(token)).length;
-  if (tokens.length >= 2 && validTokens === tokens.length) {
-    return true;
-  }
-
-  return tokens.length === 1 && /^[A-Z]{4,}$/.test(tokens[0] ?? "");
-};
-
 export const normalizeAccountRuleKey = (accountName?: string | null, institution?: string | null) =>
   normalizeMerchantText(
     `${institution ?? ""} ${extractLastFourDigits(accountName) ?? normalizeWhitespace(String(accountName ?? ""))}`
@@ -570,6 +536,11 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
 
   if (/to:\s*gcash\s+cash\s+in|gcash\s+cash\s+in/.test(lower) || /togcashcashin|gcashcashin/.test(compact)) {
     return "Transfers";
+  }
+
+  const sharedCategoryHint = getSharedMerchantCategoryHint(merchantText);
+  if (sharedCategoryHint) {
+    return sharedCategoryHint;
   }
 
   if (
@@ -1115,6 +1086,8 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/interest\s+earned|interestearned|salary|payroll|income|deposit|cash\s*in\b|cashin\b|cash\/?check\s+deposit|received|credit memo/.test(lower)) return "Income";
   if (/interbankservicecharge|atmwithdrawalacquirerfee|financecharge|financecharges|latepaymentfee|annualfee/.test(compact)) return "Financial";
   if (/incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|systemdebit|systemcredit|miscellaneousdebit|investmentsweep/.test(compact)) return "Transfers";
+  const sharedCategoryHint = getSharedMerchantCategoryHint(description);
+  if (sharedCategoryHint) return sharedCategoryHint;
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|bar leone|savory project|gokan|goken|mcdonald'?s|milksha|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|four\s+frogs|apollo\s+bay\s+seafood|wootea|iga\s+supermarkets?|caretaker'?s\s+cottage|lee'?s\s+dumplings|grocer/.test(lower)) return "Food & Dining";
   if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";

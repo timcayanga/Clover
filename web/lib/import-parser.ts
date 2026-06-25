@@ -1,6 +1,7 @@
 import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
+import { getSharedMerchantCategoryHint, isLikelyPersonTransferName } from "@/lib/merchant-category-hints";
 
 export type ImportedAccountType =
   | "bank"
@@ -93,41 +94,6 @@ export const isStandaloneCashPaymentDescription = (value?: string | null) => {
   return !isStatementPaymentSettlementDescription(lower);
 };
 
-const isLikelyPersonTransferName = (value: string) => {
-  const normalized = normalizeWhitespace(value);
-  if (!normalized) {
-    return false;
-  }
-
-  const cleaned = normalized.replace(/[^A-Za-z\s.'’-]/g, " ").replace(/\s+/g, " ").trim();
-  if (!cleaned) {
-    return false;
-  }
-
-  if (
-    /\b(?:airport|mall|market|grocer|grocery|restaurant|cafe|coffee|bar|books?|school|college|opera|harbour|transport|bus|train|station|parking|souvenir|tourism|travel|travels|sanctuary|victoria|ticket|tickets|supermarket|shop|store|mart|paypal|amazon|prime|mcdonald|milksha|gogyo|gokan|goken|leone|project|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|donki|byrdi|seeds|estate|vacation|nirvana|waterfront|relay|skybus|citibank|bank|finance|financial|oil|convenience|mitrtown|payments?)\b/i.test(
-      cleaned
-    )
-  ) {
-    return false;
-  }
-
-  const tokens = cleaned
-    .split(" ")
-    .filter(Boolean)
-    .filter((token) => token !== "." && !/^(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/.test(token));
-  if (tokens.length === 0 || tokens.length > 4) {
-    return false;
-  }
-
-  const validTokens = tokens.filter((token) => /^[A-Z][a-z]+$/.test(token) || /^[A-Z]{2,}$/.test(token) || /^[A-Z]\.?$/.test(token)).length;
-  if (tokens.length >= 2 && validTokens === tokens.length) {
-    return true;
-  }
-
-  return tokens.length === 1 && /^[A-Z]{4,}$/.test(tokens[0] ?? "");
-};
-
 export const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
@@ -201,6 +167,8 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/epsaten/.test(lower)) return type === "expense" ? "Cash & ATM" : "Income";
   if (/el\/?espay/.test(lower)) return type === "expense" || type === "transfer" ? "Transfers" : "Income";
   if (/payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
+  const sharedCategoryHint = getSharedMerchantCategoryHint(text);
+  if (sharedCategoryHint) return sharedCategoryHint;
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut|yoshinoya|bar leone|savory project|gokan|goken|milksha|mcdonald'?s|dumplings|seafood|7-?eleven|mini\s+mart|wootea|iga|grocer/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
