@@ -2885,6 +2885,27 @@ const main = async () => {
       `expected alternate payment method line to be preserved, got ${alternatePaymentMethodPreview.paymentMethod ?? "null"}`
     );
   }
+  const walletTransferPreview = parseReceiptText([
+    "DY•N TI•••Y Y.",
+    "+63 917 830 3926",
+    "Sent via GCash",
+    "Amount 480.00",
+    "Total Amount Sent ₱480.00",
+    "Ref No. 4028199314508",
+    "Apr 29, 2025 12:34 PM",
+  ].join("\n"));
+  if (walletTransferPreview.receiptType !== "wallet_transfer") {
+    throw new Error(`expected wallet screenshot to classify as wallet_transfer, got ${walletTransferPreview.receiptType}`);
+  }
+  if (Number(walletTransferPreview.total) !== 480) {
+    throw new Error(`expected wallet screenshot total 480, got ${walletTransferPreview.total ?? "null"}`);
+  }
+  if (!walletTransferPreview.merchantName || !/dy/i.test(walletTransferPreview.merchantName)) {
+    throw new Error(`expected wallet screenshot merchant to preserve recipient identity, got ${walletTransferPreview.merchantName ?? "null"}`);
+  }
+  if (walletTransferPreview.paymentMethod !== "GCash") {
+    throw new Error(`expected wallet screenshot payment method GCash, got ${walletTransferPreview.paymentMethod ?? "null"}`);
+  }
 
   const resolvedReceiptAccount = resolveReceiptAccountHintToAccount(
     {

@@ -1283,7 +1283,7 @@ const normalizeReceiptLineItems = (
     .filter((item): item is NormalizedReceiptLineItem => item !== null);
 
 const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptText>) => ({
-  receipt_type: "receipt",
+  receipt_type: preview.receiptType ?? "receipt",
   merchant_raw: preview.merchantName ?? null,
   merchant_clean: preview.merchantName ?? null,
   document_number: null,
@@ -1446,9 +1446,24 @@ const normalizeReceiptFixtureAmount = (value: string | number | null | undefined
   return parsed !== null && Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : null;
 };
 
+const isTransferStyleReceiptType = (value: string | null | undefined) => {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+  return normalized === "wallet_transfer" || normalized === "transfer_receipt";
+};
+
 const previewLooksLikeUsableReceipt = (preview: ReturnType<typeof parseReceiptText> | null) => {
   if (!preview) {
     return false;
+  }
+
+  if (
+    isTransferStyleReceiptType(preview.receiptType) &&
+    (preview.total !== null || Boolean(preview.billDate) || Boolean(preview.documentNumber) || Boolean(preview.paymentMethod))
+  ) {
+    return true;
   }
 
   if (preview.total !== null || preview.items.length > 0) {
@@ -1594,6 +1609,7 @@ const buildParsedRowsFromReceiptDetails = (params: {
     typeof details.receipt_type === "string" && details.receipt_type.trim()
       ? details.receipt_type.trim().toLowerCase()
       : params.receiptPreview?.receiptType ?? "receipt";
+  const transferStyleReceipt = isTransferStyleReceiptType(receiptType);
   const paymentMethod =
     typeof details.payment_method === "string" && details.payment_method.trim() ? details.payment_method.trim() : null;
   const lineItems = Array.isArray(details.line_items) ? details.line_items : [];
@@ -1609,15 +1625,15 @@ const buildParsedRowsFromReceiptDetails = (params: {
   const explicitCategoryName =
     typeof detailsRecord.category_name === "string" && detailsRecord.category_name.trim()
       ? detailsRecord.category_name.trim()
-      : receiptType === "wallet_transfer"
+      : transferStyleReceipt
         ? "Transfers"
         : guessCategoryName(contextText || merchantClean || merchantRaw || "Receipt", "expense");
   const categoryName = explicitCategoryName && explicitCategoryName !== "Other"
     ? explicitCategoryName
-    : receiptType === "wallet_transfer"
+    : transferStyleReceipt
       ? "Transfers"
       : "Food & Dining";
-  const type: TransactionType = receiptType === "wallet_transfer" ? "transfer" : "expense";
+  const type: TransactionType = transferStyleReceipt ? "transfer" : "expense";
   const confidence =
     typeof details.confidence_score === "number" && Number.isFinite(details.confidence_score)
       ? Math.max(0, Math.min(100, Math.round(details.confidence_score)))
@@ -1682,7 +1698,7 @@ const buildDetectedMetadataFromReceipt = (params: {
   const inferredInstitution =
     typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
       ? params.receiptAccountMatch.account_name.trim()
-      : params.receiptPreview?.receiptType === "wallet_transfer"
+      : isTransferStyleReceiptType(params.receiptPreview?.receiptType)
         ? "Cash"
         : null;
   const inferredCurrency =
@@ -1705,7 +1721,7 @@ const buildDetectedMetadataFromReceipt = (params: {
         ? params.receiptAccountMatch.account_last4.trim()
         : null,
     accountName: inferredInstitution ?? "Cash",
-    accountType: params.receiptPreview?.receiptType === "wallet_transfer" ? "cash" : "cash",
+    accountType: isTransferStyleReceiptType(params.receiptPreview?.receiptType) ? "cash" : "cash",
     currency: inferredCurrency,
     openingBalance: null,
     endingBalance: total,
