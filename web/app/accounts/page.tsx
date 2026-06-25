@@ -74,6 +74,7 @@ import {
   mergeImportedPreviewTransactions,
   mergeOptimisticImportedAccount as mergeOptimisticImportedAccountShared,
   resolvePersistedImportedAccountId as resolvePersistedImportedAccountIdShared,
+  isGenericUploadedAccountShadowed,
   isTransientUploadedAccountPlaceholder,
   transactionMatchesImportedAccount,
   uploadSummaryMatchesImportedAccount,
