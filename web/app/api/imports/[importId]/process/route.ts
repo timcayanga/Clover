@@ -31,6 +31,7 @@ import { normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { prisma } from "@/lib/prisma";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
+import { decideImportParserRoute, fingerprintImportSurface } from "@/lib/import-parser-routing";
 import type { Prisma } from "@prisma/client";
 import { makeImportFileBytesFingerprint } from "@/lib/import-file-text.server";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
@@ -1103,7 +1104,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     };
 
-    const queueBackgroundProcessing = async (bankName?: string | null) => {
+    const queueBackgroundProcessing = async (bankName?: string | null, options?: { processingMessage?: string | null }) => {
       stage = "scheduling background processing";
       try {
         if (localDev) {
@@ -1112,7 +1113,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         await updateImportFileCompat(importId, {
           status: "processing",
           processingPhase: "queued_retry",
-          processingMessage: "Queued for background processing...",
+          processingMessage: options?.processingMessage ?? "Queued for background processing...",
         });
         await enqueueImportProcessing({
           importFileId: importId,
@@ -1709,11 +1710,58 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
       const detectedInstitution = normalizeBankName(String((metadata as { institution?: unknown } | null)?.institution ?? ""));
       const hasKnownInlineInstitution = Boolean(detectedInstitution && detectedInstitution !== "Unknown");
+      const preflightParsedRows = Array.isArray(preflightText?.cacheRecord?.parsedRows)
+        ? preflightText.cacheRecord.parsedRows
+        : Array.isArray(cachedDocTextInfo?.cacheRecord?.parsedRows)
+          ? cachedDocTextInfo.cacheRecord.parsedRows
+          : [];
+      const preflightSurfaceFingerprint = fingerprintImportSurface({
+        importMode,
+        fileType: effectiveFileType || "application/octet-stream",
+        fileName: effectiveFileName,
+        imageImport: isImageUpload,
+        likelyScreenshotStatement: isStatementImageUpload,
+        textPreview: extractedText,
+        detectedMetadata: metadata as Parameters<typeof fingerprintImportSurface>[0]["detectedMetadata"],
+      });
+      const preflightParserRoute = decideImportParserRoute({
+        importMode,
+        fileType: effectiveFileType || "application/octet-stream",
+        fileName: effectiveFileName,
+        imageImport: isImageUpload,
+        likelyScreenshotStatement: isStatementImageUpload,
+        canReuseCachedStatementParse: canReuseCachedParseSnapshot,
+        hasReliableDeterministicStatementParse: canReuseCachedParseSnapshot && preflightParsedRows.length > 0,
+        imageStatementParseLooksUsable: isStatementImageUpload && preflightParsedRows.length >= 4 && parsedMetadataConfidence >= 75,
+        prefersVisionFallbackForInstitution: isNoisyPdfBank,
+        hasKnownInstitution: hasKnownInlineInstitution,
+        parsedRowsCount: preflightParsedRows.length,
+        genericParseLooksSuspicious: !canReuseCachedParseSnapshot && parsedMetadataConfidence < 70 && extractedText.trim().length < 180,
+        textLength: extractedText.trim().length,
+        textPreview: extractedText,
+        detectedMetadata: metadata as Parameters<typeof decideImportParserRoute>[0]["detectedMetadata"],
+        trainedReceiptDetails: Boolean(trainedReceiptFixture),
+        surfaceFingerprint: preflightSurfaceFingerprint,
+      });
       const shouldProcessKnownStatementInline =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
         (hasExtractedText || canReuseCachedParseSnapshot) &&
         bytes.length <= 10_000_000 &&
         (hasKnownInlineInstitution || canReuseCachedParseSnapshot);
+      const shouldQueueBackupRouteImmediately =
+        !forceInlineProcessing &&
+        !canReuseCachedParseSnapshot &&
+        preflightParserRoute.route === "backup_openai" &&
+        (isStatementImageUpload || isPdfUpload(effectiveFileName, effectiveFileType));
+
+      if (shouldQueueBackupRouteImmediately) {
+        return queueBackgroundProcessing(processingBankName || null, {
+          processingMessage:
+            preflightSurfaceFingerprint.kind === "wallet_screenshot" || preflightSurfaceFingerprint.kind === "statement_screenshot"
+              ? "Fast preflight routed this screenshot to Clover's AI backup parser..."
+              : "Fast preflight routed this file to Clover's AI backup parser...",
+        });
+      }
       const shouldQueuePdfImmediately =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
         !forceInlineProcessing &&
