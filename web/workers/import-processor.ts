@@ -148,6 +148,94 @@ const normalizeTransferMatchText = (value: unknown) =>
 
 const normalizeTransferDigits = (value: unknown) => String(value ?? "").replace(/\D/g, "");
 
+const asImportRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+
+const buildParserSummaryText = (params: {
+  merchantClean?: unknown;
+  merchantRaw?: unknown;
+  categoryName?: unknown;
+  categoryReason?: unknown;
+  type?: unknown;
+  confidence?: unknown;
+  parserConfidence?: unknown;
+  categoryConfidence?: unknown;
+}) => {
+  const merchant =
+    typeof params.merchantClean === "string" && params.merchantClean.trim()
+      ? params.merchantClean.trim()
+      : typeof params.merchantRaw === "string" && params.merchantRaw.trim()
+        ? params.merchantRaw.trim()
+        : "Imported transaction";
+  const category = typeof params.categoryName === "string" && params.categoryName.trim() ? params.categoryName.trim() : "Other";
+  const reason =
+    typeof params.categoryReason === "string" && params.categoryReason.trim() ? params.categoryReason.trim() : "unspecified";
+  const type = typeof params.type === "string" && params.type.trim() ? params.type.trim() : "expense";
+  const confidence =
+    typeof params.confidence === "number" && Number.isFinite(params.confidence)
+      ? Math.round(params.confidence)
+      : typeof params.categoryConfidence === "number" && Number.isFinite(params.categoryConfidence)
+        ? Math.round(params.categoryConfidence)
+        : typeof params.parserConfidence === "number" && Number.isFinite(params.parserConfidence)
+          ? Math.round(params.parserConfidence)
+          : 0;
+
+  return `${merchant} -> ${category} (${type}, ${reason}, ${confidence}% confidence)`;
+};
+
+const buildNormalizedParserSummary = (row: ImportInsightSourceRow) => {
+  const rawPayload = asImportRecord(row.rawPayload);
+  const rawClassification = asImportRecord(rawPayload?.classification);
+  const normalizedPayload = asImportRecord(row.normalizedPayload);
+  const existingSummary = asImportRecord(normalizedPayload?.parserSummary);
+
+  const categoryName =
+    typeof row.categoryName === "string" && row.categoryName.trim()
+      ? row.categoryName.trim()
+      : typeof rawClassification?.categoryName === "string" && rawClassification.categoryName.trim()
+        ? rawClassification.categoryName.trim()
+        : null;
+  const categoryReason =
+    typeof row.categoryReason === "string" && row.categoryReason.trim()
+      ? row.categoryReason.trim()
+      : typeof rawClassification?.categoryReason === "string" && rawClassification.categoryReason.trim()
+        ? rawClassification.categoryReason.trim()
+        : null;
+  const categorySource =
+    typeof rawClassification?.categorySource === "string" && rawClassification.categorySource.trim()
+      ? rawClassification.categorySource.trim()
+      : null;
+  const merchantClean =
+    typeof row.merchantClean === "string" && row.merchantClean.trim()
+      ? row.merchantClean.trim()
+      : typeof rawClassification?.normalizedName === "string" && rawClassification.normalizedName.trim()
+        ? rawClassification.normalizedName.trim()
+        : null;
+
+  return {
+    ...(existingSummary ?? {}),
+    merchantRaw: typeof row.merchantRaw === "string" && row.merchantRaw.trim() ? row.merchantRaw.trim() : null,
+    merchantClean,
+    categoryName,
+    categoryReason,
+    categorySource,
+    type: typeof row.type === "string" ? row.type : null,
+    confidence: normalizeImportConfidenceScore(row.confidence),
+    parserConfidence: normalizeImportConfidenceScore(row.parserConfidence),
+    categoryConfidence: normalizeImportConfidenceScore(row.categoryConfidence),
+    summaryText: buildParserSummaryText({
+      merchantClean,
+      merchantRaw: row.merchantRaw,
+      categoryName,
+      categoryReason,
+      type: row.type,
+      confidence: row.confidence,
+      parserConfidence: row.parserConfidence,
+      categoryConfidence: row.categoryConfidence,
+    }),
+  } as Record<string, unknown>;
+};
+
 const extractTransferLastFour = (value: unknown) => {
   const digits = normalizeTransferDigits(value);
   return digits.length >= 4 ? digits.slice(-4) : null;
@@ -727,6 +815,13 @@ const applyContextualCategoryHeuristics = <TRow extends EnrichedParsedImportRow>
         ? row.normalizedPayload
         : {}) as Record<string, unknown>),
       contextualCategoryHeuristic: guessedCategory,
+      parserSummary: buildNormalizedParserSummary({
+        ...row,
+        categoryName: guessedCategory,
+        type: nextType,
+        categoryConfidence: appliedConfidence,
+        confidence: Math.max(normalizeImportConfidenceScore(row.confidence), appliedConfidence),
+      }),
     },
   };
 };
@@ -5419,6 +5514,18 @@ const strengthenEnrichmentRowForAttempt = (
         : {}) as Record<string, unknown>),
       enrichmentAttempt: attempt,
       enrichmentFallback: shouldUseGuessedCategory ? "deterministic-category" : "training",
+      parserSummary: buildNormalizedParserSummary({
+        ...contextuallyRecategorizedRow,
+        categoryName,
+        type,
+        merchantClean,
+        categoryConfidence: shouldUseGuessedCategory
+          ? Math.max(normalizeImportConfidenceScore(contextuallyRecategorizedRow.categoryConfidence), attempt >= 3 ? 85 : 75)
+          : contextuallyRecategorizedRow.categoryConfidence,
+        confidence: shouldUseGuessedCategory
+          ? Math.max(normalizeImportConfidenceScore(contextuallyRecategorizedRow.confidence), attempt >= 3 ? 85 : 75)
+          : contextuallyRecategorizedRow.confidence,
+      }),
     } as Prisma.InputJsonValue,
   };
 };
@@ -9988,7 +10095,19 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             ? row.statementFingerprint.trim()
             : checkpointStatementFingerprint,
       } as Prisma.InputJsonValue,
-      normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
+      normalizedPayload: {
+        ...((row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
+          ? (row.normalizedPayload as Record<string, unknown>)
+          : {}) as Record<string, unknown>),
+        parserSummary: buildNormalizedParserSummary({
+          ...row,
+          categoryName,
+          type: canonicalType,
+          confidence: rowConfidence,
+          parserConfidence: rowParserConfidence,
+          categoryConfidence: rowCategoryConfidence,
+        }),
+      } as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
       date:
         parsedTransactionDate ?? new Date(),

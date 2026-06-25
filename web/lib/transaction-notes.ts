@@ -88,6 +88,27 @@ const readNormalizedUserNote = (normalizedPayload: unknown) => {
   return "";
 };
 
+const readNormalizedParserSummaryNote = (normalizedPayload: unknown) => {
+  const record = asRecord(normalizedPayload);
+  if (!record) {
+    return "";
+  }
+
+  const parserSummary = asRecord(record.parserSummary);
+  if (!parserSummary) {
+    return "";
+  }
+
+  for (const key of ["summaryText", "summary_text"]) {
+    const candidate = normalizeTextValue(parserSummary[key]);
+    if (candidate && !looksLikeJsonBlob(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "";
+};
+
 export const normalizeTransactionNoteValue = (value: unknown) => {
   const normalized = normalizeTextValue(value);
   return normalized && !looksLikeJsonBlob(normalized) ? normalized : "";
@@ -170,6 +191,11 @@ export const getTransactionParsedNoteValue = (params: {
     if (parserEvidenceNote) {
       return parserEvidenceNote;
     }
+  }
+
+  const normalizedParserSummaryNote = normalizeTransactionNoteValue(readNormalizedParserSummaryNote(params.normalizedPayload));
+  if (normalizedParserSummaryNote) {
+    return normalizedParserSummaryNote;
   }
 
   if ((params.source === "upload" || params.importFileId) && !readNormalizedUserNote(params.normalizedPayload)) {
