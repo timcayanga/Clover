@@ -2887,6 +2887,7 @@ const main = async () => {
   }
   const walletTransferPreview = parseReceiptText([
     "DY•N TI•••Y Y.",
+    "Dyan Yu",
     "+63 917 830 3926",
     "Sent via GCash",
     "Amount 480.00",
@@ -2900,11 +2901,16 @@ const main = async () => {
   if (Number(walletTransferPreview.total) !== 480) {
     throw new Error(`expected wallet screenshot total 480, got ${walletTransferPreview.total ?? "null"}`);
   }
-  if (!walletTransferPreview.merchantName || !/dy/i.test(walletTransferPreview.merchantName)) {
-    throw new Error(`expected wallet screenshot merchant to preserve recipient identity, got ${walletTransferPreview.merchantName ?? "null"}`);
+  if (walletTransferPreview.merchantName !== "Dyan Yu") {
+    throw new Error(`expected wallet screenshot merchant to normalize to Dyan Yu, got ${walletTransferPreview.merchantName ?? "null"}`);
   }
   if (walletTransferPreview.paymentMethod !== "GCash") {
     throw new Error(`expected wallet screenshot payment method GCash, got ${walletTransferPreview.paymentMethod ?? "null"}`);
+  }
+  if (walletTransferPreview.documentNumber !== "4028199314508") {
+    throw new Error(
+      `expected wallet screenshot to capture ref number 4028199314508, got ${walletTransferPreview.documentNumber ?? "null"}`
+    );
   }
 
   const resolvedReceiptAccount = resolveReceiptAccountHintToAccount(

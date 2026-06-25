@@ -1454,15 +1454,47 @@ const isTransferStyleReceiptType = (value: string | null | undefined) => {
   return normalized === "wallet_transfer" || normalized === "transfer_receipt";
 };
 
+const hasStructuredReceiptFastPathSignal = (
+  preview: ReturnType<typeof parseReceiptText> | null,
+  validationScore?: number | null
+) => {
+  if (!preview) {
+    return false;
+  }
+
+  const hasAmount = preview.total !== null;
+  const hasMerchant = Boolean(preview.merchantName);
+  const hasDate = Boolean(preview.billDate);
+  const hasDocument = Boolean(preview.documentNumber || preview.invoiceNumber || preview.bookingReference);
+  const hasPaymentMethod = Boolean(preview.paymentMethod);
+  const hasItems = preview.items.length > 0;
+  const score = Number(validationScore ?? 0);
+
+  if (isTransferStyleReceiptType(preview.receiptType)) {
+    return hasAmount && (hasPaymentMethod || hasDate || hasDocument || hasMerchant || score >= 4);
+  }
+
+  if (hasAmount && hasItems) {
+    return true;
+  }
+
+  if (hasAmount && ((hasMerchant && hasDate) || (hasMerchant && hasDocument) || (hasDate && hasDocument))) {
+    return true;
+  }
+
+  if (hasAmount && hasPaymentMethod && (hasMerchant || hasDate || hasDocument)) {
+    return true;
+  }
+
+  return score >= 5;
+};
+
 const previewLooksLikeUsableReceipt = (preview: ReturnType<typeof parseReceiptText> | null) => {
   if (!preview) {
     return false;
   }
 
-  if (
-    isTransferStyleReceiptType(preview.receiptType) &&
-    (preview.total !== null || Boolean(preview.billDate) || Boolean(preview.documentNumber) || Boolean(preview.paymentMethod))
-  ) {
+  if (hasStructuredReceiptFastPathSignal(preview, preview.confidence)) {
     return true;
   }
 
@@ -6718,6 +6750,8 @@ export const processImportFileText = async (
     localParseRiskScore: localParseRisk.score,
     localParseRiskReasons: localParseRisk.reasons,
   });
+  const receiptFastPathSignal =
+    imageImport && importMode === "receipt" ? hasStructuredReceiptFastPathSignal(receiptPreview, previewReceiptValidation?.score ?? 0) : false;
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
     parserRouteDecision.route === "deterministic" ||
@@ -6727,7 +6761,7 @@ export const processImportFileText = async (
     Boolean(trainedReceiptDetails) ||
     (imageImport &&
     ((importMode === "receipt" &&
-      (receiptPreviewLooksLikeReceipt || (previewReceiptValidation?.score ?? 0) >= 5)) ||
+      receiptFastPathSignal) ||
       (parsedRows.length > 0 &&
         (metadataForParse.confidence ?? 0) >= 75 &&
         !genericParseLooksSuspicious &&

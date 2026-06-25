@@ -1483,16 +1483,41 @@ const detectWalletTransferCounterpartyFromText = (lines: string[]) => {
   const sentViaIndex = normalizedLines.findIndex((line) => /\bsent via\b/i.test(line));
   const providerIndex = normalizedLines.findIndex((line) => /\b(?:gcash|maya|wise)\b/i.test(line) && /\bsent via\b/i.test(line));
   const anchorIndex = sentViaIndex >= 0 ? sentViaIndex : providerIndex;
+  const normalizeCandidate = (value: string) =>
+    cleanReceiptDescription(value)
+      .replace(/[•]{2,}/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const isWalletCounterpartyLine = (value: string) =>
+    Boolean(value) &&
+    !phonePattern.test(value) &&
+    !/\b(?:amount|total|ref\.?\s*no|reference|sent via|express send|cash in|cash out|paid amount|tips?|changes?)\b/i.test(value) &&
+    /[A-Za-z]{2,}/.test(value) &&
+    parseAmountFromLine(value) === null;
+  const candidateScore = (value: string, indexDistance: number) => {
+    const alphaCount = (value.match(/[A-Za-z]/g) ?? []).length;
+    const maskedPenalty = /[•]/.test(value) ? 4 : 0;
+    const upperBonus = /^[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z.]+){0,4}$/.test(value) ? 4 : 0;
+    const wordCountBonus = Math.min(4, Math.max(0, value.split(/\s+/).filter(Boolean).length - 1) * 2);
+    return alphaCount + upperBonus + wordCountBonus - maskedPenalty - indexDistance;
+  };
+  let bestCandidate: { value: string; score: number } | null = null;
 
   if (anchorIndex > 0) {
-    for (let index = Math.max(0, anchorIndex - 3); index < anchorIndex; index += 1) {
-      const candidate = normalizedLines[index] ?? "";
-      if (!candidate || phonePattern.test(candidate) || /\b(?:amount|total|ref\.?\s*no|reference|sent via)\b/i.test(candidate)) {
+    for (let index = Math.max(0, anchorIndex - 3); index <= Math.min(normalizedLines.length - 1, anchorIndex + 2); index += 1) {
+      if (index === anchorIndex) {
         continue;
       }
-      const cleaned = cleanReceiptDescription(candidate).replace(/[•.]{2,}/g, " ").replace(/\s+/g, " ").trim();
+      const candidate = normalizedLines[index] ?? "";
+      if (!isWalletCounterpartyLine(candidate)) {
+        continue;
+      }
+      const cleaned = normalizeCandidate(candidate);
       if (cleaned.length >= 3) {
-        return cleaned;
+        const score = candidateScore(candidate, Math.abs(index - anchorIndex));
+        if (!bestCandidate || score > bestCandidate.score) {
+          bestCandidate = { value: cleaned, score };
+        }
       }
     }
   }
@@ -1503,17 +1528,20 @@ const detectWalletTransferCounterpartyFromText = (lines: string[]) => {
       continue;
     }
     const previous = normalizedLines[index - 1] ?? "";
-    const cleaned = cleanReceiptDescription(previous).replace(/[•.]{2,}/g, " ").replace(/\s+/g, " ").trim();
-    if (
-      cleaned &&
-      cleaned.length >= 3 &&
-      !/\b(?:amount|total|ref\.?\s*no|reference|sent via)\b/i.test(cleaned)
-    ) {
-      return cleaned;
+    const next = normalizedLines[index + 1] ?? "";
+    for (const candidate of [previous, next]) {
+      const cleaned = normalizeCandidate(candidate);
+      if (!cleaned || cleaned.length < 3 || !isWalletCounterpartyLine(candidate)) {
+        continue;
+      }
+      const score = candidateScore(candidate, 1);
+      if (!bestCandidate || score > bestCandidate.score) {
+        bestCandidate = { value: cleaned, score };
+      }
     }
   }
 
-  return null;
+  return bestCandidate?.value ?? null;
 };
 
 const detectReceiptPayerNameFromText = (lines: string[]) => {
@@ -1673,7 +1701,7 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   ]);
   const documentNumber = extractReceiptField(normalized, [
     /\b(?:official receipt|receipt|or no\.?|cash slip)\s*(?:no\.?|#)?\s*[:#-]?\s*([A-Z0-9-]{3,})/i,
-    /\b(?:ref\.?\s*no|reference)\s*[:#-]?\s*([A-Z0-9-]{6,})/i,
+    /\b(?:ref\.?\s*no\.?|reference)\s*[:#-]?\s*([A-Z0-9-]{6,})/i,
     /\b(?:ticket number)\s*[:#-]?\s*([A-Z0-9-]{6,})/i,
   ]);
 
