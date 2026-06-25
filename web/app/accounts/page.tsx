@@ -2734,6 +2734,11 @@ function AccountsPageContent() {
       closeChrome();
     });
 
+    if (!selectedWorkspaceId || !hasInitialWorkspaceDataLoaded) {
+      setMessage("Clover is still loading your workspace. Please wait a moment, then upload again.");
+      return;
+    }
+
     if (!isLocalDevBrowser && planLimits?.accountLimit != null && accountLimitUsageCount >= planLimits.accountLimit) {
       showPlanLimitNudge({
         planTier,

@@ -1290,6 +1290,13 @@ export function ImportFilesModal({
     const nextFiles = Array.from(incoming);
     if (nextFiles.length === 0) return;
 
+    if (!workspaceId) {
+      setValidationNotice("Clover is still loading your workspace. Please wait a moment, then upload again.");
+      setMessage("Upload unavailable while Clover finishes loading your workspace.");
+      autoStartRef.current = false;
+      return;
+    }
+
     let feedbackMessage = "";
     let validationMessage = "";
     let shouldAutoClose = false;
@@ -1409,7 +1416,7 @@ export function ImportFilesModal({
       primaryVisibilityCompletedRef.current = false;
     }
 
-    if (nextFiles.length > 0) {
+    if (additions.length > 0) {
       autoStartRef.current = true;
       autoCloseAfterStartRef.current = shouldAutoClose;
       if (shouldLaunchInBackground) {
