@@ -1503,6 +1503,7 @@ function AccountsPageContent() {
     let visibleFetchedAccounts: Account[] = [];
     let visibleCachedWorkspaceAccounts: Account[] = [];
     const backgroundTasks: Promise<void>[] = [];
+    let shouldAwaitBackgroundBeforeCompletingInitialLoad = false;
     const shouldGuardEmptyStateDuringHydration = !options?.silent && accounts.length === 0;
     const hasResilientFallbackEvidence = () =>
       hasCachedWorkspaceDataEvidence(workspaceId) ||
@@ -1548,6 +1549,8 @@ function AccountsPageContent() {
         visibleCachedWorkspaceAccounts = (cachedWorkspaceAccounts ?? []).filter(
           (account) => !deletedAccountIdsRef.current.has(account.id)
         );
+        shouldAwaitBackgroundBeforeCompletingInitialLoad =
+          !options?.silent && visibleFetchedAccounts.length === 0 && visibleCachedWorkspaceAccounts.length === 0;
         deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(workspaceId));
         deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(workspaceId));
         setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
@@ -1587,11 +1590,10 @@ function AccountsPageContent() {
       }
 
       if (!options?.silent) {
-        setHasInitialWorkspaceDataLoaded(true);
-      }
-
-      if (!options?.silent) {
-        setAccountsLoading(false);
+        if (!shouldAwaitBackgroundBeforeCompletingInitialLoad) {
+          setHasInitialWorkspaceDataLoaded(true);
+          setAccountsLoading(false);
+        }
       }
 
       backgroundTasks.push((async () => {
@@ -1686,6 +1688,10 @@ function AccountsPageContent() {
         } finally {
           if (workspaceLoadSeqRef.current === loadSeq) {
             setAccountsHydrationPending(false);
+            if (!options?.silent && shouldAwaitBackgroundBeforeCompletingInitialLoad) {
+              setHasInitialWorkspaceDataLoaded(true);
+              setAccountsLoading(false);
+            }
           }
         }
       })());
@@ -1712,7 +1718,7 @@ function AccountsPageContent() {
       }
       setAccountsHydrationPending(false);
     } finally {
-      if (!options?.silent) {
+      if (!options?.silent && !shouldAwaitBackgroundBeforeCompletingInitialLoad) {
         setAccountsLoading(false);
       }
     }
