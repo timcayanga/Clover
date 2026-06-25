@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -22,6 +23,26 @@ import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions"
 export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Home",
+};
+
+const isTransientDashboardDataError = (error: unknown) => {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === "P1001" || error.code === "P2024";
+  }
+
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    return true;
+  }
+
+  if (error instanceof Error) {
+    return (
+      error.message.includes("Can't reach database server") ||
+      error.message.includes("database server") ||
+      error.message.includes("Connection terminated unexpectedly")
+    );
+  }
+
+  return false;
 };
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
@@ -222,6 +243,40 @@ const comparePeriods = (currentTransactions: DashboardTransaction[], previousTra
   };
 };
 
+function DashboardUnavailableContent() {
+  return (
+    <section className="dashboard-home">
+      <EmptyDataCta
+        className="dashboard-home__starter-empty"
+        eyebrow="Home"
+        title="Clover is reconnecting to your latest data"
+        copy="Your balances and activity are still yours. Clover just needs another moment to refresh them before the Home page can load properly."
+        highlights={[
+          "Try refreshing in a few seconds if you were importing or switching pages.",
+          "Uploads already in progress should keep processing in the background.",
+          "Once the connection settles, your balances, reports, and Adviser cards will return here.",
+        ]}
+        illustration="/illustrations/clover-empty-dashboard-3d.png"
+        illustrationAlt="Clover dashboard loading"
+        importHref="/transactions?import=1"
+        accountHref="/accounts"
+        transactionHref="/transactions"
+        importLabel="Upload files"
+        accountLabel="Open accounts"
+        transactionLabel="Open transactions"
+      />
+    </section>
+  );
+}
+
+function DashboardUnavailableState() {
+  return (
+    <CloverShell active="dashboard" title="Home">
+      <DashboardUnavailableContent />
+    </CloverShell>
+  );
+}
+
 
 function DashboardStreamFallback() {
   return (
@@ -375,6 +430,7 @@ async function DashboardStream({
   user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>;
   workspaceSummary: WorkspaceSummary;
 }) {
+  try {
   const cashAccountCount = workspaceSummary.accounts.filter((account) => account.type === "cash").length;
   const shouldShowStarterCard =
     workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts === 0;
@@ -933,17 +989,25 @@ async function DashboardStream({
       </section>
     </>
   );
+  } catch (error) {
+    if (isTransientDashboardDataError(error)) {
+      return <DashboardUnavailableContent />;
+    }
+
+    throw error;
+  }
 }
 
 async function DashboardPageStream() {
-  const session = await getSessionContext();
-  const user = await getOrCreateCurrentUser(session.userId);
-  if (!session.isGuest && !hasCompletedOnboarding(user)) {
-    redirect("/onboarding");
-  }
-  const workspaceSummary = await resolveDashboardWorkspaceSummary(user);
+  try {
+    const session = await getSessionContext();
+    const user = await getOrCreateCurrentUser(session.userId);
+    if (!session.isGuest && !hasCompletedOnboarding(user)) {
+      redirect("/onboarding");
+    }
+    const workspaceSummary = await resolveDashboardWorkspaceSummary(user);
 
-  return (
+    return (
       <CloverShell
         active="dashboard"
         title="Home"
@@ -964,7 +1028,14 @@ async function DashboardPageStream() {
         <DashboardStream user={user} workspaceSummary={workspaceSummary} />
       </Suspense>
     </CloverShell>
-  );
+    );
+  } catch (error) {
+    if (isTransientDashboardDataError(error)) {
+      return <DashboardUnavailableState />;
+    }
+
+    throw error;
+  }
 }
 
 export function DashboardPageContent() {
