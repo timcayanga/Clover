@@ -72,7 +72,19 @@ export type ImportStatusSnapshot = {
     paymentMethod: string | null;
     accountMatch: Record<string, unknown> | null;
     rawPayload: Record<string, unknown> | null;
+    createdAt: string;
   } | null;
+  timing: {
+    uploadedAt: string;
+    importUpdatedAt: string;
+    confirmedAt: string | null;
+    receiptDocumentCreatedAt: string | null;
+    receiptTransactionCreatedAt: string | null;
+    secondsSinceUpload: number;
+    secondsToReceiptDocument: number | null;
+    secondsToReceiptTransaction: number | null;
+    secondsToConfirmation: number | null;
+  };
   parsedRowsCount: number;
   confirmedTransactionsCount: number;
   visibleImportComplete: boolean;
@@ -271,6 +283,7 @@ export const loadImportStatusSnapshot = async (
             paymentMethod: true,
             accountMatch: true,
             rawPayload: true,
+            createdAt: true,
           },
         }).catch(() => null)
       : null;
@@ -442,6 +455,13 @@ export const loadImportStatusSnapshot = async (
     workflowStage: checkpointWorkflowStage,
   });
   const resolvedWorkflowStage = checkpointWorkflowStage ?? telemetry.phase;
+  const uploadedAtMs = importFile.uploadedAt.getTime();
+  const importUpdatedAtMs = importFile.updatedAt.getTime();
+  const confirmedAtMs = importFile.confirmedAt?.getTime() ?? null;
+  const receiptDocumentCreatedAtMs = receiptDocument?.createdAt?.getTime() ?? null;
+  const receiptTransactionCreatedAtMs = receiptTransaction?.createdAt?.getTime() ?? null;
+  const toSecondsSinceUpload = (timestampMs: number | null) =>
+    timestampMs !== null && Number.isFinite(uploadedAtMs) ? Math.max(0, Math.round((timestampMs - uploadedAtMs) / 1000)) : null;
 
   return {
     importFile: {
@@ -481,6 +501,7 @@ export const loadImportStatusSnapshot = async (
             receiptDocument.rawPayload && typeof receiptDocument.rawPayload === "object" && !Array.isArray(receiptDocument.rawPayload)
               ? (receiptDocument.rawPayload as Record<string, unknown>)
               : null,
+          createdAt: receiptDocument.createdAt.toISOString(),
         }
       : null,
     receiptTransaction: receiptTransaction
@@ -512,6 +533,20 @@ export const loadImportStatusSnapshot = async (
           createdAt: receiptTransaction.createdAt.toISOString(),
         }
       : null,
+    timing: {
+      uploadedAt: importFile.uploadedAt.toISOString(),
+      importUpdatedAt: importFile.updatedAt.toISOString(),
+      confirmedAt: importFile.confirmedAt?.toISOString() ?? null,
+      receiptDocumentCreatedAt: receiptDocument?.createdAt?.toISOString() ?? null,
+      receiptTransactionCreatedAt: receiptTransaction?.createdAt.toISOString() ?? null,
+      secondsSinceUpload:
+        Number.isFinite(uploadedAtMs) && Number.isFinite(importUpdatedAtMs)
+          ? Math.max(0, Math.round((Date.now() - uploadedAtMs) / 1000))
+          : 0,
+      secondsToReceiptDocument: toSecondsSinceUpload(receiptDocumentCreatedAtMs),
+      secondsToReceiptTransaction: toSecondsSinceUpload(receiptTransactionCreatedAtMs),
+      secondsToConfirmation: toSecondsSinceUpload(confirmedAtMs),
+    },
     parsedRowsCount,
     confirmedTransactionsCount,
     visibleImportComplete,
