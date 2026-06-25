@@ -45,6 +45,7 @@ type DecideImportParserRouteParams = {
   screenshotNoiseRatio?: number;
   detectedMetadata?: DetectedStatementMetadata | null;
   trainedReceiptDetails?: boolean;
+  prefersBackupParserForTemplateFamily?: boolean;
   surfaceFingerprint?: ImportSurfaceFingerprint | null;
 };
 
@@ -179,6 +180,23 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
       targetDecisionWindowMs: 5_000,
       shouldRenderPageImages: false,
       shouldPreferOpenAiPrimary: false,
+    };
+  }
+
+  if (
+    params.prefersBackupParserForTemplateFamily &&
+    importMode === "statement" &&
+    (imageImport || isPdf) &&
+    !params.hasReliableDeterministicStatementParse &&
+    (parsedRowsCount === 0 || weakText || metadataConfidence < 85 || genericParseLooksSuspicious)
+  ) {
+    return {
+      route: "backup_openai",
+      confidence: 95,
+      reason: "This statement family has repeatedly parsed more reliably through the backup parser",
+      targetDecisionWindowMs: 5_000,
+      shouldRenderPageImages,
+      shouldPreferOpenAiPrimary: true,
     };
   }
 

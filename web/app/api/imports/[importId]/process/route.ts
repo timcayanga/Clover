@@ -9,10 +9,12 @@ import {
   insertImportFileCompat,
   loadImportFileExtractionCache,
   loadStatementTemplate,
+  loadBestStatementTemplateForInstitution,
   mergeStatementMetadataWithTemplate,
   findExistingImportedStatement,
   updateImportFileCompat,
   buildStatementFingerprint,
+  buildStatementFamilySignatureFromText,
   insertTransactionCompat,
   IMPORT_FILE_EXTRACTION_CACHE_VERSION,
 } from "@/lib/data-engine";
@@ -1699,6 +1701,24 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         Boolean(preflightText?.cacheRecord?.parsedRows) &&
         Boolean(preflightText?.cacheRecord?.statementFingerprint) &&
         Boolean(preflightText?.cacheRecord?.metadata);
+      const preflightStatementFamilySignature =
+        typeof preflightText?.cacheRecord?.statementFamilySignature === "string" && preflightText.cacheRecord.statementFamilySignature.trim()
+          ? preflightText.cacheRecord.statementFamilySignature.trim()
+          : hasExtractedText
+            ? buildStatementFamilySignatureFromText(
+                extractedText,
+                {
+                  institution: typeof (metadata as { institution?: unknown } | null)?.institution === "string"
+                    ? String((metadata as { institution?: unknown }).institution)
+                    : null,
+                  accountType:
+                    typeof (metadata as { accountType?: unknown } | null)?.accountType === "string"
+                      ? String((metadata as { accountType?: unknown }).accountType)
+                      : null,
+                },
+                effectiveFileType || "application/octet-stream"
+              )
+            : null;
       if (
         likelyLowQualityUnionBankStatement &&
         !treatAsKnownUnionBankSampleStatement &&
@@ -1710,6 +1730,43 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
       const detectedInstitution = normalizeBankName(String((metadata as { institution?: unknown } | null)?.institution ?? ""));
       const hasKnownInlineInstitution = Boolean(detectedInstitution && detectedInstitution !== "Unknown");
+      const preflightInstitutionTemplate =
+        hasKnownInlineInstitution && preflightStatementFamilySignature
+          ? await loadBestStatementTemplateForInstitution({
+              workspaceId: String(importFile.workspaceId),
+              institution: detectedInstitution,
+              fileType: effectiveFileType || "application/octet-stream",
+              accountType:
+                typeof (metadata as { accountType?: unknown } | null)?.accountType === "string"
+                  ? String((metadata as { accountType?: unknown }).accountType)
+                  : null,
+              statementFamilySignature: preflightStatementFamilySignature,
+            }).catch(() => null)
+          : null;
+      const preflightTemplateParserConfig =
+        preflightInstitutionTemplate?.parserConfig &&
+        typeof preflightInstitutionTemplate.parserConfig === "object" &&
+        !Array.isArray(preflightInstitutionTemplate.parserConfig)
+          ? (preflightInstitutionTemplate.parserConfig as Record<string, unknown>)
+          : null;
+      const preflightTemplateFamilySignature =
+        typeof preflightTemplateParserConfig?.statementFamilySignature === "string"
+          ? preflightTemplateParserConfig.statementFamilySignature.trim()
+          : null;
+      const templateFamilyMatchesPreflight =
+        Boolean(preflightStatementFamilySignature) &&
+        Boolean(preflightTemplateFamilySignature) &&
+        preflightStatementFamilySignature === preflightTemplateFamilySignature;
+      const preflightTemplateSuccessCount = Math.max(0, Math.round(preflightInstitutionTemplate?.successCount ?? 0));
+      const preflightTemplateFailureCount = Math.max(0, Math.round(preflightInstitutionTemplate?.failureCount ?? 0));
+      const preflightTemplateTotalRuns = preflightTemplateSuccessCount + preflightTemplateFailureCount;
+      const preflightTemplateReliability =
+        preflightTemplateTotalRuns > 0 ? preflightTemplateSuccessCount / preflightTemplateTotalRuns : 1;
+      const preflightTemplatePrefersBackupParser =
+        templateFamilyMatchesPreflight &&
+        preflightTemplateTotalRuns >= 2 &&
+        preflightTemplateFailureCount >= Math.max(2, preflightTemplateSuccessCount + 1) &&
+        preflightTemplateReliability < 0.45;
       const preflightParsedRows = Array.isArray(preflightText?.cacheRecord?.parsedRows)
         ? preflightText.cacheRecord.parsedRows
         : Array.isArray(cachedDocTextInfo?.cacheRecord?.parsedRows)
@@ -1741,6 +1798,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         textPreview: extractedText,
         detectedMetadata: metadata as Parameters<typeof decideImportParserRoute>[0]["detectedMetadata"],
         trainedReceiptDetails: Boolean(trainedReceiptFixture),
+        prefersBackupParserForTemplateFamily: preflightTemplatePrefersBackupParser,
         surfaceFingerprint: preflightSurfaceFingerprint,
       });
       const shouldProcessKnownStatementInline =
