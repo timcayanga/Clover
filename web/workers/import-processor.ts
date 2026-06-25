@@ -1638,6 +1638,7 @@ const inferReceiptWalletIdentity = (params: {
     | undefined;
   receiptPreview?: ReturnType<typeof parseReceiptText> | null;
   paymentMethod?: string | null;
+  receiptType?: string | null;
 }) => {
   const accountName = String(params.receiptAccountMatch?.account_name ?? "")
     .trim()
@@ -1646,7 +1647,13 @@ const inferReceiptWalletIdentity = (params: {
     .trim()
     .toLowerCase();
   const previewText = String(params.receiptPreview?.receiptText ?? "").toLowerCase();
+  const receiptType = String(params.receiptType ?? params.receiptPreview?.receiptType ?? "")
+    .trim()
+    .toLowerCase();
   const context = [accountName, paymentMethod, previewText].filter(Boolean).join(" ");
+  const transferLikeContext =
+    isTransferStyleReceiptType(receiptType) ||
+    /\b(?:sent via|total amount sent|instapay|pesonet|transfer|bank transfer|wallet transfer|ref\.?\s*no|transaction successful)\b/.test(context);
 
   if (/\bgcash\b/.test(context)) {
     return {
@@ -1670,6 +1677,34 @@ const inferReceiptWalletIdentity = (params: {
       accountName: "Wise",
       accountType: "wallet" as AccountType,
     };
+  }
+
+  if (transferLikeContext) {
+    const institutionIdentityRules: Array<{ pattern: RegExp; institution: string; accountName: string; accountType: AccountType }> = [
+      { pattern: /\bbdo\b|banco de oro/i, institution: "BDO", accountName: "BDO", accountType: "bank" },
+      { pattern: /\bbpi\b|bank of the philippine islands/i, institution: "BPI", accountName: "BPI", accountType: "bank" },
+      { pattern: /\bmetrobank\b|metropolitan bank/i, institution: "Metrobank", accountName: "Metrobank", accountType: "bank" },
+      { pattern: /\bunionbank\b|\bunion bank\b/i, institution: "UnionBank", accountName: "UnionBank", accountType: "bank" },
+      { pattern: /\brcbc\b/i, institution: "RCBC", accountName: "RCBC", accountType: "bank" },
+      { pattern: /\bsecurity bank\b/i, institution: "Security Bank", accountName: "Security Bank", accountType: "bank" },
+      { pattern: /\bchinabank\b|\bchina bank\b/i, institution: "Chinabank", accountName: "Chinabank", accountType: "bank" },
+      { pattern: /\bpnb\b|\bphilippine national bank\b/i, institution: "PNB", accountName: "PNB", accountType: "bank" },
+      { pattern: /\bcimb\b/i, institution: "CIMB", accountName: "CIMB", accountType: "bank" },
+      { pattern: /\baub\b|\basia united bank\b/i, institution: "AUB", accountName: "AUB", accountType: "bank" },
+      { pattern: /\beastwest\b|\beast west\b/i, institution: "EastWest", accountName: "EastWest", accountType: "bank" },
+      { pattern: /\blandbank\b|\bland bank\b/i, institution: "LandBank", accountName: "LandBank", accountType: "bank" },
+      { pattern: /\bpsbank\b|\bps bank\b/i, institution: "PSBank", accountName: "PSBank", accountType: "bank" },
+    ];
+
+    for (const rule of institutionIdentityRules) {
+      if (rule.pattern.test(context)) {
+        return {
+          institution: rule.institution,
+          accountName: rule.accountName,
+          accountType: rule.accountType,
+        };
+      }
+    }
   }
 
   return null;
@@ -1869,6 +1904,7 @@ const buildParsedRowsFromReceiptDetails = (params: {
     receiptAccountMatch: params.receiptAccountMatch,
     receiptPreview: params.receiptPreview,
     paymentMethod,
+    receiptType,
   });
   const lineItems = Array.isArray(details.line_items) ? details.line_items : [];
   const lineItemText = lineItems
@@ -1960,6 +1996,12 @@ const buildDetectedMetadataFromReceipt = (params: {
     receiptAccountMatch: params.receiptAccountMatch,
     receiptPreview: params.receiptPreview,
     paymentMethod: typeof details?.payment_method === "string" ? details.payment_method : null,
+    receiptType:
+      typeof details?.receipt_type === "string"
+        ? details.receipt_type
+        : typeof (details as Record<string, unknown> | null)?.receiptType === "string"
+          ? String((details as Record<string, unknown>).receiptType)
+          : params.receiptPreview?.receiptType ?? null,
   });
   const inferredInstitution =
     walletIdentity?.institution ??
@@ -8997,6 +9039,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             : null,
         receiptPreview: null,
         paymentMethod: receiptDocument?.paymentMethod ?? (typeof receiptDetailsRecord?.payment_method === "string" ? receiptDetailsRecord.payment_method : null),
+        receiptType: receiptTypeText,
       });
       const targetReceiptAccountId =
         receiptDocument?.accountId ??
