@@ -33,7 +33,7 @@ import { normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { prisma } from "@/lib/prisma";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
-import { decideImportParserRoute, fingerprintImportSurface } from "@/lib/import-parser-routing";
+import { decideImportParserRoute, fingerprintImportSurface, shouldPreferBackupParserForTemplateFamily } from "@/lib/import-parser-routing";
 import type { Prisma } from "@prisma/client";
 import { makeImportFileBytesFingerprint } from "@/lib/import-file-text.server";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
@@ -1759,14 +1759,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         preflightStatementFamilySignature === preflightTemplateFamilySignature;
       const preflightTemplateSuccessCount = Math.max(0, Math.round(preflightInstitutionTemplate?.successCount ?? 0));
       const preflightTemplateFailureCount = Math.max(0, Math.round(preflightInstitutionTemplate?.failureCount ?? 0));
-      const preflightTemplateTotalRuns = preflightTemplateSuccessCount + preflightTemplateFailureCount;
-      const preflightTemplateReliability =
-        preflightTemplateTotalRuns > 0 ? preflightTemplateSuccessCount / preflightTemplateTotalRuns : 1;
-      const preflightTemplatePrefersBackupParser =
-        templateFamilyMatchesPreflight &&
-        preflightTemplateTotalRuns >= 2 &&
-        preflightTemplateFailureCount >= Math.max(2, preflightTemplateSuccessCount + 1) &&
-        preflightTemplateReliability < 0.45;
+      const preflightTemplatePrefersBackupParser = shouldPreferBackupParserForTemplateFamily({
+        templateFamilyMatches: templateFamilyMatchesPreflight,
+        successCount: preflightTemplateSuccessCount,
+        failureCount: preflightTemplateFailureCount,
+      });
       const preflightParsedRows = Array.isArray(preflightText?.cacheRecord?.parsedRows)
         ? preflightText.cacheRecord.parsedRows
         : Array.isArray(cachedDocTextInfo?.cacheRecord?.parsedRows)

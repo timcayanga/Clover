@@ -66,7 +66,12 @@ import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
-import { decideImportParserRoute, fingerprintImportSurface, type ImportSurfaceFingerprintKind } from "@/lib/import-parser-routing";
+import {
+  decideImportParserRoute,
+  fingerprintImportSurface,
+  shouldPreferBackupParserForTemplateFamily,
+  type ImportSurfaceFingerprintKind,
+} from "@/lib/import-parser-routing";
 import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
 import { findBestImportedAccountMatch, matchesImportedAccountIdentity, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
@@ -6699,6 +6704,19 @@ export const processImportFileText = async (
           statementFamilySignature,
         })
       : existingTemplate;
+  const templateParserConfig =
+    institutionTemplate?.parserConfig && typeof institutionTemplate.parserConfig === "object" && !Array.isArray(institutionTemplate.parserConfig)
+      ? (institutionTemplate.parserConfig as Record<string, unknown>)
+      : null;
+  const templateFamilySignature =
+    typeof templateParserConfig?.statementFamilySignature === "string" ? templateParserConfig.statementFamilySignature.trim() : null;
+  const templateFamilyMatchesStatement =
+    Boolean(statementFamilySignature) && Boolean(templateFamilySignature) && statementFamilySignature === templateFamilySignature;
+  const templatePrefersBackupParser = shouldPreferBackupParserForTemplateFamily({
+    templateFamilyMatches: templateFamilyMatchesStatement,
+    successCount: institutionTemplate?.successCount ?? 0,
+    failureCount: institutionTemplate?.failureCount ?? 0,
+  });
   const templateMetadata =
     institutionTemplate?.metadata && typeof institutionTemplate.metadata === "object" && !Array.isArray(institutionTemplate.metadata)
       ? (institutionTemplate.metadata as Record<string, unknown>)
@@ -7046,6 +7064,7 @@ export const processImportFileText = async (
     screenshotNoiseRatio,
     detectedMetadata: metadataForParse,
     trainedReceiptDetails: Boolean(trainedReceiptDetails),
+    prefersBackupParserForTemplateFamily: templatePrefersBackupParser,
     surfaceFingerprint,
   });
   if (fastFailureLooksUnsupported) {

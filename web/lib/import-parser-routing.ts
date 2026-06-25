@@ -11,6 +11,13 @@ export type ImportParserRouteDecision = {
   shouldPreferOpenAiPrimary: boolean;
 };
 
+export type ImportFastScanAssessment = {
+  score: number;
+  weak: boolean;
+  veryWeak: boolean;
+  reasons: string[];
+};
+
 export type ImportSurfaceFingerprintKind =
   | "wallet_screenshot"
   | "statement_screenshot"
@@ -50,6 +57,117 @@ type DecideImportParserRouteParams = {
 };
 
 const normalizeConfidence = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
+
+export const shouldPreferBackupParserForTemplateFamily = (params: {
+  templateFamilyMatches: boolean;
+  successCount?: number | null;
+  failureCount?: number | null;
+}) => {
+  const successCount = Math.max(0, Math.round(params.successCount ?? 0));
+  const failureCount = Math.max(0, Math.round(params.failureCount ?? 0));
+  const totalRuns = successCount + failureCount;
+  const reliability = totalRuns > 0 ? successCount / totalRuns : 1;
+
+  return (
+    params.templateFamilyMatches &&
+    totalRuns >= 2 &&
+    failureCount >= Math.max(2, successCount + 1) &&
+    reliability < 0.45
+  );
+};
+
+export const assessImportFastScan = (params: {
+  importMode?: string | null;
+  imageImport?: boolean;
+  parsedRowsCount?: number;
+  parsedDateCoverage?: number;
+  metadataConfidence?: number;
+  textLength?: number;
+  screenshotNoiseRatio?: number;
+  genericParseLooksSuspicious?: boolean;
+  suspiciousDateCoverage?: boolean;
+  surfaceFingerprint?: ImportSurfaceFingerprint | null;
+}) : ImportFastScanAssessment => {
+  const parsedRowsCount = Math.max(0, Number(params.parsedRowsCount ?? 0));
+  const parsedDateCoverage = Math.max(0, Math.min(1, Number(params.parsedDateCoverage ?? 0)));
+  const metadataConfidence = Math.max(0, Math.min(100, Number(params.metadataConfidence ?? 0)));
+  const textLength = Math.max(0, Number(params.textLength ?? 0));
+  const screenshotNoiseRatio = Math.max(0, Math.min(1, Number(params.screenshotNoiseRatio ?? 0)));
+  const importMode = params.importMode ?? "statement";
+  const reasons: string[] = [];
+  let score = 100;
+
+  if (parsedRowsCount === 0) {
+    score -= 45;
+    reasons.push("no_rows");
+  } else if (parsedRowsCount <= 2) {
+    score -= 25;
+    reasons.push("sparse_rows");
+  } else if (parsedRowsCount <= 5) {
+    score -= 10;
+    reasons.push("limited_rows");
+  }
+
+  if (parsedDateCoverage < 0.35) {
+    score -= 22;
+    reasons.push("low_date_coverage");
+  } else if (parsedDateCoverage < 0.65) {
+    score -= 12;
+    reasons.push("partial_date_coverage");
+  }
+
+  if (metadataConfidence < 55) {
+    score -= 20;
+    reasons.push("weak_metadata");
+  } else if (metadataConfidence < 75) {
+    score -= 10;
+    reasons.push("partial_metadata");
+  }
+
+  if (textLength < 80) {
+    score -= 18;
+    reasons.push("tiny_text");
+  } else if (textLength < 180) {
+    score -= 8;
+    reasons.push("short_text");
+  }
+
+  if (params.imageImport && screenshotNoiseRatio >= 0.5) {
+    score -= 20;
+    reasons.push("high_noise");
+  } else if (params.imageImport && screenshotNoiseRatio >= 0.3) {
+    score -= 10;
+    reasons.push("medium_noise");
+  }
+
+  if (params.genericParseLooksSuspicious) {
+    score -= 22;
+    reasons.push("suspicious_parse");
+  }
+
+  if (params.suspiciousDateCoverage) {
+    score -= 10;
+    reasons.push("suspicious_dates");
+  }
+
+  if (
+    importMode === "statement" &&
+    params.surfaceFingerprint?.kind === "wallet_screenshot" &&
+    (parsedRowsCount < 4 || metadataConfidence < 80)
+  ) {
+    score -= 10;
+    reasons.push("wallet_fast_scan_unstable");
+  }
+
+  score = normalizeConfidence(score);
+
+  return {
+    score,
+    weak: score < 60,
+    veryWeak: score < 40,
+    reasons,
+  };
+};
 
 export const fingerprintImportSurface = (params: {
   importMode?: string | null;
@@ -160,13 +278,25 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
       textPreview: params.textPreview,
       detectedMetadata: params.detectedMetadata,
     });
+  const fastScan = assessImportFastScan({
+    importMode,
+    imageImport,
+    parsedRowsCount,
+    parsedDateCoverage,
+    metadataConfidence,
+    textLength,
+    screenshotNoiseRatio,
+    genericParseLooksSuspicious,
+    suspiciousDateCoverage,
+    surfaceFingerprint,
+  });
 
   if (params.canReuseCachedStatementParse) {
     return {
       route: "deterministic",
       confidence: 99,
       reason: "Reused cached extraction and parsed rows",
-      targetDecisionWindowMs: 5_000,
+      targetDecisionWindowMs: 3_000,
       shouldRenderPageImages: false,
       shouldPreferOpenAiPrimary: false,
     };
@@ -177,7 +307,7 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
       route: "deterministic",
       confidence: 97,
       reason: "Matched a trained receipt pattern",
-      targetDecisionWindowMs: 5_000,
+      targetDecisionWindowMs: 3_000,
       shouldRenderPageImages: false,
       shouldPreferOpenAiPrimary: false,
     };
@@ -188,13 +318,13 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
     importMode === "statement" &&
     (imageImport || isPdf) &&
     !params.hasReliableDeterministicStatementParse &&
-    (parsedRowsCount === 0 || weakText || metadataConfidence < 85 || genericParseLooksSuspicious)
+    (fastScan.weak || parsedRowsCount === 0 || weakText || metadataConfidence < 85 || genericParseLooksSuspicious)
   ) {
     return {
       route: "backup_openai",
       confidence: 95,
-      reason: "This statement family has repeatedly parsed more reliably through the backup parser",
-      targetDecisionWindowMs: 5_000,
+      reason: `This statement family has repeatedly parsed more reliably through the backup parser${fastScan.reasons.length ? ` (${fastScan.reasons.join(", ")})` : ""}`,
+      targetDecisionWindowMs: 3_000,
       shouldRenderPageImages,
       shouldPreferOpenAiPrimary: true,
     };
@@ -202,13 +332,13 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
 
   if (
     surfaceFingerprint.kind === "wallet_screenshot" &&
-    (parsedRowsCount === 0 || weakScreenshotText || noisyScreenshotText || metadataConfidence < 75 || genericParseLooksSuspicious)
+    (fastScan.weak || parsedRowsCount === 0 || weakScreenshotText || noisyScreenshotText || metadataConfidence < 75 || genericParseLooksSuspicious)
   ) {
     return {
       route: "backup_openai",
       confidence: 94,
-      reason: "Wallet screenshot should jump to the backup parser after a weak fast scan",
-      targetDecisionWindowMs: 5_000,
+      reason: `Wallet screenshot should jump to the backup parser after a weak fast scan${fastScan.reasons.length ? ` (${fastScan.reasons.join(", ")})` : ""}`,
+      targetDecisionWindowMs: 3_000,
       shouldRenderPageImages,
       shouldPreferOpenAiPrimary: true,
     };
@@ -217,13 +347,13 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
   if (
     surfaceFingerprint.kind === "receipt_like" &&
     (imageImport || isPdf) &&
-    (veryWeakText || parsedRowsCount === 0 || metadataConfidence < 65 || genericParseLooksSuspicious)
+    (fastScan.weak || veryWeakText || parsedRowsCount === 0 || metadataConfidence < 65 || genericParseLooksSuspicious)
   ) {
     return {
       route: "backup_openai",
       confidence: 92,
       reason: "Receipt-like document looked too weak for a reliable local parse",
-      targetDecisionWindowMs: 5_000,
+      targetDecisionWindowMs: 3_000,
       shouldRenderPageImages,
       shouldPreferOpenAiPrimary: true,
     };
@@ -241,12 +371,12 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
       };
     }
 
-    if ((imageImport || isPdf) && (veryWeakText || parsedRowsCount === 0 || metadataConfidence < 65)) {
+    if ((imageImport || isPdf) && (fastScan.weak || veryWeakText || parsedRowsCount === 0 || metadataConfidence < 65)) {
       return {
         route: "backup_openai",
         confidence: 90,
         reason: "Non-statement OCR was too weak for a reliable local parse",
-        targetDecisionWindowMs: 5_000,
+        targetDecisionWindowMs: 3_000,
         shouldRenderPageImages,
         shouldPreferOpenAiPrimary: true,
       };
@@ -256,7 +386,7 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
       route: "hybrid_openai",
       confidence: 78,
       reason: "Local non-statement parse is partial and should be enriched by the backup parser",
-      targetDecisionWindowMs: 5_000,
+      targetDecisionWindowMs: fastScan.weak ? 3_000 : 5_000,
       shouldRenderPageImages,
       shouldPreferOpenAiPrimary: false,
     };
@@ -265,6 +395,7 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
   if (
     surfaceFingerprint.kind === "statement_screenshot" &&
     (parsedRowsCount === 0 ||
+      fastScan.weak ||
       weakScreenshotText ||
       noisyScreenshotText ||
       metadataConfidence < 76 ||
@@ -276,7 +407,7 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
       route: "backup_openai",
       confidence: 90,
       reason: "Statement screenshot looked too weak after the fast local scan",
-      targetDecisionWindowMs: 5_000,
+      targetDecisionWindowMs: 3_000,
       shouldRenderPageImages: true,
       shouldPreferOpenAiPrimary: true,
     };
@@ -289,7 +420,7 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
       reason: params.imageStatementParseLooksUsable
         ? "Fast screenshot parser produced usable statement rows"
         : "Local statement parser produced a reliable structured result",
-      targetDecisionWindowMs: 5_000,
+      targetDecisionWindowMs: 3_000,
       shouldRenderPageImages: false,
       shouldPreferOpenAiPrimary: false,
     };
@@ -298,13 +429,13 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
   if (
     surfaceFingerprint.kind === "structured_statement" &&
     parsedRowsCount > 0 &&
-    (genericParseLooksSuspicious || suspiciousDateCoverage || metadataConfidence < 80 || parsedDateCoverage < 0.65)
+    (fastScan.weak || genericParseLooksSuspicious || suspiciousDateCoverage || metadataConfidence < 80 || parsedDateCoverage < 0.65)
   ) {
     return {
       route: "hybrid_openai",
       confidence: 79,
       reason: "Structured statement produced partial local structure and should be enriched",
-      targetDecisionWindowMs: 5_000,
+      targetDecisionWindowMs: fastScan.veryWeak ? 3_000 : 5_000,
       shouldRenderPageImages,
       shouldPreferOpenAiPrimary: false,
     };
@@ -312,13 +443,13 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
 
   if (
     params.prefersVisionFallbackForInstitution &&
-    (imageImport || isPdf || veryWeakText || parsedRowsCount === 0 || genericParseLooksSuspicious || noisyScreenshotText)
+    (fastScan.weak || imageImport || isPdf || veryWeakText || parsedRowsCount === 0 || genericParseLooksSuspicious || noisyScreenshotText)
   ) {
     return {
       route: "backup_openai",
       confidence: 93,
       reason: "Institution is known to parse more reliably through the backup vision path",
-      targetDecisionWindowMs: 5_000,
+      targetDecisionWindowMs: 3_000,
       shouldRenderPageImages,
       shouldPreferOpenAiPrimary: true,
     };
