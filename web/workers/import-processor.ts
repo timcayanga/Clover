@@ -8962,6 +8962,14 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           : receiptPayloadSource?.receiptAccountMatch && typeof receiptPayloadSource.receiptAccountMatch === "object" && !Array.isArray(receiptPayloadSource.receiptAccountMatch)
             ? (receiptPayloadSource.receiptAccountMatch as Record<string, unknown>)
             : null;
+      const receiptDocumentNumber =
+        typeof receiptDetailsRecord?.document_number === "string" && receiptDetailsRecord.document_number.trim()
+          ? normalizeTransactionDedupeText(receiptDetailsRecord.document_number)
+          : typeof receiptDetailsRecord?.documentNumber === "string" && receiptDetailsRecord.documentNumber.trim()
+            ? normalizeTransactionDedupeText(receiptDetailsRecord.documentNumber)
+            : typeof receiptDocument?.rawPayload === "object" && receiptDocument?.rawPayload && !Array.isArray(receiptDocument.rawPayload)
+              ? getReceiptDocumentNumberFromPayload(receiptDocument.rawPayload as Prisma.JsonValue)
+              : null;
       const receiptTypeText =
         typeof receiptDetailsRecord?.receipt_type === "string"
           ? receiptDetailsRecord.receipt_type.trim().toLowerCase()
@@ -9050,6 +9058,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         | {
             id: string;
             normalizedPayload: Prisma.JsonValue | null;
+            importFileId: string | null;
           }
         | null = null;
 
@@ -9059,8 +9068,49 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             importFileId,
             accountId: targetReceiptAccountId,
           },
-          select: { id: true, normalizedPayload: true },
+          select: { id: true, normalizedPayload: true, importFileId: true },
         }).catch(() => null);
+
+        if (!existingReceiptTransaction) {
+          const nearbyTransactions = await prisma.transaction.findMany({
+            where: {
+              workspaceId: String(importFile.workspaceId),
+              accountId: targetReceiptAccountId,
+              deletedAt: null,
+              amount: receiptAmount,
+              currency: receiptCurrency,
+              date: receiptDate,
+            },
+            select: {
+              id: true,
+              normalizedPayload: true,
+              rawPayload: true,
+              importFileId: true,
+              merchantRaw: true,
+              merchantClean: true,
+              description: true,
+            },
+            orderBy: [{ createdAt: "desc" }],
+            take: 10,
+          }).catch(() => []);
+          existingReceiptTransaction =
+            nearbyTransactions.find((transaction) => {
+              const candidateDocumentNumber = getReceiptDocumentNumberFromPayload(transaction.rawPayload);
+              if (receiptDocumentNumber && candidateDocumentNumber) {
+                return candidateDocumentNumber === receiptDocumentNumber;
+              }
+
+              const candidateMerchant =
+                normalizeTransactionDedupeText(transaction.merchantClean) ||
+                normalizeTransactionDedupeText(transaction.merchantRaw) ||
+                normalizeTransactionDedupeText(transaction.description);
+              const targetMerchant =
+                normalizeTransactionDedupeText(receiptMerchantClean) ||
+                normalizeTransactionDedupeText(receiptMerchantRaw);
+
+              return Boolean(targetMerchant && candidateMerchant && targetMerchant === candidateMerchant);
+            }) ?? null;
+        }
 
         if (existingReceiptTransaction?.id) {
           createdTransactionId = existingReceiptTransaction.id;
@@ -9093,6 +9143,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               source: "receipt",
               documentType: "receipt",
               bank: receiptWalletIdentity?.institution ?? null,
+              documentNumber: receiptDocumentNumber,
               receiptDocumentId: receiptDocument?.id ?? documentImport?.id ?? null,
               receiptDetails: {
                 ...(receiptDetailsRecord ?? {}),

@@ -374,38 +374,67 @@ export const loadImportStatusSnapshot = async (
       : null;
   const receiptTransaction =
     documentImport?.id || confirmedTransactionsCountBefore > 0 || parsedRowsCountBefore === 0
-      ? await prisma.transaction.findFirst({
-          where: {
-            importFileId,
-            deletedAt: null,
-          },
-          select: {
-            id: true,
-            accountId: true,
-            date: true,
-            amount: true,
-            currency: true,
-            type: true,
-            categoryId: true,
-            merchantRaw: true,
-            merchantClean: true,
-            description: true,
-            rawPayload: true,
-            normalizedPayload: true,
-            reviewStatus: true,
-            isTransfer: true,
-            isExcluded: true,
-            createdAt: true,
-            account: {
-              select: {
-                name: true,
-                institution: true,
-                accountNumber: true,
+      ? receiptDocument?.transactionId
+        ? await prisma.transaction.findUnique({
+            where: { id: receiptDocument.transactionId },
+            select: {
+              id: true,
+              accountId: true,
+              date: true,
+              amount: true,
+              currency: true,
+              type: true,
+              categoryId: true,
+              merchantRaw: true,
+              merchantClean: true,
+              description: true,
+              rawPayload: true,
+              normalizedPayload: true,
+              reviewStatus: true,
+              isTransfer: true,
+              isExcluded: true,
+              createdAt: true,
+              account: {
+                select: {
+                  name: true,
+                  institution: true,
+                  accountNumber: true,
+                },
               },
             },
-          },
-          orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-        }).catch(() => null)
+          }).catch(() => null)
+        : await prisma.transaction.findFirst({
+            where: {
+              importFileId,
+              deletedAt: null,
+            },
+            select: {
+              id: true,
+              accountId: true,
+              date: true,
+              amount: true,
+              currency: true,
+              type: true,
+              categoryId: true,
+              merchantRaw: true,
+              merchantClean: true,
+              description: true,
+              rawPayload: true,
+              normalizedPayload: true,
+              reviewStatus: true,
+              isTransfer: true,
+              isExcluded: true,
+              createdAt: true,
+              account: {
+                select: {
+                  name: true,
+                  institution: true,
+                  accountNumber: true,
+                },
+              },
+            },
+            orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+          }).catch(() => null)
       : null;
   let statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
     ? await prisma.accountStatementCheckpoint.findUnique({
