@@ -30,6 +30,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
         let closed = false;
         let timer: ReturnType<typeof setInterval> | null = null;
         let lastSerializedSnapshot = "";
+        let visibleEventSent = false;
         const close = () => {
           if (closed) {
             return;
@@ -72,11 +73,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
               send("snapshot", snapshot);
             }
 
-            const finished =
-              snapshot.confirmationStatus === "confirmed" ||
+            const visible =
               snapshot.visibleImportComplete ||
               Boolean(snapshot.receiptTransaction) ||
               Boolean(snapshot.receiptDocument);
+
+            if (visible && !visibleEventSent) {
+              visibleEventSent = true;
+              send("visible", snapshot);
+            }
+
+            const finished =
+              snapshot.confirmationStatus === "confirmed" ||
+              visible;
 
             if (finished) {
               send("complete", snapshot);
@@ -96,7 +105,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
         void poll();
         timer = setInterval(() => {
           void poll();
-        }, 500);
+        }, 250);
 
         request.signal.addEventListener("abort", close, { once: true });
       },

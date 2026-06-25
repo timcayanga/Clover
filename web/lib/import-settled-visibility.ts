@@ -152,6 +152,20 @@ const waitWithStatusStream = async (params: {
       }
     });
 
+    source.addEventListener("visible", () => {
+      void (async () => {
+        try {
+          const payload = await fetchAccountPayload(params.accountId);
+          if (evaluate(payload?.account ?? null)) {
+            cleanup();
+            resolve(true);
+          }
+        } catch {
+          // Fall back to the regular poll loop.
+        }
+      })();
+    });
+
     source.onerror = () => {
       cleanup();
       resolve(null);
