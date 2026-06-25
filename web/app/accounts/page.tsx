@@ -3505,32 +3505,22 @@ function AccountsPageContent() {
                   <p>Clover is syncing your accounts, balances, and recent import status.</p>
                 </div>
               ) : accounts.length === 0 ? (
-                <EmptyDataCta
-                  className="empty-state--illustrated"
-                  eyebrow="Accounts"
-                  title="See every account in one place"
-                  copy="Add an account or upload a statement and Clover turns it into cards you can scan, compare, and open for balances, history, and details."
-                  highlights={[
-                    "Import bank and card statements to build account cards automatically.",
-                    "Track cash, wallets, savings, and liabilities side by side.",
-                    "Open any card to review balances, transactions, and account activity.",
-                  ]}
-                  illustration="/illustrations/clover-empty-dashboard-3d.png"
-                  illustrationAlt="A 3D Clover dashboard illustration"
-                  importHref="/accounts?import=1"
-                  accountHref="/accounts"
-                  transactionHref="/transactions?manual=1"
-                  actions={
-                    <>
-                      <button className="button button-secondary button-small" type="button" onClick={openAddAccount}>
-                        Add account
-                      </button>
-                      <button className="button button-primary button-small" type="button" onClick={() => openImportFiles()}>
-                        Upload files
-                      </button>
-                    </>
-                  }
-                />
+                <div className="empty-state accounts-empty-state">
+                  <strong>Getting your accounts ready.</strong>
+                  <p>Clover is preparing your starter accounts now, including Cash, so you have a place to begin right away.</p>
+                  <div className="accounts-empty-state__actions">
+                    <button
+                      className="button button-primary button-small"
+                      type="button"
+                      onClick={() => void loadWorkspaceData(selectedWorkspaceId, { awaitHydration: true })}
+                    >
+                      Refresh accounts
+                    </button>
+                    <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
+                      Upload files
+                    </button>
+                  </div>
+                </div>
               ) : accountGroups.length > 0 ? (
                 accountGroups.map((group) => (
                   <article key={group.title} className="accounts-group glass">
