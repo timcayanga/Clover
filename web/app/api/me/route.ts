@@ -4,6 +4,7 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getUserBillingSubscription } from "@/lib/paypal-billing";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { getUserPlanUsage } from "@/lib/plan-access";
+import { createTransientDataUnavailableResponse, isTransientDataError, isUnauthorizedDataError } from "@/lib/transient-data";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,15 @@ export async function GET() {
           : null,
       },
     });
-  } catch {
+  } catch (error) {
+    if (isTransientDataError(error)) {
+      return createTransientDataUnavailableResponse("Clover is reconnecting to your profile.");
+    }
+
+    if (isUnauthorizedDataError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }

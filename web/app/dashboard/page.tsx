@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -19,30 +18,11 @@ import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { buildRecurringTransactionSummaries } from "@/lib/recurring";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
+import { isTransientDataError } from "@/lib/transient-data";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Home",
-};
-
-const isTransientDashboardDataError = (error: unknown) => {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    return error.code === "P1001" || error.code === "P2024";
-  }
-
-  if (error instanceof Prisma.PrismaClientInitializationError) {
-    return true;
-  }
-
-  if (error instanceof Error) {
-    return (
-      error.message.includes("Can't reach database server") ||
-      error.message.includes("database server") ||
-      error.message.includes("Connection terminated unexpectedly")
-    );
-  }
-
-  return false;
 };
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
@@ -990,7 +970,7 @@ async function DashboardStream({
     </>
   );
   } catch (error) {
-    if (isTransientDashboardDataError(error)) {
+    if (isTransientDataError(error)) {
       return <DashboardUnavailableContent />;
     }
 
@@ -1030,7 +1010,7 @@ async function DashboardPageStream() {
     </CloverShell>
     );
   } catch (error) {
-    if (isTransientDashboardDataError(error)) {
+    if (isTransientDataError(error)) {
       return <DashboardUnavailableState />;
     }
 

@@ -6,6 +6,7 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { createTransientDataUnavailableResponse, isTransientDataError, isUnauthorizedDataError } from "@/lib/transient-data";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -79,6 +80,14 @@ export async function GET() {
       workspaces: orderWorkspaces(user?.workspaces?.length ? user.workspaces : [starterWorkspace]),
     });
   } catch (error) {
+    if (isTransientDataError(error)) {
+      return createTransientDataUnavailableResponse("Clover is reconnecting to your profiles.");
+    }
+
+    if (isUnauthorizedDataError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { getSessionContext } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
+import { createTransientDataUnavailableResponse, isTransientDataError, isUnauthorizedDataError } from "@/lib/transient-data";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 
@@ -90,7 +91,15 @@ export async function GET() {
       paypalAnnualPlanId: env.PAYPAL_ANNUAL_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null,
       paypalBuyerCountry: env.PAYPAL_BUYER_COUNTRY ?? null,
     });
-  } catch {
+  } catch (error) {
+    if (isTransientDataError(error)) {
+      return createTransientDataUnavailableResponse("Clover is reconnecting to your latest settings.");
+    }
+
+    if (isUnauthorizedDataError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }

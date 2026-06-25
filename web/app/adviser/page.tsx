@@ -18,6 +18,7 @@ import { EmptyDataCta } from "@/components/empty-data-cta";
 import { isLiabilityAccountType, isSpendableAccountType, isTrackedAssetAccountType } from "@/lib/account-types";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { isTransientDataError } from "@/lib/transient-data";
 
 export const dynamic = "force-dynamic";
 
@@ -301,6 +302,40 @@ const withAdviserEmoji = (card: AdviserCard): AdviserSectionCard => ({
   ...card,
   emoji: getAdviserCardEmoji(card),
 });
+
+function AdviserUnavailableContent() {
+  return (
+    <section className="adviser-page">
+      <EmptyDataCta
+        className="dashboard-empty-state"
+        eyebrow="Adviser"
+        title="Clover is reconnecting to your latest guidance"
+        copy="Your transactions and accounts are still yours. Clover just needs another moment to refresh them before Adviser can pull together the latest suggestions."
+        highlights={[
+          "Try refreshing in a few seconds if you were importing or switching pages.",
+          "Uploads already in progress should keep processing in the background.",
+          "Once the connection settles, your cards, prompts, and recommendations will return here.",
+        ]}
+        illustration="/illustrations/clover-empty-dashboard-3d.png"
+        illustrationAlt="A 3D Clover dashboard illustration"
+        importHref="/transactions?import=1"
+        accountHref="/accounts"
+        transactionHref="/transactions"
+        importLabel="Upload files"
+        accountLabel="Open accounts"
+        transactionLabel="Open transactions"
+      />
+    </section>
+  );
+}
+
+function AdviserUnavailableState() {
+  return (
+    <CloverShell active="adviser" title="Adviser">
+      <AdviserUnavailableContent />
+    </CloverShell>
+  );
+}
 
 const adviserGettingStartedCards: Record<"noticed" | "do" | "improve", AdviserSectionCard[]> = {
   noticed: [
@@ -967,6 +1002,7 @@ const getWeightedHistoricalBaseline = (series: Array<{ income: number; expense: 
 };
 
 async function AdviserPageContent() {
+  try {
   const now = new Date();
   const session = await getSessionContext();
   const existingUser = await prisma.user.findUnique({
@@ -2854,6 +2890,13 @@ async function AdviserPageContent() {
       </section>
     </CloverShell>
   );
+  } catch (error) {
+    if (isTransientDataError(error)) {
+      return <AdviserUnavailableState />;
+    }
+
+    throw error;
+  }
 }
 
 export default function AdviserPage() {
