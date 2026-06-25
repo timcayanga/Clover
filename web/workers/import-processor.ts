@@ -190,6 +190,19 @@ const buildFieldConfidenceSummary = (fieldConfidence: Record<string, number>) =>
     .map(([field, score]) => `${field}:${score}`)
     .join(", ");
 
+const asFieldConfidenceRecord = (value: unknown): Record<string, number> | null => {
+  const record = asImportRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  const normalizedEntries = Object.entries(record)
+    .map(([key, candidate]) => [key, normalizeImportConfidenceScore(candidate)] as const)
+    .filter(([, score]) => Number.isFinite(score));
+
+  return normalizedEntries.length > 0 ? Object.fromEntries(normalizedEntries) : null;
+};
+
 const buildNormalizedParserSummary = (row: ImportInsightSourceRow) => {
   const rawPayload = asImportRecord(row.rawPayload);
   const rawClassification = asImportRecord(rawPayload?.classification);
@@ -1263,13 +1276,36 @@ const inferParserRowConfidence = (params: {
   return Math.max(confidence, parserConfidence, categoryConfidence, deterministicFallback);
 };
 
-const shouldRouteToReview = (params: { confidence: number; categoryName?: string | null; type?: string | null }) => {
+const shouldRouteToReview = (params: {
+  confidence: number;
+  categoryName?: string | null;
+  type?: string | null;
+  fieldConfidence?: Record<string, number> | null;
+}) => {
   if (!params.type) {
     return true;
   }
 
   if (!params.categoryName || params.categoryName.trim().toLowerCase() === "other") {
     return true;
+  }
+
+  const fieldConfidence = params.fieldConfidence ?? null;
+  const amountConfidence = fieldConfidence ? normalizeImportConfidenceScore(fieldConfidence.amount) : 100;
+  const dateConfidence = fieldConfidence ? normalizeImportConfidenceScore(fieldConfidence.date) : 100;
+  const accountConfidence = fieldConfidence ? normalizeImportConfidenceScore(fieldConfidence.account) : 100;
+  const categoryConfidence = fieldConfidence ? normalizeImportConfidenceScore(fieldConfidence.category) : 100;
+
+  if (amountConfidence < 65 || dateConfidence < 60) {
+    return true;
+  }
+
+  if (params.type === "transfer" && accountConfidence < 55) {
+    return true;
+  }
+
+  if (categoryConfidence >= 55 && amountConfidence >= 75 && dateConfidence >= 70 && params.confidence >= 62) {
+    return false;
   }
 
   return params.confidence < 70;
@@ -5947,10 +5983,19 @@ export const processImportEnrichmentJobs = async (options: {
           });
           const categoryConfidence = Math.max(normalizeImportConfidenceScore(row.categoryConfidence), rowConfidence);
           const parserConfidence = Math.max(normalizeImportConfidenceScore(row.parserConfidence), normalizeImportConfidenceScore(row.confidence), statementConfidence);
+          const nextParserSummary = buildNormalizedParserSummary({
+            ...row,
+            categoryName,
+            type: canonicalType,
+            confidence: Math.max(rowConfidence, categoryConfidence),
+            parserConfidence,
+            categoryConfidence,
+          });
           const nextReviewStatus = shouldRouteToReview({
             confidence: Math.max(rowConfidence, categoryConfidence),
             categoryName,
             type: canonicalType,
+            fieldConfidence: asFieldConfidenceRecord(nextParserSummary.fieldConfidence),
           })
             ? "pending_review"
             : "confirmed";
@@ -5969,7 +6014,12 @@ export const processImportEnrichmentJobs = async (options: {
               parserConfidence,
               reviewStatus: nextReviewStatus,
               isTransfer: canonicalType === "transfer",
-              normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
+              normalizedPayload: {
+                ...((row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
+                  ? (row.normalizedPayload as Record<string, unknown>)
+                  : {}) as Record<string, unknown>),
+                parserSummary: nextParserSummary,
+              } as Prisma.InputJsonValue,
               learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
             },
           });
@@ -10358,6 +10408,15 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         rawPayload: row.rawPayload ?? null,
       },
     });
+    const parserSummary = buildNormalizedParserSummary({
+      ...row,
+      categoryName,
+      type: canonicalType,
+      confidence: rowConfidence,
+      parserConfidence: rowParserConfidence,
+      categoryConfidence: rowCategoryConfidence,
+      accountMatchConfidence: rowAccountMatchConfidence,
+    });
     const insertRow = buildTransactionInsertRecord({
       workspaceId: String(importFile.workspaceId),
       accountId: rowResolvedAccountId,
@@ -10366,7 +10425,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       categoryName,
       reviewStatus: reviewOnlyRow
         ? "rejected"
-        : shouldRouteToReview({ confidence: rowConfidence, categoryName, type: canonicalType })
+        : shouldRouteToReview({
+            confidence: rowConfidence,
+            categoryName,
+            type: canonicalType,
+            fieldConfidence: asFieldConfidenceRecord(parserSummary.fieldConfidence),
+          })
           ? "pending_review"
           : "confirmed",
       parserConfidence: rowParserConfidence,
@@ -10387,14 +10451,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         ...((row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
           ? (row.normalizedPayload as Record<string, unknown>)
           : {}) as Record<string, unknown>),
-        parserSummary: buildNormalizedParserSummary({
-          ...row,
-          categoryName,
-          type: canonicalType,
-          confidence: rowConfidence,
-          parserConfidence: rowParserConfidence,
-          categoryConfidence: rowCategoryConfidence,
-        }),
+        parserSummary,
       } as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
       date:

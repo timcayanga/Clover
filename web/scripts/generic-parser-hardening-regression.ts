@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { guessCategoryFallback } from "@/lib/data-engine";
 import { parseGenericBankStatementText, type ParsedImportRow } from "@/lib/import-parser";
+import { getSharedMerchantCategoryHint } from "@/lib/merchant-category-hints";
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 
 const findRow = (rows: ParsedImportRow[], description: RegExp) => {
@@ -238,6 +240,13 @@ Ending Balance 1,100.00
   assert.equal(findRow(parsedRepeatedDate.rows, /POS Purchase/i).type, "expense");
   assert.equal(findRow(parsedRepeatedDate.rows, /Cash Deposit/i).type, "income");
   assert.equal(parsedRepeatedDate.metadata.endingBalance, 1100);
+
+  assert.equal(getSharedMerchantCategoryHint("Maria Harman"), "Transfers", "Expected person-like names to map to Transfers.");
+  assert.equal(getSharedMerchantCategoryHint("Visa Provisioning Service"), "Shopping", "Expected provisioning checks to map to Shopping.");
+  assert.equal(getSharedMerchantCategoryHint("Great Ocean Road Choc"), "Travel & Lifestyle");
+  assert.equal(guessCategoryFallback("Toby's Estate Coffee AUD PHP", "expense"), "Food & Dining");
+  assert.equal(guessCategoryFallback("HTG Ticket Sales GBP", "expense"), "Entertainment");
+  assert.equal(guessCategoryFallback("Citibank IRE FIN S", "income"), "Transfers");
 };
 
 assertGenericParserHardening();
