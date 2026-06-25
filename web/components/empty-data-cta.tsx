@@ -6,6 +6,7 @@ type EmptyDataCtaProps = {
   eyebrow?: string;
   title: string;
   copy: string;
+  highlights?: string[];
   illustration?: string;
   illustrationAlt?: string;
   artClassName?: string;
@@ -23,6 +24,7 @@ export function EmptyDataCta({
   eyebrow = "Start here",
   title,
   copy,
+  highlights,
   illustration,
   illustrationAlt = "",
   artClassName,
@@ -47,6 +49,13 @@ export function EmptyDataCta({
       {eyebrow ? <p className="transactions-empty-state__eyebrow">{eyebrow}</p> : null}
       <h3>{title}</h3>
       <p className="transactions-empty-state__copy">{copy}</p>
+      {highlights && highlights.length > 0 ? (
+        <ul className="transactions-empty-state__highlights" aria-label="What you can do here">
+          {highlights.map((highlight) => (
+            <li key={highlight}>{highlight}</li>
+          ))}
+        </ul>
+      ) : null}
       {actions ? (
         <div className="transactions-empty-state__actions">{actions}</div>
       ) : (

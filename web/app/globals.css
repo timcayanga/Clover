@@ -25230,6 +25230,41 @@ button.accounts-detail__transaction-head-cell {
   margin-top: 0;
 }
 
+.transactions-empty-state__highlights {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 38rem);
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.transactions-empty-state__highlights li {
+  position: relative;
+  padding: 10px 14px 10px 34px;
+  border-radius: 18px;
+  border: 1px solid rgba(3, 168, 192, 0.1);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text);
+  line-height: 1.45;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+}
+
+.transactions-empty-state__highlights li::before {
+  content: "•";
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 22px;
+  line-height: 12px;
+}
+
 .transactions-empty-state__actions {
   display: flex;
   flex-wrap: wrap;

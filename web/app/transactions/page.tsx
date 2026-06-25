@@ -7237,8 +7237,13 @@ function TransactionsPageContent() {
               <EmptyDataCta
                 className="transactions-empty-state--table"
                 eyebrow=""
-                title="It is quiet in here"
-                copy="Add your first transaction or upload files to bring rows in."
+                title="Build your searchable transaction history"
+                copy="Upload statements, choose a photo, snap a receipt, or add a transaction manually. Clover turns that activity into one ledger you can search, filter, and review."
+                highlights={[
+                  "Bring in receipts and statements so Clover can clean up names and categories.",
+                  "Review spending, income, and transfers in one searchable list.",
+                  "Open any row later to edit details, notes, tags, and split bill links.",
+                ]}
                 illustration={transactionsEmptyStateIllustration}
                 illustrationAlt=""
                 importHref="/transactions?import=1"
@@ -7414,8 +7419,13 @@ function TransactionsPageContent() {
               <EmptyDataCta
                 className="transactions-empty-state--table"
                 eyebrow=""
-                title="It is quiet in here"
-                copy="Add your first transaction or upload files to bring rows in."
+                title="Build your searchable transaction history"
+                copy="Upload statements, choose a photo, snap a receipt, or add a transaction manually. Clover turns that activity into one ledger you can search, filter, and review."
+                highlights={[
+                  "Bring in receipts and statements so Clover can clean up names and categories.",
+                  "Review spending, income, and transfers in one searchable list.",
+                  "Open any row later to edit details, notes, tags, and split bill links.",
+                ]}
                 illustration={transactionsEmptyStateIllustration}
                 illustrationAlt=""
                 importHref="/transactions?import=1"

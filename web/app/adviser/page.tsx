@@ -14,6 +14,7 @@ import { loadBudgetWorkspaceData } from "@/lib/budgeting-data";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { AdviserChat } from "@/components/adviser-chat";
 import { AdviserSectionCarousel, type AdviserSectionCard } from "@/components/adviser-section-carousel";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 import { isLiabilityAccountType, isSpendableAccountType, isTrackedAssetAccountType } from "@/lib/account-types";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
@@ -300,6 +301,114 @@ const withAdviserEmoji = (card: AdviserCard): AdviserSectionCard => ({
   ...card,
   emoji: getAdviserCardEmoji(card),
 });
+
+const adviserGettingStartedCards: Record<"noticed" | "do" | "improve", AdviserSectionCard[]> = {
+  noticed: [
+    {
+      id: "adviser-get-started-accounts",
+      title: "Connect your money",
+      summary: "Adviser gets sharper once Clover can see your balances, accounts, and recent history together.",
+      evidence: "Start with accounts and statements so Clover has real context to work with.",
+      ctaLabel: "Open accounts",
+      href: "/accounts",
+      tone: "neutral",
+      group: "onboarding",
+      emoji: "🏦",
+    },
+    {
+      id: "adviser-get-started-transactions",
+      title: "Feed recent activity",
+      summary: "Transactions help Clover spot spending shifts, cash-flow patterns, and categories worth watching.",
+      evidence: "A few imports are enough to make Adviser, Reports, and Budgets much more useful.",
+      ctaLabel: "Open transactions",
+      href: "/transactions?import=1",
+      tone: "positive",
+      group: "onboarding",
+      emoji: "📥",
+    },
+    {
+      id: "adviser-get-started-recurring",
+      title: "Flag repeat payments",
+      summary: "Recurring bills and subscriptions help Adviser warn you before money leaves your account.",
+      evidence: "That is where due dates, pressure, and planning start to feel more intelligent.",
+      ctaLabel: "Open recurring",
+      href: "/recurring",
+      tone: "warning",
+      group: "onboarding",
+      emoji: "🔁",
+    },
+  ],
+  do: [
+    {
+      id: "adviser-next-upload",
+      title: "Upload your latest files",
+      summary: "The fastest way to make Adviser feel personal is to import your latest bank, card, or wallet activity.",
+      evidence: "Clover can only coach from the balances and transactions it can actually see.",
+      ctaLabel: "Upload transactions",
+      href: "/transactions?import=1",
+      tone: "positive",
+      group: "onboarding",
+      emoji: "📄",
+    },
+    {
+      id: "adviser-next-add-account",
+      title: "Add the accounts you use most",
+      summary: "Savings, cards, wallets, and cash give Adviser a better picture of where your money really sits.",
+      evidence: "Even a small account map makes cash-flow and account guidance more grounded.",
+      ctaLabel: "Add account",
+      href: "/accounts",
+      tone: "neutral",
+      group: "onboarding",
+      emoji: "➕",
+    },
+    {
+      id: "adviser-next-set-routine",
+      title: "Build a weekly habit",
+      summary: "A quick weekly upload is enough to keep Adviser current without making money admin feel heavy.",
+      evidence: "Fresh imports make alerts, reports, and coaching feel timely instead of stale.",
+      ctaLabel: "Start with imports",
+      href: "/transactions?import=1",
+      tone: "warning",
+      group: "onboarding",
+      emoji: "🗓️",
+    },
+  ],
+  improve: [
+    {
+      id: "adviser-improve-spending",
+      title: "Watch spending earlier",
+      summary: "Once your transactions are in, Adviser can point out category spikes before the month gets away from you.",
+      evidence: "That is when alerts like weekend spikes and category drifts start becoming useful.",
+      ctaLabel: "See transactions",
+      href: "/transactions",
+      tone: "neutral",
+      group: "onboarding",
+      emoji: "👀",
+    },
+    {
+      id: "adviser-improve-goals",
+      title: "Give advice a direction",
+      summary: "Goals and budgets help Clover turn data into suggestions that feel more specific to you.",
+      evidence: "Without a target, Adviser can only describe what happened, not what to optimize for.",
+      ctaLabel: "Open goals",
+      href: "/goals",
+      tone: "positive",
+      group: "onboarding",
+      emoji: "🎯",
+    },
+    {
+      id: "adviser-improve-review",
+      title: "Clean up a few rows",
+      summary: "Merchant names and categories do not need to be perfect, but a little cleanup makes every page smarter.",
+      evidence: "That helps Reports, Budgets, and Adviser tell a cleaner story from the same data.",
+      ctaLabel: "Review transactions",
+      href: "/transactions",
+      tone: "warning",
+      group: "onboarding",
+      emoji: "✨",
+    },
+  ],
+};
 
 const updateMemoryStats = (map: Map<string, AdviserMemoryStats>, key: string, createdAt: Date) => {
   const current = map.get(key);
@@ -2437,6 +2546,39 @@ async function AdviserPageContent() {
   const passiveCardsToRender = passiveCards;
   const recommendationCardsToRender = recommendationCards;
   const coachingCardsToRender = coachingCards;
+  const isAdviserGettingStarted =
+    workspaceAccounts.length === 0 &&
+    allTransactions.length === 0 &&
+    commitments.length === 0 &&
+    recurringPatterns.length === 0;
+  const summaryCardsToRender = isAdviserGettingStarted
+    ? [
+        {
+          id: "accounts_ready",
+          title: "Accounts",
+          value: "0",
+          tone: "neutral" as const,
+          detail: "Connect accounts so Adviser can understand your balance picture.",
+        },
+        {
+          id: "transactions_ready",
+          title: "Transactions",
+          value: "0",
+          tone: "neutral" as const,
+          detail: "Import statements or receipts so Clover can spot patterns and changes.",
+        },
+        {
+          id: "guidance_ready",
+          title: "Guidance",
+          value: "Waiting",
+          tone: "positive" as const,
+          detail: "Once data is in, Adviser turns it into weekly guidance and useful prompts.",
+        },
+      ]
+    : summaryCards;
+  const passiveCardsDisplay = isAdviserGettingStarted ? adviserGettingStartedCards.noticed : passiveCardsToRender.map(withAdviserEmoji);
+  const recommendationCardsDisplay = isAdviserGettingStarted ? adviserGettingStartedCards.do : recommendationCardsToRender.map(withAdviserEmoji);
+  const coachingCardsDisplay = isAdviserGettingStarted ? adviserGettingStartedCards.improve : coachingCardsToRender.map(withAdviserEmoji);
 
   const promptSuggestions: RankedAdviserPrompt[] = selectTopRanked(
     [
@@ -2648,9 +2790,27 @@ async function AdviserPageContent() {
   return (
     <CloverShell active="adviser" title="Adviser">
       <section className="adviser-page">
+        {isAdviserGettingStarted ? (
+          <EmptyDataCta
+            className="dashboard-empty-state"
+            eyebrow="Adviser"
+            title="Turn your money data into guidance you can act on"
+            copy="Adviser works best once Clover can see your accounts, transactions, and recurring obligations. Give it a little context and it starts surfacing what matters next."
+            highlights={[
+              "Spot spending shifts, account pressure, and category patterns earlier.",
+              "Get clearer prompts, reports, and coaching from the same data you already upload.",
+              "Use budgets, goals, and recurring items to make the advice feel more personal.",
+            ]}
+            illustration="/illustrations/clover-empty-dashboard-3d.png"
+            illustrationAlt="A 3D Clover dashboard illustration"
+            importHref="/transactions?import=1"
+            accountHref="/accounts"
+            transactionHref="/transactions?manual=1"
+          />
+        ) : null}
         <header className="adviser-summary">
           <div className="adviser-summary__grid" aria-label="Adviser summary">
-            {summaryCards.map((card) => (
+            {summaryCardsToRender.map((card) => (
               <article key={card.id} className="accounts-overview-card glass adviser-summary-card">
                 <p className="eyebrow">{card.title}</p>
                 <button
@@ -2672,19 +2832,19 @@ async function AdviserPageContent() {
         <AdviserSectionCarousel
           title="What Clover noticed"
           ariaLabel="What Clover noticed cards"
-          cards={passiveCardsToRender.map(withAdviserEmoji)}
+          cards={passiveCardsDisplay}
         />
 
         <AdviserSectionCarousel
           title="What you should do"
           ariaLabel="What you should do cards"
-          cards={recommendationCardsToRender.map(withAdviserEmoji)}
+          cards={recommendationCardsDisplay}
         />
 
         <AdviserSectionCarousel
           title="How you can improve"
           ariaLabel="How you can improve cards"
-          cards={coachingCardsToRender.map(withAdviserEmoji)}
+          cards={coachingCardsDisplay}
         />
 
         <section className="adviser-section adviser-section--chat glass">

@@ -3498,18 +3498,32 @@ function AccountsPageContent() {
                   <p>Clover is syncing your accounts, balances, and recent import status.</p>
                 </div>
               ) : accounts.length === 0 ? (
-                <div className="empty-state accounts-empty-state">
-                  <strong>It's quiet in here.</strong>
-                  <p>Add your first account to start seeing balances, history, and helpful review flags.</p>
-                  <div className="accounts-empty-state__actions">
-                    <button className="button button-secondary button-small" type="button" onClick={openAddAccount}>
-                      Add account
-                    </button>
-                    <button className="button button-primary button-small" type="button" onClick={() => openImportFiles()}>
-                      Upload files
-                    </button>
-                  </div>
-                </div>
+                <EmptyDataCta
+                  className="empty-state--illustrated"
+                  eyebrow="Accounts"
+                  title="See every account in one place"
+                  copy="Add an account or upload a statement and Clover turns it into cards you can scan, compare, and open for balances, history, and details."
+                  highlights={[
+                    "Import bank and card statements to build account cards automatically.",
+                    "Track cash, wallets, savings, and liabilities side by side.",
+                    "Open any card to review balances, transactions, and account activity.",
+                  ]}
+                  illustration="/illustrations/clover-empty-dashboard-3d.png"
+                  illustrationAlt="A 3D Clover dashboard illustration"
+                  importHref="/accounts?import=1"
+                  accountHref="/accounts"
+                  transactionHref="/transactions?manual=1"
+                  actions={
+                    <>
+                      <button className="button button-secondary button-small" type="button" onClick={openAddAccount}>
+                        Add account
+                      </button>
+                      <button className="button button-primary button-small" type="button" onClick={() => openImportFiles()}>
+                        Upload files
+                      </button>
+                    </>
+                  }
+                />
               ) : accountGroups.length > 0 ? (
                 accountGroups.map((group) => (
                   <article key={group.title} className="accounts-group glass">
@@ -3530,27 +3544,41 @@ function AccountsPageContent() {
                 ))
               ) : (
                 accounts.length > 0 ? (
-                  <div className="empty-state accounts-empty-state">
-                    <strong>No accounts in {formatCurrencySymbol(selectedCurrency)} yet.</strong>
-                    <p>Pick another currency or add/import an account in {formatCurrencySymbol(selectedCurrency)} to keep this view focused.</p>
-                    <div className="accounts-empty-state__actions">
-                      <button className="button button-secondary button-small" type="button" onClick={openAddAccount}>
-                        Add account
-                      </button>
-                      <button className="button button-primary button-small" type="button" onClick={() => openImportFiles()}>
-                        Upload files
-                      </button>
-                    </div>
-                  </div>
+                  <EmptyDataCta
+                    eyebrow={selectedCurrency}
+                    title={`No ${formatCurrencySymbol(selectedCurrency)} accounts yet`}
+                    copy={`This view is focused on ${formatCurrencySymbol(selectedCurrency)} accounts only. Add or import one to compare balances here, or switch currencies to see the rest of your workspace.`}
+                    highlights={[
+                      "Keep each currency separate when you want a cleaner balance view.",
+                      "Import another statement to let Clover detect the matching account automatically.",
+                    ]}
+                    accountHref="/accounts"
+                    transactionHref="/transactions?manual=1"
+                    actions={
+                      <>
+                        <button className="button button-secondary button-small" type="button" onClick={openAddAccount}>
+                          Add account
+                        </button>
+                        <button className="button button-primary button-small" type="button" onClick={() => openImportFiles()}>
+                          Upload files
+                        </button>
+                      </>
+                    }
+                  />
                 ) : (
                   <EmptyDataCta
                     className="empty-state--illustrated"
-                    eyebrow="No accounts yet"
-                    title="No accounts to show right now."
-                    copy="Try a different sort, or add another account to keep building your picture."
+                    eyebrow="Accounts"
+                    title="Build your financial picture here"
+                    copy="This page becomes your account map. Add accounts, upload statements, and Clover organizes each balance into cards you can scan at a glance."
+                    highlights={[
+                      "Create manual accounts for cash, wallets, and balances you want to track today.",
+                      "Upload statements when you want Clover to populate cards for you.",
+                      "Open each card later to review account-specific transactions and details.",
+                    ]}
                     illustration="/illustrations/clover-empty-dashboard-3d.png"
                     illustrationAlt="A 3D Clover dashboard illustration"
-                    importHref="/dashboard?import=1"
+                    importHref="/accounts?import=1"
                     accountHref="/accounts"
                     transactionHref="/transactions?manual=1"
                     actions={

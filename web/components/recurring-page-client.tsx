@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { CloverShell } from "@/components/clover-shell";
 import { CommitmentsPanel } from "@/components/commitments-panel";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 
 type RecurringPageClientProps = {
   workspaceId: string;
@@ -75,6 +77,11 @@ export function RecurringPageClient({
     window.history.replaceState({}, "", window.location.pathname);
   };
 
+  const isGettingStartedState =
+    commitments.length === 0 &&
+    recurringPatterns.length === 0 &&
+    plannedPaymentSuggestions.length === 0;
+
   return (
     <CloverShell
       active="recurring"
@@ -101,6 +108,36 @@ export function RecurringPageClient({
       }
     >
       <div className="recurring-page__stack">
+        {isGettingStartedState ? (
+          <EmptyDataCta
+            className="dashboard-empty-state"
+            eyebrow="Recurring"
+            title="Stay ahead of subscriptions, bills, loans, and reminders"
+            copy="Use Recurring to keep upcoming payments from surprising you. Clover can help you track what is due next, what repeats every month, and what needs follow-up."
+            highlights={[
+              "Save subscriptions, bills, loans, and one-off reminders in one place.",
+              "Catch upcoming due dates before they turn into last-minute stress.",
+              "Anchor recurring items to accounts and transactions when you want extra context.",
+            ]}
+            illustration="/illustrations/clover-empty-dashboard-3d.png"
+            illustrationAlt="A 3D Clover dashboard illustration"
+            accountHref="/accounts"
+            transactionHref="/transactions"
+            actions={
+              <>
+                <button className="button button-primary button-small" type="button" onClick={openAddModal}>
+                  Add recurring
+                </button>
+                <Link className="button button-secondary button-small" href="/transactions">
+                  Review transactions
+                </Link>
+                <Link className="pill-link pill-link--inline transactions-empty-state__manual-link" href="/accounts">
+                  Open accounts
+                </Link>
+              </>
+            }
+          />
+        ) : null}
         <CommitmentsPanel
           workspaceId={workspaceId}
           commitments={commitments}
