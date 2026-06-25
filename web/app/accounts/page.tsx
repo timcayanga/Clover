@@ -2735,6 +2735,16 @@ function AccountsPageContent() {
     });
   };
 
+  const openStarterCashAccount = () => {
+    setManualType("cash");
+    setManualName("Cash");
+    setManualInstitution("Cash");
+    setManualAccountNumber("");
+    setManualBalance("");
+    setManualCurrency(selectedCurrency || "PHP");
+    openAddAccount();
+  };
+
   const openImportFiles = (files: File[] | null = null, backgroundOnly = false) => {
     const shouldLaunchInBackground = backgroundOnly && !(files?.some(isImageImportFile) ?? false);
     flushSync(() => {
@@ -3505,22 +3515,54 @@ function AccountsPageContent() {
                   <p>Clover is syncing your accounts, balances, and recent import status.</p>
                 </div>
               ) : accounts.length === 0 ? (
-                <div className="empty-state accounts-empty-state">
-                  <strong>Getting your accounts ready.</strong>
-                  <p>Clover is preparing your starter accounts now, including Cash, so you have a place to begin right away.</p>
-                  <div className="accounts-empty-state__actions">
-                    <button
-                      className="button button-primary button-small"
-                      type="button"
-                      onClick={() => void loadWorkspaceData(selectedWorkspaceId, { awaitHydration: true })}
-                    >
-                      Refresh accounts
+                <article className="accounts-group glass">
+                  <div className="accounts-group__head">
+                    <div className="accounts-group__title-row">
+                      <h5>Cash</h5>
+                      <strong>{formatAccountAmount(0, selectedCurrency || "PHP")}</strong>
+                    </div>
+                  </div>
+
+                  <div className="accounts-card-grid accounts-card-grid--desktop" aria-label="Starter cash account">
+                    <FinancialAccountCard
+                      accountBrand={getAccountBrand({ institution: "Cash", name: "Cash", type: "cash" })}
+                      name="Cash"
+                      amount={formatAccountAmount(0, selectedCurrency || "PHP")}
+                      onOpen={openStarterCashAccount}
+                      openLabel="Set up Cash account"
+                    />
+                  </div>
+
+                  <div className="accounts-mobile-list accounts-mobile-list--mobile" aria-label="Starter cash account list">
+                    <button type="button" className="accounts-mobile-list-row" onClick={openStarterCashAccount}>
+                      <span className="accounts-mobile-list-row__brand">
+                        <AccountBrandMark
+                          accountBrand={getAccountBrand({ institution: "Cash", name: "Cash", type: "cash" })}
+                          label="Cash"
+                        />
+                        <span>
+                          <strong>Cash</strong>
+                          <small>Start with cash on hand</small>
+                        </span>
+                      </span>
+                      <span className="accounts-mobile-list-row__end">
+                        <strong>{formatAccountAmount(0, selectedCurrency || "PHP")}</strong>
+                        <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
+                          ›
+                        </span>
+                      </span>
                     </button>
-                    <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
+                  </div>
+
+                  <div className="accounts-empty-state__actions">
+                    <button className="button button-secondary button-small" type="button" onClick={openStarterCashAccount}>
+                      Set up cash
+                    </button>
+                    <button className="button button-primary button-small" type="button" onClick={() => openImportFiles()}>
                       Upload files
                     </button>
                   </div>
-                </div>
+                </article>
               ) : accountGroups.length > 0 ? (
                 accountGroups.map((group) => (
                   <article key={group.title} className="accounts-group glass">
