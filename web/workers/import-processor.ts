@@ -7779,13 +7779,13 @@ export const processImportFileText = async (
     importHealthDatedShare: importHealthSummary.datedShare,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
-  const receiptDocumentCashAccountId =
+  const receiptDocumentFallbackCashAccountId =
     importMode === "receipt"
       ? await resolveWorkspaceCashAccountId(String(importFile.workspaceId), resolvedMetadata.currency ?? "PHP")
       : null;
   const documentImportAccountId =
     importMode === "receipt"
-      ? receiptDocumentCashAccountId
+      ? resolvedReceiptAccountId ?? receiptDocumentFallbackCashAccountId
       : receiptPreviewLooksLikeReceipt
         ? importFile.account?.id ?? resolvedReceiptAccountId
         : importFile.account?.id ?? null;
@@ -8962,9 +8962,38 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           : receiptPayloadSource?.receiptAccountMatch && typeof receiptPayloadSource.receiptAccountMatch === "object" && !Array.isArray(receiptPayloadSource.receiptAccountMatch)
             ? (receiptPayloadSource.receiptAccountMatch as Record<string, unknown>)
             : null;
-      const cashAccountId =
+      const receiptTypeText =
+        typeof receiptDetailsRecord?.receipt_type === "string"
+          ? receiptDetailsRecord.receipt_type.trim().toLowerCase()
+          : typeof receiptDetailsRecord?.receiptType === "string"
+            ? receiptDetailsRecord.receiptType.trim().toLowerCase()
+            : typeof receiptDocument?.rawPayload === "object" && receiptDocument?.rawPayload && !Array.isArray(receiptDocument.rawPayload)
+              ? String(
+                  (receiptDocument.rawPayload as Record<string, unknown>).receipt_type ??
+                    (receiptDocument.rawPayload as Record<string, unknown>).receiptType ??
+                    ""
+                )
+                  .trim()
+                  .toLowerCase()
+              : "";
+      const receiptTransferType = isTransferStyleReceiptType(receiptTypeText);
+      const receiptWalletIdentity = inferReceiptWalletIdentity({
+        receiptAccountMatch:
+          receiptAccountMatchPayload && typeof receiptAccountMatchPayload === "object"
+            ? {
+                account_name:
+                  typeof receiptAccountMatchPayload.account_name === "string" ? receiptAccountMatchPayload.account_name : null,
+                account_last4:
+                  typeof receiptAccountMatchPayload.account_last4 === "string" ? receiptAccountMatchPayload.account_last4 : null,
+              }
+            : null,
+        receiptPreview: null,
+        paymentMethod: receiptDocument?.paymentMethod ?? (typeof receiptDetailsRecord?.payment_method === "string" ? receiptDetailsRecord.payment_method : null),
+      });
+      const targetReceiptAccountId =
         receiptDocument?.accountId ??
         (documentImport?.accountId && !String(documentImport.accountId).startsWith("optimistic-") ? documentImport.accountId : null) ??
+        receiptAccountResolution?.accountId ??
         (await resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency));
       const receiptCategoryName = (() => {
         const trainedCategoryName =
@@ -8977,22 +9006,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           return trainedCategoryName;
         }
 
-        const receiptTypeText =
-          typeof receiptDetailsRecord?.receipt_type === "string"
-            ? receiptDetailsRecord.receipt_type.trim().toLowerCase()
-            : typeof receiptDetailsRecord?.receiptType === "string"
-              ? receiptDetailsRecord.receiptType.trim().toLowerCase()
-              : typeof receiptDocument?.rawPayload === "object" && receiptDocument?.rawPayload && !Array.isArray(receiptDocument.rawPayload)
-                ? String(
-                    (receiptDocument.rawPayload as Record<string, unknown>).receipt_type ??
-                      (receiptDocument.rawPayload as Record<string, unknown>).receiptType ??
-                      ""
-                  )
-                    .trim()
-                    .toLowerCase()
-                : "";
         const lineItemText = receiptLineItems.map((item) => item.description).join(" ").toLowerCase();
         const receiptContextText = `${receiptMerchantClean || ""} ${receiptMerchantRaw || ""} ${receiptTypeText} ${lineItemText}`.trim();
+
+        if (receiptTransferType) {
+          return "Transfers";
+        }
 
         if (
           /\btemporary bill\b/.test(receiptTypeText) ||
@@ -9023,8 +9042,9 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       const receiptCategoryId = await resolveOrCreateWorkspaceCategoryId({
         workspaceId: String(importFile.workspaceId),
         categoryName: receiptCategoryName,
-        fallbackType: "expense",
+        fallbackType: receiptTransferType ? "transfer" : "expense",
       });
+      const receiptTransactionType: TransactionType = receiptTransferType ? "transfer" : "expense";
       let createdTransactionId = receiptDocument?.transactionId ?? null;
       let existingReceiptTransaction:
         | {
@@ -9033,11 +9053,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           }
         | null = null;
 
-      if (!createdTransactionId && cashAccountId && receiptAmount !== null && receiptDate) {
+      if (!createdTransactionId && targetReceiptAccountId && receiptAmount !== null && receiptDate) {
         existingReceiptTransaction = await prisma.transaction.findFirst({
           where: {
             importFileId,
-            accountId: cashAccountId,
+            accountId: targetReceiptAccountId,
           },
           select: { id: true, normalizedPayload: true },
         }).catch(() => null);
@@ -9047,7 +9067,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         } else {
           const insertedTransaction = await insertTransactionCompat({
             workspaceId: String(importFile.workspaceId),
-            accountId: cashAccountId,
+            accountId: targetReceiptAccountId,
             importFileId,
             categoryId: receiptCategoryId,
             categoryName: receiptCategoryName,
@@ -9061,17 +9081,18 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             categoryConfidence: 95,
             accountMatchConfidence: 100,
             duplicateConfidence: 0,
-            transferConfidence: 0,
+            transferConfidence: receiptTransferType ? 100 : 0,
             date: receiptDate,
             amount: receiptAmount,
             currency: receiptCurrency,
-            type: "expense",
+            type: receiptTransactionType,
             merchantRaw: receiptMerchantRaw,
             merchantClean: receiptMerchantClean,
             description: receiptMerchantClean,
             rawPayload: {
               source: "receipt",
               documentType: "receipt",
+              bank: receiptWalletIdentity?.institution ?? null,
               receiptDocumentId: receiptDocument?.id ?? documentImport?.id ?? null,
               receiptDetails: {
                 ...(receiptDetailsRecord ?? {}),
@@ -9119,7 +9140,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               merchantClean: receiptMerchantClean,
               categoryId: receiptCategoryId,
               categoryName: receiptCategoryName,
-              type: "expense",
+              type: receiptTransactionType,
             } as Prisma.InputJsonValue,
             learnedRuleIdsApplied: [],
           });
@@ -9148,7 +9169,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               merchantClean: receiptMerchantClean,
               categoryId: receiptCategoryId,
               categoryName: receiptCategoryName,
-              type: "expense",
+              type: receiptTransactionType,
             } as Prisma.InputJsonValue,
           },
         });
@@ -9175,7 +9196,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         await upsertReceiptDocumentCompat({
           workspaceId: String(importFile.workspaceId),
           documentImportId: documentImport.id,
-          accountId: cashAccountId,
+          accountId: targetReceiptAccountId,
           transactionId: createdTransactionId,
           merchantRaw: receiptMerchantRaw,
           merchantClean: receiptMerchantClean,
@@ -9246,7 +9267,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         imported: createdTransactionId ? 1 : 0,
         duplicate: false,
         metadata: detectStatementMetadataFromText("", importFile.fileName),
-        accountId: cashAccountId ?? documentImport?.accountId ?? accountId ?? null,
+          accountId: targetReceiptAccountId ?? documentImport?.accountId ?? accountId ?? null,
         confirmedTransactionsCount: createdTransactionId ? 1 : 0,
         insightSummary: null,
         accountBalance: null,

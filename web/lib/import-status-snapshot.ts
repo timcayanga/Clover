@@ -222,6 +222,91 @@ const buildCheckpointAccountSummary = async (
   ];
 };
 
+const buildReceiptDocumentAccountSummary = async (
+  receiptDocument: {
+    accountId: string | null;
+    currency: string | null;
+    total: { toString(): string } | null;
+    accountMatch: unknown;
+    rawPayload: unknown;
+  } | null
+): Promise<ImportAccountSummary[]> => {
+  if (!receiptDocument) {
+    return [];
+  }
+
+  const accountRecord = receiptDocument.accountId
+    ? await prisma.account.findUnique({
+        where: { id: receiptDocument.accountId },
+        select: {
+          id: true,
+          name: true,
+          institution: true,
+          accountNumber: true,
+          type: true,
+          balance: true,
+        },
+      }).catch(() => null)
+    : null;
+
+  const accountMatch =
+    receiptDocument.accountMatch && typeof receiptDocument.accountMatch === "object" && !Array.isArray(receiptDocument.accountMatch)
+      ? (receiptDocument.accountMatch as Record<string, unknown>)
+      : null;
+  const rawPayload =
+    receiptDocument.rawPayload && typeof receiptDocument.rawPayload === "object" && !Array.isArray(receiptDocument.rawPayload)
+      ? (receiptDocument.rawPayload as Record<string, unknown>)
+      : null;
+  const receiptAccountResolution =
+    rawPayload?.receiptAccountResolution && typeof rawPayload.receiptAccountResolution === "object" && !Array.isArray(rawPayload.receiptAccountResolution)
+      ? (rawPayload.receiptAccountResolution as Record<string, unknown>)
+      : null;
+
+  const accountId =
+    accountRecord?.id ??
+    (typeof receiptDocument.accountId === "string" && receiptDocument.accountId.trim() ? receiptDocument.accountId.trim() : null) ??
+    (typeof receiptAccountResolution?.accountId === "string" && receiptAccountResolution.accountId.trim()
+      ? receiptAccountResolution.accountId.trim()
+      : null);
+  const accountName =
+    accountRecord?.name ??
+    (typeof receiptAccountResolution?.accountName === "string" ? receiptAccountResolution.accountName.trim() : null) ??
+    (typeof accountMatch?.account_name === "string" ? accountMatch.account_name.trim() : null) ??
+    null;
+  const institution =
+    accountRecord?.institution ??
+    (typeof receiptAccountResolution?.institution === "string" ? receiptAccountResolution.institution.trim() : null) ??
+    (typeof rawPayload?.bank === "string" ? rawPayload.bank.trim() : null) ??
+    (typeof accountMatch?.account_name === "string" ? accountMatch.account_name.trim() : null) ??
+    null;
+  const accountNumber =
+    accountRecord?.accountNumber ??
+    (typeof receiptAccountResolution?.accountNumber === "string" ? receiptAccountResolution.accountNumber.trim() : null) ??
+    (typeof accountMatch?.account_last4 === "string" ? accountMatch.account_last4.trim() : null) ??
+    null;
+  const accountType =
+    (accountRecord?.type as AccountType | null | undefined) ??
+    (typeof receiptAccountResolution?.accountType === "string" ? (receiptAccountResolution.accountType as AccountType) : null) ??
+    (institution ? ("wallet" as AccountType) : null);
+  const balance = accountRecord?.balance?.toString() ?? receiptDocument.total?.toString() ?? null;
+
+  if (!accountId || (!accountName && !institution && !accountNumber && !balance)) {
+    return [];
+  }
+
+  return [
+    {
+      accountId,
+      accountName,
+      institution,
+      accountNumber,
+      accountType,
+      balance,
+      rowsImported: 0,
+    },
+  ];
+};
+
 const estimateFinalizationSecondsRemaining = (job: Awaited<ReturnType<typeof getImportEnrichmentJobByImportFileId>>) => {
   if (!job || job.status === "done" || job.status === "failed") {
     return 0;
@@ -388,9 +473,15 @@ export const loadImportStatusSnapshot = async (
     confirmedTransactionsCount > 0 || hasConfirmedRows || receiptHasVisibleTransaction
       ? await loadVisibleImportAccountSummaries(importFileId)
       : [];
+  const receiptDocumentAccountSummaries =
+    receiptHasVisibleDocument && visibleTransactionAccountSummaries.length === 0
+      ? await buildReceiptDocumentAccountSummary(receiptDocument)
+      : [];
   const accountSummaries =
     visibleTransactionAccountSummaries.length > 0
       ? visibleTransactionAccountSummaries
+      : receiptDocumentAccountSummaries.length > 0
+        ? receiptDocumentAccountSummaries
       : checkpointAccountSummaries;
   const resolvedAccountId =
     importFile.accountId ??
