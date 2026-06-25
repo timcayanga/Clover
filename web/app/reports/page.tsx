@@ -697,6 +697,14 @@ async function ReportsStream({
                   label: "Open transactions",
                   };
 
+    const currentNet = currentSummary.income - currentSummary.expense;
+    const previousNet = previousSummary.income - previousSummary.expense;
+    const currentSpend = currentSummary.expense;
+    const previousSpend = previousSummary.expense;
+    const savingsRate = currentSummary.income > 0 ? currentNet / currentSummary.income : null;
+    const spendDelta = previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null;
+    const incomeDelta = previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
+
     const reportExpenseTransactions = reportDisplayTransactions.filter(isReportSpendingTransaction);
     const reportPreviousExpenseTransactions = reportPreviousWindowTransactions.filter(isReportSpendingTransaction);
     const reportExpenseCategories = reportExpenseTransactions.reduce(
@@ -979,13 +987,6 @@ async function ReportsStream({
 
     const maxCategorySpend = topCategories[0]?.[1] ?? 0;
 
-    const currentNet = currentSummary.income - currentSummary.expense;
-    const previousNet = previousSummary.income - previousSummary.expense;
-    const currentSpend = currentSummary.expense;
-    const previousSpend = previousSummary.expense;
-    const savingsRate = currentSummary.income > 0 ? currentNet / currentSummary.income : null;
-    const spendDelta = previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null;
-    const incomeDelta = previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
     const topCategoryShare = currentSpend > 0 ? maxCategorySpend / currentSpend : null;
     const importedTransactionStatsSummary = importedTransactionStats as unknown as {
       _count?: { id?: number };
