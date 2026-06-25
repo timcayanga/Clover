@@ -454,7 +454,7 @@ const buildForecastSignal = (
     + ` · risk score ${Math.round(projectedRisk)}/100`;
 
   return {
-    title: projectedRisk >= 70 ? "Cash flow forecast" : "Upcoming pressure",
+    title: projectedRisk >= 70 ? "Your cash flow may feel tight soon" : "Bills may need a quick look",
     summary,
     evidence,
     tone: projectedRisk >= 70 ? "warning" : "neutral",
@@ -605,8 +605,8 @@ const buildCategoryForecastSignals = (params: {
       : null,
     recurringRisk
       ? {
-          title: "Recurring pressure",
-          summary: "Known recurring obligations are starting to crowd the available room in the month.",
+          title: "Bills are starting to stack up",
+          summary: "Your recurring bills are taking up more of the room you have this month.",
           evidence: `Recurring + commitment pressure ${formatCurrency(knownPressure)} vs threshold ${formatCurrency(params.thresholdProfile.recurringPressure)}`,
           tone: "warning",
           score: clamp(
@@ -619,8 +619,8 @@ const buildCategoryForecastSignals = (params: {
       : null,
     splitRisk
       ? {
-          title: "Split bill runway",
-          summary: "Open split bill balances are high enough to deserve a closer look.",
+          title: "Shared bills could use a quick check",
+          summary: "Open split bill balances are large enough to be worth reviewing.",
           evidence: `Open split bill pressure ${formatCurrency(params.splitBillSettlementPressure)} vs threshold ${formatCurrency(params.thresholdProfile.splitPressure)}`,
           tone: "neutral",
           score: clamp(
@@ -633,8 +633,11 @@ const buildCategoryForecastSignals = (params: {
       : null,
     goalRisk
       ? {
-          title: "Goal drift",
-          summary: "Current momentum suggests the target may need a check-in soon.",
+          title: params.goalProgressBand === "Set a Goal" ? "Set a savings goal when you are ready" : "Your savings goal may need a quick update",
+          summary:
+            params.goalProgressBand === "Set a Goal"
+              ? "A goal gives Clover a clearer target for future guidance."
+              : "Your current pace suggests the goal may need a small adjustment.",
           evidence: `Goal band ${params.goalProgressBand}; drift threshold ${Math.round(params.thresholdProfile.goalDriftPercent)}%`,
           tone: "warning",
           score: clamp(
@@ -1770,8 +1773,8 @@ async function AdviserPageContent() {
     },
     {
       id: "upcoming_pressure",
-      title: "Upcoming Pressure",
-      value: upcomingPressureLabel,
+      title: "Bills coming up",
+      value: `${upcomingPressureLabel} pressure`,
       tone: upcomingPressureLabel === "High" ? "warning" : upcomingPressureLabel === "Moderate" ? "neutral" : "positive",
       detail:
         upcomingPressureSignals.length > 0
@@ -2060,11 +2063,11 @@ async function AdviserPageContent() {
       workspaceAccounts.length > 0
         ? {
             id: "review_account_buffer",
-            title: "Review account buffer",
+            title: "Check if you have enough cash for upcoming bills",
             summary:
               liquidBalance > 0
-                ? "Check whether your spendable accounts have enough cushion for the next wave of bills."
-                : "Check whether your connected accounts are giving you enough cushion for the next wave of bills.",
+                ? "Your spendable accounts show the cash Clover can see for the bills ahead."
+                : "Your connected accounts give Clover a starting point for checking bill room.",
             evidence:
               `${formatCurrency(spendableAccountBalance)} spendable balance` +
               (liabilityAccountBalance > 0 ? ` · ${formatCurrency(liabilityAccountBalance)} liability exposure` : ""),
@@ -2089,7 +2092,7 @@ async function AdviserPageContent() {
             title: forecastSignal.title,
             summary: forecastSignal.summary,
             evidence: forecastSignal.evidence,
-            ctaLabel: "Review cash flow",
+            ctaLabel: "Check cash flow",
             href: "/accounts",
             tone: forecastSignal.tone,
             group: "cashflow",

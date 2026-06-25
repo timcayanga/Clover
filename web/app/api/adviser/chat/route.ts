@@ -383,7 +383,7 @@ const buildForecastSignal = (
   const evidence = `Projected net after known obligations: ${formatSignedCurrency(projectedNet)} · liquid balance ${formatCurrency(liquidBalance)} · risk score ${Math.round(projectedRisk)}/100`;
 
   return {
-    title: projectedRisk >= 70 ? "Cash flow forecast" : "Upcoming pressure",
+    title: projectedRisk >= 70 ? "Your cash flow may feel tight soon" : "Bills may need a quick look",
     summary,
     evidence,
     score: projectedRisk,
@@ -529,8 +529,8 @@ const buildCategoryForecastSignals = (params: {
       : null,
     recurringRisk
       ? {
-          title: "Recurring pressure",
-          summary: "Known recurring obligations are starting to crowd the available room in the month.",
+          title: "Bills are starting to stack up",
+          summary: "Your recurring bills are taking up more of the room you have this month.",
           evidence: `Recurring + commitment pressure ${formatCurrency(knownPressure)} vs threshold ${formatCurrency(params.thresholdProfile.recurringPressure)}`,
           score: clamp(
             average([
@@ -542,8 +542,8 @@ const buildCategoryForecastSignals = (params: {
       : null,
     splitRisk
       ? {
-          title: "Split bill runway",
-          summary: "Open split bill balances are high enough to deserve a closer look.",
+          title: "Shared bills could use a quick check",
+          summary: "Open split bill balances are large enough to be worth reviewing.",
           evidence: `Open split bill pressure ${formatCurrency(params.splitBillSettlementPressure)} vs threshold ${formatCurrency(params.thresholdProfile.splitPressure)}`,
           score: clamp(
             average([
@@ -555,8 +555,11 @@ const buildCategoryForecastSignals = (params: {
       : null,
     goalRisk
       ? {
-          title: "Goal drift",
-          summary: "Current momentum suggests the target may need a check-in soon.",
+          title: params.goalProgressBand === "Set a Goal" ? "Set a savings goal when you are ready" : "Your savings goal may need a quick update",
+          summary:
+            params.goalProgressBand === "Set a Goal"
+              ? "A goal gives Clover a clearer target for future guidance."
+              : "Your current pace suggests the goal may need a small adjustment.",
           evidence: `Goal band ${params.goalProgressBand}; drift threshold ${Math.round(params.thresholdProfile.goalDriftPercent)}%`,
           score: clamp(
             average([
