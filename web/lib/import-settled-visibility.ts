@@ -11,6 +11,10 @@ type SettledVisibilityParams = {
 type ImportStatusSnapshot = {
   confirmedTransactionsCount?: number | null;
   parsedRowsCount?: number | null;
+  visibleImportComplete?: boolean | null;
+  confirmationStatus?: string | null;
+  receiptTransaction?: unknown;
+  receiptDocument?: unknown;
 };
 
 type AccountPayload = {
@@ -110,7 +114,12 @@ const waitWithStatusStream = async (params: {
       if (params.importedRows > 0 && params.importFileId) {
         const confirmedTransactionsCount = Number(latestStatusRef.current?.confirmedTransactionsCount ?? 0);
         const parsedRowsCount = Number(latestStatusRef.current?.parsedRowsCount ?? 0);
-        return confirmedTransactionsCount >= params.importedRows || parsedRowsCount >= params.importedRows;
+        const hasVisibleReceiptOrImport =
+          latestStatusRef.current?.visibleImportComplete === true ||
+          latestStatusRef.current?.confirmationStatus === "confirmed" ||
+          Boolean(latestStatusRef.current?.receiptTransaction) ||
+          Boolean(latestStatusRef.current?.receiptDocument);
+        return confirmedTransactionsCount >= params.importedRows || parsedRowsCount >= params.importedRows || hasVisibleReceiptOrImport;
       }
 
       return true;
@@ -120,6 +129,10 @@ const waitWithStatusStream = async (params: {
       latestStatusRef.current = {
         confirmedTransactionsCount: Number(payload.confirmedTransactionsCount ?? 0),
         parsedRowsCount: Number(payload.parsedRowsCount ?? 0),
+        visibleImportComplete: payload.visibleImportComplete === true,
+        confirmationStatus: typeof payload.confirmationStatus === "string" ? payload.confirmationStatus : null,
+        receiptTransaction: payload.receiptTransaction ?? null,
+        receiptDocument: payload.receiptDocument ?? null,
       };
     };
 
@@ -225,7 +238,12 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
       if (params.importedRows > 0 && params.importFileId) {
         const confirmedTransactionsCount = Number(statusPayload?.confirmedTransactionsCount ?? 0);
         const parsedRowsCount = Number(statusPayload?.parsedRowsCount ?? 0);
-        if (confirmedTransactionsCount < params.importedRows && parsedRowsCount < params.importedRows) {
+        const hasVisibleReceiptOrImport =
+          statusPayload?.visibleImportComplete === true ||
+          statusPayload?.confirmationStatus === "confirmed" ||
+          Boolean(statusPayload?.receiptTransaction) ||
+          Boolean(statusPayload?.receiptDocument);
+        if (confirmedTransactionsCount < params.importedRows && parsedRowsCount < params.importedRows && !hasVisibleReceiptOrImport) {
           await sleep(pollDelayMs);
           continue;
         }
