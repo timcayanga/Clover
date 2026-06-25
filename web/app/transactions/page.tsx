@@ -318,6 +318,28 @@ const isGenericAccountBrand = (brand: ReturnType<typeof getAccountBrand>) => {
   );
 };
 
+const pickPreferredAccountBrand = (
+  primaryBrand: ReturnType<typeof getAccountBrand> | null | undefined,
+  fallbackBrand: ReturnType<typeof getAccountBrand>
+) => {
+  if (!primaryBrand) {
+    return fallbackBrand;
+  }
+
+  const primaryHasLogo = Boolean(primaryBrand.logoSrc || primaryBrand.logoSrcs.length > 0);
+  const fallbackHasLogo = Boolean(fallbackBrand.logoSrc || fallbackBrand.logoSrcs.length > 0);
+
+  if (!primaryHasLogo && fallbackHasLogo) {
+    return fallbackBrand;
+  }
+
+  if (isGenericAccountBrand(primaryBrand) && !isGenericAccountBrand(fallbackBrand)) {
+    return fallbackBrand;
+  }
+
+  return primaryBrand;
+};
+
 type Category = {
   id: string;
   name: string;
@@ -7055,11 +7077,14 @@ function TransactionsPageContent() {
                 const isTransferTransaction = effectiveType === "transfer";
                 const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
                 const accountDisplayName = getDisplayAccountNameForTransaction(transaction);
-                const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
-                  institution: accountInstitution,
-                  name: accountDisplayName,
-                  type: effectiveType === "transfer" ? "bank" : effectiveType === "income" ? "bank" : "other",
-                });
+                const accountBrand = pickPreferredAccountBrand(
+                  accountBrandById.get(transaction.accountId),
+                  getAccountBrand({
+                    institution: accountInstitution,
+                    name: accountDisplayName,
+                    type: effectiveType === "transfer" ? "bank" : effectiveType === "income" ? "bank" : "other",
+                  })
+                );
                 const merchantSummary = summarizeTransactionMerchantText(
                   transaction.merchantClean ?? transaction.merchantRaw,
                   accountInstitution
@@ -7335,11 +7360,14 @@ function TransactionsPageContent() {
                           accountInstitution
                         );
                         const accountDisplayName = getDisplayAccountNameForTransaction(transaction);
-                        const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
-                          institution: accountInstitution,
-                          name: accountDisplayName,
-                          type: effectiveType === "transfer" ? "bank" : effectiveType === "income" ? "bank" : "other",
-                        });
+                        const accountBrand = pickPreferredAccountBrand(
+                          accountBrandById.get(transaction.accountId),
+                          getAccountBrand({
+                            institution: accountInstitution,
+                            name: accountDisplayName,
+                            type: effectiveType === "transfer" ? "bank" : effectiveType === "income" ? "bank" : "other",
+                          })
+                        );
 
                         return (
                           <article

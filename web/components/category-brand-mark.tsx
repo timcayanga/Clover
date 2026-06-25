@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 
 type CategoryBrandMarkProps = {
@@ -65,14 +65,22 @@ export function CategoryBrandMark({ categoryName, size = 24, radius = 8, classNa
   const tone = getCategoryIconTone(categoryName);
   const useLightForeground = getColorLuminance(tone.backgroundColor) < 0.28;
   const iconSrc = getCategoryIconSrc(categoryName);
+  const [didFail, setDidFail] = useState(false);
+  const fallbackIconSrc = "/category-icons/default.svg";
+  const resolvedIconSrc = didFail ? fallbackIconSrc : iconSrc;
+  const resetKey = useMemo(() => `${categoryName}::${iconSrc}`, [categoryName, iconSrc]);
+
+  useEffect(() => {
+    setDidFail(false);
+  }, [resetKey]);
 
   useEffect(() => {
     const image = new Image();
     image.loading = "eager";
     image.fetchPriority = "high";
     image.decoding = "async";
-    image.src = iconSrc;
-  }, [iconSrc]);
+    image.src = resolvedIconSrc;
+  }, [resolvedIconSrc]);
 
   return (
     <span
@@ -87,35 +95,20 @@ export function CategoryBrandMark({ categoryName, size = 24, radius = 8, classNa
       title={categoryName}
       aria-hidden="true"
     >
-      <span className="category-brand-mark__glyph" aria-hidden="true">
-        <img
-          className="category-brand-mark__glyph-layer category-brand-mark__glyph-layer--extrude"
-          src={iconSrc}
-          alt=""
-          aria-hidden="true"
-          loading="eager"
-          fetchPriority="high"
-          decoding="async"
-        />
-        <img
-          className="category-brand-mark__glyph-layer category-brand-mark__glyph-layer--highlight"
-          src={iconSrc}
-          alt=""
-          aria-hidden="true"
-          loading="eager"
-          fetchPriority="high"
-          decoding="async"
-        />
-        <img
-          className="category-brand-mark__glyph-layer category-brand-mark__glyph-layer--face"
-          src={iconSrc}
-          alt=""
-          aria-hidden="true"
-          loading="eager"
-          fetchPriority="high"
-          decoding="async"
-        />
-      </span>
+      <img
+        className="category-brand-mark__glyph-icon"
+        src={resolvedIconSrc}
+        alt=""
+        aria-hidden="true"
+        loading="eager"
+        fetchPriority="high"
+        decoding="async"
+        onError={() => {
+          if (!didFail) {
+            setDidFail(true);
+          }
+        }}
+      />
     </span>
   );
 }
