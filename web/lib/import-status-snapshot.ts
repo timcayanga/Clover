@@ -381,11 +381,17 @@ export const loadImportStatusSnapshot = async (
     confirmedTransactionsCount > 0 || hasConfirmedRows || accountDetailOnlyImport || receiptHasVisibleTransaction;
   const hasVisibleImportData =
     visibleImportComplete || parsedRowsCount > 0 || checkpointRowCount > 0 || receiptHasVisibleDocument;
-  const accountSummaries = visibleImportComplete
-    ? confirmedTransactionsCount > 0 || hasConfirmedRows || receiptHasVisibleTransaction
-      ? await loadVisibleImportAccountSummaries(importFileId)
-      : await buildCheckpointAccountSummary(statementCheckpoint, importFile.accountId ?? null)
+  const checkpointAccountSummaries = hasVisibleImportData
+    ? await buildCheckpointAccountSummary(statementCheckpoint, importFile.accountId ?? null)
     : [];
+  const visibleTransactionAccountSummaries =
+    confirmedTransactionsCount > 0 || hasConfirmedRows || receiptHasVisibleTransaction
+      ? await loadVisibleImportAccountSummaries(importFileId)
+      : [];
+  const accountSummaries =
+    visibleTransactionAccountSummaries.length > 0
+      ? visibleTransactionAccountSummaries
+      : checkpointAccountSummaries;
   const resolvedAccountId =
     importFile.accountId ??
     receiptTransaction?.accountId ??
@@ -393,7 +399,15 @@ export const loadImportStatusSnapshot = async (
     statementCheckpoint?.accountId ??
     (accountSummaries.length === 1 ? accountSummaries[0]?.accountId ?? null : null);
 
-  if (visibleImportComplete && !importFile.accountId && resolvedAccountId) {
+  const shouldPersistResolvedAccountId =
+    Boolean(resolvedAccountId) &&
+    !importFile.accountId &&
+    (visibleImportComplete ||
+      Boolean(statementCheckpoint?.accountId) ||
+      (checkpointAccountSummaries.length === 1 &&
+        Boolean(checkpointAccountSummaries[0]?.accountName || checkpointAccountSummaries[0]?.accountNumber)));
+
+  if (shouldPersistResolvedAccountId && resolvedAccountId) {
     importFile =
       (await updateImportFileCompat(importFileId, {
         accountId: resolvedAccountId,
@@ -447,7 +461,13 @@ export const loadImportStatusSnapshot = async (
   const telemetry = buildImportTelemetrySnapshot({
     status: importFile.status,
     processingPhase: importFile.processingPhase,
-    processingMessage: importFile.processingMessage,
+    processingMessage:
+      !visibleImportComplete &&
+      accountSummaries.length > 0 &&
+      hasVisibleImportData &&
+      importFile.status === "processing"
+        ? "Clover found the account and is linking the visible rows."
+        : importFile.processingMessage,
     parsedRowsCount,
     confirmedTransactionsCount,
     confirmationStatus,
@@ -463,6 +483,14 @@ export const loadImportStatusSnapshot = async (
   const toSecondsSinceUpload = (timestampMs: number | null) =>
     timestampMs !== null && Number.isFinite(uploadedAtMs) ? Math.max(0, Math.round((timestampMs - uploadedAtMs) / 1000)) : null;
 
+  const resolvedProcessingMessage =
+    !visibleImportComplete &&
+    accountSummaries.length > 0 &&
+    hasVisibleImportData &&
+    importFile.status === "processing"
+      ? "Clover found the account and is linking the visible rows."
+      : importFile.processingMessage ?? null;
+
   return {
     importFile: {
       id: importFile.id,
@@ -470,7 +498,7 @@ export const loadImportStatusSnapshot = async (
       fileType: importFile.fileType,
       status: importFile.status,
       processingPhase: importFile.processingPhase ?? null,
-      processingMessage: importFile.processingMessage ?? null,
+      processingMessage: resolvedProcessingMessage,
       processingAttempt: Number(importFile.processingAttempt ?? 0),
       processingTargetScore: importFile.processingTargetScore ?? null,
       processingCurrentScore: importFile.processingCurrentScore ?? null,
