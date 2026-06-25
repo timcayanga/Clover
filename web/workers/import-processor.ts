@@ -183,6 +183,13 @@ const buildParserSummaryText = (params: {
   return `${merchant} -> ${category} (${type}, ${reason}, ${confidence}% confidence)`;
 };
 
+const clampImportConfidenceScore = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
+
+const buildFieldConfidenceSummary = (fieldConfidence: Record<string, number>) =>
+  Object.entries(fieldConfidence)
+    .map(([field, score]) => `${field}:${score}`)
+    .join(", ");
+
 const buildNormalizedParserSummary = (row: ImportInsightSourceRow) => {
   const rawPayload = asImportRecord(row.rawPayload);
   const rawClassification = asImportRecord(rawPayload?.classification);
@@ -211,6 +218,75 @@ const buildNormalizedParserSummary = (row: ImportInsightSourceRow) => {
       : typeof rawClassification?.normalizedName === "string" && rawClassification.normalizedName.trim()
         ? rawClassification.normalizedName.trim()
         : null;
+  const parsedDate =
+    row.date instanceof Date && !Number.isNaN(row.date.getTime())
+      ? row.date
+      : parseDateValue(typeof row.date === "string" ? row.date : null);
+  const rowConfidence = normalizeImportConfidenceScore(row.confidence);
+  const parserConfidence = normalizeImportConfidenceScore(row.parserConfidence);
+  const categoryConfidence = normalizeImportConfidenceScore(row.categoryConfidence);
+  const accountMatchConfidence = normalizeImportConfidenceScore(row.accountMatchConfidence);
+  const amountValue = parseAmountValue(coerceAmountToString(row.amount));
+  const existingFieldConfidence = asImportRecord(existingSummary?.fieldConfidence);
+  const fieldConfidence = {
+    date: clampImportConfidenceScore(
+      parsedDate
+        ? Math.max(
+            parserConfidence,
+            typeof existingFieldConfidence?.date === "number" ? Number(existingFieldConfidence.date) : 0,
+            75
+          )
+        : Math.max(
+            Math.min(parserConfidence, 35),
+            typeof existingFieldConfidence?.date === "number" ? Number(existingFieldConfidence.date) : 0
+          )
+    ),
+    amount: clampImportConfidenceScore(
+      amountValue !== null
+        ? Math.max(
+            parserConfidence,
+            rowConfidence,
+            typeof existingFieldConfidence?.amount === "number" ? Number(existingFieldConfidence.amount) : 0,
+            80
+          )
+        : Math.max(
+            Math.min(parserConfidence, 40),
+            typeof existingFieldConfidence?.amount === "number" ? Number(existingFieldConfidence.amount) : 0
+          )
+    ),
+    merchant: clampImportConfidenceScore(
+      merchantClean || (typeof row.merchantRaw === "string" && row.merchantRaw.trim())
+        ? Math.max(
+            parserConfidence,
+            rowConfidence,
+            typeof existingFieldConfidence?.merchant === "number" ? Number(existingFieldConfidence.merchant) : 0,
+            merchantClean ? 85 : 70
+          )
+        : Math.max(
+            Math.min(parserConfidence, 35),
+            typeof existingFieldConfidence?.merchant === "number" ? Number(existingFieldConfidence.merchant) : 0
+          )
+    ),
+    category: clampImportConfidenceScore(
+      categoryName
+        ? Math.max(
+            categoryConfidence,
+            typeof existingFieldConfidence?.category === "number" ? Number(existingFieldConfidence.category) : 0,
+            70
+          )
+        : Math.max(
+            Math.min(categoryConfidence || parserConfidence, 35),
+            typeof existingFieldConfidence?.category === "number" ? Number(existingFieldConfidence.category) : 0
+          )
+    ),
+    account: clampImportConfidenceScore(
+      Math.max(
+        accountMatchConfidence || 0,
+        typeof existingFieldConfidence?.account === "number" ? Number(existingFieldConfidence.account) : 0,
+        0
+      )
+    ),
+  };
 
   return {
     ...(existingSummary ?? {}),
@@ -220,9 +296,12 @@ const buildNormalizedParserSummary = (row: ImportInsightSourceRow) => {
     categoryReason,
     categorySource,
     type: typeof row.type === "string" ? row.type : null,
-    confidence: normalizeImportConfidenceScore(row.confidence),
-    parserConfidence: normalizeImportConfidenceScore(row.parserConfidence),
-    categoryConfidence: normalizeImportConfidenceScore(row.categoryConfidence),
+    confidence: rowConfidence,
+    parserConfidence,
+    categoryConfidence,
+    accountMatchConfidence,
+    fieldConfidence,
+    fieldConfidenceSummary: buildFieldConfidenceSummary(fieldConfidence),
     summaryText: buildParserSummaryText({
       merchantClean,
       merchantRaw: row.merchantRaw,
