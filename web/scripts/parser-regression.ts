@@ -2054,6 +2054,10 @@ const main = async () => {
     ["Cash Payment - Thank You - MB ATM", "income", "Transfers"],
     ["Payment-Thank You", "income", "Transfers"],
     ["Card Payment", "income", "Transfers"],
+    ["Emmanuel Payments", "expense", "Shopping"],
+    ["Apollo Bay Seafood", "expense", "Food & Dining"],
+    ["News Travels", "expense", "Travel & Lifestyle"],
+    ["Htg Ticket Sales", "expense", "Entertainment"],
   ];
   for (const [description, type, expectedCategory] of enrichmentFallbackExpectations) {
     const actualCategory = guessCategoryFallback(description, type);
@@ -2080,6 +2084,12 @@ const main = async () => {
     ["Wanli Hu", "income", "Transfers"],
     ["Maria Harman", "income", "Transfers"],
     ["MALDO A F", "income", "Transfers"],
+    ["Emmanuel Payments", "expense", "Shopping"],
+    ["Apollo Bay Seafood", "expense", "Food & Dining"],
+    ["Lee's Dumplings", "expense", "Food & Dining"],
+    ["News Travels", "expense", "Travel & Lifestyle"],
+    ["HTG Ticket Sales", "expense", "Entertainment"],
+    ["Viator.com", "expense", "Shopping"],
   ];
   for (const [description, type, expectedCategory] of categoryGuessExpectations) {
     const actualCategory = guessCategoryName(description, type);

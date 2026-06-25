@@ -105,7 +105,7 @@ const isLikelyPersonTransferName = (value: string) => {
   }
 
   if (
-    /\b(?:airport|mall|market|grocer|grocery|restaurant|cafe|coffee|bar|books?|school|college|opera|harbour|transport|bus|train|station|parking|souvenir|tourism|sanctuary|victoria|ticket|tickets|supermarket|shop|store|mart|paypal|amazon|prime|mcdonald|milksha|gogyo|gokan|goken|leone|project|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|donki|byrdi|seeds|estate|vacation|nirvana|waterfront|relay|skybus|citibank|bank|finance|financial|oil|convenience|mitrtown)\b/i.test(
+    /\b(?:airport|mall|market|grocer|grocery|restaurant|cafe|coffee|bar|books?|school|college|opera|harbour|transport|bus|train|station|parking|souvenir|tourism|travel|travels|sanctuary|victoria|ticket|tickets|supermarket|shop|store|mart|paypal|amazon|prime|mcdonald|milksha|gogyo|gokan|goken|leone|project|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|donki|byrdi|seeds|estate|vacation|nirvana|waterfront|relay|skybus|citibank|bank|finance|financial|oil|convenience|mitrtown|payments?)\b/i.test(
       cleaned
     )
   ) {
@@ -168,13 +168,13 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   }
   if (/liberty\s+oil|fuel|petrol|gas\s+station/.test(lower) || /libertyoil|fuel|petrol|gasstation/.test(compact)) return "Transport";
   if (
-    /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills|great\s+ocean\s+road\s+choc|samyan\s+mitrtown|jacks\s+of\s+bath|vesper|black\s+cabin\s+bar|coco\s+group|coco\s+dewata|nat'?s\s+rustic|moonlit\s+sanctuary/.test(lower) ||
-    /pedrothegrocer|grocery|supermarket|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|7eleven|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills|greatoceanroadchoc|samyanmitrtown|jacksofbath|vesper|blackcabinbar|cocogroup|cocodewata|natsrustic|moonlitsanctuary/.test(compact)
+    /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills|great\s+ocean\s+road\s+choc|samyan\s+mitrtown|jacks\s+of\s+bath|vesper|black\s+cabin\s+bar|coco\s+group|coco\s+dewata|nat'?s\s+rustic|moonlit\s+sanctuary|apollo\s+bay\s+seafood|wootea|liberty\s+oil\s+convenience|iga\s+supermarkets?|caretaker'?s\s+cottage|lee'?s\s+dumplings/.test(lower) ||
+    /pedrothegrocer|grocery|supermarket|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|7eleven|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills|greatoceanroadchoc|samyanmitrtown|jacksofbath|vesper|blackcabinbar|cocogroup|cocodewata|natsrustic|moonlitsanctuary|apollobayseafood|wootea|libertyoilconvenience|igasupermarkets?|caretakerscottage|leesdumplings/.test(compact)
   )
     return "Food & Dining";
   if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) return "Food & Dining";
   if (/books?\b|asia\s+books/.test(lower) || /books|asiabooks/.test(compact)) return "Education";
-  if (/paypal|convenience|relay|amazon|alibaba|camera/.test(lower) || /paypal|convenience|relay|amazon|alibaba|camera/.test(compact))
+  if (/paypal|relay|amazon|alibaba|camera|news\s+travels?|locker\s+hire|viator(?:\.com)?/.test(lower) || /paypal|relay|amazon|alibaba|camera|newstravels?|lockerhire|viator/.test(compact))
     return "Shopping";
   if (/citibank.*\bfin\b|bank.*\bfin\b/.test(lower) || /citibank.*fin|bank.*fin/.test(compact)) return "Transfers";
   if (
@@ -201,16 +201,16 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/epsaten/.test(lower)) return type === "expense" ? "Cash & ATM" : "Income";
   if (/el\/?espay/.test(lower)) return type === "expense" || type === "transfer" ? "Transfers" : "Income";
   if (/payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
-  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut|yoshinoya|bar leone|savory project|gokan|goken/.test(lower)) return "Food & Dining";
+  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut|yoshinoya|bar leone|savory project|gokan|goken|milksha|mcdonald'?s|dumplings|seafood|7-?eleven|mini\s+mart|wootea|iga|grocer/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
   if (/bill|utilities|electric|water|internet|phone|subscription|openai|netflix|spotify|load purchase|pay\s*maya\s*load purchase|paymaya\s*load purchase|mobile load/.test(lower))
     return "Bills & Utilities";
-  if (/travel|airbnb|hotel|airline|flight|tour|holiday|tourism|souvenir|viator|harbour|sanctuary|great\s+ocean\s+road|parks?\s+victoria/.test(lower)) return "Travel & Lifestyle";
-  if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox/.test(lower))
+  if (/travel|airbnb|hotel|airline|flight|tour|holiday|tourism|souvenir|viator|harbour|sanctuary|great\s+ocean\s+road|parks?\s+victoria|news\s+travels?|great\s+ocean\s+road\s+choc|locker\s+hire|moonlit\s+sanctuary/.test(lower)) return "Travel & Lifestyle";
+  if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox|opera\s+house|htg\s+ticket\s+sales|museum|gallery/.test(lower))
     return "Entertainment";
-  if (/puregold|shop|shopping|mall|amazon|alibaba|lazada|shopee|retail|camera/.test(lower)) return "Shopping";
+  if (/puregold|shop|shopping|mall|amazon|alibaba|lazada|shopee|retail|camera|paypal|relay/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
   if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
   if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";
@@ -251,6 +251,12 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
     /(?:shop|shopping|retail|convenience|mall|amazon|alibaba|shopee|lazada|store|camera|paypal|prime|relay)/.test(compact)
   ) {
     addHeuristicScore(heuristicScores, "Shopping", 4);
+  }
+  if (
+    /\b(?:payments?|payroll|payee|remit|remittance|transfer|received|sent)\b/.test(lower) &&
+    !/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)
+  ) {
+    addHeuristicScore(heuristicScores, "Transfers", 4);
   }
   if (
     /\b(?:college|school|tuition|course|learning|book|books|bookshop|bookstore)\b/.test(lower) ||

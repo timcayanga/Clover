@@ -500,7 +500,7 @@ const isLikelyPersonTransferName = (value: string) => {
   }
 
   if (
-    /\b(?:airport|mall|market|grocer|grocery|restaurant|cafe|coffee|bar|books?|school|college|opera|harbour|transport|bus|train|station|parking|souvenir|tourism|sanctuary|victoria|ticket|tickets|supermarket|shop|store|mart|paypal|amazon|prime|mcdonald|milksha|gogyo|gokan|goken|leone|project|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|donki|byrdi|seeds|estate|vacation|nirvana|waterfront|relay|skybus|citibank|bank|finance|financial|oil|convenience|mitrtown)\b/i.test(
+    /\b(?:airport|mall|market|grocer|grocery|restaurant|cafe|coffee|bar|books?|school|college|opera|harbour|transport|bus|train|station|parking|souvenir|tourism|travel|travels|sanctuary|victoria|ticket|tickets|supermarket|shop|store|mart|paypal|amazon|prime|mcdonald|milksha|gogyo|gokan|goken|leone|project|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|donki|byrdi|seeds|estate|vacation|nirvana|waterfront|relay|skybus|citibank|bank|finance|financial|oil|convenience|mitrtown|payments?)\b/i.test(
       cleaned
     )
   ) {
@@ -1115,7 +1115,7 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/interest\s+earned|interestearned|salary|payroll|income|deposit|cash\s*in\b|cashin\b|cash\/?check\s+deposit|received|credit memo/.test(lower)) return "Income";
   if (/interbankservicecharge|atmwithdrawalacquirerfee|financecharge|financecharges|latepaymentfee|annualfee/.test(compact)) return "Financial";
   if (/incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|systemdebit|systemcredit|miscellaneousdebit|investmentsweep/.test(compact)) return "Transfers";
-  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|bar leone|savory project|gokan|goken|mcdonald'?s|milksha|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|four\s+frogs/.test(lower)) return "Food & Dining";
+  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|bar leone|savory project|gokan|goken|mcdonald'?s|milksha|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|four\s+frogs|apollo\s+bay\s+seafood|wootea|iga\s+supermarkets?|caretaker'?s\s+cottage|lee'?s\s+dumplings|grocer/.test(lower)) return "Food & Dining";
   if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/liberty\s+oil|petrol|gas\s+station/.test(lower) || /libertyoil|petrol|gasstation/.test(compact)) return "Transport";
@@ -1124,8 +1124,8 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/google\s+one/.test(lower) || /googleone/.test(compact)) return "Subscriptions";
   if (/mlbb\s+top\s+up|mobile\s+legends|mlbbtopup/.test(lower) || /mlbbtopup|mobilelegends/.test(compact)) return "Entertainment";
   if (/bill|utilities|electric|water|internet|phone|subscription|openai|netflix|spotify/.test(lower)) return "Bills & Utilities";
-  if (/travel|airbnb|hotel|airline|flight|tour|holiday|souvenir|harbour\s+gifts?|tourism|sanctuary/.test(lower)) return "Travel & Lifestyle";
-  if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox/.test(lower))
+  if (/travel|airbnb|hotel|airline|flight|tour|holiday|souvenir|harbour\s+gifts?|tourism|sanctuary|news\s+travels?|great\s+ocean\s+road\s+choc|locker\s+hire|moonlit\s+sanctuary/.test(lower)) return "Travel & Lifestyle";
+  if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox|opera\s+house|htg\s+ticket\s+sales|museum|gallery/.test(lower))
     return "Entertainment";
   if (
     hasTravelContext &&
@@ -1135,8 +1135,10 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   ) {
     return "Travel & Lifestyle";
   }
-  if (/samyan\s+mitrtown|paypal|convenience|mitrtown/.test(lower) || /samyanmitrtown|paypal|convenience|mitrtown/.test(compact)) return "Shopping";
-  if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|retail|camera/.test(lower)) return "Shopping";
+  if (/samyan\s+mitrtown|paypal|mitrtown|relay|locker\s+hire|viator(?:\.com)?/.test(lower) || /samyanmitrtown|paypal|mitrtown|relay|lockerhire|viator/.test(compact)) return "Shopping";
+  if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|retail|camera|paypal|relay/.test(lower)) return "Shopping";
+  if (/\bpayments?\b/.test(lower) && !/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)) return "Shopping";
+  if (/emmanuel\s+payments?/.test(lower) || /emmanuelpayments?/.test(compact)) return "Shopping";
   if (/books?\b|asia\s+books/.test(lower) || /books|asiabooks/.test(compact)) return "Education";
   if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
   if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
