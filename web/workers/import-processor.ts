@@ -1549,6 +1549,53 @@ const isTransferStyleReceiptType = (value: string | null | undefined) => {
   return normalized === "wallet_transfer" || normalized === "transfer_receipt";
 };
 
+const inferReceiptWalletIdentity = (params: {
+  receiptAccountMatch?:
+    | {
+        account_name?: string | null;
+        account_last4?: string | null;
+      }
+    | null
+    | undefined;
+  receiptPreview?: ReturnType<typeof parseReceiptText> | null;
+  paymentMethod?: string | null;
+}) => {
+  const accountName = String(params.receiptAccountMatch?.account_name ?? "")
+    .trim()
+    .toLowerCase();
+  const paymentMethod = String(params.paymentMethod ?? params.receiptPreview?.paymentMethod ?? "")
+    .trim()
+    .toLowerCase();
+  const previewText = String(params.receiptPreview?.receiptText ?? "").toLowerCase();
+  const context = [accountName, paymentMethod, previewText].filter(Boolean).join(" ");
+
+  if (/\bgcash\b/.test(context)) {
+    return {
+      institution: "GCash",
+      accountName: "GCash",
+      accountType: "wallet" as AccountType,
+    };
+  }
+
+  if (/\b(?:maya|paymaya)\b/.test(context)) {
+    return {
+      institution: "Maya",
+      accountName: "Maya Wallet",
+      accountType: "wallet" as AccountType,
+    };
+  }
+
+  if (/\bwise\b/.test(context)) {
+    return {
+      institution: "Wise",
+      accountName: "Wise",
+      accountType: "wallet" as AccountType,
+    };
+  }
+
+  return null;
+};
+
 const hasStructuredReceiptFastPathSignal = (
   preview: ReturnType<typeof parseReceiptText> | null,
   validationScore?: number | null
@@ -1739,6 +1786,11 @@ const buildParsedRowsFromReceiptDetails = (params: {
   const transferStyleReceipt = isTransferStyleReceiptType(receiptType);
   const paymentMethod =
     typeof details.payment_method === "string" && details.payment_method.trim() ? details.payment_method.trim() : null;
+  const walletIdentity = inferReceiptWalletIdentity({
+    receiptAccountMatch: params.receiptAccountMatch,
+    receiptPreview: params.receiptPreview,
+    paymentMethod,
+  });
   const lineItems = Array.isArray(details.line_items) ? details.line_items : [];
   const lineItemText = lineItems
     .map((item) =>
@@ -1776,13 +1828,15 @@ const buildParsedRowsFromReceiptDetails = (params: {
       amount: amount !== null ? amount.toFixed(2) : undefined,
       currency,
       institution:
-        typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
+        walletIdentity?.institution ??
+        (typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
           ? params.receiptAccountMatch.account_name.trim()
-          : undefined,
+          : undefined),
       accountName:
-        typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
+        walletIdentity?.accountName ??
+        (typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
           ? params.receiptAccountMatch.account_name.trim()
-          : "Cash",
+          : "Cash"),
       accountNumber:
         typeof params.receiptAccountMatch?.account_last4 === "string" && params.receiptAccountMatch.account_last4.trim()
           ? params.receiptAccountMatch.account_last4.trim()
@@ -1798,6 +1852,7 @@ const buildParsedRowsFromReceiptDetails = (params: {
       rawPayload: {
         source: "receipt_preview",
         kind: "receipt_preview_transaction",
+        bank: walletIdentity?.institution ?? null,
         receiptType,
         paymentMethod,
         lineItems,
@@ -1822,12 +1877,18 @@ const buildDetectedMetadataFromReceipt = (params: {
     | undefined;
 }): DetectedStatementMetadata => {
   const details = params.receiptDetails;
+  const walletIdentity = inferReceiptWalletIdentity({
+    receiptAccountMatch: params.receiptAccountMatch,
+    receiptPreview: params.receiptPreview,
+    paymentMethod: typeof details?.payment_method === "string" ? details.payment_method : null,
+  });
   const inferredInstitution =
-    typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
+    walletIdentity?.institution ??
+    (typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
       ? params.receiptAccountMatch.account_name.trim()
       : isTransferStyleReceiptType(params.receiptPreview?.receiptType)
         ? "Cash"
-        : null;
+        : null);
   const inferredCurrency =
     typeof details?.currency === "string" && details.currency.trim()
       ? details.currency.trim().toUpperCase()
@@ -1847,8 +1908,8 @@ const buildDetectedMetadataFromReceipt = (params: {
       typeof params.receiptAccountMatch?.account_last4 === "string" && params.receiptAccountMatch.account_last4.trim()
         ? params.receiptAccountMatch.account_last4.trim()
         : null,
-    accountName: inferredInstitution ?? "Cash",
-    accountType: isTransferStyleReceiptType(params.receiptPreview?.receiptType) ? "cash" : "cash",
+    accountName: walletIdentity?.accountName ?? inferredInstitution ?? "Cash",
+    accountType: walletIdentity?.accountType ?? "cash",
     currency: inferredCurrency,
     openingBalance: null,
     endingBalance: total,
@@ -5094,6 +5155,29 @@ const getImportSourceStatementFingerprint = (rawPayload: Prisma.JsonValue | null
     : null;
 };
 
+const getReceiptDocumentNumberFromPayload = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const directDocumentNumber = payload.documentNumber;
+  if (typeof directDocumentNumber === "string" && directDocumentNumber.trim()) {
+    return normalizeTransactionDedupeText(directDocumentNumber);
+  }
+
+  const receiptDetails = payload.receiptDetails;
+  if (!receiptDetails || typeof receiptDetails !== "object" || Array.isArray(receiptDetails)) {
+    return null;
+  }
+
+  const receiptDetailsRecord = receiptDetails as Record<string, unknown>;
+  const nestedDocumentNumber = receiptDetailsRecord.document_number ?? receiptDetailsRecord.documentNumber;
+  return typeof nestedDocumentNumber === "string" && nestedDocumentNumber.trim()
+    ? normalizeTransactionDedupeText(nestedDocumentNumber)
+    : null;
+};
+
 const getMobileScreenshotPayloadKind = (rawPayload: Prisma.JsonValue | null | undefined) => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return null;
@@ -5272,12 +5356,17 @@ const buildImportTransactionCollapseKey = (transaction: {
   const sourceRowIndex = getImportSourceRowIndex(transaction.rawPayload);
   const sourceStatementFingerprint = getImportSourceStatementFingerprint(transaction.rawPayload);
   const mobileScreenshotKind = getMobileScreenshotPayloadKind(transaction.rawPayload);
+  const receiptDocumentNumber = getReceiptDocumentNumberFromPayload(transaction.rawPayload);
   if (sourceStatementFingerprint && sourceRowIndex !== null) {
     if (mobileScreenshotKind) {
-      return `mobile-source-statement:${mobileScreenshotKind}:${sourceStatementFingerprint}:${sourceRowIndex}`;
+      return receiptDocumentNumber
+        ? `mobile-source-document:${mobileScreenshotKind}:${receiptDocumentNumber}`
+        : `mobile-source-statement:${mobileScreenshotKind}:${sourceStatementFingerprint}:${sourceRowIndex}`;
     }
 
-    return `source-statement:${transaction.accountId}:${sourceStatementFingerprint}:${sourceRowIndex}`;
+    return receiptDocumentNumber
+      ? `source-document:${transaction.accountId}:${receiptDocumentNumber}`
+      : `source-statement:${transaction.accountId}:${sourceStatementFingerprint}:${sourceRowIndex}`;
   }
 
   if (sourceRowIndex !== null) {
@@ -5285,10 +5374,14 @@ const buildImportTransactionCollapseKey = (transaction: {
       const contentKey = buildMobileScreenshotContentKey(transaction);
       return contentKey
         ? `mobile-source-content:${contentKey}`
-        : `mobile-source-row:${mobileScreenshotKind}:${sourceRowIndex}`;
+        : receiptDocumentNumber
+          ? `mobile-source-document:${mobileScreenshotKind}:${receiptDocumentNumber}`
+          : `mobile-source-row:${mobileScreenshotKind}:${sourceRowIndex}`;
     }
 
-    return `source-row:${transaction.accountId}:${sourceRowIndex}`;
+    return receiptDocumentNumber
+      ? `source-document:${transaction.accountId}:${receiptDocumentNumber}`
+      : `source-row:${transaction.accountId}:${sourceRowIndex}`;
   }
 
   const merchant =
@@ -5299,6 +5392,7 @@ const buildImportTransactionCollapseKey = (transaction: {
   return [
     "fallback",
     transaction.accountId,
+    receiptDocumentNumber,
     normalizeEnrichmentMatchDate(transaction.date),
     normalizeEnrichmentMatchAmount(transaction.amount),
     normalizeTransactionDedupeText(transaction.currency || "PHP").toUpperCase(),
