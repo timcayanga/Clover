@@ -20,7 +20,6 @@ import { CloverShell, useCloverChrome } from "@/components/clover-shell";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
-import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
@@ -6474,6 +6473,52 @@ function TransactionsPageContent() {
     !transactionsLoadFailed &&
     !isTableLoading &&
     hasTransactionDataEvidence;
+  const transactionsBlankState = (
+    <div className="empty-state transactions-empty-state--table">
+      <strong>Upload statements, photos, receipts, or add a transaction manually</strong>
+      <div className="transactions-empty-state__actions">
+        <button
+          className={
+            isCompactViewport
+              ? "button button-secondary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
+              : "button button-secondary button-small transactions-action-button transactions-toolbar-add"
+          }
+          type="button"
+          onClick={() => void openManualAdd()}
+          aria-label="Add transaction"
+          title="Add transaction"
+        >
+          <span className="button-icon" aria-hidden="true">
+            <ActionIcon name="plus" />
+          </span>
+          <span>Add transaction</span>
+        </button>
+        <button
+          className={
+            isCompactViewport
+              ? "button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload transactions-toolbar-upload transactions-toolbar-upload--compact"
+              : "button button-primary button-small transactions-action-button transactions-toolbar-upload"
+          }
+          type="button"
+          onClick={() => {
+            if (isCompactViewport) {
+              openMobileFilePicker();
+              return;
+            }
+
+            openImportFiles();
+          }}
+          aria-label="Upload files"
+          title="Upload files"
+        >
+          <span className="button-icon" aria-hidden="true">
+            <ActionIcon name="upload" />
+          </span>
+          <span>{isCompactViewport ? "Upload file" : "Upload files"}</span>
+        </button>
+      </div>
+    </div>
+  );
   useEffect(() => {
     if (!selectedWorkspaceId || !shouldShowSyncingInsteadOfEmpty) {
       return;
@@ -7259,53 +7304,7 @@ function TransactionsPageContent() {
                 <p>Clover is pulling in your recent activity now.</p>
               </div>
             ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
-              <EmptyDataCta
-                className="transactions-empty-state--table"
-                eyebrow=""
-                title="Build your searchable transaction history"
-                copy="Upload statements, choose a photo, snap a receipt, or add a transaction manually. Clover turns that activity into one ledger you can search, filter, and review."
-                highlights={[
-                  "Bring in receipts and statements so Clover can clean up names and categories.",
-                  "Review spending, income, and transfers in one searchable list.",
-                  "Open any row later to edit details, notes, tags, and split bill links.",
-                ]}
-                illustration={transactionsEmptyStateIllustration}
-                illustrationAlt=""
-                importHref="/transactions?import=1"
-                accountHref="/accounts"
-                transactionHref="/transactions?manual=1"
-                actions={
-                  <>
-                    <button className="button button-primary button-small" type="button" onClick={() => openManualAdd()}>
-                      Add manually
-                    </button>
-                    {isCompactViewport ? (
-                      <button className="button button-secondary button-small" type="button" onClick={openPhotoCapture}>
-                        Take photo
-                      </button>
-                    ) : null}
-                    {isCompactViewport ? (
-                      <button className="button button-secondary button-small" type="button" onClick={openPhotoLibrary}>
-                        Choose photo
-                      </button>
-                    ) : null}
-                    <button
-                      className="button button-primary button-small transactions-empty-state__import"
-                      type="button"
-                      onClick={() => {
-                        if (isCompactViewport) {
-                          openMobileFilePicker();
-                          return;
-                        }
-
-                        openImportFiles();
-                      }}
-                    >
-                      {isCompactViewport ? "Upload file" : "Upload files"}
-                    </button>
-                  </>
-                }
-              />
+              transactionsBlankState
             ) : !hasVisibleTransactions ? (
               <div className="empty-state">No transactions match the current filters.</div>
             ) : null}
@@ -7444,53 +7443,7 @@ function TransactionsPageContent() {
                 <p>Clover is pulling in your recent activity now.</p>
               </div>
             ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
-              <EmptyDataCta
-                className="transactions-empty-state--table"
-                eyebrow=""
-                title="Build your searchable transaction history"
-                copy="Upload statements, choose a photo, snap a receipt, or add a transaction manually. Clover turns that activity into one ledger you can search, filter, and review."
-                highlights={[
-                  "Bring in receipts and statements so Clover can clean up names and categories.",
-                  "Review spending, income, and transfers in one searchable list.",
-                  "Open any row later to edit details, notes, tags, and split bill links.",
-                ]}
-                illustration={transactionsEmptyStateIllustration}
-                illustrationAlt=""
-                importHref="/transactions?import=1"
-                accountHref="/accounts"
-                transactionHref="/transactions?manual=1"
-                actions={
-                  <>
-                    <button className="button button-primary button-small" type="button" onClick={() => openManualAdd()}>
-                      Add manually
-                    </button>
-                    {isCompactViewport ? (
-                      <button className="button button-secondary button-small" type="button" onClick={openPhotoCapture}>
-                        Take photo
-                      </button>
-                    ) : null}
-                    {isCompactViewport ? (
-                      <button className="button button-secondary button-small" type="button" onClick={openPhotoLibrary}>
-                        Choose photo
-                      </button>
-                    ) : null}
-                    <button
-                      className="button button-primary button-small transactions-empty-state__import"
-                      type="button"
-                      onClick={() => {
-                        if (isCompactViewport) {
-                          openMobileFilePicker();
-                          return;
-                        }
-
-                        openImportFiles();
-                      }}
-                    >
-                      {isCompactViewport ? "Upload file" : "Upload files"}
-                    </button>
-                  </>
-                }
-              />
+              transactionsBlankState
             ) : !hasVisibleTransactions ? (
               <div className="empty-state">No transactions match the current filters.</div>
             ) : null}
