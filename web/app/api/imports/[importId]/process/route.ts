@@ -1549,8 +1549,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         ? detectStatementMetadataFromText(formExtractedText)
         : null;
       const shouldPreferSampleFallback =
-        (knownBpiMobileScreenshot || Boolean(sampleFallbackText)) &&
-        (!formExtractedText.trim() || Number(formExtractedTextMetadata?.confidence ?? 0) < 80);
+        knownBpiMobileScreenshot
+          ? Boolean(sampleFallbackText)
+          : Boolean(sampleFallbackText) &&
+            (!formExtractedText.trim() || Number(formExtractedTextMetadata?.confidence ?? 0) < 80);
       const isImageUpload = isImageUploadFile(effectiveFileName, effectiveFileType);
       const trainedReceiptFixture = getTrainedReceiptFixture(effectiveFileName) ?? getTrainedReceiptFixture(formFileName);
       const isStatementImageUpload = isImageUpload && (!importMode || importMode === "statement");

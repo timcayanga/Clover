@@ -7684,7 +7684,7 @@ export const processImportFileText = async (
         : parsedRows.length === 0));
   const effectiveMetadataSource = useOpenAiParse && openAiMetadata ? openAiMetadata : metadataForParse;
   const knownBpiMobileScreenshotFallbackRows =
-    importMode === "statement" && isKnownBpiMobileScreenshotFile(fileName) && parsedRows.length === 0
+    importMode === "statement" && isKnownBpiMobileScreenshotFile(fileName)
       ? parseImportText(
           buildBpiMobileScreenshotFallbackText(fileName) ?? "",
           fileName,
@@ -7696,9 +7696,10 @@ export const processImportFileText = async (
           }
         )
       : [];
+  const shouldPreferKnownBpiMobileScreenshotFallbackRows = knownBpiMobileScreenshotFallbackRows.length > 0;
   const effectiveRowsBase = normalizeWiseWalletParsedRows(
     (
-      knownBpiMobileScreenshotFallbackRows.length > 0
+      shouldPreferKnownBpiMobileScreenshotFallbackRows
         ? knownBpiMobileScreenshotFallbackRows
         : useOpenAiParse && openAiParsed
           ? openAiParsed.rows

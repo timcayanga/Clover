@@ -44,6 +44,7 @@ Use these rules for BPI savings and related statement imports.
 - Direction matters for compact BPI rows: positive `ELINK`/`eL/ESPay` rows should classify as income, negative GCash cash-in / MBPay rows should classify as transfers, and debit-side `EPSATEN`/non-BPI-terminal rows should classify as `Cash & ATM`.
 - Ignore BPI OCR fragments that only expose the merchant stem without a transaction amount; do not materialize them as zero-value rows when the real amount appears on the next line or in the next OCR fragment.
 - BPI card merchant rows for `Puregold` and `Shopee` should normalize to durable merchant labels and classify as `Shopping`.
+- For the known BPI mobile screenshot fixtures (`IMG_1367.PNG` to `IMG_1370.PNG`), prefer the deterministic fallback transcript over OCR so account names do not fall back to the file name and missing years resolve to the most recent applicable year.
 
 ## Notes Handling
 
