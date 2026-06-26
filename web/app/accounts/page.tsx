@@ -2735,14 +2735,53 @@ function AccountsPageContent() {
     });
   };
 
-  const openStarterCashAccount = () => {
-    setManualType("cash");
-    setManualName("Cash");
-    setManualInstitution("Cash");
-    setManualAccountNumber("");
-    setManualBalance("");
-    setManualCurrency(selectedCurrency || "PHP");
-    openAddAccount();
+  const openStarterCashAccount = async () => {
+    if (!selectedWorkspaceId) {
+      setMessage("Clover is still loading your workspace. Please wait a moment, then try Cash again.");
+      return;
+    }
+
+    const normalizedCurrency = (selectedCurrency || "PHP").trim().toUpperCase() || "PHP";
+    const existingCashAccount =
+      accounts.find(
+        (account) =>
+          getEffectiveAccountType(account) === "cash" &&
+          formatCurrencyCode(account.currency) === normalizedCurrency
+        ) ?? null;
+
+    if (existingCashAccount) {
+      openAccountDrawer(existingCashAccount);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/accounts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          name: "Cash",
+          institution: "Cash",
+          type: "cash",
+          currency: normalizedCurrency,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { account?: Account; error?: string } | null;
+      if (!response.ok || !payload?.account) {
+        throw new Error(payload?.error || "Unable to open Cash.");
+      }
+
+      setAccounts((current) => {
+        const nextAccounts = current.filter((account) => account.id !== payload.account?.id);
+        return [payload.account!, ...nextAccounts];
+      });
+      openAccountDrawer(payload.account);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to open Cash.");
+    }
   };
 
   const openImportFiles = (files: File[] | null = null, backgroundOnly = false) => {
@@ -3554,14 +3593,6 @@ function AccountsPageContent() {
                     </button>
                   </div>
 
-                  <div className="accounts-empty-state__actions">
-                    <button className="button button-secondary button-small" type="button" onClick={openStarterCashAccount}>
-                      Set up cash
-                    </button>
-                    <button className="button button-primary button-small" type="button" onClick={() => openImportFiles()}>
-                      Upload files
-                    </button>
-                  </div>
                 </article>
               ) : accountGroups.length > 0 ? (
                 accountGroups.map((group) => (
