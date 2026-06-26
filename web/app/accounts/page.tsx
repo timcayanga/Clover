@@ -2735,55 +2735,6 @@ function AccountsPageContent() {
     });
   };
 
-  const openStarterCashAccount = async () => {
-    if (!selectedWorkspaceId) {
-      setMessage("Clover is still loading your workspace. Please wait a moment, then try Cash again.");
-      return;
-    }
-
-    const normalizedCurrency = (selectedCurrency || "PHP").trim().toUpperCase() || "PHP";
-    const existingCashAccount =
-      accounts.find(
-        (account) =>
-          getEffectiveAccountType(account) === "cash" &&
-          formatCurrencyCode(account.currency) === normalizedCurrency
-        ) ?? null;
-
-    if (existingCashAccount) {
-      openAccountDrawer(existingCashAccount);
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/accounts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          workspaceId: selectedWorkspaceId,
-          name: "Cash",
-          institution: "Cash",
-          type: "cash",
-          currency: normalizedCurrency,
-        }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as { account?: Account; error?: string } | null;
-      if (!response.ok || !payload?.account) {
-        throw new Error(payload?.error || "Unable to open Cash.");
-      }
-
-      setAccounts((current) => {
-        const nextAccounts = current.filter((account) => account.id !== payload.account?.id);
-        return [payload.account!, ...nextAccounts];
-      });
-      openAccountDrawer(payload.account);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to open Cash.");
-    }
-  };
-
   const openImportFiles = (files: File[] | null = null, backgroundOnly = false) => {
     const shouldLaunchInBackground = backgroundOnly && !(files?.some(isImageImportFile) ?? false);
     flushSync(() => {
@@ -3432,7 +3383,16 @@ function AccountsPageContent() {
     };
   }, [loadWorkspaceData, selectedWorkspaceId, shouldShowSyncingInsteadOfEmpty]);
 
-  if (!hasInitialWorkspaceDataLoaded || showColdLoadGuard) {
+  const showAccountsSplash =
+    !accountsLoadFailed &&
+    (
+      !hasInitialWorkspaceDataLoaded ||
+      showColdLoadGuard ||
+      shouldShowSyncingInsteadOfEmpty ||
+      (accounts.length === 0 && accountsLoading)
+    );
+
+  if (showAccountsSplash) {
     return <CloverLoadingScreen label="accounts" />;
   }
 
@@ -3538,62 +3498,19 @@ function AccountsPageContent() {
                     </button>
                   </div>
                 </div>
-              ) : shouldShowSyncingInsteadOfEmpty ? (
-                <div className="empty-state accounts-empty-state">
-                  <strong>Your latest accounts are on the way.</strong>
-                  <p>Clover is pulling in your latest balances and account details now.</p>
-                  <div className="accounts-empty-state__actions">
-                    <button className="button button-primary button-small" type="button" onClick={() => void loadWorkspaceData(selectedWorkspaceId, { awaitHydration: true })}>
-                      Refresh accounts
-                    </button>
-                  </div>
-                </div>
-              ) : accountsLoading && accounts.length === 0 ? (
-                <div className="empty-state accounts-empty-state">
-                  <strong>Loading accounts...</strong>
-                  <p>Clover is syncing your accounts, balances, and recent import status.</p>
-                </div>
               ) : accounts.length === 0 ? (
-                <article className="accounts-group glass">
-                  <div className="accounts-group__head">
-                    <div className="accounts-group__title-row">
-                      <h5>Cash</h5>
-                      <strong>{formatAccountAmount(0, selectedCurrency || "PHP")}</strong>
-                    </div>
-                  </div>
-
-                  <div className="accounts-card-grid accounts-card-grid--desktop" aria-label="Starter cash account">
-                    <FinancialAccountCard
-                      accountBrand={getAccountBrand({ institution: "Cash", name: "Cash", type: "cash" })}
-                      name="Cash"
-                      amount={formatAccountAmount(0, selectedCurrency || "PHP")}
-                      onOpen={openStarterCashAccount}
-                      openLabel="Set up Cash account"
-                    />
-                  </div>
-
-                  <div className="accounts-mobile-list accounts-mobile-list--mobile" aria-label="Starter cash account list">
-                    <button type="button" className="accounts-mobile-list-row" onClick={openStarterCashAccount}>
-                      <span className="accounts-mobile-list-row__brand">
-                        <AccountBrandMark
-                          accountBrand={getAccountBrand({ institution: "Cash", name: "Cash", type: "cash" })}
-                          label="Cash"
-                        />
-                        <span>
-                          <strong>Cash</strong>
-                          <small>Start with cash on hand</small>
-                        </span>
-                      </span>
-                      <span className="accounts-mobile-list-row__end">
-                        <strong>{formatAccountAmount(0, selectedCurrency || "PHP")}</strong>
-                        <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
-                          ›
-                        </span>
-                      </span>
+                <div className="empty-state accounts-empty-state">
+                  <strong>It's quiet in here.</strong>
+                  <p>Add your first account to start seeing balances, history, and helpful review flags.</p>
+                  <div className="accounts-empty-state__actions">
+                    <button className="button button-secondary button-small" type="button" onClick={openAddAccount}>
+                      Add account
+                    </button>
+                    <button className="button button-primary button-small" type="button" onClick={() => openImportFiles()}>
+                      Upload files
                     </button>
                   </div>
-
-                </article>
+                </div>
               ) : accountGroups.length > 0 ? (
                 accountGroups.map((group) => (
                   <article key={group.title} className="accounts-group glass">

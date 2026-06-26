@@ -6473,6 +6473,7 @@ function TransactionsPageContent() {
     !transactionsLoadFailed &&
     !isTableLoading &&
     hasTransactionDataEvidence;
+  const showTransactionsLoadingState = isTableLoading || shouldShowSyncingInsteadOfEmpty;
   const transactionsBlankState = (
     <div className="empty-state transactions-empty-state--table">
       <strong>Upload statements, photos, receipts, or add a transaction manually</strong>
@@ -7065,8 +7066,8 @@ function TransactionsPageContent() {
             </div>
 
             <div
-              className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !isTableLoading ? " transactions-table-wrap--empty" : ""}`}
-              aria-busy={isTableLoading}
+              className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !showTransactionsLoadingState ? " transactions-table-wrap--empty" : ""}`}
+              aria-busy={showTransactionsLoadingState}
             >
             {transactionsLoadFailed ? (
               <div className="empty-state transactions-empty-state--table">
@@ -7076,7 +7077,7 @@ function TransactionsPageContent() {
                   Retry
                 </button>
               </div>
-            ) : isTableLoading ? (
+            ) : showTransactionsLoadingState ? (
               <div className="transactions-loading-state" role="status" aria-live="polite" aria-label="Loading transactions">
                 <div className="transactions-loading-header">
                   <span className="skeleton-block skeleton-block--checkbox" />
@@ -7298,11 +7299,6 @@ function TransactionsPageContent() {
                   </div>
                 );
               })
-            ) : shouldShowSyncingInsteadOfEmpty ? (
-              <div className="empty-state">
-                <strong>Your latest transactions are on the way.</strong>
-                <p>Clover is pulling in your recent activity now.</p>
-              </div>
             ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
               transactionsBlankState
             ) : !hasVisibleTransactions ? (
@@ -7314,7 +7310,7 @@ function TransactionsPageContent() {
 
           {isCompactViewport ? (
           <div
-            className={`transactions-mobile-view${!hasVisibleTransactions && !isTableLoading ? " transactions-table-wrap--empty" : ""}`}
+            className={`transactions-mobile-view${!hasVisibleTransactions && !showTransactionsLoadingState ? " transactions-table-wrap--empty" : ""}`}
           >
             {transactionsLoadFailed ? (
               <div className="empty-state transactions-empty-state--table">
@@ -7324,7 +7320,7 @@ function TransactionsPageContent() {
                   Retry
                 </button>
               </div>
-            ) : isTableLoading ? (
+            ) : showTransactionsLoadingState ? (
               <div className="transactions-mobile-list" role="status" aria-live="polite" aria-label="Loading transactions">
                 {Array.from({ length: 4 }).map((_, index) => (
                   <div key={index} className="transactions-mobile-simple-row transactions-mobile-simple-row--loading">
@@ -7436,11 +7432,6 @@ function TransactionsPageContent() {
                     <span>{isMobileLoadingMore ? "Loading more transactions…" : "Scroll for more"}</span>
                   </div>
                 ) : null}
-              </div>
-            ) : shouldShowSyncingInsteadOfEmpty ? (
-              <div className="empty-state">
-                <strong>Your latest transactions are on the way.</strong>
-                <p>Clover is pulling in your recent activity now.</p>
               </div>
             ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
               transactionsBlankState
