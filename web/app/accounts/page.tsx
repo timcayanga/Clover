@@ -3389,7 +3389,7 @@ function AccountsPageContent() {
       !hasInitialWorkspaceDataLoaded ||
       showColdLoadGuard ||
       shouldShowSyncingInsteadOfEmpty ||
-      (accounts.length === 0 && accountsLoading)
+      accounts.length === 0
     );
 
   if (showAccountsSplash) {
@@ -3495,19 +3495,6 @@ function AccountsPageContent() {
                   <div className="accounts-empty-state__actions">
                     <button className="button button-primary button-small" type="button" onClick={() => void loadWorkspaceData(selectedWorkspaceId)}>
                       Retry
-                    </button>
-                  </div>
-                </div>
-              ) : accounts.length === 0 ? (
-                <div className="empty-state accounts-empty-state">
-                  <strong>It's quiet in here.</strong>
-                  <p>Add your first account to start seeing balances, history, and helpful review flags.</p>
-                  <div className="accounts-empty-state__actions">
-                    <button className="button button-secondary button-small" type="button" onClick={openAddAccount}>
-                      Add account
-                    </button>
-                    <button className="button button-primary button-small" type="button" onClick={() => openImportFiles()}>
-                      Upload files
                     </button>
                   </div>
                 </div>
