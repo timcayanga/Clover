@@ -5998,7 +5998,7 @@ export function ImportFilesModal({
   const showCompactProgress = compactProgressUnlocked && progressSessionActive;
   const targetDisplayProgress = showCompactProgress ? Math.max(overallProgress, activityProgressFloor) : 0;
   const shouldLockPageInteraction =
-    open && !backgroundOnly && !launchInBackground && (Boolean(activePasswordItem) || !showCompactProgress);
+    open && !backgroundOnly && !launchInBackground && Boolean(activePasswordItem);
   const hasImportIssue = items.some((item) => item.status === "error" || item.status === "needs_password") || Boolean(validationNotice);
   const showImportHelp = hasImportIssue || items.some((item) => item.confirmationState === "staged");
   const importHelpTitle = items.some((item) => item.status === "needs_password")

@@ -15470,12 +15470,12 @@ input.transaction-inline-edit--amount::placeholder {
   pointer-events: auto;
 }
 
-body[data-clover-import-modal-open="true"] .sidebar,
-body[data-clover-import-modal-open="true"] .sidebar-backdrop,
-body[data-clover-import-modal-open="true"] .sidebar-popover,
-body[data-clover-import-modal-open="true"] .shell-quick-add-button,
-body[data-clover-import-modal-open="true"] .shell-quick-add-popover,
-body[data-clover-import-modal-open="true"] .shell-bottom-nav {
+body[data-clover-import-modal-visible="true"] .sidebar,
+body[data-clover-import-modal-visible="true"] .sidebar-backdrop,
+body[data-clover-import-modal-visible="true"] .sidebar-popover,
+body[data-clover-import-modal-visible="true"] .shell-quick-add-button,
+body[data-clover-import-modal-visible="true"] .shell-quick-add-popover,
+body[data-clover-import-modal-visible="true"] .shell-bottom-nav {
   pointer-events: none !important;
   z-index: 1 !important;
 }
