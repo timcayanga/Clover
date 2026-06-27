@@ -2723,10 +2723,12 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .transactions-page .topbar-actions {
   flex-wrap: nowrap;
+  margin-left: auto;
 }
 
 .transactions-page .topbar__title-wrap {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  margin-right: auto;
 }
 
 .content-body {

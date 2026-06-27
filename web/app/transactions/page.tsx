@@ -6479,7 +6479,7 @@ function TransactionsPageContent() {
       <div className="transactions-empty-state__art" aria-hidden="true">
         <img src={transactionsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
       </div>
-      <strong>Upload statements, photos, receipts, or add a transaction manually</strong>
+      <strong>Upload statements, receipts, screenshots, or add transaction manually</strong>
       <div className="transactions-empty-state__actions">
         <button
           className={
