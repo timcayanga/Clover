@@ -25089,6 +25089,15 @@ button.accounts-detail__transaction-head-cell {
   text-align: center;
 }
 
+.transactions-empty-state strong {
+  font-family: var(--font-heading);
+  font-size: 1.08rem;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .transactions-empty-state h3 {
   font-family: var(--font-heading);
   font-size: 1.08rem;

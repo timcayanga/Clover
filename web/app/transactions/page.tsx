@@ -6476,6 +6476,9 @@ function TransactionsPageContent() {
   const showTransactionsLoadingState = isTableLoading || shouldShowSyncingInsteadOfEmpty;
   const transactionsBlankState = (
     <div className="empty-state transactions-empty-state--table">
+      <div className="transactions-empty-state__art" aria-hidden="true">
+        <img src={transactionsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
+      </div>
       <strong>Upload statements, photos, receipts, or add a transaction manually</strong>
       <div className="transactions-empty-state__actions">
         <button

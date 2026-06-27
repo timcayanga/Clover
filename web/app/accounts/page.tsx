@@ -3392,38 +3392,46 @@ function AccountsPageContent() {
       accounts.length === 0
     );
 
+  const accountsShellActions = (
+    <>
+      <CurrencySelector
+        value={selectedCurrency}
+        onChange={setSelectedCurrency}
+        options={availableCurrencies}
+        ariaLabel="Select account currency"
+        className="accounts-currency-filter"
+        buttonClassName="accounts-currency-filter__button"
+        menuClassName="accounts-currency-filter__menu"
+        optionClassName="accounts-currency-filter__option"
+        menuAlignment="end"
+        showChevron={false}
+      />
+      <button className="button button-secondary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
+        <ActionIcon name="plus" />
+        <span>Add account</span>
+      </button>
+      <button className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload" type="button" onClick={() => openImportFiles()}>
+        <ActionIcon name="upload" />
+        <span>Upload files</span>
+      </button>
+    </>
+  );
+
   if (showAccountsSplash) {
-    return <CloverLoadingScreen label="accounts" />;
+    return (
+      <CloverShell active="accounts" title="Accounts" actions={accountsShellActions}>
+        <div className="accounts-page">
+          <CloverLoadingScreen label="accounts" />
+        </div>
+      </CloverShell>
+    );
   }
 
   return (
     <CloverShell
       active="accounts"
       title="Accounts"
-      actions={
-        <>
-          <CurrencySelector
-            value={selectedCurrency}
-            onChange={setSelectedCurrency}
-            options={availableCurrencies}
-            ariaLabel="Select account currency"
-            className="accounts-currency-filter"
-            buttonClassName="accounts-currency-filter__button"
-            menuClassName="accounts-currency-filter__menu"
-            optionClassName="accounts-currency-filter__option"
-            menuAlignment="end"
-            showChevron={false}
-          />
-          <button className="button button-secondary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
-            <ActionIcon name="plus" />
-            <span>Add account</span>
-          </button>
-          <button className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload" type="button" onClick={() => openImportFiles()}>
-            <ActionIcon name="upload" />
-            <span>Upload files</span>
-          </button>
-        </>
-      }
+      actions={accountsShellActions}
       >
       <div className="accounts-page">
         {visibleAccounts.length > 0 ? (
