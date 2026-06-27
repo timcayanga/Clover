@@ -1571,8 +1571,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         importMode,
         trainingMode: formTrainingMode,
       });
+      const shouldBypassCachedExtractionForKnownBpiScreenshot =
+        knownBpiMobileScreenshot && isStatementImageUpload && Boolean(sampleFallbackText);
       const shouldUseCachedExtractionRecord =
-        shouldQueueDocumentUpload || isNoisyPdfBank || isStatementImageUpload;
+        !shouldBypassCachedExtractionForKnownBpiScreenshot &&
+        (shouldQueueDocumentUpload || isNoisyPdfBank || isStatementImageUpload);
       const cachedDocRecordPromise = shouldUseCachedExtractionRecord
         ? loadImportFileExtractionCache({
             workspaceId: String(importFile.workspaceId),
@@ -1734,7 +1737,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       let preflightText: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       const cachedDocRecord = cachedDocRecordPromise ? await cachedDocRecordPromise : null;
 
-      if (cachedDocRecord?.parsedRows && cachedDocRecord.statementFingerprint && cachedDocRecord.metadata) {
+      if (
+        !shouldBypassCachedExtractionForKnownBpiScreenshot &&
+        cachedDocRecord?.parsedRows &&
+        cachedDocRecord.statementFingerprint &&
+        cachedDocRecord.metadata
+      ) {
         cachedDocTextInfo = {
           fileFingerprint,
           text: String(cachedDocRecord.extractedText ?? ""),

@@ -6603,6 +6603,13 @@ export const processImportFileText = async (
     !trainedReceiptDetails &&
     !String(options.text ?? "").trim() &&
     !options.textCacheInfo;
+  const knownBpiScreenshotFallbackText =
+    importMode === "statement" && isKnownBpiMobileScreenshotFile(fileName)
+      ? buildBpiMobileScreenshotFallbackText(fileName) ?? ""
+      : "";
+  const providedKnownBpiScreenshotText =
+    Boolean(knownBpiScreenshotFallbackText.trim()) &&
+    normalizeWhitespace(String(options.text ?? "")) === normalizeWhitespace(knownBpiScreenshotFallbackText);
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
   let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
@@ -6615,7 +6622,13 @@ export const processImportFileText = async (
     fileType === "application/pdf" &&
     /landbank|land bank|eastwest|chinabank|china bank/i.test(fileName);
 
-  if (!shouldPreferDirectImageStatementVision && !trainedReceiptDetails && !noisyPdfBankByFileName && (imageImport || !text)) {
+  if (
+    !providedKnownBpiScreenshotText &&
+    !shouldPreferDirectImageStatementVision &&
+    !trainedReceiptDetails &&
+    !noisyPdfBankByFileName &&
+    (imageImport || !text)
+  ) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
@@ -6677,6 +6690,7 @@ export const processImportFileText = async (
   const cachedParsePreservesMobileScreenshotIdentity =
     !freshMobileScreenshotInstitution || cachedMetadataForCacheGate?.institution === freshMobileScreenshotInstitution;
   const canReuseCachedStatementParse =
+    !providedKnownBpiScreenshotText &&
     importMode === "statement" &&
     Boolean(textCacheInfo?.cacheHit) &&
     cachedParsedRows.length > 0 &&

@@ -5512,6 +5512,7 @@ export function ImportFilesModal({
               accountType: statementAccountType,
             })
           : [];
+      const localPreparseSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
       const optimisticPreviewSummary =
         targetAccountId
           ? buildResolvedOptimisticUploadSummary({
@@ -5562,7 +5563,9 @@ export function ImportFilesModal({
 
       const publishableOptimisticPreviewSummary = shouldPublishImportSummary(item.file.name, optimisticPreviewSummary)
         ? optimisticPreviewSummary
-        : null;
+        : shouldPublishImportSummary(item.file.name, localPreparseSummary)
+          ? localPreparseSummary
+          : null;
 
       if (publishableOptimisticPreviewSummary) {
         seedImportedWorkspaceCaches(workspaceId, publishableOptimisticPreviewSummary);
@@ -5665,8 +5668,11 @@ export function ImportFilesModal({
           confirmationState: "confirmed",
           error: null,
           importFileId,
-          targetAccountId: null,
-          importedRows: Number(processPayload?.imported ?? 0) || 0,
+          targetAccountId: publishableOptimisticPreviewSummary?.accountId ?? null,
+          importedRows:
+            Number(processPayload?.imported ?? 0) ||
+            Number(publishableOptimisticPreviewSummary?.rowsImported ?? 0) ||
+            0,
           progress: 100,
           progressLabel: "Done",
         });
