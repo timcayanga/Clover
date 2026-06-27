@@ -3392,6 +3392,10 @@ function AccountsPageContent() {
       accounts.length === 0
     );
 
+  if (showAccountsSplash) {
+    return <CloverLoadingScreen label="accounts" />;
+  }
+
   const accountsShellActions = (
     <>
       <CurrencySelector
@@ -3416,16 +3420,6 @@ function AccountsPageContent() {
       </button>
     </>
   );
-
-  if (showAccountsSplash) {
-    return (
-      <CloverShell active="accounts" title="Accounts" actions={accountsShellActions}>
-        <div className="accounts-page">
-          <CloverLoadingScreen label="accounts" />
-        </div>
-      </CloverShell>
-    );
-  }
 
   return (
     <CloverShell
