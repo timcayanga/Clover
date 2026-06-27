@@ -1965,6 +1965,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         (hasKnownInlineInstitution || canReuseCachedParseSnapshot);
       const shouldQueueBackupRouteImmediately =
         !forceInlineProcessing &&
+        !knownBpiMobileScreenshot &&
         !canReuseCachedParseSnapshot &&
         preflightParserRoute.route === "backup_openai" &&
         (isStatementImageUpload || isPdfUpload(effectiveFileName, effectiveFileType));
