@@ -26,6 +26,10 @@ import { type ImportImageMode } from "@/lib/import-image-mode";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import {
+  buildBpiMobileScreenshotFallbackText,
+  isKnownBpiMobileScreenshotFile,
+} from "@/lib/bpi-mobile-screenshot-fallback";
+import {
   detectStatementMetadata,
   getTrailingBalanceFromParsedRows,
   inferAccountTypeFromStatement,
@@ -4422,12 +4426,19 @@ export function ImportFilesModal({
         import_mode: itemImportMode,
       });
       const lowerFileName = item.file.name.toLowerCase();
+      const knownBpiScreenshot = itemImportMode === "statement" && isKnownBpiMobileScreenshotFile(item.file.name);
       const inferredBankName = normalizeBankName(item.file.name);
       const shouldSkipLocalStatementPreparse =
         itemImportMode === "statement" &&
         (lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv")) &&
         shouldSkipClientStatementPreparse(item.file.name);
       let extractedTextForUpload = localPreparseTextByItemIdRef.current.get(itemId);
+      if (!extractedTextForUpload && knownBpiScreenshot) {
+        extractedTextForUpload = buildBpiMobileScreenshotFallbackText(item.file.name) ?? "";
+        if (extractedTextForUpload.trim()) {
+          localPreparseTextByItemIdRef.current.set(itemId, extractedTextForUpload);
+        }
+      }
       if (
         !shouldSkipLocalStatementPreparse &&
         !extractedTextForUpload &&
@@ -4454,7 +4465,7 @@ export function ImportFilesModal({
           fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
           password: item.password.trim() || undefined,
           importMode: itemImportMode,
-          bankName: inferredBankName !== "Unknown" ? inferredBankName : undefined,
+          bankName: inferredBankName !== "Unknown" ? inferredBankName : knownBpiScreenshot ? "BPI" : undefined,
           extractedText: extractedTextForUpload,
         },
         (progress) => {
