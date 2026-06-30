@@ -372,6 +372,10 @@ export function CommitmentsPanel({
     [selectedAccount?.type]
   );
   const formCopy = commitmentFormCopy[kind];
+  const hasSavedCommitments = commitments.length > 0;
+  const openRecurringAdd = () => {
+    window.dispatchEvent(new Event("clover:open-recurring-add"));
+  };
 
   useEffect(() => {
     if (!suggestedKind) {
@@ -664,7 +668,44 @@ export function CommitmentsPanel({
 
   return (
     <section style={{ display: "grid", gap: 24 }}>
-      {plannedPaymentSuggestions.length > 0 ? (
+      <div className="commitments-summary-grid">
+        {groupedCommitments.map((group) => {
+          const isSelected = selectedKind === group.kind;
+
+          return (
+            <button
+              key={group.kind}
+              type="button"
+              onClick={() => setSelectedKind(group.kind)}
+              className="panel"
+              aria-pressed={isSelected}
+              style={{
+                appearance: "none",
+                border: `1px solid ${isSelected ? kindRingTone[group.kind] : "rgba(148, 163, 184, 0.18)"}`,
+                background: isSelected ? "rgba(255, 255, 255, 0.92)" : "rgba(255, 255, 255, 0.68)",
+                display: "grid",
+                gap: 10,
+                padding: 18,
+                textAlign: "left",
+                boxShadow: isSelected ? "0 18px 36px rgba(15, 23, 42, 0.08)" : "none",
+                transform: isSelected ? "translateY(-1px)" : "none",
+                cursor: "pointer",
+              }}
+            >
+              <p className="notification-item__tone" style={{ color: kindBadgeTone[group.kind] }}>
+                {commitmentKindLabels[group.kind]}
+              </p>
+              <strong style={{ fontSize: 28, letterSpacing: "-0.03em" }}>{group.count}</strong>
+              <div style={{ display: "grid", gap: 4, color: "var(--muted-foreground)" }}>
+                <span>{group.nextDueDate ? `Next due ${formatDate(group.nextDueDate)}` : "No due date yet"}</span>
+                <span>{group.activeCount} active</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {hasSavedCommitments && plannedPaymentSuggestions.length > 0 ? (
         <article className="panel commitments-suggestions-panel">
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div>
@@ -708,7 +749,7 @@ export function CommitmentsPanel({
         </article>
       ) : null}
 
-      {suggestedRecurringPatterns.length > 0 ? (
+      {hasSavedCommitments && suggestedRecurringPatterns.length > 0 ? (
         <article className="panel commitments-suggestions-panel">
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div>
@@ -930,112 +971,87 @@ export function CommitmentsPanel({
         </div>
       ) : null}
 
-      <div className="commitments-summary-grid">
-        {groupedCommitments.map((group) => {
-          const isSelected = selectedKind === group.kind;
-
-          return (
-            <button
-              key={group.kind}
-              type="button"
-              onClick={() => setSelectedKind(group.kind)}
-              className="panel"
-              aria-pressed={isSelected}
-              style={{
-                appearance: "none",
-                border: `1px solid ${isSelected ? kindRingTone[group.kind] : "rgba(148, 163, 184, 0.18)"}`,
-                background: isSelected ? "rgba(255, 255, 255, 0.92)" : "rgba(255, 255, 255, 0.68)",
-                display: "grid",
-                gap: 10,
-                padding: 18,
-                textAlign: "left",
-                boxShadow: isSelected ? "0 18px 36px rgba(15, 23, 42, 0.08)" : "none",
-                transform: isSelected ? "translateY(-1px)" : "none",
-                cursor: "pointer",
-              }}
-            >
-              <p className="notification-item__tone" style={{ color: kindBadgeTone[group.kind] }}>
-                {commitmentKindLabels[group.kind]}
-              </p>
-              <strong style={{ fontSize: 28, letterSpacing: "-0.03em" }}>{group.count}</strong>
-              <div style={{ display: "grid", gap: 4, color: "var(--muted-foreground)" }}>
-                <span>{group.nextDueDate ? `Next due ${formatDate(group.nextDueDate)}` : "No due date yet"}</span>
-                <span>{group.activeCount} active</span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      <article className="panel commitments-detail-panel" ref={detailPanelRef}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <div>
-            <p className="eyebrow">{commitmentKindLabels[selectedKind]}</p>
-            <h3 style={{ margin: 0 }}>
-              {selectedItems.length > 0 ? `${selectedItems.length} item${selectedItems.length === 1 ? "" : "s"}` : "Nothing saved yet"}
-            </h3>
+      {hasSavedCommitments ? (
+        <article className="panel commitments-detail-panel" ref={detailPanelRef}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <p className="eyebrow">{commitmentKindLabels[selectedKind]}</p>
+              <h3 style={{ margin: 0 }}>
+                {selectedItems.length > 0 ? `${selectedItems.length} item${selectedItems.length === 1 ? "" : "s"}` : "Nothing saved yet"}
+              </h3>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <span className="button button-secondary button-small">{totals[selectedKind].activeCount} active</span>
+              {totals[selectedKind].nextDueDate ? (
+                <span className="button button-secondary button-small">Next {formatDate(totals[selectedKind].nextDueDate)}</span>
+              ) : (
+                <span className="button button-secondary button-small">No due date</span>
+              )}
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span className="button button-secondary button-small">{totals[selectedKind].activeCount} active</span>
-            {totals[selectedKind].nextDueDate ? (
-              <span className="button button-secondary button-small">Next {formatDate(totals[selectedKind].nextDueDate)}</span>
-            ) : (
-              <span className="button button-secondary button-small">No due date</span>
-            )}
-          </div>
-        </div>
 
-        {selectedItems.length > 0 ? (
-          <div style={{ display: "grid", gap: 10 }}>
-            {selectedItems.map((commitment) => (
-              <article key={commitment.id} className="notification-item" style={{ alignItems: "flex-start" }}>
-                <div className="notification-item__main" style={{ gap: 4 }}>
-                  <p className="notification-item__tone">
-                    {commitmentStatusLabels[commitment.status]} · {commitment.recurrence ? commitmentRecurrenceLabels[commitment.recurrence] : "One-time"}
-                  </p>
-                  <h4>{commitment.title}</h4>
-                  <p>
-                    {formatCurrency(commitment.amount)}
-                    {commitment.counterparty ? ` · ${commitment.counterparty}` : ""}
-                    {commitment.dueDate ? ` · Due ${formatDate(commitment.dueDate)}` : ""}
-                    {commitment.nextDueDate && commitment.nextDueDate !== commitment.dueDate ? ` · Next ${formatDate(commitment.nextDueDate)}` : ""}
-                  </p>
-                  {commitment.notes ? <p className="panel-muted">{commitment.notes}</p> : null}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {commitment.account ? (
-                      <Link className="button button-secondary button-small" href={getAccountPath({ id: commitment.account.id, name: commitment.account.name })}>
-                        Open account
-                      </Link>
-                    ) : null}
-                    {commitment.transaction ? (
-                      <span className="button button-secondary button-small" aria-label="Linked transaction">
-                        {commitment.transaction.merchantClean ?? commitment.transaction.merchantRaw}
-                      </span>
-                    ) : null}
+          {selectedItems.length > 0 ? (
+            <div style={{ display: "grid", gap: 10 }}>
+              {selectedItems.map((commitment) => (
+                <article key={commitment.id} className="notification-item" style={{ alignItems: "flex-start" }}>
+                  <div className="notification-item__main" style={{ gap: 4 }}>
+                    <p className="notification-item__tone">
+                      {commitmentStatusLabels[commitment.status]} · {commitment.recurrence ? commitmentRecurrenceLabels[commitment.recurrence] : "One-time"}
+                    </p>
+                    <h4>{commitment.title}</h4>
+                    <p>
+                      {formatCurrency(commitment.amount)}
+                      {commitment.counterparty ? ` · ${commitment.counterparty}` : ""}
+                      {commitment.dueDate ? ` · Due ${formatDate(commitment.dueDate)}` : ""}
+                      {commitment.nextDueDate && commitment.nextDueDate !== commitment.dueDate ? ` · Next ${formatDate(commitment.nextDueDate)}` : ""}
+                    </p>
+                    {commitment.notes ? <p className="panel-muted">{commitment.notes}</p> : null}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {commitment.account ? (
+                        <Link className="button button-secondary button-small" href={getAccountPath({ id: commitment.account.id, name: commitment.account.name })}>
+                          Open account
+                        </Link>
+                      ) : null}
+                      {commitment.transaction ? (
+                        <span className="button button-secondary button-small" aria-label="Linked transaction">
+                          {commitment.transaction.merchantClean ?? commitment.transaction.merchantRaw}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-                <div className="notification-item__time" style={{ minWidth: 110 }}>
-                  <time>{formatDate(getCommitmentDateValue(commitment))}</time>
-                  <div style={{ marginTop: 8 }}>
-                    <button
-                      type="button"
-                      className="button button-secondary button-small"
-                      onClick={() => handleDelete(commitment.id)}
-                      disabled={isSaving}
-                    >
-                      Delete
-                    </button>
+                  <div className="notification-item__time" style={{ minWidth: 110 }}>
+                    <time>{formatDate(getCommitmentDateValue(commitment))}</time>
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="button button-secondary button-small"
+                        onClick={() => handleDelete(commitment.id)}
+                        disabled={isSaving}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="panel-muted" style={{ margin: 0 }}>
-            Saved {commitmentKindLabels[selectedKind].toLowerCase()}s will appear here once you add one.
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="panel-muted" style={{ margin: 0 }}>
+              Saved {commitmentKindLabels[selectedKind].toLowerCase()}s will appear here once you add one.
+            </p>
+          )}
+        </article>
+      ) : (
+        <article className="recurring-empty-cta">
+          <img src="/clover-mark.svg" alt="" aria-hidden="true" />
+          <p>
+            <span>Add recurring transactions</span> to track what is due next, what repeats every month, and what needs follow-up.
           </p>
-        )}
-      </article>
+          <button className="button button-primary button-small recurring-topbar-add transactions-action-button" type="button" onClick={openRecurringAdd}>
+            <span>Add Recurring</span>
+          </button>
+        </article>
+      )}
 
       {showAddModal ? (
         <div
