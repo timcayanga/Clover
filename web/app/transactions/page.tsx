@@ -2528,7 +2528,7 @@ function TransactionsPageContent() {
           route: "transactions.accounts",
           workspaceId,
           detail: options?.background ? "background" : "foreground",
-          input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&cleanupImportedAccounts=1`,
+          input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`,
         }),
         fetchJsonOnce<{ categories?: Category[] }>({
           key: `transactions:categories:${workspaceId}:defaults-v2`,

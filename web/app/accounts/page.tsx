@@ -1533,7 +1533,7 @@ function AccountsPageContent() {
         route: "accounts.data",
         workspaceId,
         detail: options?.awaitHydration ? "awaitHydration" : options?.silent ? "silent" : "foreground",
-        input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&repairImportedAccounts=1&cleanupImportedAccounts=1`,
+        input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`,
         timeoutMs: options?.silent ? null : 6500,
       });
       if (workspaceLoadSeqRef.current !== loadSeq) {
@@ -1594,6 +1594,18 @@ function AccountsPageContent() {
           setHasInitialWorkspaceDataLoaded(true);
           setAccountsLoading(false);
         }
+      }
+
+      if (!options?.silent) {
+        void (async () => {
+          try {
+            await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&repairImportedAccounts=1&cleanupImportedAccounts=1`, {
+              cache: "no-store",
+            });
+          } catch {
+            // Imported-account maintenance is best-effort and should never block opening Accounts.
+          }
+        })();
       }
 
       backgroundTasks.push((async () => {
