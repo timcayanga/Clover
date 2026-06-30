@@ -92,6 +92,7 @@ type ScoreWeights = ScoreFactors;
 type RankedAdviserCard = AdviserCard & {
   group: string;
   diversityKey?: string;
+  insightKey?: string;
   breakdown: ScoreFactors;
   score: number;
 };
@@ -99,6 +100,7 @@ type RankedAdviserCard = AdviserCard & {
 type RankedAdviserPrompt = AdviserPrompt & {
   group: string;
   diversityKey?: string;
+  insightKey?: string;
   breakdown: ScoreFactors;
   score: number;
 };
@@ -175,10 +177,11 @@ const scoreCandidate = (factors: ScoreFactors, weights: ScoreWeights) =>
 
 const scorePromptCandidate = (factors: ScoreFactors, weights: ScoreWeights) => scoreCandidate(factors, weights);
 
-const selectTopRanked = <T extends { score: number; group: string; diversityKey?: string }>(items: T[], limit: number) => {
+const selectTopRanked = <T extends { score: number; group: string; diversityKey?: string; insightKey?: string }>(items: T[], limit: number) => {
   const sorted = [...items].sort((left, right) => right.score - left.score);
   const selected: T[] = [];
   const usedGroups = new Set<string>();
+  const usedInsights = new Set<string>();
 
   for (const item of sorted) {
     if (selected.length >= limit) {
@@ -186,9 +189,11 @@ const selectTopRanked = <T extends { score: number; group: string; diversityKey?
     }
 
     const key = item.diversityKey ?? item.group;
-    if (!usedGroups.has(key)) {
+    const insightKey = item.insightKey ?? key;
+    if (!usedGroups.has(key) && !usedInsights.has(insightKey)) {
       selected.push(item);
       usedGroups.add(key);
+      usedInsights.add(insightKey);
     }
   }
 
@@ -199,7 +204,13 @@ const selectTopRanked = <T extends { score: number; group: string; diversityKey?
       }
 
       if (!selected.includes(item)) {
+        const insightKey = item.insightKey ?? item.diversityKey ?? item.group;
+        if (usedInsights.has(insightKey) && sorted.some((candidate) => !selected.includes(candidate) && !usedInsights.has(candidate.insightKey ?? candidate.diversityKey ?? candidate.group))) {
+          continue;
+        }
+
         selected.push(item);
+        usedInsights.add(insightKey);
       }
     }
   }
@@ -1996,6 +2007,7 @@ async function AdviserPageContent() {
             href: "/budgeting",
             tone: budgetOverview.alerts.length > 0 ? budgetOverview.alerts[0].tone : "neutral",
             group: "cashflow",
+            insightKey: "budget-pressure",
             breakdown: {
               impact: clamp(budgetOverview.totalProgressPercent),
               urgency: clamp(budgetOverview.alerts.length > 0 ? 82 + budgetOverview.alerts[0].progressPercent * 0.15 : 38),
@@ -2021,6 +2033,7 @@ async function AdviserPageContent() {
             href: "/accounts",
             tone: totalAccountMagnitude > 0 ? "positive" : "neutral",
             group: "accounts",
+            insightKey: "account-coverage",
             breakdown: {
               impact: clamp(55 + workspaceAccounts.length * 8 + (totalAccountMagnitude > 0 ? 10 : 0)),
               urgency: clamp(accountPressureEstimate),
@@ -2042,6 +2055,7 @@ async function AdviserPageContent() {
             href: "/reports",
             tone: anomalySignal.tone,
             group: "cashflow",
+            insightKey: anomalySignal.title === "Most spending is coming from a few places" ? "category-concentration" : "spend-anomaly",
             breakdown: {
               impact: clamp(anomalySignal.score + 18),
               urgency: clamp(anomalySignal.score + 22),
@@ -2063,6 +2077,7 @@ async function AdviserPageContent() {
             href: buildTransactionsHref({ month: analysisMonthHref }),
             tone: spendDelta > 0 ? "warning" : "positive",
             group: "spend-change",
+            insightKey: "spend-change",
             breakdown: {
               impact: clamp(Math.abs(spendDelta) * 1.2 + 20),
               urgency: clamp(spendDelta > 0 ? 60 + Math.abs(spendDelta) * 0.4 : 35 + Math.abs(spendDelta) * 0.2),
@@ -2084,6 +2099,7 @@ async function AdviserPageContent() {
             href: buildTransactionsHref({ category: topCategoryName }),
             tone: "neutral",
             group: "category-mix",
+            insightKey: "category-concentration",
             breakdown: {
               impact: clamp(topCategoryShare * 100),
               urgency: clamp(topCategoryShare * 80),
@@ -2105,6 +2121,7 @@ async function AdviserPageContent() {
             href: buildTransactionsHref({ month: analysisMonthHref }),
             tone: weekendExpenseShare > 0.3 ? "warning" : "neutral",
             group: "behavior-pattern",
+            insightKey: "weekend-behavior",
             breakdown: {
               impact: clamp(weekendExpenseShare * 100),
               urgency: clamp(weekendExpenseShare * 95),
@@ -2134,6 +2151,7 @@ async function AdviserPageContent() {
             href: "/recurring",
             tone: "warning",
             group: "recurring",
+            insightKey: "upcoming-obligations",
             breakdown: {
               impact: clamp(recurringDueSoon.length * 28 + plannedPaymentsDueSoon.length * 24 + commitmentsDueSoon.length * 18),
               urgency: clamp(
@@ -2184,6 +2202,7 @@ async function AdviserPageContent() {
             href: "/split-bill",
             tone: "warning",
             group: "split-bills",
+            insightKey: "split-bill-settlement",
             breakdown: {
               impact: clamp(openSplitBillCount * 22 + (currentSpend > 0 ? (openSplitBillAmount / currentSpend) * 100 : 40)),
               urgency: clamp(70 + openSplitBillCount * 8),
@@ -2210,6 +2229,7 @@ async function AdviserPageContent() {
             href: "/accounts",
             tone: largestAccountShare > 0.6 ? "warning" : "neutral",
             group: "accounts",
+            insightKey: "account-concentration",
             breakdown: {
               impact: clamp(55 + largestAccountShare * 45),
               urgency: clamp(accountPressureEstimate + largestAccountShare * 20),
@@ -2234,6 +2254,7 @@ async function AdviserPageContent() {
             href: "/investments",
             tone: investmentDelta !== null && investmentDelta >= 0 ? "positive" : "neutral",
             group: "investments",
+            insightKey: "investment-movement",
             breakdown: {
               impact: clamp(investmentDelta === null ? 55 : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot.totalValue ?? 1), 1) * 100),
               urgency: clamp(latestInvestmentSnapshot.gainLossPercent === null ? 35 : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent))),
@@ -2270,6 +2291,7 @@ async function AdviserPageContent() {
             tone: accountPressureEstimate >= 70 ? "warning" : "neutral",
             group: "accounts",
             diversityKey: "cashflow-readiness",
+            insightKey: "cashflow-readiness",
             breakdown: {
               impact: clamp(65 + accountPressureEstimate * 0.3),
               urgency: clamp(accountPressureEstimate + (liquidBalance < currentSpend * 0.3 ? 20 : 0)),
@@ -2292,6 +2314,7 @@ async function AdviserPageContent() {
             tone: forecastSignal.tone,
             group: "cashflow",
             diversityKey: "cashflow-readiness",
+            insightKey: "cashflow-readiness",
             breakdown: {
               impact: clamp(forecastSignal.score),
               urgency: clamp(forecastSignal.score + 8),
@@ -2313,6 +2336,7 @@ async function AdviserPageContent() {
             href: "/transactions",
             tone: "warning",
             group: "cleanup",
+            insightKey: "cleanup-quality",
             breakdown: {
               impact: clamp(uncategorizedTransactions.length * 18 + 20),
               urgency: clamp(70 + uncategorizedTransactions.length * 6),
@@ -2338,6 +2362,7 @@ async function AdviserPageContent() {
             href: "/recurring",
             tone: "warning",
             group: "recurring",
+            insightKey: "upcoming-obligations",
             breakdown: {
               impact: clamp(recurringDueSoon.length * 28 + plannedPaymentsDueSoon.length * 24 + commitmentsDueSoon.length * 18),
               urgency: clamp(
@@ -2388,6 +2413,7 @@ async function AdviserPageContent() {
             href: "/split-bill",
             tone: "warning",
             group: "split-bills",
+            insightKey: "split-bill-settlement",
             breakdown: {
               impact: clamp(openSplitBillCount * 22 + (currentSpend > 0 ? (openSplitBillAmount / currentSpend) * 100 : 40)),
               urgency: clamp(70 + openSplitBillCount * 8),
@@ -2409,6 +2435,7 @@ async function AdviserPageContent() {
             href: buildTransactionsHref({ category: topCategoryName }),
             tone: "neutral",
             group: "spend-control",
+            insightKey: "category-concentration",
             breakdown: {
               impact: clamp(topCategoryShare * 100),
               urgency: clamp(topCategoryShare * 75),
@@ -2420,7 +2447,7 @@ async function AdviserPageContent() {
             score: 0,
           }
         : null,
-      liquidBalance < currentSpend * 0.3
+      hasTransactionFlow && liquidBalance < currentSpend * 0.3
         ? {
             id: "protect_cashflow",
             title: "Set aside money for next week",
@@ -2430,6 +2457,7 @@ async function AdviserPageContent() {
             href: "/accounts",
             tone: "warning",
             group: "cashflow",
+            insightKey: "cashflow-readiness",
             breakdown: {
               impact: clamp(currentSpend > 0 ? ((currentSpend - liquidBalance) / currentSpend) * 100 : 70),
               urgency: clamp(85 - Math.min((liquidBalance / Math.max(currentSpend, 1)) * 100, 80)),
@@ -2451,6 +2479,7 @@ async function AdviserPageContent() {
             href: "/investments",
             tone: "neutral",
             group: "investments",
+            insightKey: "investment-movement",
             breakdown: {
               impact: clamp(investmentDelta === null ? 55 : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot.totalValue ?? 1), 1) * 100),
               urgency: clamp(latestInvestmentSnapshot.gainLossPercent === null ? 35 : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent))),
@@ -2483,6 +2512,7 @@ async function AdviserPageContent() {
             href: "/accounts",
             tone: "neutral",
             group: "accounts",
+            insightKey: "account-concentration",
             breakdown: {
               impact: clamp(45 + largestAccountShare * 35),
               urgency: clamp(accountPressureEstimate),
@@ -2504,6 +2534,7 @@ async function AdviserPageContent() {
             href: buildTransactionsHref({ month: analysisMonthHref }),
             tone: weekendExpenseShare > 0.3 ? "warning" : "neutral",
             group: "behavior-pattern",
+            insightKey: "weekend-behavior",
             breakdown: {
               impact: clamp(weekendExpenseShare * 100),
               urgency: clamp(weekendExpenseShare * 70),
@@ -2525,6 +2556,7 @@ async function AdviserPageContent() {
             href: "/reports",
             tone: "neutral",
             group: "category-pattern",
+            insightKey: "category-concentration",
             breakdown: {
               impact: clamp(topCategoryShare * 100),
               urgency: clamp(topCategoryShare * 55),
@@ -2549,6 +2581,7 @@ async function AdviserPageContent() {
             href: "/goals",
             tone: goalProgress.bandLabel === "On track" ? "positive" : "warning",
             group: "goals",
+            insightKey: "goal-progress",
             breakdown: {
               impact: clamp(goalProgress.bandLabel === "On track" ? 80 : 100),
               urgency: clamp(goalProgress.bandLabel === "On track" ? 30 : 85),
@@ -2570,6 +2603,7 @@ async function AdviserPageContent() {
             href: "/recurring",
             tone: "neutral",
             group: "recurring",
+            insightKey: "upcoming-obligations",
             breakdown: {
               impact: clamp(recurringMerchantCount * 18 + recurringDueSoon.length * 12 + plannedPaymentsDueSoon.length * 10),
               urgency: clamp(recurringDueSoon.length > 0 || plannedPaymentsDueSoon.length > 0 ? 75 : 45),
@@ -2591,6 +2625,7 @@ async function AdviserPageContent() {
             href: "/transactions",
             tone: "warning",
             group: "cleanup",
+            insightKey: "cleanup-quality",
             breakdown: {
               impact: clamp(uncategorizedTransactions.length * 18 + 15),
               urgency: clamp(70 + uncategorizedTransactions.length * 5),
@@ -2614,6 +2649,7 @@ async function AdviserPageContent() {
             href: "/reports",
             tone: "neutral",
             group: "cashflow",
+            insightKey: "income-timing",
             breakdown: {
               impact: clamp(Math.abs(incomeDelta ?? 0) * 1.2 + 20),
               urgency: clamp(incomeDelta !== null && Math.abs(incomeDelta) > 15 ? 75 : 40),
@@ -2678,6 +2714,7 @@ async function AdviserPageContent() {
             prompt: `Why is ${topCategoryName} driving my spending, and what should I look at first?`,
             group: "transactions",
             diversityKey: "transactions-top-category",
+            insightKey: "category-concentration",
             breakdown: {
               impact: clamp(topCategoryShare * 100),
               urgency: clamp(spendDelta === null ? 45 : Math.max(spendDelta, 0) * 1.2 + 35),
@@ -2696,6 +2733,7 @@ async function AdviserPageContent() {
             prompt: "What is driving my weekend spending, and what should I watch next?",
             group: "transactions",
             diversityKey: "transactions-weekend-spend",
+            insightKey: "weekend-behavior",
             breakdown: {
               impact: clamp(weekendExpenseShare * 100),
               urgency: clamp(weekendExpenseShare * 70),
@@ -2714,6 +2752,7 @@ async function AdviserPageContent() {
             prompt: "Which recurring bills, planned payments, or commitments are due soon, and which ones matter most?",
             group: "recurring",
             diversityKey: "recurring-upcoming",
+            insightKey: "upcoming-obligations",
             breakdown: {
               impact: clamp(recurringDueSoon.length * 28 + plannedPaymentsDueSoon.length * 24 + commitmentsDueSoon.length * 18),
               urgency: clamp(90),
@@ -2732,6 +2771,7 @@ async function AdviserPageContent() {
             prompt: "How much do I still owe or am I owed from split bills, and who should I settle with first?",
             group: "split-bills",
             diversityKey: "split-bills-open",
+            insightKey: "split-bill-settlement",
             breakdown: {
               impact: clamp(openSplitBillCount * 24 + (currentSpend > 0 ? (openSplitBillAmount / currentSpend) * 100 : 40)),
               urgency: 90,
@@ -2750,6 +2790,7 @@ async function AdviserPageContent() {
             prompt: `Am I on track for my goal of ${goalLabel.toLowerCase()}?`,
             group: "goals",
             diversityKey: "goals-track",
+            insightKey: "goal-progress",
             breakdown: {
               impact: clamp(goalProgress.bandLabel === "On track" ? 80 : 100),
               urgency: clamp(goalProgress.bandLabel === "On track" ? 35 : 80),
@@ -2768,6 +2809,7 @@ async function AdviserPageContent() {
             prompt: "What changed in my latest investment snapshot, and what should I pay attention to?",
             group: "investments",
             diversityKey: "investments-change",
+            insightKey: "investment-movement",
             breakdown: {
               impact: clamp(investmentDelta === null ? 55 : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot.totalValue ?? 1), 1) * 100),
               urgency: clamp(latestInvestmentSnapshot.gainLossPercent === null ? 35 : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent))),
@@ -2786,6 +2828,7 @@ async function AdviserPageContent() {
             prompt: `How is my cash flow looking from the ${activeTransactionWindowLabel}, and what stands out most?`,
             group: "cashflow",
             diversityKey: "cashflow-summary",
+            insightKey: "cashflow-readiness",
             breakdown: {
               impact: clamp(currentNet === 0 ? 55 : Math.abs(currentNet) / Math.max(currentSummary.income || currentSpend || 1, 1) * 100),
               urgency: clamp(currentSavingsRate === null ? 45 : currentSavingsRate < 0 ? 90 : 55),
@@ -2804,6 +2847,7 @@ async function AdviserPageContent() {
             prompt: "Which budget is closest to its limit, and what should I watch first?",
             group: "cashflow",
             diversityKey: "cashflow-budgeting",
+            insightKey: "budget-pressure",
             breakdown: {
               impact: clamp(budgetOverview.totalProgressPercent),
               urgency: clamp(budgetOverview.alerts.length > 0 ? 88 : 55),
@@ -2822,6 +2866,7 @@ async function AdviserPageContent() {
             prompt: "Which account or account type is holding the most balance right now?",
             group: "accounts",
             diversityKey: "accounts-balance",
+            insightKey: "account-concentration",
             breakdown: {
               impact: clamp(liquidBalance > 0 ? 70 : 40),
               urgency: clamp(liquidBalance < currentSpend * 0.3 ? 80 : 40),
@@ -2840,6 +2885,7 @@ async function AdviserPageContent() {
             prompt: "What can Clover tell from my connected accounts even before I add more recent transactions?",
             group: "accounts",
             diversityKey: "accounts-grounding",
+            insightKey: "account-coverage",
             breakdown: {
               impact: clamp(55 + accountCoverageScore * 0.35),
               urgency: clamp(accountPressureEstimate),
@@ -2858,6 +2904,7 @@ async function AdviserPageContent() {
             prompt: `What spending pattern stands out most from my ${dataFreshness.shortLabel}?`,
             group: "patterns",
             diversityKey: "patterns-overview",
+            insightKey: topCategoryShare > weekendExpenseShare ? "category-concentration" : "weekend-behavior",
             breakdown: {
               impact: clamp(topCategoryShare * 100),
               urgency: clamp(weekendExpenseShare * 60),
@@ -2876,6 +2923,7 @@ async function AdviserPageContent() {
             prompt: "Which transactions still need cleanup, and which ones should I fix first?",
             group: "cleanup",
             diversityKey: "cleanup-transactions",
+            insightKey: "cleanup-quality",
             breakdown: {
               impact: clamp(uncategorizedTransactions.length * 18 + 15),
               urgency: clamp(70 + uncategorizedTransactions.length * 5),
