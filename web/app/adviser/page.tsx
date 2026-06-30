@@ -125,12 +125,43 @@ const formatSignedCurrency = (value: number, currency?: string | null) =>
 const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
 const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
+const toShortDateLabel = (date: Date) =>
+  new Intl.DateTimeFormat("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
 const normalizeMerchant = (value: string) => value.trim().toLowerCase();
 const buildTransactionsHref = (params: Record<string, string>) => `/transactions?${new URLSearchParams(params).toString()}`;
 const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
 const average = (values: number[]) => (values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0);
 const toCountScore = (count: number, maxCount = 5) => clamp((count / maxCount) * 100);
 const daysBetween = (left: Date, right: Date) => Math.max(1, Math.ceil((left.getTime() - right.getTime()) / (1000 * 60 * 60 * 24)));
+const getDataFreshnessCopy = (anchorDate: Date, now: Date) => {
+  const daysOld = Math.max(0, Math.floor((now.getTime() - anchorDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+  if (daysOld > 180) {
+    return {
+      label: `latest available data ending ${toShortDateLabel(anchorDate)}`,
+      shortLabel: `latest data: ${toShortDateLabel(anchorDate)}`,
+      recencyScore: 42,
+    };
+  }
+
+  if (daysOld > 45) {
+    return {
+      label: `available data ending ${toShortDateLabel(anchorDate)}`,
+      shortLabel: `data through ${toShortDateLabel(anchorDate)}`,
+      recencyScore: 65,
+    };
+  }
+
+  return {
+    label: "latest 30-day window",
+    shortLabel: "latest data",
+    recencyScore: 100,
+  };
+};
 
 const scoreCandidate = (factors: ScoreFactors, weights: ScoreWeights) =>
   Math.round(
@@ -235,11 +266,11 @@ const InfoIcon = () => (
 const getAdviserCardEmoji = (card: { title: string; group: string; tone: AdviserCard["tone"] }) => {
   const title = card.title.toLowerCase();
 
-  if (title.includes("spending moved up") || title.includes("spend spike") || title.includes("cash flow consistency")) {
+  if (title.includes("spending is higher") || title.includes("spending has eased") || title.includes("spend spike") || title.includes("income timing")) {
     return "💸";
   }
 
-  if (title.includes("top spending driver") || title.includes("category concentration") || title.includes("category mix") || title.includes("set a cap")) {
+  if (title.includes("spending is coming from") || title.includes("category concentration") || title.includes("category mix") || title.includes("simple cap")) {
     return "📊";
   }
 
@@ -247,11 +278,11 @@ const getAdviserCardEmoji = (card: { title: string; group: string; tone: Adviser
     return "🌤️";
   }
 
-  if (title.includes("recurring") || title.includes("subscriptions") || title.includes("charges")) {
+  if (title.includes("recurring") || title.includes("subscriptions") || title.includes("charges") || title.includes("bills")) {
     return "🧾";
   }
 
-  if (title.includes("split bill")) {
+  if (title.includes("split bill") || title.includes("shared bill")) {
     return "🧮";
   }
 
@@ -263,11 +294,11 @@ const getAdviserCardEmoji = (card: { title: string; group: string; tone: Adviser
     return "🎯";
   }
 
-  if (title.includes("uncategorized") || title.includes("cleanup")) {
+  if (title.includes("uncategorized") || title.includes("cleanup") || title.includes("clean data")) {
     return "🧹";
   }
 
-  if (title.includes("protect next week") || title.includes("cash flow")) {
+  if (title.includes("set aside") || title.includes("cash flow")) {
     return "🛟";
   }
 
@@ -750,7 +781,7 @@ const buildCategoryForecastSignals = (params: {
     recurringRisk
       ? {
           title: "Bills are starting to stack up",
-          summary: "Your recurring bills are taking up more of the room you have this month.",
+          summary: "Your recurring bills are taking up more of the room Clover can see.",
           evidence: `Recurring + commitment pressure ${formatCurrency(knownPressure)} vs threshold ${formatCurrency(params.thresholdProfile.recurringPressure)}`,
           tone: "warning",
           score: clamp(
@@ -1282,6 +1313,8 @@ async function AdviserPageContent() {
     );
 
   const analysisAnchorDate = allTransactions[0]?.date ?? now;
+  const dataFreshness = getDataFreshnessCopy(analysisAnchorDate, now);
+  const analysisMonthHref = toIsoMonth(analysisAnchorDate);
   const currentWindowStart = new Date(analysisAnchorDate);
   currentWindowStart.setDate(currentWindowStart.getDate() - 30);
   const previousWindowStart = new Date(analysisAnchorDate);
@@ -1294,7 +1327,7 @@ async function AdviserPageContent() {
     (transaction) => transaction.date > previousWindowStart && transaction.date <= currentWindowStart
   );
   const activeTransactions = currentWindowTransactions.length > 0 ? currentWindowTransactions : allTransactions;
-  const activeTransactionWindowLabel = currentWindowTransactions.length > 0 ? "latest 30-day" : "available";
+  const activeTransactionWindowLabel = currentWindowTransactions.length > 0 ? dataFreshness.label : "available history";
   const comparisonWindowTransactions =
     previousWindowTransactions.length > 0 ? previousWindowTransactions : allTransactions.filter((transaction) => transaction.date <= currentWindowStart);
 
@@ -1458,6 +1491,7 @@ async function AdviserPageContent() {
     commitmentsDueSoon.length > 0 ? `${commitmentsDueSoon.length} commitments due soon` : null,
     openSplitBillCount > 0 ? `${formatCurrency(openSplitBillAmount)} in split bills` : null,
     hasTransactionFlow ? `baseline spend ${formatCurrency(baselineSpend)}` : null,
+    hasTransactionFlow && dataFreshness.recencyScore < 70 ? dataFreshness.shortLabel : null,
     workspaceAccounts.length > 0 ? `${groundingMode} guidance` : null,
     workspaceAccounts.length > 0
       ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"}`
@@ -1759,7 +1793,7 @@ async function AdviserPageContent() {
     forecastSignal ? `${forecastSignal.title.toLowerCase()} points to ${forecastSignal.summary.toLowerCase()}` : null,
     anomalySignal ? `${anomalySignal.title.toLowerCase()} shows ${anomalySignal.summary.toLowerCase()}` : null,
     workspaceAccounts.length > 0
-      ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"} and ${formatCurrency(accountPressureEstimate)} estimated account pressure are feeding the guidance`
+      ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"} and account pressure ${Math.round(accountPressureEstimate)}/100 are feeding the guidance`
       : null,
   ]
     .filter((value): value is string => Boolean(value))
@@ -1901,7 +1935,7 @@ async function AdviserPageContent() {
       value: formatSignedCurrency(moneyLeftAmount),
       tone: moneyLeftAmount >= 0 ? "positive" : "warning",
       detail: hasTransactionFlow
-        ? `${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending; baseline spend ${formatCurrency(baselineSpend)}`
+        ? `${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending from the ${activeTransactionWindowLabel}; baseline spend ${formatCurrency(baselineSpend)}`
         : workspaceAccounts.length > 0
           ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"}; ${formatCurrency(spendableAccountBalance)} available cash and ${formatCurrency(liabilityAccountBalance)} in balances owed`
           : "Based on your current transaction history",
@@ -1914,7 +1948,7 @@ async function AdviserPageContent() {
       detail:
         currentSavingsRate === null
           ? "Add more income and spending data to calculate this"
-          : `Based on your ${activeTransactionWindowLabel} income and expense mix against your historical baseline`,
+          : `Based on income and expense mix from the ${activeTransactionWindowLabel}, compared with your historical baseline`,
     },
     {
       id: "upcoming_pressure",
@@ -1998,7 +2032,7 @@ async function AdviserPageContent() {
               urgency: clamp(anomalySignal.score + 22),
               confidence: currentPatternConfidence,
               personalization: clamp(70 + topCategoryShare * 20),
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 72,
             },
             score: 0,
@@ -2008,10 +2042,10 @@ async function AdviserPageContent() {
         ? {
             id: "spending_moved",
             title: spendDelta > 0 ? "Spending is higher than usual" : "Spending has eased",
-            summary: spendDelta > 0 ? `Expenses are up ${formatPercent(Math.abs(spendDelta))} versus the previous 30 days.` : `Expenses are down ${formatPercent(Math.abs(spendDelta))} versus the previous 30 days.`,
+            summary: spendDelta > 0 ? `Expenses are up ${formatPercent(Math.abs(spendDelta))} versus the comparison window.` : `Expenses are down ${formatPercent(Math.abs(spendDelta))} versus the comparison window.`,
             evidence: `${formatSignedCurrency(currentSpend - previousSpend)} difference from your comparison period`,
             ctaLabel: "Open transactions",
-            href: buildTransactionsHref({ month: toIsoMonth(now) }),
+            href: buildTransactionsHref({ month: analysisMonthHref }),
             tone: spendDelta > 0 ? "warning" : "positive",
             group: "spend-change",
             breakdown: {
@@ -2019,7 +2053,7 @@ async function AdviserPageContent() {
               urgency: clamp(spendDelta > 0 ? 60 + Math.abs(spendDelta) * 0.4 : 35 + Math.abs(spendDelta) * 0.2),
               confidence: currentTransactionConfidence,
               personalization: clamp(55 + topCategoryShare * 40),
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 82,
             },
             score: 0,
@@ -2029,7 +2063,7 @@ async function AdviserPageContent() {
         ? {
             id: "top_driver",
             title: "Most of your spending is coming from one place",
-            summary: `${topCategoryName} is the biggest category in this period.`,
+            summary: `${topCategoryName} is the biggest category in the ${activeTransactionWindowLabel}.`,
             evidence: `${formatCurrency(topCategoryAmount)} went to ${topCategoryName}, about ${formatPercent(topCategoryShare * 100)} of expenses.`,
             ctaLabel: "Review category",
             href: buildTransactionsHref({ category: topCategoryName }),
@@ -2040,7 +2074,7 @@ async function AdviserPageContent() {
               urgency: clamp(topCategoryShare * 80),
               confidence: currentTransactionConfidence,
               personalization: clamp(70 + topCategoryShare * 20),
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 88,
             },
             score: 0,
@@ -2050,10 +2084,10 @@ async function AdviserPageContent() {
         ? {
             id: "weekend_spike",
             title: "Weekends are carrying a lot of spend",
-            summary: `Weekend purchases account for ${formatPercent(weekendExpenseShare * 100)} of your expenses this month.`,
+            summary: `Weekend purchases account for ${formatPercent(weekendExpenseShare * 100)} of expenses in the ${activeTransactionWindowLabel}.`,
             evidence: `${weekendExpenses.length} weekend expense${weekendExpenses.length === 1 ? "" : "s"} found in this window`,
             ctaLabel: "See weekends",
-            href: buildTransactionsHref({ month: toIsoMonth(now) }),
+            href: buildTransactionsHref({ month: analysisMonthHref }),
             tone: weekendExpenseShare > 0.3 ? "warning" : "neutral",
             group: "behavior-pattern",
             breakdown: {
@@ -2061,7 +2095,7 @@ async function AdviserPageContent() {
               urgency: clamp(weekendExpenseShare * 95),
               confidence: currentPatternConfidence,
               personalization: clamp(60 + weekendExpenseShare * 35),
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 72,
             },
             score: 0,
@@ -2355,7 +2389,7 @@ async function AdviserPageContent() {
             id: "cap_top_category",
             title: "Consider a simple cap for your biggest category",
             summary: `A monthly limit for ${topCategoryName.toLowerCase()} could make spending easier to steer.`,
-            evidence: `${formatCurrency(topCategoryAmount)} spent in the last 30 days`,
+            evidence: `${formatCurrency(topCategoryAmount)} spent in the ${activeTransactionWindowLabel}`,
             ctaLabel: "Open transactions",
             href: buildTransactionsHref({ category: topCategoryName }),
             tone: "neutral",
@@ -2365,7 +2399,7 @@ async function AdviserPageContent() {
               urgency: clamp(topCategoryShare * 75),
               confidence: currentTransactionConfidence,
               personalization: clamp(75 + topCategoryShare * 15),
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 82,
             },
             score: 0,
@@ -2452,7 +2486,7 @@ async function AdviserPageContent() {
             summary: "Weekend spending is taking a noticeable share of your expenses.",
             evidence: `${formatPercent(weekendExpenseShare * 100)} of expenses happened on weekends.`,
             ctaLabel: "View pattern",
-            href: buildTransactionsHref({ month: toIsoMonth(now) }),
+            href: buildTransactionsHref({ month: analysisMonthHref }),
             tone: weekendExpenseShare > 0.3 ? "warning" : "neutral",
             group: "behavior-pattern",
             breakdown: {
@@ -2460,7 +2494,7 @@ async function AdviserPageContent() {
               urgency: clamp(weekendExpenseShare * 70),
               confidence: currentPatternConfidence,
               personalization: clamp(85 + weekendExpenseShare * 10),
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 65,
             },
             score: 0,
@@ -2481,7 +2515,7 @@ async function AdviserPageContent() {
               urgency: clamp(topCategoryShare * 55),
               confidence: currentPatternConfidence,
               personalization: clamp(80 + topCategoryShare * 15),
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 55,
             },
             score: 0,
@@ -2570,7 +2604,7 @@ async function AdviserPageContent() {
               urgency: clamp(incomeDelta !== null && Math.abs(incomeDelta) > 15 ? 75 : 40),
               confidence: currentTransactionConfidence,
               personalization: 60,
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 55,
             },
             score: 0,
@@ -2634,7 +2668,7 @@ async function AdviserPageContent() {
               urgency: clamp(spendDelta === null ? 45 : Math.max(spendDelta, 0) * 1.2 + 35),
               confidence: currentTransactionConfidence,
               personalization: 95,
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 82,
             },
             score: 0,
@@ -2652,7 +2686,7 @@ async function AdviserPageContent() {
               urgency: clamp(weekendExpenseShare * 70),
               confidence: currentPatternConfidence,
               personalization: 90,
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 75,
             },
             score: 0,
@@ -2734,7 +2768,7 @@ async function AdviserPageContent() {
         ? {
             id: "prompt-cashflow",
             label: "How is my cash flow?",
-            prompt: "How is my current cash flow looking, and what stands out most right now?",
+            prompt: `How is my cash flow looking from the ${activeTransactionWindowLabel}, and what stands out most?`,
             group: "cashflow",
             diversityKey: "cashflow-summary",
             breakdown: {
@@ -2742,7 +2776,7 @@ async function AdviserPageContent() {
               urgency: clamp(currentSavingsRate === null ? 45 : currentSavingsRate < 0 ? 90 : 55),
               confidence: currentTransactionConfidence,
               personalization: 88,
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 80,
             },
             score: 0,
@@ -2784,11 +2818,29 @@ async function AdviserPageContent() {
             score: 0,
           }
         : null,
-      currentTransactionConfidence > 0
+      workspaceAccounts.length > 0 && (!hasTransactionFlow || dataFreshness.recencyScore < 70)
+        ? {
+            id: "prompt-account-grounding",
+            label: "What can Clover tell from my accounts?",
+            prompt: "What can Clover tell from my connected accounts even before I add more recent transactions?",
+            group: "accounts",
+            diversityKey: "accounts-grounding",
+            breakdown: {
+              impact: clamp(55 + accountCoverageScore * 0.35),
+              urgency: clamp(accountPressureEstimate),
+              confidence: clamp(average([accountCoverageScore, toCountScore(workspaceAccounts.length, 5), totalAccountBalance > 0 ? 80 : 45])),
+              personalization: 86,
+              recency: 100,
+              actionability: 72,
+            },
+            score: 0,
+          }
+        : null,
+      activeTransactions.length > 0 && currentSummary.expense > 0
         ? {
             id: "prompt-patterns",
             label: "What pattern stands out?",
-            prompt: "What spending pattern stands out most from my current transactions?",
+            prompt: `What spending pattern stands out most from my ${dataFreshness.shortLabel}?`,
             group: "patterns",
             diversityKey: "patterns-overview",
             breakdown: {
@@ -2796,7 +2848,7 @@ async function AdviserPageContent() {
               urgency: clamp(weekendExpenseShare * 60),
               confidence: currentPatternConfidence,
               personalization: 84,
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 68,
             },
             score: 0,
@@ -2814,7 +2866,7 @@ async function AdviserPageContent() {
               urgency: clamp(70 + uncategorizedTransactions.length * 5),
               confidence: currentTransactionConfidence,
               personalization: 88,
-              recency: 100,
+              recency: dataFreshness.recencyScore,
               actionability: 95,
             },
             score: 0,

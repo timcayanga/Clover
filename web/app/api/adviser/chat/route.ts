@@ -89,8 +89,27 @@ const formatSignedCurrency = (value: number, currency?: string | null) =>
   `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
 const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
+const toShortDateLabel = (date: Date) =>
+  new Intl.DateTimeFormat("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
 const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
 const average = (values: number[]) => (values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0);
+const getDataFreshnessCopy = (anchorDate: Date, now: Date) => {
+  const daysOld = Math.max(0, Math.floor((now.getTime() - anchorDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+  if (daysOld > 180) {
+    return `latest available data ending ${toShortDateLabel(anchorDate)}`;
+  }
+
+  if (daysOld > 45) {
+    return `available data ending ${toShortDateLabel(anchorDate)}`;
+  }
+
+  return "latest 30-day window";
+};
 const buildTransactionSummary = (
   transactions: Array<{
     amount: unknown;
@@ -530,7 +549,7 @@ const buildCategoryForecastSignals = (params: {
     recurringRisk
       ? {
           title: "Bills are starting to stack up",
-          summary: "Your recurring bills are taking up more of the room you have this month.",
+          summary: "Your recurring bills are taking up more of the room Clover can see.",
           evidence: `Recurring + commitment pressure ${formatCurrency(knownPressure)} vs threshold ${formatCurrency(params.thresholdProfile.recurringPressure)}`,
           score: clamp(
             average([
@@ -944,6 +963,7 @@ export async function POST(request: Request) {
     }>;
 
     const analysisAnchorDate = allTransactions[0]?.date ?? now;
+    const dataFreshnessLabel = getDataFreshnessCopy(analysisAnchorDate, now);
     const currentWindowStart = new Date(analysisAnchorDate);
     currentWindowStart.setDate(currentWindowStart.getDate() - 30);
     const previousWindowStart = new Date(analysisAnchorDate);
@@ -1068,6 +1088,7 @@ export async function POST(request: Request) {
       .map((pattern) => ({
         label: pattern.merchantClean ?? pattern.merchantRaw,
         due: pattern.nextExpectedDate ? toMonthLabel(pattern.nextExpectedDate) : null,
+        amount: Number(pattern.amount ?? 0),
       }));
 
     const commitmentsDueSoon = financialCommitments
@@ -1076,6 +1097,7 @@ export async function POST(request: Request) {
       .map((commitment) => ({
         title: commitment.title,
         due: commitment.nextDueDate ? toMonthLabel(commitment.nextDueDate) : null,
+        amount: Number(commitment.amount ?? 0),
       }));
 
     const openSplitBills = splitBillWorkspaceData.bills
@@ -1359,7 +1381,7 @@ export async function POST(request: Request) {
       forecastSignal ? `${forecastSignal.title.toLowerCase()} points to ${forecastSignal.summary.toLowerCase()}` : null,
       anomalySignal ? `${anomalySignal.title.toLowerCase()} shows ${anomalySignal.summary.toLowerCase()}` : null,
       workspace.accounts.length > 0
-        ? `${workspace.accounts.length} connected account${workspace.accounts.length === 1 ? "" : "s"} and ${formatCurrency(accountPressureEstimate)} estimated account pressure are feeding the guidance`
+        ? `${workspace.accounts.length} connected account${workspace.accounts.length === 1 ? "" : "s"} and account pressure ${Math.round(accountPressureEstimate)}/100 are feeding the guidance`
         : null,
     ]
       .filter((value): value is string => Boolean(value))
@@ -1457,13 +1479,13 @@ export async function POST(request: Request) {
     const totalAdviserOutcomes = Array.from(adviserOutcomeByGroup.values()).reduce((sum, stats) => sum + stats.outcomes, 0);
     const adviserFollowThroughRate = totalAdviserClicks > 0 ? (totalAdviserOutcomes / totalAdviserClicks) * 100 : 0;
 
-    const currentWindowLabel = currentWindowTransactions.length > 0 ? "Current 30 days" : "Latest available window";
+    const currentWindowLabel = currentWindowTransactions.length > 0 ? dataFreshnessLabel : "Latest available window";
     const previousWindowLabel = previousWindowTransactions.length > 0 ? "Previous 30 days" : "Earlier available window";
     const longTermWindowLabel = historySpanDays > 0 ? `All available history (${Math.ceil(historySpanDays / 30)} month${Math.ceil(historySpanDays / 30) === 1 ? "" : "s"})` : "All available history";
 
     const summaryLines = [
       `Workspace: ${workspace.name}`,
-      `Data grounding: ${groundingMode}; accounts ${workspace.accounts.length}; coverage ${Math.round(accountCoverageScore)}/100; liquid ${formatCurrency(liquidBalance, displayCurrency)}; spendable ${formatCurrency(spendableAccountBalance, displayCurrency)}; liabilities ${formatCurrency(liabilityAccountBalance, displayCurrency)}; top balance share ${formatPercent(largestAccountShare * 100)}`,
+      `Data grounding: ${groundingMode}; accounts ${workspace.accounts.length}; coverage ${Math.round(accountCoverageScore)}/100; liquid ${formatCurrency(liquidBalance, displayCurrency)}; available cash ${formatCurrency(spendableAccountBalance, displayCurrency)}; balances owed ${formatCurrency(liabilityAccountBalance, displayCurrency)}; top balance share ${formatPercent(largestAccountShare * 100)}`,
       `${currentWindowLabel}: income ${formatCurrency(currentSummary.income)}, spend ${formatCurrency(currentSpend)}, net ${formatSignedCurrency(currentNet)}`,
       `${previousWindowLabel}: income ${formatCurrency(previousSummary.income)}, spend ${formatCurrency(previousSpend)}, net ${formatSignedCurrency(previousNet)}`,
       `${longTermWindowLabel}: avg income ${formatCurrency(longTermAverageIncome)}, avg spend ${formatCurrency(longTermAverageSpend)}, avg net ${formatSignedCurrency(longTermAverageNet)}`,
@@ -1481,8 +1503,8 @@ export async function POST(request: Request) {
       `Goal history: ${goalHistoryRows.length > 0 ? `${goalHistoryRows.length} recent setting change${goalHistoryRows.length === 1 ? "" : "s"}` : "none"}`,
       `Ranked evidence: ${explainabilityBundle.join(" | ")}`,
       `Top category: ${topCategoryName ?? "none"}`,
-      `Recurring due soon: ${recurringDueSoon.map((item) => `${item.label}${item.due ? ` (${item.due})` : ""}`).join("; ") || "none"}`,
-      `Commitments due soon: ${commitmentsDueSoon.map((item) => `${item.title}${item.due ? ` (${item.due})` : ""}`).join("; ") || "none"}`,
+      `Recurring due soon: ${recurringDueSoon.map((item) => `${item.label}${item.due ? ` (${item.due})` : ""}${item.amount > 0 ? ` ${formatCurrency(item.amount, displayCurrency)}` : ""}`).join("; ") || "none"}`,
+      `Commitments due soon: ${commitmentsDueSoon.map((item) => `${item.title}${item.due ? ` (${item.due})` : ""}${item.amount > 0 ? ` ${formatCurrency(item.amount, displayCurrency)}` : ""}`).join("; ") || "none"}`,
       `Split bills open: ${openSplitBills.map((item) => `${item.title} (${formatCurrency(item.outstanding)})`).join("; ") || "none"}`,
       `Latest investment snapshot: ${latestInvestmentSnapshot ? `${formatCurrency(Number(latestInvestmentSnapshot.totalValue ?? 0), latestInvestmentSnapshot.currency)}${investmentDelta === null ? "" : `, change ${formatSignedCurrency(investmentDelta, latestInvestmentSnapshot.currency)}`}` : "none"}`,
       `Liquid balance: ${formatCurrency(liquidBalance, displayCurrency)}`,
