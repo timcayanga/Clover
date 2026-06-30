@@ -6475,7 +6475,7 @@ function TransactionsPageContent() {
     hasTransactionDataEvidence;
   const showTransactionsLoadingState = isTableLoading || shouldShowSyncingInsteadOfEmpty;
   const transactionsBlankState = (
-    <div className="empty-state transactions-empty-state--table">
+    <div className="empty-state transactions-empty-state transactions-empty-state--table">
       <div className="transactions-empty-state__art" aria-hidden="true">
         <img src={transactionsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
       </div>
@@ -7075,7 +7075,7 @@ function TransactionsPageContent() {
               aria-busy={showTransactionsLoadingState}
             >
             {transactionsLoadFailed ? (
-              <div className="empty-state transactions-empty-state--table">
+              <div className="empty-state transactions-empty-state transactions-empty-state--table">
                 <strong>Couldn&apos;t load transactions.</strong>
                 <p>Your transactions may still be there, but Clover could not reach the latest workspace data. Try again before importing or editing.</p>
                 <button className="button button-primary button-small" type="button" onClick={() => selectedWorkspaceId && void loadTransactionsPage(selectedWorkspaceId)}>
@@ -7318,7 +7318,7 @@ function TransactionsPageContent() {
             className={`transactions-mobile-view${!hasVisibleTransactions && !showTransactionsLoadingState ? " transactions-table-wrap--empty" : ""}`}
           >
             {transactionsLoadFailed ? (
-              <div className="empty-state transactions-empty-state--table">
+              <div className="empty-state transactions-empty-state transactions-empty-state--table">
                 <strong>Couldn&apos;t load transactions.</strong>
                 <p>Your transactions may still be there. Retry to refresh the latest workspace data.</p>
                 <button className="button button-primary button-small" type="button" onClick={() => selectedWorkspaceId && void loadTransactionsPage(selectedWorkspaceId)}>
