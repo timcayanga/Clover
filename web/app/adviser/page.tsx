@@ -662,8 +662,8 @@ const buildAnomalySignal = (
   if (spendSpikeScore >= incomeDropScore && spendSpikeScore >= concentrationScore) {
     return {
       title: "Unusual spend spike",
-      summary: "This month’s spending is moving faster than your own baseline.",
-      evidence: `${formatCurrency(currentSpend)} this period vs ${formatCurrency(baselineSpend)} baseline`,
+      summary: "Spending in the analysis window is moving faster than your own baseline.",
+      evidence: `${formatCurrency(currentSpend)} in the analysis window vs ${formatCurrency(baselineSpend)} baseline`,
       tone: "warning",
       score: clamp(average([spendSpikeScore, currentPatternConfidence, currentTransactionConfidence])),
     };
@@ -672,8 +672,8 @@ const buildAnomalySignal = (
   if (incomeDropScore >= concentrationScore) {
     return {
       title: "Income dip detected",
-      summary: "Your current income is running below the baseline we can see in your history.",
-      evidence: `${formatCurrency(currentIncome)} this period vs ${formatCurrency(baselineIncome)} baseline`,
+      summary: "Income in the analysis window is running below the baseline we can see in your history.",
+      evidence: `${formatCurrency(currentIncome)} in the analysis window vs ${formatCurrency(baselineIncome)} baseline`,
       tone: "warning",
       score: clamp(average([incomeDropScore, currentTransactionConfidence, currentPatternConfidence])),
     };
@@ -683,7 +683,7 @@ const buildAnomalySignal = (
     title: "Most spending is coming from a few places",
     summary: "A small number of categories are dominating the expense mix right now.",
     evidence: topCategoryName
-      ? `${topCategoryName} makes up ${formatPercent(topCategoryShare * 100)} of current expenses.`
+      ? `${topCategoryName} makes up ${formatPercent(topCategoryShare * 100)} of window expenses.`
       : `Top category share is ${formatPercent(topCategoryShare * 100)}.`,
     tone: "neutral",
     score: clamp(average([concentrationScore, currentPatternConfidence, currentTransactionConfidence])),
@@ -714,6 +714,18 @@ const buildThresholdProfile = (params: {
     recurringBase + params.splitBillSettlementPressure * 0.75,
     params.currentIncome > 0 ? params.currentIncome * 0.3 : params.baselineIncome * 0.3,
   ]) + Math.max(0, coverageSensitivity) * params.baselineSpend * 0.04;
+  const recurringPressure = Math.max(
+    1,
+    params.baselineSpend * 0.25,
+    params.currentIncome > 0 ? params.currentIncome * 0.16 : params.baselineIncome * 0.16,
+    cashBuffer * 0.35
+  );
+  const splitPressure = Math.max(
+    1,
+    params.baselineSpend * 0.14,
+    params.currentIncome > 0 ? params.currentIncome * 0.1 : params.baselineIncome * 0.1,
+    cashBuffer * 0.24
+  );
   const spendSpikePercent = clamp(9 + (params.historyDepthScore < 50 ? 4 : 1) + (params.weekendExpenseShare > 0.3 ? 3 : 0) - coverageSensitivity * 2, 7, 24);
   const incomeDropPercent = clamp(8 + (params.historyDepthScore < 40 ? 3 : 0) - coverageSensitivity * 1.5, 6, 20);
   const concentrationShare = clamp((params.topCategoryShare > 0.4 ? 0.42 : 0.35) - coverageSensitivity * 0.04, 0.26, 0.58);
@@ -725,8 +737,8 @@ const buildThresholdProfile = (params: {
     spendSpikePercent,
     incomeDropPercent,
     concentrationShare,
-    recurringPressure: recurringBase,
-    splitPressure: params.splitBillSettlementPressure,
+    recurringPressure,
+    splitPressure,
     investmentSwingPercent,
     goalDriftPercent,
   } satisfies AdviserThresholdProfile;
@@ -763,7 +775,8 @@ const buildCategoryForecastSignals = (params: {
     params.monthlyExpenseTrend,
     params.spendDelta
   );
-  const recurringRisk = knownPressure > params.thresholdProfile.recurringPressure * 0.9 || params.monthlyExpenseTrend.direction > 0;
+  const recurringBase = params.recurringAmountPressure + params.commitmentAmountPressure;
+  const recurringRisk = recurringBase > params.thresholdProfile.recurringPressure * 0.9 || (recurringBase > 0 && params.monthlyExpenseTrend.direction > 0);
   const splitRisk = params.splitBillSettlementPressure > params.thresholdProfile.splitPressure * 0.8;
   const goalRisk = params.goalProgressBand !== "On track" || (params.currentSavingsRate !== null && params.currentSavingsRate < 0);
   const investmentRisk =
@@ -782,11 +795,11 @@ const buildCategoryForecastSignals = (params: {
       ? {
           title: "Bills are starting to stack up",
           summary: "Your recurring bills are taking up more of the room Clover can see.",
-          evidence: `Recurring + commitment pressure ${formatCurrency(knownPressure)} vs threshold ${formatCurrency(params.thresholdProfile.recurringPressure)}`,
+          evidence: `Recurring + commitment pressure ${formatCurrency(recurringBase)} vs threshold ${formatCurrency(params.thresholdProfile.recurringPressure)}`,
           tone: "warning",
           score: clamp(
             average([
-              55 + Math.max(0, (knownPressure / Math.max(params.thresholdProfile.recurringPressure || 1, 1)) * 30),
+              55 + Math.max(0, (recurringBase / Math.max(params.thresholdProfile.recurringPressure || 1, 1)) * 30),
               params.monthlyExpenseTrend.direction > 0 ? 65 + params.monthlyExpenseTrend.score * 0.2 : 35,
             ])
           ),
@@ -1443,15 +1456,16 @@ async function AdviserPageContent() {
   const liabilityAccounts = workspaceAccounts.filter((account) => isLiabilityAccountType(account.type));
   const trackedAssetAccounts = workspaceAccounts.filter((account) => isTrackedAssetAccountType(account.type));
   const totalAccountBalance = accountBalances.reduce((sum, account) => sum + (account.balance ?? 0), 0);
+  const totalAccountMagnitude = accountBalances.reduce((sum, account) => sum + Math.abs(account.balance ?? 0), 0);
   const spendableAccountBalance = spendableAccounts.reduce((sum, account) => sum + (account.balance ?? 0), 0);
   const liabilityAccountBalance = liabilityAccounts.reduce((sum, account) => sum + Math.abs(account.balance ?? 0), 0);
   const trackedAssetBalance = trackedAssetAccounts.reduce((sum, account) => sum + (account.balance ?? 0), 0);
-  const largestAccountBalance = [...accountBalances].sort((left, right) => (right.balance ?? 0) - (left.balance ?? 0))[0] ?? null;
-  const largestAccountShare = totalAccountBalance > 0 && largestAccountBalance ? Math.abs(largestAccountBalance.balance ?? 0) / totalAccountBalance : 0;
+  const largestAccountBalance = [...accountBalances].sort((left, right) => Math.abs(right.balance ?? 0) - Math.abs(left.balance ?? 0))[0] ?? null;
+  const largestAccountShare = totalAccountMagnitude > 0 && largestAccountBalance ? Math.abs(largestAccountBalance.balance ?? 0) / totalAccountMagnitude : 0;
   const accountPressureEstimate = clamp(
     average([
-      liabilityAccountBalance > 0 ? clamp(liabilityAccountBalance / Math.max(totalAccountBalance || 1, 1) * 100) : 18,
-      spendableAccountBalance < totalAccountBalance * 0.3 ? 82 : 28,
+      liabilityAccountBalance > 0 ? clamp(liabilityAccountBalance / Math.max(totalAccountMagnitude || 1, 1) * 100) : 18,
+      spendableAccountBalance < totalAccountMagnitude * 0.3 ? 82 : 28,
       largestAccountShare > 0.55 ? clamp(45 + largestAccountShare * 55) : 30,
     ])
   );
@@ -1462,7 +1476,7 @@ async function AdviserPageContent() {
   const accountCoverageScore = clamp(
     average([
       toCountScore(workspaceAccounts.length, 6),
-      totalAccountBalance > 0 ? 80 : 40,
+      totalAccountMagnitude > 0 ? 80 : 40,
       liquidBalance > 0 ? 78 : 35,
     ])
   );
@@ -1999,15 +2013,16 @@ async function AdviserPageContent() {
             title: "Clover can see your connected accounts",
             summary: `${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? " is" : "s are"} connected in this workspace.`,
             evidence:
-              totalAccountBalance > 0
-                ? `${formatCurrency(totalAccountBalance)} is visible across ${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? "" : "s"}`
+              totalAccountMagnitude > 0
+                ? `${formatCurrency(spendableAccountBalance)} available cash` +
+                  (liabilityAccountBalance > 0 ? ` · ${formatCurrency(liabilityAccountBalance)} in balances owed` : "")
                 : `${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? "" : "s"} ready for analysis`,
             ctaLabel: "Open accounts",
             href: "/accounts",
-            tone: totalAccountBalance > 0 ? "positive" : "neutral",
+            tone: totalAccountMagnitude > 0 ? "positive" : "neutral",
             group: "accounts",
             breakdown: {
-              impact: clamp(55 + workspaceAccounts.length * 8 + (totalAccountBalance > 0 ? 10 : 0)),
+              impact: clamp(55 + workspaceAccounts.length * 8 + (totalAccountMagnitude > 0 ? 10 : 0)),
               urgency: clamp(accountPressureEstimate),
               confidence: clamp(average([toCountScore(workspaceAccounts.length, 5), currentTransactionConfidence, liquidBalance > 0 ? 80 : 45])),
               personalization: clamp(65 + largestAccountShare * 25),
@@ -2180,7 +2195,7 @@ async function AdviserPageContent() {
             score: 0,
           }
         : null,
-      workspaceAccounts.length > 1 && totalAccountBalance > 0
+      workspaceAccounts.length > 1 && totalAccountMagnitude > 0
         ? {
             id: "account_concentration",
             title: "Most of your balance sits in one account",
@@ -2456,7 +2471,7 @@ async function AdviserPageContent() {
 
   const coachingCards: RankedAdviserCard[] = selectTopRanked(
     [
-      workspaceAccounts.length > 1 && totalAccountBalance > 0
+      workspaceAccounts.length > 1 && totalAccountMagnitude > 0
         ? {
             id: "account_buffer_habit",
             title: "Keep a little room across accounts",
@@ -2828,7 +2843,7 @@ async function AdviserPageContent() {
             breakdown: {
               impact: clamp(55 + accountCoverageScore * 0.35),
               urgency: clamp(accountPressureEstimate),
-              confidence: clamp(average([accountCoverageScore, toCountScore(workspaceAccounts.length, 5), totalAccountBalance > 0 ? 80 : 45])),
+              confidence: clamp(average([accountCoverageScore, toCountScore(workspaceAccounts.length, 5), totalAccountMagnitude > 0 ? 80 : 45])),
               personalization: 86,
               recency: 100,
               actionability: 72,

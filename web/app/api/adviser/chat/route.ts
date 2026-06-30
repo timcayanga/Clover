@@ -434,8 +434,8 @@ const buildAnomalySignal = (
   if (spendSpikeScore >= incomeDropScore && spendSpikeScore >= concentrationScore) {
     return {
       title: "Unusual spend spike",
-      summary: "This month’s spending is moving faster than your own baseline.",
-      evidence: `${formatCurrency(currentSpend)} this period vs ${formatCurrency(baselineSpend)} baseline`,
+      summary: "Spending in the analysis window is moving faster than your own baseline.",
+      evidence: `${formatCurrency(currentSpend)} in the analysis window vs ${formatCurrency(baselineSpend)} baseline`,
       score: Math.max(0, Math.min(100, average([spendSpikeScore, currentPatternConfidence, currentTransactionConfidence]))),
     };
   }
@@ -443,8 +443,8 @@ const buildAnomalySignal = (
   if (incomeDropScore >= concentrationScore) {
     return {
       title: "Income dip detected",
-      summary: "Your current income is running below the baseline we can see in your history.",
-      evidence: `${formatCurrency(currentIncome)} this period vs ${formatCurrency(baselineIncome)} baseline`,
+      summary: "Income in the analysis window is running below the baseline we can see in your history.",
+      evidence: `${formatCurrency(currentIncome)} in the analysis window vs ${formatCurrency(baselineIncome)} baseline`,
       score: Math.max(0, Math.min(100, average([incomeDropScore, currentTransactionConfidence, currentPatternConfidence]))),
     };
   }
@@ -453,7 +453,7 @@ const buildAnomalySignal = (
     title: "Most spending is coming from a few places",
     summary: "A small number of categories are dominating the expense mix right now.",
     evidence: topCategoryName
-      ? `${topCategoryName} makes up ${formatPercent(topCategoryShare * 100)} of current expenses.`
+      ? `${topCategoryName} makes up ${formatPercent(topCategoryShare * 100)} of window expenses.`
       : `Top category share is ${formatPercent(topCategoryShare * 100)}.`,
     score: Math.max(0, Math.min(100, average([concentrationScore, currentPatternConfidence, currentTransactionConfidence]))),
   };
@@ -483,6 +483,18 @@ const buildThresholdProfile = (params: {
     recurringBase + params.splitBillSettlementPressure * 0.75,
     params.currentIncome > 0 ? params.currentIncome * 0.3 : params.baselineIncome * 0.3,
   ]) + Math.max(0, coverageSensitivity) * params.baselineSpend * 0.04;
+  const recurringPressure = Math.max(
+    1,
+    params.baselineSpend * 0.25,
+    params.currentIncome > 0 ? params.currentIncome * 0.16 : params.baselineIncome * 0.16,
+    cashBuffer * 0.35
+  );
+  const splitPressure = Math.max(
+    1,
+    params.baselineSpend * 0.14,
+    params.currentIncome > 0 ? params.currentIncome * 0.1 : params.baselineIncome * 0.1,
+    cashBuffer * 0.24
+  );
   const spendSpikePercent = clamp(9 + (params.historyDepthScore < 50 ? 4 : 1) + (params.weekendExpenseShare > 0.3 ? 3 : 0) - coverageSensitivity * 2, 7, 24);
   const incomeDropPercent = clamp(8 + (params.historyDepthScore < 40 ? 3 : 0) - coverageSensitivity * 1.5, 6, 20);
   const concentrationShare = clamp((params.topCategoryShare > 0.4 ? 0.42 : 0.35) - coverageSensitivity * 0.04, 0.26, 0.58);
@@ -494,8 +506,8 @@ const buildThresholdProfile = (params: {
     spendSpikePercent,
     incomeDropPercent,
     concentrationShare,
-    recurringPressure: recurringBase,
-    splitPressure: params.splitBillSettlementPressure,
+    recurringPressure,
+    splitPressure,
     investmentSwingPercent,
     goalDriftPercent,
   } satisfies AdviserThresholdProfile;
@@ -531,7 +543,8 @@ const buildCategoryForecastSignals = (params: {
     params.monthlyExpenseTrend,
     params.spendDelta
   );
-  const recurringRisk = knownPressure > params.thresholdProfile.recurringPressure * 0.9 || params.monthlyExpenseTrend.direction > 0;
+  const recurringBase = params.recurringAmountPressure + params.commitmentAmountPressure;
+  const recurringRisk = recurringBase > params.thresholdProfile.recurringPressure * 0.9 || (recurringBase > 0 && params.monthlyExpenseTrend.direction > 0);
   const splitRisk = params.splitBillSettlementPressure > params.thresholdProfile.splitPressure * 0.8;
   const goalRisk = params.goalProgressBand !== "On track" || (params.currentSavingsRate !== null && params.currentSavingsRate < 0);
   const investmentRisk =
@@ -550,10 +563,10 @@ const buildCategoryForecastSignals = (params: {
       ? {
           title: "Bills are starting to stack up",
           summary: "Your recurring bills are taking up more of the room Clover can see.",
-          evidence: `Recurring + commitment pressure ${formatCurrency(knownPressure)} vs threshold ${formatCurrency(params.thresholdProfile.recurringPressure)}`,
+          evidence: `Recurring + commitment pressure ${formatCurrency(recurringBase)} vs threshold ${formatCurrency(params.thresholdProfile.recurringPressure)}`,
           score: clamp(
             average([
-              55 + Math.max(0, (knownPressure / Math.max(params.thresholdProfile.recurringPressure || 1, 1)) * 30),
+              55 + Math.max(0, (recurringBase / Math.max(params.thresholdProfile.recurringPressure || 1, 1)) * 30),
               params.monthlyExpenseTrend.direction > 0 ? 65 + params.monthlyExpenseTrend.score * 0.2 : 35,
             ])
           ),
@@ -1123,22 +1136,23 @@ export async function POST(request: Request) {
       .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
       .reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
     const totalAccountBalance = workspace.accounts.reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
+    const totalAccountMagnitude = workspace.accounts.reduce((sum, account) => sum + Math.abs(Number(account.balance ?? 0)), 0);
     const spendableAccountBalance = workspace.accounts
       .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
       .reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
     const liabilityAccountBalance = workspace.accounts
       .filter((account) => ["credit_card", "loan", "mortgage", "line_of_credit", "payable", "bnpl"].includes(account.type))
       .reduce((sum, account) => sum + Math.abs(Number(account.balance ?? 0)), 0);
-    const largestAccountBalance = [...workspace.accounts].sort((left, right) => Number(right.balance ?? 0) - Number(left.balance ?? 0))[0] ?? null;
-    const largestAccountShare = totalAccountBalance > 0 && largestAccountBalance ? Math.abs(Number(largestAccountBalance.balance ?? 0)) / totalAccountBalance : 0;
+    const largestAccountBalance = [...workspace.accounts].sort((left, right) => Math.abs(Number(right.balance ?? 0)) - Math.abs(Number(left.balance ?? 0)))[0] ?? null;
+    const largestAccountShare = totalAccountMagnitude > 0 && largestAccountBalance ? Math.abs(Number(largestAccountBalance.balance ?? 0)) / totalAccountMagnitude : 0;
     const accountPressureEstimate = Math.max(
       0,
       Math.min(
         100,
         Math.round(
           average([
-            liabilityAccountBalance > 0 ? Math.min(100, (liabilityAccountBalance / Math.max(totalAccountBalance || 1, 1)) * 100) : 18,
-            spendableAccountBalance < totalAccountBalance * 0.3 ? 82 : 28,
+            liabilityAccountBalance > 0 ? Math.min(100, (liabilityAccountBalance / Math.max(totalAccountMagnitude || 1, 1)) * 100) : 18,
+            spendableAccountBalance < totalAccountMagnitude * 0.3 ? 82 : 28,
             largestAccountShare > 0.55 ? Math.min(100, 45 + largestAccountShare * 55) : 30,
           ])
         )
@@ -1497,7 +1511,7 @@ export async function POST(request: Request) {
       `Preference profile: cashflow ${Math.round(userPreferenceAffinity.cashflow)}, behavior ${Math.round(userPreferenceAffinity.behavior)}, goals ${Math.round(userPreferenceAffinity.goals)}, investments ${Math.round(userPreferenceAffinity.investments)}, cleanup ${Math.round(userPreferenceAffinity.cleanup)}`,
       `Financial persona: ${financialPersona.label} - ${financialPersona.summary}`,
       `Narrative: ${adviserNarrative}`,
-      `Thresholds: cash buffer ${formatCurrency(thresholdProfile.cashBuffer)}, spend spike ${Math.round(thresholdProfile.spendSpikePercent)}%, income drop ${Math.round(thresholdProfile.incomeDropPercent)}%, concentration ${Math.round(thresholdProfile.concentrationShare * 100)}%`,
+      `Thresholds: cash buffer ${formatCurrency(thresholdProfile.cashBuffer)}, recurring pressure ${formatCurrency(thresholdProfile.recurringPressure)}, split pressure ${formatCurrency(thresholdProfile.splitPressure)}, spend spike ${Math.round(thresholdProfile.spendSpikePercent)}%, income drop ${Math.round(thresholdProfile.incomeDropPercent)}%, concentration ${Math.round(thresholdProfile.concentrationShare * 100)}%`,
       `Forecast: ${forecastSignal ? `${forecastSignal.title} (${Math.round(forecastSignal.score)})` : "none"}; anomaly: ${anomalySignal ? `${anomalySignal.title} (${Math.round(anomalySignal.score)})` : "none"}`,
       `Forecast categories: ${categoryForecastSignals.map((signal) => `${signal.title} (${Math.round(signal.score)})`).join(" | ") || "none"}`,
       `Goal history: ${goalHistoryRows.length > 0 ? `${goalHistoryRows.length} recent setting change${goalHistoryRows.length === 1 ? "" : "s"}` : "none"}`,
@@ -1552,7 +1566,7 @@ export async function POST(request: Request) {
     }).catch(() => null);
 
     const fallbackReply = [
-      `Based on your current data, ${topCategoryName ? `${topCategoryName} is the main spending driver` : "spending is fairly spread out"}${spendDelta !== null ? ` and spending is ${formatPercent(spendDelta)} vs baseline` : ""}.`,
+      `Based on your ${dataFreshnessLabel}, ${topCategoryName ? `${topCategoryName} is the main spending driver` : "spending is fairly spread out"}${spendDelta !== null ? ` and spending is ${formatPercent(spendDelta)} vs baseline` : ""}.`,
       workspace.accounts.length > 0
         ? `You also have ${workspace.accounts.length} connected account${workspace.accounts.length === 1 ? "" : "s"}, with ${formatCurrency(spendableAccountBalance, displayCurrency)} available cash and ${formatCurrency(liabilityAccountBalance, displayCurrency)} in balances owed.`
         : null,
