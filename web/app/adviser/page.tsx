@@ -649,7 +649,7 @@ const buildAnomalySignal = (
   }
 
   return {
-    title: "Category concentration",
+    title: "Most spending is coming from a few places",
     summary: "A small number of categories are dominating the expense mix right now.",
     evidence: topCategoryName
       ? `${topCategoryName} makes up ${formatPercent(topCategoryShare * 100)} of current expenses.`
@@ -795,7 +795,7 @@ const buildCategoryForecastSignals = (params: {
       : null,
     investmentRisk
       ? {
-          title: "Investment movement",
+          title: "Your investments changed since the last snapshot",
           summary: "The latest snapshot suggests a change worth watching.",
           evidence:
             params.latestInvestmentSnapshot && params.latestInvestmentSnapshot.totalValue !== undefined
@@ -1903,7 +1903,7 @@ async function AdviserPageContent() {
       detail: hasTransactionFlow
         ? `${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending; baseline spend ${formatCurrency(baselineSpend)}`
         : workspaceAccounts.length > 0
-          ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"}; ${formatCurrency(spendableAccountBalance)} spendable balance and ${formatCurrency(liabilityAccountBalance)} liability exposure`
+          ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"}; ${formatCurrency(spendableAccountBalance)} available cash and ${formatCurrency(liabilityAccountBalance)} in balances owed`
           : "Based on your current transaction history",
     },
     {
@@ -1935,14 +1935,14 @@ async function AdviserPageContent() {
       budgetOverview.activeBudgetCount > 0
         ? {
             id: "budget_pressure",
-            title: budgetOverview.alerts.length > 0 ? "Budget pressure" : "Budget watch",
+            title: budgetOverview.alerts.length > 0 ? "One budget may need attention" : "Your budgets are being watched",
             summary:
               budgetOverview.alerts.length > 0
-                ? "One or more budgets are pushing into alert territory."
-                : "Budgets are active and being tracked by Clover.",
+                ? "At least one budget is close enough to check before the month gets tighter."
+                : "Clover is keeping your active budgets in view as new spending comes in.",
             evidence:
               budgetOverview.alerts.length > 0
-                ? `${budgetOverview.alerts[0].name} is at ${Math.round(budgetOverview.alerts[0].progressPercent)}% of its target.`
+                ? `${budgetOverview.alerts[0].name} is ${Math.round(budgetOverview.alerts[0].progressPercent)}% used.`
                 : `${budgetOverview.activeBudgetCount} budget${budgetOverview.activeBudgetCount === 1 ? "" : "s"} active across the workspace`,
             ctaLabel: "Open budgeting",
             href: "/budgeting",
@@ -1962,11 +1962,11 @@ async function AdviserPageContent() {
       workspaceAccounts.length > 0
         ? {
             id: "account_snapshot",
-            title: "Connected accounts",
+            title: "Clover can see your connected accounts",
             summary: `${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? " is" : "s are"} connected in this workspace.`,
             evidence:
               totalAccountBalance > 0
-                ? `${formatCurrency(totalAccountBalance)} tracked across ${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? "" : "s"}`
+                ? `${formatCurrency(totalAccountBalance)} is visible across ${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? "" : "s"}`
                 : `${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? "" : "s"} ready for analysis`,
             ctaLabel: "Open accounts",
             href: "/accounts",
@@ -2007,9 +2007,9 @@ async function AdviserPageContent() {
       spendDelta !== null
         ? {
             id: "spending_moved",
-            title: spendDelta > 0 ? "Spending moved up" : "Spending eased",
+            title: spendDelta > 0 ? "Spending is higher than usual" : "Spending has eased",
             summary: spendDelta > 0 ? `Expenses are up ${formatPercent(Math.abs(spendDelta))} versus the previous 30 days.` : `Expenses are down ${formatPercent(Math.abs(spendDelta))} versus the previous 30 days.`,
-            evidence: `${formatSignedCurrency(currentSpend - previousSpend)} change in spending`,
+            evidence: `${formatSignedCurrency(currentSpend - previousSpend)} difference from your comparison period`,
             ctaLabel: "Open transactions",
             href: buildTransactionsHref({ month: toIsoMonth(now) }),
             tone: spendDelta > 0 ? "warning" : "positive",
@@ -2028,9 +2028,9 @@ async function AdviserPageContent() {
       topCategoryName
         ? {
             id: "top_driver",
-            title: "Top spending driver",
+            title: "Most of your spending is coming from one place",
             summary: `${topCategoryName} is the biggest category in this period.`,
-            evidence: `${formatCurrency(topCategoryAmount)} spent, or ${formatPercent(topCategoryShare * 100)} of total expenses.`,
+            evidence: `${formatCurrency(topCategoryAmount)} went to ${topCategoryName}, about ${formatPercent(topCategoryShare * 100)} of expenses.`,
             ctaLabel: "Review category",
             href: buildTransactionsHref({ category: topCategoryName }),
             tone: "neutral",
@@ -2049,9 +2049,9 @@ async function AdviserPageContent() {
       weekendExpenseShare > 0
         ? {
             id: "weekend_spike",
-            title: "Weekend spending spike",
+            title: "Weekends are carrying a lot of spend",
             summary: `Weekend purchases account for ${formatPercent(weekendExpenseShare * 100)} of your expenses this month.`,
-            evidence: `${weekendExpenses.length} weekend expense${weekendExpenses.length === 1 ? "" : "s"} reviewed`,
+            evidence: `${weekendExpenses.length} weekend expense${weekendExpenses.length === 1 ? "" : "s"} found in this window`,
             ctaLabel: "See weekends",
             href: buildTransactionsHref({ month: toIsoMonth(now) }),
             tone: weekendExpenseShare > 0.3 ? "warning" : "neutral",
@@ -2070,7 +2070,7 @@ async function AdviserPageContent() {
       recurringDueSoon.length > 0 || plannedPaymentsDueSoon.length > 0
         ? {
             id: "recurring_soon",
-            title: "Recurring costs coming soon",
+            title: "Bills are coming up soon",
             summary: `${recurringDueSoon.length + plannedPaymentsDueSoon.length} item${recurringDueSoon.length + plannedPaymentsDueSoon.length === 1 ? "" : "s"} are due in the next two weeks.`,
             evidence: recurringDueSoon
               .slice(0, 2)
@@ -2128,9 +2128,9 @@ async function AdviserPageContent() {
       openSplitBillCount > 0
         ? {
             id: "split_balance",
-            title: "Split bill balance",
+            title: "Some shared bills are still open",
             summary: `${openSplitBillCount} split bill${openSplitBillCount === 1 ? "" : "s"} still need settlement.`,
-            evidence: `Outstanding balance: ${formatCurrency(openSplitBillAmount)}`,
+            evidence: `${formatCurrency(openSplitBillAmount)} is still unsettled.`,
             ctaLabel: "Open split bills",
             href: "/split-bill",
             tone: "warning",
@@ -2149,14 +2149,14 @@ async function AdviserPageContent() {
       workspaceAccounts.length > 1 && totalAccountBalance > 0
         ? {
             id: "account_concentration",
-            title: "Balance concentration",
+            title: "Most of your balance sits in one account",
             summary:
               largestAccountBalance && largestAccountBalance.name
                 ? `${largestAccountBalance.name} holds most of the tracked balance.`
                 : "One account holds most of the tracked balance.",
             evidence:
-              `Largest account share: ${formatPercent(largestAccountShare * 100)} · Spendable balance ${formatCurrency(spendableAccountBalance)}` +
-              (liabilityAccountBalance > 0 ? ` · Liability exposure ${formatCurrency(liabilityAccountBalance)}` : ""),
+              `${formatPercent(largestAccountShare * 100)} of tracked balance is in the largest account · available cash ${formatCurrency(spendableAccountBalance)}` +
+              (liabilityAccountBalance > 0 ? ` · ${formatCurrency(liabilityAccountBalance)} in balances owed` : ""),
             ctaLabel: "Open accounts",
             href: "/accounts",
             tone: largestAccountShare > 0.6 ? "warning" : "neutral",
@@ -2175,7 +2175,7 @@ async function AdviserPageContent() {
       latestInvestmentSnapshot
         ? {
             id: "investment_move",
-            title: "Investment movement",
+            title: "Your investments changed since the last snapshot",
             summary: "Your latest investment snapshot changed since the last update.",
             evidence:
               investmentDelta === null
@@ -2214,12 +2214,13 @@ async function AdviserPageContent() {
                 ? "Your spendable accounts show the cash Clover can see for the bills ahead."
                 : "Your connected accounts give Clover a starting point for checking bill room.",
             evidence:
-              `${formatCurrency(spendableAccountBalance)} spendable balance` +
-              (liabilityAccountBalance > 0 ? ` · ${formatCurrency(liabilityAccountBalance)} liability exposure` : ""),
+              `${formatCurrency(spendableAccountBalance)} available cash` +
+              (liabilityAccountBalance > 0 ? ` · ${formatCurrency(liabilityAccountBalance)} in balances owed` : ""),
             ctaLabel: "Open accounts",
             href: "/accounts",
             tone: accountPressureEstimate >= 70 ? "warning" : "neutral",
             group: "accounts",
+            diversityKey: "cashflow-readiness",
             breakdown: {
               impact: clamp(65 + accountPressureEstimate * 0.3),
               urgency: clamp(accountPressureEstimate + (liquidBalance < currentSpend * 0.3 ? 20 : 0)),
@@ -2241,6 +2242,7 @@ async function AdviserPageContent() {
             href: "/accounts",
             tone: forecastSignal.tone,
             group: "cashflow",
+            diversityKey: "cashflow-readiness",
             breakdown: {
               impact: clamp(forecastSignal.score),
               urgency: clamp(forecastSignal.score + 8),
@@ -2255,9 +2257,9 @@ async function AdviserPageContent() {
       uncategorizedTransactions.length > 0
         ? {
             id: "review_uncategorized",
-            title: "Review uncategorized transactions",
-            summary: `${uncategorizedTransactions.length} row${uncategorizedTransactions.length === 1 ? "" : "s"} still need a category or cleaner merchant title.`,
-            evidence: "Cleaning these up improves Adviser and Reports at the same time.",
+            title: "Clean up transactions Clover is unsure about",
+            summary: `${uncategorizedTransactions.length} row${uncategorizedTransactions.length === 1 ? "" : "s"} still need a category or clearer merchant name.`,
+            evidence: "A few quick fixes will make Adviser and Reports more accurate.",
             ctaLabel: "Fix transactions",
             href: "/transactions",
             tone: "warning",
@@ -2276,8 +2278,8 @@ async function AdviserPageContent() {
       recurringDueSoon.length > 0 || plannedPaymentsDueSoon.length > 0
         ? {
             id: "check_recurring",
-            title: "Check recurring charges",
-            summary: "Review upcoming subscriptions and bills before they hit your balance.",
+            title: "Check the bills coming up next",
+            summary: "A quick look now can keep upcoming subscriptions and bills from surprising you.",
             evidence: recurringDueSoon
               .slice(0, 3)
               .map((pattern) => pattern.merchantClean ?? pattern.merchantRaw)
@@ -2330,8 +2332,8 @@ async function AdviserPageContent() {
       openSplitBillCount > 0
         ? {
             id: "settle_split_bills",
-            title: "Settle split bills",
-            summary: "Close out the balances that are still open with your group or people list.",
+            title: "Close out shared bills",
+            summary: "Settle the balances that are still open with your group or people list.",
             evidence: `${formatCurrency(openSplitBillAmount)} still outstanding across split bills`,
             ctaLabel: "Open split bills",
             href: "/split-bill",
@@ -2351,8 +2353,8 @@ async function AdviserPageContent() {
       topCategoryName
         ? {
             id: "cap_top_category",
-            title: "Set a cap for your biggest category",
-            summary: `Consider a monthly limit for ${topCategoryName.toLowerCase()} if you want more control.`,
+            title: "Consider a simple cap for your biggest category",
+            summary: `A monthly limit for ${topCategoryName.toLowerCase()} could make spending easier to steer.`,
             evidence: `${formatCurrency(topCategoryAmount)} spent in the last 30 days`,
             ctaLabel: "Open transactions",
             href: buildTransactionsHref({ category: topCategoryName }),
@@ -2372,9 +2374,9 @@ async function AdviserPageContent() {
       liquidBalance < currentSpend * 0.3
         ? {
             id: "protect_cashflow",
-            title: "Protect next week’s cash flow",
-            summary: "Move aside enough money for the obligations that are about to land.",
-            evidence: `Liquid balance looks tight compared with current spending: ${formatCurrency(liquidBalance)}`,
+            title: "Set aside money for next week",
+            summary: "Keeping bill money separate can make the next few days feel calmer.",
+            evidence: `Clover can see ${formatCurrency(liquidBalance)} in liquid balance against current spending.`,
             ctaLabel: "Review accounts",
             href: "/accounts",
             tone: "warning",
@@ -2393,8 +2395,8 @@ async function AdviserPageContent() {
       latestInvestmentSnapshot
         ? {
             id: "review_investments",
-            title: "Review investment position",
-            summary: "Open your portfolio and check the latest snapshot before making a move.",
+            title: "Take a quick look at your investments",
+            summary: "Check the latest snapshot before deciding whether anything needs attention.",
             evidence: latestInvestmentSnapshot.account?.name ? `Latest snapshot from ${latestInvestmentSnapshot.account.name}` : "Latest investment snapshot available",
             ctaLabel: "Open investments",
             href: "/investments",
@@ -2423,11 +2425,11 @@ async function AdviserPageContent() {
       workspaceAccounts.length > 1 && totalAccountBalance > 0
         ? {
             id: "account_buffer_habit",
-            title: "Balance buffer habit",
-            summary: "Keeping a healthy spread across accounts makes it easier to absorb recurring charges and surprise spend.",
+            title: "Keep a little room across accounts",
+            summary: "A healthy spread across accounts can make bills and surprise spending easier to absorb.",
             evidence:
               `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"} · ` +
-              `largest account share ${formatPercent(largestAccountShare * 100)}`,
+              `${formatPercent(largestAccountShare * 100)} of tracked balance is in the largest account`,
             ctaLabel: "View account mix",
             href: "/accounts",
             tone: "neutral",
@@ -2446,9 +2448,9 @@ async function AdviserPageContent() {
       weekendExpenseShare > 0.2
         ? {
             id: "weekend_pattern",
-            title: "Weekend pattern",
-            summary: "Weekends are taking a noticeable share of your expense flow.",
-            evidence: `Weekend spending is at ${formatPercent(weekendExpenseShare * 100)} of total expenses.`,
+            title: "Weekends may be where spending slips",
+            summary: "Weekend spending is taking a noticeable share of your expenses.",
+            evidence: `${formatPercent(weekendExpenseShare * 100)} of expenses happened on weekends.`,
             ctaLabel: "View pattern",
             href: buildTransactionsHref({ month: toIsoMonth(now) }),
             tone: weekendExpenseShare > 0.3 ? "warning" : "neutral",
@@ -2467,9 +2469,9 @@ async function AdviserPageContent() {
       topCategoryShare > 0.35
         ? {
             id: "category_concentration",
-            title: "Category concentration",
+            title: "Most spending is coming from a few places",
             summary: "A small number of categories are carrying most of the spending load.",
-            evidence: `${topCategoryName ?? "Your top category"} makes up ${formatPercent(topCategoryShare * 100)} of total expenses.`,
+            evidence: `${topCategoryName ?? "Your top category"} is about ${formatPercent(topCategoryShare * 100)} of expenses.`,
             ctaLabel: "Review mix",
             href: "/reports",
             tone: "neutral",
@@ -2488,12 +2490,12 @@ async function AdviserPageContent() {
       goalLabel
         ? {
             id: "goal_alignment",
-            title: "Goal alignment",
+            title: "Your goal pace needs a look",
             summary:
               goalProgress.bandLabel === "On track"
                 ? `Your current pace is supporting ${goalLabel.toLowerCase()}.`
                 : `Your current pace is making ${goalLabel.toLowerCase()} harder right now.`,
-            evidence: goalProgress.bandLabel,
+            evidence: goalProgress.bandLabel === "On track" ? "You are on track right now." : "Your current pace is below the target path.",
             ctaLabel: "Open goals",
             href: "/goals",
             tone: goalProgress.bandLabel === "On track" ? "positive" : "warning",
@@ -2512,9 +2514,9 @@ async function AdviserPageContent() {
       recurringMerchantCount > 0
         ? {
             id: "recurring_discipline",
-            title: "Recurring discipline",
-            summary: "You tend to stay clearer when repeating costs are reviewed early.",
-            evidence: `${recurringMerchantCount} recurring merchant${recurringMerchantCount === 1 ? "" : "s"} detected`,
+            title: "A quick bill check could help",
+            summary: "Repeating costs are easier to handle when they are reviewed early.",
+            evidence: `${recurringMerchantCount} recurring merchant${recurringMerchantCount === 1 ? "" : "s"} found`,
             ctaLabel: "Open recurring",
             href: "/recurring",
             tone: "neutral",
@@ -2533,8 +2535,8 @@ async function AdviserPageContent() {
       uncategorizedTransactions.length > 0
         ? {
             id: "cleanup_effect",
-            title: "Cleanup effect",
-            summary: "Keeping uncategorized rows low makes the rest of Adviser much more useful.",
+            title: "Clean data makes Clover smarter",
+            summary: "Keeping uncategorized rows low makes Adviser more useful.",
             evidence: `${uncategorizedTransactions.length} row${uncategorizedTransactions.length === 1 ? "" : "s"} still need attention`,
             ctaLabel: "Fix rows",
             href: "/transactions",
@@ -2554,9 +2556,11 @@ async function AdviserPageContent() {
       incomeTransactionCount > 0
         ? {
             id: "cashflow_consistency",
-            title: "Cash flow consistency",
+            title: "Income timing matters",
             summary: "Your month becomes steadier when income arrives before the biggest obligations.",
-            evidence: `Income changed ${incomeDelta === null ? "without" : `by ${formatPercent(incomeDelta)}`} a lot versus the last 30 days.`,
+            evidence: incomeDelta === null
+              ? "Clover can see income activity in this window."
+              : `Income is ${formatPercent(incomeDelta)} versus your comparison period.`,
             ctaLabel: "View reports",
             href: "/reports",
             tone: "neutral",

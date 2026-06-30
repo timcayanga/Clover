@@ -5689,7 +5689,7 @@ body.transactions-manual-open .shell-quick-add-button {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .budget-card__amounts {
@@ -8771,6 +8771,25 @@ html[data-theme="dark"] .adviser-section {
   margin: 0;
   color: var(--muted);
   font-size: 0.96rem;
+  line-height: 1.55;
+}
+
+.adviser-section-empty {
+  display: grid;
+  gap: 6px;
+  max-width: 520px;
+  padding: 8px 0 4px;
+  color: var(--muted);
+}
+
+.adviser-section-empty strong {
+  color: var(--ink);
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.adviser-section-empty p {
+  margin: 0;
   line-height: 1.55;
 }
 

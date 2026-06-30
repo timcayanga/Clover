@@ -6,7 +6,10 @@ export const budgetLookbackDays = 35;
 export const getBudgetLookbackStart = (now = new Date()) => new Date(now.getTime() - budgetLookbackDays * 24 * 60 * 60 * 1000);
 
 export const isMissingBudgetTableError = (error: unknown) =>
-  typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2021";
+  typeof error === "object" &&
+  error !== null &&
+  (((error as { code?: string }).code === "P2021") ||
+    (error instanceof Error && /(?:public\.)?Budget.*does not exist|table .*Budget.*does not exist/i.test(error.message)));
 
 export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Date()) => {
   const lookbackStart = getBudgetLookbackStart(now);

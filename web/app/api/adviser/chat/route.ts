@@ -431,7 +431,7 @@ const buildAnomalySignal = (
   }
 
   return {
-    title: "Category concentration",
+    title: "Most spending is coming from a few places",
     summary: "A small number of categories are dominating the expense mix right now.",
     evidence: topCategoryName
       ? `${topCategoryName} makes up ${formatPercent(topCategoryShare * 100)} of current expenses.`
@@ -572,7 +572,7 @@ const buildCategoryForecastSignals = (params: {
       : null,
     investmentRisk
       ? {
-          title: "Investment movement",
+          title: "Your investments changed since the last snapshot",
           summary: "The latest snapshot suggests a change worth watching.",
           evidence:
             params.latestInvestmentSnapshot && params.latestInvestmentSnapshot.totalValue !== undefined
@@ -1532,7 +1532,7 @@ export async function POST(request: Request) {
     const fallbackReply = [
       `Based on your current data, ${topCategoryName ? `${topCategoryName} is the main spending driver` : "spending is fairly spread out"}${spendDelta !== null ? ` and spending is ${formatPercent(spendDelta)} vs baseline` : ""}.`,
       workspace.accounts.length > 0
-        ? `You also have ${workspace.accounts.length} connected account${workspace.accounts.length === 1 ? "" : "s"}, with ${formatCurrency(spendableAccountBalance, displayCurrency)} spendable balance and ${formatCurrency(liabilityAccountBalance, displayCurrency)} in liability exposure.`
+        ? `You also have ${workspace.accounts.length} connected account${workspace.accounts.length === 1 ? "" : "s"}, with ${formatCurrency(spendableAccountBalance, displayCurrency)} available cash and ${formatCurrency(liabilityAccountBalance, displayCurrency)} in balances owed.`
         : null,
       recurringDueSoon.length > 0
         ? `You also have ${recurringDueSoon.length} recurring item${recurringDueSoon.length === 1 ? "" : "s"} coming up, so check those first if you want more room in cash flow.`
