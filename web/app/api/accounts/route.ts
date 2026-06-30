@@ -760,7 +760,6 @@ export async function GET(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, workspaceId);
-    await ensureWorkspaceCashAccount(workspaceId, "PHP");
     const compatibleColumns = await getCompatibleAccountColumns();
     const shouldRepairImportedAccounts = ["1", "true"].includes(
       (searchParams.get("repairImportedAccounts") ?? "").trim().toLowerCase()
