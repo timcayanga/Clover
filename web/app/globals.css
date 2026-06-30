@@ -21248,6 +21248,7 @@ button.accounts-detail__transaction-head-cell {
 .accounts-drawer-backdrop {
   position: fixed;
   inset: 0;
+  left: 236px;
   z-index: 60;
   display: flex;
   justify-content: flex-end;
