@@ -145,6 +145,35 @@ type Account = {
   createdAt: string;
 };
 
+const buildCashFallbackAccount = (currency: string): Account => {
+  const now = new Date(0).toISOString();
+  return {
+    id: `fallback-cash-${formatCurrencyCode(currency).toLowerCase()}`,
+    name: "Cash",
+    institution: "Cash",
+    accountNumber: null,
+    investmentSubtype: null,
+    investmentSymbol: null,
+    investmentQuantity: null,
+    investmentCostBasis: null,
+    investmentPrincipal: null,
+    investmentStartDate: null,
+    investmentMaturityDate: null,
+    investmentInterestRate: null,
+    investmentMaturityValue: null,
+    type: "cash",
+    currency: formatCurrencyCode(currency),
+    source: "manual",
+    balance: "0",
+    transactionCount: 0,
+    favorite: false,
+    updatedAt: now,
+    createdAt: now,
+  };
+};
+
+const isCashFallbackAccount = (account: Account) => account.id.startsWith("fallback-cash-");
+
 type UploadAccountLoadingContext = {
   latestCheckpoint: StatementCheckpoint | null;
   checkpointBalance: string | null;
@@ -2351,10 +2380,15 @@ function AccountsPageContent() {
   }, [currencyFilteredAccounts]);
 
   const visibleAccounts = useMemo(() => {
-    return [...currencyFilteredAccounts].sort((left, right) => {
+    const accountsForDisplay =
+      currencyFilteredAccounts.length > 0
+        ? currencyFilteredAccounts
+        : [buildCashFallbackAccount(selectedCurrency)];
+
+    return [...accountsForDisplay].sort((left, right) => {
       return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
     });
-  }, [currencyFilteredAccounts]);
+  }, [currencyFilteredAccounts, selectedCurrency]);
 
   const featuredAccounts = useMemo(() => {
     const swipableAccountTypes = new Set<SupportedAccountType>(["bank", "credit_card", "wallet", "cash"]);
@@ -2374,7 +2408,7 @@ function AccountsPageContent() {
   }, [visibleAccounts, statementCheckpoints]);
 
   const totals = useMemo(() => {
-    return currencyFilteredAccounts.reduce(
+    return visibleAccounts.reduce(
       (accumulator, account) => {
         const displayedBalance = getDisplayedAccountBalance(account);
         const signedValue = normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(displayedBalance));
@@ -2391,7 +2425,7 @@ function AccountsPageContent() {
       },
       { assets: 0, liabilities: 0, netWorth: 0, spendable: 0 }
     );
-  }, [currencyFilteredAccounts, statementCheckpoints]);
+  }, [visibleAccounts, statementCheckpoints]);
 
   const accountGroups = useMemo(() => {
     const groups = [
@@ -2996,7 +3030,7 @@ function AccountsPageContent() {
   };
 
   const openAccountDrawer = (account: Account) => {
-    if (deletingAccountIdsSet.has(account.id)) {
+    if (deletingAccountIdsSet.has(account.id) || isCashFallbackAccount(account)) {
       return;
     }
     const navigableAccount = resolveNavigableAccount(account);
