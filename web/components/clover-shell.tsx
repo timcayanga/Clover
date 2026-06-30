@@ -550,6 +550,35 @@ const getImportNotificationCopy = (activity: ImportActivitySnapshot) => {
   };
 };
 
+const clearStaleInteractionLocks = () => {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const { body } = document;
+  const hasImportModal = Boolean(document.querySelector(".modal-backdrop--import-fullscreen"));
+  const hasPageModal = Boolean(document.querySelector(".modal-backdrop"));
+  const hasFileDropZone = Boolean(document.querySelector(".page-file-drop-zone"));
+
+  if (body.dataset.cloverImportModalVisible === "true" && !hasImportModal) {
+    delete body.dataset.cloverImportModalVisible;
+    delete body.dataset.cloverImportModalVisibleCount;
+  }
+
+  if ((body.dataset.cloverImportModalOpen === "true" || body.dataset.cloverImportModalLocks) && !hasImportModal) {
+    delete body.dataset.cloverImportModalOpen;
+    delete body.dataset.cloverImportModalLocks;
+  }
+
+  if (body.hasAttribute("data-clover-page-modal") && !hasPageModal) {
+    body.removeAttribute("data-clover-page-modal");
+  }
+
+  if (body.dataset.cloverDropActive === "true" && !hasFileDropZone) {
+    delete body.dataset.cloverDropActive;
+  }
+};
+
 export function CloverShell({
   active,
   title,
@@ -757,7 +786,37 @@ export function CloverShell({
     setIsQuickAddOpen(false);
     setQuickAddModal(null);
     setQuickAddSeedFiles(null);
+    clearStaleInteractionLocks();
   }, [pathname]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    clearStaleInteractionLocks();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        clearStaleInteractionLocks();
+      }
+    };
+    const handleWindowFocus = () => {
+      clearStaleInteractionLocks();
+    };
+    const interval = window.setInterval(() => {
+      clearStaleInteractionLocks();
+    }, 1000);
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, []);
 
   useEffect(() => {
     const prefetchTargets = ["/home", "/accounts", "/transactions", "/reports", "/adviser", "/more", "/settings", "/help"];
