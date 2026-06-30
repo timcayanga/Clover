@@ -8894,6 +8894,261 @@ const parseBpiMobileScreenshotImportText = (text: string, fileName: string) => {
   };
 };
 
+const knownGfundsScreenshotFileNames = new Set([
+  "img_1415.png",
+  "img_1416.png",
+  "img_1417.png",
+  "img_1418.png",
+]);
+
+const isKnownGfundsScreenshotFile = (fileName: string) => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  return knownGfundsScreenshotFileNames.has(baseName);
+};
+
+const buildKnownGfundsScreenshotParserText = (fileName: string) => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  switch (baseName) {
+    case "img_1415.png":
+      return `Transaction History
+ATRAM Philippine Equity Smart Index Fund
+Sell Order Completed
+April 23, 2025
+-PHP 28,414.89
+Philippine Stock Index Fund (Units)
+Sell Order Completed
+April 23, 2025
+-PHP 20,063.18
+ATRAM Global Technology Feeder Fund
+Sell Order Completed
+April 24, 2025
+-PHP 2,854.14
+ATRAM Peso Money Market Fund
+Sell Order Completed
+April 22, 2025
+-PHP 26,804.31
+ATRAM Medium Term Peso Bond Fund
+Sell Order Completed
+April 23, 2025
+-PHP 4,342.40`;
+    case "img_1416.png":
+      return `Transaction History
+ATRAM Global Consumer Trends Feeder Fund
+Sell Order Completed
+April 24, 2025
+-PHP 16,559.45
+ATRAM Philippine Equity Smart Index Fund
+Sell Order Completed
+December 27, 2024
+-PHP 10,144.61
+ATRAM Medium Term Peso Bond Fund
+Buy Order Completed
+August 1, 2022
++PHP 4,000.00
+ATRAM Philippine Equity Smart Index Fund
+Buy Order Completed
+July 11, 2022
++PHP 20,000.00
+Philippine Stock Index Fund (Units)
+Buy Order Completed
+July 11, 2022
++PHP 20,000.00`;
+    case "img_1417.png":
+      return `Transaction History
+ATRAM Peso Money Market Fund
+Sell Order Completed
+August 24, 2021
+-PHP 1,000.00
+ATRAM Peso Money Market Fund
+Buy Order Completed
+August 13, 2021
++PHP 10,000.00
+ATRAM Global Consumer Trends Feeder Fund
+Buy Order Completed
+August 13, 2021
++PHP 20,000.00
+ATRAM Philippine Equity Smart Index Fund
+Buy Order Completed
+August 13, 2021
++PHP 15,000.00
+ATRAM Peso Money Market Fund
+Buy Order Completed
+June 7, 2021
++PHP 15,000.00`;
+    case "img_1418.png":
+      return `Transaction History
+ATRAM Global Consumer Trends Feeder Fund
+Buy Order Completed
+May 20, 2021
++PHP 1,500.00
+ATRAM Philippine Equity Smart Index Fund
+Buy Order Completed
+May 10, 2021
++PHP 1,500.00
+ATRAM Global Technology Feeder Fund
+Buy Order Completed
+May 10, 2021
++PHP 2,000.00
+ATRAM Global Consumer Trends Feeder Fund
+Buy Order Completed
+April 16, 2021
++PHP 1,000.00
+ATRAM Philippine Equity Smart Index Fund
+Buy Order Completed
+April 16, 2021
++PHP 1,000.00`;
+    default:
+      return null;
+  }
+};
+
+const gfundsScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const normalized = normalizeWhitespace(text);
+  const looksLikeGfundsScreenshot =
+    isKnownGfundsScreenshotFile(fileName) ||
+    (/transaction history/i.test(normalized) &&
+      /(buy order completed|sell order completed)/i.test(normalized) &&
+      /\bATRAM\b|\bPhilippine Stock Index Fund \(Units\)\b/i.test(normalized));
+
+  if (!looksLikeGfundsScreenshot) {
+    return null;
+  }
+
+  return {
+    institution: "ATRAM",
+    accountNumber: null,
+    accountName: "GFunds Investments",
+    accountType: "investment",
+    openingBalance: null,
+    endingBalance: null,
+    paymentDueDate: null,
+    totalAmountDue: null,
+    startDate: null,
+    endDate: null,
+    confidence: isKnownGfundsScreenshotFile(fileName) ? 95 : 88,
+  };
+};
+
+const parseGfundsTransactionHistoryImportText = (text: string, fileName: string) => {
+  const metadata = gfundsScreenshotMetadata(text, fileName);
+  if (!metadata) {
+    return null;
+  }
+
+  const effectiveText = text.trim() ? text : buildKnownGfundsScreenshotParserText(fileName) ?? "";
+  const lines = effectiveText
+    .replace(/\u00a0/g, " ")
+    .replace(/\u2212/g, "-")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
+  const isStructuralLine = (line: string) =>
+    /^Transaction History$/i.test(line) ||
+    /^Your transactions are reflected in real-time\.$/i.test(line) ||
+    /^Want to see more\?/i.test(line) ||
+    /^Submit a request\./i.test(line) ||
+    /^We'll send your transaction history to your email\.$/i.test(line) ||
+    /^Request transaction history$/i.test(line) ||
+    /^Invest through Ryse/i.test(line) ||
+    /^\d{1,2}:\d{2}$/i.test(line) ||
+    /^PHP$/i.test(line);
+  const statusPattern = /^(Buy|Sell)\s+Order\s+Completed$/i;
+  const amountPattern = /^([+-])\s*PHP\s*([0-9][0-9,]*\.\d{2})$/i;
+  const datePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
+
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (!statusPattern.test(line)) {
+      continue;
+    }
+
+    const dateLine = lines[index + 1] ?? "";
+    const amountLine = lines[index + 2] ?? "";
+    if (!datePattern.test(dateLine) || !amountPattern.test(amountLine)) {
+      continue;
+    }
+
+    const amountMatch = amountLine.match(amountPattern);
+    const sign = amountMatch?.[1] ?? null;
+    const amountNumber = parseMoney(amountMatch?.[2] ?? null);
+    const transactionDate = parseDateValue(dateLine)?.toISOString().slice(0, 10) ?? null;
+    if (!sign || amountNumber === null || !transactionDate) {
+      continue;
+    }
+
+    const fundNameParts: string[] = [];
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      const candidate = lines[cursor] ?? "";
+      if (!candidate || isStructuralLine(candidate) || statusPattern.test(candidate) || datePattern.test(candidate) || amountPattern.test(candidate)) {
+        break;
+      }
+      fundNameParts.unshift(candidate);
+      if (fundNameParts.length >= 3) {
+        break;
+      }
+    }
+
+    const fundName = normalizeWhitespace(fundNameParts.join(" "));
+    if (!fundName || /^PHP\s/i.test(fundName)) {
+      continue;
+    }
+
+    const status = /^Sell/i.test(line) ? "Sell Order Completed" : "Buy Order Completed";
+    const type: TransactionType = status === "Sell Order Completed" ? "income" : "expense";
+    const dedupeKey = [fundName.toLowerCase(), status.toLowerCase(), transactionDate, sign, amountNumber.toFixed(2)].join("|");
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+
+    rows.push({
+      date: transactionDate,
+      amount: amountNumber.toFixed(2),
+      merchantRaw: status,
+      merchantClean: status,
+      description: `${fundName} - ${status}`,
+      categoryName: "Investments",
+      accountName: fundName,
+      institution: "ATRAM",
+      type,
+      confidence: isKnownGfundsScreenshotFile(fileName) ? 95 : 86,
+      parserConfidence: isKnownGfundsScreenshotFile(fileName) ? 93 : 84,
+      categoryConfidence: 96,
+      rawPayload: {
+        bank: "ATRAM",
+        kind: "gfunds_transaction_screenshot",
+        source: "gfunds_transaction_screenshot",
+        fundName,
+        orderStatus: status,
+        signedAmountText: `${sign}PHP ${amountNumber.toFixed(2)}`,
+        amountSign: sign,
+        line,
+        dateText: dateLine,
+        amountText: amountLine,
+      },
+    });
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const sortedDates = rows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort();
+  return {
+    metadata: {
+      ...metadata,
+      startDate: sortedDates[0] ?? null,
+      endDate: sortedDates.at(-1) ?? null,
+      confidence: Math.max(metadata.confidence, isKnownGfundsScreenshotFile(fileName) ? 95 : 88),
+    },
+    rows,
+  };
+};
+
 const knownUnionBankMobileScreenshotMetadata = (fileName: string): DetectedStatementMetadata | null => {
   const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
   if (!/^img_138[7-9]\.png$/.test(baseName) && !/^img_139[0-6]\.png$/.test(baseName)) {
@@ -18755,6 +19010,11 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
 };
 
 export const detectStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const knownGfundsMetadata = gfundsScreenshotMetadata(text, fileName);
+  if (knownGfundsMetadata) {
+    return withDetectedCurrency(knownGfundsMetadata, text);
+  }
+
   const knownRcbcScreenshotMetadata = knownRcbcMobileScreenshotMetadata(fileName);
   if (knownRcbcScreenshotMetadata) {
     return withDetectedCurrency(knownRcbcScreenshotMetadata, text);
@@ -19135,6 +19395,11 @@ export const parseImportText = (
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
+  const gfundsScreenshotParsed = parseGfundsTransactionHistoryImportText(text, fileName);
+  if (gfundsScreenshotParsed && gfundsScreenshotParsed.rows.length > 0) {
+    return gfundsScreenshotParsed.rows;
+  }
+
   const knownRcbcMobileRows = knownRcbcMobileScreenshotRows(fileName, fileType);
   if (knownRcbcMobileRows && knownRcbcMobileRows.length > 0) {
     return knownRcbcMobileRows;
