@@ -631,8 +631,8 @@ const buildForecastSignal = (
 
   const summary =
     knownPressure > 0
-      ? `Known obligations add ${formatCurrency(knownPressure)} of pressure against your current balance and spending pattern.`
-      : `Your current spend trend suggests ${formatCurrency(Math.abs(projectedNet))} of net pressure if the pattern continues.`;
+      ? `Known obligations add ${formatCurrency(knownPressure)} of pressure against the balance and spending pattern Clover can see.`
+      : `The visible spend trend suggests ${formatCurrency(Math.abs(projectedNet))} of net pressure if the pattern continues.`;
 
   const evidence =
     `Projected net after known obligations: ${formatSignedCurrency(projectedNet)}`
@@ -2452,7 +2452,7 @@ async function AdviserPageContent() {
             id: "protect_cashflow",
             title: "Set aside money for next week",
             summary: "Keeping bill money separate can make the next few days feel calmer.",
-            evidence: `Clover can see ${formatCurrency(liquidBalance)} in liquid balance against current spending.`,
+            evidence: `Clover can see ${formatCurrency(liquidBalance)} in liquid balance against spending in the analysis window.`,
             ctaLabel: "Review accounts",
             href: "/accounts",
             tone: "warning",

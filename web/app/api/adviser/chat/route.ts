@@ -397,8 +397,8 @@ const buildForecastSignal = (
 
   const summary =
     knownPressure > 0
-      ? `Known obligations add ${formatCurrency(knownPressure)} of pressure against your current balance and spending pattern.`
-      : `Your current spend trend suggests ${formatCurrency(Math.abs(projectedNet))} of net pressure if the pattern continues.`;
+      ? `Known obligations add ${formatCurrency(knownPressure)} of pressure against the balance and spending pattern Clover can see.`
+      : `The visible spend trend suggests ${formatCurrency(Math.abs(projectedNet))} of net pressure if the pattern continues.`;
   const evidence = `Projected net after known obligations: ${formatSignedCurrency(projectedNet)} · liquid balance ${formatCurrency(liquidBalance)} · risk score ${Math.round(projectedRisk)}/100`;
 
   return {
@@ -1531,7 +1531,9 @@ export async function POST(request: Request) {
       "Use the workspace context to answer the user's question clearly and directly.",
       "Prefer concrete data over generic advice.",
       "If transactions are sparse, lean on account balances, recurring items, commitments, split bills, and long-term history before giving a weak answer.",
+      "If data is stale or historical, say so plainly and avoid implying it reflects today.",
       "If you can, mention the exact source of the signal, the relevant period, and one practical next step.",
+      "Keep the answer short: one main read, one reason, and one next step unless the user asks for more detail.",
       "Do not pretend to be a financial advisor. Keep guidance educational and contextual.",
       "If the user's question asks for investment advice, stay cautious and avoid personalized investment recommendations.",
       "If the data is insufficient, say what is missing and suggest where to check in Clover.",
@@ -1565,8 +1567,25 @@ export async function POST(request: Request) {
       pathname: "/adviser",
     }).catch(() => null);
 
+    const strongestFallbackSignal = explainabilityBundle[0] ?? null;
+    const fallbackNextStep =
+      inferredQuestionTheme === "goals" && goalLabel
+        ? `Open Goals and check whether ${goalLabel.toLowerCase()} still matches your latest cash-flow pace.`
+        : inferredQuestionTheme === "investments" && latestInvestmentSnapshot
+          ? "Open Investments and review the latest snapshot before making any decision."
+          : inferredQuestionTheme === "behavior" && topCategoryName
+            ? `Open Transactions filtered to ${topCategoryName} and review the largest items first.`
+            : inferredQuestionTheme === "cashflow" && recurringDueSoon.length > 0
+              ? "Open Recurring and check the bills due soon before moving money around."
+              : inferredQuestionTheme === "cashflow" && workspace.accounts.length > 0
+                ? "Open Accounts and compare available cash with the obligations Clover can see."
+                : openSplitBills.length > 0
+                  ? "Open Split Bills and settle the largest open balance first."
+                  : "Open Transactions and review the clearest driver Clover surfaced.";
+
     const fallbackReply = [
       `Based on your ${dataFreshnessLabel}, ${topCategoryName ? `${topCategoryName} is the main spending driver` : "spending is fairly spread out"}${spendDelta !== null ? ` and spending is ${formatPercent(spendDelta)} vs baseline` : ""}.`,
+      strongestFallbackSignal ? `Strongest signal: ${strongestFallbackSignal}.` : null,
       workspace.accounts.length > 0
         ? `You also have ${workspace.accounts.length} connected account${workspace.accounts.length === 1 ? "" : "s"}, with ${formatCurrency(spendableAccountBalance, displayCurrency)} available cash and ${formatCurrency(liabilityAccountBalance, displayCurrency)} in balances owed.`
         : null,
@@ -1579,7 +1598,7 @@ export async function POST(request: Request) {
       latestInvestmentSnapshot
         ? `Your latest investment snapshot is available, so if your question is about investments, start there next.`
         : null,
-      `For "${latestQuestion}", the clearest first step is to open the relevant transactions, accounts, or obligations and review the biggest driver shown above.`,
+      `For "${latestQuestion}", ${fallbackNextStep}`,
     ]
       .filter((line): line is string => Boolean(line))
       .join(" ");
