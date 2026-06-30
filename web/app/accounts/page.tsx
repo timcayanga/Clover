@@ -3399,9 +3399,7 @@ function AccountsPageContent() {
     !accountsLoadFailed &&
     (
       !hasInitialWorkspaceDataLoaded ||
-      showColdLoadGuard ||
-      shouldShowSyncingInsteadOfEmpty ||
-      accounts.length === 0
+      showColdLoadGuard
     );
 
   if (showAccountsSplash) {
