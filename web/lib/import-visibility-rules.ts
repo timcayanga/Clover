@@ -218,7 +218,12 @@ export const hasVisibleImportData = (
   const localPreviewRows = Array.isArray(summary?.previewTransactions) ? summary.previewTransactions.length : 0;
   const localHasRows = Math.max(localRows, localPreviewRows) > 0 && Boolean(summary?.accountId);
   const localHasAccountDetails =
-    Boolean(summary?.accountId) && Boolean(summary?.accountName || summary?.accountNumber || summary?.balance);
+    (Boolean(summary?.accountId) && Boolean(summary?.accountName || summary?.accountNumber || summary?.balance)) ||
+    Boolean(
+      summary?.accountSummaries?.some(
+        (account) => Boolean(account.accountId) && Boolean(account.accountName || account.accountNumber || account.balance)
+      )
+    );
   const itemHasRows = item.importedRows !== null && item.importedRows !== undefined && item.importedRows > 0 && Boolean(item.targetAccountId);
 
   if (shouldRequireVisibleRowsForImportSummary(item.file.name, summary)) {

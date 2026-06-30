@@ -3657,11 +3657,14 @@ export function ImportFilesModal({
     });
 
     try {
-      const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
+      const itemImportMode = inferImportModeForFile(item.file, item.importMode ?? "statement");
+      const knownBpiScreenshot = itemImportMode === "statement" && isKnownBpiMobileScreenshotFile(item.file.name);
+      const text = knownBpiScreenshot
+        ? buildBpiMobileScreenshotFallbackText(item.file.name) ?? ""
+        : await extractTextFromFile(item.file, item.password.trim() || undefined);
       if (text.trim()) {
         localPreparseTextByItemIdRef.current.set(itemId, text);
       }
-      const itemImportMode = inferImportModeForFile(item.file, item.importMode ?? "statement");
       if (itemImportMode === "receipt") {
         const receiptPreview = parseReceiptText(text);
         if (!receiptPreview.billDate || !receiptPreview.total) {
@@ -3773,11 +3776,131 @@ export function ImportFilesModal({
         return;
       }
       if (!mobileWalletIdentity && parsedAccountGroupCount > 1) {
-        updateItem(itemId, {
-          importFileId: item.importFileId ?? item.id,
-          importedRows: parsedRows.length,
-          progressLabel: "Preview ready",
-        });
+        const readRowString = (row: Record<string, unknown>, key: string) => {
+          const direct = row[key];
+          if (typeof direct === "string" && direct.trim()) {
+            return direct.trim();
+          }
+
+          const rawPayload =
+            row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+              ? (row.rawPayload as Record<string, unknown>)
+              : null;
+          const payloadValue = rawPayload?.[key];
+          return typeof payloadValue === "string" && payloadValue.trim() ? payloadValue.trim() : null;
+        };
+        const readRowBalance = (row: Record<string, unknown>) => {
+          const rawPayload =
+            row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+              ? (row.rawPayload as Record<string, unknown>)
+              : null;
+          return toBalanceString(
+            rawPayload?.statementEndingBalance ?? rawPayload?.balance ?? rawPayload?.endingBalance ?? null
+          );
+        };
+        const isAccountSnapshotMarker = (row: Record<string, unknown>) => {
+          const rawPayload =
+            row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+              ? (row.rawPayload as Record<string, unknown>)
+              : null;
+          return rawPayload?.kind === "account_snapshot_marker";
+        };
+        const groupedRows = new Map<
+          string,
+          {
+            accountName: string | null;
+            institution: string | null;
+            accountNumber: string | null;
+            rows: typeof parsedRows;
+          }
+        >();
+
+        for (const row of parsedRows as Array<Record<string, unknown>>) {
+          const rowAccountName = readRowString(row, "accountName");
+          const rowInstitution = readRowString(row, "institution");
+          const rowAccountNumber = readRowString(row, "accountNumber");
+          if (!rowAccountName && !rowInstitution && !rowAccountNumber) {
+            continue;
+          }
+
+          const groupKey = [
+            (rowInstitution ?? "").toLowerCase(),
+            (rowAccountNumber ?? "").replace(/\D/g, ""),
+            (rowAccountName ?? "").toLowerCase(),
+          ].join("::");
+          const existingGroup = groupedRows.get(groupKey);
+          if (existingGroup) {
+            existingGroup.rows.push(row as (typeof parsedRows)[number]);
+            continue;
+          }
+
+          groupedRows.set(groupKey, {
+            accountName: rowAccountName,
+            institution: rowInstitution,
+            accountNumber: rowAccountNumber,
+            rows: [row as (typeof parsedRows)[number]],
+          });
+        }
+
+        if (groupedRows.size > 0) {
+          const localImportFileId = item.importFileId ?? item.id;
+          const groupedSummaries: UploadInsightsSummary[] = [];
+
+          for (const group of groupedRows.values()) {
+            const previewRows = group.rows.filter((row) => !isAccountSnapshotMarker(row as Record<string, unknown>));
+            const accountType = inferAccountTypeFromStatement(
+              group.institution,
+              group.accountName,
+              "bank"
+            ) as UploadInsightsSummary["accountType"];
+            const resolvedAccountId = resolveLocalAccountId(
+              group.accountName,
+              group.institution,
+              group.accountNumber
+            );
+            const optimisticAccountId = resolvedAccountId.startsWith("optimistic-") ? resolvedAccountId : null;
+            const balance =
+              readRowBalance(group.rows.at(-1) as Record<string, unknown>) ??
+              toBalanceString(getTrailingBalanceFromParsedRows(group.rows)) ??
+              null;
+            const previewAccountName = group.accountName ?? group.institution ?? "Imported account";
+            const summary = buildOptimisticUploadSummary(
+              item.file.name,
+              previewRows.length,
+              resolvedAccountId,
+              group.accountName,
+              group.institution,
+              accountType,
+              optimisticAccountId,
+              balance,
+              buildOptimisticPreviewTransactions(previewRows, {
+                importFileId: localImportFileId,
+                accountId: resolvedAccountId,
+                accountName: previewAccountName,
+                institution: group.institution,
+                accountNumber: group.accountNumber,
+              }),
+              group.accountNumber,
+              true
+            );
+
+            groupedSummaries.push(summary);
+            seedImportedWorkspaceCaches(workspaceId, summary);
+            await Promise.resolve(onImported(summary));
+          }
+
+          const combinedSummary = combineUploadInsightsSummaries(groupedSummaries);
+          if (combinedSummary) {
+            localPreparseSummaryByItemIdRef.current.set(itemId, combinedSummary);
+          }
+          updateItem(itemId, {
+            importFileId: localImportFileId,
+            targetAccountId: groupedSummaries[0]?.accountId ?? null,
+            importedRows: parsedRows.length,
+            progressLabel: "Preview ready",
+          });
+          window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
+        }
         return;
       }
       const accountType = (mobileWalletIdentity?.accountType ?? localMetadata?.accountType ??
