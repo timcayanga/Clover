@@ -166,7 +166,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
     <div className="split-bill-home">
       {isBlankState ? (
         <section className="split-bill-empty-cta" aria-label="Start splitting bills">
-          <img src="/clover-mark.svg" alt="" aria-hidden="true" />
+          <img src="/assets/3d%20icons/split%20bills.png" alt="" aria-hidden="true" />
           <h2>
             <span>Upload a receipt</span>, split the items, and track who owes what
           </h2>
