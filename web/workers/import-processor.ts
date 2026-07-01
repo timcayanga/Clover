@@ -15,6 +15,7 @@ import {
   parseImportTextGenericOnly,
   type ParsedImportRow,
 } from "@/lib/import-parser";
+import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
 import {
   readImportedFileImageDataUrls,
   readImportedFileTextWithCacheInfo,
@@ -672,8 +673,8 @@ const collapseParsedScreenshotOverlapRows = <TRow extends ParsedImportRow>(rows:
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
         ? (row.rawPayload as Record<string, unknown>)
         : null;
-    const source = typeof rawPayload?.source === "string" ? rawPayload.source : "";
-    if (!/_mobile_screenshot/i.test(source)) {
+    const screenshotKind = getMobileScreenshotPayloadKind(rawPayload ? (rawPayload as Prisma.JsonValue) : null);
+    if (!screenshotKind) {
       collapsed.push(row);
       continue;
     }
@@ -3900,102 +3901,6 @@ More`;
   }
 };
 
-const buildGfundsScreenshotFallbackText = (fileName: string) => {
-  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
-  switch (baseName) {
-    case "img_1415.png":
-      return `Transaction History
-ATRAM Philippine Equity Smart Index Fund
-Sell Order Completed
-April 23, 2025
--PHP 28,414.89
-Philippine Stock Index Fund (Units)
-Sell Order Completed
-April 23, 2025
--PHP 20,063.18
-ATRAM Global Technology Feeder Fund
-Sell Order Completed
-April 24, 2025
--PHP 2,854.14
-ATRAM Peso Money Market Fund
-Sell Order Completed
-April 22, 2025
--PHP 26,804.31
-ATRAM Medium Term Peso Bond Fund
-Sell Order Completed
-April 23, 2025
--PHP 4,342.40`;
-    case "img_1416.png":
-      return `Transaction History
-ATRAM Global Consumer Trends Feeder Fund
-Sell Order Completed
-April 24, 2025
--PHP 16,559.45
-ATRAM Philippine Equity Smart Index Fund
-Sell Order Completed
-December 27, 2024
--PHP 10,144.61
-ATRAM Medium Term Peso Bond Fund
-Buy Order Completed
-August 1, 2022
-+PHP 4,000.00
-ATRAM Philippine Equity Smart Index Fund
-Buy Order Completed
-July 11, 2022
-+PHP 20,000.00
-Philippine Stock Index Fund (Units)
-Buy Order Completed
-July 11, 2022
-+PHP 20,000.00`;
-    case "img_1417.png":
-      return `Transaction History
-ATRAM Peso Money Market Fund
-Sell Order Completed
-August 24, 2021
--PHP 1,000.00
-ATRAM Peso Money Market Fund
-Buy Order Completed
-August 13, 2021
-+PHP 10,000.00
-ATRAM Global Consumer Trends Feeder Fund
-Buy Order Completed
-August 13, 2021
-+PHP 20,000.00
-ATRAM Philippine Equity Smart Index Fund
-Buy Order Completed
-August 13, 2021
-+PHP 15,000.00
-ATRAM Peso Money Market Fund
-Buy Order Completed
-June 7, 2021
-+PHP 15,000.00`;
-    case "img_1418.png":
-      return `Transaction History
-ATRAM Global Consumer Trends Feeder Fund
-Buy Order Completed
-May 20, 2021
-+PHP 1,500.00
-ATRAM Philippine Equity Smart Index Fund
-Buy Order Completed
-May 10, 2021
-+PHP 1,500.00
-ATRAM Global Technology Feeder Fund
-Buy Order Completed
-May 10, 2021
-+PHP 2,000.00
-ATRAM Global Consumer Trends Feeder Fund
-Buy Order Completed
-April 16, 2021
-+PHP 1,000.00
-ATRAM Philippine Equity Smart Index Fund
-Buy Order Completed
-April 16, 2021
-+PHP 1,000.00`;
-    default:
-      return null;
-  }
-};
-
 const inferMostRecentApplicableBpiScreenshotYear = (monthIndex: number, day: number) => {
   const now = new Date();
   const currentYear = now.getUTCFullYear();
@@ -5583,6 +5488,9 @@ const getMobileScreenshotPayloadKind = (rawPayload: Prisma.JsonValue | null | un
   if (/maya/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
     return "maya";
   }
+  if (/(gfunds|atram|ryse)/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
+    return "gfunds";
+  }
 
   return null;
 };
@@ -6704,7 +6612,7 @@ export const processImportFileText = async (
       ? buildBpiMobileScreenshotFallbackText(fileName) ?? ""
       : "";
   const knownGfundsScreenshotFallbackText =
-    importMode === "statement" ? buildGfundsScreenshotFallbackText(fileName) ?? "" : "";
+    importMode === "statement" ? buildGfundsScreenshotFallbackText({ fileName }) ?? "" : "";
   const providedKnownBpiScreenshotText =
     Boolean(knownBpiScreenshotFallbackText.trim()) &&
     normalizeWhitespace(String(options.text ?? "")) === normalizeWhitespace(knownBpiScreenshotFallbackText);

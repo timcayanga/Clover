@@ -2,6 +2,7 @@ import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { getSharedMerchantCategoryHint, isLikelyPersonTransferName } from "@/lib/merchant-category-hints";
+import { buildGfundsScreenshotFallbackText, isKnownGfundsScreenshotFile } from "@/lib/gfunds-screenshot-samples";
 
 export type ImportedAccountType =
   | "bank"
@@ -8894,121 +8895,15 @@ const parseBpiMobileScreenshotImportText = (text: string, fileName: string) => {
   };
 };
 
-const knownGfundsScreenshotFileNames = new Set([
-  "img_1415.png",
-  "img_1416.png",
-  "img_1417.png",
-  "img_1418.png",
-]);
-
-const isKnownGfundsScreenshotFile = (fileName: string) => {
-  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
-  return knownGfundsScreenshotFileNames.has(baseName);
-};
-
-const buildKnownGfundsScreenshotParserText = (fileName: string) => {
-  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
-  switch (baseName) {
-    case "img_1415.png":
-      return `Transaction History
-ATRAM Philippine Equity Smart Index Fund
-Sell Order Completed
-April 23, 2025
--PHP 28,414.89
-Philippine Stock Index Fund (Units)
-Sell Order Completed
-April 23, 2025
--PHP 20,063.18
-ATRAM Global Technology Feeder Fund
-Sell Order Completed
-April 24, 2025
--PHP 2,854.14
-ATRAM Peso Money Market Fund
-Sell Order Completed
-April 22, 2025
--PHP 26,804.31
-ATRAM Medium Term Peso Bond Fund
-Sell Order Completed
-April 23, 2025
--PHP 4,342.40`;
-    case "img_1416.png":
-      return `Transaction History
-ATRAM Global Consumer Trends Feeder Fund
-Sell Order Completed
-April 24, 2025
--PHP 16,559.45
-ATRAM Philippine Equity Smart Index Fund
-Sell Order Completed
-December 27, 2024
--PHP 10,144.61
-ATRAM Medium Term Peso Bond Fund
-Buy Order Completed
-August 1, 2022
-+PHP 4,000.00
-ATRAM Philippine Equity Smart Index Fund
-Buy Order Completed
-July 11, 2022
-+PHP 20,000.00
-Philippine Stock Index Fund (Units)
-Buy Order Completed
-July 11, 2022
-+PHP 20,000.00`;
-    case "img_1417.png":
-      return `Transaction History
-ATRAM Peso Money Market Fund
-Sell Order Completed
-August 24, 2021
--PHP 1,000.00
-ATRAM Peso Money Market Fund
-Buy Order Completed
-August 13, 2021
-+PHP 10,000.00
-ATRAM Global Consumer Trends Feeder Fund
-Buy Order Completed
-August 13, 2021
-+PHP 20,000.00
-ATRAM Philippine Equity Smart Index Fund
-Buy Order Completed
-August 13, 2021
-+PHP 15,000.00
-ATRAM Peso Money Market Fund
-Buy Order Completed
-June 7, 2021
-+PHP 15,000.00`;
-    case "img_1418.png":
-      return `Transaction History
-ATRAM Global Consumer Trends Feeder Fund
-Buy Order Completed
-May 20, 2021
-+PHP 1,500.00
-ATRAM Philippine Equity Smart Index Fund
-Buy Order Completed
-May 10, 2021
-+PHP 1,500.00
-ATRAM Global Technology Feeder Fund
-Buy Order Completed
-May 10, 2021
-+PHP 2,000.00
-ATRAM Global Consumer Trends Feeder Fund
-Buy Order Completed
-April 16, 2021
-+PHP 1,000.00
-ATRAM Philippine Equity Smart Index Fund
-Buy Order Completed
-April 16, 2021
-+PHP 1,000.00`;
-    default:
-      return null;
-  }
-};
-
 const gfundsScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
   const normalized = normalizeWhitespace(text);
   const looksLikeGfundsScreenshot =
     isKnownGfundsScreenshotFile(fileName) ||
     (/transaction history/i.test(normalized) &&
       /(buy order completed|sell order completed)/i.test(normalized) &&
-      /\bATRAM\b|\bPhilippine Stock Index Fund \(Units\)\b/i.test(normalized));
+      /(?:\bATRAM\b|\bPhilippine Stock Index Fund \(Units\)\b|\bInvest through Ryse\b|\bRequest transaction history\b)/i.test(
+        normalized
+      ));
 
   if (!looksLikeGfundsScreenshot) {
     return null;
@@ -9035,13 +8930,79 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
     return null;
   }
 
-  const effectiveText = text.trim() ? text : buildKnownGfundsScreenshotParserText(fileName) ?? "";
-  const lines = effectiveText
+  const effectiveText = text.trim() ? text : buildGfundsScreenshotFallbackText({ fileName }) ?? "";
+  const datePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
+  const statusPattern = /^(Buy|Sell)\s+Order\s+Completed$/i;
+  const amountPattern = /^([+-])\s*PHP\s*([0-9][0-9,]*\.\d{2})$/i;
+  const rawLines = effectiveText
     .replace(/\u00a0/g, " ")
     .replace(/\u2212/g, "-")
     .split(/\r?\n/)
-    .map((line) => normalizeWhitespace(line))
+    .map((line) =>
+      normalizeWhitespace(
+        line
+          .replace(/[›»]+$/g, "")
+          .replace(/[“”]/g, '"')
+          .replace(/[‘’]/g, "'")
+      )
+    )
     .filter(Boolean);
+  const lines: string[] = [];
+  for (let index = 0; index < rawLines.length; index += 1) {
+    const normalized = rawLines[index] ?? "";
+    if (!normalized) {
+      continue;
+    }
+
+    const nextLine = rawLines[index + 1] ?? "";
+    const combinedFundAmount = normalized.match(/^(.*\S)\s+([+-]\s*PHP\s*[0-9][0-9,]*\.\d{2})$/i);
+    const combinedStatusDateAmount = normalized.match(
+      new RegExp(
+        `^(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})\\s+([+-]\\s*PHP\\s*[0-9][0-9,]*\\.\\d{2})$`,
+        "i"
+      )
+    );
+    const combinedStatusDate = normalized.match(
+      new RegExp(`^(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})$`, "i")
+    );
+
+    if (combinedFundAmount && nextLine) {
+      const nextStatusDate = nextLine.match(
+        new RegExp(`^(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})$`, "i")
+      );
+      if (nextStatusDate) {
+        lines.push(
+          normalizeWhitespace(combinedFundAmount[1] ?? ""),
+          `${nextStatusDate[1]} Order Completed`,
+          normalizeWhitespace(nextStatusDate[2] ?? ""),
+          normalizeWhitespace(combinedFundAmount[2] ?? "")
+        );
+        index += 1;
+        continue;
+      }
+    }
+
+    if (combinedStatusDateAmount) {
+      lines.push(
+        `${combinedStatusDateAmount[1]} Order Completed`,
+        normalizeWhitespace(combinedStatusDateAmount[2] ?? ""),
+        normalizeWhitespace(combinedStatusDateAmount[3] ?? "")
+      );
+      continue;
+    }
+
+    if (combinedStatusDate) {
+      lines.push(`${combinedStatusDate[1]} Order Completed`, normalizeWhitespace(combinedStatusDate[2] ?? ""));
+      continue;
+    }
+
+    if (combinedFundAmount && !datePattern.test(normalized) && !statusPattern.test(normalized)) {
+      lines.push(normalizeWhitespace(combinedFundAmount[1] ?? ""), normalizeWhitespace(combinedFundAmount[2] ?? ""));
+      continue;
+    }
+
+    lines.push(normalized);
+  }
 
   const isStructuralLine = (line: string) =>
     /^Transaction History$/i.test(line) ||
@@ -9053,9 +9014,6 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
     /^Invest through Ryse/i.test(line) ||
     /^\d{1,2}:\d{2}$/i.test(line) ||
     /^PHP$/i.test(line);
-  const statusPattern = /^(Buy|Sell)\s+Order\s+Completed$/i;
-  const amountPattern = /^([+-])\s*PHP\s*([0-9][0-9,]*\.\d{2})$/i;
-  const datePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
 
   const rows: ParsedImportRow[] = [];
   const seen = new Set<string>();
@@ -9120,8 +9078,8 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
       categoryConfidence: 96,
       rawPayload: {
         bank: "ATRAM",
-        kind: "gfunds_transaction_screenshot",
-        source: "gfunds_transaction_screenshot",
+        kind: "gfunds_mobile_screenshot",
+        source: "gfunds_mobile_screenshot",
         fundName,
         orderStatus: status,
         signedAmountText: `${sign}PHP ${amountNumber.toFixed(2)}`,

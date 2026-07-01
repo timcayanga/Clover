@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
+import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
 
 const samples = [
   {
@@ -146,5 +147,37 @@ const buyRows = allRows.filter((row) => row.description?.includes("Buy Order Com
 const sellRows = allRows.filter((row) => row.description?.includes("Sell Order Completed"));
 assert.ok(buyRows.length > 0 && buyRows.every((row) => row.type === "expense"), "Buy orders should map to investment expenses.");
 assert.ok(sellRows.length > 0 && sellRows.every((row) => row.type === "income"), "Sell orders should map to investment income.");
+assert.ok(
+  allRows.every((row) => {
+    const payload = row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : null;
+    return payload?.source === "gfunds_mobile_screenshot" && payload?.kind === "gfunds_mobile_screenshot";
+  }),
+  "GFunds rows should identify themselves as mobile screenshot imports for overlap collapse."
+);
+
+const fingerprintMatchedFallback = buildGfundsScreenshotFallbackText({
+  fileName: "renamed-gfunds-export.png",
+  fileFingerprint: "6110e688401f1a5eba1bccc799af93ecce5b9ed38c34c30cdd9cb502957f388d",
+});
+assert.ok(
+  fingerprintMatchedFallback?.includes("ATRAM Global Technology Feeder Fund"),
+  "Known GFunds screenshots should still resolve through file fingerprints after renaming."
+);
+
+const noisyOcrText = `Transaction History
+ATRAM Global Consumer Trends Feeder Fund +PHP 1,500.00
+Buy Order Completed May 20, 2021
+ATRAM Philippine Equity Smart Index Fund +PHP 1,500.00
+Buy Order Completed May 10, 2021`;
+const noisyRows = parseImportText(noisyOcrText, "renamed-gfunds-export.png", "image/png", {
+  institution: "ATRAM",
+  accountName: "GFunds Investments",
+  accountNumber: null,
+});
+assert.equal(noisyRows.length, 2, "The GFunds parser should tolerate combined OCR lines for fund, status, date, and amount.");
+assert.ok(
+  noisyRows.every((row) => row.accountName && !/^IMG_/i.test(String(row.accountName))),
+  "Noisy OCR parses should still surface fund names instead of screenshot file names."
+);
 
 console.log("[PASS] GFunds screenshot parser surfaces investment accounts and visible transaction rows.");

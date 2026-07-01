@@ -13,6 +13,7 @@ This document captures the current Clover parsing rules for ATRAM-backed investm
 - Blue `Transaction History` screenshots from the GFunds flow should route to the Investments area.
 - Use one investment account per visible fund, not one account per screenshot file.
 - Never let screenshot file names like `IMG_1415.PNG` appear as account names.
+- The parser should not depend only on `IMG_1415.PNG`-style names. If the screenshot is renamed, Clover should still recover the sample through OCR content or the known file fingerprint.
 - Visible fund names from the current training bundle include:
   - `ATRAM Philippine Equity Smart Index Fund`
   - `Philippine Stock Index Fund (Units)`
@@ -23,6 +24,7 @@ This document captures the current Clover parsing rules for ATRAM-backed investm
 - Use the visible fund name as the investment account name.
 - Use `ATRAM` as the institution for the current screenshot bundle so Clover can reuse the ATRAM investment branding.
 - Parse only fully visible rows. If the bottom sheet or the screenshot edge cuts off the status, date, or amount, skip that row instead of inventing it.
+- Tolerate OCR that merges a fund name with its signed amount on the same line or a status with its date on the same line.
 
 ## Transaction Mapping
 
@@ -45,6 +47,7 @@ This document captures the current Clover parsing rules for ATRAM-backed investm
 
 - If Clover cannot recover all of `fund name + order status + date + amount`, do not create the row.
 - If multiple screenshots overlap, dedupe rows by `fund name + order status + date + signed amount`.
+- Mark parsed rows as mobile screenshots so Clover's overlap collapse can remove duplicated rows from adjacent scroll captures before confirmation.
 
 ## Expected Outcome
 
