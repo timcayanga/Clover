@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getEnv } from "@/lib/env";
 import {
+  parseGfundsAccountDetailSnapshotText,
   parseGfundsPortfolioSnapshotText,
   type DetectedStatementMetadata,
   type DeterministicParsedHolding,
@@ -1999,6 +2000,32 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     }
   | null
 > => {
+  const deterministicGfundsAccountDetail =
+    (params.importMode === "account_detail" || params.importMode === "statement")
+      ? parseGfundsAccountDetailSnapshotText(params.text, params.fileName ?? "")
+      : null;
+  if (deterministicGfundsAccountDetail) {
+    return {
+      documentType: deterministicGfundsAccountDetail.documentType,
+      metadata: deterministicGfundsAccountDetail.metadata,
+      holdings: deterministicGfundsAccountDetail.holdings.map(toDeterministicHolding),
+      receiptAccountMatch: null,
+      receiptDetails: null,
+      rows: [],
+      model: "deterministic_gfunds_account_detail",
+      promptVersion: OPENAI_PROMPT_VERSION,
+      audit: {
+        sourceFilename: params.fileName ?? null,
+        confidence: deterministicGfundsAccountDetail.metadata.confidence ?? 0,
+        schemaValidated: true,
+        schemaValidationResult: "deterministic_gfunds_account_detail",
+        rawResponse: JSON.stringify({
+          document_type: deterministicGfundsAccountDetail.documentType,
+          holdings: deterministicGfundsAccountDetail.holdings.length,
+        }),
+      },
+    };
+  }
   const deterministicGfundsPortfolio =
     (params.importMode === "portfolio" || params.importMode === "account_detail" || params.importMode === "statement")
       ? parseGfundsPortfolioSnapshotText(params.text, params.fileName ?? "")

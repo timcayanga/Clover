@@ -42,6 +42,15 @@ This document captures the current Clover parsing rules for ATRAM-backed investm
 - Use the visible `Gain/Loss` amount directly when present; do not recompute it if the screenshot already provides it.
 - Preserve the visible fund name, units, and NAVPU text in parser evidence or raw payload so the user can trace what Clover read.
 
+## Fund Detail Rules
+
+- When the screen focuses on one ATRAM fund and shows balance metrics such as `Current Value`, `Market Value`, `Subscribed Amount`, `Invested Amount`, `Gain/Loss`, `Units`, or `NAVPU`, treat it as an `account_detail` import.
+- Use the visible fund name as the investment account name for single-fund detail screens.
+- Still persist a holding row for the visible fund so Clover can show an investment position even without a multi-fund portfolio layout.
+- Prefer visible `Current Value` or `Market Value` as the account balance.
+- Use `Subscribed Amount` or `Invested Amount` as cost basis when present.
+- Preserve the visible fund name, units, NAVPU, and gain/loss text in parser evidence or raw payload.
+
 ## Transaction Mapping
 
 - `Buy Order Completed` means money moved into the investment:

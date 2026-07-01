@@ -9330,6 +9330,113 @@ export const parseGfundsPortfolioSnapshotText = (text: string, fileName = "") =>
   };
 };
 
+export const parseGfundsAccountDetailSnapshotText = (text: string, fileName = "") => {
+  const normalized = normalizeWhitespace(text);
+  const looksLikeGfundsAccountDetail =
+    /(?:\bATRAM\b|\bRyse\b|\bGFunds\b|\bPhilippine Stock Index Fund \(Units\)\b)/i.test(normalized) &&
+    /(?:current value|market value|fund value|subscribed amount|invested amount|gain\/?loss|unrealized|navpu|unit price|units?)/i.test(
+      normalized
+    );
+
+  if (!looksLikeGfundsAccountDetail) {
+    return null;
+  }
+
+  const portfolioLikeDocument = parseGfundsPortfolioSnapshotText(text, fileName);
+  if (portfolioLikeDocument && portfolioLikeDocument.holdings.length > 1) {
+    return null;
+  }
+
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .replace(/\u2212/g, "-")
+    .split(/\r?\n/)
+    .map((line) =>
+      normalizeWhitespace(
+        line
+          .replace(/[›»]+$/g, "")
+          .replace(/[“”]/g, '"')
+          .replace(/[‘’]/g, "'")
+      )
+    )
+    .filter(Boolean);
+
+  const fundLinePattern = /(?:\bATRAM\b.*\bFund\b|\bPhilippine Stock Index Fund \(Units\)\b)/i;
+  const valueLinePattern = /(?:current value|market value|fund value|current balance)\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
+  const costBasisPattern = /(?:subscribed amount|invested amount|cost basis)\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
+  const gainLossPattern = /(?:gain\/?loss|unrealized\s+gain\/?loss)\s*([+-])?\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
+  const unitsPattern = /(?:units?|shares?)\s*([0-9][0-9,]*\.?[0-9]*)/i;
+  const unitPricePattern = /(?:navpu|unit price|price per unit)\s*(?:php)?\s*([0-9][0-9,]*\.?[0-9]*)/i;
+  const dateText =
+    lines.find((line) => new RegExp(`${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}`, "i").test(line)) ?? null;
+  const snapshotDate = parseDateValue(dateText)?.toISOString().slice(0, 10) ?? null;
+
+  const fundName = lines.find((line) => fundLinePattern.test(line)) ?? null;
+  if (!fundName) {
+    return null;
+  }
+
+  const valueMatch = lines.map((line) => line.match(valueLinePattern)).find((match): match is RegExpMatchArray => Boolean(match?.[1]));
+  const costBasisMatch = lines.map((line) => line.match(costBasisPattern)).find((match): match is RegExpMatchArray => Boolean(match?.[1]));
+  const gainLossMatch = lines.map((line) => line.match(gainLossPattern)).find((match): match is RegExpMatchArray => Boolean(match?.[2] || match?.[1]));
+  const unitsMatch = lines.map((line) => line.match(unitsPattern)).find((match): match is RegExpMatchArray => Boolean(match?.[1]));
+  const unitPriceMatch = lines.map((line) => line.match(unitPricePattern)).find((match): match is RegExpMatchArray => Boolean(match?.[1]));
+
+  const currentValue = parseMoney(valueMatch?.[1] ?? null);
+  const costBasis = parseMoney(costBasisMatch?.[1] ?? null);
+  const gainLossAbsolute = parseMoney(gainLossMatch?.[2] ?? gainLossMatch?.[1] ?? null);
+  const gainLossSign = gainLossMatch?.[1] === "-" ? -1 : 1;
+  const gainLossValue = gainLossAbsolute !== null ? gainLossAbsolute * gainLossSign : null;
+  const quantity = parseMoney(unitsMatch?.[1] ?? null);
+  const unitPrice = parseMoney(unitPriceMatch?.[1] ?? null);
+
+  if (currentValue === null && costBasis === null && gainLossValue === null && quantity === null && unitPrice === null) {
+    return null;
+  }
+
+  const holding: DeterministicParsedHolding = {
+    asset_name: fundName,
+    asset_symbol: null,
+    asset_type: "mutual_fund",
+    quantity,
+    unit_price: unitPrice,
+    cost_basis: costBasis,
+    market_value: currentValue,
+    current_value: currentValue,
+    gain_loss_value: gainLossValue,
+    gain_loss_percent:
+      gainLossValue !== null && costBasis !== null && costBasis !== 0
+        ? Number(((gainLossValue / costBasis) * 100).toFixed(2))
+        : null,
+    currency: "PHP",
+    status: "active",
+    confidence_score: 85,
+    parser_evidence: {
+      page: null,
+      source_text: fundName,
+      reason: "deterministic_gfunds_account_detail",
+    },
+  };
+
+  return {
+    documentType: "account_detail" as const,
+    metadata: {
+      institution: "ATRAM",
+      accountNumber: null,
+      accountName: fundName,
+      accountType: "investment" as const,
+      openingBalance: costBasis !== null ? Number(costBasis.toFixed(2)) : null,
+      endingBalance: currentValue !== null ? Number(currentValue.toFixed(2)) : null,
+      paymentDueDate: null,
+      totalAmountDue: null,
+      startDate: snapshotDate,
+      endDate: snapshotDate,
+      confidence: 85,
+    },
+    holdings: [holding],
+  };
+};
+
 const knownUnionBankMobileScreenshotMetadata = (fileName: string): DetectedStatementMetadata | null => {
   const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
   if (!/^img_138[7-9]\.png$/.test(baseName) && !/^img_139[0-6]\.png$/.test(baseName)) {
@@ -19194,6 +19301,10 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
   const knownGfundsMetadata = gfundsScreenshotMetadata(text, fileName);
   if (knownGfundsMetadata) {
     return withDetectedCurrency(knownGfundsMetadata, text);
+  }
+  const gfundsAccountDetailSnapshot = parseGfundsAccountDetailSnapshotText(text, fileName);
+  if (gfundsAccountDetailSnapshot) {
+    return withDetectedCurrency(gfundsAccountDetailSnapshot.metadata, text);
   }
   const gfundsPortfolioSnapshot = parseGfundsPortfolioSnapshotText(text, fileName);
   if (gfundsPortfolioSnapshot) {
