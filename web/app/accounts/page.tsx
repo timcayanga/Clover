@@ -1289,6 +1289,7 @@ function AccountsPageContent() {
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const [importActivitySnapshot, setImportActivitySnapshot] = useState(() => readImportActivity());
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
+  const [hasCompletedInitialAccountPaint, setHasCompletedInitialAccountPaint] = useState(Boolean(initialCachedWorkspace));
   const stableAccountBalancesRef = useRef(new Map<string, string>());
   const accountLoadingSinceRef = useRef(new Map<string, number>());
   const pageLoadingSinceRef = useRef<number>(Date.now());
@@ -2322,6 +2323,12 @@ function AccountsPageContent() {
     (!selectedWorkspaceId && (workspacesLoading || accountsLoading || !hasInitialWorkspaceDataLoaded));
 
   useEffect(() => {
+    if (hasInitialWorkspaceDataLoaded) {
+      setHasCompletedInitialAccountPaint(true);
+    }
+  }, [hasInitialWorkspaceDataLoaded]);
+
+  useEffect(() => {
     if (!isColdLoading) {
       wasColdLoadingRef.current = false;
       return;
@@ -2363,12 +2370,15 @@ function AccountsPageContent() {
       return;
     }
 
-    document.body.toggleAttribute("data-clover-accounts-loading", isColdLoading && accounts.length === 0);
+    document.body.toggleAttribute(
+      "data-clover-accounts-loading",
+      !hasCompletedInitialAccountPaint && isColdLoading && accounts.length === 0
+    );
 
     return () => {
       document.body.removeAttribute("data-clover-accounts-loading");
     };
-  }, [accounts.length, isColdLoading]);
+  }, [accounts.length, hasCompletedInitialAccountPaint, isColdLoading]);
 
   const duplicateCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -3396,6 +3406,7 @@ function AccountsPageContent() {
   };
 
   const showColdLoadGuard =
+    !hasCompletedInitialAccountPaint &&
     accounts.length === 0 &&
     isColdLoading &&
     pageLoadingPulse - pageLoadingSinceRef.current < PAGE_LOADING_TIMEOUT_MS;
@@ -3432,7 +3443,7 @@ function AccountsPageContent() {
   const showAccountsSplash =
     !accountsLoadFailed &&
     !selectedWorkspaceId &&
-    (workspacesLoading || !hasInitialWorkspaceDataLoaded || showColdLoadGuard);
+    (!hasCompletedInitialAccountPaint && (workspacesLoading || !hasInitialWorkspaceDataLoaded || showColdLoadGuard));
 
   if (showAccountsSplash) {
     return <CloverLoadingScreen label="accounts" />;
