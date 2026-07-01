@@ -588,15 +588,40 @@ const getImportNotificationCopy = (activity: ImportActivitySnapshot) => {
   };
 };
 
+const isActuallyVisibleElement = (element: Element | null) => {
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+
+  const styles = window.getComputedStyle(element);
+  if (
+    styles.display === "none" ||
+    styles.visibility === "hidden" ||
+    styles.pointerEvents === "none" ||
+    Number(styles.opacity || "1") === 0
+  ) {
+    return false;
+  }
+
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+};
+
 const clearStaleInteractionLocks = () => {
   if (typeof document === "undefined") {
     return;
   }
 
   const { body } = document;
-  const hasImportModal = Boolean(document.querySelector(".modal-backdrop--import-fullscreen"));
-  const hasPageModal = Boolean(document.querySelector(".modal-backdrop:not(.modal-backdrop--import-fullscreen)"));
-  const hasFileDropZone = Boolean(document.querySelector(".page-file-drop-zone"));
+  const hasImportModal = Array.from(document.querySelectorAll(".modal-backdrop--import-fullscreen")).some((element) =>
+    isActuallyVisibleElement(element)
+  );
+  const hasPageModal = Array.from(document.querySelectorAll(".modal-backdrop:not(.modal-backdrop--import-fullscreen)")).some(
+    (element) => isActuallyVisibleElement(element)
+  );
+  const hasFileDropZone = Array.from(document.querySelectorAll(".page-file-drop-zone")).some((element) =>
+    isActuallyVisibleElement(element)
+  );
 
   if (body.dataset.cloverImportModalVisible === "true" && !hasImportModal) {
     delete body.dataset.cloverImportModalVisible;

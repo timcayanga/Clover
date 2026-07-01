@@ -6334,6 +6334,16 @@ export function ImportFilesModal({
   }, [backgroundOnly, launchInBackground, open, shouldLockPageInteraction, showCompactProgress]);
 
   useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    if (!open || backgroundOnly || launchInBackground || showCompactProgress) {
+      clearImportInteractionLocks();
+    }
+  }, [backgroundOnly, launchInBackground, open, showCompactProgress]);
+
+  useEffect(() => {
     if (typeof document === "undefined" || !open || backgroundOnly || launchInBackground || showCompactProgress) {
       return;
     }
