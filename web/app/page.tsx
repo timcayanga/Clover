@@ -100,7 +100,7 @@ export default async function HomePage() {
           </div>
           <div className="landing-hero-card__stack">
             <div className="landing-hero-card__row">
-              <strong>Space for a product image or animation</strong>
+              <strong>Space for a product image or animation.</strong>
               <span>Use this area to show Clover in action.</span>
             </div>
           </div>
