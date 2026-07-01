@@ -884,11 +884,9 @@ body.dashboard-modal-open .app-shell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
   color: var(--accent);
-  background: rgba(3, 168, 192, 0.12);
   flex: none;
 }
 
@@ -901,7 +899,7 @@ body.dashboard-modal-open .app-shell {
 
 .sidebar-nav__submenu-link:hover .sidebar-nav__submenu-icon,
 .sidebar-nav__submenu-link.is-active .sidebar-nav__submenu-icon {
-  background: rgba(3, 168, 192, 0.18);
+  transform: scale(1.03);
 }
 
 .nav-link {
@@ -933,15 +931,13 @@ body.dashboard-modal-open .app-shell {
   justify-content: center;
   color: var(--muted-2);
   flex: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.72);
+  width: 30px;
+  height: 30px;
 }
 
 .menu-icon-3d {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   display: block;
   object-fit: contain;
 }

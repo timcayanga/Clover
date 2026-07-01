@@ -261,7 +261,6 @@ const formatSidebarMoney = (value: number, currency?: string | null) => formatCu
 const navItems = [
   { href: "/home", label: "Home", key: "dashboard" as const },
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
-  { href: "/investments", label: "Investments", key: "investments" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/recurring", label: "Recurring", key: "recurring" as const },
   { href: "/adviser", label: "Adviser", key: "adviser" as const },
@@ -1549,17 +1548,6 @@ export function CloverShell({
                         Split Bills
                       </button>
                       <button
-                        className={`sidebar-nav__submenu-link${active === "reports" || pathname?.startsWith("/reports") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/reports")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="reports" />
-                        </span>
-                        Reports
-                      </button>
-                      <button
                         className={`sidebar-nav__submenu-link${active === "budgeting" || pathname?.startsWith("/budgeting") ? " is-active" : ""}`}
                         type="button"
                         role="menuitem"
@@ -1569,6 +1557,17 @@ export function CloverShell({
                           <MenuIcon name="budgeting" />
                         </span>
                         Budgeting
+                      </button>
+                      <button
+                        className={`sidebar-nav__submenu-link${active === "reports" || pathname?.startsWith("/reports") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/reports")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="reports" />
+                        </span>
+                        Reports
                       </button>
                       <button
                         className={`sidebar-nav__submenu-link${pathname?.startsWith("/help") ? " is-active" : ""}`}
