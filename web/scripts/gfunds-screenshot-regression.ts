@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
 import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
+import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import {
   deriveStatementFallbackAccountName,
   guessStatementIdentity,
@@ -285,6 +286,12 @@ assert.equal(
   deriveStatementFallbackAccountName("IMG_1415.PNG", "ATRAM", null, "investment"),
   "ATRAM Investments",
   "Generic investment screenshots should fall back to an investment-aware account label."
+);
+
+assert.equal(
+  formatUploadAccountDisplayName("ATRAM Global Technology Feeder Fund", "ATRAM", null, "investment"),
+  "ATRAM Global Technology Feeder Fund",
+  "Investment upload display names should preserve the visible fund name instead of collapsing to the institution brand."
 );
 
 console.log("[PASS] GFunds screenshot parser surfaces investment accounts and visible transaction rows.");

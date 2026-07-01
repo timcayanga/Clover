@@ -9903,9 +9903,29 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     institution: typeof statementMetadata?.institution === "string" ? statementMetadata.institution : null,
     accountType: typeof statementMetadata?.accountType === "string" ? statementMetadata.accountType : null,
   });
+  const hasMultipleInvestmentAccountGroups =
+    (baseStatementMetadata.accountType === "investment" ||
+      parsedRows.some((row) => {
+        const rawPayload =
+          row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+            ? (row.rawPayload as Record<string, unknown>)
+            : null;
+        const identityText = [
+          typeof row.institution === "string" ? row.institution : null,
+          typeof row.accountName === "string" ? row.accountName : null,
+          typeof rawPayload?.bank === "string" ? rawPayload.bank : null,
+          typeof rawPayload?.source === "string" ? rawPayload.source : null,
+          typeof rawPayload?.kind === "string" ? rawPayload.kind : null,
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return /(gfunds|atram|ryse)/i.test(identityText);
+      })) &&
+    parsedAccountGroups.filter((group) => group.key !== "__default__").length > 1;
   const multiAccountImport =
     (parsedAccountGroups.filter((group) => group.key !== "__default__").length > 1 &&
       parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))))) ||
+    hasMultipleInvestmentAccountGroups ||
     hasMultipleWiseWalletAccountGroups;
   const accountByGroupKey = new Map<string, Awaited<ReturnType<typeof resolveConfirmationAccount>>>();
   let resolvedAccountSequence = 0;

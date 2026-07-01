@@ -110,6 +110,14 @@ export const formatUploadAccountDisplayName = (
     return wiseWalletName;
   }
 
+  if (
+    type === "investment" &&
+    safeName &&
+    (!safeInstitution || normalizeWhitespace(safeName).toLowerCase() !== normalizeWhitespace(safeInstitution).toLowerCase())
+  ) {
+    return normalizeWhitespace(safeName);
+  }
+
   const accountSuffix = extractLastFourDigits(accountNumber) ?? extractLastFourDigits(name);
   if (
     safeName &&
