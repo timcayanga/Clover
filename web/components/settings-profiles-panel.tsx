@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type Dispatch, type SetStateAction } from "react";
-import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 
 type ProfileSummary = {
   id: string;
@@ -42,7 +41,7 @@ type SettingsProfilesPanelProps = {
 };
 
 export function SettingsProfilesPanel({
-  workspaceName,
+  workspaceName: _workspaceName,
   userImageUrl,
   activeProfileId,
   profileList,
@@ -78,13 +77,16 @@ export function SettingsProfilesPanel({
           const isDefault = profile.id === defaultProfileId;
           const renameDraft = profileRenameDrafts[profile.id] ?? profile.name;
           const profileAvatar = profile.type === "personal" ? userImageUrl : null;
-          const avatarFallback = profile.name || workspaceName;
 
           return (
             <article key={profile.id} className={`settings-action-card settings-profile-card${isActive ? " is-active" : ""}`}>
               <div className="settings-profile-summary settings-profile-summary--with-avatar">
-                <span className="settings-profile-summary__avatar" style={profileAvatar ? undefined : getAvatarBackgroundStyle(avatarFallback)}>
-                  {profileAvatar ? <img src={profileAvatar} alt="" /> : <span>{getAvatarInitials(avatarFallback)}</span>}
+                <span className="settings-profile-summary__avatar" aria-hidden="true">
+                  {profileAvatar ? (
+                    <img src={profileAvatar} alt="" />
+                  ) : (
+                    <img className="settings-profile-summary__avatar-icon" src="/assets/3d%20icons/account.png" alt="" />
+                  )}
                 </span>
                 <div className="settings-profile-summary__copy">
                   <strong>{profile.name}</strong>

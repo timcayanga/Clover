@@ -2,7 +2,6 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useUser } from "@clerk/nextjs";
-import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 
 type UserAvatarEditorProps = {
   displayName: string;
@@ -10,6 +9,7 @@ type UserAvatarEditorProps = {
 };
 
 export function UserAvatarEditor({ displayName, avatarUrl }: UserAvatarEditorProps) {
+  void displayName;
   const { isLoaded, isSignedIn, user } = useUser();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -55,16 +55,13 @@ export function UserAvatarEditor({ displayName, avatarUrl }: UserAvatarEditorPro
     });
   };
 
-  const fallbackName = displayName || "Clover";
-  const previewStyle = avatarUrl ? undefined : getAvatarBackgroundStyle(fallbackName);
-
   return (
     <div className="user-avatar-editor">
-      <div className="user-avatar-editor__preview" style={previewStyle}>
+      <div className="user-avatar-editor__preview">
         {avatarUrl ? (
           <img className="user-avatar-editor__image" src={avatarUrl} alt="" />
         ) : (
-          <span className="user-avatar-editor__initials">{getAvatarInitials(fallbackName)}</span>
+          <img className="user-avatar-editor__image user-avatar-editor__image--fallback" src="/assets/3d%20icons/account.png" alt="" />
         )}
       </div>
 
@@ -79,13 +76,13 @@ export function UserAvatarEditor({ displayName, avatarUrl }: UserAvatarEditorPro
 
       {isMenuOpen ? (
         <div className="user-avatar-editor__menu">
-          <p>Choose a new photo or switch back to initials.</p>
+          <p>Choose a new photo or switch back to the default Clover profile icon.</p>
           <div className="user-avatar-editor__actions">
             <button type="button" className="button button-primary button-small" onClick={() => fileInputRef.current?.click()} disabled={isPending}>
               Upload new photo
             </button>
             <button type="button" className="button button-secondary button-small" onClick={handleClearPhoto} disabled={isPending}>
-              Use initials
+              Use default icon
             </button>
             <button type="button" className="button button-danger button-small" onClick={handleClearPhoto} disabled={isPending}>
               Remove photo

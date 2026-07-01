@@ -8,7 +8,6 @@ import { useClerk, useUser } from "@clerk/nextjs";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { persistSelectedWorkspaceId, readSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
-import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 import { DashboardManualTransactionModal } from "@/components/dashboard-top-actions";
 import { ImportFilesModal } from "@/components/import-files-modal";
 import { signOutToLanding } from "@/lib/sign-out";
@@ -162,6 +161,22 @@ const sidebarSearchPages: Array<{
     terms: ["adviser", "advice", "analysis", "trend", "goal", "coach"],
   },
   {
+    key: "investments",
+    title: "Investments",
+    href: "/investments",
+    icon: "investments",
+    detail: "Portfolio, holdings, and market views.",
+    terms: ["investments", "portfolio", "holdings", "stocks", "funds", "market"],
+  },
+  {
+    key: "budgeting",
+    title: "Budgeting",
+    href: "/budgeting",
+    icon: "budgeting",
+    detail: "Budgets, pacing, and spending guardrails.",
+    terms: ["budgeting", "budget", "limits", "spending plan", "pacing"],
+  },
+  {
     key: "settings",
     title: "Settings",
     href: "/settings",
@@ -246,6 +261,7 @@ const formatSidebarMoney = (value: number, currency?: string | null) => formatCu
 const navItems = [
   { href: "/home", label: "Home", key: "dashboard" as const },
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
+  { href: "/investments", label: "Investments", key: "investments" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/recurring", label: "Recurring", key: "recurring" as const },
   { href: "/adviser", label: "Adviser", key: "adviser" as const },
@@ -276,7 +292,30 @@ type IconName =
   | "help"
   | "sign-out";
 
+const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
+  dashboard: "/assets/3d%20icons/home.png",
+  accounts: "/assets/3d%20icons/bank%20account.png",
+  investments: "/assets/3d%20icons/investments.png",
+  "split-bill": "/assets/3d%20icons/split%20bills.png",
+  transactions: "/assets/3d%20icons/transactions.png",
+  recurring: "/assets/3d%20icons/recurring.png",
+  reports: "/assets/3d%20icons/reports.png",
+  adviser: "/assets/3d%20icons/adviser.png",
+  budgeting: "/assets/3d%20icons/budgeting.png",
+  more: "/assets/3d%20icons/more.png",
+  notifications: "/assets/3d%20icons/notifications.png",
+  settings: "/assets/3d%20icons/settings.png",
+  help: "/assets/3d%20icons/help.png",
+  search: "/assets/3d%20icons/search.png",
+  profile: "/assets/3d%20icons/account.png",
+};
+
 function MenuIcon({ name }: { name: IconName }) {
+  const imageSrc = MENU_ICON_SRC[name];
+  if (imageSrc) {
+    return <img src={imageSrc} alt="" className="menu-icon-3d" aria-hidden="true" />;
+  }
+
   const common = {
     width: 18,
     height: 18,
@@ -819,7 +858,7 @@ export function CloverShell({
   }, []);
 
   useEffect(() => {
-    const prefetchTargets = ["/home", "/accounts", "/transactions", "/reports", "/adviser", "/more", "/settings", "/help"];
+    const prefetchTargets = ["/home", "/accounts", "/investments", "/transactions", "/reports", "/budgeting", "/adviser", "/more", "/settings", "/help"];
 
     for (const href of prefetchTargets) {
       if (pathname === href) {
@@ -1488,6 +1527,17 @@ export function CloverShell({
                   {isMoreMenuOpen ? (
                     <div className="sidebar-nav__submenu" role="menu" aria-label="More products">
                       <button
+                        className={`sidebar-nav__submenu-link${active === "investments" || pathname?.startsWith("/investments") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/investments")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="investments" />
+                        </span>
+                        Investments
+                      </button>
+                      <button
                         className={`sidebar-nav__submenu-link${active === "split-bill" || pathname?.startsWith("/split-bill") ? " is-active" : ""}`}
                         type="button"
                         role="menuitem"
@@ -1508,6 +1558,17 @@ export function CloverShell({
                           <MenuIcon name="reports" />
                         </span>
                         Reports
+                      </button>
+                      <button
+                        className={`sidebar-nav__submenu-link${active === "budgeting" || pathname?.startsWith("/budgeting") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/budgeting")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="budgeting" />
+                        </span>
+                        Budgeting
                       </button>
                       <button
                         className={`sidebar-nav__submenu-link${pathname?.startsWith("/help") ? " is-active" : ""}`}
@@ -1567,8 +1628,8 @@ export function CloverShell({
             {profileImage ? (
               <img className="sidebar-profile__photo" src={profileImage} alt="" aria-hidden="true" />
             ) : (
-              <span className="sidebar-profile__avatar" aria-hidden="true" style={getAvatarBackgroundStyle(displayName)}>
-                <span style={{ color: "#fff" }}>{getAvatarInitials(displayName)}</span>
+              <span className="sidebar-profile__avatar" aria-hidden="true">
+                <img src="/assets/3d%20icons/account.png" alt="" className="sidebar-profile__avatar-icon" />
               </span>
             )}
             <span className="sr-only">{displayName}</span>
