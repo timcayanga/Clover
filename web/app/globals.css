@@ -36888,6 +36888,9 @@ body[data-split-bill-modal-open="true"] .app-shell {
   width: min(1120px, calc(100% - 28px));
   margin: 0 auto;
   padding: 16px 0 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 .landing-page--snap {
@@ -36919,8 +36922,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
 .landing-page .landing-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.98fr);
-  gap: 24px;
+  grid-template-columns: minmax(0, 0.94fr) minmax(360px, 1fr);
+  gap: 32px;
   align-items: center;
   min-height: auto;
   padding: 28px 0 18px;
@@ -36929,22 +36932,24 @@ body[data-split-bill-modal-open="true"] .app-shell {
 .landing-page .landing-hero__copy {
   display: grid;
   gap: 16px;
-  max-width: 560px;
+  max-width: 520px;
+  min-width: 0;
 }
 
 .landing-page .landing-hero__title {
   color: var(--text);
   display: grid;
   gap: 0.24em;
-  font-size: clamp(1.7rem, 3vw, 2.45rem);
-  line-height: 1.08;
+  font-size: clamp(1.58rem, 2.5vw, 2.25rem);
+  line-height: 1.12;
   letter-spacing: 0;
-  max-width: 16ch;
+  max-width: 12ch;
+  text-wrap: balance;
 }
 
 .landing-page .landing-hero__title span {
   display: block;
-  white-space: nowrap;
+  min-width: 0;
 }
 
 .landing-page .landing-hero__lede {
@@ -37053,10 +37058,11 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
 .landing-feature__title {
   color: var(--accent);
-  font-size: clamp(1.65rem, 2.4vw, 2.35rem);
-  line-height: 1.14;
+  font-size: clamp(1.5rem, 2vw, 2rem);
+  line-height: 1.16;
   letter-spacing: 0;
-  max-width: 18ch;
+  max-width: 15ch;
+  text-wrap: balance;
 }
 
 .landing-feature__body {
@@ -37240,7 +37246,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   display: grid;
   justify-items: stretch;
   width: 100vw;
-  margin: 18px 0 0 calc(50% - 50vw);
+  margin: auto 0 0 calc(50% - 50vw);
   padding: 28px 0;
   border-radius: 0;
   background: linear-gradient(135deg, rgba(3, 168, 192, 0.98), rgba(2, 137, 160, 0.98));
@@ -37339,9 +37345,9 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .landing-page .landing-hero__title {
     gap: 0.22em;
-    font-size: clamp(1.5rem, 6vw, 1.95rem);
-    line-height: 1.08;
-    max-width: 16ch;
+    font-size: clamp(1.42rem, 5.3vw, 1.82rem);
+    line-height: 1.1;
+    max-width: 11ch;
   }
 
   .landing-page .landing-hero__lede {

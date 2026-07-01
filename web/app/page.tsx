@@ -75,9 +75,10 @@ export default async function HomePage() {
 
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">
-          <p className="eyebrow">Clover</p>
           <h1 className="landing-hero__title">
-            <span>Track months of finances in minutes.</span>
+            <span>
+              Track months of finances <span className="landing-highlight">in minutes.</span>
+            </span>
           </h1>
           <p className="landing-hero__lede">
             Clover helps you upload financial data quickly, understand your spending, and manage shared expenses in one place.
@@ -85,7 +86,7 @@ export default async function HomePage() {
 
           <div className="landing-hero__actions">
             <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
-              Get started
+              Start seeing clarity for free
             </Link>
             <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>
               Log in
@@ -227,13 +228,12 @@ export default async function HomePage() {
       <ScrollReveal as="section" className="landing-cta">
         <div className="landing-cta__inner">
           <div className="landing-cta__copy">
-            <p className="eyebrow">Ready when you are</p>
             <h2>Make money management feel simpler.</h2>
             <p>Import statements, track spending, and split bills with Clover.</p>
           </div>
           <div className="landing-cta__actions">
             <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
-              Get started
+              Start seeing clarity for free
             </Link>
             <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>
               Log in
