@@ -36924,8 +36924,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
 .landing-page .landing-hero {
   display: grid;
-  grid-template-columns: minmax(0, 0.94fr) minmax(360px, 1fr);
-  gap: 32px;
+  grid-template-columns: minmax(0, 500px) minmax(0, 1fr);
+  gap: 40px;
   align-items: center;
   min-height: auto;
   padding: 28px 0 18px;
@@ -36934,7 +36934,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
 .landing-page .landing-hero__copy {
   display: grid;
   gap: 16px;
-  max-width: 520px;
+  max-width: 480px;
   min-width: 0;
 }
 
@@ -36942,11 +36942,12 @@ body[data-split-bill-modal-open="true"] .app-shell {
   color: var(--text);
   display: grid;
   gap: 0.24em;
-  font-size: clamp(1.58rem, 2.5vw, 2.25rem);
+  font-size: clamp(1.5rem, 2.2vw, 2.05rem);
   line-height: 1.12;
   letter-spacing: 0;
-  max-width: 12ch;
+  max-width: 10.75ch;
   text-wrap: balance;
+  overflow-wrap: anywhere;
 }
 
 .landing-page .landing-hero__title span {
@@ -37047,23 +37048,23 @@ body[data-split-bill-modal-open="true"] .app-shell {
   gap: 12px;
   justify-items: center;
   text-align: center;
-  width: min(100%, 760px);
+  width: min(100%, 700px);
 }
 
 .landing-feature__title {
   color: var(--accent);
-  font-size: clamp(1.35rem, 1.85vw, 1.75rem);
+  font-size: clamp(1.25rem, 1.55vw, 1.58rem);
   line-height: 1.2;
   letter-spacing: 0;
-  max-width: 16ch;
+  max-width: 15ch;
   text-wrap: balance;
 }
 
 .landing-feature__body {
-  max-width: 44ch;
+  max-width: 42ch;
   color: var(--muted);
-  line-height: 1.7;
-  font-size: 16px;
+  line-height: 1.65;
+  font-size: 15px;
   text-align: center;
 }
 
@@ -37322,7 +37323,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .landing-page .landing-hero {
-    gap: 12px;
+    gap: 14px;
     padding: 18px 0 8px;
   }
 
@@ -37332,9 +37333,9 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .landing-page .landing-hero__title {
     gap: 0.22em;
-    font-size: clamp(1.42rem, 5.3vw, 1.82rem);
-    line-height: 1.1;
-    max-width: 11ch;
+    font-size: clamp(1.34rem, 4.9vw, 1.7rem);
+    line-height: 1.12;
+    max-width: 10.5ch;
   }
 
   .landing-page .landing-hero__lede {
@@ -37379,12 +37380,15 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .landing-feature__title {
-    max-width: none;
-    font-size: clamp(1.9rem, 9vw, 2.5rem);
+    max-width: 14ch;
+    font-size: clamp(1.22rem, 4.8vw, 1.45rem);
+    line-height: 1.24;
   }
 
   .landing-feature__body {
-    font-size: 15px;
+    max-width: 30ch;
+    font-size: 14px;
+    line-height: 1.6;
   }
 
   .landing-visual {
