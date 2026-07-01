@@ -3431,10 +3431,8 @@ function AccountsPageContent() {
 
   const showAccountsSplash =
     !accountsLoadFailed &&
-    (
-      !hasInitialWorkspaceDataLoaded ||
-      showColdLoadGuard
-    );
+    !selectedWorkspaceId &&
+    (workspacesLoading || !hasInitialWorkspaceDataLoaded || showColdLoadGuard);
 
   if (showAccountsSplash) {
     return <CloverLoadingScreen label="accounts" />;

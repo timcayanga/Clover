@@ -2626,7 +2626,9 @@ function TransactionsPageContent() {
     }
 
     if (!options?.background) {
-      setIsWorkspaceDataReady(false);
+      const hasImmediateFallbackRows =
+        transactionsRef.current.length > 0 || hydrateWorkspaceFromCache(workspaceId);
+      setIsWorkspaceDataReady(hasImmediateFallbackRows);
     }
 
     const compactViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 1100px)").matches;
