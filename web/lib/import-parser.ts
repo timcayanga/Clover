@@ -8952,16 +8952,17 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
   }
 
   const effectiveText = text.trim() ? text : buildGfundsScreenshotFallbackText({ fileName }) ?? "";
-  const datePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
+  const gfundsDateTokenPattern = `${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4}`;
+  const datePattern = new RegExp(`^${gfundsDateTokenPattern}$`, "i");
   const statusPattern = /^(Buy|Sell)\s+Order\s+Completed$/i;
   const amountPattern = /^([+-])\s*PHP\s*([0-9][0-9,]*\.\d{2})$/i;
-  const statusDatePattern = new RegExp(`^(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})$`, "i");
+  const statusDatePattern = new RegExp(`^(Buy|Sell)\\s+Order\\s+Completed\\s+(${gfundsDateTokenPattern})$`, "i");
   const dateAmountPattern = new RegExp(
-    `^(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})\\s+([+-]\\s*PHP\\s*[0-9][0-9,]*\\.\\d{2})$`,
+    `^(${gfundsDateTokenPattern})\\s+([+-]\\s*PHP\\s*[0-9][0-9,]*\\.\\d{2})$`,
     "i"
   );
   const fundStatusDateAmountPattern = new RegExp(
-    `^(.*\\S)\\s+(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})\\s+([+-]\\s*PHP\\s*[0-9][0-9,]*\\.\\d{2})$`,
+    `^(.*\\S)\\s+(Buy|Sell)\\s+Order\\s+Completed\\s+(${gfundsDateTokenPattern})\\s+([+-]\\s*PHP\\s*[0-9][0-9,]*\\.\\d{2})$`,
     "i"
   );
   const rawLines = effectiveText

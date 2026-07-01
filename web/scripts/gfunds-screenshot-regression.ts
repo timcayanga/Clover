@@ -224,6 +224,44 @@ assert.deepEqual(
   "Collapsed OCR parses should still preserve fund identity, dates, and signed amounts."
 );
 
+const relaxedDateOcrText = `Transaction History
+ATRAM Global Consumer Trends Feeder Fund
+Buy Order Completed
+Apr 16 2021
++PHP 1,000.00
+ATRAM Philippine Equity Smart Index Fund
+Sell Order Completed Apr 23 2025
+-PHP 28,414.89`;
+const relaxedDateRows = parseImportText(relaxedDateOcrText, "renamed-gfunds-export.png", "image/png", {
+  institution: "ATRAM",
+  accountName: "GFunds Investments",
+  accountNumber: null,
+});
+assert.equal(relaxedDateRows.length, 2, "The GFunds parser should tolerate abbreviated or comma-less OCR dates.");
+assert.deepEqual(
+  relaxedDateRows.map((row) => ({
+    name: row.accountName,
+    date: row.date,
+    amount: row.amount,
+    type: row.type,
+  })),
+  [
+    {
+      name: "ATRAM Global Consumer Trends Feeder Fund",
+      date: "2021-04-16",
+      amount: "1000.00",
+      type: "expense",
+    },
+    {
+      name: "ATRAM Philippine Equity Smart Index Fund",
+      date: "2025-04-23",
+      amount: "28414.89",
+      type: "income",
+    },
+  ],
+  "Relaxed OCR dates should still normalize into correct ISO transaction dates."
+);
+
 const screenshotIdentity = resolveMobileWalletIdentityFromParsedRows(allRows as Array<Record<string, unknown>>);
 assert.deepEqual(
   screenshotIdentity,
