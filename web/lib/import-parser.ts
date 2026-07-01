@@ -8955,6 +8955,15 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
   const datePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
   const statusPattern = /^(Buy|Sell)\s+Order\s+Completed$/i;
   const amountPattern = /^([+-])\s*PHP\s*([0-9][0-9,]*\.\d{2})$/i;
+  const statusDatePattern = new RegExp(`^(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})$`, "i");
+  const dateAmountPattern = new RegExp(
+    `^(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})\\s+([+-]\\s*PHP\\s*[0-9][0-9,]*\\.\\d{2})$`,
+    "i"
+  );
+  const fundStatusDateAmountPattern = new RegExp(
+    `^(.*\\S)\\s+(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})\\s+([+-]\\s*PHP\\s*[0-9][0-9,]*\\.\\d{2})$`,
+    "i"
+  );
   const rawLines = effectiveText
     .replace(/\u00a0/g, " ")
     .replace(/\u2212/g, "-")
@@ -8978,19 +8987,24 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
     const nextLine = rawLines[index + 1] ?? "";
     const combinedFundAmount = normalized.match(/^(.*\S)\s+([+-]\s*PHP\s*[0-9][0-9,]*\.\d{2})$/i);
     const combinedStatusDateAmount = normalized.match(
-      new RegExp(
-        `^(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})\\s+([+-]\\s*PHP\\s*[0-9][0-9,]*\\.\\d{2})$`,
-        "i"
-      )
+      new RegExp(`^(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})\\s+([+-]\\s*PHP\\s*[0-9][0-9,]*\\.\\d{2})$`, "i")
     );
-    const combinedStatusDate = normalized.match(
-      new RegExp(`^(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})$`, "i")
-    );
+    const combinedStatusDate = normalized.match(statusDatePattern);
+    const combinedDateAmount = normalized.match(dateAmountPattern);
+    const combinedFundStatusDateAmount = normalized.match(fundStatusDateAmountPattern);
+
+    if (combinedFundStatusDateAmount) {
+      lines.push(
+        normalizeWhitespace(combinedFundStatusDateAmount[1] ?? ""),
+        `${combinedFundStatusDateAmount[2]} Order Completed`,
+        normalizeWhitespace(combinedFundStatusDateAmount[3] ?? ""),
+        normalizeWhitespace(combinedFundStatusDateAmount[4] ?? "")
+      );
+      continue;
+    }
 
     if (combinedFundAmount && nextLine) {
-      const nextStatusDate = nextLine.match(
-        new RegExp(`^(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})$`, "i")
-      );
+      const nextStatusDate = nextLine.match(statusDatePattern);
       if (nextStatusDate) {
         lines.push(
           normalizeWhitespace(combinedFundAmount[1] ?? ""),
@@ -9009,6 +9023,11 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
         normalizeWhitespace(combinedStatusDateAmount[2] ?? ""),
         normalizeWhitespace(combinedStatusDateAmount[3] ?? "")
       );
+      continue;
+    }
+
+    if (combinedDateAmount) {
+      lines.push(normalizeWhitespace(combinedDateAmount[1] ?? ""), normalizeWhitespace(combinedDateAmount[2] ?? ""));
       continue;
     }
 

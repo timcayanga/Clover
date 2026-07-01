@@ -185,6 +185,45 @@ assert.ok(
   "Noisy OCR parses should still surface fund names instead of screenshot file names."
 );
 
+const collapsedOcrText = `Transaction History
+ATRAM Global Technology Feeder Fund Sell Order Completed April 24, 2025 -PHP 2,854.14
+ATRAM Peso Money Market Fund
+Buy Order Completed
+June 7, 2021 +PHP 15,000.00`;
+const collapsedRows = parseImportText(collapsedOcrText, "renamed-gfunds-export.png", "image/png", {
+  institution: "ATRAM",
+  accountName: "GFunds Investments",
+  accountNumber: null,
+});
+assert.equal(
+  collapsedRows.length,
+  2,
+  "The GFunds parser should tolerate fully collapsed rows and date-plus-amount OCR lines."
+);
+assert.deepEqual(
+  collapsedRows.map((row) => ({
+    name: row.accountName,
+    date: row.date,
+    amount: row.amount,
+    type: row.type,
+  })),
+  [
+    {
+      name: "ATRAM Global Technology Feeder Fund",
+      date: "2025-04-24",
+      amount: "2854.14",
+      type: "income",
+    },
+    {
+      name: "ATRAM Peso Money Market Fund",
+      date: "2021-06-07",
+      amount: "15000.00",
+      type: "expense",
+    },
+  ],
+  "Collapsed OCR parses should still preserve fund identity, dates, and signed amounts."
+);
+
 const screenshotIdentity = resolveMobileWalletIdentityFromParsedRows(allRows as Array<Record<string, unknown>>);
 assert.deepEqual(
   screenshotIdentity,
