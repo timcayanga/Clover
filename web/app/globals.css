@@ -884,10 +884,13 @@ body.dashboard-modal-open .app-shell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   color: var(--accent);
   flex: none;
+  background: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
 .sidebar-nav__submenu-link:hover,
@@ -931,13 +934,16 @@ body.dashboard-modal-open .app-shell {
   justify-content: center;
   color: var(--muted-2);
   flex: none;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
+  background: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
 .menu-icon-3d {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   display: block;
   object-fit: contain;
 }
