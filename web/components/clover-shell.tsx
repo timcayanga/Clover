@@ -1267,6 +1267,14 @@ export function CloverShell({
   const notificationCount = notifications.length;
   const navigateTo = (href: string) => {
     closeChrome();
+    if (typeof window !== "undefined" && pathname?.startsWith("/accounts")) {
+      const currentHref = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (currentHref !== href) {
+        window.location.assign(href);
+      }
+      return;
+    }
+
     router.push(href);
   };
 
@@ -1617,6 +1625,14 @@ export function CloverShell({
                 className={`nav-link ${active === item.key ? "is-active" : ""}`}
                 aria-current={active === item.key ? "page" : undefined}
                 type="button"
+                onMouseDown={(event) => {
+                  if (event.button !== 0) {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  navigateTo(item.href);
+                }}
                 onClick={() => navigateTo(item.href)}
                 onMouseEnter={() => prefetchNavTarget(item.href)}
                 onTouchStart={() => prefetchNavTarget(item.href)}
