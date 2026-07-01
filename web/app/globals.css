@@ -37027,24 +37027,13 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
 .landing-feature {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
-  gap: 28px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  justify-items: center;
   min-height: auto;
   padding: 64px 0;
   box-sizing: border-box;
-}
-
-.landing-feature--reverse {
-  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1fr);
-}
-
-.landing-feature--reverse .landing-feature__copy {
-  order: 2;
-}
-
-.landing-feature--reverse .landing-feature__visual {
-  order: 1;
 }
 
 .landing-feature + .landing-feature {
@@ -37053,23 +37042,27 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
 .landing-feature__copy {
   display: grid;
-  gap: 14px;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+  width: min(100%, 760px);
 }
 
 .landing-feature__title {
   color: var(--accent);
-  font-size: clamp(1.5rem, 2vw, 2rem);
-  line-height: 1.16;
+  font-size: clamp(1.35rem, 1.85vw, 1.75rem);
+  line-height: 1.2;
   letter-spacing: 0;
-  max-width: 15ch;
+  max-width: 16ch;
   text-wrap: balance;
 }
 
 .landing-feature__body {
-  max-width: 48ch;
+  max-width: 44ch;
   color: var(--muted);
-  line-height: 1.75;
-  font-size: 17px;
+  line-height: 1.7;
+  font-size: 16px;
+  text-align: center;
 }
 
 .landing-feature__body p {
@@ -37088,6 +37081,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   display: grid;
   gap: 16px;
   min-height: 320px;
+  width: min(100%, 920px);
   padding: 22px;
   border-radius: 30px;
   border: 1px solid rgba(15, 23, 42, 0.08);
@@ -37291,17 +37285,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
 @media (max-width: 980px) {
   .landing-page .landing-hero,
-  .landing-feature,
-  .landing-feature--reverse {
+  .landing-feature {
     grid-template-columns: 1fr;
-  }
-
-  .landing-feature__copy {
-    order: 2;
-  }
-
-  .landing-feature__visual {
-    order: 1;
   }
 
   .landing-page .landing-hero {
@@ -37382,13 +37367,9 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .landing-feature {
-    gap: 16px;
+    gap: 18px;
     min-height: auto;
     padding: 34px 0;
-  }
-
-  .landing-feature__copy {
-    order: 2;
   }
 
   .landing-feature__visual {

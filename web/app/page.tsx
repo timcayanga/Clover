@@ -36,22 +36,20 @@ function FeatureSection({
   title,
   copy,
   visual,
-  reverse = false,
   id,
 }: {
   title: ReactNode;
   copy: ReactNode;
   visual: ReactNode;
-  reverse?: boolean;
   id: string;
 }) {
   return (
-    <ScrollReveal as="section" className={`landing-feature ${reverse ? "landing-feature--reverse" : ""}`.trim()} id={id}>
+    <ScrollReveal as="section" className="landing-feature" id={id}>
+      <div className="landing-feature__visual">{visual}</div>
       <div className="landing-feature__copy">
         <h2 className="landing-feature__title">{title}</h2>
         <div className="landing-feature__body">{copy}</div>
       </div>
-      <div className="landing-feature__visual">{visual}</div>
     </ScrollReveal>
   );
 }
@@ -109,7 +107,6 @@ export default async function HomePage() {
 
       <FeatureSection
         id="statement-import"
-        reverse
         title={
           <>
             Turn <span className="landing-highlight">statements</span> into usable spending data.
@@ -157,7 +154,6 @@ export default async function HomePage() {
 
       <FeatureSection
         id="split-bills"
-        reverse
         title={
           <>
             Share expenses without the <span className="landing-highlight">hassle</span>.
@@ -204,7 +200,6 @@ export default async function HomePage() {
 
       <FeatureSection
         id="trust"
-        reverse
         title={
           <>
             Keep your data <span className="landing-highlight">safe and secure</span>.
