@@ -5513,6 +5513,14 @@ const getMobileScreenshotWalletIdentity = (rawPayload: Prisma.JsonValue | null |
     };
   }
 
+  if (kind === "gfunds") {
+    return {
+      accountName: "ATRAM Investments",
+      institution: "ATRAM",
+      accountType: "investment" as AccountType,
+    };
+  }
+
   return null;
 };
 
@@ -7999,6 +8007,48 @@ export const processImportFileText = async (
     parsedRowsCount: rows.length,
   });
 
+  let resolvedDocumentImportAccount = importFile.account ?? null;
+  if (
+    isDocumentImport &&
+    !resolvedDocumentImportAccount &&
+    (typeof resolvedMetadata.accountName === "string" && resolvedMetadata.accountName.trim()
+      ? true
+      : typeof resolvedMetadata.institution === "string" && resolvedMetadata.institution.trim())
+  ) {
+    try {
+      resolvedDocumentImportAccount = await resolveConfirmationAccount({
+        importFile,
+        statementMetadata: {
+          accountName: resolvedMetadata.accountName ?? null,
+          institution: resolvedMetadata.institution ?? null,
+          accountNumber: resolvedMetadata.accountNumber ?? null,
+          accountType: resolvedMetadata.accountType ?? null,
+          currency: resolvedMetadata.currency ?? null,
+          openingBalance: resolvedMetadata.openingBalance ?? null,
+          endingBalance: resolvedMetadata.endingBalance ?? resolvedMetadata.totalAmountDue ?? null,
+          creditLimit: resolvedMetadata.creditLimit ?? null,
+        },
+        parsedRows: rows,
+        accountId: null,
+        planLimits: null,
+        planAccountCount: null,
+      });
+      if (resolvedDocumentImportAccount?.id) {
+        await updateImportFileCompat(importFileId, {
+          accountId: resolvedDocumentImportAccount.id,
+        });
+      }
+    } catch (error) {
+      console.warn("[import-account-match] unable to materialize document import account from metadata", {
+        importFileId,
+        importMode,
+        institution: resolvedMetadata.institution ?? null,
+        accountName: resolvedMetadata.accountName ?? null,
+        error,
+      });
+    }
+  }
+
   const derivedDocumentMode =
     importMode === "statement" && openAiParsed?.documentType && openAiParsed.documentType !== "statement"
       ? openAiParsed.documentType
@@ -8076,8 +8126,8 @@ export const processImportFileText = async (
     derivedDocumentMode === "receipt"
       ? resolvedReceiptAccountId ?? receiptDocumentFallbackCashAccountId
       : receiptPreviewLooksLikeReceipt
-        ? importFile.account?.id ?? resolvedReceiptAccountId
-        : importFile.account?.id ?? null;
+        ? resolvedDocumentImportAccount?.id ?? resolvedReceiptAccountId
+        : resolvedDocumentImportAccount?.id ?? null;
   const documentImportExtractedPayload = {
     metadata: resolvedMetadata,
     rowCount: rows.length,
@@ -8248,7 +8298,7 @@ export const processImportFileText = async (
     const investmentSnapshot = await upsertInvestmentSnapshotCompat({
       workspaceId: String(importFile.workspaceId),
       documentImportId: documentImportRecord.id,
-      accountId: importFile.account?.id ?? null,
+      accountId: resolvedDocumentImportAccount?.id ?? null,
       snapshotDate: parseDateValue(resolvedMetadata.endDate ?? null),
       portfolioName: resolvedMetadata.accountName ?? resolvedMetadata.institution ?? null,
       currency: resolvedMetadata.currency ?? null,
@@ -8270,7 +8320,7 @@ export const processImportFileText = async (
         workspaceId: String(importFile.workspaceId),
         investmentSnapshotId: investmentSnapshot.id,
         documentImportId: documentImportRecord.id,
-        accountId: importFile.account?.id ?? null,
+        accountId: resolvedDocumentImportAccount?.id ?? null,
         holdings: openAiParsed.holdings.map((holding, index) => ({
           rowIndex: index + 1,
           assetName: holding.asset_name,
