@@ -312,7 +312,7 @@ const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
 function MenuIcon({ name }: { name: IconName }) {
   const imageSrc = MENU_ICON_SRC[name];
   if (imageSrc) {
-    return <img src={imageSrc} alt="" className="menu-icon-3d" aria-hidden="true" />;
+    return <img src={imageSrc} alt="" className={`menu-icon-3d${name === "dashboard" ? " menu-icon-3d--home" : ""}`} aria-hidden="true" />;
   }
 
   const common = {

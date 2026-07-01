@@ -948,6 +948,11 @@ body.dashboard-modal-open .app-shell {
   object-fit: contain;
 }
 
+.menu-icon-3d--home {
+  width: 31px;
+  height: 31px;
+}
+
 .nav-link__badge {
   margin-left: auto;
   min-height: 22px;
