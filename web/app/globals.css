@@ -16298,12 +16298,19 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   body[data-clover-page-modal] .sidebar,
   body[data-clover-drop-active="true"] .sidebar {
     pointer-events: auto !important;
-    z-index: 120 !important;
+    z-index: 2147483400 !important;
+    isolation: isolate;
+  }
+
+  body[data-clover-import-modal-visible="true"] .sidebar-popover,
+  body[data-clover-page-modal] .sidebar-popover,
+  body[data-clover-drop-active="true"] .sidebar-popover {
+    pointer-events: auto !important;
+    z-index: 2147483500 !important;
   }
 
   body[data-clover-import-modal-visible="true"] .sidebar-popover {
     pointer-events: auto !important;
-    z-index: 1377 !important;
   }
 }
 

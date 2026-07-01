@@ -595,7 +595,7 @@ const clearStaleInteractionLocks = () => {
 
   const { body } = document;
   const hasImportModal = Boolean(document.querySelector(".modal-backdrop--import-fullscreen"));
-  const hasPageModal = Boolean(document.querySelector(".modal-backdrop"));
+  const hasPageModal = Boolean(document.querySelector(".modal-backdrop:not(.modal-backdrop--import-fullscreen)"));
   const hasFileDropZone = Boolean(document.querySelector(".page-file-drop-zone"));
 
   if (body.dataset.cloverImportModalVisible === "true" && !hasImportModal) {
