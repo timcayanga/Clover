@@ -16299,7 +16299,11 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 @media (min-width: 981px) {
-  body[data-clover-import-modal-visible="true"] .sidebar,
+  body[data-clover-import-modal-visible="true"] .sidebar {
+    pointer-events: none !important;
+    z-index: 120 !important;
+  }
+
   body[data-clover-page-modal] .sidebar,
   body[data-clover-drop-active="true"] .sidebar {
     pointer-events: auto !important;
@@ -16307,15 +16311,15 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
     isolation: isolate;
   }
 
-  body[data-clover-import-modal-visible="true"] .sidebar-popover,
+  body[data-clover-import-modal-visible="true"] .sidebar-popover {
+    pointer-events: none !important;
+    z-index: 1 !important;
+  }
+
   body[data-clover-page-modal] .sidebar-popover,
   body[data-clover-drop-active="true"] .sidebar-popover {
     pointer-events: auto !important;
     z-index: 2147483500 !important;
-  }
-
-  body[data-clover-import-modal-visible="true"] .sidebar-popover {
-    pointer-events: auto !important;
   }
 }
 
