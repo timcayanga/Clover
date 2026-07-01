@@ -1015,33 +1015,37 @@ export default function InvestmentsPage() {
           <>
             <section className="accounts-overview-grid investments-overview-grid">
               <article className="accounts-overview-card glass">
-                <div className="investments-metric__label">
-                  <span>Current value</span>
-                  <InfoTip label="The total value of the visible investment holdings for the selected currency view." />
-                </div>
-                <strong className="accounts-overview-card__amount">
+                <button className="accounts-overview-card__info" type="button" aria-label="How Current Value is calculated">
+                  i
+                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                    The total value of the visible investment holdings for the selected currency view.
+                  </span>
+                </button>
+                <p className="eyebrow">Current Value</p>
+                <strong className="accounts-overview-card__amount is-good">
                   {hasVisibleCurrencySelection
                     ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
                     : "—"}
                 </strong>
               </article>
               <article className="accounts-overview-card glass">
-                <div className="investments-metric__label">
-                  <span>P&amp;L</span>
-                  <InfoTip label="Gain or loss for the visible holdings in the selected currency view." />
-                </div>
-                <div style={{ display: "grid", gap: 4 }}>
-                  <strong className="accounts-overview-card__amount">
-                    {hasVisibleCurrencySelection
-                      ? formatInvestmentAggregate(portfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
-                      : "—"}
-                  </strong>
-                  <span className="panel-muted">
-                    {hasVisibleCurrencySelection && selectedCurrencyCodes.length === 1 && portfolioTotals.purchaseValue > 0
-                      ? percentFormatter.format(portfolioTotals.gainLoss / portfolioTotals.purchaseValue)
-                      : "—"}
+                <button className="accounts-overview-card__info" type="button" aria-label="How P&L is calculated">
+                  i
+                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                    Gain or loss for the visible holdings in the selected currency view.
                   </span>
-                </div>
+                </button>
+                <p className="eyebrow">P&amp;L</p>
+                <strong className={`accounts-overview-card__amount ${portfolioTotals.gainLoss > 0 ? "is-good" : portfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
+                  {hasVisibleCurrencySelection
+                    ? formatInvestmentAggregate(portfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
+                    : "—"}
+                </strong>
+                <span className="investments-overview-card__subvalue">
+                  {hasVisibleCurrencySelection && selectedCurrencyCodes.length === 1 && portfolioTotals.purchaseValue > 0
+                    ? percentFormatter.format(portfolioTotals.gainLoss / portfolioTotals.purchaseValue)
+                    : "—"}
+                </span>
               </article>
             </section>
 

@@ -19140,6 +19140,13 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   margin: 0 auto;
 }
 
+.investments-overview-card__subvalue {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 .accounts-form-currency-field,
 .settings-currency-field__selector,
 .transaction-drawer-form__currency {
