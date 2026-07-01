@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
 import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
+import {
+  deriveStatementFallbackAccountName,
+  guessStatementIdentity,
+  resolveMobileWalletIdentityFromParsedRows,
+} from "@/lib/import-statement-identity";
 
 const samples = [
   {
@@ -178,6 +183,31 @@ assert.equal(noisyRows.length, 2, "The GFunds parser should tolerate combined OC
 assert.ok(
   noisyRows.every((row) => row.accountName && !/^IMG_/i.test(String(row.accountName))),
   "Noisy OCR parses should still surface fund names instead of screenshot file names."
+);
+
+const screenshotIdentity = resolveMobileWalletIdentityFromParsedRows(allRows as Array<Record<string, unknown>>);
+assert.deepEqual(
+  screenshotIdentity,
+  {
+    accountName: "ATRAM Investments",
+    institution: "ATRAM",
+    accountType: "investment",
+    accountNumber: null,
+  },
+  "GFunds screenshot rows should resolve to an investment screenshot identity."
+);
+
+assert.deepEqual(guessStatementIdentity("GFunds export.png"), {
+  accountName: "ATRAM Investments",
+  institution: "ATRAM",
+  accountNumber: null,
+  accountType: "investment",
+});
+
+assert.equal(
+  deriveStatementFallbackAccountName("IMG_1415.PNG", "ATRAM", null, "investment"),
+  "ATRAM Investments",
+  "Generic investment screenshots should fall back to an investment-aware account label."
 );
 
 console.log("[PASS] GFunds screenshot parser surfaces investment accounts and visible transaction rows.");

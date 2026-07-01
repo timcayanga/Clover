@@ -226,6 +226,15 @@ export const guessStatementIdentity = (fileName: string) => {
     };
   }
 
+  if (/(gfunds|atram|ryse)/i.test(lowerName)) {
+    return {
+      accountName: "ATRAM Investments",
+      institution: "ATRAM",
+      accountNumber: null,
+      accountType: "investment" as const,
+    };
+  }
+
   return null;
 };
 
@@ -319,6 +328,10 @@ export const deriveStatementFallbackAccountName = (
   const normalizedInstitution = typeof institution === "string" && institution.trim() ? institution.trim() : null;
   if (!normalizedInstitution) {
     return null;
+  }
+
+  if (accountType === "investment") {
+    return `${normalizedInstitution} Investments`;
   }
 
   return formatUploadAccountDisplayName(
@@ -418,6 +431,15 @@ export const resolveMobileWalletIdentityFromParsedRows = (rows: ParsedImportRow[
         accountName: "GCash",
         institution: "GCash",
         accountType: "wallet",
+        accountNumber: null,
+      };
+    }
+
+    if (/(gfunds|atram|ryse)/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
+      return {
+        accountName: "ATRAM Investments",
+        institution: "ATRAM",
+        accountType: "investment",
         accountNumber: null,
       };
     }
