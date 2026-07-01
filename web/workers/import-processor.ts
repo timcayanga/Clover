@@ -8053,6 +8053,23 @@ export const processImportFileText = async (
     importMode === "statement" && openAiParsed?.documentType && openAiParsed.documentType !== "statement"
       ? openAiParsed.documentType
       : importMode;
+  const documentImportAccountSummaries =
+    resolvedDocumentImportAccount?.id
+      ? [
+          {
+            accountId: resolvedDocumentImportAccount.id,
+            accountName: resolvedDocumentImportAccount.name,
+            institution: resolvedDocumentImportAccount.institution,
+            accountNumber: resolvedDocumentImportAccount.accountNumber,
+            accountType: resolvedDocumentImportAccount.type,
+            balance:
+              resolvedMetadata.endingBalance !== null && resolvedMetadata.endingBalance !== undefined
+                ? resolvedMetadata.endingBalance.toString()
+                : snapshotBalanceToString(resolvedDocumentImportAccount.balance),
+            rowsImported: rows.length,
+          },
+        ]
+      : [];
   const documentImportSourceMetadata = {
     importMode,
     documentType: derivedDocumentMode,
@@ -8488,7 +8505,10 @@ export const processImportFileText = async (
           duplicate: Boolean(confirmedImportResult.duplicate),
           metadata: resolvedMetadata,
           accountId: confirmedImportResult.accountId ?? null,
-          accountSummaries: confirmedImportResult.accountSummaries,
+          accountSummaries:
+            confirmedImportResult.accountSummaries && confirmedImportResult.accountSummaries.length > 0
+              ? confirmedImportResult.accountSummaries
+              : documentImportAccountSummaries,
           confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
           insightSummary: confirmedImportResult.insightSummary ?? undefined,
           accountBalance: confirmedImportResult.accountBalance ?? null,
@@ -8638,7 +8658,10 @@ export const processImportFileText = async (
         duplicate: false,
         metadata: resolvedMetadata,
         accountId: confirmedImportResult.accountId ?? null,
-        accountSummaries: confirmedImportResult.accountSummaries,
+        accountSummaries:
+          confirmedImportResult.accountSummaries && confirmedImportResult.accountSummaries.length > 0
+            ? confirmedImportResult.accountSummaries
+            : documentImportAccountSummaries,
         confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
         insightSummary: confirmedImportResult.insightSummary ?? undefined,
         accountBalance: confirmedImportResult.accountBalance ?? null,
