@@ -10340,7 +10340,7 @@ input.transaction-inline-edit--amount::placeholder {
   right: 14px;
   bottom: 14px;
   z-index: 76;
-  width: min(280px, calc(100vw - 16px));
+  width: min(340px, calc(100vw - 16px));
   pointer-events: none;
 }
 
@@ -10362,12 +10362,17 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 10px;
 }
 
+.import-upload-dock__copy {
+  min-width: 0;
+}
+
 .import-upload-dock__header strong {
   display: block;
   margin-top: 4px;
   font-size: 14px;
   line-height: 1.25;
   letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
 }
 
 .import-upload-dock__header p {
@@ -10375,6 +10380,22 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--muted);
   line-height: 1.45;
   font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.import-upload-dock__file-name {
+  margin-top: 6px;
+  color: var(--muted-2);
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.import-upload-dock__message {
+  min-width: 0;
 }
 
 .import-upload-dock__status {
@@ -10397,14 +10418,20 @@ input.transaction-inline-edit--amount::placeholder {
 
 .import-upload-dock__close {
   border: 0;
-  background: transparent;
-  color: var(--muted-2);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text);
   font-size: 18px;
   line-height: 1;
   padding: 0;
-  margin: -2px -1px 0 0;
-  width: auto;
-  height: auto;
+  margin: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(215, 228, 233, 0.92);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
+  display: grid;
+  place-items: center;
+  flex: none;
 }
 
 .import-upload-dock__body {

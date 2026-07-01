@@ -288,7 +288,7 @@ export function GlobalImportActivity() {
           fileTotal={activity.fileTotal}
           completedFiles={activity.completedFiles}
           progress={activity.progress}
-          detail={activity.errorMessage ?? spec.message}
+          detail={spec.message}
           errorCode={code}
           errorTitle={activity.errorTitle || spec.title || "File not readable"}
           errorNextSteps={activity.errorNextSteps ?? getImportErrorNextSteps(code)}
@@ -300,9 +300,9 @@ export function GlobalImportActivity() {
     return (
       <ImportErrorToast
         code={code}
-        httpClass={spec.httpClass}
-        title={activity.errorTitle || spec.title || activity.detail || "Clover hit an import snag"}
-        message={activity.errorMessage ?? spec.message}
+        fileName={activity.fileName}
+        title={activity.errorTitle || spec.title || "Clover hit an import snag"}
+        message={spec.message}
         nextSteps={activity.errorNextSteps ?? getImportErrorNextSteps(code)}
         onClose={handleClose}
       />

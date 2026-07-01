@@ -28,6 +28,19 @@ type ImportUploadDockProps = {
 
 const clampProgress = (value: number) => Math.max(0, Math.min(100, value));
 
+const truncateMiddle = (value: string, maxLength = 44) => {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  const extensionMatch = value.match(/(\.[a-z0-9]{2,8})$/i);
+  const extension = extensionMatch?.[1] ?? "";
+  const roomForName = Math.max(8, maxLength - extension.length - 1);
+  const leading = Math.max(6, Math.ceil(roomForName * 0.6));
+  const trailing = Math.max(4, roomForName - leading);
+  return `${value.slice(0, leading)}…${value.slice(-trailing)}${extension}`;
+};
+
 export function ImportUploadDock({
   open,
   fileName = null,
@@ -78,6 +91,7 @@ export function ImportUploadDock({
         ? `File ${safeFileIndex} of ${safeFileTotal}`
         : `${safeCompletedFiles} of ${safeFileTotal} ${tone === "error" ? "files checked" : "files ready"}`
       : "Clover is getting things ready";
+  const displayFileName = fileName ? truncateMiddle(fileName) : null;
   const progressLabel =
     safeFileTotal > 0
       ? isComplete
@@ -115,11 +129,12 @@ export function ImportUploadDock({
     <div className={`import-upload-dock import-upload-dock--${tone}`} role={tone === "error" ? "alert" : "status"} aria-live={tone === "error" ? "assertive" : "polite"}>
       <div className="import-upload-dock__inner glass">
         <div className="import-upload-dock__header">
-          <div>
+          <div className="import-upload-dock__copy">
             <p className="eyebrow">Import progress</p>
             <strong>{tone === "error" && errorTitle ? errorTitle : fileLabel}</strong>
+            {displayFileName ? <p className="import-upload-dock__file-name" title={fileName ?? undefined}>{displayFileName}</p> : null}
             {phaseLabel ? <p className="import-upload-dock__phase">{phaseLabel}</p> : null}
-            <p>{statusDetail}</p>
+            <p className="import-upload-dock__message">{statusDetail}</p>
             {timingSummary ? <p className="import-upload-dock__phase">{timingSummary}</p> : null}
             {tone === "error" && errorCode ? <p className="import-upload-dock__phase">Import code {errorCode}</p> : null}
           </div>

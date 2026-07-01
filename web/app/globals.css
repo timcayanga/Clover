@@ -15688,18 +15688,33 @@ body[data-clover-page-modal] .modal-card {
   justify-content: space-between;
 }
 
+.import-error-toast__copy {
+  min-width: 0;
+}
+
 .import-error-toast__title-row h4 {
   margin: 0;
   color: var(--fg);
   font-size: 1.12rem;
   line-height: 1.15;
   letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
 }
 
 .import-error-toast__title-row p {
   margin: 6px 0 0;
   color: var(--muted);
   line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.import-error-toast__file-name {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .import-error-toast__close {
@@ -15999,7 +16014,7 @@ body[data-clover-page-modal] .modal-card {
   right: 14px;
   bottom: 14px;
   z-index: 76;
-  width: min(280px, calc(100vw - 16px));
+  width: min(340px, calc(100vw - 16px));
   pointer-events: none;
 }
 
@@ -16035,12 +16050,17 @@ body[data-clover-page-modal] .modal-card {
   gap: 10px;
 }
 
+.import-upload-dock__copy {
+  min-width: 0;
+}
+
 .import-upload-dock__header strong {
   display: block;
   margin-top: 4px;
   font-size: 14px;
   line-height: 1.25;
   letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
 }
 
 .import-upload-dock__header p {
@@ -16048,6 +16068,22 @@ body[data-clover-page-modal] .modal-card {
   color: var(--muted);
   line-height: 1.45;
   font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.import-upload-dock__file-name {
+  margin-top: 6px;
+  color: var(--muted-2);
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.import-upload-dock__message {
+  min-width: 0;
 }
 
 .import-upload-dock__status {
@@ -16070,14 +16106,20 @@ body[data-clover-page-modal] .modal-card {
 
 .import-upload-dock__close {
   border: 0;
-  background: transparent;
-  color: var(--muted-2);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text);
   font-size: 18px;
   line-height: 1;
   padding: 0;
-  margin: -2px -1px 0 0;
-  width: auto;
-  height: auto;
+  margin: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(215, 228, 233, 0.92);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
+  display: grid;
+  place-items: center;
+  flex: none;
 }
 
 .import-upload-dock__body {
@@ -16164,6 +16206,7 @@ body[data-clover-page-modal] .modal-card {
   color: var(--text);
   font-size: 11px;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .import-upload-dock__checklist li::before {

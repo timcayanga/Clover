@@ -52,7 +52,7 @@ import {
 import { friendlyImportPhaseLabel, friendlyImportProgressLabel, IMPORT_PROGRESS } from "@/lib/import-progress";
 import { waitForImportSettledVisibility } from "@/lib/import-settled-visibility";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
-import { getImportErrorSpec, isResumableImportErrorCode, type ImportErrorStage, type ImportErrorSpec } from "@/lib/import-error-spec";
+import { getImportErrorSpec, getImportErrorSpecForCode, isResumableImportErrorCode, type ImportErrorStage, type ImportErrorSpec } from "@/lib/import-error-spec";
 import {
   clearImportActivity,
   readImportActivity,
@@ -319,7 +319,8 @@ const getImportErrorCode = (error: unknown) => {
   return "unknown_error";
 };
 
-const formatImportFailureMessage = (_file: File | string, errorMessage: string) => errorMessage;
+const formatImportFailureMessage = (file: File | string, errorMessage: string) =>
+  getImportErrorSpec("process", typeof file === "string" ? file : file.name, errorMessage).message;
 
 const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null, reason?: string | null): ImportErrorSpec => {
   const spec = getImportErrorSpec(stage, fileName, reason);
@@ -7038,6 +7039,7 @@ export function ImportFilesModal({
     hasCompletedBatch ? lastImportActivityRef.current?.summary ?? buildVisibleImportSummary(items) : null;
   const compactProgressSummary =
     showCompactProgress ? completedBatchSummary ?? buildVisibleImportSummary(items) : null;
+  const compactErrorSpec = currentErrorItem?.errorCode ? getImportErrorSpecForCode(currentErrorItem.errorCode) : null;
 
   const modalContent = activePasswordItem ? (
       <ImportPasswordModal
@@ -7078,7 +7080,7 @@ export function ImportFilesModal({
         progress={Math.max(displayedOverallProgress, activityProgressFloor)}
         summary={compactProgressSummary}
         detail={
-          currentErrorItem?.error ??
+          (currentErrorItem ? compactErrorSpec?.message ?? currentErrorItem.errorTitle ?? "Clover could not finish this import." : null) ??
           (activityProgressFloor > displayedOverallProgress && activitySnapshotForDisplay?.detail
             ? activitySnapshotForDisplay.detail
             : null) ??
@@ -7227,7 +7229,7 @@ export function ImportFilesModal({
                   {item.error ? (
                     <div className="accounts-import-file__error">
                       <strong>{item.errorTitle ?? "Import issue"}</strong>
-                      <p>{item.error}</p>
+                      <p>{item.errorCode ? getImportErrorSpecForCode(item.errorCode).message : item.error}</p>
                       {item.errorCode ? <p className="accounts-import-file__error-code">Error code {item.errorCode}</p> : null}
                       {item.errorNextSteps?.length ? (
                         <ul className="accounts-import-file__error-list">

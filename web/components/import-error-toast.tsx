@@ -4,20 +4,34 @@ import Link from "next/link";
 
 type ImportErrorToastProps = {
   code: string;
-  httpClass: string;
   title: string;
   message: string;
   nextSteps: string[];
+  fileName?: string | null;
   onClose: () => void;
 };
 
-export function ImportErrorToast({ code, httpClass, title, message, nextSteps, onClose }: ImportErrorToastProps) {
+const truncateMiddle = (value: string, maxLength = 52) => {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  const extensionMatch = value.match(/(\.[a-z0-9]{2,8})$/i);
+  const extension = extensionMatch?.[1] ?? "";
+  const roomForName = Math.max(10, maxLength - extension.length - 1);
+  const leading = Math.max(8, Math.ceil(roomForName * 0.6));
+  const trailing = Math.max(5, roomForName - leading);
+  return `${value.slice(0, leading)}…${value.slice(-trailing)}${extension}`;
+};
+
+export function ImportErrorToast({ code, title, message, nextSteps, fileName = null, onClose }: ImportErrorToastProps) {
   return (
     <aside className="import-error-toast glass" role="alert" aria-live="assertive">
-      <div className="import-error-toast__eyebrow">HTTP {httpClass}</div>
+      <div className="import-error-toast__eyebrow">Import issue</div>
       <div className="import-error-toast__title-row">
-        <div>
+        <div className="import-error-toast__copy">
           <h4>{title}</h4>
+          {fileName ? <p className="import-error-toast__file-name" title={fileName}>{truncateMiddle(fileName)}</p> : null}
           <p>{message}</p>
         </div>
         <button type="button" className="icon-button import-error-toast__close" onClick={onClose} aria-label="Close import error popup">
