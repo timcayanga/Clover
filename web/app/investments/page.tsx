@@ -1265,52 +1265,31 @@ export default function InvestmentsPage() {
                         const gainLoss =
                           currentValue === null || purchaseValue === null ? null : currentValue - purchaseValue;
                         const returnPercent = getReturnPercent(currentValue, purchaseValue);
-                        const highlights = getInvestmentHighlights(account);
                         const isEditing = editingAccountId === account.id && Boolean(editingDraft);
                         const editFieldConfigs = isEditing && editingDraft ? getInvestmentFieldConfigs(editingDraft.investmentSubtype) : [];
+                        const accountPath = getAccountPath(account);
 
                         return (
                           <article key={account.id} className="accounts-account-card glass">
+                            {!isEditing ? <Link className="accounts-account-card__link-overlay" href={accountPath} aria-label={`Open ${account.name}`} /> : null}
                             <div className="accounts-account-card__head">
                               <div className="accounts-account-card__brand">
                                 <AccountBrandMark accountBrand={investmentAssetBrand} label={investmentAssetBrand.label} />
                                 <div>
                                   <strong>{account.name}</strong>
-                                  <span>
-                                    {investmentAssetBrand.label}
-                                    {account.institution && account.institution !== investmentAssetBrand.label ? ` · ${account.institution}` : ""}
-                                  </span>
+                                  {account.investmentSymbol ? <span>{account.investmentSymbol}</span> : null}
                                 </div>
                               </div>
-                              <div className="accounts-account-card__head-actions">
-                                {isEditing ? (
-                                  <>
-                                    <button className="button button-primary button-small" type="button" onClick={saveEditingAccount} disabled={isUpdating}>
-                                      Save
-                                    </button>
-                                    <button className="button button-secondary button-small" type="button" onClick={cancelEditingAccount} disabled={isUpdating}>
-                                      Cancel
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <button className="button button-secondary button-small" type="button" onClick={() => beginEditingAccount(account)}>
-                                      Edit
-                                    </button>
-                                    <button
-                                      className="button button-danger button-small"
-                                      type="button"
-                                      onClick={() => void deleteInvestment(account)}
-                                      disabled={isDeleting === account.id}
-                                    >
-                                      {isDeleting === account.id ? "Deleting..." : "Delete"}
-                                    </button>
-                                    <Link className="button button-secondary button-small" href={getAccountPath(account)}>
-                                      Open
-                                    </Link>
-                                  </>
-                                )}
-                              </div>
+                              {isEditing ? (
+                                <div className="accounts-account-card__head-actions">
+                                  <button className="button button-primary button-small" type="button" onClick={saveEditingAccount} disabled={isUpdating}>
+                                    Save
+                                  </button>
+                                  <button className="button button-secondary button-small" type="button" onClick={cancelEditingAccount} disabled={isUpdating}>
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
 
                             <div className="accounts-account-card__body">
@@ -1389,39 +1368,45 @@ export default function InvestmentsPage() {
                                 </div>
                               ) : (
                                 <>
-                                  <div className="accounts-account-card__balance-row">
-                                    <div className="accounts-account-card__amount is-asset">
-                                      {currentValue === null ? "Not set" : formatInvestmentAmount(currentValue, account.currency)}
+                                  {currentValue !== null || account.investmentSubtype ? (
+                                    <div className="accounts-account-card__balance-row">
+                                      {currentValue !== null ? (
+                                        <div className="accounts-account-card__amount is-asset">
+                                          {formatInvestmentAmount(currentValue, account.currency)}
+                                        </div>
+                                      ) : null}
+                                      {account.investmentSubtype ? (
+                                        <div className="accounts-account-card__balance-meta">
+                                          <span className="accounts-account-card__balance-pill is-neutral">
+                                            {getInvestmentSubtypeLabel(account.investmentSubtype)}
+                                          </span>
+                                        </div>
+                                      ) : null}
                                     </div>
-                                    <div className="accounts-account-card__balance-meta">
-                                      <span className="accounts-account-card__balance-pill is-neutral">
-                                        {account.investmentSubtype ? getInvestmentSubtypeLabel(account.investmentSubtype) : "Unclassified"}
+                                  ) : null}
+
+                                  {purchaseValue !== null || gainLoss !== null ? (
+                                    <div className="accounts-account-card__investment-meta">
+                                      {purchaseValue !== null ? (
+                                        <span>
+                                          {`${account.investmentCostBasis ? "Purchase value" : "Principal"} ${formatInvestmentAmount(purchaseValue, account.currency)}`}
+                                        </span>
+                                      ) : null}
+                                      {gainLoss !== null ? (
+                                        <span>
+                                          {`${gainLoss >= 0 ? "Gain" : "Loss"} ${formatInvestmentAmount(Math.abs(gainLoss), account.currency)}`}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+
+                                  {returnPercent !== null ? (
+                                    <div className="accounts-account-card__investment-meta">
+                                      <span className={returnPercent >= 0 ? "is-positive" : "is-negative"}>
+                                        {`Return ${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
                                       </span>
                                     </div>
-                                  </div>
-
-                                  <div className="accounts-account-card__investment-meta">
-                                    <span>
-                                      {purchaseValue === null
-                                        ? "Purchase value not set"
-                                        : `${account.investmentCostBasis ? "Purchase value" : "Principal"} ${formatInvestmentAmount(purchaseValue, account.currency)}`}
-                                    </span>
-                                    <span>
-                                      {gainLoss === null
-                                        ? "Gain/Loss not set"
-                                        : `${gainLoss >= 0 ? "Gain" : "Loss"} ${formatInvestmentAmount(Math.abs(gainLoss), account.currency)}`}
-                                    </span>
-                                  </div>
-
-                                  <div className="accounts-account-card__investment-meta">
-                                    <span>{highlights[0]}</span>
-                                    <span>{highlights[1]}</span>
-                                    <span className={returnPercent === null ? "" : returnPercent >= 0 ? "is-positive" : "is-negative"}>
-                                      {returnPercent === null
-                                        ? "Return not set"
-                                        : `Return ${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
-                                    </span>
-                                  </div>
+                                  ) : null}
                                 </>
                               )}
                             </div>

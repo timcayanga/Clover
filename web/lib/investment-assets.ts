@@ -99,11 +99,15 @@ export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): Acco
         type: "investment",
       })
     : null;
-  const logoSrcs = uniqueValues([
-    ...getInvestmentAssetLogoCandidates(params),
+  const shouldPreferInstitutionLogo = !params.symbol?.trim() || !params.subtype || params.subtype === "other";
+  const institutionLogoCandidates = uniqueValues([
     ...(institutionBrand?.logoSrcs ?? []),
     ...(institutionBrand?.logoSrc ? [institutionBrand.logoSrc] : []),
   ]);
+  const assetLogoCandidates = getInvestmentAssetLogoCandidates(params);
+  const logoSrcs = shouldPreferInstitutionLogo
+    ? uniqueValues([...institutionLogoCandidates, ...assetLogoCandidates])
+    : uniqueValues([...assetLogoCandidates, ...institutionLogoCandidates]);
 
   return {
     label,

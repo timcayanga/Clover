@@ -2070,6 +2070,7 @@ function AccountDetailPageContent() {
   const hasVisibleBalance = hasMeaningfulBalance(account?.balance);
   const isPendingBalance =
     account?.source === "upload" &&
+    account?.type !== "investment" &&
     !hasVisibleBalance &&
     !hasMeaningfulBalance(checkpointBalance) &&
     !hasLoadedTransactions;
@@ -3498,6 +3499,15 @@ function AccountDetailPageContent() {
     setInvestmentEditDraft((current) => (current ? { ...current, [key]: value } : current));
   };
 
+  const focusInvestmentEditField = (field: keyof InvestmentEditDraft | "dividendAmount") => {
+    const selector = `[data-investment-field="${field}"]`;
+    const fieldElement = document.querySelector<HTMLInputElement | HTMLSelectElement>(selector);
+    fieldElement?.focus();
+    if (fieldElement instanceof HTMLInputElement) {
+      fieldElement.select();
+    }
+  };
+
   const toggleFavoriteAccount = async () => {
     if (!account || favoriteSaving) {
       return;
@@ -4035,31 +4045,39 @@ function AccountDetailPageContent() {
                       ? "Saved"
                       : investmentAutosaveState === "error"
                         ? "Needs attention"
-                        : "Autosaves as you edit"}
+                        : ""}
                 </span>
               </div>
             </div>
             <div className="accounts-detail__investment-summary">
-              <div className="status-card">
+              <button className="status-card accounts-detail__investment-field" type="button" onClick={() => focusInvestmentEditField("investmentSubtype")}>
                 <div className="panel-muted">Subtype</div>
                 <strong>{getInvestmentSubtypeLabel(investmentSubtype)}</strong>
-              </div>
-              <div className="status-card">
+              </button>
+              <button className="status-card accounts-detail__investment-field" type="button" onClick={() => focusInvestmentEditField("balance")}>
                 <div className="panel-muted">Current value</div>
                 <strong>{formatAccountAmount(currentBalance, account.currency)}</strong>
-              </div>
-              <div className="status-card">
+              </button>
+              <button
+                className="status-card accounts-detail__investment-field"
+                type="button"
+                onClick={() => focusInvestmentEditField(isFixedIncomeInvestmentSubtype(investmentSubtype) ? "investmentPrincipal" : "investmentCostBasis")}
+              >
                 <div className="panel-muted">Purchase value / principal</div>
                 <strong>{investmentPurchaseValue === null ? "Not set" : formatAccountAmount(investmentPurchaseValue, account.currency)}</strong>
-              </div>
-              <div className="status-card">
+              </button>
+              <button className="status-card accounts-detail__investment-field" type="button" onClick={() => focusInvestmentEditField("dividendAmount")}>
                 <div className="panel-muted">Dividends</div>
                 <strong>{formatAccountAmount(investmentDividendTotal, account.currency)}</strong>
-              </div>
-              <div className="status-card">
+              </button>
+              <button
+                className="status-card accounts-detail__investment-field"
+                type="button"
+                onClick={() => focusInvestmentEditField(isFixedIncomeInvestmentSubtype(investmentSubtype) ? "investmentPrincipal" : "investmentCostBasis")}
+              >
                 <div className="panel-muted">Gain / loss</div>
                 <strong>{investmentGainLoss === null ? "Not set" : formatAccountAmount(investmentGainLoss, account.currency)}</strong>
-              </div>
+              </button>
             </div>
 
             {investmentEditDraft ? (
@@ -4071,11 +4089,12 @@ function AccountDetailPageContent() {
                   </label>
                   <label>
                     Institution
-                    <input value={investmentEditDraft.institution} onChange={(event) => updateInvestmentEditDraft("institution", event.target.value)} />
+                    <input data-investment-field="institution" value={investmentEditDraft.institution} onChange={(event) => updateInvestmentEditDraft("institution", event.target.value)} />
                   </label>
                   <label>
                     Investment subtype
                     <select
+                      data-investment-field="investmentSubtype"
                       value={investmentEditDraft.investmentSubtype}
                       onChange={(event) => {
                         const nextSubtype = event.target.value as InvestmentSubtype;
@@ -4098,7 +4117,7 @@ function AccountDetailPageContent() {
                   </label>
                   <label>
                     Current value / balance
-                    <input value={investmentEditDraft.balance} onChange={(event) => updateInvestmentEditDraft("balance", event.target.value)} inputMode="decimal" />
+                    <input data-investment-field="balance" value={investmentEditDraft.balance} onChange={(event) => updateInvestmentEditDraft("balance", event.target.value)} inputMode="decimal" />
                   </label>
                   {investmentEditingFieldConfigs.map((field) => (
                     <label key={field.key}>
@@ -4106,6 +4125,7 @@ function AccountDetailPageContent() {
                       {field.type === "date" ? (
                         <input
                           type="date"
+                          data-investment-field={field.key}
                           value={
                             field.key === "investmentStartDate"
                               ? investmentEditDraft.investmentStartDate
@@ -4128,6 +4148,7 @@ function AccountDetailPageContent() {
                                       ? investmentEditDraft.investmentInterestRate
                                       : investmentEditDraft.investmentMaturityValue
                           }
+                          data-investment-field={field.key}
                           onChange={(event) => updateInvestmentEditDraft(field.key as keyof InvestmentEditDraft, event.target.value)}
                           inputMode={field.inputMode}
                           placeholder={field.placeholder}
@@ -4249,6 +4270,7 @@ function AccountDetailPageContent() {
                       Amount
                       <input
                         inputMode="decimal"
+                        data-investment-field="dividendAmount"
                         value={dividendDraft.amount}
                         onChange={(event) => setDividendDraft((current) => ({ ...current, amount: event.target.value }))}
                       />
