@@ -3363,9 +3363,9 @@ body.transactions-manual-open .shell-quick-add-button {
     color: var(--muted);
     display: grid;
     justify-items: center;
-    gap: 4px;
+    gap: 2px;
     min-width: 0;
-    padding: 6px 2px 4px;
+    padding: 5px 2px 4px;
     border-radius: 16px;
     text-align: center;
   }
@@ -3379,11 +3379,14 @@ body.transactions-manual-open .shell-quick-add-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.72);
+    width: 34px;
+    height: 34px;
     color: var(--muted-2);
+  }
+
+  .shell-bottom-nav__icon .menu-icon-3d {
+    width: 30px;
+    height: 30px;
   }
 
   .shell-bottom-nav__label {
@@ -3397,7 +3400,6 @@ body.transactions-manual-open .shell-quick-add-button {
   }
 
   .shell-bottom-nav__item.is-active .shell-bottom-nav__icon {
-    background: rgba(3, 168, 192, 0.14);
     color: var(--accent);
   }
 
@@ -3466,7 +3468,7 @@ body.transactions-manual-open .shell-quick-add-button {
   .more-page__link {
     min-height: 0;
     padding: 8px 0 4px;
-    gap: 6px;
+    gap: 4px;
     border-radius: 0;
     border: 0;
     background: transparent;
@@ -3489,8 +3491,8 @@ body.transactions-manual-open .shell-quick-add-button {
   }
 
   .more-page__link-icon-image {
-    width: 22px;
-    height: 22px;
+    width: 34px;
+    height: 34px;
   }
 
   .more-page__link strong {
