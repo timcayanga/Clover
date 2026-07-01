@@ -60,6 +60,27 @@ export type DetectedStatementMetadata = {
   confidence: number;
 };
 
+export type DeterministicParsedHolding = {
+  asset_name: string;
+  asset_symbol: string | null;
+  asset_type: string | null;
+  quantity: number | null;
+  unit_price: number | null;
+  cost_basis: number | null;
+  market_value: number | null;
+  current_value: number | null;
+  gain_loss_value: number | null;
+  gain_loss_percent: number | null;
+  currency: string | null;
+  status: string | null;
+  confidence_score: number;
+  parser_evidence: {
+    page: number | null;
+    source_text: string | null;
+    reason: string;
+  };
+};
+
 export type ImportParseContext = {
   institution?: string | null;
   accountName?: string | null;
@@ -9104,6 +9125,208 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
       confidence: Math.max(metadata.confidence, isKnownGfundsScreenshotFile(fileName) ? 95 : 88),
     },
     rows,
+  };
+};
+
+export const parseGfundsPortfolioSnapshotText = (text: string, fileName = "") => {
+  const normalized = normalizeWhitespace(text);
+  const looksLikeGfundsPortfolio =
+    /(?:\bATRAM\b|\bRyse\b|\bGFunds\b)/i.test(normalized) &&
+    /(?:current value|market value|total value|portfolio value|subscribed amount|invested amount|gain\/?loss|unrealized)/i.test(
+      normalized
+    );
+
+  if (!looksLikeGfundsPortfolio) {
+    return null;
+  }
+
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .replace(/\u2212/g, "-")
+    .split(/\r?\n/)
+    .map((line) =>
+      normalizeWhitespace(
+        line
+          .replace(/[›»]+$/g, "")
+          .replace(/[“”]/g, '"')
+          .replace(/[‘’]/g, "'")
+      )
+    )
+    .filter(Boolean);
+
+  const structuralPattern =
+    /^(?:My Funds|Portfolio|Invest through Ryse|Transaction History|Request transaction history|Available balance|Total balance|Current balance)$/i;
+  const fundLinePattern = /(?:\bATRAM\b.*\bFund\b|\bPhilippine Stock Index Fund \(Units\)\b)/i;
+  const totalValuePattern = /(?:total\s+(?:current\s+)?value|portfolio\s+value|total\s+portfolio)\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
+  const valueLinePattern = /(current value|market value)\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
+  const costBasisPattern = /(subscribed amount|invested amount|cost basis)\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
+  const gainLossPattern = /(gain\/?loss|unrealized\s+gain\/?loss)\s*([+-])?\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
+  const unitsPattern = /(units?|shares?)\s*([0-9][0-9,]*\.?[0-9]*)/i;
+  const unitPricePattern = /(?:navpu|unit price|price per unit)\s*(?:php)?\s*([0-9][0-9,]*\.?[0-9]*)/i;
+  const dateText =
+    lines.find((line) => new RegExp(`${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}`, "i").test(line)) ?? null;
+  const snapshotDate = parseDateValue(dateText)?.toISOString().slice(0, 10) ?? null;
+
+  const holdings: DeterministicParsedHolding[] = [];
+  let currentHolding:
+    | (DeterministicParsedHolding & {
+        __fundName: string;
+      })
+    | null = null;
+
+  const flushHolding = () => {
+    if (!currentHolding?.__fundName) {
+      return;
+    }
+
+    holdings.push({
+      asset_name: currentHolding.__fundName,
+      asset_symbol: currentHolding.asset_symbol,
+      asset_type: currentHolding.asset_type,
+      quantity: currentHolding.quantity,
+      unit_price: currentHolding.unit_price,
+      cost_basis: currentHolding.cost_basis,
+      market_value: currentHolding.market_value,
+      current_value: currentHolding.current_value,
+      gain_loss_value: currentHolding.gain_loss_value,
+      gain_loss_percent: currentHolding.gain_loss_percent,
+      currency: currentHolding.currency,
+      status: currentHolding.status,
+      confidence_score: currentHolding.confidence_score,
+      parser_evidence: currentHolding.parser_evidence,
+    });
+  };
+
+  for (const line of lines) {
+    if (structuralPattern.test(line)) {
+      continue;
+    }
+
+    if (fundLinePattern.test(line) && !valueLinePattern.test(line) && !costBasisPattern.test(line) && !gainLossPattern.test(line)) {
+      flushHolding();
+      currentHolding = {
+        __fundName: line,
+        asset_name: line,
+        asset_symbol: null,
+        asset_type: "mutual_fund",
+        quantity: null,
+        unit_price: null,
+        cost_basis: null,
+        market_value: null,
+        current_value: null,
+        gain_loss_value: null,
+        gain_loss_percent: null,
+        currency: "PHP",
+        status: "active",
+        confidence_score: 86,
+        parser_evidence: {
+          page: null,
+          source_text: line,
+          reason: "deterministic_gfunds_portfolio",
+        },
+      };
+      continue;
+    }
+
+    if (!currentHolding) {
+      continue;
+    }
+
+    const totalValueMatch = line.match(totalValuePattern);
+    const valueMatch = line.match(valueLinePattern);
+    const costBasisMatch = line.match(costBasisPattern);
+    const gainLossMatch = line.match(gainLossPattern);
+    const unitsMatch = line.match(unitsPattern);
+    const unitPriceMatch = line.match(unitPricePattern);
+
+    if (valueMatch?.[2]) {
+      const parsed = parseMoney(valueMatch[2]);
+      if (parsed !== null) {
+        currentHolding.current_value = parsed;
+        currentHolding.market_value = parsed;
+      }
+      continue;
+    }
+
+    if (costBasisMatch?.[2]) {
+      const parsed = parseMoney(costBasisMatch[2]);
+      if (parsed !== null) {
+        currentHolding.cost_basis = parsed;
+      }
+      continue;
+    }
+
+    if (gainLossMatch?.[3]) {
+      const parsed = parseMoney(gainLossMatch[3]);
+      const sign = gainLossMatch[2] === "-" ? -1 : 1;
+      if (parsed !== null) {
+        currentHolding.gain_loss_value = parsed * sign;
+      }
+      continue;
+    }
+
+    if (unitsMatch?.[2]) {
+      const parsed = parseMoney(unitsMatch[2]);
+      if (parsed !== null) {
+        currentHolding.quantity = parsed;
+      }
+      continue;
+    }
+
+    if (unitPriceMatch?.[1]) {
+      const parsed = parseMoney(unitPriceMatch[1]);
+      if (parsed !== null) {
+        currentHolding.unit_price = parsed;
+      }
+      continue;
+    }
+
+    if (totalValueMatch?.[1]) {
+      continue;
+    }
+  }
+
+  flushHolding();
+
+  if (holdings.length === 0) {
+    return null;
+  }
+
+  for (const holding of holdings) {
+    if (
+      holding.gain_loss_percent === null &&
+      holding.gain_loss_value !== null &&
+      holding.cost_basis !== null &&
+      holding.cost_basis !== 0
+    ) {
+      holding.gain_loss_percent = Number(((holding.gain_loss_value / holding.cost_basis) * 100).toFixed(2));
+    }
+  }
+
+  const explicitTotalValue = lines
+    .map((line) => line.match(totalValuePattern))
+    .find((match): match is RegExpMatchArray => Boolean(match?.[1]));
+  const totalValue =
+    parseMoney(explicitTotalValue?.[1] ?? null) ??
+    holdings.reduce((sum, holding) => sum + (holding.current_value ?? holding.market_value ?? 0), 0);
+  const totalCostBasis = holdings.reduce((sum, holding) => sum + (holding.cost_basis ?? 0), 0);
+
+  return {
+    documentType: "portfolio" as const,
+    metadata: {
+      institution: "ATRAM",
+      accountNumber: null,
+      accountName: "GFunds Investments",
+      accountType: "investment" as const,
+      openingBalance: totalCostBasis > 0 ? Number(totalCostBasis.toFixed(2)) : null,
+      endingBalance: totalValue > 0 ? Number(totalValue.toFixed(2)) : null,
+      paymentDueDate: null,
+      totalAmountDue: null,
+      startDate: snapshotDate,
+      endDate: snapshotDate,
+      confidence: 87,
+    },
+    holdings,
   };
 };
 
@@ -18971,6 +19194,10 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
   const knownGfundsMetadata = gfundsScreenshotMetadata(text, fileName);
   if (knownGfundsMetadata) {
     return withDetectedCurrency(knownGfundsMetadata, text);
+  }
+  const gfundsPortfolioSnapshot = parseGfundsPortfolioSnapshotText(text, fileName);
+  if (gfundsPortfolioSnapshot) {
+    return withDetectedCurrency(gfundsPortfolioSnapshot.metadata, text);
   }
 
   const knownRcbcScreenshotMetadata = knownRcbcMobileScreenshotMetadata(fileName);

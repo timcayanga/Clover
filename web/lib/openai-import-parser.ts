@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { getEnv } from "@/lib/env";
 import {
+  parseGfundsPortfolioSnapshotText,
   type DetectedStatementMetadata,
+  type DeterministicParsedHolding,
   guessCategoryName,
   inferAccountTypeFromStatement,
   type ImportedAccountType,
@@ -321,6 +323,23 @@ type OpenAIParsedHolding = {
     reason: string;
   };
 };
+
+const toDeterministicHolding = (holding: DeterministicParsedHolding): OpenAIParsedHolding => ({
+  asset_name: holding.asset_name,
+  asset_symbol: holding.asset_symbol,
+  asset_type: holding.asset_type,
+  quantity: holding.quantity,
+  unit_price: holding.unit_price,
+  cost_basis: holding.cost_basis,
+  market_value: holding.market_value,
+  current_value: holding.current_value,
+  gain_loss_value: holding.gain_loss_value,
+  gain_loss_percent: holding.gain_loss_percent,
+  currency: holding.currency,
+  status: holding.status,
+  confidence_score: holding.confidence_score,
+  parser_evidence: holding.parser_evidence,
+});
 
 type OpenAIParsedReceiptLineItem = {
   description: string;
@@ -1962,6 +1981,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   retryTimeoutMs?: number | null;
 }): Promise<
   | {
+      documentType: "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
       metadata: DetectedStatementMetadata;
       holdings: OpenAIParsedHolding[];
       receiptAccountMatch: ReceiptAccountMatch | null;
@@ -1979,6 +1999,33 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     }
   | null
 > => {
+  const deterministicGfundsPortfolio =
+    (params.importMode === "portfolio" || params.importMode === "account_detail" || params.importMode === "statement")
+      ? parseGfundsPortfolioSnapshotText(params.text, params.fileName ?? "")
+      : null;
+  if (deterministicGfundsPortfolio) {
+    return {
+      documentType: deterministicGfundsPortfolio.documentType,
+      metadata: deterministicGfundsPortfolio.metadata,
+      holdings: deterministicGfundsPortfolio.holdings.map(toDeterministicHolding),
+      receiptAccountMatch: null,
+      receiptDetails: null,
+      rows: [],
+      model: "deterministic_gfunds_portfolio",
+      promptVersion: OPENAI_PROMPT_VERSION,
+      audit: {
+        sourceFilename: params.fileName ?? null,
+        confidence: deterministicGfundsPortfolio.metadata.confidence ?? 0,
+        schemaValidated: true,
+        schemaValidationResult: "deterministic_gfunds_portfolio",
+        rawResponse: JSON.stringify({
+          document_type: deterministicGfundsPortfolio.documentType,
+          holdings: deterministicGfundsPortfolio.holdings.length,
+        }),
+      },
+    };
+  }
+
   const env = getEnv();
   const apiKey = (env as { OPENAI_API_KEY?: string }).OPENAI_API_KEY?.trim();
   const isPrimaryMode =
@@ -2281,6 +2328,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         sample: outputText.slice(0, 500),
       });
       return {
+        documentType: params.importMode ?? "statement",
         metadata: buildFallbackMetadata(params.detectedMetadata),
         holdings: [],
         receiptAccountMatch: null,
@@ -2305,6 +2353,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         issues: validation.error.issues.slice(0, 3),
       });
       return {
+        documentType: params.importMode ?? "statement",
         metadata: buildFallbackMetadata(params.detectedMetadata),
         holdings: [],
         receiptAccountMatch: null,
@@ -2553,6 +2602,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     }
 
     return {
+      documentType,
       metadata,
       holdings,
       receiptAccountMatch,

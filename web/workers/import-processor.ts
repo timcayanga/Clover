@@ -7999,17 +7999,21 @@ export const processImportFileText = async (
     parsedRowsCount: rows.length,
   });
 
+  const derivedDocumentMode =
+    importMode === "statement" && openAiParsed?.documentType && openAiParsed.documentType !== "statement"
+      ? openAiParsed.documentType
+      : importMode;
   const documentImportSourceMetadata = {
     importMode,
-    documentType: importMode,
+    documentType: derivedDocumentMode,
     receiptFamily:
-      importMode === "receipt"
+      derivedDocumentMode === "receipt"
         ? trainedReceiptFixture?.documentType ?? receiptPreview?.receiptType ?? null
         : receiptPreviewLooksLikeReceipt
           ? receiptPreview?.receiptType ?? null
           : null,
     matchedTrainingFixture:
-      importMode === "receipt" && trainedReceiptFixture
+      derivedDocumentMode === "receipt" && trainedReceiptFixture
         ? {
             fileName: trainedReceiptFixture.fileName,
             merchant: trainedReceiptFixture.merchant,
@@ -8065,11 +8069,11 @@ export const processImportFileText = async (
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const receiptDocumentFallbackCashAccountId =
-    importMode === "receipt"
+    derivedDocumentMode === "receipt"
       ? await resolveWorkspaceCashAccountId(String(importFile.workspaceId), resolvedMetadata.currency ?? "PHP")
       : null;
   const documentImportAccountId =
-    importMode === "receipt"
+    derivedDocumentMode === "receipt"
       ? resolvedReceiptAccountId ?? receiptDocumentFallbackCashAccountId
       : receiptPreviewLooksLikeReceipt
         ? importFile.account?.id ?? resolvedReceiptAccountId
@@ -8104,20 +8108,20 @@ export const processImportFileText = async (
     workspaceId: String(importFile.workspaceId),
     importFileId,
     accountId: documentImportAccountId,
-    documentFamily: importMode,
+    documentFamily: derivedDocumentMode,
     documentSubtype:
-      importMode === "receipt"
+      derivedDocumentMode === "receipt"
         ? "receipt"
-        : importMode === "portfolio"
+        : derivedDocumentMode === "portfolio"
           ? resolvedMetadata.accountType ?? resolvedMetadata.accountName ?? "portfolio"
-          : importMode === "account_detail"
+          : derivedDocumentMode === "account_detail"
             ? resolvedMetadata.accountType ?? resolvedMetadata.accountName ?? "account_detail"
-            : importMode === "notes"
+            : derivedDocumentMode === "notes"
               ? "notes"
               : "statement",
-    institution: importMode === "receipt" ? null : resolvedMetadata.institution ?? null,
-    accountName: importMode === "receipt" ? "Cash" : resolvedMetadata.accountName ?? null,
-    accountNumber: importMode === "receipt" ? null : resolvedMetadata.accountNumber ?? null,
+    institution: derivedDocumentMode === "receipt" ? null : resolvedMetadata.institution ?? null,
+    accountName: derivedDocumentMode === "receipt" ? "Cash" : resolvedMetadata.accountName ?? null,
+    accountNumber: derivedDocumentMode === "receipt" ? null : resolvedMetadata.accountNumber ?? null,
     currency: resolvedMetadata.currency ?? null,
     pageCount: effectiveDocumentPageCount,
     confidence: resolvedMetadata.confidence ?? 0,
@@ -8154,32 +8158,32 @@ export const processImportFileText = async (
         pageNumber: page,
         imageName: `${fileName || "import"}-page-${page}`,
         pageType:
-          importMode === "receipt"
+          derivedDocumentMode === "receipt"
             ? "receipt_page"
-            : importMode === "portfolio"
+            : derivedDocumentMode === "portfolio"
               ? "portfolio_page"
-              : importMode === "account_detail"
+              : derivedDocumentMode === "account_detail"
                 ? "account_detail_page"
-                : importMode === "notes"
+                : derivedDocumentMode === "notes"
                   ? "notes_page"
                   : "statement_page",
         visibleTitle:
-          importMode === "receipt"
+          derivedDocumentMode === "receipt"
             ? "Receipt"
-            : importMode === "portfolio"
+            : derivedDocumentMode === "portfolio"
               ? resolvedMetadata.accountName ?? resolvedMetadata.institution ?? "Portfolio"
-              : importMode === "account_detail"
+              : derivedDocumentMode === "account_detail"
                 ? resolvedMetadata.accountName ?? resolvedMetadata.institution ?? "Account details"
-                : importMode === "notes"
+                : derivedDocumentMode === "notes"
                   ? "Notes"
                   : resolvedMetadata.accountName ?? resolvedMetadata.institution ?? "Statement",
         visibleDate: resolvedMetadata.endDate ?? resolvedMetadata.paymentDueDate ?? null,
         visibleCurrency: resolvedMetadata.currency ?? null,
-        layoutNotes: `Imported ${importMode} page ${page}`,
+        layoutNotes: `Imported ${derivedDocumentMode} page ${page}`,
         confidence: resolvedMetadata.confidence ?? 0,
         rawPayload: {
           pageNumber: page,
-          importMode,
+          importMode: derivedDocumentMode,
           fileName,
           fileType,
         } as Prisma.InputJsonValue,
@@ -8200,7 +8204,7 @@ export const processImportFileText = async (
     }
   }
 
-  if (documentImportRecord && (importMode === "receipt" || receiptDetails)) {
+  if (documentImportRecord && (derivedDocumentMode === "receipt" || receiptDetails)) {
     const receiptDetailsPayload = receiptDetails ?? openAiParsed?.receiptDetails ?? null;
     const receiptAccountMatchPayload = receiptAccountMatch ?? openAiParsed?.receiptAccountMatch ?? null;
     const receiptValidation = openAiReceiptValidation;
@@ -8228,7 +8232,7 @@ export const processImportFileText = async (
         : null,
       confidence: resolvedMetadata.confidence ?? 0,
       rawPayload: {
-        documentType: importMode,
+        documentType: derivedDocumentMode,
         metadata: resolvedMetadata,
         receiptAccountMatch: receiptAccountMatchPayload,
         receiptAccountResolution,
@@ -8240,7 +8244,7 @@ export const processImportFileText = async (
     });
   }
 
-  if (documentImportRecord && (importMode === "portfolio" || importMode === "account_detail")) {
+  if (documentImportRecord && (derivedDocumentMode === "portfolio" || derivedDocumentMode === "account_detail")) {
     const investmentSnapshot = await upsertInvestmentSnapshotCompat({
       workspaceId: String(importFile.workspaceId),
       documentImportId: documentImportRecord.id,
@@ -8254,7 +8258,7 @@ export const processImportFileText = async (
       gainLossPercent: null,
       confidence: resolvedMetadata.confidence ?? 0,
       rawPayload: {
-        documentType: importMode,
+        documentType: derivedDocumentMode,
         metadata: resolvedMetadata,
         rowCount: rows.length,
         pageCount: effectiveDocumentPageCount,
@@ -8285,7 +8289,7 @@ export const processImportFileText = async (
           rawPayload: {
             parserEvidence: holding.parser_evidence,
             source: "openai",
-            documentType: importMode,
+            documentType: derivedDocumentMode,
           } as Prisma.InputJsonValue,
         })),
       });
