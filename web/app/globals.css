@@ -35356,8 +35356,8 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 }
 
 .split-bill-empty-cta img {
-  width: 58px;
-  height: 58px;
+  width: min(100%, 172px);
+  height: auto;
   object-fit: contain;
 }
 
