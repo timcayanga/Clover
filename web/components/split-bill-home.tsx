@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { EmptyDataCta } from "@/components/empty-data-cta";
+import { SplitBillActionButtons } from "@/components/split-bill-action-buttons";
 import { formatSplitBillAmount, normalizeCurrencyCode, type SplitBillSerializedBill } from "@/lib/split-bill";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
@@ -63,7 +63,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
   const [showAllBills, setShowAllBills] = useState(false);
   const [billSearch, setBillSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "settled">("all");
-  const isGettingStartedState = bills.length === 0 && groups.length === 0 && people.length === 0;
+  const isBlankState = bills.length === 0;
 
   const balancePulse = useMemo(() => {
     const owes = new Map<string, number>();
@@ -164,47 +164,18 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
 
   return (
     <div className="split-bill-home">
-      {isGettingStartedState ? (
-        <EmptyDataCta
-          className="dashboard-empty-state"
-          eyebrow="Split Bills"
-          title="Upload a receipt, split the items, and track who owes what"
-          copy="Split Bills helps you turn shared meals, trips, and group expenses into something easy to settle. Clover keeps the bill, the people, and the transfers in one place."
-          highlights={[
-            "Upload a receipt and let Clover pull in line items for review.",
-            "Assign items to friends or groups instead of splitting everything equally.",
-            "Track who owes you, who you owe, and what has already been settled.",
-          ]}
-          illustration="/illustrations/clover-transactions-search-3d.png"
-          illustrationAlt="A 3D Clover illustration"
-          accountHref="/split-bill"
-          transactionHref="/transactions"
-          actions={
-            <>
-              <button
-                className="button button-primary button-small"
-                type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent("clover:open-split-bill-add", { detail: { mode: "import" } }))}
-              >
-                Upload receipt
-              </button>
-              <button
-                className="button button-secondary button-small"
-                type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent("clover:open-split-bill-add", { detail: { mode: "manual" } }))}
-              >
-                Add bill
-              </button>
-              <button
-                className="pill-link pill-link--inline transactions-empty-state__manual-link"
-                type="button"
-                onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-people"))}
-              >
-                Add people
-              </button>
-            </>
-          }
-        />
+      {isBlankState ? (
+        <section className="split-bill-empty-cta" aria-label="Start splitting bills">
+          <img src="/clover-mark.svg" alt="" aria-hidden="true" />
+          <h2>
+            <span>Upload a receipt</span>, split the items, and track who owes what
+          </h2>
+          <SplitBillActionButtons
+            className="split-bill-empty-cta__actions"
+            onAddBill={() => window.dispatchEvent(new CustomEvent("clover:open-split-bill-add", { detail: { mode: "manual" } }))}
+            onUploadReceipt={() => window.dispatchEvent(new CustomEvent("clover:open-split-bill-add", { detail: { mode: "import" } }))}
+          />
+        </section>
       ) : (
         <section className="split-bill-pulse panel glass" aria-label="Split Bills balance summary">
           <div className="split-bill-pulse__metrics">
@@ -307,7 +278,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
             })
           ) : (
             <div className="split-bill-table__empty-state">
-              {bills.length === 0 ? null : "No bills match this view."}
+              {isBlankState ? null : "No bills match this view."}
             </div>
           )}
         </div>

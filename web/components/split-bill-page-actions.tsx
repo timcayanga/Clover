@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { SplitBillActionButtons } from "@/components/split-bill-action-buttons";
 import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
 import { SplitBillPersonModal } from "@/components/split-bill-person-modal";
@@ -175,14 +176,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
   return (
     <>
       {!isModalOpen ? (
-        <div className="split-bill-page-actions">
-          <button className="button button-primary button-small" type="button" onClick={() => setOpenAddMode("manual")}>
-            Add Bill
-          </button>
-          <button className="button button-secondary button-small" type="button" onClick={() => setOpenAddMode("import")}>
-            Upload Receipt
-          </button>
-        </div>
+        <SplitBillActionButtons onAddBill={() => setOpenAddMode("manual")} onUploadReceipt={() => setOpenAddMode("import")} />
       ) : null}
 
       <SplitBillManualModal open={openAddMode === "manual"} currentUserName={currentUserName} people={people} groups={groups} onClose={closeAddModal} onSaved={onBillSaved} />

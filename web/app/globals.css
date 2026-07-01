@@ -34699,6 +34699,10 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   gap: 10px;
 }
 
+.split-bill-action-button {
+  gap: 7px;
+}
+
 .split-bill-currency-selector .currency-selector__trigger-all {
   min-width: 76px;
 }
@@ -35314,6 +35318,39 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 .split-bill-table__empty-state {
   padding: 18px;
   color: var(--text-secondary);
+}
+
+.split-bill-empty-cta {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  width: min(100%, 720px);
+  margin: 0 auto 4px;
+  padding: 8px 20px 2px;
+  text-align: center;
+}
+
+.split-bill-empty-cta img {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+}
+
+.split-bill-empty-cta h2 {
+  max-width: 620px;
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.45rem, 3vw, 2.4rem);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+}
+
+.split-bill-empty-cta h2 span {
+  color: var(--accent);
+}
+
+.split-bill-empty-cta__actions {
+  justify-content: center;
 }
 
 .split-bill-empty-launchpad {
@@ -36709,6 +36746,14 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .split-bill-page-actions {
     flex-wrap: wrap;
+  }
+
+  .split-bill-empty-cta {
+    padding-inline: 8px;
+  }
+
+  .split-bill-empty-cta__actions {
+    justify-content: center;
   }
 
   .split-bill-detail-modal__summary-grid {
