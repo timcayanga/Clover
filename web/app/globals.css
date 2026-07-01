@@ -1277,17 +1277,17 @@ body.transactions-manual-open .shell-quick-add-button {
   width: 40px;
   height: 40px;
   border-radius: 13px;
-  border: 1px solid transparent;
+  border: 1px solid rgba(3, 168, 192, 0.2);
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.58);
+  background: linear-gradient(180deg, rgba(3, 168, 192, 0.04), rgba(94, 211, 208, 0.02));
   cursor: pointer;
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
 .sidebar-icon-button:hover,
 .sidebar-icon-button.is-active {
-  background: rgba(3, 168, 192, 0.1);
-  border-color: rgba(3, 168, 192, 0.16);
+  background: linear-gradient(180deg, rgba(3, 168, 192, 0.1), rgba(94, 211, 208, 0.06));
+  border-color: rgba(3, 168, 192, 0.28);
   color: var(--accent);
   box-shadow: 0 8px 20px rgba(3, 168, 192, 0.08);
 }
@@ -33657,8 +33657,8 @@ html[data-theme="dark"] .sidebar-icon-button:hover,
 html[data-theme="dark"] .sidebar-icon-button.is-active,
 html[data-theme="dark"] .sidebar-profile:hover,
 html[data-theme="dark"] .sidebar-profile.is-active {
-  background: rgba(9, 15, 27, 0.96);
-  border-color: rgba(148, 163, 184, 0.2);
+  background: linear-gradient(180deg, rgba(3, 168, 192, 0.18), rgba(94, 211, 208, 0.08));
+  border-color: rgba(94, 211, 208, 0.28);
   color: var(--accent-hover);
 }
 
