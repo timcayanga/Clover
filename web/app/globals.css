@@ -574,7 +574,8 @@ body.dashboard-modal-open .app-shell {
   border-radius: 0;
   overflow-y: auto;
   position: relative;
-  z-index: 120;
+  z-index: 2147483400;
+  isolation: isolate;
 }
 
 .sidebar-header {
