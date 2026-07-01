@@ -47,11 +47,11 @@ function FeatureSection({
 }) {
   return (
     <ScrollReveal as="section" className={`landing-feature ${reverse ? "landing-feature--reverse" : ""}`.trim()} id={id}>
-      <div className="landing-feature__visual">{visual}</div>
       <div className="landing-feature__copy">
         <h2 className="landing-feature__title">{title}</h2>
         <div className="landing-feature__body">{copy}</div>
       </div>
+      <div className="landing-feature__visual">{visual}</div>
     </ScrollReveal>
   );
 }

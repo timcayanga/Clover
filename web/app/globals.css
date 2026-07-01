@@ -37060,6 +37060,11 @@ body[data-split-bill-modal-open="true"] .app-shell {
   justify-items: start;
   text-align: left;
   width: min(100%, 560px);
+  order: 1;
+}
+
+.landing-feature__visual {
+  order: 2;
 }
 
 .landing-feature__title {
@@ -37239,7 +37244,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   box-shadow: none;
   border-radius: 0;
   min-height: auto;
-  padding-block: 56px 12px;
+  padding-block: 68px 44px;
 }
 
 .landing-page .landing-cta__inner {
@@ -37254,8 +37259,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
   display: grid;
   justify-items: stretch;
   width: 100vw;
-  margin: auto 0 0 calc(50% - 50vw);
-  padding: 28px 0;
+  margin: 0 0 0 calc(50% - 50vw);
+  padding: 32px 0 max(44px, env(safe-area-inset-bottom));
   border-radius: 0;
   background: linear-gradient(135deg, rgba(3, 168, 192, 0.98), rgba(2, 137, 160, 0.98));
   color: white;
@@ -37397,6 +37402,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .landing-feature__copy {
+    order: 2;
     justify-items: center;
     text-align: center;
     width: min(100%, 34rem);
@@ -37432,12 +37438,12 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .landing-page .landing-cta {
-    padding: 22px 0 6px;
+    padding: 30px 0 32px;
     min-height: auto;
   }
 
   .landing-footer--expanded {
-    padding: 22px 16px;
+    padding: 26px 16px max(36px, env(safe-area-inset-bottom));
     margin-top: 16px;
   }
 
