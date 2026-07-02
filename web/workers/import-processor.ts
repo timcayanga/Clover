@@ -6763,7 +6763,7 @@ export const processImportFileText = async (
 
   const shouldEagerLoadImagePages =
     imageImport &&
-    importMode === "statement" &&
+    ["statement", "receipt", "notes", "portfolio", "account_detail"].includes(importMode) &&
     !trainedReceiptDetails &&
     !canReuseCachedStatementParse;
 

@@ -186,9 +186,15 @@ export const fingerprintImportSurface = (params: {
     .slice(0, 1500)
     .toLowerCase();
   const institution = String(params.detectedMetadata?.institution ?? "").toLowerCase();
+  const timestampedImageName =
+    /\b\d{4}[-_]\d{2}[-_]\d{2}[\s_-]+\d{1,2}[._-]\d{2}(?:[._-]\d{2})?\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(
+      fileName
+    );
   const looksLikePhoneScreenshot =
     imageImport &&
-    (/(?:^|[\\/])img_\d+\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(fileName) || /screenshot/i.test(fileName));
+    (/(?:^|[\\/])img_\d+\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(fileName) ||
+      timestampedImageName ||
+      /screenshot/i.test(fileName));
   const walletInstitution = /^(wise|gcash|maya)$/i.test(String(params.detectedMetadata?.institution ?? ""));
   const walletTransferLexicon =
     /\b(?:sent\s+via\s+(?:gcash|maya|wise)|express\s+send|total\s+amount\s+sent|ref\.?\s*no\.?|reference\s*(?:no\.?|#|:)|gcash|maya|wise)\b/.test(

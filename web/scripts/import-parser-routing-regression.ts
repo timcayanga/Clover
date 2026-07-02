@@ -160,6 +160,35 @@ const main = () => {
   assert.equal(timestampNamedGcashRoute.route, "backup_openai");
   assert.equal(timestampNamedGcashRoute.shouldPreferOpenAiPrimary, true);
 
+  const noTextTimestampReceiptSurface = fingerprintImportSurface({
+    importMode: "receipt",
+    fileType: "image/jpeg",
+    fileName: "2026-05-01 22.08.42.jpg",
+    imageImport: true,
+    textPreview: "",
+    detectedMetadata: { institution: "Unknown", confidence: 0 },
+  });
+  assert.equal(noTextTimestampReceiptSurface.kind, "receipt_like");
+
+  const noTextTimestampReceiptRoute = decideImportParserRoute({
+    importMode: "receipt",
+    fileType: "image/jpeg",
+    fileName: "2026-05-01 22.08.42.jpg",
+    imageImport: true,
+    hasKnownInstitution: false,
+    parsedRowsCount: 0,
+    parsedDateCoverage: 0,
+    genericParseLooksSuspicious: true,
+    textLength: 0,
+    textPreview: "",
+    screenshotNoiseRatio: 0,
+    detectedMetadata: { institution: "Unknown", confidence: 0 },
+    surfaceFingerprint: noTextTimestampReceiptSurface,
+  });
+  assert.equal(noTextTimestampReceiptRoute.route, "backup_openai");
+  assert.equal(noTextTimestampReceiptRoute.shouldRenderPageImages, true);
+  assert.equal(noTextTimestampReceiptRoute.shouldPreferOpenAiPrimary, true);
+
   const spacedBpiRows = parseImportText(
     [
       "Statement of tnuoccA",
