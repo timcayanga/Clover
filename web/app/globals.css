@@ -949,8 +949,8 @@ body.dashboard-modal-open .app-shell {
 }
 
 .menu-icon-3d--home {
-  width: 31px;
-  height: 31px;
+  width: 36px;
+  height: 36px;
 }
 
 .nav-link__badge {
@@ -1277,19 +1277,21 @@ body.transactions-manual-open .shell-quick-add-button {
   width: 40px;
   height: 40px;
   border-radius: 13px;
-  border: 1px solid rgba(3, 168, 192, 0.2);
+  border: 1px solid transparent;
   color: var(--muted);
-  background: linear-gradient(180deg, rgba(3, 168, 192, 0.04), rgba(94, 211, 208, 0.02));
+  background: transparent;
+  box-shadow: none;
   cursor: pointer;
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
 .sidebar-icon-button:hover,
 .sidebar-icon-button.is-active {
-  background: linear-gradient(180deg, rgba(3, 168, 192, 0.1), rgba(94, 211, 208, 0.06));
-  border-color: rgba(3, 168, 192, 0.28);
+  background: transparent;
+  border-color: transparent;
   color: var(--accent);
-  box-shadow: 0 8px 20px rgba(3, 168, 192, 0.08);
+  box-shadow: none;
+  transform: translateY(-1px);
 }
 
 .sidebar-profile {
@@ -33629,10 +33631,15 @@ html[data-theme="dark"] .settings-plan-card,
 html[data-theme="dark"] .settings-plan-panel,
 html[data-theme="dark"] .settings-plan-usage__card,
 html[data-theme="dark"] .sidebar-footer,
-html[data-theme="dark"] .sidebar-profile,
-html[data-theme="dark"] .sidebar-icon-button {
+html[data-theme="dark"] .sidebar-profile {
   background-color: rgba(14, 23, 37, 0.86);
   border-color: rgba(148, 163, 184, 0.14);
+}
+
+html[data-theme="dark"] .sidebar-icon-button {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 html[data-theme="dark"] .sidebar-search-panel {
@@ -33786,8 +33793,9 @@ html[data-theme="dark"] .sidebar-icon-button:hover,
 html[data-theme="dark"] .sidebar-icon-button.is-active,
 html[data-theme="dark"] .sidebar-profile:hover,
 html[data-theme="dark"] .sidebar-profile.is-active {
-  background: linear-gradient(180deg, rgba(3, 168, 192, 0.18), rgba(94, 211, 208, 0.08));
-  border-color: rgba(94, 211, 208, 0.28);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
   color: var(--accent-hover);
 }
 
