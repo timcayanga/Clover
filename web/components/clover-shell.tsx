@@ -1533,6 +1533,10 @@ export function CloverShell({
 
         <nav className="sidebar-nav" aria-label="Primary" id="primary-navigation">
           {navItems.map((item) => {
+            if (item.key === "investments") {
+              return null;
+            }
+
             if (item.key === "more") {
               return (
                 <div key={item.key} className="sidebar-nav__more">
