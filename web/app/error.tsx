@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { getAppBuildInfo } from "@/lib/build-info";
+import { isChunkLoadErrorMessage, recoverFromChunkLoadError } from "@/lib/chunk-error-recovery";
 
 function useReportError(error: Error & { digest?: string }, source: string) {
   const sentRef = useRef(false);
@@ -57,6 +58,12 @@ export function ErrorView({
   source: string;
 }) {
   useReportError(error, source);
+
+  useEffect(() => {
+    if (isChunkLoadErrorMessage(error.message)) {
+      recoverFromChunkLoadError();
+    }
+  }, [error.message]);
 
   return (
     <main className="error-screen">

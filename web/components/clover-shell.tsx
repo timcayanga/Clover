@@ -11,6 +11,11 @@ import { DashboardManualTransactionModal } from "@/components/dashboard-top-acti
 import { ImportFilesModal } from "@/components/import-files-modal";
 import { signOutToLanding } from "@/lib/sign-out";
 import {
+  getErrorMessage,
+  isChunkLoadErrorMessage,
+  recoverFromChunkLoadError,
+} from "@/lib/chunk-error-recovery";
+import {
   clearImportActivity,
   getImportActivityTimingSummary,
   readImportActivity,
@@ -1012,29 +1017,19 @@ export function CloverShell({
   }, [searchWorkspaceId]);
 
   useEffect(() => {
-    const shouldReload = (message: string) =>
-      /Loading chunk|ChunkLoadError|Failed to fetch dynamically imported module|Importing a module script failed/i.test(message);
-
     const handleError = (event: ErrorEvent) => {
       const message = [event.message, event.error instanceof Error ? event.error.message : ""].join(" ");
-      if (shouldReload(message)) {
-        console.warn("[Clover] Ignoring transient chunk load error during deployment:", message);
+      if (isChunkLoadErrorMessage(message)) {
+        console.warn("[Clover] Recovering from transient chunk load error during deployment:", message);
+        recoverFromChunkLoadError();
       }
     };
 
     const handleRejection = (event: PromiseRejectionEvent) => {
-      const reason = event.reason;
-      const message =
-        typeof reason === "string"
-          ? reason
-          : reason instanceof Error
-            ? reason.message
-            : typeof reason === "object" && reason !== null && "message" in reason
-              ? String((reason as { message?: unknown }).message ?? "")
-              : "";
-
-      if (shouldReload(message)) {
-        console.warn("[Clover] Ignoring transient chunk load error during deployment:", message);
+      const message = getErrorMessage(event.reason);
+      if (isChunkLoadErrorMessage(message)) {
+        console.warn("[Clover] Recovering from transient chunk load error during deployment:", message);
+        recoverFromChunkLoadError();
       }
     };
 
