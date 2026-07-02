@@ -2390,10 +2390,10 @@ function AccountsPageContent() {
   }, [currencyFilteredAccounts]);
 
   const visibleAccounts = useMemo(() => {
-    const accountsForDisplay =
-      currencyFilteredAccounts.length > 0
-        ? currencyFilteredAccounts
-        : [buildCashFallbackAccount(selectedCurrency)];
+    const hasCashAccount = currencyFilteredAccounts.some((account) => getEffectiveAccountType(account) === "cash");
+    const accountsForDisplay = hasCashAccount
+      ? currencyFilteredAccounts
+      : [...currencyFilteredAccounts, buildCashFallbackAccount(selectedCurrency)];
 
     return [...accountsForDisplay].sort((left, right) => {
       return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
