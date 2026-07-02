@@ -25,10 +25,16 @@ const STALE_STATEMENT_IMAGE_READING_MS = 75 * 1000;
 const STALE_STATEMENT_IMAGE_RECONCILING_MS = 45 * 1000;
 const STALE_STATEMENT_IMAGE_STAGED_MS = 45 * 1000;
 const STALE_STATEMENT_IMAGE_EMPTY_DONE_MS = 30 * 1000;
+const VISUAL_IMPORT_RETRY_LIMIT = 2;
 
 const isImageImportFile = (fileName?: string | null, fileType?: string | null) =>
   String(fileType ?? "").toLowerCase().startsWith("image/") ||
   /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(String(fileName ?? "").toLowerCase());
+
+const getVisualRepairMessage = (importMode: "receipt" | "statement") =>
+  importMode === "receipt"
+    ? "Clover tried the local and backup receipt readers but still could not extract enough reliable details. Please retry with a clearer photo or a different angle."
+    : "Clover tried the local and backup image readers but still could not extract enough reliable details. Please retry with a clearer file or a different angle.";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   try {
@@ -57,6 +63,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const importMode = readCheckpointImportMode(snapshot.statementCheckpoint?.sourceMetadata);
     const updatedAtMs = new Date(snapshot.importFile.updatedAt).getTime();
     const statementImageProcessingAgeMs = Number.isFinite(updatedAtMs) ? Date.now() - updatedAtMs : 0;
+    const visualProcessingAttempt = Math.max(0, Math.floor(Number(snapshot.importFile.processingAttempt ?? 0) || 0));
+    const visualImportIsOutOfRetryBudget =
+      visualProcessingAttempt >= VISUAL_IMPORT_RETRY_LIMIT && snapshot.importFile.processingPhase !== "queued_retry";
     const staleStatementImageQueue =
       importMode === "statement" &&
       snapshot.importFile.status === "processing" &&
@@ -71,6 +80,28 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           : STALE_STATEMENT_IMAGE_QUEUE_MS);
 
     if (staleStatementImageQueue) {
+      if (visualImportIsOutOfRetryBudget) {
+        await updateImportFileCompat(importId, {
+          status: "failed",
+          processingPhase: "repair_needed",
+          processingMessage: getVisualRepairMessage("statement"),
+          parsedRowsCount: 0,
+          confirmedTransactionsCount: 0,
+        });
+        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
+          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+          promoteFailedVisibleImport: true,
+        });
+        if (refreshedSnapshot) {
+          return NextResponse.json({
+            ...refreshedSnapshot,
+            statementSelfHeal: {
+              reason: "statement_image_retry_budget_exhausted",
+              retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
+            },
+          });
+        }
+      }
       await updateImportFileCompat(importId, {
         status: "processing",
         processingPhase: "reading_account_details",
@@ -107,7 +138,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             await updateImportFileCompat(importId, {
               status: "failed",
               processingPhase: "repair_needed",
-              processingMessage: "Clover couldn't finish reading this screenshot. Please retry the upload.",
+              processingMessage: getVisualRepairMessage("statement"),
               parsedRowsCount: 0,
               confirmedTransactionsCount: 0,
             }).catch(() => null);
@@ -142,6 +173,28 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       statementImageProcessingAgeMs > STALE_RECEIPT_QUEUE_MS;
 
     if (staleReceiptQueue) {
+      if (visualImportIsOutOfRetryBudget) {
+        await updateImportFileCompat(importId, {
+          status: "failed",
+          processingPhase: "repair_needed",
+          processingMessage: getVisualRepairMessage("receipt"),
+          parsedRowsCount: 0,
+          confirmedTransactionsCount: 0,
+        });
+        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
+          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+          promoteFailedVisibleImport: true,
+        });
+        if (refreshedSnapshot) {
+          return NextResponse.json({
+            ...refreshedSnapshot,
+            receiptSelfHeal: {
+              reason: "receipt_retry_budget_exhausted",
+              retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
+            },
+          });
+        }
+      }
       await updateImportFileCompat(importId, {
         status: "processing",
         processingPhase: "reading_receipt_vision",
@@ -178,7 +231,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             await updateImportFileCompat(importId, {
               status: "failed",
               processingPhase: "repair_needed",
-              processingMessage: "Clover couldn't finish reading this receipt. Please retry or use a clearer photo.",
+              processingMessage: getVisualRepairMessage("receipt"),
               parsedRowsCount: 0,
               confirmedTransactionsCount: 0,
             }).catch(() => null);
@@ -210,6 +263,28 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       statementImageProcessingAgeMs > STALE_STATEMENT_IMAGE_EMPTY_DONE_MS;
 
     if (staleStatementImageEmptyDone) {
+      if (visualProcessingAttempt >= VISUAL_IMPORT_RETRY_LIMIT) {
+        await updateImportFileCompat(importId, {
+          status: "failed",
+          processingPhase: "repair_needed",
+          processingMessage: getVisualRepairMessage("statement"),
+          parsedRowsCount: 0,
+          confirmedTransactionsCount: 0,
+        });
+        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
+          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+          promoteFailedVisibleImport: true,
+        });
+        if (refreshedSnapshot) {
+          return NextResponse.json({
+            ...refreshedSnapshot,
+            statementSelfHeal: {
+              reason: "statement_image_empty_done_retry_budget_exhausted",
+              retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
+            },
+          });
+        }
+      }
       await updateImportFileCompat(importId, {
         status: "processing",
         processingPhase: "reading_account_details",
@@ -229,7 +304,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           await updateImportFileCompat(importId, {
             status: "failed",
             processingPhase: "repair_needed",
-            processingMessage: "Clover couldn't finish reading this screenshot. Please retry the upload.",
+            processingMessage: getVisualRepairMessage("statement"),
             parsedRowsCount: 0,
             confirmedTransactionsCount: 0,
           }).catch(() => null);
@@ -260,6 +335,28 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       statementImageProcessingAgeMs > STALE_RECEIPT_EMPTY_DONE_MS;
 
     if (staleReceiptEmptyDone) {
+      if (visualProcessingAttempt >= VISUAL_IMPORT_RETRY_LIMIT) {
+        await updateImportFileCompat(importId, {
+          status: "failed",
+          processingPhase: "repair_needed",
+          processingMessage: getVisualRepairMessage("receipt"),
+          parsedRowsCount: 0,
+          confirmedTransactionsCount: 0,
+        });
+        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
+          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+          promoteFailedVisibleImport: true,
+        });
+        if (refreshedSnapshot) {
+          return NextResponse.json({
+            ...refreshedSnapshot,
+            receiptSelfHeal: {
+              reason: "receipt_empty_done_retry_budget_exhausted",
+              retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
+            },
+          });
+        }
+      }
       await updateImportFileCompat(importId, {
         status: "processing",
         processingPhase: "reading_receipt_vision",
@@ -279,7 +376,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           await updateImportFileCompat(importId, {
             status: "failed",
             processingPhase: "repair_needed",
-            processingMessage: "Clover couldn't finish reading this receipt. Please retry or use a clearer photo.",
+            processingMessage: getVisualRepairMessage("receipt"),
             parsedRowsCount: 0,
             confirmedTransactionsCount: 0,
           }).catch(() => null);
@@ -627,7 +724,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             await updateImportFileCompat(importId, {
               status: "failed",
               processingPhase: "repair_needed",
-              processingMessage: "Clover couldn't finish reading this receipt. Please retry or use a clearer photo.",
+              processingMessage: getVisualRepairMessage("receipt"),
               parsedRowsCount: 0,
               confirmedTransactionsCount: 0,
             }).catch(() => null);
