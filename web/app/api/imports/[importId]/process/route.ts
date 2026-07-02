@@ -2438,19 +2438,23 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               : null;
           failedImportMode = normalizeImportImageMode(sourceMetadata?.importMode);
         }
-        const failedImageStatement =
+        const failedVisualImport =
           failedImportFile &&
-          isImageUploadFile(failedFileName, failedFileType) &&
-          (!failedImportMode || failedImportMode === "statement");
-        if (failedImageStatement) {
+          (isImageUploadFile(failedFileName, failedFileType) || isPdfUpload(failedFileName, failedFileType)) &&
+          (!failedImportMode || failedImportMode === "statement" || failedImportMode === "receipt");
+        if (failedVisualImport) {
           try {
             if (await isLocalDevHost().catch(() => false)) {
               await ensureImportProcessingWorker();
             }
+            const retryImportMode = failedImportMode ?? "statement";
             await updateImportFileCompat(importId, {
               status: "processing",
               processingPhase: "queued_retry",
-              processingMessage: "Clover hit a temporary image-reading issue and queued another pass.",
+              processingMessage:
+                retryImportMode === "receipt"
+                  ? "Clover hit a temporary receipt-reading issue and queued another pass."
+                  : "Clover hit a temporary image-reading issue and queued another pass.",
               parsedRowsCount: 0,
               confirmedTransactionsCount: 0,
             });
@@ -2458,7 +2462,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               importFileId: importId,
               actorUserId: null,
               allowDuplicateStatement: false,
-              importMode: failedImportMode ?? "statement",
+              importMode: retryImportMode,
               pdfJsBaseUrl: new URL(_request.url).origin,
             });
             return NextResponse.json({
@@ -2470,10 +2474,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               status: "queued",
               importFileId: importId,
               metadata: null,
-              retryReason: "inline_image_processing_failed",
+              retryReason: retryImportMode === "receipt" ? "inline_receipt_processing_failed" : "inline_image_processing_failed",
             });
           } catch (queueError) {
-            console.error("Image import retry queue failed", {
+            console.error("Visual import retry queue failed", {
               importId,
               error: summarizeErrorForLog(queueError),
             });

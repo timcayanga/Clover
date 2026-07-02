@@ -2297,10 +2297,58 @@ const readCheckpointStatementFamilySignature = (sourceMetadata: unknown): string
   return candidate ? candidate.trim() : null;
 };
 
+const hasCharacterSpacedOcrText = (text: string) => /(?:\b[A-Z0-9]\s+){8,}[A-Z0-9]\b/i.test(text);
+
+const collapseCharacterSpacedOcrLine = (line: string) => {
+  if (!hasCharacterSpacedOcrText(line)) {
+    return line;
+  }
+
+  const tokens = line.split(/\s+/).filter(Boolean);
+  const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9]$/.test(token)).length;
+  if (tokens.length < 10 || singleCharacterTokens / tokens.length < 0.55) {
+    return line;
+  }
+
+  const rebuilt: string[] = [];
+  let buffer = "";
+  const flushBuffer = () => {
+    if (buffer) {
+      rebuilt.push(buffer);
+      buffer = "";
+    }
+  };
+
+  for (const token of tokens) {
+    if (/^[A-Za-z0-9]$/.test(token)) {
+      buffer += token;
+      continue;
+    }
+
+    if (/^[,.:;*\/-]+$/.test(token) && buffer) {
+      buffer += token;
+      continue;
+    }
+
+    flushBuffer();
+    rebuilt.push(token);
+  }
+  flushBuffer();
+
+  return rebuilt
+    .join(" ")
+    .replace(/\s+([,.:;*\/-])/g, "$1")
+    .replace(/([,.:;*\/-])\s+/g, "$1")
+    .replace(/([A-Za-z][A-Za-z0-9*\/.-]*)(\d{10})(\d{1,3},\d{3}\.\d{2})$/u, "$1$2 $3")
+    .replace(/(?<![,.\d])([A-Za-z0-9])((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})$/u, "$1 $2");
+};
+
 const sanitizeStatementImageOcrText = (text: string) => {
   const lines = text
     .split(/\r?\n/)
-    .map((line) => line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
+    .map((line) =>
+      collapseCharacterSpacedOcrLine(line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
+    )
     .filter(Boolean);
 
   const isStatementUiNoiseLine = (line: string) => {
@@ -6777,7 +6825,8 @@ export const processImportFileText = async (
   }
 
   let textForParse = text;
-  if (imageImport && importMode === "statement") {
+  const sourceTextLooksCharacterSpacedOcr = importMode === "statement" && hasCharacterSpacedOcrText(text);
+  if (importMode === "statement" && (imageImport || sourceTextLooksCharacterSpacedOcr)) {
     const sanitizedParseText = sanitizeStatementImageOcrText(text);
     statementImageOcrCleanup = {
       removedLineCount: Math.max(statementImageOcrCleanup.removedLineCount, sanitizedParseText.removedLineCount),
@@ -7124,7 +7173,7 @@ export const processImportFileText = async (
     parsedRows.length < 6 &&
     !metadataForParse.endingBalance &&
     !gcashLooksStructurallyReadable;
-  const looksCharacterSpacedOcr = /(?:\b[A-Z]\s+){8,}[A-Z]\b/.test(textForParse);
+  const looksCharacterSpacedOcr = sourceTextLooksCharacterSpacedOcr || hasCharacterSpacedOcrText(textForParse);
   const genericIdentityLooksWeak =
     !metadataForParse.accountName ||
     metadataForParse.accountName === metadataForParse.institution ||
@@ -7499,8 +7548,7 @@ export const processImportFileText = async (
     imageImport &&
     pageImages?.length &&
     !canUseFastImageParse &&
-    importMode !== "receipt" &&
-    (!shouldPreferDirectImageStatementVision || likelyScreenshotStatement)
+    (importMode === "receipt" || !shouldPreferDirectImageStatementVision || likelyScreenshotStatement)
   );
   const openAiParseIsUsableWiseScreenshot =
     imageImport &&

@@ -1641,9 +1641,22 @@ const isBpiCreditCardStatementText = (text: string) => {
   );
 };
 
-const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+const looksLikeContextualBpiCreditCardLedgerText = (text: string) => {
+  const compact = compactWhitespace(text).toUpperCase();
+  const transactionDatePairPattern = new RegExp(`(?:${monthNamePattern}\\d{1,2}){2}`, "i");
+  return (
+    /CUSTOMERNUMBER[0-9-]{8,}/i.test(compact) &&
+    transactionDatePairPattern.test(compact) &&
+    /(?:PAYPAL|GRAB|LAZADA|AMAZON|ZALORA|DHL|KINDLE)/i.test(compact)
+  );
+};
+
+const bpiCreditCardStatementMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
   const normalized = normalizeBpiText(text).trim();
-  if (!isBpiCreditCardStatementText(normalized)) {
+  const contextLooksBpi = /(?:^|\b)(BPI|BANK\s+OF\s+THE\s+PHILIPPINE\s+ISLANDS)(?:\b|$)/i.test(
+    [context.institution, context.accountName, context.accountNumber].filter(Boolean).join(" ")
+  );
+  if (!isBpiCreditCardStatementText(normalized) && !(contextLooksBpi && looksLikeContextualBpiCreditCardLedgerText(normalized))) {
     return null;
   }
 
@@ -1670,7 +1683,7 @@ const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata
   const accountNumber = detectAccountNumberFromText(normalized) ?? "9001";
 
   return {
-    institution: "BPI Family Savings Bank",
+    institution: "BPI",
     accountNumber,
     accountName: formatSimpleBankAccountName("BPI", accountNumber.slice(-4)),
     accountType: "credit_card",
@@ -4651,6 +4664,25 @@ const isBpiStatementPaymentCredit = (description: string) => {
   );
 };
 
+const splitTrailingBpiApprovalCodeAndAmount = (body: string) => {
+  const match = body.match(/^(.+?[A-Za-z])(\d{10})(-?\d{1,3}(?:,\d{3})*\.\d{2})$/);
+  if (!match) {
+    return null;
+  }
+
+  const amount = parseMoney(match[3]);
+  if (amount === null) {
+    return null;
+  }
+
+  return {
+    descriptionPrefix: match[1],
+    approvalCode: match[2],
+    amountText: match[3],
+    amount,
+  };
+};
+
 const parseBpiCreditCardTransactionLine = (
   line: string,
   state: {
@@ -4678,9 +4710,10 @@ const parseBpiCreditCardTransactionLine = (
     return null;
   }
 
+  const approvalAmount = splitTrailingBpiApprovalCodeAndAmount(body.replace(/\s+/g, ""));
   const moneyMatches = body.match(/-?[0-9][0-9,]*\.\d{2}/g) ?? [];
-  const amountText = moneyMatches.at(-1) ?? null;
-  const amount = parseMoney(amountText);
+  const amountText = approvalAmount?.amountText ?? moneyMatches.at(-1) ?? null;
+  const amount = approvalAmount?.amount ?? parseMoney(amountText);
   if (amount === null) {
     return null;
   }
@@ -4695,6 +4728,9 @@ const parseBpiCreditCardTransactionLine = (
     .replace(/\s*\/\s*/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  if (approvalAmount) {
+    descriptionSource = normalizeWhitespace(descriptionSource.replace(new RegExp(`${approvalAmount.approvalCode}$`), ""));
+  }
 
   if (!descriptionSource) {
     return null;
@@ -4732,6 +4768,7 @@ const parseBpiCreditCardTransactionLine = (
       saleDate: saleDateResult.date.toISOString().slice(0, 10),
       postDate: postDateResult.date.toISOString().slice(0, 10),
       amountText,
+      approvalCode: approvalAmount?.approvalCode ?? null,
       foreignAmountText,
       fxNote,
       line: normalized,
@@ -4740,9 +4777,9 @@ const parseBpiCreditCardTransactionLine = (
   } satisfies ParsedImportRow;
 };
 
-const parseBpiCreditCardImportText = (text: string) => {
+const parseBpiCreditCardImportText = (text: string, context: ImportParseContext = {}) => {
   const normalizedText = normalizeBpiText(text);
-  const metadata = bpiCreditCardStatementMetadata(normalizedText);
+  const metadata = bpiCreditCardStatementMetadata(normalizedText, context);
   if (!metadata) {
     return null;
   }
@@ -4919,12 +4956,13 @@ const parseBpiCreditCardSegment = (
   }
 
   const body = match[3];
+  const approvalAmount = splitTrailingBpiApprovalCodeAndAmount(body);
   const moneyMatches = body.match(/-?[0-9][0-9,]*\.\d{2}/g) ?? [];
   if (moneyMatches.length === 0) {
     return null;
   }
-  const amountText = moneyMatches.at(-1) ?? null;
-  const amount = parseMoney(amountText);
+  const amountText = approvalAmount?.amountText ?? moneyMatches.at(-1) ?? null;
+  const amount = approvalAmount?.amount ?? parseMoney(amountText);
   if (amount === null) {
     return null;
   }
@@ -4951,6 +4989,7 @@ const parseBpiCreditCardSegment = (
   }
   descriptionSource = descriptionSource
     .replace(/-?[0-9][0-9,]*\.\d{2}/g, " ")
+    .replace(approvalAmount ? new RegExp(`${approvalAmount.approvalCode}$`) : /$^/, " ")
     .replace(/\s*\/\s*/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -4991,6 +5030,7 @@ const parseBpiCreditCardSegment = (
       saleDate: saleDate.toISOString().slice(0, 10),
       postDate: postDate.toISOString().slice(0, 10),
       amountText,
+      approvalCode: approvalAmount?.approvalCode ?? null,
       foreignAmountText,
       fxNote,
       line: segmentText,
@@ -19742,6 +19782,10 @@ export const parseImportText = (
   if (isLikelyLowQualityUnionBankStatementFile) {
     return [];
   }
+  const earlyBpiCreditParsed = parseBpiCreditCardImportText(text, context);
+  if (earlyBpiCreditParsed && earlyBpiCreditParsed.rows.length > 0) {
+    return earlyBpiCreditParsed.rows;
+  }
   const earlySecurityBankLowQualityKnownLedger = parseSecurityBankLowQualityKnownLedger(text, context);
   if (earlySecurityBankLowQualityKnownLedger && earlySecurityBankLowQualityKnownLedger.rows.length > 0) {
     return earlySecurityBankLowQualityKnownLedger.rows;
@@ -19890,7 +19934,7 @@ export const parseImportText = (
     return bdoParsed.rows;
   }
 
-  const bpiCreditParsed = parseBpiCreditCardImportText(text);
+  const bpiCreditParsed = parseBpiCreditCardImportText(text, context);
   if (bpiCreditParsed && bpiCreditParsed.rows.length > 0) {
     return bpiCreditParsed.rows;
   }
