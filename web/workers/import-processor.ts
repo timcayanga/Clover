@@ -5563,8 +5563,8 @@ const getMobileScreenshotWalletIdentity = (rawPayload: Prisma.JsonValue | null |
 
   if (kind === "gfunds") {
     return {
-      accountName: "ATRAM Investments",
-      institution: "ATRAM",
+      accountName: "GFunds Investments",
+      institution: "GFunds",
       accountType: "investment" as AccountType,
     };
   }

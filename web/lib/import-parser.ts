@@ -9027,7 +9027,7 @@ const gfundsScreenshotMetadata = (text: string, fileName = ""): DetectedStatemen
   }
 
   return {
-    institution: "ATRAM",
+    institution: "GFunds",
     accountNumber: null,
     accountName: "GFunds Investments",
     accountType: "investment",
@@ -9208,13 +9208,14 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
       description: `${fundName} - ${status}`,
       categoryName: "Investments",
       accountName: fundName,
-      institution: "ATRAM",
+      institution: "GFunds",
       type,
       confidence: isKnownGfundsScreenshotFile(fileName) ? 95 : 86,
       parserConfidence: isKnownGfundsScreenshotFile(fileName) ? 93 : 84,
       categoryConfidence: 96,
       rawPayload: {
-        bank: "ATRAM",
+        bank: "GFunds",
+        providerInstitution: "ATRAM",
         kind: "gfunds_mobile_screenshot",
         source: "gfunds_mobile_screenshot",
         fundName,
@@ -9430,7 +9431,7 @@ export const parseGfundsPortfolioSnapshotText = (text: string, fileName = "") =>
   return {
     documentType: "portfolio" as const,
     metadata: {
-      institution: "ATRAM",
+      institution: "GFunds",
       accountNumber: null,
       accountName: "GFunds Investments",
       accountType: "investment" as const,
@@ -9537,7 +9538,7 @@ export const parseGfundsAccountDetailSnapshotText = (text: string, fileName = ""
   return {
     documentType: "account_detail" as const,
     metadata: {
-      institution: "ATRAM",
+      institution: "GFunds",
       accountNumber: null,
       accountName: fundName,
       accountType: "investment" as const,

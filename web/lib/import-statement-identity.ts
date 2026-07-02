@@ -228,8 +228,8 @@ export const guessStatementIdentity = (fileName: string) => {
 
   if (/(gfunds|atram|ryse)/i.test(lowerName)) {
     return {
-      accountName: "ATRAM Investments",
-      institution: "ATRAM",
+      accountName: "GFunds Investments",
+      institution: "GFunds",
       accountNumber: null,
       accountType: "investment" as const,
     };
@@ -437,8 +437,8 @@ export const resolveMobileWalletIdentityFromParsedRows = (rows: ParsedImportRow[
 
     if (/(gfunds|atram|ryse)/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
       return {
-        accountName: "ATRAM Investments",
-        institution: "ATRAM",
+        accountName: "GFunds Investments",
+        institution: "GFunds",
         accountType: "investment",
         accountNumber: null,
       };

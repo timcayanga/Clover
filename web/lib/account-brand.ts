@@ -647,6 +647,16 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
+    match: /\bGFUNDS\b|\bGCASH\s+GFUNDS\b/i,
+    brand: makeBrand({
+      label: "GFunds",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#1479E7",
+      background: "linear-gradient(135deg, rgba(20, 121, 231, 0.18), rgba(20, 121, 231, 0.06))",
+    }),
+  },
+  {
     match: /\bATRAM\b/i,
     brand: makeBrand({
       label: "ATRAM",
@@ -947,6 +957,16 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
       logoSrcs: philippinesLogoWithVariants("gcash"),
       fallbackIconSrc: walletIcon,
       accent: "#1479E7",
+    });
+  }
+
+  if (/\bgfunds\b/i.test(rawBrandText)) {
+    return makeBrand({
+      label: "GFunds",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#1479E7",
+      background: "linear-gradient(135deg, rgba(20, 121, 231, 0.18), rgba(20, 121, 231, 0.06))",
     });
   }
 

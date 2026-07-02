@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
 import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import {
   deriveStatementFallbackAccountName,
   guessStatementIdentity,
@@ -113,17 +114,17 @@ April 16, 2021
 
 const allRows = samples.flatMap((sample) => {
   const metadata = detectStatementMetadata(sample.text, sample.fileName);
-  assert.equal(metadata?.institution, "ATRAM", `${sample.fileName} should detect ATRAM metadata.`);
+  assert.equal(metadata?.institution, "GFunds", `${sample.fileName} should detect GFunds metadata.`);
   assert.equal(metadata?.accountType, "investment", `${sample.fileName} should detect an investment import.`);
 
   const rows = parseImportText(sample.text, sample.fileName, "image/png", {
-    institution: metadata?.institution ?? "ATRAM",
+    institution: metadata?.institution ?? "GFunds",
     accountName: metadata?.accountName ?? "GFunds Investments",
     accountNumber: metadata?.accountNumber ?? null,
   });
 
   assert.equal(rows.length, sample.expectedRows, `${sample.fileName} visible row count mismatch.`);
-  assert.ok(rows.every((row) => row.institution === "ATRAM"), `${sample.fileName} should keep ATRAM as institution.`);
+  assert.ok(rows.every((row) => row.institution === "GFunds"), `${sample.fileName} should keep GFunds as institution.`);
   assert.ok(rows.every((row) => row.categoryName === "Investments"), `${sample.fileName} rows should map to Investments.`);
   assert.ok(
     rows.every((row) => row.accountName && !/^IMG_/i.test(String(row.accountName))),
@@ -154,6 +155,14 @@ const sellRows = allRows.filter((row) => row.description?.includes("Sell Order C
 assert.ok(buyRows.length > 0 && buyRows.every((row) => row.type === "expense"), "Buy orders should map to investment expenses.");
 assert.ok(sellRows.length > 0 && sellRows.every((row) => row.type === "income"), "Sell orders should map to investment income.");
 assert.ok(
+  buyRows.every((row) => coerceTransactionTypeFromCategoryName(row.categoryName, row.type ?? "expense") === "expense"),
+  "Investment buy orders should stay expenses after category coercion."
+);
+assert.ok(
+  sellRows.every((row) => coerceTransactionTypeFromCategoryName(row.categoryName, row.type ?? "expense") === "income"),
+  "Investment sell orders should stay income after category coercion."
+);
+assert.ok(
   allRows.every((row) => {
     const payload = row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : null;
     return payload?.source === "gfunds_mobile_screenshot" && payload?.kind === "gfunds_mobile_screenshot";
@@ -176,7 +185,7 @@ Buy Order Completed May 20, 2021
 ATRAM Philippine Equity Smart Index Fund +PHP 1,500.00
 Buy Order Completed May 10, 2021`;
 const noisyRows = parseImportText(noisyOcrText, "renamed-gfunds-export.png", "image/png", {
-  institution: "ATRAM",
+  institution: "GFunds",
   accountName: "GFunds Investments",
   accountNumber: null,
 });
@@ -192,7 +201,7 @@ ATRAM Peso Money Market Fund
 Buy Order Completed
 June 7, 2021 +PHP 15,000.00`;
 const collapsedRows = parseImportText(collapsedOcrText, "renamed-gfunds-export.png", "image/png", {
-  institution: "ATRAM",
+  institution: "GFunds",
   accountName: "GFunds Investments",
   accountNumber: null,
 });
@@ -234,7 +243,7 @@ ATRAM Philippine Equity Smart Index Fund
 Sell Order Completed Apr 23 2025
 -PHP 28,414.89`;
 const relaxedDateRows = parseImportText(relaxedDateOcrText, "renamed-gfunds-export.png", "image/png", {
-  institution: "ATRAM",
+  institution: "GFunds",
   accountName: "GFunds Investments",
   accountNumber: null,
 });
@@ -267,8 +276,8 @@ const screenshotIdentity = resolveMobileWalletIdentityFromParsedRows(allRows as 
 assert.deepEqual(
   screenshotIdentity,
   {
-    accountName: "ATRAM Investments",
-    institution: "ATRAM",
+    accountName: "GFunds Investments",
+    institution: "GFunds",
     accountType: "investment",
     accountNumber: null,
   },
@@ -276,15 +285,15 @@ assert.deepEqual(
 );
 
 assert.deepEqual(guessStatementIdentity("GFunds export.png"), {
-  accountName: "ATRAM Investments",
-  institution: "ATRAM",
+  accountName: "GFunds Investments",
+  institution: "GFunds",
   accountNumber: null,
   accountType: "investment",
 });
 
 assert.equal(
-  deriveStatementFallbackAccountName("IMG_1415.PNG", "ATRAM", null, "investment"),
-  "ATRAM Investments",
+  deriveStatementFallbackAccountName("IMG_1415.PNG", "GFunds", null, "investment"),
+  "GFunds Investments",
   "Generic investment screenshots should fall back to an investment-aware account label."
 );
 

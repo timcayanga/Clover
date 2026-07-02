@@ -23,7 +23,8 @@ This document captures the current Clover parsing rules for ATRAM-backed investm
   - `ATRAM Medium Term Peso Bond Fund`
   - `ATRAM Global Consumer Trends Feeder Fund`
 - Use the visible fund name as the investment account name.
-- Use `ATRAM` as the institution for the current screenshot bundle so Clover can reuse the ATRAM investment branding.
+- Use `GFunds` as the institution for the current screenshot bundle because the screenshots come from the GFunds flow.
+- Preserve `ATRAM` in raw parser evidence as the underlying fund provider when it is visible in the screenshot.
 - Parse only fully visible rows. If the bottom sheet or the screenshot edge cuts off the status, date, or amount, skip that row instead of inventing it.
 - Tolerate OCR that merges a fund name with its signed amount on the same line or a status with its date on the same line.
 
@@ -32,7 +33,7 @@ This document captures the current Clover parsing rules for ATRAM-backed investm
 - When a GFunds or ATRAM screen shows holdings metrics such as `Current Value`, `Market Value`, `Subscribed Amount`, `Invested Amount`, `Gain/Loss`, `Units`, or `NAVPU`, treat it as a portfolio snapshot.
 - Persist the document family as `portfolio` so the import worker saves an investment snapshot and holdings instead of only creating parsed rows.
 - Use `GFunds Investments` as the portfolio account label when the screenshot is portfolio-wide rather than tied to a single visible fund account card.
-- Use `ATRAM` as the institution for current GFunds portfolio screens.
+- Use `GFunds` as the institution for current GFunds portfolio screens.
 - For each visible fund holding:
   - `asset_type`: `mutual_fund`
   - `currency`: `PHP`
