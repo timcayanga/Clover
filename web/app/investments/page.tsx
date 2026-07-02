@@ -1065,7 +1065,6 @@ export default function InvestmentsPage() {
       }
     >
       <div className="accounts-page animate-tab-panel" key={selectedTab}>
-        {loading ? <p className="panel-muted">Loading investments...</p> : null}
         {!loading && message ? <p className="panel-muted">{message}</p> : null}
 
         {!canAccessSelectedTab ? (
