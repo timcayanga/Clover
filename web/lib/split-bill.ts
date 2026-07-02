@@ -1,5 +1,20 @@
 import type { Prisma } from "@prisma/client";
 
+const monthIndexByAbbr: Record<string, number> = {
+  JAN: 0,
+  FEB: 1,
+  MAR: 2,
+  APR: 3,
+  MAY: 4,
+  JUN: 5,
+  JUL: 6,
+  AUG: 7,
+  SEP: 8,
+  OCT: 9,
+  NOV: 10,
+  DEC: 11,
+};
+
 export type SplitBillSourceType = "manual" | "receipt";
 
 export type SplitBillParticipantDraft = {
@@ -396,8 +411,9 @@ const parseBillDateFromText = (text: string) => {
         return parsed.toISOString();
       }
     } else if (/^[A-Za-z]/.test(match[1])) {
-      const parsed = new Date(`${match[1]} ${match[2]}, ${match[3]}`);
-      if (!Number.isNaN(parsed.getTime())) {
+      const monthIndex = monthIndexByAbbr[match[1].slice(0, 3).toUpperCase()];
+      const parsed = monthIndex === undefined ? null : new Date(Date.UTC(Number(match[3]), monthIndex, Number(match[2])));
+      if (parsed && !Number.isNaN(parsed.getTime())) {
         return parsed.toISOString();
       }
     } else {

@@ -190,6 +190,10 @@ export const fingerprintImportSurface = (params: {
     imageImport &&
     (/(?:^|[\\/])img_\d+\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(fileName) || /screenshot/i.test(fileName));
   const walletInstitution = /^(wise|gcash|maya)$/i.test(String(params.detectedMetadata?.institution ?? ""));
+  const walletTransferLexicon =
+    /\b(?:sent\s+via\s+(?:gcash|maya|wise)|express\s+send|total\s+amount\s+sent|ref\.?\s*no\.?|reference\s*(?:no\.?|#|:)|gcash|maya|wise)\b/.test(
+      sample
+    ) && /\b(?:amount|total|sent|received|transfer|wallet)\b/.test(sample);
   const walletChrome =
     /\b(?:includes hidden|all currencies|direction|transaction history|wallet|added|refunded|received|sent|cash in)\b/.test(
       sample
@@ -199,11 +203,15 @@ export const fingerprintImportSurface = (params: {
   const statementLexicon =
     /\b(?:statement period|opening balance|ending balance|account number|available balance|transaction history)\b/.test(sample);
 
-  if (walletInstitution || (looksLikePhoneScreenshot && walletChrome)) {
+  if (walletInstitution || walletTransferLexicon || (looksLikePhoneScreenshot && walletChrome)) {
     return {
       kind: "wallet_screenshot",
-      confidence: walletInstitution ? 96 : 88,
-      reason: walletInstitution ? "Known wallet institution matched mobile screenshot surface" : "Mobile screenshot looks like a wallet history",
+      confidence: walletInstitution ? 96 : walletTransferLexicon ? 94 : 88,
+      reason: walletInstitution
+        ? "Known wallet institution matched mobile screenshot surface"
+        : walletTransferLexicon
+          ? "Text matched wallet transfer screenshot markers"
+          : "Mobile screenshot looks like a wallet history",
     };
   }
 

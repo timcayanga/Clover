@@ -123,6 +123,43 @@ const main = () => {
   assert.equal(fastScan.veryWeak, true);
   assert.ok(fastScan.reasons.includes("no_rows"));
 
+  const timestampNamedGcashSurface = fingerprintImportSurface({
+    importMode: "receipt",
+    fileType: "image/jpeg",
+    fileName: "2026-05-01 22.08.42.jpg",
+    imageImport: true,
+    textPreview: [
+      "JA••N PA••••K L.",
+      "+63 967 218 2712",
+      "Sent via GCash",
+      "Amount 1,281.00",
+      "Total Amount Sent ₱1281.00",
+      "Ref No. 2037683983228",
+      "Feb 10, 2026 9:07 PM",
+    ].join("\n"),
+    detectedMetadata: { institution: "Unknown", confidence: 20 },
+  });
+  assert.equal(timestampNamedGcashSurface.kind, "wallet_screenshot");
+  assert.ok(timestampNamedGcashSurface.confidence >= 90);
+
+  const timestampNamedGcashRoute = decideImportParserRoute({
+    importMode: "receipt",
+    fileType: "image/jpeg",
+    fileName: "2026-05-01 22.08.42.jpg",
+    imageImport: true,
+    hasKnownInstitution: false,
+    parsedRowsCount: 0,
+    parsedDateCoverage: 0,
+    genericParseLooksSuspicious: true,
+    textLength: 150,
+    textPreview: "Sent via GCash Amount 1,281.00 Total Amount Sent ₱1281.00 Ref No. 2037683983228",
+    screenshotNoiseRatio: 0.1,
+    detectedMetadata: { institution: "Unknown", confidence: 20 },
+    surfaceFingerprint: timestampNamedGcashSurface,
+  });
+  assert.equal(timestampNamedGcashRoute.route, "backup_openai");
+  assert.equal(timestampNamedGcashRoute.shouldPreferOpenAiPrimary, true);
+
   const spacedBpiRows = parseImportText(
     [
       "Statement of tnuoccA",
