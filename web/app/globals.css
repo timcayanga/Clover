@@ -19144,6 +19144,18 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   overflow: visible;
 }
 
+@media (min-width: 981px) {
+  .accounts-overview-grid {
+    position: sticky;
+    top: 8px;
+    z-index: 30;
+    padding-bottom: 10px;
+    background:
+      radial-gradient(circle at top right, rgba(3, 168, 192, 0.04), transparent 32%),
+      linear-gradient(180deg, rgba(248, 251, 252, 0.98), rgba(248, 251, 252, 0.9) 72%, rgba(248, 251, 252, 0));
+  }
+}
+
 .accounts-overview-card {
   position: relative;
   z-index: 0;
