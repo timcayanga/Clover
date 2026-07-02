@@ -1038,8 +1038,8 @@ export default function InvestmentsPage() {
             label: tab.label,
             icon: tab.icon,
             disabled: Boolean(tab.proOnly && !canUseProTabs),
-            badge: tab.proOnly ? "Pro" : null,
-            ariaLabel: tab.proOnly ? `${tab.label}, Pro only` : tab.label,
+            badge: null,
+            ariaLabel: tab.label,
           }))}
         />
       }

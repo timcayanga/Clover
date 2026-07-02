@@ -1993,7 +1993,7 @@ export function CloverShell({
       </nav>
 
       <main
-        className="content"
+        className={`content content--${active}`}
         onClickCapture={() => {
           if (isSidebarOpen) {
             setIsSidebarOpen(false);
