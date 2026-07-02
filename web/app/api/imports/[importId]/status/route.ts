@@ -15,7 +15,7 @@ import { after, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const STALE_RECEIPT_PROCESSING_MS = 3 * 60 * 1000;
+const STALE_RECEIPT_PROCESSING_MS = 75 * 1000;
 const STALE_RECEIPT_QUEUE_MS = 25 * 1000;
 const STALE_RECEIPT_RECONCILING_MS = 45 * 1000;
 const STALE_RECEIPT_STAGED_MS = 45 * 1000;
@@ -590,15 +590,49 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       snapshot.importFile.status === "processing" &&
       !receiptHasVisibleData &&
       Number.isFinite(updatedAtMs) &&
-      Date.now() - updatedAtMs > STALE_RECEIPT_PROCESSING_MS;
+      Date.now() - updatedAtMs >
+        (snapshot.importFile.processingPhase === "queued_retry"
+          ? STALE_RECEIPT_QUEUE_MS
+          : STALE_RECEIPT_PROCESSING_MS);
 
     if (staleReceiptProcessing) {
       await updateImportFileCompat(importId, {
-        status: "failed",
-        processingPhase: "repair_needed",
-        processingMessage: "Clover couldn't finish reading this receipt. Please retry or use a clearer photo.",
+        status: "processing",
+        processingPhase: "reading_receipt_vision",
+        processingMessage: "Restarting receipt reading...",
         parsedRowsCount: 0,
         confirmedTransactionsCount: 0,
+      });
+      after(async () => {
+        try {
+          const { getConfiguredPdfJsBaseUrl } = await import("@/lib/import-file-text.server");
+          const { processImportFileText } = await import("@/workers/import-processor");
+          await processImportFileText(importId, {
+            actorUserId: userId,
+            qaSource: "import_processing",
+            importMode: "receipt",
+            pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
+          });
+        } catch {
+          const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
+            importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+            promoteFailedVisibleImport: true,
+          }).catch(() => null);
+          const refreshedHasVisibleData =
+            Boolean(refreshedSnapshot?.receiptDocument) ||
+            Boolean(refreshedSnapshot?.receiptTransaction) ||
+            Number(refreshedSnapshot?.confirmedTransactionsCount ?? 0) > 0 ||
+            Number(refreshedSnapshot?.parsedRowsCount ?? 0) > 0;
+          if (!refreshedHasVisibleData) {
+            await updateImportFileCompat(importId, {
+              status: "failed",
+              processingPhase: "repair_needed",
+              processingMessage: "Clover couldn't finish reading this receipt. Please retry or use a clearer photo.",
+              parsedRowsCount: 0,
+              confirmedTransactionsCount: 0,
+            }).catch(() => null);
+          }
+        }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
         importFile: (await fetchImportFileCompat(importId)) ?? importFile,
@@ -609,7 +643,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           ...refreshedSnapshot,
           receiptSelfHeal: {
             reason: "stale_receipt_processing",
-            staleAfterSeconds: Math.round(STALE_RECEIPT_PROCESSING_MS / 1000),
+            staleAfterSeconds: Math.round(
+              (snapshot.importFile.processingPhase === "queued_retry"
+                ? STALE_RECEIPT_QUEUE_MS
+                : STALE_RECEIPT_PROCESSING_MS) / 1000
+            ),
           },
         });
       }
