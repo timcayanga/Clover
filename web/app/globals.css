@@ -26564,6 +26564,13 @@ button.accounts-detail__transaction-head-cell {
     justify-self: stretch;
   }
 
+  .topbar:not(:has(.shell-back-button)) .topbar__title-wrap {
+    grid-column: 1;
+    justify-self: start;
+    justify-items: start;
+    text-align: left;
+  }
+
   .topbar-actions {
     grid-column: 3;
   }
@@ -26572,6 +26579,21 @@ button.accounts-detail__transaction-head-cell {
   .shell-compact-bar__copy h1 {
     font-size: 12px;
     letter-spacing: 0.09em;
+  }
+
+  @media (max-width: 720px) {
+    .shell-compact-bar__copy,
+    .topbar__title-wrap,
+    .topbar:not(:has(.shell-back-button)) .topbar__title-wrap {
+      grid-column: 2;
+      justify-self: stretch;
+      justify-items: center;
+      text-align: center;
+    }
+
+    .topbar__title-row {
+      justify-content: center;
+    }
   }
 
   .reports-tabs {
