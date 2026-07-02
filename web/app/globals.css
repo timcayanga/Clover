@@ -953,6 +953,11 @@ body.dashboard-modal-open .app-shell {
   height: 36px;
 }
 
+.menu-icon-3d--adviser {
+  width: 28px;
+  height: 28px;
+}
+
 .nav-link__badge {
   margin-left: auto;
   min-height: 22px;
@@ -3394,6 +3399,16 @@ body.transactions-manual-open .shell-quick-add-button {
   .shell-bottom-nav__icon .menu-icon-3d {
     width: 30px;
     height: 30px;
+  }
+
+  .shell-bottom-nav__icon .menu-icon-3d--home {
+    width: 36px;
+    height: 36px;
+  }
+
+  .shell-bottom-nav__icon .menu-icon-3d--adviser {
+    width: 34px;
+    height: 34px;
   }
 
   .shell-bottom-nav__label {
