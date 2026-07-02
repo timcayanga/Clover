@@ -18472,6 +18472,12 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
     text-align: left;
   }
 
+  .investments-allocation__metrics {
+    grid-template-columns: 1fr;
+    justify-self: stretch;
+    width: 100%;
+  }
+
   .market-chart__canvas {
     grid-template-columns: 1fr;
     gap: 8px;
@@ -18748,6 +18754,19 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.03em;
+}
+
+.investments-allocation__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: 10px;
+  justify-self: end;
+  width: min(100%, 520px);
+  margin-top: 4px;
+}
+
+.investments-allocation__metric-card {
+  min-height: 86px;
 }
 
 .investments-allocation__list {

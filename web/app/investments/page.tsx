@@ -1078,57 +1078,7 @@ export default function InvestmentsPage() {
           </section>
         ) : selectedTab === "overview" ? (
           <>
-            <section className="accounts-overview-grid investments-overview-grid">
-              <article className="accounts-overview-card glass">
-                <button className="accounts-overview-card__info" type="button" aria-label="How Current Value is calculated">
-                  i
-                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                    The total value of the visible investment holdings for the selected currency view.
-                  </span>
-                </button>
-                <p className="eyebrow">Current Value</p>
-                <strong className="accounts-overview-card__amount is-good">
-                  {hasVisibleCurrencySelection
-                    ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
-                    : "—"}
-                </strong>
-              </article>
-              <article className="accounts-overview-card glass">
-                <button className="accounts-overview-card__info" type="button" aria-label="How P&L is calculated">
-                  i
-                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                    Gain or loss for the visible holdings in the selected currency view.
-                  </span>
-                </button>
-                <p className="eyebrow">P&amp;L</p>
-                <strong className={`accounts-overview-card__amount ${portfolioTotals.gainLoss > 0 ? "is-good" : portfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
-                  {hasVisibleCurrencySelection
-                    ? formatInvestmentAggregate(portfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
-                    : "—"}
-                </strong>
-                <span className="investments-overview-card__subvalue">
-                  {hasVisibleCurrencySelection && selectedCurrencyCodes.length === 1 && portfolioTotals.purchaseValue > 0
-                    ? percentFormatter.format(portfolioTotals.gainLoss / portfolioTotals.purchaseValue)
-                    : "—"}
-                </span>
-              </article>
-            </section>
-
             <section className="investments-allocation glass">
-              <div className="investments-allocation__head">
-                <div className="investments-allocation__head-title">
-                  <p className="eyebrow">Portfolio mix</p>
-                  <div className="investments-allocation__title-row">
-                    <h5>Allocation by subtype</h5>
-                    <InfoTip label="How current value is spread across investment types." />
-                  </div>
-                </div>
-                <div className="investments-allocation__summary">
-                  <span>Total value</span>
-                  <strong>{formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)}</strong>
-                </div>
-              </div>
-
               {portfolioAllocation.length > 0 ? (
                 <div className="investments-allocation__list">
                   {portfolioAllocation.map((group) => (
@@ -1152,25 +1102,51 @@ export default function InvestmentsPage() {
               ) : (
                 <EmptyDataCta
                   className="empty-state--illustrated investments-empty-state--compact"
-                  eyebrow="It's quiet in here"
-                  title="No allocation to show yet."
-                  copy="Add an investment to bring this view to life."
+                  eyebrow=""
+                  title="Add investments to start tracking your portfolio"
                   illustration={investmentsEmptyStateIllustration}
                   illustrationAlt=""
                   accountHref="/accounts"
                   transactionHref="/transactions?manual=1"
-                  actions={
-                    <>
-                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
-                        Add investment
-                      </button>
-                      <Link className="button button-secondary button-small" href="/accounts">
-                        Open Accounts
-                      </Link>
-                    </>
-                  }
+                  actions={renderAddInvestmentButton()}
                 />
               )}
+
+              <div className="investments-allocation__metrics" aria-label="Portfolio totals">
+                <article className="accounts-overview-card investments-allocation__metric-card glass">
+                  <button className="accounts-overview-card__info" type="button" aria-label="How Current Value is calculated">
+                    i
+                    <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                      The total value of the visible investment holdings for the selected currency view.
+                    </span>
+                  </button>
+                  <p className="eyebrow">Current Value</p>
+                  <strong className="accounts-overview-card__amount is-good">
+                    {hasVisibleCurrencySelection
+                      ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
+                      : "—"}
+                  </strong>
+                </article>
+                <article className="accounts-overview-card investments-allocation__metric-card glass">
+                  <button className="accounts-overview-card__info" type="button" aria-label="How P&L is calculated">
+                    i
+                    <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                      Gain or loss for the visible holdings in the selected currency view.
+                    </span>
+                  </button>
+                  <p className="eyebrow">P&amp;L</p>
+                  <strong className={`accounts-overview-card__amount ${portfolioTotals.gainLoss > 0 ? "is-good" : portfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
+                    {hasVisibleCurrencySelection
+                      ? formatInvestmentAggregate(portfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
+                      : "—"}
+                  </strong>
+                  <span className="investments-overview-card__subvalue">
+                    {hasVisibleCurrencySelection && selectedCurrencyCodes.length === 1 && portfolioTotals.purchaseValue > 0
+                      ? percentFormatter.format(portfolioTotals.gainLoss / portfolioTotals.purchaseValue)
+                      : "—"}
+                  </span>
+                </article>
+              </div>
             </section>
           </>
         ) : selectedTab === "portfolio" ? (
