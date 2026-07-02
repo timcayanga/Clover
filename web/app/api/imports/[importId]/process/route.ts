@@ -180,6 +180,23 @@ const shouldProcessReceiptInline = (params: {
   return params.bytesLength <= 8_000_000;
 };
 
+const VISUAL_IMPORT_RETRY_LIMIT = 2;
+
+const coerceProcessingAttempt = (value: unknown) => {
+  const attempt = Number(value ?? 0);
+  return Number.isFinite(attempt) && attempt > 0 ? Math.floor(attempt) : 0;
+};
+
+const getVisualRetryMessage = (importMode: ImportImageMode, attempt: number) =>
+  importMode === "receipt"
+    ? `Clover hit a temporary receipt-reading issue and queued backup pass ${attempt}/${VISUAL_IMPORT_RETRY_LIMIT}.`
+    : `Clover hit a temporary image-reading issue and queued backup pass ${attempt}/${VISUAL_IMPORT_RETRY_LIMIT}.`;
+
+const getVisualRepairMessage = (importMode: ImportImageMode) =>
+  importMode === "receipt"
+    ? "Clover tried the local and backup receipt readers but still could not extract enough reliable details. Please retry with a clearer photo or a different angle."
+    : "Clover tried the local and backup image readers but still could not extract enough reliable details. Please retry with a clearer file or a different angle.";
+
 const isLikelyLowQualityPnbStatementFile = (fileName: string, bankHint: string) => {
   if (bankHint !== "PNB") {
     return false;
@@ -1388,10 +1405,45 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             }).catch(() => null);
             return;
           }
+          const latestImportFile = await fetchImportFileCompat(importId).catch(() => null);
+          const nextAttempt = coerceProcessingAttempt(latestImportFile?.processingAttempt) + 1;
+          if (nextAttempt <= VISUAL_IMPORT_RETRY_LIMIT) {
+            if (await isLocalDevHost().catch(() => false)) {
+              await ensureImportProcessingWorker();
+            }
+            await updateImportFileCompat(importId, {
+              status: "processing",
+              processingPhase: "queued_retry",
+              processingAttempt: nextAttempt,
+              processingMessage: getVisualRetryMessage("receipt", nextAttempt),
+              parsedRowsCount: 0,
+              confirmedTransactionsCount: 0,
+            }).catch(() => null);
+            let retryQueued = false;
+            try {
+              await enqueueImportProcessing({
+                importFileId: importId,
+                actorUserId: userId,
+                allowDuplicateStatement,
+                importMode: "receipt",
+                pdfJsBaseUrl,
+              });
+              retryQueued = true;
+            } catch (queueError) {
+              console.error("Receipt import visual retry queue failed", {
+                importId,
+                error: summarizeErrorForLog(queueError),
+              });
+            }
+            if (retryQueued) {
+              return;
+            }
+          }
           await updateImportFileCompat(importId, {
             status: "failed",
             processingPhase: "repair_needed",
-            processingMessage: "Clover couldn't finish reading this receipt. Please retry or use a clearer photo.",
+            processingAttempt: nextAttempt,
+            processingMessage: getVisualRepairMessage("receipt"),
             parsedRowsCount: 0,
             confirmedTransactionsCount: 0,
           }).catch(() => null);
@@ -2448,13 +2500,33 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               await ensureImportProcessingWorker();
             }
             const retryImportMode = failedImportMode ?? "statement";
+            const nextAttempt = coerceProcessingAttempt(failedImportFile.processingAttempt) + 1;
+            if (nextAttempt > VISUAL_IMPORT_RETRY_LIMIT) {
+              await updateImportFileCompat(importId, {
+                status: "failed",
+                processingPhase: "repair_needed",
+                processingAttempt: nextAttempt,
+                processingMessage: getVisualRepairMessage(retryImportMode),
+                parsedRowsCount: 0,
+                confirmedTransactionsCount: 0,
+              }).catch(() => null);
+              return NextResponse.json(
+                {
+                  error: getVisualRepairMessage(retryImportMode),
+                  stage,
+                  importFileId: importId,
+                  code: "I-104",
+                  retryReason: retryImportMode === "receipt" ? "receipt_visual_retry_exhausted" : "image_visual_retry_exhausted",
+                  ...(localDev ? { debugMessage: errorMessage } : {}),
+                },
+                { status: 422 }
+              );
+            }
             await updateImportFileCompat(importId, {
               status: "processing",
               processingPhase: "queued_retry",
-              processingMessage:
-                retryImportMode === "receipt"
-                  ? "Clover hit a temporary receipt-reading issue and queued another pass."
-                  : "Clover hit a temporary image-reading issue and queued another pass.",
+              processingAttempt: nextAttempt,
+              processingMessage: getVisualRetryMessage(retryImportMode, nextAttempt),
               parsedRowsCount: 0,
               confirmedTransactionsCount: 0,
             });
@@ -2475,6 +2547,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               importFileId: importId,
               metadata: null,
               retryReason: retryImportMode === "receipt" ? "inline_receipt_processing_failed" : "inline_image_processing_failed",
+              retryAttempt: nextAttempt,
+              retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
             });
           } catch (queueError) {
             console.error("Visual import retry queue failed", {

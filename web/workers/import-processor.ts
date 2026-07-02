@@ -6456,6 +6456,7 @@ export const processImportFileText = async (
   const autoRerunAttempt = Number(options.autoRerunAttempt ?? 0);
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const importFile = await fetchImportFileCompat(importFileId);
+  const existingProcessingAttempt = Math.max(0, Math.floor(Number(importFile?.processingAttempt ?? 0) || 0));
   const emitImportProcessingEvent = (
     event: "import_processing_started" | "import_processing_completed" | "import_processing_stalled",
     properties: Record<string, unknown> = {}
@@ -6638,7 +6639,7 @@ export const processImportFileText = async (
   await updateImportFileCompat(importFileId, {
     status: "processing",
     processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "reading_account_details",
-    processingAttempt: autoRerunAttempt,
+    processingAttempt: autoRerunAttempt > 0 ? autoRerunAttempt : existingProcessingAttempt,
     processingTargetScore: autoRerunEnabled ? AUTO_REPARSE_SCORE_TARGET : null,
     processingCurrentScore: null,
     processingMessage:
