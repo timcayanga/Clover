@@ -306,6 +306,7 @@ const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
   help: "/assets/3d%20icons/help.png",
   search: "/assets/3d%20icons/search.png",
   profile: "/assets/3d%20icons/account.png",
+  "sign-out": "/assets/3d%20icons/log%20out.png",
 };
 
 function MenuIcon({ name }: { name: IconName }) {
