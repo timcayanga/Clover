@@ -1077,7 +1077,7 @@ export default function InvestmentsPage() {
           </section>
         ) : selectedTab === "overview" ? (
           <>
-            <section className="investments-allocation glass">
+            <section className="investments-allocation investments-allocation--overview glass">
               {portfolioAllocation.length > 0 ? (
                 <div className="investments-allocation__list">
                   {portfolioAllocation.map((group) => (
