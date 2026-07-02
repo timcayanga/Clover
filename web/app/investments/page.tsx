@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
@@ -374,6 +374,7 @@ const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => 
 });
 
 export default function InvestmentsPage() {
+  const router = useRouter();
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = null;
   const searchParams = useSearchParams();
@@ -1064,6 +1065,76 @@ export default function InvestmentsPage() {
         </>
       }
     >
+      <section className="investments-mobile-header" aria-label="Investments mobile header">
+        <div className="investments-mobile-header__bar">
+          <button
+            className="shell-back-button investments-mobile-header__back"
+            type="button"
+            aria-label="Back"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                router.back();
+                return;
+              }
+
+              router.push("/more");
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="m14.5 6-6 6 6 6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
+            </svg>
+          </button>
+          <h1>Investments</h1>
+        </div>
+
+        <AnimatedTabs
+          className="investments-tabs investments-tabs--mobile"
+          activeKey={selectedTab}
+          onChange={(key) => setSelectedTab(key as InvestmentTab)}
+          tabs={INVESTMENT_TABS.map((tab) => ({
+            key: tab.key,
+            label: tab.label,
+            icon: tab.icon,
+            disabled: Boolean(tab.proOnly && !canUseProTabs),
+            badge: null,
+            ariaLabel: tab.label,
+          }))}
+        />
+
+        <div className="investments-mobile-header__actions">
+          <CurrencySelector
+            value={portfolioCurrencyFilter}
+            onChange={setPortfolioCurrencyFilter}
+            options={portfolioCurrencyOptions.filter((currency) => currency !== "all")}
+            includeAllOption
+            allLabel="All currencies"
+            ariaLabel="Select investment currency"
+            className="investments-currency-filter investments-currency-filter--mobile"
+            buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip investments-mobile-icon-button investments-mobile-icon-button--currency"
+            menuClassName="transactions-currency-filter__menu"
+            optionClassName="transactions-currency-filter__option"
+            compact
+            menuAlignment="end"
+            showChevron={false}
+            portalMenu
+          />
+          <button
+            className="button button-primary button-small investments-page__add-button investments-mobile-icon-button investments-mobile-icon-button--primary"
+            type="button"
+            onClick={() => setAddOpen(true)}
+            disabled={!selectedWorkspaceId}
+            aria-label="Add investment"
+          >
+            <span className="button-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M10 4v12M4 10h12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+              </svg>
+            </span>
+            <span className="investments-page__add-button-label">Add investment</span>
+          </button>
+        </div>
+      </section>
+
       <div className="accounts-page animate-tab-panel" key={selectedTab}>
         {!loading && message ? <p className="panel-muted">{message}</p> : null}
 
@@ -1111,41 +1182,41 @@ export default function InvestmentsPage() {
                 />
               )}
 
-              <div className="investments-allocation__metrics" aria-label="Portfolio totals">
-                <article className="accounts-overview-card investments-allocation__metric-card glass">
-                  <button className="accounts-overview-card__info" type="button" aria-label="How Current Value is calculated">
-                    i
-                    <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                      The total value of the visible investment holdings for the selected currency view.
-                    </span>
-                  </button>
-                  <p className="eyebrow">Current Value</p>
-                  <strong className="accounts-overview-card__amount is-good">
-                    {hasVisibleCurrencySelection
-                      ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
-                      : "—"}
-                  </strong>
-                </article>
-                <article className="accounts-overview-card investments-allocation__metric-card glass">
-                  <button className="accounts-overview-card__info" type="button" aria-label="How P&L is calculated">
-                    i
-                    <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                      Gain or loss for the visible holdings in the selected currency view.
-                    </span>
-                  </button>
-                  <p className="eyebrow">P&amp;L</p>
-                  <strong className={`accounts-overview-card__amount ${portfolioTotals.gainLoss > 0 ? "is-good" : portfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
-                    {hasVisibleCurrencySelection
-                      ? formatInvestmentAggregate(portfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
-                      : "—"}
-                  </strong>
-                  <span className="investments-overview-card__subvalue">
-                    {hasVisibleCurrencySelection && selectedCurrencyCodes.length === 1 && portfolioTotals.purchaseValue > 0
-                      ? percentFormatter.format(portfolioTotals.gainLoss / portfolioTotals.purchaseValue)
-                      : "—"}
+            </section>
+            <section className="investments-overview-metrics" aria-label="Portfolio totals">
+              <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
+                <button className="accounts-overview-card__info" type="button" aria-label="How Current Value is calculated">
+                  i
+                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                    The total value of the visible investment holdings for the selected currency view.
                   </span>
-                </article>
-              </div>
+                </button>
+                <p className="eyebrow">Current Value</p>
+                <strong className="accounts-overview-card__amount is-good">
+                  {hasVisibleCurrencySelection
+                    ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
+                    : "—"}
+                </strong>
+              </article>
+              <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
+                <button className="accounts-overview-card__info" type="button" aria-label="How P&L is calculated">
+                  i
+                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                    Gain or loss for the visible holdings in the selected currency view.
+                  </span>
+                </button>
+                <p className="eyebrow">P&amp;L</p>
+                <strong className={`accounts-overview-card__amount ${portfolioTotals.gainLoss > 0 ? "is-good" : portfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
+                  {hasVisibleCurrencySelection
+                    ? formatInvestmentAggregate(portfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
+                    : "—"}
+                </strong>
+                <span className="investments-overview-card__subvalue">
+                  {hasVisibleCurrencySelection && selectedCurrencyCodes.length === 1 && portfolioTotals.purchaseValue > 0
+                    ? percentFormatter.format(portfolioTotals.gainLoss / portfolioTotals.purchaseValue)
+                    : "—"}
+                </span>
+              </article>
             </section>
           </>
         ) : selectedTab === "portfolio" ? (
