@@ -15,6 +15,7 @@ import { RouteSplash } from "@/components/route-splash";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardTopActions } from "@/components/dashboard-top-actions";
 import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { buildRecurringTransactionSummaries } from "@/lib/recurring";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
