@@ -4103,7 +4103,7 @@ export function ImportFilesModal({
   ): Promise<{ completed: boolean; summary: UploadInsightsSummary | null }> => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     const startedAt = Date.now();
-    const MAX_WAIT_MS = importMode === "receipt" ? 120_000 : importMode === "statement" ? 120_000 : 20_000;
+    const MAX_WAIT_MS = importMode === "receipt" ? 240_000 : importMode === "statement" ? 120_000 : 20_000;
     const timeoutDurationLabel =
       MAX_WAIT_MS >= 60_000
         ? `${Math.round(MAX_WAIT_MS / 60_000)} minute${Math.round(MAX_WAIT_MS / 60_000) === 1 ? "" : "s"}`
@@ -4131,7 +4131,7 @@ export function ImportFilesModal({
               ? "Notes screenshot imported"
               : "Screenshot imported";
 
-    for (let attempt = 0; attempt < 240; attempt += 1) {
+    for (let attempt = 0; attempt < Math.ceil(MAX_WAIT_MS / 500); attempt += 1) {
       const response = await fetch(`/api/imports/${importFileId}/status`, {
         cache: "no-store",
       });
@@ -4352,7 +4352,9 @@ export function ImportFilesModal({
 
         if (Date.now() - startedAt >= MAX_WAIT_MS) {
           const hasRecoverableProgress =
-            Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0;
+            Boolean(payload.visibleImportComplete || payload.receiptDocument || payload.receiptTransaction) ||
+            parsedRowsCount > 0 ||
+            confirmedTransactionsCount > 0;
           if (hasRecoverableProgress) {
             closeImportAsRecoverable(
               itemId,
@@ -4429,7 +4431,9 @@ export function ImportFilesModal({
 
       if (Date.now() - startedAt >= MAX_WAIT_MS) {
         const hasRecoverableProgress =
-          Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0;
+          Boolean(payload.visibleImportComplete || payload.receiptDocument || payload.receiptTransaction) ||
+          parsedRowsCount > 0 ||
+          confirmedTransactionsCount > 0;
         if (hasRecoverableProgress) {
           closeImportAsRecoverable(
             itemId,
