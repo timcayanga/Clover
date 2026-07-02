@@ -127,6 +127,33 @@ const detectLimitError = (message: string | null | undefined) => {
   return null;
 };
 
+const isTransientDatabaseCapacityError = (error: unknown) => {
+  const summary = summarizeErrorForLog(error);
+  const metadata =
+    typeof error === "object" && error && "meta" in error
+      ? (() => {
+          try {
+            return JSON.stringify((error as { meta?: unknown }).meta ?? "");
+          } catch {
+            return "";
+          }
+        })()
+      : "";
+  const message = [
+    error instanceof Error ? error.message : "",
+    typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code ?? "") : "",
+    metadata,
+    typeof summary === "object" && summary && "message" in summary
+      ? String((summary as { message?: unknown }).message ?? "")
+      : "",
+    typeof summary === "object" && summary && "code" in summary
+      ? String((summary as { code?: unknown }).code ?? "")
+      : "",
+  ].join(" ");
+
+  return /EMAXCONN|max client connections|too many connections|remaining connection slots|connection limit/i.test(message);
+};
+
 const isPdfUpload = (fileName: string, fileType: string) =>
   fileType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
 
@@ -1331,6 +1358,26 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             importId,
             error: summarizeErrorForLog(error),
           });
+          if (isTransientDatabaseCapacityError(error)) {
+            await updateImportFileCompat(importId, {
+              status: "processing",
+              processingPhase: "queued_retry",
+              processingMessage: "Clover is waiting for database capacity, then it will finish reading this receipt.",
+            }).catch(() => null);
+            await enqueueImportProcessing({
+              importFileId: importId,
+              actorUserId: userId,
+              allowDuplicateStatement,
+              importMode: "receipt",
+              pdfJsBaseUrl,
+            }).catch((queueError) => {
+              console.error("Receipt import capacity retry queue failed", {
+                importId,
+                error: summarizeErrorForLog(queueError),
+              });
+            });
+            return;
+          }
           const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
           if (savedTransactionsCount > 0) {
             await updateImportFileCompat(importId, {
@@ -2299,6 +2346,46 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     console.error("Import processing failed", error);
     console.error("Import processing failed", { stage, error: summarizeErrorForLog(error) });
     const errorMessage = error instanceof Error ? error.message || "Unable to process import" : "Unable to process import";
+    if (importId && isTransientDatabaseCapacityError(error)) {
+      await updateImportFileCompat(importId, {
+        status: "processing",
+        processingPhase: "queued_retry",
+        processingMessage: "Clover is waiting for database capacity, then it will finish processing this file.",
+      }).catch((updateError) => {
+        console.error("Import capacity retry status update failed", {
+          importId,
+          error: summarizeErrorForLog(updateError),
+        });
+      });
+      await enqueueImportProcessing({
+        importFileId: importId,
+        actorUserId: null,
+        allowDuplicateStatement: false,
+        importMode: null,
+        pdfJsBaseUrl: new URL(_request.url).origin,
+      }).catch((queueError) => {
+        console.error("Import capacity retry queue failed", {
+          importId,
+          error: summarizeErrorForLog(queueError),
+        });
+      });
+
+      return NextResponse.json(
+        {
+          ok: true,
+          queued: true,
+          processed: false,
+          importedRows: 0,
+          duplicate: false,
+          status: "queued",
+          importFileId: importId,
+          metadata: null,
+          retryReason: "database_capacity",
+          ...(localDev ? { debugMessage: errorMessage, stage } : {}),
+        },
+        { status: 202 }
+      );
+    }
     if (importId) {
       const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
       const parsedRowsCount = await countParsedTransactionRows(importId).catch(() => 0);
