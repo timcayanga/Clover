@@ -12,6 +12,12 @@ import { readCheckpointImportMode } from "@/lib/import-workflow";
 import { prisma } from "@/lib/prisma";
 import { processImportEnrichmentJobs } from "@/workers/import-processor";
 import { after, NextResponse } from "next/server";
+import {
+  VISUAL_IMPORT_RETRY_LIMIT,
+  coerceVisualImportAttempt,
+  getVisualImportRepairMessage,
+  shouldStopStaleVisualImportRetry,
+} from "@/lib/import-visual-recovery";
 
 export const dynamic = "force-dynamic";
 
@@ -25,16 +31,10 @@ const STALE_STATEMENT_IMAGE_READING_MS = 75 * 1000;
 const STALE_STATEMENT_IMAGE_RECONCILING_MS = 45 * 1000;
 const STALE_STATEMENT_IMAGE_STAGED_MS = 45 * 1000;
 const STALE_STATEMENT_IMAGE_EMPTY_DONE_MS = 30 * 1000;
-const VISUAL_IMPORT_RETRY_LIMIT = 2;
 
 const isImageImportFile = (fileName?: string | null, fileType?: string | null) =>
   String(fileType ?? "").toLowerCase().startsWith("image/") ||
   /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(String(fileName ?? "").toLowerCase());
-
-const getVisualRepairMessage = (importMode: "receipt" | "statement") =>
-  importMode === "receipt"
-    ? "Clover tried the local and backup receipt readers but still could not extract enough reliable details. Please retry with a clearer photo or a different angle."
-    : "Clover tried the local and backup image readers but still could not extract enough reliable details. Please retry with a clearer file or a different angle.";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   try {
@@ -63,9 +63,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const importMode = readCheckpointImportMode(snapshot.statementCheckpoint?.sourceMetadata);
     const updatedAtMs = new Date(snapshot.importFile.updatedAt).getTime();
     const statementImageProcessingAgeMs = Number.isFinite(updatedAtMs) ? Date.now() - updatedAtMs : 0;
-    const visualProcessingAttempt = Math.max(0, Math.floor(Number(snapshot.importFile.processingAttempt ?? 0) || 0));
-    const visualImportIsOutOfRetryBudget =
-      visualProcessingAttempt >= VISUAL_IMPORT_RETRY_LIMIT && snapshot.importFile.processingPhase !== "queued_retry";
+    const visualProcessingAttempt = coerceVisualImportAttempt(snapshot.importFile.processingAttempt);
+    const visualImportIsOutOfRetryBudget = shouldStopStaleVisualImportRetry({
+      processingAttempt: snapshot.importFile.processingAttempt,
+      processingPhase: snapshot.importFile.processingPhase,
+    });
     const staleStatementImageQueue =
       importMode === "statement" &&
       snapshot.importFile.status === "processing" &&
@@ -84,7 +86,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         await updateImportFileCompat(importId, {
           status: "failed",
           processingPhase: "repair_needed",
-          processingMessage: getVisualRepairMessage("statement"),
+          processingMessage: getVisualImportRepairMessage("statement"),
           parsedRowsCount: 0,
           confirmedTransactionsCount: 0,
         });
@@ -138,7 +140,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             await updateImportFileCompat(importId, {
               status: "failed",
               processingPhase: "repair_needed",
-              processingMessage: getVisualRepairMessage("statement"),
+              processingMessage: getVisualImportRepairMessage("statement"),
               parsedRowsCount: 0,
               confirmedTransactionsCount: 0,
             }).catch(() => null);
@@ -177,7 +179,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         await updateImportFileCompat(importId, {
           status: "failed",
           processingPhase: "repair_needed",
-          processingMessage: getVisualRepairMessage("receipt"),
+          processingMessage: getVisualImportRepairMessage("receipt"),
           parsedRowsCount: 0,
           confirmedTransactionsCount: 0,
         });
@@ -231,7 +233,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             await updateImportFileCompat(importId, {
               status: "failed",
               processingPhase: "repair_needed",
-              processingMessage: getVisualRepairMessage("receipt"),
+              processingMessage: getVisualImportRepairMessage("receipt"),
               parsedRowsCount: 0,
               confirmedTransactionsCount: 0,
             }).catch(() => null);
@@ -267,7 +269,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         await updateImportFileCompat(importId, {
           status: "failed",
           processingPhase: "repair_needed",
-          processingMessage: getVisualRepairMessage("statement"),
+          processingMessage: getVisualImportRepairMessage("statement"),
           parsedRowsCount: 0,
           confirmedTransactionsCount: 0,
         });
@@ -304,7 +306,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           await updateImportFileCompat(importId, {
             status: "failed",
             processingPhase: "repair_needed",
-            processingMessage: getVisualRepairMessage("statement"),
+            processingMessage: getVisualImportRepairMessage("statement"),
             parsedRowsCount: 0,
             confirmedTransactionsCount: 0,
           }).catch(() => null);
@@ -339,7 +341,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         await updateImportFileCompat(importId, {
           status: "failed",
           processingPhase: "repair_needed",
-          processingMessage: getVisualRepairMessage("receipt"),
+          processingMessage: getVisualImportRepairMessage("receipt"),
           parsedRowsCount: 0,
           confirmedTransactionsCount: 0,
         });
@@ -376,7 +378,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           await updateImportFileCompat(importId, {
             status: "failed",
             processingPhase: "repair_needed",
-            processingMessage: getVisualRepairMessage("receipt"),
+            processingMessage: getVisualImportRepairMessage("receipt"),
             parsedRowsCount: 0,
             confirmedTransactionsCount: 0,
           }).catch(() => null);
@@ -724,7 +726,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             await updateImportFileCompat(importId, {
               status: "failed",
               processingPhase: "repair_needed",
-              processingMessage: getVisualRepairMessage("receipt"),
+              processingMessage: getVisualImportRepairMessage("receipt"),
               parsedRowsCount: 0,
               confirmedTransactionsCount: 0,
             }).catch(() => null);

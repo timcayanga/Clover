@@ -43,6 +43,13 @@ import {
   resolveReceiptAccountHintToAccount,
   resolveReceiptInstitutionFallbackToAccount,
 } from "@/lib/receipt-account-resolution";
+import {
+  VISUAL_IMPORT_RETRY_LIMIT,
+  getNextVisualImportAttempt,
+  getVisualImportRepairMessage,
+  getVisualImportRetryMessage,
+  type VisualImportRecoveryMode,
+} from "@/lib/import-visual-recovery";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -179,23 +186,6 @@ const shouldProcessReceiptInline = (params: {
 
   return params.bytesLength <= 8_000_000;
 };
-
-const VISUAL_IMPORT_RETRY_LIMIT = 2;
-
-const coerceProcessingAttempt = (value: unknown) => {
-  const attempt = Number(value ?? 0);
-  return Number.isFinite(attempt) && attempt > 0 ? Math.floor(attempt) : 0;
-};
-
-const getVisualRetryMessage = (importMode: ImportImageMode, attempt: number) =>
-  importMode === "receipt"
-    ? `Clover hit a temporary receipt-reading issue and queued backup pass ${attempt}/${VISUAL_IMPORT_RETRY_LIMIT}.`
-    : `Clover hit a temporary image-reading issue and queued backup pass ${attempt}/${VISUAL_IMPORT_RETRY_LIMIT}.`;
-
-const getVisualRepairMessage = (importMode: ImportImageMode) =>
-  importMode === "receipt"
-    ? "Clover tried the local and backup receipt readers but still could not extract enough reliable details. Please retry with a clearer photo or a different angle."
-    : "Clover tried the local and backup image readers but still could not extract enough reliable details. Please retry with a clearer file or a different angle.";
 
 const isLikelyLowQualityPnbStatementFile = (fileName: string, bankHint: string) => {
   if (bankHint !== "PNB") {
@@ -1406,7 +1396,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             return;
           }
           const latestImportFile = await fetchImportFileCompat(importId).catch(() => null);
-          const nextAttempt = coerceProcessingAttempt(latestImportFile?.processingAttempt) + 1;
+          const nextAttempt = getNextVisualImportAttempt(latestImportFile?.processingAttempt);
           if (nextAttempt <= VISUAL_IMPORT_RETRY_LIMIT) {
             if (await isLocalDevHost().catch(() => false)) {
               await ensureImportProcessingWorker();
@@ -1415,7 +1405,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               status: "processing",
               processingPhase: "queued_retry",
               processingAttempt: nextAttempt,
-              processingMessage: getVisualRetryMessage("receipt", nextAttempt),
+              processingMessage: getVisualImportRetryMessage("receipt", nextAttempt),
               parsedRowsCount: 0,
               confirmedTransactionsCount: 0,
             }).catch(() => null);
@@ -1443,7 +1433,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             status: "failed",
             processingPhase: "repair_needed",
             processingAttempt: nextAttempt,
-            processingMessage: getVisualRepairMessage("receipt"),
+            processingMessage: getVisualImportRepairMessage("receipt"),
             parsedRowsCount: 0,
             confirmedTransactionsCount: 0,
           }).catch(() => null);
@@ -2500,19 +2490,20 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               await ensureImportProcessingWorker();
             }
             const retryImportMode = failedImportMode ?? "statement";
-            const nextAttempt = coerceProcessingAttempt(failedImportFile.processingAttempt) + 1;
+            const visualRecoveryMode: VisualImportRecoveryMode = retryImportMode === "receipt" ? "receipt" : "statement";
+            const nextAttempt = getNextVisualImportAttempt(failedImportFile.processingAttempt);
             if (nextAttempt > VISUAL_IMPORT_RETRY_LIMIT) {
               await updateImportFileCompat(importId, {
                 status: "failed",
                 processingPhase: "repair_needed",
                 processingAttempt: nextAttempt,
-                processingMessage: getVisualRepairMessage(retryImportMode),
+                processingMessage: getVisualImportRepairMessage(visualRecoveryMode),
                 parsedRowsCount: 0,
                 confirmedTransactionsCount: 0,
               }).catch(() => null);
               return NextResponse.json(
                 {
-                  error: getVisualRepairMessage(retryImportMode),
+                  error: getVisualImportRepairMessage(visualRecoveryMode),
                   stage,
                   importFileId: importId,
                   code: "I-104",
@@ -2526,7 +2517,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               status: "processing",
               processingPhase: "queued_retry",
               processingAttempt: nextAttempt,
-              processingMessage: getVisualRetryMessage(retryImportMode, nextAttempt),
+              processingMessage: getVisualImportRetryMessage(visualRecoveryMode, nextAttempt),
               parsedRowsCount: 0,
               confirmedTransactionsCount: 0,
             });
