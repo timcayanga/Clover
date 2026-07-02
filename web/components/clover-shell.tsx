@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -1691,11 +1690,18 @@ export function CloverShell({
                 <span className="sidebar-popover__title">{displayName}</span>
               </div>
               <div className="sidebar-popover__links sidebar-popover__links--bare">
-                <Link
+                <button
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__link--bare"
-                  href="/settings"
-                  prefetch
-                  onClick={closeChrome}
+                  type="button"
+                  onMouseDown={(event) => {
+                    if (event.button !== 0) {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    navigateTo("/settings");
+                  }}
+                  onClick={() => navigateTo("/settings")}
                   onMouseEnter={() => prefetchNavTarget("/settings")}
                   onTouchStart={() => prefetchNavTarget("/settings")}
                   role="menuitem"
@@ -1704,7 +1710,7 @@ export function CloverShell({
                     <MenuIcon name="settings" />
                   </span>
                   <span>Settings</span>
-                </Link>
+                </button>
                 <div className="sidebar-popover__separator" aria-hidden="true" />
                 <button
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger sidebar-popover__link--bare"
@@ -1894,11 +1900,19 @@ export function CloverShell({
       ) : null}
 
       <nav className="shell-bottom-nav glass" aria-label="Primary mobile navigation">
-        <Link
+        <button
           className={`shell-bottom-nav__item${active === "dashboard" || pathname?.startsWith("/home") ? " is-active" : ""}`}
           aria-current={active === "dashboard" || pathname?.startsWith("/home") ? "page" : undefined}
-          href="/home"
-          prefetch
+          type="button"
+          onMouseDown={(event) => {
+            if (event.button !== 0) {
+              return;
+            }
+
+            event.preventDefault();
+            navigateTo("/home");
+          }}
+          onClick={() => navigateTo("/home")}
           onMouseEnter={() => prefetchNavTarget("/home")}
           onTouchStart={() => prefetchNavTarget("/home")}
         >
@@ -1906,12 +1920,20 @@ export function CloverShell({
             <MenuIcon name="dashboard" />
           </span>
           <span className="shell-bottom-nav__label">Home</span>
-        </Link>
-        <Link
+        </button>
+        <button
           className={`shell-bottom-nav__item${active === "transactions" || pathname?.startsWith("/transactions") ? " is-active" : ""}`}
           aria-current={active === "transactions" || pathname?.startsWith("/transactions") ? "page" : undefined}
-          href="/transactions"
-          prefetch
+          type="button"
+          onMouseDown={(event) => {
+            if (event.button !== 0) {
+              return;
+            }
+
+            event.preventDefault();
+            navigateTo("/transactions");
+          }}
+          onClick={() => navigateTo("/transactions")}
           onMouseEnter={() => prefetchNavTarget("/transactions")}
           onTouchStart={() => prefetchNavTarget("/transactions")}
         >
@@ -1919,7 +1941,7 @@ export function CloverShell({
             <MenuIcon name="transactions" />
           </span>
           <span className="shell-bottom-nav__label">Transactions</span>
-        </Link>
+        </button>
         <button
           ref={quickAddButtonRef}
           className="shell-bottom-nav__add"
@@ -1930,11 +1952,19 @@ export function CloverShell({
         >
           <MenuIcon name="plus" />
         </button>
-        <Link
+        <button
           className={`shell-bottom-nav__item${active === "adviser" || pathname?.startsWith("/adviser") ? " is-active" : ""}`}
           aria-current={active === "adviser" || pathname?.startsWith("/adviser") ? "page" : undefined}
-          href="/adviser"
-          prefetch={shouldPrefetchNavHref("/adviser")}
+          type="button"
+          onMouseDown={(event) => {
+            if (event.button !== 0) {
+              return;
+            }
+
+            event.preventDefault();
+            navigateTo("/adviser");
+          }}
+          onClick={() => navigateTo("/adviser")}
           onMouseEnter={() => prefetchNavTarget("/adviser")}
           onTouchStart={() => prefetchNavTarget("/adviser")}
         >
@@ -1942,12 +1972,20 @@ export function CloverShell({
             <MenuIcon name="adviser" />
           </span>
           <span className="shell-bottom-nav__label">Adviser</span>
-        </Link>
-        <Link
+        </button>
+        <button
           className={`shell-bottom-nav__item${isMoreActive ? " is-active" : ""}`}
           aria-current={isMoreActive ? "page" : undefined}
-          href="/more"
-          prefetch
+          type="button"
+          onMouseDown={(event) => {
+            if (event.button !== 0) {
+              return;
+            }
+
+            event.preventDefault();
+            navigateTo("/more");
+          }}
+          onClick={() => navigateTo("/more")}
           onMouseEnter={() => prefetchNavTarget("/more")}
           onTouchStart={() => prefetchNavTarget("/more")}
         >
@@ -1955,7 +1993,7 @@ export function CloverShell({
             <MenuIcon name="more" />
           </span>
           <span className="shell-bottom-nav__label">More</span>
-        </Link>
+        </button>
       </nav>
 
       <main
