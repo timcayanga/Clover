@@ -629,6 +629,62 @@ const looksCharacterSpacedGenericLine = (value: string) => {
   return singleCharacterTokens / tokens.length >= 0.6;
 };
 
+const collapseCharacterSpacedImportLine = (value: string) => {
+  const normalized = normalizeWhitespace(value.replace(/\u00a0/g, " ").replace(/[|¦]/g, " "));
+  if (!looksCharacterSpacedGenericLine(normalized)) {
+    return normalized;
+  }
+
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9]$/.test(token)).length;
+  if (tokens.length < 10 || singleCharacterTokens / tokens.length < 0.55) {
+    return normalized;
+  }
+
+  const rebuilt: string[] = [];
+  let buffer = "";
+  const flushBuffer = () => {
+    if (buffer) {
+      rebuilt.push(buffer);
+      buffer = "";
+    }
+  };
+
+  for (const token of tokens) {
+    if (/^[A-Za-z0-9]$/.test(token)) {
+      buffer += token;
+      continue;
+    }
+
+    if (/^[,.:;*\/-]+$/.test(token) && buffer) {
+      buffer += token;
+      continue;
+    }
+
+    flushBuffer();
+    rebuilt.push(token);
+  }
+  flushBuffer();
+
+  return rebuilt
+    .join(" ")
+    .replace(/\s+([,.:;*\/-])/g, "$1")
+    .replace(/([,.:;*\/-])\s+/g, "$1")
+    .replace(/([A-Za-z][A-Za-z0-9*\/.-]*)(\d{10})(\d{1,3},\d{3}\.\d{2})$/u, "$1$2 $3")
+    .replace(/(?<![,.\d])([A-Za-z0-9])((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})$/u, "$1 $2");
+};
+
+const normalizeCharacterSpacedImportText = (text: string) => {
+  const lines = text.split(/\r?\n/);
+  const sampleLines = lines.map((line) => normalizeWhitespace(line)).filter(Boolean).slice(0, 80);
+  const characterSpacedLines = sampleLines.filter((line) => looksCharacterSpacedGenericLine(line)).length;
+  if (sampleLines.length === 0 || characterSpacedLines / sampleLines.length < 0.1) {
+    return text;
+  }
+
+  return lines.map((line) => collapseCharacterSpacedImportLine(line)).join("\n");
+};
+
 const genericNameLexicon = new Set(
   [
     "ABENOJA",
@@ -18451,6 +18507,7 @@ export const parseImportTextGenericOnly = (
   fileType: string,
   context: ImportParseContext = {}
 ) => {
+  text = normalizeCharacterSpacedImportText(text);
   const wiseMobileParsed = parseWiseMobileScreenshotImportText(text, context);
   if (wiseMobileParsed) {
     return wiseMobileParsed.rows;
@@ -19751,6 +19808,7 @@ export const parseImportText = (
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
+  text = normalizeCharacterSpacedImportText(text);
   const gfundsScreenshotParsed = parseGfundsTransactionHistoryImportText(text, fileName);
   if (gfundsScreenshotParsed && gfundsScreenshotParsed.rows.length > 0) {
     return gfundsScreenshotParsed.rows;

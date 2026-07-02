@@ -5,6 +5,7 @@ import {
   fingerprintImportSurface,
   shouldPreferBackupParserForTemplateFamily,
 } from "@/lib/import-parser-routing";
+import { parseImportText } from "@/lib/import-parser";
 
 const main = () => {
   assert.equal(
@@ -121,6 +122,27 @@ const main = () => {
   });
   assert.equal(fastScan.veryWeak, true);
   assert.ok(fastScan.reasons.includes("no_rows"));
+
+  const spacedBpiRows = parseImportText(
+    [
+      "Statement of tnuoccA",
+      "C u s t o m e r N u m b e r 0 2 0 1 0 0 - 3 - 3 0 - 9 0 2 9 7 3 7",
+      "M a r c h 1 9 M a r c h 2 0 P a y p a l * S e p h o r a p h i l 4 0 2 9 3 5 7 7 3 3 5 , 7 0 6 . 5 0",
+      "M a r c h 1 9 M a r c h 2 0 G r a b M a k a t i 2 2 0 . 0 0",
+      "M a r c h 2 0 M a r c h 2 3 L a z a d a P h M a k a t i 6 , 4 3 6 . 5 9",
+    ].join("\n"),
+    "BE20260331.pdf",
+    "application/pdf",
+    {
+      institution: "BPI",
+      accountName: "BPI",
+      accountNumber: "0201003309029737",
+    }
+  );
+  assert.equal(spacedBpiRows.length, 3, "Expected character-spaced BPI credit-card OCR to parse transaction rows.");
+  assert.equal(spacedBpiRows[0]?.amount, "5706.50", "Expected BPI approval code not to merge into the PayPal amount.");
+  assert.equal((spacedBpiRows[0]?.rawPayload as Record<string, unknown> | undefined)?.approvalCode, "4029357733");
+  assert.equal(spacedBpiRows[1]?.categoryName, "Transport");
 
   console.log("Import parser routing regression passed.");
 };
