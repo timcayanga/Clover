@@ -9,7 +9,6 @@ import { EmptyDataCta } from "@/components/empty-data-cta";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { AnimatedTabs } from "@/components/animated-tabs";
 import { CurrencySelector } from "@/components/currency-selector";
-import { getAccountPath } from "@/lib/account-path";
 import { InfoTip } from "@/components/info-tip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
@@ -393,6 +392,7 @@ export default function InvestmentsPage() {
   const [investmentSortKey, setInvestmentSortKey] = useState<InvestmentSortKey>("value_desc");
   const [portfolioCurrencyFilter, setPortfolioCurrencyFilter] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
+  const [selectedInvestmentAssetId, setSelectedInvestmentAssetId] = useState<string | null>(urlSearchParams.get("asset"));
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -414,7 +414,7 @@ export default function InvestmentsPage() {
   const [manualDividendAmount, setManualDividendAmount] = useState("");
   const [manualBalance, setManualBalance] = useState("");
   const [manualCurrency, setManualCurrency] = useState("PHP");
-  const [selectedTab, setSelectedTab] = useState<InvestmentTab>(requestedTab);
+  const [selectedTab, setSelectedTab] = useState<InvestmentTab>(urlSearchParams.get("asset") ? "portfolio" : requestedTab);
 
   useEffect(() => {
     document.title = "Clover | Investments";
@@ -425,11 +425,11 @@ export default function InvestmentsPage() {
   }, [searchQueryFromUrl]);
 
   useEffect(() => {
-    document.body.toggleAttribute("data-clover-page-modal", addOpen);
+    document.body.toggleAttribute("data-clover-page-modal", addOpen || Boolean(selectedInvestmentAssetId));
     return () => {
       document.body.removeAttribute("data-clover-page-modal");
     };
-  }, [addOpen]);
+  }, [addOpen, selectedInvestmentAssetId]);
 
   useEffect(() => {
     setPortfolioCurrencyFilter("all");
@@ -708,6 +708,30 @@ export default function InvestmentsPage() {
   const canUseProTabs = planTier !== "free";
   const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "analysis") && !canUseProTabs);
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
+  const selectedInvestmentAsset = selectedInvestmentAssetId
+    ? visibleInvestmentAccounts.find((account) => account.id === selectedInvestmentAssetId) ??
+      accounts.find((account) => account.id === selectedInvestmentAssetId) ??
+      null
+    : null;
+  const selectedInvestmentFieldConfigs = editingDraft ? getInvestmentFieldConfigs(editingDraft.investmentSubtype) : [];
+  const selectedInvestmentCurrentValue = selectedInvestmentAsset ? parseNullableAmount(selectedInvestmentAsset.balance) : null;
+  const selectedInvestmentPurchaseValue = selectedInvestmentAsset
+    ? parseNullableAmount(selectedInvestmentAsset.investmentCostBasis ?? selectedInvestmentAsset.investmentPrincipal)
+    : null;
+  const selectedInvestmentGainLoss =
+    selectedInvestmentCurrentValue === null || selectedInvestmentPurchaseValue === null
+      ? null
+      : selectedInvestmentCurrentValue - selectedInvestmentPurchaseValue;
+  const selectedInvestmentReturnPercent = getReturnPercent(selectedInvestmentCurrentValue, selectedInvestmentPurchaseValue);
+  const selectedInvestmentAssetBrand = selectedInvestmentAsset
+    ? getInvestmentAssetBrand({
+        symbol: selectedInvestmentAsset.investmentSymbol,
+        name: selectedInvestmentAsset.name,
+        subtype: selectedInvestmentAsset.investmentSubtype,
+        currency: selectedInvestmentAsset.currency,
+        institution: selectedInvestmentAsset.institution,
+      })
+    : null;
 
   const renderAddInvestmentButton = () => (
     <button
@@ -746,6 +770,41 @@ export default function InvestmentsPage() {
     setEditingAccountId(null);
     setEditingDraft(null);
   };
+
+  const openInvestmentAsset = (account: Account) => {
+    setSelectedInvestmentAssetId(account.id);
+    setSelectedTab("portfolio");
+    beginEditingAccount(account);
+
+    const nextParams = new URLSearchParams(urlSearchParams.toString());
+    nextParams.set("tab", "portfolio");
+    nextParams.set("asset", account.id);
+    window.history.replaceState(null, "", `/investments?${nextParams.toString()}`);
+  };
+
+  const closeInvestmentAsset = () => {
+    setSelectedInvestmentAssetId(null);
+    cancelEditingAccount();
+
+    const nextParams = new URLSearchParams(urlSearchParams.toString());
+    nextParams.delete("asset");
+    const nextQuery = nextParams.toString();
+    window.history.replaceState(null, "", nextQuery ? `/investments?${nextQuery}` : "/investments");
+  };
+
+  const focusInvestmentAssetField = (fieldKey: keyof InvestmentEditDraft) => {
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`[data-investment-asset-field="${fieldKey}"]`)?.focus();
+    });
+  };
+
+  useEffect(() => {
+    if (!selectedInvestmentAsset || editingAccountId === selectedInvestmentAsset.id) {
+      return;
+    }
+
+    beginEditingAccount(selectedInvestmentAsset);
+  }, [editingAccountId, selectedInvestmentAsset]);
 
   const updateEditingDraft = (key: keyof InvestmentEditDraft, value: string) => {
     setEditingDraft((current) => (current ? { ...current, [key]: value } : current));
@@ -791,11 +850,17 @@ export default function InvestmentsPage() {
       }
 
       const payload = await response.json();
+      const updatedAccount = payload.account as Account | undefined;
       if (payload.account) {
         setAccounts((current) => current.map((account) => (account.id === editingAccountId ? (payload.account as Account) : account)));
       }
 
-      cancelEditingAccount();
+      if (selectedInvestmentAssetId === editingAccountId && updatedAccount) {
+        setEditingAccountId(updatedAccount.id);
+        setEditingDraft(serializeInvestmentEditDraft(updatedAccount));
+      } else {
+        cancelEditingAccount();
+      }
       setMessage("Investment updated.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to update investment.");
@@ -1265,13 +1330,19 @@ export default function InvestmentsPage() {
                         const gainLoss =
                           currentValue === null || purchaseValue === null ? null : currentValue - purchaseValue;
                         const returnPercent = getReturnPercent(currentValue, purchaseValue);
-                        const isEditing = editingAccountId === account.id && Boolean(editingDraft);
+                        const isEditing = !selectedInvestmentAssetId && editingAccountId === account.id && Boolean(editingDraft);
                         const editFieldConfigs = isEditing && editingDraft ? getInvestmentFieldConfigs(editingDraft.investmentSubtype) : [];
-                        const accountPath = getAccountPath(account);
 
                         return (
                           <article key={account.id} className="accounts-account-card glass">
-                            {!isEditing ? <Link className="accounts-account-card__link-overlay" href={accountPath} aria-label={`Open ${account.name}`} /> : null}
+                            {!isEditing ? (
+                              <button
+                                className="accounts-account-card__link-overlay"
+                                type="button"
+                                onClick={() => openInvestmentAsset(account)}
+                                aria-label={`Open ${account.name}`}
+                              />
+                            ) : null}
                             <div className="accounts-account-card__head">
                               <div className="accounts-account-card__brand">
                                 <AccountBrandMark accountBrand={investmentAssetBrand} label={investmentAssetBrand.label} />
@@ -1642,6 +1713,208 @@ export default function InvestmentsPage() {
           </section>
         )}
       </div>
+
+        {selectedInvestmentAsset && editingDraft ? (
+          <div className="modal-backdrop modal-backdrop--investments-add" role="presentation" onClick={closeInvestmentAsset}>
+            <section
+              className="modal-card modal-card--wide investments-asset-detail-modal glass"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="investment-asset-detail-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="modal-head">
+                <div>
+                  <p className="eyebrow">Asset details</p>
+                  <h4 id="investment-asset-detail-title">{selectedInvestmentAsset.name}</h4>
+                </div>
+                <button className="icon-button" type="button" onClick={closeInvestmentAsset} aria-label="Close asset details">
+                  ×
+                </button>
+              </div>
+
+              <div className="investments-asset-detail-modal__hero">
+                {selectedInvestmentAssetBrand ? (
+                  <AccountBrandMark accountBrand={selectedInvestmentAssetBrand} label={selectedInvestmentAssetBrand.label} />
+                ) : null}
+                <div>
+                  <strong>{selectedInvestmentAsset.name}</strong>
+                  {selectedInvestmentAsset.institution || selectedInvestmentAsset.investmentSymbol ? (
+                    <span>
+                      {[selectedInvestmentAsset.institution, selectedInvestmentAsset.investmentSymbol].filter(Boolean).join(" · ")}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              <section className="accounts-detail__investment investments-asset-detail-modal__snapshot glass">
+                <div className="accounts-detail__investment-summary">
+                  <button
+                    className="status-card accounts-detail__investment-field"
+                    type="button"
+                    onClick={() => focusInvestmentAssetField("investmentSubtype")}
+                  >
+                    <span>Subtype</span>
+                    <strong>{getInvestmentSubtypeLabel(editingDraft.investmentSubtype)}</strong>
+                  </button>
+                  <button
+                    className="status-card accounts-detail__investment-field"
+                    type="button"
+                    onClick={() => focusInvestmentAssetField("balance")}
+                  >
+                    <span>Current value</span>
+                    <strong>
+                      {selectedInvestmentCurrentValue === null
+                        ? "Not set"
+                        : formatInvestmentAmount(selectedInvestmentCurrentValue, selectedInvestmentAsset.currency)}
+                    </strong>
+                  </button>
+                  <button
+                    className="status-card accounts-detail__investment-field"
+                    type="button"
+                    onClick={() =>
+                      focusInvestmentAssetField(
+                        isFixedIncomeInvestmentSubtype(editingDraft.investmentSubtype) ? "investmentPrincipal" : "investmentCostBasis"
+                      )
+                    }
+                  >
+                    <span>{isFixedIncomeInvestmentSubtype(editingDraft.investmentSubtype) ? "Principal" : "Purchase value"}</span>
+                    <strong>
+                      {selectedInvestmentPurchaseValue === null
+                        ? "Not set"
+                        : formatInvestmentAmount(selectedInvestmentPurchaseValue, selectedInvestmentAsset.currency)}
+                    </strong>
+                  </button>
+                  <button
+                    className="status-card accounts-detail__investment-field"
+                    type="button"
+                    onClick={() =>
+                      focusInvestmentAssetField(
+                        isFixedIncomeInvestmentSubtype(editingDraft.investmentSubtype) ? "investmentPrincipal" : "investmentCostBasis"
+                      )
+                    }
+                  >
+                    <span>Gain / loss</span>
+                    <strong>
+                      {selectedInvestmentGainLoss === null
+                        ? "Not set"
+                        : formatInvestmentAmount(selectedInvestmentGainLoss, selectedInvestmentAsset.currency)}
+                    </strong>
+                  </button>
+                </div>
+                {selectedInvestmentReturnPercent !== null ? (
+                  <p className="investments-asset-detail-modal__return">
+                    Return: {percentFormatter.format(selectedInvestmentReturnPercent)}
+                  </p>
+                ) : null}
+              </section>
+
+              <form
+                className="accounts-inline-edit investments-asset-detail-modal__form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void saveEditingAccount();
+                }}
+              >
+                <div className="accounts-inline-edit__grid">
+                  <label>
+                    Holding name
+                    <input
+                      data-investment-asset-field="name"
+                      value={editingDraft.name}
+                      onChange={(event) => updateEditingDraft("name", event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Institution
+                    <input
+                      data-investment-asset-field="institution"
+                      value={editingDraft.institution}
+                      onChange={(event) => updateEditingDraft("institution", event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Investment subtype
+                    <select
+                      data-investment-asset-field="investmentSubtype"
+                      value={editingDraft.investmentSubtype}
+                      onChange={(event) => {
+                        const nextSubtype = event.target.value as InvestmentSubtype;
+                        setEditingDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                investmentSubtype: nextSubtype,
+                              }
+                            : current
+                        );
+                      }}
+                    >
+                      {INVESTMENT_SUBTYPES.map((subtype) => (
+                        <option key={subtype} value={subtype}>
+                          {getInvestmentSubtypeLabel(subtype)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Current value / balance
+                    <input
+                      data-investment-asset-field="balance"
+                      value={editingDraft.balance}
+                      onChange={(event) => updateEditingDraft("balance", event.target.value)}
+                      inputMode="decimal"
+                    />
+                  </label>
+                  <div className="accounts-form-currency-field">
+                    <span className="sr-only">Currency</span>
+                    <CurrencySelector
+                      value={editingDraft.currency}
+                      onChange={(value) => updateEditingDraft("currency", value)}
+                      options={currencyCatalogCodes}
+                      ariaLabel="Select investment currency"
+                      className="accounts-form-currency-field__selector"
+                      buttonClassName="accounts-form-currency-field__button"
+                      menuClassName="accounts-form-currency-field__menu"
+                      optionClassName="accounts-form-currency-field__option"
+                      menuAlignment="end"
+                    />
+                  </div>
+                  {selectedInvestmentFieldConfigs.map((field) => (
+                    <label key={field.key}>
+                      {field.label}
+                      {field.type === "date" ? (
+                        <input
+                          data-investment-asset-field={field.key}
+                          type="date"
+                          value={getEditingFieldValue(field.key)}
+                          onChange={(event) => updateEditingDraft(field.key as keyof InvestmentEditDraft, event.target.value)}
+                        />
+                      ) : (
+                        <input
+                          data-investment-asset-field={field.key}
+                          value={getEditingFieldValue(field.key)}
+                          onChange={(event) => updateEditingDraft(field.key as keyof InvestmentEditDraft, event.target.value)}
+                          inputMode={field.inputMode}
+                          placeholder={field.placeholder}
+                        />
+                      )}
+                    </label>
+                  ))}
+                </div>
+
+                <div className="modal-actions investments-asset-detail-modal__actions">
+                  <button className="button button-secondary button-small" type="button" onClick={closeInvestmentAsset} disabled={isUpdating}>
+                    Close
+                  </button>
+                  <button className="button button-primary button-small" type="submit" disabled={isUpdating}>
+                    {isUpdating ? "Saving..." : "Save changes"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        ) : null}
 
         {addOpen ? (
           <div className="modal-backdrop modal-backdrop--investments-add" role="presentation" onClick={() => setAddOpen(false)}>

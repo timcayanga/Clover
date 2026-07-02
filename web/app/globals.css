@@ -22061,6 +22061,54 @@ button.accounts-detail__transaction-head-cell {
   font-size: 0.72rem;
 }
 
+.investments-asset-detail-modal {
+  display: grid;
+  gap: 18px;
+  width: min(1040px, calc(100vw - 48px));
+  max-height: min(860px, calc(100dvh - 48px));
+  overflow: auto;
+}
+
+.investments-asset-detail-modal__hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(203, 213, 225, 0.68);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.investments-asset-detail-modal__hero strong,
+.investments-asset-detail-modal__hero span {
+  display: block;
+}
+
+.investments-asset-detail-modal__hero span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.investments-asset-detail-modal__snapshot {
+  border-radius: 24px;
+}
+
+.investments-asset-detail-modal__return {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.investments-asset-detail-modal__form {
+  padding: 0;
+}
+
+.investments-asset-detail-modal__actions {
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
 .accounts-detail__history-stack {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
