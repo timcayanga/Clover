@@ -296,22 +296,22 @@ type IconName =
   | "sign-out";
 
 const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
-  dashboard: "/assets/3d%20icons/home.png",
-  accounts: "/assets/3d%20icons/bank%20account.png",
-  investments: "/assets/3d%20icons/investments.png",
-  "split-bill": "/assets/3d%20icons/split%20bills.png",
-  transactions: "/assets/3d%20icons/transactions.png",
-  recurring: "/assets/3d%20icons/recurring.png",
-  reports: "/assets/3d%20icons/reports.png",
-  adviser: "/assets/3d%20icons/adviser.png",
-  budgeting: "/assets/3d%20icons/budgeting.png",
-  more: "/assets/3d%20icons/more.png",
-  notifications: "/assets/3d%20icons/notifications.png",
-  settings: "/assets/3d%20icons/settings.png",
-  help: "/assets/3d%20icons/help.png",
-  search: "/assets/3d%20icons/search.png",
-  profile: "/assets/3d%20icons/account.png",
-  "sign-out": "/assets/3d%20icons/log%20out.png",
+  dashboard: "/assets/3d%20icons/menu/home.png",
+  accounts: "/assets/3d%20icons/menu/bank-account.png",
+  investments: "/assets/3d%20icons/menu/investments.png",
+  "split-bill": "/assets/3d%20icons/menu/split-bills.png",
+  transactions: "/assets/3d%20icons/menu/transactions.png",
+  recurring: "/assets/3d%20icons/menu/recurring.png",
+  reports: "/assets/3d%20icons/menu/reports.png",
+  adviser: "/assets/3d%20icons/menu/adviser.png",
+  budgeting: "/assets/3d%20icons/menu/budgeting.png",
+  more: "/assets/3d%20icons/menu/more.png",
+  notifications: "/assets/3d%20icons/menu/notifications.png",
+  settings: "/assets/3d%20icons/menu/settings.png",
+  help: "/assets/3d%20icons/menu/help.png",
+  search: "/assets/3d%20icons/menu/search.png",
+  profile: "/assets/3d%20icons/menu/account.png",
+  "sign-out": "/assets/3d%20icons/menu/log-out.png",
 };
 
 function MenuIcon({ name }: { name: IconName }) {
@@ -321,6 +321,12 @@ function MenuIcon({ name }: { name: IconName }) {
       <img
         src={imageSrc}
         alt=""
+        width={96}
+        height={96}
+        loading="eager"
+        decoding="async"
+        fetchPriority="high"
+        draggable={false}
         className={`menu-icon-3d${name === "dashboard" ? " menu-icon-3d--home" : ""}${name === "adviser" ? " menu-icon-3d--adviser" : ""}`}
         aria-hidden="true"
       />
