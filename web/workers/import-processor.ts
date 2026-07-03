@@ -70,6 +70,7 @@ import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-ima
 import {
   decideImportParserRoute,
   fingerprintImportSurface,
+  shouldAttemptVisualBackupBeforeFailure,
   shouldPreferBackupParserForTemplateFamily,
   type ImportSurfaceFingerprintKind,
 } from "@/lib/import-parser-routing";
@@ -7276,7 +7277,14 @@ export const processImportFileText = async (
     prefersBackupParserForTemplateFamily: templatePrefersBackupParser,
     surfaceFingerprint,
   });
-  if (fastFailureLooksUnsupported) {
+  const visualBackupAvailableBeforeFailure = shouldAttemptVisualBackupBeforeFailure({
+    routeDecision: parserRouteDecision,
+    imageImport,
+    isPdfImport: isPdfImportFile(fileType, fileName),
+    trainedReceiptDetails: Boolean(trainedReceiptDetails),
+    canReuseCachedStatementParse,
+  });
+  if (fastFailureLooksUnsupported && !visualBackupAvailableBeforeFailure) {
     const processingMessage = buildNoRowsImportFailureMessage({
       institution: metadataForParse.institution ?? null,
       surfaceFingerprintKind: surfaceFingerprint.kind,
@@ -7369,19 +7377,19 @@ export const processImportFileText = async (
         !prefersVisionFallbackForInstitution)));
   if (shouldUseVisionFallback && !pageImages) {
     try {
+      if (!storageKey) {
+        throw new Error("Missing imported file.");
+      }
       if (imageImport) {
         pageImages = await readImportedFileImageDataUrls({
-          storageKey: String(importFile.storageKey ?? ""),
+          storageKey,
           fileType,
           fileName,
         });
-      } else if (fileType === "application/pdf") {
-        const importedBytes = await downloadImportObject(storageKey);
-        pdfFileDataBase64 = Buffer.from(importedBytes).toString("base64");
-      } else {
+      } else if (isPdfImportFile(fileType, fileName)) {
         pageImages = await readImportedPdfPageImages(
           {
-            storageKey: String(importFile.storageKey ?? ""),
+            storageKey,
             fileType,
             fileName,
           },
@@ -7391,6 +7399,10 @@ export const processImportFileText = async (
           options.pdfJsBaseUrl,
           !text.trim() || imageImport
         );
+        if ((!pageImages || pageImages.length === 0) && fileType === "application/pdf") {
+          const importedBytes = await downloadImportObject(storageKey);
+          pdfFileDataBase64 = Buffer.from(importedBytes).toString("base64");
+        }
       }
     } catch (error) {
       console.warn("Unable to render page images for fallback; continuing without them", {

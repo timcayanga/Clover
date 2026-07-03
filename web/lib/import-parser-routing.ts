@@ -11,6 +11,22 @@ export type ImportParserRouteDecision = {
   shouldPreferOpenAiPrimary: boolean;
 };
 
+export const shouldAttemptVisualBackupBeforeFailure = (params: {
+  routeDecision: ImportParserRouteDecision;
+  imageImport?: boolean;
+  isPdfImport?: boolean;
+  trainedReceiptDetails?: boolean;
+  canReuseCachedStatementParse?: boolean;
+}) => {
+  return (
+    params.routeDecision.route !== "deterministic" &&
+    params.routeDecision.shouldRenderPageImages &&
+    (params.imageImport === true || params.isPdfImport === true) &&
+    params.trainedReceiptDetails !== true &&
+    params.canReuseCachedStatementParse !== true
+  );
+};
+
 export type ImportFastScanAssessment = {
   score: number;
   weak: boolean;

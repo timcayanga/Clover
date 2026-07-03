@@ -3,6 +3,7 @@ import {
   assessImportFastScan,
   decideImportParserRoute,
   fingerprintImportSurface,
+  shouldAttemptVisualBackupBeforeFailure,
   shouldPreferBackupParserForTemplateFamily,
 } from "@/lib/import-parser-routing";
 import { parseImportText } from "@/lib/import-parser";
@@ -188,6 +189,52 @@ const main = () => {
   assert.equal(noTextTimestampReceiptRoute.route, "backup_openai");
   assert.equal(noTextTimestampReceiptRoute.shouldRenderPageImages, true);
   assert.equal(noTextTimestampReceiptRoute.shouldPreferOpenAiPrimary, true);
+  assert.equal(
+    shouldAttemptVisualBackupBeforeFailure({
+      routeDecision: noTextTimestampReceiptRoute,
+      imageImport: true,
+      trainedReceiptDetails: false,
+      canReuseCachedStatementParse: false,
+    }),
+    true,
+    "Expected weak receipt screenshots to try visual backup before any I-104 failure."
+  );
+
+  const weakScannedPdfRoute = decideImportParserRoute({
+    importMode: "statement",
+    fileType: "application/pdf",
+    fileName: "BE20260331.pdf",
+    imageImport: false,
+    hasKnownInstitution: true,
+    parsedRowsCount: 0,
+    parsedDateCoverage: 0,
+    genericParseLooksSuspicious: true,
+    suspiciousDateCoverage: true,
+    textLength: 45,
+    textPreview: "BPI Statement Account Number Total Amount Due",
+    screenshotNoiseRatio: 0,
+    detectedMetadata: { institution: "BPI", confidence: 61 },
+    surfaceFingerprint: fingerprintImportSurface({
+      importMode: "statement",
+      fileType: "application/pdf",
+      fileName: "BE20260331.pdf",
+      imageImport: false,
+      textPreview: "BPI Statement Account Number Total Amount Due",
+      detectedMetadata: { institution: "BPI", confidence: 61 },
+    }),
+  });
+  assert.equal(weakScannedPdfRoute.route, "backup_openai");
+  assert.equal(weakScannedPdfRoute.shouldRenderPageImages, true);
+  assert.equal(
+    shouldAttemptVisualBackupBeforeFailure({
+      routeDecision: weakScannedPdfRoute,
+      isPdfImport: true,
+      trainedReceiptDetails: false,
+      canReuseCachedStatementParse: false,
+    }),
+    true,
+    "Expected weak scanned PDFs to render pages for backup before failing."
+  );
 
   const spacedBpiRows = parseImportText(
     [
