@@ -1235,6 +1235,33 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         importFile: (await fetchImportFileCompat(importId)) ?? importFile,
         promoteFailedVisibleImport: true,
       });
+      if (
+        result.status === "error" &&
+        statusSnapshot?.importFile.status === "processing" &&
+        (statusSnapshot.importFile.processingPhase === "queued_retry" ||
+          statusSnapshot.importFile.processingPhase === "reading_receipt_vision" ||
+          statusSnapshot.importFile.processingPhase === "reading_account_details" ||
+          statusSnapshot.importFile.processingPhase === "reconciling")
+      ) {
+        return NextResponse.json(
+          {
+            ok: true,
+            queued: true,
+            processed: false,
+            importedRows: 0,
+            duplicate: false,
+            status: "queued",
+            importFileId: importId,
+            metadata: result.metadata ?? null,
+            retryReason: "recoverable_visual_inline_retry",
+            retryAttempt: statusSnapshot.importFile.processingAttempt ?? null,
+            retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
+            visibleImportComplete: false,
+            finalizationInBackground: true,
+          },
+          { status: 202 }
+        );
+      }
       const accountSummaries =
         statusSnapshot?.accountSummaries?.length ? statusSnapshot.accountSummaries : result.accountSummaries ?? [];
       const responseAccountId =
@@ -2209,6 +2236,33 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           importFile: (await fetchImportFileCompat(importId)) ?? importFile,
           promoteFailedVisibleImport: true,
         });
+        if (
+          result.status === "error" &&
+          statusSnapshot?.importFile.status === "processing" &&
+          (statusSnapshot.importFile.processingPhase === "queued_retry" ||
+            statusSnapshot.importFile.processingPhase === "reading_receipt_vision" ||
+            statusSnapshot.importFile.processingPhase === "reading_account_details" ||
+            statusSnapshot.importFile.processingPhase === "reconciling")
+        ) {
+          return NextResponse.json(
+            {
+              ok: true,
+              queued: true,
+              processed: false,
+              importedRows: 0,
+              duplicate: false,
+              status: "queued",
+              importFileId: importId,
+              metadata: result.metadata ?? null,
+              retryReason: "recoverable_visual_inline_retry",
+              retryAttempt: statusSnapshot.importFile.processingAttempt ?? null,
+              retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
+              visibleImportComplete: false,
+              finalizationInBackground: true,
+            },
+            { status: 202 }
+          );
+        }
         const accountSummaries =
           statusSnapshot?.accountSummaries?.length ? statusSnapshot.accountSummaries : result.accountSummaries ?? [];
         const responseAccountId =

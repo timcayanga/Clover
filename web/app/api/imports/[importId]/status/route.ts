@@ -282,14 +282,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       }
     }
 
+    const visualImportWithoutMode =
+      importMode === null && isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType);
     const staleStatementImageEmptyDone =
-      importMode === "statement" &&
+      (importMode === "statement" || visualImportWithoutMode) &&
       (snapshot.importFile.status === "done" || snapshot.importFile.status === "failed") &&
       isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount === 0 &&
       Number.isFinite(updatedAtMs) &&
-      statementImageProcessingAgeMs > STALE_STATEMENT_IMAGE_EMPTY_DONE_MS;
+      (snapshot.importFile.status === "failed" || statementImageProcessingAgeMs > STALE_STATEMENT_IMAGE_EMPTY_DONE_MS);
 
     if (staleStatementImageEmptyDone) {
       if (visualProcessingAttempt >= VISUAL_IMPORT_RETRY_LIMIT) {
@@ -355,7 +357,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount === 0 &&
       Number.isFinite(updatedAtMs) &&
-      statementImageProcessingAgeMs > STALE_RECEIPT_EMPTY_DONE_MS;
+      (snapshot.importFile.status === "failed" || statementImageProcessingAgeMs > STALE_RECEIPT_EMPTY_DONE_MS);
 
     if (staleReceiptEmptyDone) {
       if (visualProcessingAttempt >= VISUAL_IMPORT_RETRY_LIMIT) {
