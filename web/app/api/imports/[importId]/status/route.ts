@@ -15,8 +15,11 @@ import { after, NextResponse } from "next/server";
 import {
   VISUAL_IMPORT_RETRY_LIMIT,
   coerceVisualImportAttempt,
+  getNextVisualImportAttempt,
   getVisualImportRepairMessage,
+  getVisualImportRetryMessage,
   shouldStopStaleVisualImportRetry,
+  type VisualImportRecoveryMode,
 } from "@/lib/import-visual-recovery";
 
 export const dynamic = "force-dynamic";
@@ -75,6 +78,71 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       processingAttempt: snapshot.importFile.processingAttempt,
       processingPhase: snapshot.importFile.processingPhase,
     });
+    const countVisibleTransactions = async () =>
+      prisma.transaction
+        .count({
+          where: {
+            deletedAt: null,
+            OR: [
+              { importFileId: importId },
+              {
+                rawPayload: {
+                  path: ["sourceImportFileId"],
+                  equals: importId,
+                },
+              },
+            ],
+          },
+        })
+        .catch(() => 0);
+    const keepVisualImportRecoverableAfterFailure = async (
+      recoveryMode: VisualImportRecoveryMode,
+      options?: { parsedRowsMessage?: string; parsedRowsCount?: number | null }
+    ) => {
+      const refreshedRows = await countVisibleTransactions();
+      if (refreshedRows > 0) {
+        await updateImportFileCompat(importId, {
+          status: "done",
+          processingPhase: "complete",
+          processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
+          confirmedTransactionsCount: refreshedRows,
+        }).catch(() => null);
+        return;
+      }
+
+      const parsedRowsCount = Number(options?.parsedRowsCount ?? snapshot.parsedRowsCount ?? 0);
+      if (parsedRowsCount > 0) {
+        await updateImportFileCompat(importId, {
+          status: "processing",
+          processingPhase: "reconciling",
+          processingMessage:
+            options?.parsedRowsMessage ?? "Clover parsed rows from this file and is retrying the final save step.",
+          confirmedTransactionsCount: 0,
+        }).catch(() => null);
+        return;
+      }
+
+      const nextAttempt = getNextVisualImportAttempt(snapshot.importFile.processingAttempt);
+      if (nextAttempt <= VISUAL_IMPORT_RETRY_LIMIT) {
+        await updateImportFileCompat(importId, {
+          status: "processing",
+          processingPhase: "queued_retry",
+          processingAttempt: nextAttempt,
+          processingMessage: getVisualImportRetryMessage(recoveryMode, nextAttempt),
+          parsedRowsCount: 0,
+          confirmedTransactionsCount: 0,
+        }).catch(() => null);
+        return;
+      }
+
+      await updateImportFileCompat(importId, {
+        status: "failed",
+        processingPhase: "repair_needed",
+        processingMessage: getVisualImportRepairMessage(recoveryMode),
+        parsedRowsCount: 0,
+        confirmedTransactionsCount: 0,
+      }).catch(() => null);
+    };
     const staleStatementImageQueue =
       importMode === "statement" &&
       snapshot.importFile.status === "processing" &&
@@ -127,31 +195,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
           });
         } catch {
-          const refreshedRows = await prisma.transaction
-            .count({
-              where: {
-                deletedAt: null,
-                OR: [
-                  { importFileId: importId },
-                  {
-                    rawPayload: {
-                      path: ["sourceImportFileId"],
-                      equals: importId,
-                    },
-                  },
-                ],
-              },
-            })
-            .catch(() => 0);
-          if (refreshedRows === 0) {
-            await updateImportFileCompat(importId, {
-              status: "failed",
-              processingPhase: "repair_needed",
-              processingMessage: getVisualImportRepairMessage("statement"),
-              parsedRowsCount: 0,
-              confirmedTransactionsCount: 0,
-            }).catch(() => null);
-          }
+          await keepVisualImportRecoverableAfterFailure("statement");
         }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
@@ -220,31 +264,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
           });
         } catch {
-          const refreshedRows = await prisma.transaction
-            .count({
-              where: {
-                deletedAt: null,
-                OR: [
-                  { importFileId: importId },
-                  {
-                    rawPayload: {
-                      path: ["sourceImportFileId"],
-                      equals: importId,
-                    },
-                  },
-                ],
-              },
-            })
-            .catch(() => 0);
-          if (refreshedRows === 0) {
-            await updateImportFileCompat(importId, {
-              status: "failed",
-              processingPhase: "repair_needed",
-              processingMessage: getVisualImportRepairMessage("receipt"),
-              parsedRowsCount: 0,
-              confirmedTransactionsCount: 0,
-            }).catch(() => null);
-          }
+          await keepVisualImportRecoverableAfterFailure("receipt");
         }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
@@ -310,13 +330,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
           });
         } catch {
-          await updateImportFileCompat(importId, {
-            status: "failed",
-            processingPhase: "repair_needed",
-            processingMessage: getVisualImportRepairMessage("statement"),
-            parsedRowsCount: 0,
-            confirmedTransactionsCount: 0,
-          }).catch(() => null);
+          await keepVisualImportRecoverableAfterFailure("statement");
         }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
@@ -382,13 +396,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
           });
         } catch {
-          await updateImportFileCompat(importId, {
-            status: "failed",
-            processingPhase: "repair_needed",
-            processingMessage: getVisualImportRepairMessage("receipt"),
-            parsedRowsCount: 0,
-            confirmedTransactionsCount: 0,
-          }).catch(() => null);
+          await keepVisualImportRecoverableAfterFailure("receipt");
         }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
@@ -436,29 +444,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             }).catch(() => null);
           }
         } catch {
-          const refreshedRows = await prisma.transaction
-            .count({
-              where: {
-                deletedAt: null,
-                OR: [
-                  { importFileId: importId },
-                  {
-                    rawPayload: {
-                      path: ["sourceImportFileId"],
-                      equals: importId,
-                    },
-                  },
-                ],
-              },
-            })
-            .catch(() => 0);
-          if (refreshedRows === 0) {
-            await updateImportFileCompat(importId, {
-              status: "failed",
-              processingPhase: "repair_needed",
-              processingMessage: "Clover read rows from this screenshot, but could not save them yet. Please retry the import.",
-            }).catch(() => null);
-          }
+          await keepVisualImportRecoverableAfterFailure("statement", {
+            parsedRowsMessage: "Clover read rows from this screenshot and is retrying the final save step.",
+            parsedRowsCount: snapshot.parsedRowsCount,
+          });
         }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
@@ -505,30 +494,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             }).catch(() => null);
           }
         } catch {
-          const refreshedRows = await prisma.transaction
-            .count({
-              where: {
-                deletedAt: null,
-                OR: [
-                  { importFileId: importId },
-                  {
-                    rawPayload: {
-                      path: ["sourceImportFileId"],
-                      equals: importId,
-                    },
-                  },
-                ],
-              },
-            })
-            .catch(() => 0);
-          if (refreshedRows === 0) {
-            await updateImportFileCompat(importId, {
-              status: "failed",
-              processingPhase: "repair_needed",
-              processingMessage: "Clover read this receipt but couldn't save the transaction yet. Please retry the import.",
-              confirmedTransactionsCount: 0,
-            }).catch(() => null);
-          }
+          await keepVisualImportRecoverableAfterFailure("receipt", {
+            parsedRowsMessage: "Clover read this receipt and is retrying the final save step.",
+            parsedRowsCount: snapshot.parsedRowsCount,
+          });
         }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
@@ -576,29 +545,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             }).catch(() => null);
           }
         } catch {
-          const refreshedRows = await prisma.transaction
-            .count({
-              where: {
-                deletedAt: null,
-                OR: [
-                  { importFileId: importId },
-                  {
-                    rawPayload: {
-                      path: ["sourceImportFileId"],
-                      equals: importId,
-                    },
-                  },
-                ],
-              },
-            })
-            .catch(() => 0);
-          if (refreshedRows === 0) {
-            await updateImportFileCompat(importId, {
-              status: "failed",
-              processingPhase: "repair_needed",
-              processingMessage: "Clover saved rows from this screenshot, but could not finish linking them yet. Please retry the import.",
-            }).catch(() => null);
-          }
+          await keepVisualImportRecoverableAfterFailure("statement", {
+            parsedRowsMessage: "Clover saved rows from this screenshot and is retrying the final linking step.",
+            parsedRowsCount: snapshot.parsedRowsCount,
+          });
         }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
@@ -645,30 +595,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             }).catch(() => null);
           }
         } catch {
-          const refreshedRows = await prisma.transaction
-            .count({
-              where: {
-                deletedAt: null,
-                OR: [
-                  { importFileId: importId },
-                  {
-                    rawPayload: {
-                      path: ["sourceImportFileId"],
-                      equals: importId,
-                    },
-                  },
-                ],
-              },
-            })
-            .catch(() => 0);
-          if (refreshedRows === 0) {
-            await updateImportFileCompat(importId, {
-              status: "failed",
-              processingPhase: "repair_needed",
-              processingMessage: "Clover saved this receipt but couldn't finish linking the transaction yet. Please retry the import.",
-              confirmedTransactionsCount: 0,
-            }).catch(() => null);
-          }
+          await keepVisualImportRecoverableAfterFailure("receipt", {
+            parsedRowsMessage: "Clover saved this receipt and is retrying the final linking step.",
+            parsedRowsCount: snapshot.parsedRowsCount,
+          });
         }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
@@ -730,13 +660,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             Number(refreshedSnapshot?.confirmedTransactionsCount ?? 0) > 0 ||
             Number(refreshedSnapshot?.parsedRowsCount ?? 0) > 0;
           if (!refreshedHasVisibleData) {
-            await updateImportFileCompat(importId, {
-              status: "failed",
-              processingPhase: "repair_needed",
-              processingMessage: getVisualImportRepairMessage("receipt"),
-              parsedRowsCount: 0,
-              confirmedTransactionsCount: 0,
-            }).catch(() => null);
+            await keepVisualImportRecoverableAfterFailure("receipt", {
+              parsedRowsCount: refreshedSnapshot?.parsedRowsCount ?? snapshot.parsedRowsCount,
+            });
           }
         }
       });
