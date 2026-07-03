@@ -20,6 +20,7 @@ import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { buildRecurringTransactionSummaries } from "@/lib/recurring";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { isTransientDataError } from "@/lib/transient-data";
+import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -971,11 +972,22 @@ async function DashboardStream({
     </>
   );
   } catch (error) {
-    if (isTransientDataError(error)) {
-      return <DashboardUnavailableContent />;
+    if (isNextNavigationSignal(error)) {
+      throw error;
     }
 
-    throw error;
+    await recordServerPageError({
+      error,
+      source: "dashboard-stream",
+      route: "/home",
+      userId: user.id,
+      clerkUserId: user.clerkUserId,
+      workspaceId: workspaceSummary.id,
+      metadata: {
+        transient: isTransientDataError(error),
+      },
+    });
+    return <DashboardUnavailableContent />;
   }
 }
 
@@ -1011,11 +1023,19 @@ async function DashboardPageStream() {
     </CloverShell>
     );
   } catch (error) {
-    if (isTransientDataError(error)) {
-      return <DashboardUnavailableState />;
+    if (isNextNavigationSignal(error)) {
+      throw error;
     }
 
-    throw error;
+    await recordServerPageError({
+      error,
+      source: "dashboard-page",
+      route: "/home",
+      metadata: {
+        transient: isTransientDataError(error),
+      },
+    });
+    return <DashboardUnavailableState />;
   }
 }
 

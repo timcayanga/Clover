@@ -19,6 +19,7 @@ import { isLiabilityAccountType, isSpendableAccountType, isTrackedAssetAccountTy
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { isTransientDataError } from "@/lib/transient-data";
+import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 
 export const dynamic = "force-dynamic";
 
@@ -3010,11 +3011,19 @@ async function AdviserPageContent() {
     </CloverShell>
   );
   } catch (error) {
-    if (isTransientDataError(error)) {
-      return <AdviserUnavailableState />;
+    if (isNextNavigationSignal(error)) {
+      throw error;
     }
 
-    throw error;
+    await recordServerPageError({
+      error,
+      source: "adviser-page",
+      route: "/adviser",
+      metadata: {
+        transient: isTransientDataError(error),
+      },
+    });
+    return <AdviserUnavailableState />;
   }
 }
 

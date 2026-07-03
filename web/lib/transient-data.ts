@@ -6,7 +6,13 @@ const TRANSIENT_DATABASE_MESSAGE_PATTERNS = [
   "database server",
   "connection terminated unexpectedly",
   "connection closed",
+  "connection reset",
+  "terminating connection",
   "timed out fetching a new connection",
+  "fetch failed",
+  "network error",
+  "econnreset",
+  "etimedout",
 ];
 
 export const isTransientDataError = (error: unknown) => {
