@@ -2679,9 +2679,9 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .topbar {
   padding: 0 0 10px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 14px;
 }
 
@@ -2700,6 +2700,9 @@ body.transactions-manual-open .shell-quick-add-button {
   flex-wrap: wrap;
   gap: 12px;
   min-width: 0;
+  justify-self: start;
+  justify-items: start;
+  text-align: left;
 }
 
 .topbar__title-row {
@@ -2739,6 +2742,7 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  justify-self: end;
 }
 
 .transactions-page .topbar-actions {
@@ -26045,8 +26049,8 @@ button.accounts-detail__transaction-head-cell {
   .topbar__title-wrap {
     display: grid !important;
     gap: 2px;
-    grid-column: 2;
-    justify-self: stretch;
+    grid-column: 1;
+    justify-self: start;
     justify-items: start;
     text-align: left;
     width: 100% !important;
@@ -26657,8 +26661,24 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .topbar__title-wrap {
+    grid-column: 1;
+    justify-self: start;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .topbar:has(.shell-back-button) .topbar__title-wrap {
     grid-column: 2;
     justify-self: stretch;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .shell-compact-bar:has(.shell-back-button) .shell-compact-bar__copy {
+    grid-column: 2;
+    justify-self: stretch;
+    justify-items: center;
+    text-align: center;
   }
 
   .topbar:not(:has(.shell-back-button)) .topbar__title-wrap {
