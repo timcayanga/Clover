@@ -1087,51 +1087,53 @@ export default function InvestmentsPage() {
           <h1>Investments</h1>
         </div>
 
-        <AnimatedTabs
-          className="investments-tabs investments-tabs--mobile"
-          activeKey={selectedTab}
-          onChange={(key) => setSelectedTab(key as InvestmentTab)}
-          tabs={INVESTMENT_TABS.map((tab) => ({
-            key: tab.key,
-            label: tab.label,
-            icon: tab.icon,
-            disabled: Boolean(tab.proOnly && !canUseProTabs),
-            badge: null,
-            ariaLabel: tab.label,
-          }))}
-        />
-
-        <div className="investments-mobile-header__actions">
-          <CurrencySelector
-            value={portfolioCurrencyFilter}
-            onChange={setPortfolioCurrencyFilter}
-            options={portfolioCurrencyOptions.filter((currency) => currency !== "all")}
-            includeAllOption
-            allLabel="All currencies"
-            ariaLabel="Select investment currency"
-            className="investments-currency-filter investments-currency-filter--mobile"
-            buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip investments-mobile-icon-button investments-mobile-icon-button--currency"
-            menuClassName="transactions-currency-filter__menu"
-            optionClassName="transactions-currency-filter__option"
-            compact
-            menuAlignment="end"
-            showChevron={false}
-            portalMenu
+        <div className="investments-mobile-header__controls">
+          <AnimatedTabs
+            className="investments-tabs investments-tabs--mobile"
+            activeKey={selectedTab}
+            onChange={(key) => setSelectedTab(key as InvestmentTab)}
+            tabs={INVESTMENT_TABS.map((tab) => ({
+              key: tab.key,
+              label: tab.label,
+              icon: tab.icon,
+              disabled: Boolean(tab.proOnly && !canUseProTabs),
+              badge: null,
+              ariaLabel: tab.label,
+            }))}
           />
-          <button
-            className="button button-primary button-small investments-page__add-button investments-mobile-icon-button investments-mobile-icon-button--primary"
-            type="button"
-            onClick={() => setAddOpen(true)}
-            disabled={!selectedWorkspaceId}
-            aria-label="Add investment"
-          >
-            <span className="button-icon" aria-hidden="true">
-              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M10 4v12M4 10h12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-              </svg>
-            </span>
-            <span className="investments-page__add-button-label">Add investment</span>
-          </button>
+
+          <div className="investments-mobile-header__actions">
+            <CurrencySelector
+              value={portfolioCurrencyFilter}
+              onChange={setPortfolioCurrencyFilter}
+              options={portfolioCurrencyOptions.filter((currency) => currency !== "all")}
+              includeAllOption
+              allLabel="All currencies"
+              ariaLabel="Select investment currency"
+              className="investments-currency-filter investments-currency-filter--mobile"
+              buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip investments-mobile-icon-button investments-mobile-icon-button--currency"
+              menuClassName="transactions-currency-filter__menu"
+              optionClassName="transactions-currency-filter__option"
+              compact
+              menuAlignment="end"
+              showChevron={false}
+              portalMenu
+            />
+            <button
+              className="button button-primary button-small investments-page__add-button investments-mobile-icon-button investments-mobile-icon-button--primary"
+              type="button"
+              onClick={() => setAddOpen(true)}
+              disabled={!selectedWorkspaceId}
+              aria-label="Add investment"
+            >
+              <span className="button-icon" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="M10 4v12M4 10h12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+                </svg>
+              </span>
+              <span className="investments-page__add-button-label">Add investment</span>
+            </button>
+          </div>
         </div>
       </section>
 
