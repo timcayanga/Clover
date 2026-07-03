@@ -1,33 +1,29 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
 import { LandingNav } from "../components/landing-nav";
 import { ScrollReveal } from "../components/scroll-reveal";
 import { resolvePublicAccountState } from "@/lib/public-account-state";
 
-function SectionVisual({
-  eyebrow,
-  title,
-  body,
-  tone = "light",
+function LandingImage({
+  src,
+  alt,
+  width,
+  height,
   className = "",
+  priority = false,
 }: {
-  eyebrow: string;
-  title: string;
-  body: string;
-  tone?: "light" | "dark";
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
   className?: string;
+  priority?: boolean;
 }) {
   return (
-    <div className={`landing-visual ${tone === "dark" ? "landing-visual--dark" : ""} ${className}`.trim()} aria-hidden="true">
-      <div className="landing-visual__top">
-        <span className="landing-visual__chip">{eyebrow}</span>
-        <span className="landing-visual__pulse" />
-      </div>
-      <div className="landing-visual__content">
-        <strong>{title}</strong>
-        <p>{body}</p>
-      </div>
+    <div className={`landing-asset ${className}`.trim()}>
+      <Image className="landing-asset__image" src={src} alt={alt} width={width} height={height} priority={priority} />
     </div>
   );
 }
@@ -76,9 +72,8 @@ export default async function HomePage() {
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">
           <h1 className="landing-hero__title">
-            <span>
-              Track months of finances <span className="landing-highlight">in minutes.</span>
-            </span>
+            <span>Track months of finances</span>
+            <span className="landing-highlight">in minutes.</span>
           </h1>
           <p className="landing-hero__lede">
             Clover helps you upload financial data quickly, understand your spending, and manage shared expenses in one place.
@@ -94,17 +89,14 @@ export default async function HomePage() {
           </div>
         </div>
 
-        <article className="landing-hero-card glass">
-          <div className="landing-hero-card__image-placeholder" aria-hidden="true">
-            <span>Image goes here</span>
-          </div>
-          <div className="landing-hero-card__stack">
-            <div className="landing-hero-card__row">
-              <strong>Space for a product image or animation.</strong>
-              <span>Use this area to show Clover in action.</span>
-            </div>
-          </div>
-        </article>
+        <LandingImage
+          className="landing-asset--hero"
+          src="/assets/landing page/hero card.png"
+          alt="Clover dashboard preview"
+          width={1536}
+          height={1024}
+          priority
+        />
       </ScrollReveal>
 
       <FeatureSection
@@ -116,17 +108,17 @@ export default async function HomePage() {
           </>
         }
         copy={
-          <p>
-            Upload statements, receipts, screenshots, or enter transactions manually. Clover turns your financial records into usable data, so you
-            can prefill months of spending without starting from scratch.
-          </p>
+          <>
+            <p>Upload statements, receipts, screenshots, or enter transactions manually.</p>
+            <p>Clover turns your financial records into usable data, so you can prefill months of spending without starting from scratch.</p>
+          </>
         }
         visual={
-          <SectionVisual
-            eyebrow="Upload"
-            title="Statement.pdf"
-            body="Imported, parsed, and ready for review with the original source preserved."
-            className="landing-visual--upload"
+          <LandingImage
+            src="/assets/landing page/statements.png"
+            alt="Statement import preview in Clover"
+            width={1536}
+            height={1024}
           />
         }
       />
@@ -139,18 +131,17 @@ export default async function HomePage() {
           </>
         }
         copy={
-          <p>
-            Clover turns the data you upload into reports and insights that help you understand your spending, spot patterns, and make better
-            progress toward your goals.
-          </p>
+          <>
+            <p>Clover turns the data you upload into reports and insights that help you understand your spending.</p>
+            <p>Spot patterns, see progress clearly, and make better decisions toward your goals.</p>
+          </>
         }
         visual={
-          <SectionVisual
-            eyebrow="Insights"
-            title="Clear visibility"
-            body="Turn uploaded records into reports that show patterns, trends, and progress over time."
-            tone="dark"
-            className="landing-visual--report"
+          <LandingImage
+            src="/assets/landing page/see what your money is telling you.png"
+            alt="Clover spending insights preview"
+            width={612}
+            height={408}
           />
         }
       />
@@ -164,17 +155,17 @@ export default async function HomePage() {
           </>
         }
         copy={
-          <p>
-            Track shared costs with friends, family, roommates, or travel groups and quickly see who owes what. Clover keeps the math simple so
-            settling up feels less awkward.
-          </p>
+          <>
+            <p>Track shared costs with friends, family, roommates, or travel groups and quickly see who owes what.</p>
+            <p>Clover keeps the math simple so settling up feels less awkward.</p>
+          </>
         }
         visual={
-          <SectionVisual
-            eyebrow="Split"
-            title="3 people"
-            body="Add expenses, assign shares, and see balances at a glance before anyone asks for a reminder."
-            className="landing-visual--split"
+          <LandingImage
+            src="/assets/landing page/share expenses.png"
+            alt="Clover split bills preview"
+            width={612}
+            height={408}
           />
         }
       />
@@ -187,17 +178,17 @@ export default async function HomePage() {
           </>
         }
         copy={
-          <p>
-            Pro gives you advanced reporting, higher limits, and investment tools for people who want a more complete view of their finances.
-          </p>
+          <>
+            <p>Pro gives you advanced reporting, higher limits, and investment tools for a more complete view of your finances.</p>
+            <p>It is built for people who want deeper visibility as their money setup gets more complex.</p>
+          </>
         }
         visual={
-          <SectionVisual
-            eyebrow="Pro"
-            title="More room"
-            body="Designed for people who want richer reports, higher limits, and extra control as their finances grow."
-            tone="dark"
-            className="landing-visual--pro"
+          <LandingImage
+            src="/assets/landing page/pro.png"
+            alt="Clover Pro feature preview"
+            width={612}
+            height={408}
           />
         }
       />
@@ -211,16 +202,17 @@ export default async function HomePage() {
           </>
         }
         copy={
-          <p>
-            Clover is built to keep your information protected, your imported data reviewable, and your account access under your control.
-          </p>
+          <>
+            <p>Clover is built to keep your information protected and your imported data reviewable.</p>
+            <p>Your account access stays under your control while the audit trail stays intact.</p>
+          </>
         }
         visual={
-          <SectionVisual
-            eyebrow="Security"
-            title="Protected by design"
-            body="A secure workflow keeps your financial information private while preserving the audit trail you need."
-            className="landing-visual--trust"
+          <LandingImage
+            src="/assets/landing page/security.png"
+            alt="Clover security preview"
+            width={612}
+            height={408}
           />
         }
       />
