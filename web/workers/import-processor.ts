@@ -2254,21 +2254,6 @@ const readCheckpointBankName = (sourceMetadata: unknown) => {
 const isPdfImportFile = (fileType: string, fileName: string) =>
   fileType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
 
-const isLikelyLowQualityPnbStatementFile = (fileName: string, bankName?: string | null) => {
-  const normalizedBankName = normalizeBankName(bankName || fileName);
-  if (normalizedBankName !== "PNB") {
-    return false;
-  }
-
-  const normalizedFileName = fileName.toLowerCase();
-  return (
-    normalizedFileName.includes("philippines pnb") ||
-    normalizedFileName.includes("pnb 4 pages excel") ||
-    normalizedFileName.includes("bank st") ||
-    normalizedFileName.includes("template-in-word-and-pdf")
-  );
-};
-
 const readCheckpointAccountType = (sourceMetadata: unknown): string | null => {
   if (!isRecord(sourceMetadata)) {
     return null;
@@ -6543,38 +6528,6 @@ export const processImportFileText = async (
   const checkpointBankName = readCheckpointBankName(statementCheckpoint?.sourceMetadata);
   const fileType = String(importFile.fileType ?? "");
   const fileName = String(importFile.fileName ?? "");
-  if (
-    previouslyVisibleRows <= 0 &&
-    importMode === "statement" &&
-    isPdfImportFile(fileType, fileName) &&
-    isLikelyLowQualityPnbStatementFile(fileName, checkpointBankName ?? String(importFile.account?.institution ?? ""))
-  ) {
-    await updateImportFileCompat(importFileId, {
-      status: "failed",
-      processingPhase: "repair_needed",
-      processingMessage: "Clover couldn't read enough reliable text from this low-quality PNB scan.",
-      parsedRowsCount: 0,
-      confirmedTransactionsCount: 0,
-    }).catch(() => null);
-
-    emitImportProcessingEvent("import_processing_stalled", {
-      processing_status: "failed",
-      processing_phase: "repair_needed",
-      reason: "low_quality_pnb_scan",
-      error_code: "I-104",
-    });
-
-    return {
-      imported: 0,
-      duplicate: false,
-      metadata: detectStatementMetadataFromText("", importFile.fileName),
-      accountId: typeof importFile.accountId === "string" ? importFile.accountId : null,
-      confirmedTransactionsCount: 0,
-      insightSummary: undefined,
-      accountBalance: null,
-      status: "error",
-    };
-  }
   if (previouslyVisibleRows > 0 && isDocumentImportMode) {
     const cleanupRows = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
     if (cleanupRows > 0) {

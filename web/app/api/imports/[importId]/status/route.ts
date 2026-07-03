@@ -36,6 +36,13 @@ const isImageImportFile = (fileName?: string | null, fileType?: string | null) =
   String(fileType ?? "").toLowerCase().startsWith("image/") ||
   /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(String(fileName ?? "").toLowerCase());
 
+const isPdfImportFile = (fileName?: string | null, fileType?: string | null) =>
+  String(fileType ?? "").toLowerCase() === "application/pdf" ||
+  /\.pdf$/i.test(String(fileName ?? "").toLowerCase());
+
+const isVisualImportFile = (fileName?: string | null, fileType?: string | null) =>
+  isImageImportFile(fileName, fileType) || isPdfImportFile(fileName, fileType);
+
 export async function GET(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   try {
     const { importId } = await params;
@@ -72,7 +79,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       importMode === "statement" &&
       snapshot.importFile.status === "processing" &&
       (snapshot.importFile.processingPhase === "queued_retry" || snapshot.importFile.processingPhase === "reading_account_details") &&
-      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount === 0 &&
       Number.isFinite(updatedAtMs) &&
@@ -168,7 +175,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       (snapshot.importFile.processingPhase === "queued_retry" ||
         snapshot.importFile.processingPhase === "reading_receipt_vision" ||
         snapshot.importFile.processingPhase === "reading_account_details") &&
-      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount === 0 &&
       Number.isFinite(updatedAtMs) &&
@@ -258,7 +265,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const staleStatementImageEmptyDone =
       importMode === "statement" &&
       (snapshot.importFile.status === "done" || snapshot.importFile.status === "failed") &&
-      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount === 0 &&
       Number.isFinite(updatedAtMs) &&
@@ -330,7 +337,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const staleReceiptEmptyDone =
       importMode === "receipt" &&
       (snapshot.importFile.status === "done" || snapshot.importFile.status === "failed") &&
-      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount === 0 &&
       Number.isFinite(updatedAtMs) &&
@@ -403,7 +410,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       importMode === "statement" &&
       snapshot.importFile.status === "processing" &&
       snapshot.importFile.processingPhase === "reconciling" &&
-      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       !snapshot.accountDetailOnlyImport &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount > 0 &&
@@ -473,7 +480,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       importMode === "receipt" &&
       snapshot.importFile.status === "processing" &&
       snapshot.importFile.processingPhase === "reconciling" &&
-      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount > 0 &&
       Number.isFinite(updatedAtMs) &&
@@ -543,7 +550,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       importMode === "statement" &&
       snapshot.importFile.status === "processing" &&
       snapshot.importFile.processingPhase === "staged" &&
-      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       !snapshot.accountDetailOnlyImport &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount > 0 &&
@@ -613,7 +620,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       importMode === "receipt" &&
       snapshot.importFile.status === "processing" &&
       snapshot.importFile.processingPhase === "staged" &&
-      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount > 0 &&
       Number.isFinite(updatedAtMs) &&

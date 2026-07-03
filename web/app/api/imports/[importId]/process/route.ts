@@ -48,6 +48,7 @@ import {
   getNextVisualImportAttempt,
   getVisualImportRepairMessage,
   getVisualImportRetryMessage,
+  shouldQueueDifficultVisualImportInsteadOfFailing,
   type VisualImportRecoveryMode,
 } from "@/lib/import-visual-recovery";
 
@@ -1767,40 +1768,28 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
       }
 
-      if (knownUnreadableUcpbExcelSample) {
-        await updateImportFileCompat(importId, {
-          status: "failed",
-          processingPhase: "repair_needed",
-          processingMessage: "Clover couldn't read enough text from this UCPB Excel/PDF sample.",
-          parsedRowsCount: 0,
-          confirmedTransactionsCount: 0,
+      if (
+        shouldQueueDifficultVisualImportInsteadOfFailing({
+          knownDifficultVisualImport: knownUnreadableUcpbExcelSample,
+          forceInlineProcessing,
+          canReuseCachedParseSnapshot: false,
+        })
+      ) {
+        return queueBackgroundProcessing(processingBankName || null, {
+          processingMessage: "This looks like a low-quality UCPB scan. Clover is trying the AI backup reader...",
         });
-        return NextResponse.json(
-          {
-            error: "Unable to parse readable transactions from this UCPB Excel/PDF sample.",
-            code: "I-104",
-            stage: "validating statement text",
-          },
-          { status: 400 }
-        );
       }
 
-      if (likelyLowQualityPnbStatement) {
-        await updateImportFileCompat(importId, {
-          status: "failed",
-          processingPhase: "repair_needed",
-          processingMessage: "Clover couldn't read enough reliable text from this low-quality PNB scan.",
-          parsedRowsCount: 0,
-          confirmedTransactionsCount: 0,
+      if (
+        shouldQueueDifficultVisualImportInsteadOfFailing({
+          knownDifficultVisualImport: likelyLowQualityPnbStatement,
+          forceInlineProcessing,
+          canReuseCachedParseSnapshot: false,
+        })
+      ) {
+        return queueBackgroundProcessing(processingBankName || null, {
+          processingMessage: "This looks like a low-quality PNB scan. Clover is trying the AI backup reader...",
         });
-        return NextResponse.json(
-          {
-            error: "Unable to parse readable transactions from this low-quality PNB scan.",
-            code: "I-104",
-            stage: "validating statement text",
-          },
-          { status: 400 }
-        );
       }
 
       if (importMode === "receipt" && isTrainedReceiptFileName(effectiveFileName)) {

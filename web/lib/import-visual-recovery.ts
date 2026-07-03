@@ -30,3 +30,12 @@ export const shouldStopStaleVisualImportRetry = (params: {
   processingPhase?: string | null;
 }) =>
   isVisualImportRetryBudgetExhausted(params.processingAttempt) && params.processingPhase !== "queued_retry";
+
+export const shouldQueueDifficultVisualImportInsteadOfFailing = (params: {
+  knownDifficultVisualImport?: boolean;
+  forceInlineProcessing?: boolean;
+  canReuseCachedParseSnapshot?: boolean;
+}) =>
+  params.knownDifficultVisualImport === true &&
+  params.forceInlineProcessing !== true &&
+  params.canReuseCachedParseSnapshot !== true;

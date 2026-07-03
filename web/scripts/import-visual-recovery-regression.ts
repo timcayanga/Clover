@@ -7,6 +7,7 @@ import {
   getVisualImportRepairMessage,
   getVisualImportRetryMessage,
   isVisualImportRetryBudgetExhausted,
+  shouldQueueDifficultVisualImportInsteadOfFailing,
   shouldStopStaleVisualImportRetry,
 } from "@/lib/import-visual-recovery";
 
@@ -46,6 +47,33 @@ const main = () => {
   assert.match(getVisualImportRetryMessage("statement", 1), /image-reading issue/i);
   assert.match(getVisualImportRepairMessage("receipt"), /local and backup receipt readers/i);
   assert.match(getVisualImportRepairMessage("statement"), /local and backup image readers/i);
+  assert.equal(
+    shouldQueueDifficultVisualImportInsteadOfFailing({
+      knownDifficultVisualImport: true,
+      forceInlineProcessing: false,
+      canReuseCachedParseSnapshot: false,
+    }),
+    true,
+    "Known difficult visual imports should queue backup parsing instead of immediately returning I-104."
+  );
+  assert.equal(
+    shouldQueueDifficultVisualImportInsteadOfFailing({
+      knownDifficultVisualImport: true,
+      forceInlineProcessing: true,
+      canReuseCachedParseSnapshot: false,
+    }),
+    false,
+    "Forced inline processing should still honor the caller's explicit processing path."
+  );
+  assert.equal(
+    shouldQueueDifficultVisualImportInsteadOfFailing({
+      knownDifficultVisualImport: true,
+      forceInlineProcessing: false,
+      canReuseCachedParseSnapshot: true,
+    }),
+    false,
+    "Reusable cached parses should not be sent through unnecessary visual recovery."
+  );
 
   console.log("Import visual recovery regression passed.");
 };
