@@ -1,6 +1,11 @@
 import { Worker } from "bullmq";
 import { getRedisConnection } from "@/lib/import-queue";
-import { fetchImportFileCompat, updateImportFileCompat } from "@/lib/data-engine";
+import {
+  countParsedTransactionRows,
+  countTransactionsByImportFileCompat,
+  fetchImportFileCompat,
+  updateImportFileCompat,
+} from "@/lib/data-engine";
 import { getConfiguredPdfJsBaseUrl } from "@/lib/import-file-text.server";
 import {
   getNextVisualImportAttempt,
@@ -67,6 +72,28 @@ worker.on("failed", async (job, error) => {
       /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif|pdf)$/i.test(fileName);
     const importMode: VisualImportRecoveryMode =
       job.data?.importMode === "receipt" ? "receipt" : "statement";
+    const [savedTransactionsCount, parsedRowsCount] = await Promise.all([
+      countTransactionsByImportFileCompat(importFileId).catch(() => 0),
+      countParsedTransactionRows(importFileId).catch(() => 0),
+    ]);
+    if (savedTransactionsCount > 0) {
+      await updateImportFileCompat(importFileId, {
+        status: "done",
+        processingPhase: "complete",
+        processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
+        confirmedTransactionsCount: savedTransactionsCount,
+      });
+      return;
+    }
+    if (parsedRowsCount > 0 && isVisualImport) {
+      await updateImportFileCompat(importFileId, {
+        status: "processing",
+        processingPhase: "reconciling",
+        processingMessage: "Clover parsed rows from this file and is retrying the final save step.",
+        confirmedTransactionsCount: 0,
+      });
+      return;
+    }
     if (
       shouldKeepFailedVisualImportRecoverable({
         importMode,

@@ -1441,6 +1441,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             if (retryQueued) {
               return;
             }
+            await updateImportFileCompat(importId, {
+              status: "processing",
+              processingPhase: "queued_retry",
+              processingAttempt: nextAttempt,
+              processingMessage: getVisualImportRetryMessage("receipt", nextAttempt),
+              parsedRowsCount: 0,
+              confirmedTransactionsCount: 0,
+            }).catch(() => null);
+            return;
           }
           await updateImportFileCompat(importId, {
             status: "failed",
@@ -2432,6 +2441,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     if (importId) {
       const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
       const parsedRowsCount = await countParsedTransactionRows(importId).catch(() => 0);
+      const recoveryImportFile = await fetchImportFileCompat(importId).catch(() => null);
+      const recoveryFileName = String(recoveryImportFile?.fileName ?? "");
+      const recoveryFileType = String(recoveryImportFile?.fileType ?? "");
+      const recoveryVisualImport =
+        recoveryImportFile &&
+        (isImageUploadFile(recoveryFileName, recoveryFileType) || isPdfUpload(recoveryFileName, recoveryFileType));
       if (savedTransactionsCount > 0) {
         await updateImportFileCompat(importId, {
           status: "done",
@@ -2458,15 +2473,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       if (parsedRowsCount > 0) {
         const needsAccountConfirmation = /deleted account|confirm before recreating|account.*confirmation/i.test(errorMessage);
         await updateImportFileCompat(importId, {
-          status: needsAccountConfirmation ? "processing" : "failed",
-          processingPhase: needsAccountConfirmation ? "account_match_needs_confirmation" : "repair_needed",
+          status: needsAccountConfirmation || recoveryVisualImport ? "processing" : "failed",
+          processingPhase: needsAccountConfirmation
+            ? "account_match_needs_confirmation"
+            : recoveryVisualImport
+              ? "reconciling"
+              : "repair_needed",
           processingMessage: needsAccountConfirmation
             ? errorMessage
-            : "Clover parsed the file but could not save the transactions yet. Retry the import to finish saving it.",
+            : recoveryVisualImport
+              ? "Clover parsed rows from this file and is retrying the final save step."
+              : "Clover parsed the file but could not save the transactions yet. Retry the import to finish saving it.",
           confirmedTransactionsCount: 0,
         }).catch(() => null);
       } else {
-        const failedImportFile = await fetchImportFileCompat(importId).catch(() => null);
+        const failedImportFile = recoveryImportFile;
         const failedFileName = String(failedImportFile?.fileName ?? "");
         const failedFileType = String(failedImportFile?.fileType ?? "");
         let failedImportMode: ImportImageMode | null = null;
