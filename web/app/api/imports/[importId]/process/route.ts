@@ -1296,14 +1296,26 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       } catch (error) {
         console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
         await updateImportFileCompat(importId, {
-          status: "failed",
+          status: "processing",
+          processingPhase: "queued_retry",
+          processingMessage:
+            options?.processingMessage ??
+            "Clover is waiting for the background reader, then it will finish processing this file.",
         });
         return NextResponse.json(
           {
-            error: "Unable to queue import processing",
+            ok: true,
+            queued: true,
+            processed: false,
+            importedRows: 0,
+            duplicate: false,
+            status: "queued",
+            importFileId: importId,
+            metadata: null,
+            retryReason: "background_queue_deferred",
             stage,
           },
-          { status: 400 }
+          { status: 202 }
         );
       }
 
@@ -2535,6 +2547,36 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               importId,
               error: summarizeErrorForLog(queueError),
             });
+            const retryImportMode = failedImportMode ?? "statement";
+            const visualRecoveryMode: VisualImportRecoveryMode = retryImportMode === "receipt" ? "receipt" : "statement";
+            const nextAttempt = getNextVisualImportAttempt(failedImportFile.processingAttempt);
+            if (nextAttempt <= VISUAL_IMPORT_RETRY_LIMIT) {
+              await updateImportFileCompat(importId, {
+                status: "processing",
+                processingPhase: "queued_retry",
+                processingAttempt: nextAttempt,
+                processingMessage: getVisualImportRetryMessage(visualRecoveryMode, nextAttempt),
+                parsedRowsCount: 0,
+                confirmedTransactionsCount: 0,
+              }).catch(() => null);
+              return NextResponse.json(
+                {
+                  ok: true,
+                  queued: true,
+                  processed: false,
+                  importedRows: 0,
+                  duplicate: false,
+                  status: "queued",
+                  importFileId: importId,
+                  metadata: null,
+                  retryReason:
+                    retryImportMode === "receipt" ? "receipt_visual_retry_queue_deferred" : "image_visual_retry_queue_deferred",
+                  retryAttempt: nextAttempt,
+                  retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
+                },
+                { status: 202 }
+              );
+            }
           }
         }
         await updateImportFileCompat(importId, {
