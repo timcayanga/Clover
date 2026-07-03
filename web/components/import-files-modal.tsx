@@ -4505,48 +4505,6 @@ export function ImportFilesModal({
 
     try {
       importFileId = item.importFileId ?? crypto.randomUUID();
-      if (itemImportMode === "statement" && isLikelyLowQualityPnbStatementFile(item.file.name)) {
-        const nextCompletedFiles = Math.min(items.length, completedFileCount + 1);
-        updateItem(itemId, {
-          status: "error",
-          confirmationState: "staged",
-          error: `${item.file.name}: Clover could not finish reading the statement. Unable to parse readable transactions from this low-quality PNB scan.`,
-          errorCode: "I-104",
-          errorTitle: "File not readable",
-          errorNextSteps: [
-            "Upload the original PDF when available, or use a clearer image with the account details and transaction table visible.",
-            "Try importing the file by itself so Clover can focus on that statement.",
-            "If Clover still cannot read it, add the account or transactions manually.",
-          ],
-          importFileId,
-          importedRows: 0,
-          progress: 100,
-          progressLabel: "File not readable",
-        });
-        publishImportActivity({
-          workspaceId,
-          surface: importActivitySurfaceRef.current,
-          status: "error",
-          importFileId,
-          fileName: item.file.name,
-          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
-          fileTotal: items.length,
-          completedFiles: nextCompletedFiles,
-          progress: (nextCompletedFiles / Math.max(items.length, 1)) * 100,
-          detail: "File not readable",
-          summary: null,
-          errorCode: "I-104",
-          errorMessage: `${item.file.name}: Clover could not finish reading the statement. Unable to parse readable transactions from this low-quality PNB scan.`,
-          errorTitle: "File not readable",
-          errorNextSteps: [
-            "Upload the original PDF when available, or use a clearer image with the account details and transaction table visible.",
-            "Try importing the file by itself so Clover can focus on that statement.",
-            "If Clover still cannot read it, add the account or transactions manually.",
-          ],
-        });
-        return { status: "error", importedRows: null, summary: null };
-      }
-
       capturePostHogClientEvent("import_started", {
         file_type: fileTypeLabel(item.file),
         file_size_bytes: item.file.size,
@@ -5493,40 +5451,29 @@ export function ImportFilesModal({
 
         if (isLikelyLowQualityPnbStatementFile(item.file.name) && !hasStatementIdentity && visibleRows === 0) {
           updateItem(itemId, {
-            status: "error",
-            confirmationState: "staged",
-            error:
-              "Clover queued this low-quality PNB scan for background reading, but it could not show reliable account details yet.",
-            errorCode: "I-104",
-            errorTitle: "File needs a clearer scan",
-            errorNextSteps: [
-              "Upload the original PDF when available, or use a clearer image with the account details and transaction table visible.",
-              "Import this file by itself if you want Clover to keep trying in the background.",
-              "If Clover still cannot read it, add the account or transactions manually.",
-            ],
+            status: "importing",
+            confirmationState: "pending",
+            error: null,
+            errorCode: null,
+            errorTitle: null,
+            errorNextSteps: null,
             importFileId,
             importedRows: 0,
-            progress: IMPORT_PROGRESS.finalizing,
-            progressLabel: "Review needed",
+            progress: IMPORT_PROGRESS.loadingAccount,
+            progressLabel: "Reading statement in background",
           });
           publishImportActivity({
             workspaceId,
             surface: importActivitySurfaceRef.current,
-            status: "error",
+            status: "active",
             fileName: item.file.name,
             fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
             fileTotal: items.length,
             completedFiles: completedFileCount,
-            progress: IMPORT_PROGRESS.finalizing,
-            detail: "Clover could not show reliable rows from this low-quality PNB scan yet.",
+            progress: IMPORT_PROGRESS.loadingAccount,
+            detail: "Clover queued this low-quality scan for backup reading.",
             summary: null,
-            errorMessage: "Clover needs a clearer scan before it can import this file reliably.",
-            errorTitle: "File needs a clearer scan",
-            errorNextSteps: [
-              "Upload the original PDF when available, or use a clearer image with the account details and transaction table visible.",
-              "Import this file by itself if you want Clover to keep trying in the background.",
-              "If Clover still cannot read it, add the account or transactions manually.",
-            ],
+            errorMessage: null,
           });
           void monitorQueuedImportAndConfirm(
             itemId,
@@ -5943,6 +5890,88 @@ export function ImportFilesModal({
       const recoverableConfirmedRowsCount = Number(recoverableStatus?.confirmedTransactionsCount ?? 0);
       const hasRecoverableIdentity =
         Boolean(recoverableIdentity?.accountName || recoverableIdentity?.institution || recoverableIdentity?.accountNumber);
+      const recoverableImportStatus =
+        typeof recoverableStatus?.importFile?.status === "string" ? recoverableStatus.importFile.status : null;
+      const recoverableProcessingPhase =
+        typeof recoverableStatus?.importFile?.processingPhase === "string" ? recoverableStatus.importFile.processingPhase : null;
+      const recoverableStillProcessing =
+        recoverableImportStatus === "processing" &&
+        (recoverableProcessingPhase === "queued_retry" ||
+          recoverableProcessingPhase === "reading_account_details" ||
+          recoverableProcessingPhase === "reading_receipt_vision" ||
+          recoverableProcessingPhase === "identifying_transactions" ||
+          recoverableProcessingPhase === "reconciling");
+      if (recoverableImportFileId && recoverableStillProcessing) {
+        updateItem(itemId, {
+          status: "importing",
+          confirmationState: "pending",
+          error: null,
+          errorCode: null,
+          errorTitle: null,
+          errorNextSteps: null,
+          importFileId: recoverableImportFileId,
+          targetAccountId: recoverableAccountId,
+          importedRows: Math.max(recoverableParsedRowsCount, recoverableConfirmedRowsCount),
+          progress: IMPORT_PROGRESS.loadingAccount,
+          progressLabel: isDocumentImport ? "Reading document in background" : "Reading statement in background",
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "active",
+          importFileId: recoverableImportFileId,
+          fileName: item.file.name,
+          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount,
+          progress: IMPORT_PROGRESS.loadingAccount,
+          detail: isDocumentImport
+            ? "Clover is running the backup document reader."
+            : "Clover is running the backup statement reader.",
+          summary: null,
+          errorMessage: null,
+        });
+        if (isDocumentImport) {
+          void monitorQueuedDocumentImport(itemId, recoverableImportFileId, itemImportMode, item.file.name, {
+            keepWatchingAfterVisible: itemImportMode === "receipt",
+          }).finally(() => router.refresh());
+        } else {
+          void monitorQueuedImportAndConfirm(itemId, recoverableImportFileId, recoverableAccountId, {
+            fileName: item.file.name,
+            fallbackAccountName:
+              deriveStatementFallbackAccountName(
+                item.file.name,
+                recoverableIdentity?.institution ?? guessedIdentity?.institution ?? null,
+                recoverableIdentity?.accountNumber ?? guessedIdentity?.accountNumber ?? null,
+                recoverableIdentity?.accountType ??
+                  (guessedIdentity
+                    ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+                    : null),
+              ) ?? "Imported statement",
+            guessedAccountName: guessedIdentity?.accountName ?? null,
+            guessedInstitution: guessedIdentity?.institution ?? null,
+            guessedAccountNumber: null,
+            guessedAccountType: guessedIdentity
+              ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+              : null,
+            accountName: recoverableIdentity?.accountName ?? null,
+            institution: recoverableIdentity?.institution ?? null,
+            accountNumber: recoverableIdentity?.accountNumber ?? null,
+            accountType: recoverableIdentity?.accountType ?? null,
+            optimisticAccountId: recoverableAccountId,
+            initialBalance: toBalanceString(recoverableStatus?.statementCheckpoint?.endingBalance),
+            password: item.password.trim() || undefined,
+          }, {
+            backgroundOnly: true,
+          }).finally(() => router.refresh());
+        }
+
+        return {
+          status: "staged",
+          importedRows: Math.max(recoverableParsedRowsCount, recoverableConfirmedRowsCount) || null,
+          summary: null,
+        };
+      }
       const canRecoverFromProcessError =
         Boolean(recoverableAccountId && !recoverableAccountId.startsWith("optimistic-")) ||
         hasRecoverableIdentity;
