@@ -1,6 +1,6 @@
 export type VisualImportRecoveryMode = "receipt" | "statement";
 
-export const VISUAL_IMPORT_RETRY_LIMIT = 2;
+export const VISUAL_IMPORT_RETRY_LIMIT = 3;
 
 export const coerceVisualImportAttempt = (value: unknown) => {
   const attempt = Number(value ?? 0);

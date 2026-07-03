@@ -74,6 +74,12 @@ import {
   shouldPreferBackupParserForTemplateFamily,
   type ImportSurfaceFingerprintKind,
 } from "@/lib/import-parser-routing";
+import {
+  VISUAL_IMPORT_RETRY_LIMIT,
+  getNextVisualImportAttempt,
+  getVisualImportRetryMessage,
+  type VisualImportRecoveryMode,
+} from "@/lib/import-visual-recovery";
 import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
 import { findBestImportedAccountMatch, matchesImportedAccountIdentity, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
@@ -1167,6 +1173,38 @@ const buildNoRowsImportFailureMessage = (params: {
   }
 
   return "Clover could not finish reading the file.";
+};
+
+const markNoRowsVisualImportForRecovery = async (params: {
+  importFileId: string;
+  processingAttempt: unknown;
+  importMode: VisualImportRecoveryMode;
+  reason: string;
+  institution?: string | null;
+}) => {
+  const nextAttempt = getNextVisualImportAttempt(params.processingAttempt);
+  if (nextAttempt > VISUAL_IMPORT_RETRY_LIMIT) {
+    return false;
+  }
+
+  await updateImportFileCompat(params.importFileId, {
+    status: "processing",
+    processingPhase: "queued_retry",
+    processingAttempt: nextAttempt,
+    processingMessage: getVisualImportRetryMessage(params.importMode, nextAttempt),
+    parsedRowsCount: 0,
+    confirmedTransactionsCount: 0,
+  }).catch(() => null);
+  emitImportProcessingEvent("import_processing_requeued", {
+    processing_status: "queued",
+    processing_phase: "queued_retry",
+    reason: params.reason,
+    institution: params.institution ?? null,
+    retry_attempt: nextAttempt,
+    retry_limit: VISUAL_IMPORT_RETRY_LIMIT,
+  });
+
+  return true;
 };
 
 const assessLocalParseRisk = (params: {
@@ -7238,6 +7276,26 @@ export const processImportFileText = async (
     canReuseCachedStatementParse,
   });
   if (fastFailureLooksUnsupported && !visualBackupAvailableBeforeFailure) {
+    const requeuedForRecovery = await markNoRowsVisualImportForRecovery({
+      importFileId,
+      processingAttempt: importFile.processingAttempt,
+      importMode: "statement",
+      reason: "fast_unsupported_surface",
+      institution: metadataForParse.institution ?? null,
+    });
+    if (requeuedForRecovery) {
+      return {
+        imported: 0,
+        duplicate: false,
+        metadata: metadataForParse,
+        accountId: null,
+        accountSummaries: [],
+        confirmedTransactionsCount: 0,
+        insightSummary: undefined,
+        accountBalance: null,
+        status: "error",
+      };
+    }
     const processingMessage = buildNoRowsImportFailureMessage({
       institution: metadataForParse.institution ?? null,
       surfaceFingerprintKind: surfaceFingerprint.kind,
@@ -8465,6 +8523,26 @@ export const processImportFileText = async (
 
   if (!isDocumentImport && imageImport && rows.length === 0) {
     const stalledInstitution = resolvedMetadata.institution ?? checkpointBankName ?? null;
+    const requeuedForRecovery = await markNoRowsVisualImportForRecovery({
+      importFileId,
+      processingAttempt: importFile.processingAttempt,
+      importMode: importMode === "receipt" ? "receipt" : "statement",
+      reason: "image_statement_no_rows",
+      institution: stalledInstitution,
+    });
+    if (requeuedForRecovery) {
+      return {
+        imported: 0,
+        duplicate: false,
+        metadata: resolvedMetadata,
+        accountId: null,
+        accountSummaries: [],
+        confirmedTransactionsCount: 0,
+        insightSummary: undefined,
+        accountBalance: null,
+        status: "error",
+      };
+    }
     const processingMessage = buildNoRowsImportFailureMessage({
       institution: stalledInstitution,
       surfaceFingerprintKind: surfaceFingerprint.kind,

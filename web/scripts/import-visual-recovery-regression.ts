@@ -12,7 +12,7 @@ import {
 } from "@/lib/import-visual-recovery";
 
 const main = () => {
-  assert.equal(VISUAL_IMPORT_RETRY_LIMIT, 2, "Expected visual imports to get one local attempt plus two recovery passes.");
+  assert.equal(VISUAL_IMPORT_RETRY_LIMIT, 3, "Expected visual imports to get one local attempt plus three recovery passes.");
 
   assert.equal(coerceVisualImportAttempt(null), 0);
   assert.equal(coerceVisualImportAttempt("1.9"), 1);
@@ -22,28 +22,30 @@ const main = () => {
 
   assert.equal(canQueueVisualImportRetry(0), true, "First visual recovery pass should be queued.");
   assert.equal(canQueueVisualImportRetry(1), true, "Second visual recovery pass should be queued.");
-  assert.equal(canQueueVisualImportRetry(2), false, "Third visual recovery pass should be blocked.");
+  assert.equal(canQueueVisualImportRetry(2), true, "Third visual recovery pass should be queued.");
+  assert.equal(canQueueVisualImportRetry(3), false, "Fourth visual recovery pass should be blocked.");
 
   assert.equal(isVisualImportRetryBudgetExhausted(1), false);
-  assert.equal(isVisualImportRetryBudgetExhausted(2), true);
+  assert.equal(isVisualImportRetryBudgetExhausted(2), false);
+  assert.equal(isVisualImportRetryBudgetExhausted(3), true);
 
   assert.equal(
-    shouldStopStaleVisualImportRetry({ processingAttempt: 2, processingPhase: "queued_retry" }),
+    shouldStopStaleVisualImportRetry({ processingAttempt: 3, processingPhase: "queued_retry" }),
     false,
     "Queued final recovery pass should still be allowed to start if the worker is delayed."
   );
   assert.equal(
-    shouldStopStaleVisualImportRetry({ processingAttempt: 2, processingPhase: "reading_receipt_vision" }),
+    shouldStopStaleVisualImportRetry({ processingAttempt: 3, processingPhase: "reading_receipt_vision" }),
     true,
     "Stale in-flight final receipt recovery pass should stop instead of looping."
   );
   assert.equal(
-    shouldStopStaleVisualImportRetry({ processingAttempt: 2, processingPhase: "reading_account_details" }),
+    shouldStopStaleVisualImportRetry({ processingAttempt: 3, processingPhase: "reading_account_details" }),
     true,
     "Stale in-flight final screenshot recovery pass should stop instead of looping."
   );
 
-  assert.match(getVisualImportRetryMessage("receipt", 2), /backup pass 2\/2/i);
+  assert.match(getVisualImportRetryMessage("receipt", 3), /backup pass 3\/3/i);
   assert.match(getVisualImportRetryMessage("statement", 1), /image-reading issue/i);
   assert.match(getVisualImportRepairMessage("receipt"), /local and backup receipt readers/i);
   assert.match(getVisualImportRepairMessage("statement"), /local and backup image readers/i);

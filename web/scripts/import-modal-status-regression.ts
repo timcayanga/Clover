@@ -6,11 +6,11 @@ const main = () => {
     importMode: "receipt",
     status: "processing",
     processingPhase: "queued_retry",
-    processingAttempt: 2,
-    processingMessage: "Clover hit a temporary receipt-reading issue and queued backup pass 2/2.",
+    processingAttempt: 3,
+    processingMessage: "Clover hit a temporary receipt-reading issue and queued backup pass 3/3.",
   });
   assert.equal(queuedReceipt.kind, "waiting");
-  assert.equal(queuedReceipt.progressLabel, "Clover hit a temporary receipt-reading issue and queued backup pass 2/2.");
+  assert.equal(queuedReceipt.progressLabel, "Clover hit a temporary receipt-reading issue and queued backup pass 3/3.");
   assert.ok(queuedReceipt.progress >= 4, "Expected queued retry to remain visibly active in the modal.");
 
   const exhaustedReceipt = resolveImportModalStatusDecision({
