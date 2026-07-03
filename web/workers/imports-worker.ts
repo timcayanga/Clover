@@ -1,7 +1,13 @@
 import { Worker } from "bullmq";
 import { getRedisConnection } from "@/lib/import-queue";
-import { updateImportFileCompat } from "@/lib/data-engine";
+import { fetchImportFileCompat, updateImportFileCompat } from "@/lib/data-engine";
 import { getConfiguredPdfJsBaseUrl } from "@/lib/import-file-text.server";
+import {
+  getNextVisualImportAttempt,
+  getVisualImportRetryMessage,
+  shouldKeepFailedVisualImportRecoverable,
+  type VisualImportRecoveryMode,
+} from "@/lib/import-visual-recovery";
 import { processImportEnrichmentJobs, processImportFileText } from "@/workers/import-processor";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 
@@ -52,6 +58,34 @@ worker.on("failed", async (job, error) => {
   console.error("Import job failed", { jobId: job?.id ?? null, error: summarizeErrorForLog(error) });
   const importFileId = job?.data?.importFileId;
   if (importFileId) {
+    const latestImportFile = await fetchImportFileCompat(importFileId).catch(() => null);
+    const fileName = String(latestImportFile?.fileName ?? "");
+    const fileType = String(latestImportFile?.fileType ?? "");
+    const isVisualImport =
+      fileType.toLowerCase().startsWith("image/") ||
+      fileType.toLowerCase() === "application/pdf" ||
+      /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif|pdf)$/i.test(fileName);
+    const importMode: VisualImportRecoveryMode =
+      job.data?.importMode === "receipt" ? "receipt" : "statement";
+    if (
+      shouldKeepFailedVisualImportRecoverable({
+        importMode,
+        isVisualImport,
+        processingAttempt: latestImportFile?.processingAttempt,
+      })
+    ) {
+      const nextAttempt = getNextVisualImportAttempt(latestImportFile?.processingAttempt);
+      await updateImportFileCompat(importFileId, {
+        status: "processing",
+        processingPhase: "queued_retry",
+        processingAttempt: nextAttempt,
+        processingMessage: getVisualImportRetryMessage(importMode, nextAttempt),
+        parsedRowsCount: 0,
+        confirmedTransactionsCount: 0,
+      });
+      return;
+    }
+
     const errorMessage =
       error instanceof Error && error.message.trim().length > 0
         ? error.message

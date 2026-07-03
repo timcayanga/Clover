@@ -39,3 +39,12 @@ export const shouldQueueDifficultVisualImportInsteadOfFailing = (params: {
   params.knownDifficultVisualImport === true &&
   params.forceInlineProcessing !== true &&
   params.canReuseCachedParseSnapshot !== true;
+
+export const shouldKeepFailedVisualImportRecoverable = (params: {
+  importMode?: VisualImportRecoveryMode | null;
+  isVisualImport?: boolean;
+  processingAttempt: unknown;
+}) =>
+  params.isVisualImport === true &&
+  (params.importMode === "receipt" || params.importMode === "statement") &&
+  canQueueVisualImportRetry(params.processingAttempt);

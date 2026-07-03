@@ -8,6 +8,7 @@ import {
   getVisualImportRetryMessage,
   isVisualImportRetryBudgetExhausted,
   shouldQueueDifficultVisualImportInsteadOfFailing,
+  shouldKeepFailedVisualImportRecoverable,
   shouldStopStaleVisualImportRetry,
 } from "@/lib/import-visual-recovery";
 
@@ -75,6 +76,33 @@ const main = () => {
     }),
     false,
     "Reusable cached parses should not be sent through unnecessary visual recovery."
+  );
+  assert.equal(
+    shouldKeepFailedVisualImportRecoverable({
+      importMode: "receipt",
+      isVisualImport: true,
+      processingAttempt: 2,
+    }),
+    true,
+    "Visual receipt imports should remain recoverable while retry budget remains."
+  );
+  assert.equal(
+    shouldKeepFailedVisualImportRecoverable({
+      importMode: "statement",
+      isVisualImport: true,
+      processingAttempt: 3,
+    }),
+    false,
+    "Visual statement imports should fail closed once retry budget is exhausted."
+  );
+  assert.equal(
+    shouldKeepFailedVisualImportRecoverable({
+      importMode: "receipt",
+      isVisualImport: false,
+      processingAttempt: 1,
+    }),
+    false,
+    "Non-visual imports should not be held in visual recovery."
   );
 
   console.log("Import visual recovery regression passed.");
