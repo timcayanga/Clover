@@ -50,6 +50,7 @@ import {
   loadOptimisticPreviewTransactions,
 } from "@/lib/import-preview-transactions";
 import { friendlyImportPhaseLabel, friendlyImportProgressLabel, IMPORT_PROGRESS } from "@/lib/import-progress";
+import { resolveImportModalStatusDecision } from "@/lib/import-modal-status";
 import { waitForImportSettledVisibility } from "@/lib/import-settled-visibility";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { getImportErrorSpec, getImportErrorSpecForCode, isResumableImportErrorCode, type ImportErrorStage, type ImportErrorSpec } from "@/lib/import-error-spec";
@@ -4150,14 +4151,34 @@ export function ImportFilesModal({
       const telemetryLabel = typeof payload.telemetryLabel === "string" ? payload.telemetryLabel : null;
       const telemetryMessage = typeof payload.telemetryMessage === "string" ? payload.telemetryMessage : null;
       const resumeReason = typeof payload.resumeReason === "string" ? payload.resumeReason : null;
+      const statusDecision = resolveImportModalStatusDecision({
+        importMode,
+        status: importStatus,
+        processingPhase,
+        processingMessage,
+        telemetryPhase,
+        telemetryLabel,
+        telemetryMessage,
+        parsedRowsCount,
+        confirmedTransactionsCount,
+        visibleImportComplete: Boolean(payload.visibleImportComplete),
+        hasStructuredReceiptVisibility: Boolean(payload.receiptDocument || payload.receiptTransaction),
+        processingAttempt: importFile?.processingAttempt ?? null,
+        progressFloor: IMPORT_PROGRESS.parsing + attempt * 0.25,
+      });
+
+      if (statusDecision.kind === "repair_needed") {
+        closeImportAfterError(itemId, "background", fileName, statusDecision.message);
+        return { completed: false, summary: null };
+      }
 
       if (importStatus === "failed") {
-        if (parsedRowsCount > 0 || confirmedTransactionsCount > 0) {
+        if (statusDecision.kind === "visible") {
           closeImportAsRecoverable(
             itemId,
             fileName,
             "The file is visible in Clover. Clover will keep cleaning up names and categories in the background.",
-            "Visible in Clover"
+            statusDecision.progressLabel
           );
           return { completed: true, summary: null };
         }
@@ -4277,12 +4298,12 @@ export function ImportFilesModal({
         }
 
         if (importStatus === "failed") {
-          if (parsedRowsCount > 0 || confirmedTransactionsCount > 0) {
+          if (statusDecision.kind === "visible") {
             closeImportAsRecoverable(
               itemId,
               fileName,
               "The file is visible in Clover. Clover will keep cleaning up names and categories in the background.",
-              "Visible in Clover"
+              statusDecision.progressLabel
             );
             return { completed: true, summary: null };
           }
@@ -4322,8 +4343,8 @@ export function ImportFilesModal({
 
         updateItem(itemId, {
           status: "importing",
-          progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(90, IMPORT_PROGRESS.parsing + attempt * 0.25)),
-          progressLabel: telemetryLabel ?? processingMessage ?? progressLabel,
+          progress: statusDecision.progress,
+          progressLabel: statusDecision.progressLabel,
         });
         publishImportActivity({
           workspaceId,
@@ -4333,7 +4354,7 @@ export function ImportFilesModal({
           fileIndex: items.findIndex((item) => item.id === itemId) + 1,
           fileTotal: items.length,
           completedFiles: completedFileCount,
-          progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(90, IMPORT_PROGRESS.parsing + attempt * 0.25)),
+          progress: statusDecision.progress,
           detail: getTelemetryDetail(
             telemetryPhase === "repair_needed"
               ? "Clover needs another pass to finish this file"
@@ -4341,7 +4362,7 @@ export function ImportFilesModal({
               ? "Clover is rechecking the document"
               : parsedRowsCount > 0 || confirmedTransactionsCount > 0
                 ? `Clover found ${Math.max(parsedRowsCount, confirmedTransactionsCount)} item(s)`
-                : progressLabel,
+                : statusDecision.detail,
             telemetryMessage ?? processingMessage,
             telemetryLabel,
             resumeReason
@@ -4401,8 +4422,8 @@ export function ImportFilesModal({
 
       updateItem(itemId, {
         status: "importing",
-        progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(90, IMPORT_PROGRESS.parsing + attempt * 0.25)),
-        progressLabel: telemetryLabel ?? processingMessage ?? progressLabel,
+        progress: statusDecision.progress,
+        progressLabel: statusDecision.progressLabel,
       });
       publishImportActivity({
         workspaceId,
@@ -4412,7 +4433,7 @@ export function ImportFilesModal({
         fileIndex: items.findIndex((item) => item.id === itemId) + 1,
         fileTotal: items.length,
         completedFiles: completedFileCount,
-        progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(90, IMPORT_PROGRESS.parsing + attempt * 0.25)),
+        progress: statusDecision.progress,
         detail: getTelemetryDetail(
           telemetryPhase === "repair_needed"
             ? "Clover needs another pass to finish this file"
@@ -4420,7 +4441,7 @@ export function ImportFilesModal({
             ? "Clover is rechecking the document"
             : parsedRowsCount > 0 || confirmedTransactionsCount > 0
               ? `Clover found ${Math.max(parsedRowsCount, confirmedTransactionsCount)} item(s)`
-              : progressLabel,
+              : statusDecision.detail,
           telemetryMessage ?? processingMessage,
           telemetryLabel,
           resumeReason

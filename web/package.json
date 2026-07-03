@@ -17,6 +17,7 @@
     "qa:generic-parser-hardening": "tsx scripts/generic-parser-hardening-regression.ts",
     "qa:import-routing": "tsx scripts/import-parser-routing-regression.ts",
     "qa:visual-recovery": "tsx scripts/import-visual-recovery-regression.ts",
+    "qa:import-modal-status": "tsx scripts/import-modal-status-regression.ts",
     "qa:bpi-enrichment": "tsx scripts/bpi-four-file-enrichment-regression.ts",
     "qa:bpi-import-worker-enrichment": "tsx scripts/bpi-import-worker-enrichment-regression.ts",
     "qa:cimb-multi-account": "tsx scripts/cimb-multi-account-import-regression.ts",
