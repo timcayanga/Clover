@@ -314,6 +314,19 @@ const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
   "sign-out": "/assets/3d%20icons/menu/log-out.png",
 };
 
+const PRELOADED_MENU_ICON_NAMES: IconName[] = [
+  "notifications",
+  "settings",
+  "sign-out",
+  "investments",
+  "split-bill",
+  "budgeting",
+  "reports",
+  "help",
+  "more",
+  "profile",
+];
+
 function MenuIcon({ name }: { name: IconName }) {
   const imageSrc = MENU_ICON_SRC[name];
   if (imageSrc) {
@@ -1384,6 +1397,16 @@ export function CloverShell({
   return (
     <CloverChromeContext.Provider value={{ closeChrome }}>
       <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
+      <div className="menu-icon-preload" aria-hidden="true">
+        {PRELOADED_MENU_ICON_NAMES.map((iconName) => {
+          const imageSrc = MENU_ICON_SRC[iconName];
+          if (!imageSrc) {
+            return null;
+          }
+
+          return <img key={iconName} src={imageSrc} alt="" width={96} height={96} loading="eager" decoding="async" fetchPriority="high" />;
+        })}
+      </div>
       <div
         className="sidebar-backdrop"
         role="presentation"
@@ -1680,7 +1703,7 @@ export function CloverShell({
               <img className="sidebar-profile__photo" src={profileImage} alt="" aria-hidden="true" />
             ) : (
               <span className="sidebar-profile__avatar" aria-hidden="true">
-                <img src="/assets/3d%20icons/account.png" alt="" className="sidebar-profile__avatar-icon" />
+                <img src="/assets/3d%20icons/menu/account.png" alt="" width={96} height={96} loading="eager" decoding="async" className="sidebar-profile__avatar-icon" />
               </span>
             )}
             <span className="sr-only">{displayName}</span>

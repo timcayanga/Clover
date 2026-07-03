@@ -18,20 +18,20 @@ type MoreSection = {
 type PageIconName = "accounts" | "recurring" | "split-bill" | "investments" | "reports" | "goals" | "budgeting" | "notifications" | "settings" | "help";
 
 const MORE_ICON_SRC: Record<PageIconName, string> = {
-  accounts: "/assets/3d%20icons/bank%20account.png",
-  recurring: "/assets/3d%20icons/recurring.png",
-  "split-bill": "/assets/3d%20icons/split%20bills.png",
-  investments: "/assets/3d%20icons/investments.png",
-  reports: "/assets/3d%20icons/reports.png",
-  goals: "/assets/3d%20icons/adviser.png",
-  budgeting: "/assets/3d%20icons/budgeting.png",
-  notifications: "/assets/3d%20icons/notifications.png",
-  settings: "/assets/3d%20icons/settings.png",
-  help: "/assets/3d%20icons/help.png",
+  accounts: "/assets/3d%20icons/menu/bank-account.png",
+  recurring: "/assets/3d%20icons/menu/recurring.png",
+  "split-bill": "/assets/3d%20icons/menu/split-bills.png",
+  investments: "/assets/3d%20icons/menu/investments.png",
+  reports: "/assets/3d%20icons/menu/reports.png",
+  goals: "/assets/3d%20icons/menu/adviser.png",
+  budgeting: "/assets/3d%20icons/menu/budgeting.png",
+  notifications: "/assets/3d%20icons/menu/notifications.png",
+  settings: "/assets/3d%20icons/menu/settings.png",
+  help: "/assets/3d%20icons/menu/help.png",
 };
 
 function PageIcon({ name }: { name: PageIconName }) {
-  return <img src={MORE_ICON_SRC[name]} alt="" className="more-page__link-icon-image" aria-hidden="true" />;
+  return <img src={MORE_ICON_SRC[name]} alt="" width={96} height={96} loading="eager" decoding="async" className="more-page__link-icon-image" aria-hidden="true" />;
 }
 
 const moreSections: MoreSection[] = [
