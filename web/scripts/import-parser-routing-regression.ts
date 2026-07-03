@@ -236,6 +236,34 @@ const main = () => {
     "Expected weak scanned PDFs to render pages for backup before failing."
   );
 
+  const visualRecoveryRoute = decideImportParserRoute({
+    importMode: "receipt",
+    fileType: "image/jpeg",
+    fileName: "untrained-restaurant-receipt.jpg",
+    imageImport: true,
+    hasKnownInstitution: false,
+    parsedRowsCount: 2,
+    parsedDateCoverage: 0,
+    genericParseLooksSuspicious: false,
+    textLength: 420,
+    textPreview: "Restaurant Receipt Subtotal VAT Amount Due Mastercard",
+    screenshotNoiseRatio: 0.08,
+    detectedMetadata: { institution: "Unknown", confidence: 82 },
+    surfaceFingerprint: fingerprintImportSurface({
+      importMode: "receipt",
+      fileType: "image/jpeg",
+      fileName: "untrained-restaurant-receipt.jpg",
+      imageImport: true,
+      textPreview: "Restaurant Receipt Subtotal VAT Amount Due Mastercard",
+      detectedMetadata: { institution: "Unknown", confidence: 82 },
+    }),
+    visualRecoveryAttempt: 1,
+  });
+  assert.equal(visualRecoveryRoute.route, "backup_openai");
+  assert.equal(visualRecoveryRoute.shouldRenderPageImages, true);
+  assert.equal(visualRecoveryRoute.shouldPreferOpenAiPrimary, true);
+  assert.ok(/Previous visual parse attempt/i.test(visualRecoveryRoute.reason));
+
   const spacedBpiRows = parseImportText(
     [
       "Statement of tnuoccA",

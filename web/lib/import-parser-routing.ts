@@ -70,6 +70,7 @@ type DecideImportParserRouteParams = {
   trainedReceiptDetails?: boolean;
   prefersBackupParserForTemplateFamily?: boolean;
   surfaceFingerprint?: ImportSurfaceFingerprint | null;
+  visualRecoveryAttempt?: number | null;
 };
 
 const normalizeConfidence = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
@@ -340,6 +341,22 @@ export const decideImportParserRoute = (params: DecideImportParserRouteParams): 
       targetDecisionWindowMs: 3_000,
       shouldRenderPageImages: false,
       shouldPreferOpenAiPrimary: false,
+    };
+  }
+
+  if (
+    Math.max(0, Number(params.visualRecoveryAttempt ?? 0)) > 0 &&
+    shouldRenderPageImages &&
+    !params.hasReliableDeterministicStatementParse &&
+    !params.imageStatementParseLooksUsable
+  ) {
+    return {
+      route: "backup_openai",
+      confidence: 96,
+      reason: "Previous visual parse attempt found no rows, so retry must use the backup vision parser",
+      targetDecisionWindowMs: 3_000,
+      shouldRenderPageImages: true,
+      shouldPreferOpenAiPrimary: true,
     };
   }
 

@@ -6753,6 +6753,9 @@ export const processImportFileText = async (
     cachedParsePreservesMobileScreenshotIdentity &&
     Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) &&
     Boolean(textCacheInfo?.cacheRecord?.metadata);
+  const isVisualImportFile = imageImport || isPdfImportFile(fileType, fileName);
+  const visualRecoveryAttempt =
+    isVisualImportFile && !canReuseCachedStatementParse ? Math.max(existingProcessingAttempt, autoRerunAttempt) : 0;
 
   const shouldEagerLoadImagePages =
     imageImport &&
@@ -7267,6 +7270,7 @@ export const processImportFileText = async (
     trainedReceiptDetails: Boolean(trainedReceiptDetails),
     prefersBackupParserForTemplateFamily: templatePrefersBackupParser,
     surfaceFingerprint,
+    visualRecoveryAttempt,
   });
   const visualBackupAvailableBeforeFailure = shouldAttemptVisualBackupBeforeFailure({
     routeDecision: parserRouteDecision,
@@ -7363,6 +7367,7 @@ export const processImportFileText = async (
     surfaceFingerprintKind: surfaceFingerprint.kind,
     surfaceFingerprintConfidence: surfaceFingerprint.confidence,
     surfaceFingerprintReason: surfaceFingerprint.reason,
+    visualRecoveryAttempt,
     rowCount: parsedRows.length,
     metadataConfidence: metadataForParse.confidence ?? 0,
     screenshotNoiseRatio: Number(screenshotNoiseRatio.toFixed(3)),
@@ -7378,14 +7383,14 @@ export const processImportFileText = async (
       hasDeterministicBpiMobileScreenshotRows &&
       !hasSuspiciousLegacyScreenshotDates(parsedRows as Array<Record<string, unknown>>)) ||
     Boolean(trainedReceiptDetails) ||
-    (imageImport &&
-    ((importMode === "receipt" &&
-      receiptFastPathSignal) ||
-      (parsedRows.length > 0 &&
-        (metadataForParse.confidence ?? 0) >= 75 &&
-        !genericParseLooksSuspicious &&
-        !suspiciousDateCoverage &&
-        !prefersVisionFallbackForInstitution)));
+    (visualRecoveryAttempt <= 0 &&
+      imageImport &&
+      ((importMode === "receipt" && receiptFastPathSignal) ||
+        (parsedRows.length > 0 &&
+          (metadataForParse.confidence ?? 0) >= 75 &&
+          !genericParseLooksSuspicious &&
+          !suspiciousDateCoverage &&
+          !prefersVisionFallbackForInstitution)));
   if (shouldUseVisionFallback && !pageImages) {
     try {
       if (!storageKey) {
