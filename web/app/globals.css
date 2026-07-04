@@ -18142,6 +18142,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 12px;
   min-width: 0;
   align-content: start;
+  isolation: isolate;
 }
 
 .investments-overview-hero {
@@ -19372,21 +19373,30 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .accounts-overview-grid {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   overflow: visible;
+  isolation: isolate;
 }
 
 @media (min-width: 981px) {
   .accounts-overview-grid {
     position: sticky;
     top: 8px;
-    z-index: 30;
-    padding-bottom: 10px;
-    background:
-      radial-gradient(circle at top right, rgba(3, 168, 192, 0.04), transparent 32%),
-      linear-gradient(180deg, rgba(248, 251, 252, 0.98), rgba(248, 251, 252, 0.9) 72%, rgba(248, 251, 252, 0));
+    z-index: 70;
+    padding: 10px 0 12px;
+  }
+
+  .accounts-overview-grid::before {
+    content: "";
+    position: absolute;
+    inset: -14px -8px -10px;
+    z-index: -1;
+    background: #ffffff;
+    border-bottom: 1px solid rgba(216, 226, 232, 0.88);
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06);
   }
 }
 
@@ -19850,6 +19860,8 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .accounts-main-grid {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 10px;
