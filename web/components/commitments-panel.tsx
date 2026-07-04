@@ -705,7 +705,7 @@ export function CommitmentsPanel({
         })}
       </div>
 
-      {hasSavedCommitments && plannedPaymentSuggestions.length > 0 ? (
+      {plannedPaymentSuggestions.length > 0 ? (
         <article className="panel commitments-suggestions-panel">
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div>
@@ -749,7 +749,7 @@ export function CommitmentsPanel({
         </article>
       ) : null}
 
-      {hasSavedCommitments && suggestedRecurringPatterns.length > 0 ? (
+      {suggestedRecurringPatterns.length > 0 ? (
         <article className="panel commitments-suggestions-panel">
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div>

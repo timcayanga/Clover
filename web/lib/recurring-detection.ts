@@ -34,7 +34,7 @@ type DetectedRecurringPattern = {
 };
 
 const recurringKeywordPattern =
-  /\b(rent|internet|bill|utility|utilities|subscription|electric|water|phone|insurance|mortgage|loan|fee|netflix|spotify|youtube|icloud|google|openai|chatgpt|adobe|microsoft|canva|grab|globe|smart|pldt|meralco)\b/i;
+  /\b(rent|internet|bill|utility|utilities|subscription|subscriptions|membership|premium|monthly|electric|water|phone|insurance|mortgage|loan|fee|netflix|spotify|youtube|icloud|google|openai|chatgpt|adobe|microsoft|canva|grab|globe|smart|pldt|meralco)\b/i;
 
 const normalizeMerchantKey = (value: string) =>
   value
@@ -132,8 +132,45 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
   const expenseTransactions = transactions
     .filter((transaction) => transaction.type === "expense")
     .sort((left, right) => left.date.getTime() - right.date.getTime());
+  const categoryNames = new Set(expenseTransactions.map((transaction) => transaction.category?.name?.toLowerCase() ?? ""));
+  const textBlob = expenseTransactions
+    .map((transaction) => `${transaction.merchantClean ?? ""} ${transaction.merchantRaw} ${transaction.category?.name ?? ""}`)
+    .join(" ");
+  const hasKeywordSignal = recurringKeywordPattern.test(textBlob) || categoryNames.has("bills & utilities");
+
   if (expenseTransactions.length < 2) {
-    return null;
+    const transaction = expenseTransactions[0];
+    const amount = transaction ? toAmount(transaction.amount) : 0;
+
+    if (!transaction || !hasKeywordSignal || amount <= 0) {
+      return null;
+    }
+
+    const confidence = recurringKeywordPattern.test(`${transaction.merchantClean ?? ""} ${transaction.merchantRaw}`)
+      ? 72
+      : 66;
+
+    return {
+      workspaceId: transaction.workspaceId,
+      accountId: transaction.accountId,
+      merchantRaw: transaction.merchantRaw,
+      merchantClean: transaction.merchantClean ?? transaction.merchantRaw,
+      amount: Number(amount.toFixed(2)),
+      currency: (transaction.currency ?? "PHP").trim().toUpperCase() || "PHP",
+      frequency: "monthly",
+      firstSeenDate: transaction.date,
+      lastSeenDate: transaction.date,
+      nextExpectedDate: addMonths(transaction.date, 1),
+      transactionCount: 1,
+      confidence,
+      rawPayload: {
+        source: "recurring_detection",
+        detectionType: "single_keyword_transaction",
+        transactionIds: [transaction.id],
+        amountStability: 1,
+        hasKeywordSignal,
+      },
+    };
   }
 
   const amounts = expenseTransactions.map((transaction) => toAmount(transaction.amount)).filter((amount) => amount > 0);
@@ -145,11 +182,6 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
   const amountTolerance = Math.max(20, typicalAmount * 0.12);
   const stableAmountCount = amounts.filter((amount) => Math.abs(amount - typicalAmount) <= amountTolerance).length;
   const amountStability = stableAmountCount / Math.max(amounts.length, 1);
-  const categoryNames = new Set(expenseTransactions.map((transaction) => transaction.category?.name?.toLowerCase() ?? ""));
-  const textBlob = expenseTransactions
-    .map((transaction) => `${transaction.merchantClean ?? ""} ${transaction.merchantRaw} ${transaction.category?.name ?? ""}`)
-    .join(" ");
-  const hasKeywordSignal = recurringKeywordPattern.test(textBlob) || categoryNames.has("bills & utilities");
   const cadence = inferFrequency(expenseTransactions.map((transaction) => transaction.date));
 
   if (!cadence.frequency || !cadence.nextExpectedDate) {
