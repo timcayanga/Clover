@@ -4720,22 +4720,101 @@ const isBpiStatementPaymentCredit = (description: string) => {
   );
 };
 
-const splitTrailingBpiApprovalCodeAndAmount = (body: string) => {
-  const match = body.match(/^(.+?[A-Za-z])(\d{10})(-?\d{1,3}(?:,\d{3})*\.\d{2})$/);
-  if (!match) {
+const BPI_CREDIT_CARD_PLAUSIBLE_MERCHANT_AMOUNT_LIMIT = 1_000_000;
+
+const choosePlausibleBpiCreditAmountFromMergedToken = (amountText: string, body: string) => {
+  const cleaned = amountText.replace(/[^0-9.-]/g, "");
+  const match = cleaned.match(/^(-?)(\d+)\.(\d{2})$/);
+  if (!match?.[2] || !match[3]) {
     return null;
   }
 
-  const amount = parseMoney(match[3]);
-  if (amount === null) {
+  const integerDigits = match[2];
+  if (integerDigits.length <= 7) {
     return null;
   }
+
+  const bodyWithoutAmount = body.slice(0, Math.max(0, body.lastIndexOf(amountText)));
+  const hasReferenceSignal =
+    integerDigits.length >= 10 ||
+    /\d{8,}$/.test(bodyWithoutAmount.replace(/\s+/g, "")) ||
+    /\b(?:approval|auth|appr|ref(?:erence)?|trace|transaction)\b/i.test(body);
+  if (!hasReferenceSignal) {
+    return null;
+  }
+
+  const merchantContext = bodyWithoutAmount.toLowerCase();
+  const likelySmallMerchant =
+    /spotify|netflix|google|apple|youtube|discord|subscription|paypal|steam|grab|food|coffee|cafe|restaurant|shop|lazada|shopee/.test(
+      merchantContext
+    );
+  const maxPlausible = likelySmallMerchant ? 50_000 : BPI_CREDIT_CARD_PLAUSIBLE_MERCHANT_AMOUNT_LIMIT;
+
+  const candidates: Array<{ amount: number; amountText: string; score: number }> = [];
+  for (const integerLength of [3, 4, 5, 6, 7]) {
+    if (integerDigits.length < integerLength) {
+      continue;
+    }
+
+    const integerPart = integerDigits.slice(-integerLength);
+    const amount = Number(`${integerPart}.${match[3]}`);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > maxPlausible) {
+      continue;
+    }
+
+    const leadingDigits = integerDigits.slice(0, -integerLength);
+    const looksLikeReferencePrefix = leadingDigits.length >= 6;
+    candidates.push({
+      amount,
+      amountText: `${match[1] ?? ""}${integerPart}.${match[3]}`,
+      score:
+        Number(looksLikeReferencePrefix) * 30 +
+        Number(likelySmallMerchant && amount <= 10_000) * 15 -
+        Math.abs(integerLength - (likelySmallMerchant ? 3 : 5)),
+    });
+  }
+
+  return candidates.sort((left, right) => right.score - left.score || left.amount - right.amount)[0] ?? null;
+};
+
+const splitTrailingBpiApprovalCodeAndAmount = (body: string) => {
+  const compactBody = body.replace(/\s+/g, "");
+  const formattedAmountMatch = compactBody.match(/^(.+?[A-Za-z])(\d{8,16})(-?\d{1,3}(?:,\d{3})+\.\d{2})$/);
+  if (formattedAmountMatch) {
+    const amount = parseMoney(formattedAmountMatch[3]);
+    if (amount !== null) {
+      return {
+        descriptionPrefix: formattedAmountMatch[1],
+        approvalCode: formattedAmountMatch[2],
+        amountText: formattedAmountMatch[3],
+        amount,
+        mergedAmountText: null,
+      };
+    }
+  }
+
+  const mergedTailMatch = compactBody.match(/^(.+?[A-Za-z])(-?\d{8,}\.\d{2})$/);
+  if (!mergedTailMatch) {
+    return null;
+  }
+
+  const recoveredMergedAmount = choosePlausibleBpiCreditAmountFromMergedToken(mergedTailMatch[2], compactBody);
+  if (!recoveredMergedAmount) {
+    return null;
+  }
+
+  const mergedDigits = mergedTailMatch[2].replace(/[^0-9.]/g, "");
+  const recoveredDigits = recoveredMergedAmount.amountText.replace(/[^0-9.]/g, "");
+  const leadingReferenceDigits = mergedDigits.endsWith(recoveredDigits)
+    ? mergedDigits.slice(0, -recoveredDigits.length).replace(/\D/g, "")
+    : "";
 
   return {
-    descriptionPrefix: match[1],
-    approvalCode: match[2],
-    amountText: match[3],
-    amount,
+    descriptionPrefix: mergedTailMatch[1],
+    approvalCode: leadingReferenceDigits || null,
+    amountText: recoveredMergedAmount.amountText,
+    amount: recoveredMergedAmount.amount,
+    mergedAmountText: mergedTailMatch[2],
   };
 };
 
@@ -4825,6 +4904,8 @@ const parseBpiCreditCardTransactionLine = (
       postDate: postDateResult.date.toISOString().slice(0, 10),
       amountText,
       approvalCode: approvalAmount?.approvalCode ?? null,
+      mergedAmountText: approvalAmount?.mergedAmountText ?? null,
+      recoveredAmountText: approvalAmount?.mergedAmountText ? approvalAmount.amountText : null,
       foreignAmountText,
       fxNote,
       line: normalized,
@@ -5087,6 +5168,8 @@ const parseBpiCreditCardSegment = (
       postDate: postDate.toISOString().slice(0, 10),
       amountText,
       approvalCode: approvalAmount?.approvalCode ?? null,
+      mergedAmountText: approvalAmount?.mergedAmountText ?? null,
+      recoveredAmountText: approvalAmount?.mergedAmountText ? approvalAmount.amountText : null,
       foreignAmountText,
       fxNote,
       line: segmentText,

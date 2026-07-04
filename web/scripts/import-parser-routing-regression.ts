@@ -365,6 +365,35 @@ const main = () => {
   assert.equal((spacedBpiRows[0]?.rawPayload as Record<string, unknown> | undefined)?.approvalCode, "4029357733");
   assert.equal(spacedBpiRows[1]?.categoryName, "Transport");
 
+  const mergedBpiAmountRows = parseImportText(
+    [
+      "Statement of tnuoccA",
+      "C u s t o m e r N u m b e r 0 2 0 1 0 0 - 3 - 3 0 - 9 0 2 9 7 3 7",
+      "M a r c h 1 0 M a r c h 1 0 P a y p a l * S p o t i f y * P 4 0 2 E B B 3 5 3 1 4 3 6 9 0 0 1 1 7 0 . 6 9",
+    ].join("\n"),
+    "BE20260331.pdf",
+    "application/pdf",
+    {
+      institution: "BPI",
+      accountName: "BPI 9737",
+      accountNumber: "0201003309029737",
+    }
+  );
+  assert.equal(mergedBpiAmountRows.length, 1, "Expected merged BPI reference and amount OCR to parse one row.");
+  assert.equal(
+    mergedBpiAmountRows[0]?.amount,
+    "170.69",
+    "Expected BPI merged approval/reference digits not to become a trillion-peso amount."
+  );
+  assert.equal(
+    (mergedBpiAmountRows[0]?.rawPayload as Record<string, unknown> | undefined)?.mergedAmountText,
+    "35314369001170.69"
+  );
+  assert.equal(
+    (mergedBpiAmountRows[0]?.rawPayload as Record<string, unknown> | undefined)?.recoveredAmountText,
+    "170.69"
+  );
+
   console.log("Import parser routing regression passed.");
 };
 
