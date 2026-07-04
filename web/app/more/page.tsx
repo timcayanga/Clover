@@ -25,8 +25,8 @@ const MORE_ICON_SRC: Record<PageIconName, string> = {
   reports: "/assets/3d%20icons/menu/reports.png",
   goals: "/assets/3d%20icons/menu/adviser.png",
   budgeting: "/assets/3d%20icons/menu/budgeting.png",
-  notifications: "/assets/3d%20icons/menu/notifications.png",
-  settings: "/assets/3d%20icons/menu/settings.png",
+  notifications: "/assets/3d%20icons/menu/notifications-v2.png",
+  settings: "/assets/3d%20icons/menu/settings-v2.png",
   help: "/assets/3d%20icons/menu/help.png",
 };
 
