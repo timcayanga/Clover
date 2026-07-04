@@ -59,6 +59,51 @@ const main = () => {
   assert.equal(weakWalletRoute.route, "backup_openai");
   assert.ok(weakWalletRoute.targetDecisionWindowMs <= 3000);
 
+  const weakKnownBankScreenshotSurface = fingerprintImportSurface({
+    importMode: "statement",
+    fileType: "image/jpeg",
+    fileName: "BE20260331-screenshot.jpg",
+    imageImport: true,
+    likelyScreenshotStatement: false,
+    textPreview: "BPI",
+    detectedMetadata: { institution: "BPI", confidence: 42 },
+  });
+  assert.equal(
+    weakKnownBankScreenshotSurface.kind,
+    "statement_screenshot",
+    "Expected known-bank image uploads with weak OCR to stay on the statement screenshot route."
+  );
+
+  const weakKnownBankScreenshotRoute = decideImportParserRoute({
+    importMode: "statement",
+    fileType: "image/jpeg",
+    fileName: "BE20260331-screenshot.jpg",
+    imageImport: true,
+    likelyScreenshotStatement: false,
+    hasKnownInstitution: true,
+    parsedRowsCount: 0,
+    parsedDateCoverage: 0,
+    genericParseLooksSuspicious: true,
+    textLength: 3,
+    textPreview: "BPI",
+    screenshotNoiseRatio: 0,
+    detectedMetadata: { institution: "BPI", confidence: 42 },
+    surfaceFingerprint: weakKnownBankScreenshotSurface,
+  });
+  assert.equal(weakKnownBankScreenshotRoute.route, "backup_openai");
+  assert.equal(weakKnownBankScreenshotRoute.shouldRenderPageImages, true);
+  assert.equal(weakKnownBankScreenshotRoute.shouldPreferOpenAiPrimary, true);
+  assert.equal(
+    shouldAttemptVisualBackupBeforeFailure({
+      routeDecision: weakKnownBankScreenshotRoute,
+      imageImport: true,
+      trainedReceiptDetails: false,
+      canReuseCachedStatementParse: false,
+    }),
+    true,
+    "Expected weak known-bank screenshots to attempt visual backup before surfacing an import error."
+  );
+
   const unionBankWithWiseLikeTransferText = [
     "Union Bank of the Philippines",
     "Statement of Account",

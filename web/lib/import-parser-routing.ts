@@ -221,6 +221,12 @@ export const fingerprintImportSurface = (params: {
     /\b(?:includes hidden|all currencies|direction|transaction history|wallet|added|refunded|received|sent|cash in)\b/.test(
       sample
     );
+  const knownInstitution = Boolean(institution && institution !== "unknown");
+  const bankNameInFile =
+    /\b(?:aub|bdo|bpi|cimb|chinabank|china\s+bank|gcash|landbank|land\s+bank|maya|metrobank|pnb|rcbc|security\s+bank|unionbank|union\s+bank|wise)\b/i.test(
+      fileName
+    );
+  const imageStatementWithBankSignal = imageImport && importMode === "statement" && (knownInstitution || bankNameInFile);
   const receiptLexicon =
     /\b(?:official receipt|sales invoice|tax invoice|receipt no|subtotal|vat|amount due|change due|cashier)\b/.test(sample);
   const statementLexicon =
@@ -235,6 +241,16 @@ export const fingerprintImportSurface = (params: {
         : walletTransferLexicon
           ? "Text matched wallet transfer screenshot markers"
           : "Mobile screenshot looks like a wallet history",
+    };
+  }
+
+  if (imageStatementWithBankSignal && !walletInstitution) {
+    return {
+      kind: "statement_screenshot",
+      confidence: knownInstitution ? 86 : 78,
+      reason: knownInstitution
+        ? "Known institution matched an image statement upload"
+        : "Filename matched a known bank image statement upload",
     };
   }
 
