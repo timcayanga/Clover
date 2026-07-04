@@ -323,6 +323,11 @@ const getImportErrorCode = (error: unknown) => {
 const formatImportFailureMessage = (file: File | string, errorMessage: string) =>
   getImportErrorSpec("process", typeof file === "string" ? file : file.name, errorMessage).message;
 
+const VISUAL_IMPORT_REPAIR_GRACE_MS = 30_000;
+
+const isRecoverableVisualUploadFileName = (fileName: string) =>
+  /\.(?:pdf|jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(fileName.trim().toLowerCase());
+
 const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null, reason?: string | null): ImportErrorSpec => {
   const spec = getImportErrorSpec(stage, fileName, reason);
 
@@ -2129,6 +2134,11 @@ export function ImportFilesModal({
         );
         const hasRowBackedVisibility = parsedRowsCount > 0 || confirmedTransactionsCount > 0 || visibleImportComplete;
         const visibleProgressSignal = requiresVisibleRows ? hasRowBackedVisibility : hasVisibleImportDataSignal;
+        const visualRepairGraceActive =
+          isRecoverableVisualUploadFileName(summaryContext.fileName) &&
+          parsedRowsCount === 0 &&
+          confirmedTransactionsCount === 0 &&
+          Date.now() - startedAt < VISUAL_IMPORT_REPAIR_GRACE_MS;
 
         if (processingPhase === "account_match_needs_confirmation") {
           closeImportAfterError(
@@ -2167,6 +2177,35 @@ export function ImportFilesModal({
         }
 
         if (importFile?.status === "failed" && parsedRowsCount === 0 && confirmedTransactionsCount === 0) {
+          if (visualRepairGraceActive) {
+            emitItemUpdate({
+              status: "importing",
+              confirmationState: "pending",
+              error: null,
+              errorCode: null,
+              errorTitle: null,
+              errorNextSteps: null,
+              progress: IMPORT_PROGRESS.uploading,
+              progressLabel: "Running backup reader",
+              targetAccountId: latestResolvedAccountId ?? accountId,
+            });
+            emitImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "active",
+              fileName: summaryContext.fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount,
+              progress: IMPORT_PROGRESS.uploading,
+              detail: "Clover is retrying this visual statement with the backup reader.",
+              summary: null,
+              errorMessage: null,
+            });
+            await sleep(500);
+            continue;
+          }
+
           if (visibleProgressSignal) {
             emitImportRecoverable(
               summaryContext.fileName,
@@ -2177,7 +2216,7 @@ export function ImportFilesModal({
           }
 
           if (hasRecoverableImportSignal && attempt < 6) {
-      await sleep(300);
+            await sleep(300);
             continue;
           }
           const limitPayload = parsePlanLimitMessage(processingMessage, planTier);
@@ -4151,6 +4190,11 @@ export function ImportFilesModal({
       const telemetryLabel = typeof payload.telemetryLabel === "string" ? payload.telemetryLabel : null;
       const telemetryMessage = typeof payload.telemetryMessage === "string" ? payload.telemetryMessage : null;
       const resumeReason = typeof payload.resumeReason === "string" ? payload.resumeReason : null;
+      const visualRepairGraceActive =
+        isRecoverableVisualUploadFileName(fileName) &&
+        parsedRowsCount === 0 &&
+        confirmedTransactionsCount === 0 &&
+        Date.now() - startedAt < VISUAL_IMPORT_REPAIR_GRACE_MS;
       const statusDecision = resolveImportModalStatusDecision({
         importMode,
         status: importStatus,
@@ -4168,6 +4212,33 @@ export function ImportFilesModal({
       });
 
       if (statusDecision.kind === "repair_needed") {
+        if (visualRepairGraceActive) {
+          updateItem(itemId, {
+            status: "importing",
+            confirmationState: "pending",
+            error: null,
+            errorCode: null,
+            errorTitle: null,
+            errorNextSteps: null,
+            progress: Math.max(IMPORT_PROGRESS.uploading, statusDecision.progress),
+            progressLabel: "Running backup reader",
+          });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: Math.max(IMPORT_PROGRESS.uploading, statusDecision.progress),
+            detail: "Clover is switching this file to the backup reader.",
+            summary: null,
+            errorMessage: null,
+          });
+          await sleep(500);
+          continue;
+        }
         closeImportAfterError(itemId, "background", fileName, statusDecision.message);
         return { completed: false, summary: null };
       }
@@ -4181,6 +4252,33 @@ export function ImportFilesModal({
             statusDecision.progressLabel
           );
           return { completed: true, summary: null };
+        }
+        if (visualRepairGraceActive) {
+          updateItem(itemId, {
+            status: "importing",
+            confirmationState: "pending",
+            error: null,
+            errorCode: null,
+            errorTitle: null,
+            errorNextSteps: null,
+            progress: IMPORT_PROGRESS.uploading,
+            progressLabel: "Running backup reader",
+          });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: IMPORT_PROGRESS.uploading,
+            detail: "Clover is retrying this visual file with the backup reader.",
+            summary: null,
+            errorMessage: null,
+          });
+          await sleep(500);
+          continue;
         }
         closeImportAfterError(
           itemId,
@@ -4306,6 +4404,33 @@ export function ImportFilesModal({
               statusDecision.progressLabel
             );
             return { completed: true, summary: null };
+          }
+          if (visualRepairGraceActive) {
+            updateItem(itemId, {
+              status: "importing",
+              confirmationState: "pending",
+              error: null,
+              errorCode: null,
+              errorTitle: null,
+              errorNextSteps: null,
+              progress: IMPORT_PROGRESS.uploading,
+              progressLabel: "Running backup reader",
+            });
+            publishImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "active",
+              fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount,
+              progress: IMPORT_PROGRESS.uploading,
+              detail: "Clover is retrying this visual file with the backup reader.",
+              summary: null,
+              errorMessage: null,
+            });
+            await sleep(500);
+            continue;
           }
           closeImportAfterError(
             itemId,
@@ -5901,7 +6026,13 @@ export function ImportFilesModal({
           recoverableProcessingPhase === "reading_receipt_vision" ||
           recoverableProcessingPhase === "identifying_transactions" ||
           recoverableProcessingPhase === "reconciling");
-      if (recoverableImportFileId && recoverableStillProcessing) {
+      const recoverableVisualRepairPending =
+        recoverableImportFileId !== null &&
+        isRecoverableVisualUploadFileName(item.file.name) &&
+        recoverableParsedRowsCount === 0 &&
+        recoverableConfirmedRowsCount === 0 &&
+        (recoverableImportStatus === "failed" || recoverableProcessingPhase === "repair_needed");
+      if (recoverableImportFileId && (recoverableStillProcessing || recoverableVisualRepairPending)) {
         updateItem(itemId, {
           status: "importing",
           confirmationState: "pending",
@@ -5913,7 +6044,11 @@ export function ImportFilesModal({
           targetAccountId: recoverableAccountId,
           importedRows: Math.max(recoverableParsedRowsCount, recoverableConfirmedRowsCount),
           progress: IMPORT_PROGRESS.loadingAccount,
-          progressLabel: isDocumentImport ? "Reading document in background" : "Reading statement in background",
+          progressLabel: recoverableVisualRepairPending
+            ? "Running backup reader"
+            : isDocumentImport
+              ? "Reading document in background"
+              : "Reading statement in background",
         });
         publishImportActivity({
           workspaceId,
@@ -5925,9 +6060,11 @@ export function ImportFilesModal({
           fileTotal: items.length,
           completedFiles: completedFileCount,
           progress: IMPORT_PROGRESS.loadingAccount,
-          detail: isDocumentImport
-            ? "Clover is running the backup document reader."
-            : "Clover is running the backup statement reader.",
+          detail: recoverableVisualRepairPending
+            ? "Clover is reopening this visual file for backup reading."
+            : isDocumentImport
+              ? "Clover is running the backup document reader."
+              : "Clover is running the backup statement reader.",
           summary: null,
           errorMessage: null,
         });
