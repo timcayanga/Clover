@@ -4027,31 +4027,65 @@ body.transactions-manual-open .shell-quick-add-button {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  gap: 10px;
   min-width: 0;
 }
 
-.dashboard-top-actions__toggle {
+.dashboard-top-actions__button {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   white-space: nowrap;
 }
 
-.dashboard-top-actions__toggle-icon {
+.dashboard-top-actions .transactions-toolbar-add {
+  background: rgba(242, 245, 247, 0.98);
+  border-color: rgba(182, 191, 197, 1);
+  color: #111111;
+  box-shadow: none;
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.dashboard-top-actions .transactions-toolbar-add:hover,
+.dashboard-top-actions .transactions-toolbar-add:focus-visible {
+  background: rgba(235, 239, 241, 0.98);
+  border-color: rgba(160, 170, 176, 1);
+  color: #111111;
+  box-shadow: none;
+}
+
+.dashboard-top-actions .transactions-toolbar-upload {
+  background: var(--brand-gradient);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(3, 168, 192, 0.16);
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.dashboard-top-actions .transactions-toolbar-upload:hover,
+.dashboard-top-actions .transactions-toolbar-upload:focus-visible {
+  background: var(--brand-gradient-alt);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 14px 28px rgba(3, 168, 192, 0.2);
+}
+
+.dashboard-top-actions__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
+  width: 14px;
+  height: 14px;
   font-size: 15px;
   line-height: 1;
 }
 
-.dashboard-top-actions__toggle-chevron {
-  font-size: 11px;
-  line-height: 1;
-  opacity: 0.82;
+.dashboard-top-actions__icon svg {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .dashboard-top-actions__menu {

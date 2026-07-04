@@ -805,8 +805,6 @@ export function DashboardManualTransactionModal({
 
 export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActionsProps) {
   const router = useRouter();
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -815,32 +813,6 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
     accounts.find((account) => normalizeName(account.type) !== "cash" && normalizeName(account.type) !== "other" && normalizeName(account.type) !== "investment")?.id ??
     accounts[0]?.id ??
     null;
-
-  useEffect(() => {
-    if (!menuOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!menuRef.current || menuRef.current.contains(event.target as Node)) {
-        return;
-      }
-      setMenuOpen(false);
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [menuOpen]);
 
   useLayoutEffect(() => {
     const active = manualOpen;
@@ -858,14 +830,12 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
     const importParam = new URLSearchParams(window.location.search).get("import");
 
     if (manualParam === "1") {
-      setMenuOpen(false);
       setImportOpen(false);
       setManualOpen(true);
       return;
     }
 
     if (importParam === "1") {
-      setMenuOpen(false);
       setManualOpen(false);
       setImportOpen(true);
     }
@@ -873,12 +843,10 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
 
   useEffect(() => {
     const handleOpenManual = () => {
-      setMenuOpen(false);
       setImportOpen(false);
       setManualOpen(true);
     };
     const handleOpenImport = () => {
-      setMenuOpen(false);
       setManualOpen(false);
       setImportOpen(true);
     };
@@ -905,24 +873,20 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
 
   const closeManual = () => {
     setManualOpen(false);
-    setMenuOpen(false);
-    window.history.replaceState({}, "", "/dashboard");
+    window.history.replaceState({}, "", "/home");
   };
 
   const closeImport = () => {
     setImportOpen(false);
-    setMenuOpen(false);
-    window.history.replaceState({}, "", "/dashboard");
+    window.history.replaceState({}, "", "/home");
   };
 
   const openManualAdd = () => {
-    setMenuOpen(false);
     setImportOpen(false);
     setManualOpen(true);
   };
 
   const openImportFiles = () => {
-    setMenuOpen(false);
     setManualOpen(false);
     setImportOpen(true);
   };
@@ -933,32 +897,34 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
 
   return (
     <>
-      <div className="dashboard-top-actions" ref={menuRef}>
+      <div className="dashboard-top-actions">
         <button
-          className="button button-secondary button-small dashboard-top-actions__toggle"
+          className="button button-secondary button-small transactions-action-button transactions-toolbar-add dashboard-top-actions__button"
           type="button"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((current) => !current)}
+          onClick={openManualAdd}
+          aria-label="Add transaction"
+          title="Add transaction"
         >
-          <span className="dashboard-top-actions__toggle-icon" aria-hidden="true">
+          <span className="button-icon dashboard-top-actions__icon" aria-hidden="true">
             +
           </span>
           <span>Add transaction</span>
-          <span className="dashboard-top-actions__toggle-chevron" aria-hidden="true">
-            ▾
-          </span>
         </button>
-        {menuOpen ? (
-          <div className="dashboard-top-actions__menu">
-            <button className="dashboard-top-actions__menu-item" type="button" onClick={openManualAdd}>
-              Add manually
-            </button>
-            <button className="dashboard-top-actions__menu-item dashboard-top-actions__menu-item--upload" type="button" onClick={openImportFiles}>
-              Upload files
-            </button>
-          </div>
-        ) : null}
+        <button
+          className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload transactions-action-button transactions-toolbar-upload dashboard-top-actions__button"
+          type="button"
+          onClick={openImportFiles}
+          aria-label="Upload files"
+          title="Upload files"
+        >
+          <span className="button-icon dashboard-top-actions__icon" aria-hidden="true">
+            <svg viewBox="0 0 20 20" role="img" focusable="false">
+              <path d="M10 3.25 5.8 7.45l1.1 1.1 2.3-2.3V13h1.6V6.25l2.3 2.3 1.1-1.1L10 3.25Z" fill="currentColor" />
+              <path d="M4.5 13.5h1.6v1.4h7.8v-1.4h1.6v3H4.5v-3Z" fill="currentColor" />
+            </svg>
+          </span>
+          <span>Upload files</span>
+        </button>
       </div>
 
       {manualOpen ? (
