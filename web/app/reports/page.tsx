@@ -23,6 +23,7 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { getCategoryIconTone } from "@/lib/category-icons";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
   loading: () => (
@@ -473,6 +474,13 @@ async function ReportsStream({
     }
     selectedWorkspaceId = starterWorkspaceData.id;
   }
+
+  await repairWorkspaceDataVisibility(selectedWorkspaceId).catch((error) => {
+    console.warn("[reports] unable to repair workspace data visibility", {
+      workspaceId: selectedWorkspaceId,
+      error,
+    });
+  });
 
   try {
     const now = new Date();

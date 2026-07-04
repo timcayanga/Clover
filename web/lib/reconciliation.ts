@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 export type WorkspaceReconciliationIssue = {
   type:
     | "account_without_transactions_nonzero_balance"
+    | "transaction_workspace_mismatch"
     | "transaction_linked_to_deleted_account"
     | "duplicate_account_identity"
     | "category_type_mismatch"
@@ -30,8 +31,41 @@ const accountIdentityKey = (account: {
   ].join("|");
 };
 
+export const repairWorkspaceDataVisibility = async (workspaceId: string) => {
+  const repairedTransactionWorkspaceRows = await prisma.$executeRaw`
+    UPDATE "Transaction" t
+    SET "workspaceId" = a."workspaceId",
+        "updatedAt" = NOW()
+    FROM "Account" a
+    WHERE t."accountId" = a."id"
+      AND a."workspaceId" = ${workspaceId}
+      AND t."workspaceId" <> a."workspaceId"
+  `;
+
+  await prisma.$executeRaw`
+    UPDATE "Transaction"
+    SET "isExcluded" = false
+    WHERE "workspaceId" = ${workspaceId}
+      AND "isExcluded" IS NULL
+  `;
+
+  return {
+    repairedTransactionWorkspaceRows: Number(repairedTransactionWorkspaceRows ?? 0),
+  };
+};
+
 export const reconcileWorkspaceData = async (workspaceId: string): Promise<WorkspaceReconciliationIssue[]> => {
   const issues: WorkspaceReconciliationIssue[] = [];
+
+  const repairs = await repairWorkspaceDataVisibility(workspaceId);
+  if (repairs.repairedTransactionWorkspaceRows > 0) {
+    issues.push({
+      type: "transaction_workspace_mismatch",
+      severity: "warning",
+      message: `${repairs.repairedTransactionWorkspaceRows} transaction${repairs.repairedTransactionWorkspaceRows === 1 ? "" : "s"} were reconnected to this profile from their linked accounts.`,
+      entityIds: [],
+    });
+  }
 
   const [accounts, orphanedTransactions, stuckImports] = await Promise.all([
     prisma.account.findMany({

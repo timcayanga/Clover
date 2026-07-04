@@ -22,6 +22,7 @@ import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions"
 import { isTransientDataError } from "@/lib/transient-data";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -402,6 +403,21 @@ async function resolveDashboardWorkspaceSummary(user: Awaited<ReturnType<typeof 
       },
     });
   }
+
+  if (!workspaceSummary) {
+    redirect("/home");
+  }
+
+  await repairWorkspaceDataVisibility(workspaceSummary.id).catch((error) => {
+    console.warn("[home] unable to repair workspace data visibility", {
+      workspaceId: workspaceSummary.id,
+      error,
+    });
+  });
+  workspaceSummary = await prisma.workspace.findUnique({
+    where: { id: workspaceSummary.id },
+    select: workspaceSelect,
+  });
 
   if (!workspaceSummary) {
     redirect("/home");

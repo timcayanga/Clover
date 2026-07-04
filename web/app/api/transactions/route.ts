@@ -22,6 +22,7 @@ import {
   parseTransactionQueryFilters,
   type TransactionQueryFilters,
 } from "@/lib/transaction-query";
+import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
 
 export const dynamic = "force-dynamic";
 
@@ -864,6 +865,12 @@ export async function GET(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, workspaceId);
+    await repairWorkspaceDataVisibility(workspaceId).catch((error) => {
+      console.warn("[transactions] unable to repair workspace data visibility", {
+        workspaceId,
+        error,
+      });
+    });
     await normalizeLegacyTransactionVisibility(workspaceId);
     const workspaceAccountRows = await prisma.account.findMany({
       where: { workspaceId },

@@ -16,6 +16,7 @@ import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { BANK_PRIORITY, normalizeBankName } from "@/lib/data-qa-banks";
 import { isWiseWalletWithoutVisibleAccountNumber, normalizeImportedCurrencyCode } from "@/lib/imported-account-identity";
+import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
 
 export const dynamic = "force-dynamic";
 
@@ -760,6 +761,12 @@ export async function GET(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, workspaceId);
+    await repairWorkspaceDataVisibility(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to repair workspace data visibility", {
+        workspaceId,
+        error,
+      });
+    });
     const compatibleColumns = await getCompatibleAccountColumns();
     const shouldRepairImportedAccounts = ["1", "true"].includes(
       (searchParams.get("repairImportedAccounts") ?? "").trim().toLowerCase()
