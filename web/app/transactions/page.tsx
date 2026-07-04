@@ -6193,9 +6193,14 @@ function TransactionsPageContent() {
           : headerMenuOpen === "amount"
             ? "Sort by amount"
             : "";
+  const amountTypeOptions: Array<{ value: TransactionTypeFilter; label: string; amount: number }> = [
+    { value: "debit", label: "Expenses", amount: displayedTransactionsSummary.spending },
+    { value: "credit", label: "Income", amount: displayedTransactionsSummary.income },
+    { value: "transfer", label: "Transfers", amount: displayedTransactionsSummary.transfers },
+  ];
   const headerMenuPanel = headerMenuOpen && headerMenuPosition ? (
     <div
-      className="transactions-column-menu glass"
+      className={`transactions-column-menu glass ${headerMenuOpen === "amount" ? "transactions-column-menu--amount" : ""}`}
       ref={headerMenuRef}
       style={{
         top: `${headerMenuPosition.top}px`,
@@ -6368,7 +6373,7 @@ function TransactionsPageContent() {
 
       {headerMenuOpen === "amount" ? (
         <div className="transactions-column-menu__section">
-          <div className="transactions-column-menu__sort">
+          <div className="transactions-column-menu__sort transactions-column-menu__sort--amount">
             {[
               ["asc", "Ascending"],
               ["desc", "Descending"],
@@ -6388,18 +6393,34 @@ function TransactionsPageContent() {
               </button>
             ))}
           </div>
-          <MultiSelectFilterGroup
-            label="Show amounts for"
-            options={[
-              { value: "debit", label: "Debits" },
-              { value: "credit", label: "Credits" },
-              { value: "transfer", label: "Transfers" },
-            ]}
-            selected={typeFilters}
-            onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as TransactionTypeFilter))}
-            onClear={() => setTypeFilters([])}
-          />
-          <div className="transactions-column-menu__fields">
+          <div className="transactions-filter-group transactions-filter-group--amount" role="group" aria-label="Show amounts for">
+            <div className="transactions-filter-group__head">
+              <span className="transactions-filter-group__label">Show amounts for</span>
+              {typeFilters.length ? (
+                <button className="transactions-filter-group__clear" type="button" onClick={() => setTypeFilters([])}>
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            <div className="transactions-amount-type-grid">
+              {amountTypeOptions.map((option) => {
+                const isSelected = typeFilters.includes(option.value);
+                return (
+                  <button
+                    key={option.value}
+                    className={`transactions-amount-type-chip ${isSelected ? "is-selected" : ""}`}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setTypeFilters((current) => toggleTypedFilterValue(current, option.value))}
+                  >
+                    <span>{option.label}</span>
+                    <strong>{formatTransactionAggregate(option.amount, visibleTransactions)}</strong>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="transactions-column-menu__fields transactions-column-menu__fields--amount-range">
             <label className="transactions-column-menu__field">
               <span>Min amount</span>
               <input
@@ -6420,8 +6441,10 @@ function TransactionsPageContent() {
                 placeholder="0.00"
               />
             </label>
+            <div className="transactions-column-menu__hint transactions-column-menu__hint--amount-range">
+              Filter amounts by a specific range.
+            </div>
           </div>
-          <div className="transactions-column-menu__hint">Filter amounts by a specific range.</div>
         </div>
       ) : null}
 
@@ -6442,6 +6465,7 @@ function TransactionsPageContent() {
             } else if (headerMenuOpen === "amount") {
               setAmountMin("");
               setAmountMax("");
+              setTypeFilters([]);
             } else if (headerMenuOpen === "name") {
               setSortField("date");
               setSortDirection("desc");

@@ -13342,6 +13342,10 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   overflow: auto;
 }
 
+.transactions-column-menu--amount {
+  width: min(620px, calc(100vw - 28px)) !important;
+}
+
 .transactions-column-menu__head {
   display: flex;
   justify-content: space-between;
@@ -13365,6 +13369,11 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   flex-wrap: wrap;
 }
 
+.transactions-column-menu__sort--amount {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .transactions-column-menu__options {
   display: flex;
   gap: 8px;
@@ -13373,6 +13382,11 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 
 .transactions-column-menu__button {
   flex: 0 0 auto;
+}
+
+.transactions-column-menu__sort--amount .transactions-column-menu__button {
+  width: 100%;
+  justify-content: center;
 }
 
 .transactions-column-menu__button.is-active {
@@ -13385,6 +13399,12 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.transactions-column-menu__fields--amount-range {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  align-items: end;
 }
 
 .transactions-column-menu__field {
@@ -13409,6 +13429,70 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   color: var(--muted);
   font-size: 0.75rem;
   line-height: 1.4;
+}
+
+.transactions-column-menu__hint--amount-range {
+  grid-column: 1 / -1;
+  margin-top: -2px;
+}
+
+.transactions-filter-group--amount {
+  grid-column: auto;
+}
+
+.transactions-amount-type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.transactions-amount-type-chip {
+  min-width: 0;
+  border: 1px solid rgba(199, 216, 224, 0.9);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  padding: 9px 11px;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+.transactions-amount-type-chip span {
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.transactions-amount-type-chip strong {
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.transactions-amount-type-chip:hover,
+.transactions-amount-type-chip:focus-visible,
+.transactions-amount-type-chip.is-selected {
+  border-color: rgba(24, 180, 206, 0.55);
+  background: rgba(24, 180, 206, 0.09);
+  box-shadow: 0 10px 24px rgba(24, 180, 206, 0.12);
+  color: var(--accent-strong);
+  outline: none;
+}
+
+.transactions-amount-type-chip.is-selected strong {
+  color: var(--accent-strong);
 }
 
 .form-actions--compact {
