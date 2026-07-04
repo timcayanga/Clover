@@ -21,6 +21,7 @@ import { buildRecurringTransactionSummaries } from "@/lib/recurring";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { isTransientDataError } from "@/lib/transient-data";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -117,6 +118,9 @@ const toDayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(),
 
 const normalizeNetWorthBalance = (type: string, value: number) => (isLiabilityAccountType(type as Parameters<typeof isLiabilityAccountType>[0]) ? -Math.abs(value) : Math.abs(value));
 
+const getDashboardTransactionType = (transaction: DashboardTransaction) =>
+  coerceTransactionTypeFromCategoryName(transaction.category?.name, transaction.type, transaction.amount);
+
 const summarizeWindow = (transactions: DashboardTransaction[], label: string): WindowSummary => {
   const totals = summarizeTransactions(transactions);
   return {
@@ -133,10 +137,11 @@ const summarizeTransactions = (transactions: DashboardTransaction[]): Aggregated
   return transactions.reduce<AggregatedTransactionTotals>(
     (accumulator, transaction) => {
       const amount = Math.abs(toAmount(transaction.amount));
+      const transactionType = getDashboardTransactionType(transaction);
 
-      if (transaction.type === "income") {
+      if (transactionType === "income") {
         accumulator.income += amount;
-      } else if (transaction.type === "expense") {
+      } else if (transactionType === "expense") {
         accumulator.expense += amount;
       } else {
         accumulator.transfer += amount;
@@ -150,7 +155,7 @@ const summarizeTransactions = (transactions: DashboardTransaction[]): Aggregated
         accumulator.reviewAttention += 1;
       }
 
-      if (transaction.type === "expense") {
+      if (transactionType === "expense") {
         const categoryName = transaction.category?.name ?? "Unassigned";
         accumulator.expenseCategories.set(categoryName, (accumulator.expenseCategories.get(categoryName) ?? 0) + amount);
 
@@ -428,15 +433,28 @@ async function DashboardStream({
     return currencies[0] ?? "PHP";
   })();
 
+  const shouldLoadTransactions = workspaceSummary._count.transactions > 0;
   const now = new Date();
-  const todayStart = toDayStart(now);
+  const latestTransactionDatePromise = shouldLoadTransactions
+    ? prisma.transaction.findFirst({
+        where: {
+          workspaceId: workspaceSummary.id,
+          isExcluded: false,
+        },
+        orderBy: { date: "desc" },
+        select: { date: true },
+      })
+    : Promise.resolve(null);
+  const latestTransactionDate = await latestTransactionDatePromise;
+  const activityAnchorDate = latestTransactionDate?.date ?? now;
+  const todayStart = toDayStart(activityAnchorDate);
   const sevenDaysAgo = new Date(todayStart);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
   const thirtyDaysAgo = new Date(todayStart);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
-  const sixtyDaysAgo = new Date(now);
+  const sixtyDaysAgo = new Date(activityAnchorDate);
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-  const ninetyDaysAgo = new Date(now);
+  const ninetyDaysAgo = new Date(activityAnchorDate);
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
   const latestImportPromise = prisma.importFile.findFirst({
@@ -497,7 +515,6 @@ async function DashboardStream({
         })
       : Promise.resolve([]);
 
-  const shouldLoadTransactions = workspaceSummary._count.transactions > 0;
   const transactionsPromise = shouldLoadTransactions
     ? prisma.transaction.findMany({
         where: {
@@ -622,7 +639,7 @@ async function DashboardStream({
         currentTransactions.map((transaction) => ({
           amount: transaction.amount,
           date: transaction.date,
-          type: transaction.type,
+          type: getDashboardTransactionType(transaction),
           merchantRaw: transaction.merchantRaw,
           merchantClean: transaction.merchantClean,
           currency: transaction.account?.currency ?? displayCurrency,
