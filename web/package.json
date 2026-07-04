@@ -32,6 +32,8 @@
     "qa:training-signals": "tsx scripts/training-signal-dedupe.ts",
     "qa:training-signals-db": "tsx scripts/record-training-signal-regression.ts",
     "qa:data-loop": "tsx scripts/data-qa-regression.ts",
+    "qa:data-visibility": "tsx scripts/data-visibility-regression.ts",
+    "data:reconcile": "tsx scripts/reconcile-workspace-data.ts",
     "train:image-labels": "tsx --tsconfig tsconfig.json scripts/train-image-label-corpus.ts"
   },
   "dependencies": {

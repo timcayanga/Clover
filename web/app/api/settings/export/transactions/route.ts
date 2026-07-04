@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     await assertWorkspaceAccess(userId, workspaceId);
 
     const transactions = await prisma.transaction.findMany({
-      where: { workspaceId },
+      where: buildVisibleWorkspaceTransactionWhere(workspaceId),
       include: {
         account: {
           select: { name: true, institution: true },

@@ -5,6 +5,7 @@ import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +107,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ w
         },
       }),
       prisma.transaction.count({
-        where: { workspaceId },
+        where: buildVisibleWorkspaceTransactionWhere(workspaceId),
       }),
       prisma.importFile.count({
         where: { workspaceId },

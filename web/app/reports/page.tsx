@@ -24,6 +24,7 @@ import { getCategoryIconTone } from "@/lib/category-icons";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
+import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
   loading: () => (
@@ -500,10 +501,9 @@ async function ReportsStream({
       deletedImportCount,
     ] = await Promise.all([
       prisma.transaction.findMany({
-        where: {
-          workspaceId: selectedWorkspaceId,
+        where: buildVisibleWorkspaceTransactionWhere(selectedWorkspaceId, {
           isExcluded: false,
-        },
+        }),
         select: {
           id: true,
           date: true,
@@ -530,22 +530,20 @@ async function ReportsStream({
       }),
       needsAdvancedData
         ? prisma.transaction.aggregate({
-            where: {
-              workspaceId: selectedWorkspaceId,
+            where: buildVisibleWorkspaceTransactionWhere(selectedWorkspaceId, {
               isExcluded: false,
               importFileId: { not: null },
-            },
+            }),
             _count: { id: true },
             _sum: { amount: true },
           })
         : Promise.resolve({ _count: { id: 0 }, _sum: { amount: 0 } }),
       needsAdvancedData
         ? prisma.transaction.aggregate({
-            where: {
-              workspaceId: selectedWorkspaceId,
+            where: buildVisibleWorkspaceTransactionWhere(selectedWorkspaceId, {
               isExcluded: false,
               importFileId: null,
-            },
+            }),
             _count: { id: true },
             _sum: { amount: true },
           })

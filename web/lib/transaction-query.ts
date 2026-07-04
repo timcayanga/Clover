@@ -93,6 +93,37 @@ const appendAndFilter = (where: Prisma.TransactionWhereInput, filter: Prisma.Tra
   where.AND = Array.isArray(existing) ? [...existing, filter] : existing ? [existing, filter] : [filter];
 };
 
+export const appendWorkspaceTransactionScope = (where: Prisma.TransactionWhereInput, workspaceId: string) => {
+  appendAndFilter(where, {
+    OR: [
+      { workspaceId },
+      { account: { workspaceId } },
+    ],
+  });
+
+  return where;
+};
+
+export const buildWorkspaceTransactionScopeWhere = (workspaceId: string): Prisma.TransactionWhereInput =>
+  appendWorkspaceTransactionScope(
+    {
+      deletedAt: null,
+    },
+    workspaceId
+  );
+
+export const buildVisibleWorkspaceTransactionWhere = (
+  workspaceId: string,
+  filters: Prisma.TransactionWhereInput = {}
+): Prisma.TransactionWhereInput => {
+  const where: Prisma.TransactionWhereInput = {
+    ...filters,
+    deletedAt: filters.deletedAt ?? null,
+  };
+
+  return appendWorkspaceTransactionScope(where, workspaceId);
+};
+
 const splitFilterValues = (value: string) =>
   value
     .split(/[,;\n]/)
@@ -239,16 +270,7 @@ const buildMerchantFilters = (merchantFilters: string[]) =>
     }));
 
 export const buildTransactionQueryWhere = (workspaceId: string, filters: TransactionQueryFilters): Prisma.TransactionWhereInput => {
-  const where: Prisma.TransactionWhereInput = {
-    deletedAt: null,
-  };
-
-  appendAndFilter(where, {
-    OR: [
-      { workspaceId },
-      { account: { workspaceId } },
-    ],
-  });
+  const where = buildWorkspaceTransactionScopeWhere(workspaceId);
 
   const query = filters.query?.trim();
   const categoryIds = (filters.categoryIds ?? []).filter(Boolean);

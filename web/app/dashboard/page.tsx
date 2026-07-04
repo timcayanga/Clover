@@ -23,6 +23,7 @@ import { isTransientDataError } from "@/lib/transient-data";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
+import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -453,10 +454,9 @@ async function DashboardStream({
   const now = new Date();
   const latestTransactionDatePromise = shouldLoadTransactions
     ? prisma.transaction.findFirst({
-        where: {
-          workspaceId: workspaceSummary.id,
+        where: buildVisibleWorkspaceTransactionWhere(workspaceSummary.id, {
           isExcluded: false,
-        },
+        }),
         orderBy: { date: "desc" },
         select: { date: true },
       })
@@ -533,11 +533,10 @@ async function DashboardStream({
 
   const transactionsPromise = shouldLoadTransactions
     ? prisma.transaction.findMany({
-        where: {
-          workspaceId: workspaceSummary.id,
+        where: buildVisibleWorkspaceTransactionWhere(workspaceSummary.id, {
           isExcluded: false,
           date: { gte: ninetyDaysAgo },
-        },
+        }),
         select: {
           id: true,
           date: true,
