@@ -240,9 +240,15 @@ const buildMerchantFilters = (merchantFilters: string[]) =>
 
 export const buildTransactionQueryWhere = (workspaceId: string, filters: TransactionQueryFilters): Prisma.TransactionWhereInput => {
   const where: Prisma.TransactionWhereInput = {
-    workspaceId,
     deletedAt: null,
   };
+
+  appendAndFilter(where, {
+    OR: [
+      { workspaceId },
+      { account: { workspaceId } },
+    ],
+  });
 
   const query = filters.query?.trim();
   const categoryIds = (filters.categoryIds ?? []).filter(Boolean);
@@ -253,11 +259,13 @@ export const buildTransactionQueryWhere = (workspaceId: string, filters: Transac
   const anchor = filters.dateFilterAnchor ?? new Date().toISOString().slice(0, 10);
 
   if (query) {
-    where.OR = [
-      { merchantRaw: { contains: query, mode: "insensitive" } },
-      { merchantClean: { contains: query, mode: "insensitive" } },
-      { description: { contains: query, mode: "insensitive" } },
-    ];
+    appendAndFilter(where, {
+      OR: [
+        { merchantRaw: { contains: query, mode: "insensitive" } },
+        { merchantClean: { contains: query, mode: "insensitive" } },
+        { description: { contains: query, mode: "insensitive" } },
+      ],
+    });
   }
 
   const currencyFilter = filters.currencyFilter?.trim().toUpperCase();

@@ -6489,6 +6489,7 @@ function TransactionsPageContent() {
     Boolean(selectedWorkspaceId) &&
     (
       transactions.length > 0 ||
+      accounts.length > 0 ||
       imports.length > 0 ||
       hasCachedTransactionsWorkspaceEvidence(selectedWorkspaceId) ||
       hasRecentWorkspaceImportEvidence(importActivitySnapshot, selectedWorkspaceId)
