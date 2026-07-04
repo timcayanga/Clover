@@ -3442,8 +3442,16 @@ function AccountsPageContent() {
 
   const showAccountsSplash =
     !accountsLoadFailed &&
-    !selectedWorkspaceId &&
-    (!hasCompletedInitialAccountPaint && (workspacesLoading || !hasInitialWorkspaceDataLoaded || showColdLoadGuard));
+    accounts.length === 0 &&
+    (
+      showColdLoadGuard ||
+      (!hasCompletedInitialAccountPaint &&
+        (workspacesLoading ||
+          accountsLoading ||
+          !hasInitialWorkspaceDataLoaded ||
+          accountsHydrationPending ||
+          shouldShowSyncingInsteadOfEmpty))
+    );
 
   if (showAccountsSplash) {
     return <CloverLoadingScreen label="accounts" />;

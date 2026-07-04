@@ -6499,7 +6499,12 @@ function TransactionsPageContent() {
     !transactionsLoadFailed &&
     !isTableLoading &&
     hasTransactionDataEvidence;
-  const showTransactionsLoadingState = isTableLoading || shouldShowSyncingInsteadOfEmpty;
+  const hasKnownTransactionsAwaitingRows =
+    Boolean(selectedWorkspaceId) &&
+    !transactionsLoadFailed &&
+    transactions.length === 0 &&
+    totalTransactionCountForDisplay > 0;
+  const showTransactionsLoadingState = isTableLoading || shouldShowSyncingInsteadOfEmpty || hasKnownTransactionsAwaitingRows;
   const transactionsBlankState = (
     <div className="empty-state transactions-empty-state transactions-empty-state--table">
       <div className="transactions-empty-state__art" aria-hidden="true">
