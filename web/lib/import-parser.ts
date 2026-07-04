@@ -965,7 +965,7 @@ const detectExplicitInstitutionShell = (text: string) => {
   }
 
   if (
-    /\b(?:BANK OF THE PHILIPPINE ISLANDS|BPI FAMILY SAVINGS BANK|BDO UNIBANK|METROBANK|SECURITY BANK|RCBC|UNIONBANK|PHILIPPINE NATIONAL BANK|ASIA UNITED BANK|LANDBANK|PSBANK|CHINABANK|MARI\s?BANK|UCPB|CIMB|MAYA|GOTYME)\b/i.test(
+    /\b(?:BANK OF THE PHILIPPINE ISLANDS|BPI FAMILY SAVINGS BANK|BDO UNIBANK|METROBANK|SECURITY BANK|RCBC|UNIONBANK|UNION\s+BANK|PHILIPPINE NATIONAL BANK|ASIA UNITED BANK|LANDBANK|PSBANK|CHINABANK|MARI\s?BANK|UCPB|CIMB|MAYA|GOTYME)\b/i.test(
       restored
     )
   ) {
@@ -19088,6 +19088,14 @@ const looksLikeWiseMobileScreenshotText = (text: string) => {
 };
 
 const parseWiseMobileScreenshotMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
+  const contextInstitution = sanitizeBankNameLabel(context.institution);
+  if (contextInstitution && contextInstitution !== "Wise") {
+    return null;
+  }
+  if (detectExplicitNonWiseStatementInstitution(text)) {
+    return null;
+  }
+
   if (!looksLikeWiseMobileScreenshotText(text) && !/\bWise\b/i.test(`${context.institution ?? ""} ${context.accountName ?? ""} ${text}`)) {
     return null;
   }
@@ -19110,6 +19118,14 @@ const parseWiseMobileScreenshotMetadata = (text: string, context: ImportParseCon
     confidence: 82,
   };
 };
+
+function detectExplicitNonWiseStatementInstitution(text: string, fileName = "") {
+  const headerText = splitStatementLines(text).slice(0, 24).join("\n");
+  const explicitInstitution =
+    detectExplicitInstitutionShell([fileName, headerText].filter(Boolean).join("\n")) ?? detectInstitutionFromText(fileName);
+
+  return explicitInstitution && explicitInstitution !== "Wise" ? explicitInstitution : null;
+}
 
 const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseContext = {}) => {
   const metadata = parseWiseMobileScreenshotMetadata(text, context);
@@ -19439,9 +19455,11 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     return withDetectedCurrency(unionBankMobileMetadata, text);
   }
 
-  const wiseMobileMetadata = parseWiseMobileScreenshotMetadata(text);
-  if (wiseMobileMetadata) {
-    return withDetectedCurrency(wiseMobileMetadata, text);
+  if (!detectExplicitNonWiseStatementInstitution(text, fileName)) {
+    const wiseMobileMetadata = parseWiseMobileScreenshotMetadata(text);
+    if (wiseMobileMetadata) {
+      return withDetectedCurrency(wiseMobileMetadata, text);
+    }
   }
 
   const bpiMobileMetadata = bpiMobileScreenshotMetadata(text, fileName);
@@ -19983,9 +20001,11 @@ export const parseImportText = (
     return gotymeParsed.rows;
   }
 
-  const wiseMobileParsed = parseWiseMobileScreenshotImportText(text, context);
-  if (wiseMobileParsed && wiseMobileParsed.rows.length > 0) {
-    return wiseMobileParsed.rows;
+  if (!detectExplicitNonWiseStatementInstitution(text, fileName)) {
+    const wiseMobileParsed = parseWiseMobileScreenshotImportText(text, context);
+    if (wiseMobileParsed && wiseMobileParsed.rows.length > 0) {
+      return wiseMobileParsed.rows;
+    }
   }
 
   const bdoParsed = parseBdoSavingsImportText(text);

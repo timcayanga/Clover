@@ -181,7 +181,7 @@ const KNOWN_INSTITUTIONS: Array<{ name: string; match: RegExp }> = [
   { name: "EastWest", match: /\b(EASTWEST|EAST WEST)\b/i },
   { name: "CIMB", match: /\b(CIMB|GSAVE)\b/i },
   { name: "RCBC", match: /\bRCBC\b/i },
-  { name: "UnionBank", match: /\bUNIONBANK\b/i },
+  { name: "UnionBank", match: /\b(UNIONBANK|UNION\s+BANK|UNIONBANK\s+OF\s+THE\s+PHILIPPINES|UNION\s+BANK\s+OF\s+THE\s+PHILIPPINES)\b/i },
   { name: "Landbank", match: /\bLANDBANK\b/i },
   { name: "Chinabank", match: /\b(CHINABANK|CHINA\s*BANK)\b/i },
   { name: "MariBank", match: /\b(MARIBANK|SEABANK)\b/i },

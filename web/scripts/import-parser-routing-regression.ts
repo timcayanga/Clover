@@ -6,7 +6,8 @@ import {
   shouldAttemptVisualBackupBeforeFailure,
   shouldPreferBackupParserForTemplateFamily,
 } from "@/lib/import-parser-routing";
-import { parseImportText } from "@/lib/import-parser";
+import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
+import { detectStatementMetadataFromText } from "@/lib/data-engine";
 
 const main = () => {
   assert.equal(
@@ -57,6 +58,40 @@ const main = () => {
   });
   assert.equal(weakWalletRoute.route, "backup_openai");
   assert.ok(weakWalletRoute.targetDecisionWindowMs <= 3000);
+
+  const unionBankWithWiseLikeTransferText = [
+    "Union Bank of the Philippines",
+    "Statement of Account",
+    "Account Number 1093551235",
+    "Transaction History",
+    "Date Description Debit Credit Balance",
+    "Apr 13, 2026 Wise To PHP Added 100.00 PHP 0.00 PHP 1,000.00",
+    "Apr 14, 2026 Online Fund Transfer 50.00 PHP 0.00 PHP 950.00",
+  ].join("\n");
+  const unionBankMetadata = detectStatementMetadata(unionBankWithWiseLikeTransferText, "Union Bank Statement.pdf");
+  assert.equal(
+    unionBankMetadata?.institution,
+    "UnionBank of the Philippines",
+    "Expected explicit Union Bank statement text to beat Wise mobile-history heuristics."
+  );
+  const unionBankDataEngineMetadata = detectStatementMetadataFromText(
+    unionBankWithWiseLikeTransferText,
+    "Union Bank Statement.pdf"
+  );
+  assert.equal(
+    unionBankDataEngineMetadata.institution,
+    "UnionBank of the Philippines",
+    "Expected Data Engine institution detection to recognize spaced Union Bank names."
+  );
+  const unionBankRows = parseImportText(
+    unionBankWithWiseLikeTransferText,
+    "Union Bank Statement.pdf",
+    "application/pdf"
+  );
+  assert.ok(
+    unionBankRows.every((row) => row.institution !== "Wise" && row.accountName !== "Wise"),
+    "Expected UnionBank-labeled statement rows to never be claimed by Wise fallback parsing."
+  );
 
   const strongStructuredRoute = decideImportParserRoute({
     importMode: "statement",
