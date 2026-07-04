@@ -248,6 +248,59 @@ const toReportAmount = (value: unknown) => {
 
 const toReportMagnitude = (value: unknown) => Math.abs(toReportAmount(value));
 
+const getWorkspaceReportRowCount = (
+  workspace: { id: string; _count: { transactions: number } },
+  parsedRowsByWorkspaceId: Map<string, number>
+) => workspace._count.transactions + (parsedRowsByWorkspaceId.get(workspace.id) ?? 0);
+
+const mapParsedRowsToReportTransactions = (
+  rows: Array<{
+    id: string;
+    importFileId: string;
+    date: Date | null;
+    amount: unknown;
+    type: "income" | "expense" | "transfer" | null;
+    merchantRaw: string | null;
+    merchantClean: string | null;
+    categoryName: string | null;
+    rawPayload: unknown;
+    institution: string | null;
+    accountName: string | null;
+    importFile: {
+      account: {
+        name: string;
+        institution: string | null;
+      } | null;
+    } | null;
+  }>
+): ReportTransaction[] =>
+  rows.flatMap((row) => {
+    if (!isValidDate(row.date) || row.amount === null || row.amount === undefined) {
+      return [];
+    }
+
+    const merchantRaw = row.merchantRaw?.trim() || row.merchantClean?.trim() || "Imported transaction";
+    const type = row.type ?? (row.categoryName?.trim().toLowerCase() === "income" ? "income" : "expense");
+    return [
+      {
+        id: `parsed:${row.id}`,
+        date: row.date,
+        amount: row.amount,
+        type,
+        merchantRaw,
+        merchantClean: row.merchantClean,
+        description: null,
+        rawPayload: row.rawPayload,
+        account: {
+          name: row.importFile?.account?.name ?? row.accountName ?? "Imported account",
+          institution: row.importFile?.account?.institution ?? row.institution,
+        },
+        category: row.categoryName ? { name: row.categoryName } : null,
+        importFileId: row.importFileId,
+      },
+    ];
+  });
+
 const goalLabels: Record<string, string> = {
   save_more: "Save more",
   pay_down_debt: "Pay down debt",
@@ -340,12 +393,28 @@ async function ReportsStream({
     },
     orderBy: { createdAt: "asc" },
   });
+  const parsedRowCounts = await prisma.parsedTransaction
+    .groupBy({
+      by: ["workspaceId"],
+      where: {
+        workspaceId: { in: userWorkspaces.map((workspace) => workspace.id) },
+        date: { not: null },
+        amount: { not: null },
+      },
+      _count: { _all: true },
+    })
+    .catch(() => []);
+  const parsedRowsByWorkspaceId = new Map(
+    parsedRowCounts.map((row) => [row.workspaceId, Number(row._count._all ?? 0)])
+  );
   const cookieWorkspace = selectedWorkspaceCookieId
     ? userWorkspaces.find((workspace) => workspace.id === selectedWorkspaceCookieId) ?? null
     : null;
   const workspaceWithMostData =
     [...userWorkspaces].sort((left, right) => {
-      const transactionGap = right._count.transactions - left._count.transactions;
+      const transactionGap =
+        getWorkspaceReportRowCount(right, parsedRowsByWorkspaceId) -
+        getWorkspaceReportRowCount(left, parsedRowsByWorkspaceId);
       if (transactionGap !== 0) {
         return transactionGap;
       }
@@ -359,8 +428,8 @@ async function ReportsStream({
     })[0] ?? null;
   const activeWorkspace =
     cookieWorkspace &&
-    (cookieWorkspace._count.transactions > 0 ||
-      ((workspaceWithMostData?._count.transactions ?? 0) === 0 &&
+    (getWorkspaceReportRowCount(cookieWorkspace, parsedRowsByWorkspaceId) > 0 ||
+      ((workspaceWithMostData ? getWorkspaceReportRowCount(workspaceWithMostData, parsedRowsByWorkspaceId) : 0) === 0 &&
         (cookieWorkspace._count.importFiles > 0 || cookieWorkspace._count.accounts > 1)))
       ? cookieWorkspace
       : workspaceWithMostData ?? cookieWorkspace;
@@ -521,7 +590,51 @@ async function ReportsStream({
       failed: Number(failedImportCount ?? 0),
       deleted: Number(deletedImportCount ?? 0),
     };
-    const reportAllTransactions = Array.isArray(reportTransactions) ? reportTransactions.filter(isDefined) : [];
+    const normalizedReportTransactions = Array.isArray(reportTransactions) ? reportTransactions.filter(isDefined) : [];
+    const normalizedImportFileIds = new Set(
+      normalizedReportTransactions.flatMap((transaction) => (transaction.importFileId ? [transaction.importFileId] : []))
+    );
+    const parsedReportRows = await prisma.parsedTransaction
+      .findMany({
+        where: {
+          workspaceId: selectedWorkspaceId,
+          date: { not: null },
+          amount: { not: null },
+          importFileId: normalizedImportFileIds.size > 0 ? { notIn: Array.from(normalizedImportFileIds) } : undefined,
+          importFile: {
+            OR: [{ status: "done" }, { confirmedAt: { not: null } }, { parsedRowsCount: { gt: 0 } }],
+          },
+        },
+        select: {
+          id: true,
+          importFileId: true,
+          date: true,
+          amount: true,
+          type: true,
+          merchantRaw: true,
+          merchantClean: true,
+          categoryName: true,
+          rawPayload: true,
+          institution: true,
+          accountName: true,
+          importFile: {
+            select: {
+              account: {
+                select: {
+                  name: true,
+                  institution: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+      })
+      .catch(() => []);
+    const reportAllTransactions = [
+      ...normalizedReportTransactions,
+      ...mapParsedRowsToReportTransactions(parsedReportRows),
+    ].sort((left, right) => right.date.getTime() - left.date.getTime());
     const reportCurrentWindowTransactions = reportAllTransactions.filter((transaction) => transaction.date >= currentWindowStart);
     const reportPreviousWindowTransactions = reportAllTransactions.filter(
       (transaction) => transaction.date >= previousWindowStart && transaction.date < currentWindowStart
@@ -928,7 +1041,7 @@ async function ReportsStream({
           sourceY,
           targetY,
           height: linkHeight,
-          color: categoryLayout?.color ?? getCategoryIconTone(entry.label).borderColor,
+          color: categoryLayout?.color.borderColor ?? getCategoryIconTone(entry.label).borderColor,
         };
       });
     });
