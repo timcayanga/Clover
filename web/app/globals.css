@@ -26003,6 +26003,7 @@ button.accounts-detail__transaction-head-cell {
     grid-template-columns: auto minmax(0, 1fr) auto !important;
     align-items: center;
     gap: 10px;
+    grid-auto-flow: column;
   }
 
   .shell-compact-bar {
@@ -26011,6 +26012,7 @@ button.accounts-detail__transaction-head-cell {
     align-items: center;
     gap: 8px;
     width: 100%;
+    grid-auto-flow: column;
   }
 
   .shell-menu-button {
@@ -26686,7 +26688,7 @@ button.accounts-detail__transaction-head-cell {
 
   .topbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
   }
@@ -26710,10 +26712,11 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .topbar__title-wrap {
-    grid-column: 1;
-    justify-self: start;
-    justify-items: start;
-    text-align: left;
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: stretch;
+    justify-items: center;
+    text-align: center;
   }
 
   .topbar:has(.shell-back-button) .topbar__title-wrap {
@@ -26731,14 +26734,15 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .topbar:not(:has(.shell-back-button)) .topbar__title-wrap {
-    grid-column: 1;
-    justify-self: start;
-    justify-items: start;
-    text-align: left;
+    grid-column: 2;
+    justify-self: stretch;
+    justify-items: center;
+    text-align: center;
   }
 
   .topbar-actions {
     grid-column: 3;
+    grid-row: 1;
   }
 
   .topbar h1,
@@ -26748,10 +26752,29 @@ button.accounts-detail__transaction-head-cell {
   }
 
   @media (max-width: 720px) {
+    .topbar,
+    .shell-compact-bar {
+      grid-template-columns: auto minmax(0, 1fr) auto !important;
+      align-items: center;
+      grid-auto-flow: column;
+    }
+
+    .topbar .shell-back-button,
+    .shell-compact-bar .shell-back-button,
+    .topbar .shell-menu-button,
+    .shell-compact-bar .shell-menu-button {
+      grid-column: 1;
+      grid-row: 1;
+      align-self: center;
+      justify-self: start;
+    }
+
     .shell-compact-bar__copy,
     .topbar__title-wrap,
     .topbar:not(:has(.shell-back-button)) .topbar__title-wrap {
       grid-column: 2;
+      grid-row: 1;
+      align-self: center;
       justify-self: stretch;
       justify-items: center;
       text-align: center;
@@ -26759,6 +26782,14 @@ button.accounts-detail__transaction-head-cell {
 
     .topbar__title-row {
       justify-content: center;
+    }
+
+    .topbar-actions,
+    .shell-compact-bar__actions {
+      grid-column: 3;
+      grid-row: 1;
+      align-self: center;
+      justify-self: end;
     }
   }
 
