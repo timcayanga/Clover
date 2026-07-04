@@ -31920,7 +31920,7 @@ button.accounts-detail__transaction-head-cell {
   display: grid;
   grid-template-columns: minmax(160px, 200px) minmax(0, 1fr);
   gap: 18px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .settings-hub--menu-only {
@@ -31935,10 +31935,13 @@ button.accounts-detail__transaction-head-cell {
 .settings-hub__menu {
   position: sticky;
   top: 24px;
+  align-self: stretch;
   display: grid;
   gap: 0;
-  padding: 10px;
-  max-height: calc(100vh - 48px);
+  padding: 14px;
+  min-height: 100%;
+  border-radius: 28px;
+  max-height: none;
 }
 
 .settings-hub__brand {
@@ -31982,7 +31985,7 @@ button.accounts-detail__transaction-head-cell {
   display: grid;
   gap: 0;
   padding: 4px;
-  border-radius: 22px;
+  border-radius: 24px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(247, 249, 250, 0.72);
   overflow: hidden;
@@ -32035,6 +32038,8 @@ button.accounts-detail__transaction-head-cell {
   padding: 24px;
   width: 100%;
   min-width: 0;
+  min-height: 100%;
+  border-radius: 28px;
 }
 
 .settings-hub--panel-only .settings-hub__panel {
