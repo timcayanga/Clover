@@ -241,6 +241,13 @@ const buildTransactionsHref = (params: Record<string, string>) => `/transactions
 
 const isDefined = <T,>(value: T | null | undefined): value is T => value !== null && value !== undefined;
 
+const toReportAmount = (value: unknown) => {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : 0;
+};
+
+const toReportMagnitude = (value: unknown) => Math.abs(toReportAmount(value));
+
 const goalLabels: Record<string, string> = {
   save_more: "Save more",
   pay_down_debt: "Pay down debt",
@@ -315,29 +322,50 @@ async function ReportsStream({
     redirect("/onboarding");
   }
 
-  let selectedWorkspaceId: string =
-    (
-      (selectedWorkspaceCookieId
-        ? await prisma.workspace.findFirst({
-            where: {
-              id: selectedWorkspaceCookieId,
-              user: {
-                clerkUserId: user.clerkUserId,
-              },
-            },
-            select: { id: true },
-          })
-        : null) ??
-      (await prisma.workspace.findFirst({
-        where: {
-          user: {
-            clerkUserId: user.clerkUserId,
-          },
+  const userWorkspaces = await prisma.workspace.findMany({
+    where: {
+      user: {
+        clerkUserId: user.clerkUserId,
+      },
+    },
+    select: {
+      id: true,
+      _count: {
+        select: {
+          accounts: true,
+          importFiles: true,
+          transactions: true,
         },
-        select: { id: true },
-        orderBy: { createdAt: "asc" },
-      }))
-    )?.id ?? "";
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  const cookieWorkspace = selectedWorkspaceCookieId
+    ? userWorkspaces.find((workspace) => workspace.id === selectedWorkspaceCookieId) ?? null
+    : null;
+  const workspaceWithMostData =
+    [...userWorkspaces].sort((left, right) => {
+      const transactionGap = right._count.transactions - left._count.transactions;
+      if (transactionGap !== 0) {
+        return transactionGap;
+      }
+
+      const importGap = right._count.importFiles - left._count.importFiles;
+      if (importGap !== 0) {
+        return importGap;
+      }
+
+      return right._count.accounts - left._count.accounts;
+    })[0] ?? null;
+  const activeWorkspace =
+    cookieWorkspace &&
+    (cookieWorkspace._count.transactions > 0 ||
+      ((workspaceWithMostData?._count.transactions ?? 0) === 0 &&
+        (cookieWorkspace._count.importFiles > 0 || cookieWorkspace._count.accounts > 1)))
+      ? cookieWorkspace
+      : workspaceWithMostData ?? cookieWorkspace;
+
+  let selectedWorkspaceId = activeWorkspace?.id ?? "";
 
   if (!selectedWorkspaceId) {
     const starterWorkspace = await ensureStarterWorkspace(user);
@@ -422,7 +450,6 @@ async function ReportsStream({
           },
         },
         orderBy: { date: "desc" },
-        take: 1000,
       }),
       needsAdvancedData
         ? prisma.transaction.aggregate({
@@ -527,21 +554,21 @@ async function ReportsStream({
 
     const currentSummary: WindowSummary = reportDisplayTransactions.reduce(
       (accumulator, transaction) => {
-        const amount = Number(transaction.amount);
+        const magnitude = toReportMagnitude(transaction.amount);
         const transactionType = getReportTransactionType(transaction);
         if (transactionType === "income") {
-          accumulator.income += amount;
+          accumulator.income += magnitude;
         } else if (transactionType === "expense") {
-          accumulator.expense += amount;
+          accumulator.expense += magnitude;
         } else {
-          accumulator.transfer += amount;
+          accumulator.transfer += magnitude;
         }
 
         if (transactionType === "expense") {
           const categoryName = getReportTransactionCategoryName(transaction);
           accumulator.expenseCategories.set(
             categoryName,
-            (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
+            (accumulator.expenseCategories.get(categoryName) ?? 0) + magnitude
           );
         }
 
@@ -557,21 +584,21 @@ async function ReportsStream({
 
     const previousSummary: WindowSummary = reportPreviousWindowTransactions.reduce(
       (accumulator, row) => {
-        const amount = Number(row.amount ?? 0);
+        const magnitude = toReportMagnitude(row.amount);
         const transactionType = getReportTransactionType(row);
         if (transactionType === "income") {
-          accumulator.income += amount;
+          accumulator.income += magnitude;
         } else if (transactionType === "expense") {
-          accumulator.expense += amount;
+          accumulator.expense += magnitude;
         } else {
-          accumulator.transfer += amount;
+          accumulator.transfer += magnitude;
         }
 
         if (transactionType === "expense") {
           const categoryName = getReportTransactionCategoryName(row);
           accumulator.expenseCategories.set(
             categoryName,
-            (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
+            (accumulator.expenseCategories.get(categoryName) ?? 0) + magnitude
           );
         }
         return accumulator;
@@ -591,11 +618,12 @@ async function ReportsStream({
         return;
       }
 
-      const amount = Number(transaction.amount);
-      if (transaction.type === "income") {
+      const amount = toReportMagnitude(transaction.amount);
+      const transactionType = getReportTransactionType(transaction);
+      if (transactionType === "income") {
         bucket.income += amount;
-      } else if (transaction.type === "expense") {
-        bucket.expense += Math.abs(amount);
+      } else if (transactionType === "expense") {
+        bucket.expense += amount;
       }
       bucket.net = bucket.income - bucket.expense;
     });
