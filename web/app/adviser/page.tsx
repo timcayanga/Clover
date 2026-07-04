@@ -16,6 +16,7 @@ import { AdviserChat } from "@/components/adviser-chat";
 import { AdviserSectionCarousel, type AdviserSectionCard } from "@/components/adviser-section-carousel";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { isLiabilityAccountType, isSpendableAccountType, isTrackedAssetAccountType } from "@/lib/account-types";
+import { deriveReconciledBalance } from "@/lib/account-balance";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { isTransientDataError } from "@/lib/transient-data";
@@ -59,6 +60,38 @@ type WorkspaceAccount = {
   investmentMaturityDate: Date | null;
   investmentInterestRate: number | null;
   investmentMaturityValue: number | null;
+};
+
+type AdviserWorkspaceAccountSource = {
+  name: string;
+  type: string;
+  currency: string | null;
+  balance: unknown;
+  investmentSubtype: string | null;
+  investmentSymbol: string | null;
+  investmentCostBasis: unknown;
+  investmentPrincipal: unknown;
+  investmentStartDate: Date | null;
+  investmentMaturityDate: Date | null;
+  investmentInterestRate: unknown;
+  investmentMaturityValue: unknown;
+  transactions: Array<{
+    amount: unknown;
+    type: "income" | "expense" | "transfer";
+    isExcluded: boolean;
+    merchantRaw: string;
+    merchantClean: string | null;
+    description: string | null;
+    date: Date;
+    createdAt: Date;
+    rawPayload: unknown;
+  }>;
+  statementCheckpoints: Array<{
+    endingBalance: unknown;
+    status: string;
+    statementEndDate: Date | null;
+    createdAt: Date;
+  }>;
 };
 
 type AdviserCard = {
@@ -790,7 +823,9 @@ const buildCategoryForecastSignals = (params: {
   const recurringBase = params.recurringAmountPressure + params.commitmentAmountPressure;
   const recurringRisk = recurringBase > params.thresholdProfile.recurringPressure * 0.9 || (recurringBase > 0 && params.monthlyExpenseTrend.direction > 0);
   const splitRisk = params.splitBillSettlementPressure > params.thresholdProfile.splitPressure * 0.8;
-  const goalRisk = params.goalProgressBand !== "On track" || (params.currentSavingsRate !== null && params.currentSavingsRate < 0);
+  const goalRisk =
+    params.goalProgressBand !== "Set a Goal" &&
+    (params.goalProgressBand !== "On track" || (params.currentSavingsRate !== null && params.currentSavingsRate < 0));
   const investmentRisk =
     params.latestInvestmentSnapshot !== null &&
     (params.investmentDelta !== null ? Math.abs(params.investmentDelta) : 0) > 0 &&
@@ -958,11 +993,20 @@ const buildTransactionSummary = (transactions: AdviserTransaction[]) =>
       if (transactionType === "income") {
         accumulator.income += amount;
       } else if (transactionType === "expense") {
-        accumulator.expense += amount;
+        const expenseAmount = Math.abs(amount);
+        accumulator.expense += expenseAmount;
         accumulator.expenseCategories.set(
           categoryName,
-          (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
+          (accumulator.expenseCategories.get(categoryName) ?? 0) + expenseAmount
         );
+        const merchantName = transaction.merchantClean?.trim() || transaction.merchantRaw?.trim() || transaction.description?.trim() || "Unknown merchant";
+        const merchant = accumulator.expenseMerchants.get(merchantName) ?? { amount: 0, count: 0, lastSeen: transaction.date };
+        merchant.amount += expenseAmount;
+        merchant.count += 1;
+        if (transaction.date > merchant.lastSeen) {
+          merchant.lastSeen = transaction.date;
+        }
+        accumulator.expenseMerchants.set(merchantName, merchant);
       } else {
         accumulator.transfer += amount;
       }
@@ -974,6 +1018,7 @@ const buildTransactionSummary = (transactions: AdviserTransaction[]) =>
       expense: 0,
       transfer: 0,
       expenseCategories: new Map<string, number>(),
+      expenseMerchants: new Map<string, { amount: number; count: number; lastSeen: Date }>(),
     }
   );
 
@@ -1087,6 +1132,31 @@ async function AdviserPageContent() {
         investmentMaturityDate: true,
         investmentInterestRate: true,
         investmentMaturityValue: true,
+        transactions: {
+          where: { isExcluded: false },
+          select: {
+            amount: true,
+            type: true,
+            isExcluded: true,
+            merchantRaw: true,
+            merchantClean: true,
+            description: true,
+            date: true,
+            createdAt: true,
+            rawPayload: true,
+          },
+          orderBy: { date: "desc" },
+        },
+        statementCheckpoints: {
+          select: {
+            endingBalance: true,
+            status: true,
+            statementEndDate: true,
+            createdAt: true,
+          },
+          orderBy: [{ statementEndDate: "desc" }, { createdAt: "desc" }],
+          take: 1,
+        },
       },
     },
   } as const;
@@ -1230,11 +1300,27 @@ async function AdviserPageContent() {
   ]);
 
   const allTransactions = allTransactionsQuery as AdviserTransaction[];
-  const workspaceAccounts = resolvedWorkspace.accounts.map((account) => ({
+  const reconcileWorkspaceAccountBalance = (account: AdviserWorkspaceAccountSource) => {
+    const latestCheckpoint = account.statementCheckpoints[0] ?? null;
+    const checkpointBalance =
+      latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
+    const reconciledBalance =
+      checkpointBalance ??
+      deriveReconciledBalance({
+        balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
+        transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
+        checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
+      });
+
+    const parsed = Number(reconciledBalance ?? account.balance ?? 0);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const workspaceAccounts = (resolvedWorkspace.accounts as AdviserWorkspaceAccountSource[]).map((account) => ({
     name: account.name,
     type: account.type,
     currency: account.currency,
-    balance: account.balance === null ? null : Number(account.balance),
+    balance: reconcileWorkspaceAccountBalance(account),
     investmentSubtype: account.investmentSubtype,
     investmentSymbol: account.investmentSymbol,
     investmentCostBasis: account.investmentCostBasis === null ? null : Number(account.investmentCostBasis),
@@ -1390,7 +1476,13 @@ async function AdviserPageContent() {
   const currencyCandidates = new Set(
     workspaceAccounts.map((account) => formatCurrencyCode(account.currency)).filter((currency) => currency.length > 0)
   );
-  const displayCurrency = currencyCandidates.size === 1 ? Array.from(currencyCandidates)[0] : "MIXED";
+  const displayCurrency = (() => {
+    const currencies = Array.from(currencyCandidates).sort((left, right) => left.localeCompare(right));
+    if (currencies.includes("PHP")) {
+      return "PHP";
+    }
+    return currencies[0] ?? "PHP";
+  })();
   const goalValue = user.primaryGoal?.trim() ?? null;
   const goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
   const currentGoalPlan = normalizeGoalPlan(user.goalPlan, goalValue as GoalKey | null, goalTargetAmount);
@@ -1419,6 +1511,12 @@ async function AdviserPageContent() {
   const topCategoryName = topCategories[0]?.[0] ?? null;
   const topCategoryAmount = topCategories[0]?.[1] ?? 0;
   const topCategoryShare = currentSpend > 0 ? topCategoryAmount / currentSpend : 0;
+  const topMerchants = Array.from(currentSummary.expenseMerchants.entries())
+    .sort((left, right) => right[1].amount - left[1].amount || right[1].count - left[1].count)
+    .slice(0, 4);
+  const topMerchant = topMerchants[0] ?? null;
+  const frequentMerchant = [...topMerchants].sort((left, right) => right[1].count - left[1].count || right[1].amount - left[1].amount)[0] ?? null;
+  const topMerchantShare = topMerchant && currentSpend > 0 ? topMerchant[1].amount / currentSpend : 0;
 
   const weekendExpenses = activeTransactions.filter((transaction) => {
     const day = transaction.date.getDay();
@@ -1439,6 +1537,11 @@ async function AdviserPageContent() {
   const commitmentsDueSoon = financialCommitments
     .filter((commitment) => commitment.nextDueDate && commitment.nextDueDate <= nextSevenDays)
     .slice(0, 3);
+  const recurringDueSoonAmount = recurringDueSoon.reduce((sum, pattern) => sum + Math.abs(Number(pattern.amount ?? 0)), 0);
+  const plannedPaymentsDueSoonAmount = plannedPaymentsDueSoon.reduce((sum, suggestion) => sum + Math.abs(Number(suggestion.amount ?? 0)), 0);
+  const commitmentsDueSoonAmount = commitmentsDueSoon.reduce((sum, commitment) => sum + Math.abs(Number(commitment.amount ?? 0)), 0);
+  const knownBillsDueSoonAmount = recurringDueSoonAmount + plannedPaymentsDueSoonAmount + commitmentsDueSoonAmount;
+  const knownBillsDueSoonCount = recurringDueSoon.length + plannedPaymentsDueSoon.length + commitmentsDueSoon.length;
 
   const openSplitBills = splitBillWorkspaceData.bills
     .map((bill) => {
@@ -1463,10 +1566,11 @@ async function AdviserPageContent() {
       ? Number(latestInvestmentSnapshot.totalValue ?? 0) - Number(previousInvestmentSnapshot.totalValue ?? 0)
       : null;
 
-  const accountBalances = workspaceAccounts.filter((account) => account.balance !== null);
-  const spendableAccounts = workspaceAccounts.filter((account) => isSpendableAccountType(account.type));
-  const liabilityAccounts = workspaceAccounts.filter((account) => isLiabilityAccountType(account.type));
-  const trackedAssetAccounts = workspaceAccounts.filter((account) => isTrackedAssetAccountType(account.type));
+  const accountAnalysisAccounts = workspaceAccounts.filter((account) => formatCurrencyCode(account.currency) === displayCurrency);
+  const accountBalances = accountAnalysisAccounts.filter((account) => account.balance !== null);
+  const spendableAccounts = accountAnalysisAccounts.filter((account) => isSpendableAccountType(account.type));
+  const liabilityAccounts = accountAnalysisAccounts.filter((account) => isLiabilityAccountType(account.type));
+  const trackedAssetAccounts = accountAnalysisAccounts.filter((account) => isTrackedAssetAccountType(account.type));
   const totalAccountBalance = accountBalances.reduce((sum, account) => sum + (account.balance ?? 0), 0);
   const totalAccountMagnitude = accountBalances.reduce((sum, account) => sum + Math.abs(account.balance ?? 0), 0);
   const spendableAccountBalance = spendableAccounts.reduce((sum, account) => sum + (account.balance ?? 0), 0);
@@ -1481,9 +1585,10 @@ async function AdviserPageContent() {
       largestAccountShare > 0.55 ? clamp(45 + largestAccountShare * 55) : 30,
     ])
   );
-  const liquidBalance = workspaceAccounts
+  const liquidBalance = accountAnalysisAccounts
     .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
     .reduce((sum, account) => sum + (account.balance ?? 0), 0);
+  const billCoverageRatio = knownBillsDueSoonAmount > 0 ? liquidBalance / knownBillsDueSoonAmount : null;
   const hasTransactionFlow = currentSummary.income > 0 || currentSummary.expense > 0;
   const accountCoverageScore = clamp(
     average([
@@ -1497,7 +1602,7 @@ async function AdviserPageContent() {
     : workspaceAccounts.length > 0
       ? "account-backed"
       : "history-backed";
-  const moneyLeftAmount = hasTransactionFlow ? currentNet : spendableAccountBalance - liabilityAccountBalance;
+  const moneyLeftAmount = spendableAccountBalance;
   const upcomingPressureScore = clamp(
     average([
       accountPressureEstimate,
@@ -1567,9 +1672,8 @@ async function AdviserPageContent() {
   const currentGoalConfidence = goalLabel ? clamp(average([toCountScore(transactionCount, 20), goalProgress.bandLabel === "On track" ? 85 : 70, historyDepthScore])) : 0;
   const goalProgressLabel = goalLabel ? goalProgress.bandLabel : "Set a Goal";
   const recurringAmountPressure =
-    recurringDueSoon.reduce((sum, pattern) => sum + Number(pattern.amount ?? 0), 0) +
-    plannedPaymentsDueSoon.reduce((sum, suggestion) => sum + Number(suggestion.amount ?? 0), 0);
-  const commitmentAmountPressure = commitmentsDueSoon.reduce((sum, commitment) => sum + Number(commitment.amount ?? 0), 0);
+    recurringDueSoonAmount + plannedPaymentsDueSoonAmount;
+  const commitmentAmountPressure = commitmentsDueSoonAmount;
   const splitBillSettlementPressure = openSplitBillAmount;
   const thresholdProfile = buildThresholdProfile({
     baselineSpend,
@@ -1961,9 +2065,9 @@ async function AdviserPageContent() {
       value: formatSignedCurrency(moneyLeftAmount),
       tone: moneyLeftAmount >= 0 ? "positive" : "warning",
       detail: hasTransactionFlow
-        ? `${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending from the ${activeTransactionWindowLabel}; baseline spend ${formatCurrency(baselineSpend)}`
+        ? `${formatCurrency(spendableAccountBalance)} reconciled spendable balance; ${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending from the ${activeTransactionWindowLabel}; baseline spend ${formatCurrency(baselineSpend)}`
         : workspaceAccounts.length > 0
-          ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"}; ${formatCurrency(spendableAccountBalance)} available cash and ${formatCurrency(liabilityAccountBalance)} in balances owed`
+          ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"}; ${formatCurrency(spendableAccountBalance)} reconciled spendable balance and ${formatCurrency(liabilityAccountBalance)} in balances owed`
           : "Based on your current transaction history",
     },
     {
@@ -2016,32 +2120,6 @@ async function AdviserPageContent() {
               personalization: 92,
               recency: 100,
               actionability: 92,
-            },
-            score: 0,
-          }
-        : null,
-      workspaceAccounts.length > 0
-        ? {
-            id: "account_snapshot",
-            title: "Clover can see your connected accounts",
-            summary: `${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? " is" : "s are"} connected in this workspace.`,
-            evidence:
-              totalAccountMagnitude > 0
-                ? `${formatCurrency(spendableAccountBalance)} available cash` +
-                  (liabilityAccountBalance > 0 ? ` · ${formatCurrency(liabilityAccountBalance)} in balances owed` : "")
-                : `${workspaceAccounts.length} account${workspaceAccounts.length === 1 ? "" : "s"} ready for analysis`,
-            ctaLabel: "Open accounts",
-            href: "/accounts",
-            tone: totalAccountMagnitude > 0 ? "positive" : "neutral",
-            group: "accounts",
-            insightKey: "account-coverage",
-            breakdown: {
-              impact: clamp(55 + workspaceAccounts.length * 8 + (totalAccountMagnitude > 0 ? 10 : 0)),
-              urgency: clamp(accountPressureEstimate),
-              confidence: clamp(average([toCountScore(workspaceAccounts.length, 5), currentTransactionConfidence, liquidBalance > 0 ? 80 : 45])),
-              personalization: clamp(65 + largestAccountShare * 25),
-              recency: 100,
-              actionability: 78,
             },
             score: 0,
           }
@@ -2108,6 +2186,50 @@ async function AdviserPageContent() {
               personalization: clamp(70 + topCategoryShare * 20),
               recency: dataFreshness.recencyScore,
               actionability: 88,
+            },
+            score: 0,
+          }
+        : null,
+      topMerchant
+        ? {
+            id: "top_merchant",
+            title: `${topMerchant[0]} stands out`,
+            summary: `${topMerchant[0]} is the largest merchant Clover can see in the ${activeTransactionWindowLabel}.`,
+            evidence: `${formatCurrency(topMerchant[1].amount)} across ${topMerchant[1].count} transaction${topMerchant[1].count === 1 ? "" : "s"}, about ${formatPercent(topMerchantShare * 100)} of expenses.`,
+            ctaLabel: "Review merchant",
+            href: buildTransactionsHref({ q: topMerchant[0] }),
+            tone: topMerchantShare > 0.25 ? "warning" : "neutral",
+            group: "merchant-mix",
+            insightKey: "merchant-concentration",
+            breakdown: {
+              impact: clamp(topMerchantShare * 100),
+              urgency: clamp(topMerchantShare * 75),
+              confidence: currentTransactionConfidence,
+              personalization: clamp(70 + Math.min(topMerchant[1].count, 12) * 2),
+              recency: dataFreshness.recencyScore,
+              actionability: 86,
+            },
+            score: 0,
+          }
+        : null,
+      frequentMerchant && frequentMerchant[1].count >= 3
+        ? {
+            id: "frequent_merchant",
+            title: `${frequentMerchant[0]} keeps showing up`,
+            summary: `Clover sees repeated spending at ${frequentMerchant[0]} in the ${activeTransactionWindowLabel}.`,
+            evidence: `${frequentMerchant[1].count} transactions totaling ${formatCurrency(frequentMerchant[1].amount)}.`,
+            ctaLabel: "See pattern",
+            href: buildTransactionsHref({ q: frequentMerchant[0] }),
+            tone: frequentMerchant[1].amount > baselineSpend * 0.2 ? "warning" : "neutral",
+            group: "merchant-frequency",
+            insightKey: "merchant-frequency",
+            breakdown: {
+              impact: clamp((frequentMerchant[1].amount / Math.max(currentSpend, 1)) * 100),
+              urgency: clamp(frequentMerchant[1].count * 10 + (frequentMerchant[1].amount / Math.max(baselineSpend, 1)) * 35),
+              confidence: currentPatternConfidence,
+              personalization: clamp(72 + Math.min(frequentMerchant[1].count, 10) * 2),
+              recency: dataFreshness.recencyScore,
+              actionability: 80,
             },
             score: 0,
           }
@@ -2279,24 +2401,39 @@ async function AdviserPageContent() {
       workspaceAccounts.length > 0
         ? {
             id: "review_account_buffer",
-            title: "Check if you have enough cash for upcoming bills",
+            title:
+              knownBillsDueSoonAmount > 0
+                ? billCoverageRatio !== null && billCoverageRatio >= 1.2
+                  ? "Your upcoming bills look covered"
+                  : "Upcoming bills may need cash set aside"
+                : "Check if you have enough cash for upcoming bills",
             summary:
-              liquidBalance > 0
-                ? "Your spendable accounts show the cash Clover can see for the bills ahead."
-                : "Your connected accounts give Clover a starting point for checking bill room.",
+              knownBillsDueSoonAmount > 0
+                ? billCoverageRatio !== null && billCoverageRatio >= 1.2
+                  ? "The cash Clover can see appears higher than the known bills coming up."
+                  : "The known bills ahead are close enough to your visible cash to deserve a quick check."
+                : "Clover can compare your visible cash with bills once due dates and amounts are available.",
             evidence:
-              `${formatCurrency(spendableAccountBalance)} available cash` +
-              (liabilityAccountBalance > 0 ? ` · ${formatCurrency(liabilityAccountBalance)} in balances owed` : ""),
+              knownBillsDueSoonAmount > 0
+                ? `${formatCurrency(liquidBalance)} visible cash vs ${formatCurrency(knownBillsDueSoonAmount)} in ${knownBillsDueSoonCount} bill${knownBillsDueSoonCount === 1 ? "" : "s"} Clover can see`
+                : `${formatCurrency(spendableAccountBalance)} available cash` +
+                  (liabilityAccountBalance > 0 ? ` · ${formatCurrency(liabilityAccountBalance)} in balances owed` : ""),
             ctaLabel: "Open accounts",
             href: "/accounts",
-            tone: accountPressureEstimate >= 70 ? "warning" : "neutral",
+            tone: knownBillsDueSoonAmount > 0 && billCoverageRatio !== null && billCoverageRatio >= 1.2 ? "positive" : accountPressureEstimate >= 70 ? "warning" : "neutral",
             group: "accounts",
             diversityKey: "cashflow-readiness",
             insightKey: "cashflow-readiness",
             breakdown: {
-              impact: clamp(65 + accountPressureEstimate * 0.3),
-              urgency: clamp(accountPressureEstimate + (liquidBalance < currentSpend * 0.3 ? 20 : 0)),
-              confidence: clamp(average([toCountScore(workspaceAccounts.length, 5), currentTransactionConfidence, liquidBalance > 0 ? 80 : 45])),
+              impact: clamp(knownBillsDueSoonAmount > 0 ? (knownBillsDueSoonAmount / Math.max(liquidBalance, 1)) * 80 : 65 + accountPressureEstimate * 0.3),
+              urgency: clamp(
+                knownBillsDueSoonAmount > 0
+                  ? billCoverageRatio !== null && billCoverageRatio >= 1.2
+                    ? 34
+                    : 82
+                  : accountPressureEstimate + (liquidBalance < currentSpend * 0.3 ? 20 : 0)
+              ),
+              confidence: clamp(average([toCountScore(workspaceAccounts.length, 5), currentTransactionConfidence, knownBillsDueSoonAmount > 0 ? 90 : liquidBalance > 0 ? 80 : 45])),
               personalization: clamp(70 + largestAccountShare * 20),
               recency: 100,
               actionability: 92,
@@ -2444,6 +2581,29 @@ async function AdviserPageContent() {
               personalization: clamp(75 + topCategoryShare * 15),
               recency: dataFreshness.recencyScore,
               actionability: 82,
+            },
+            score: 0,
+          }
+        : null,
+      topMerchant
+        ? {
+            id: "review_top_merchant",
+            title: `Review your biggest merchant: ${topMerchant[0]}`,
+            summary: "A quick look at the largest merchant can show whether this spending was planned or a one-off.",
+            evidence: `${formatCurrency(topMerchant[1].amount)} across ${topMerchant[1].count} transaction${topMerchant[1].count === 1 ? "" : "s"} in the ${activeTransactionWindowLabel}`,
+            ctaLabel: "Review merchant",
+            href: buildTransactionsHref({ q: topMerchant[0] }),
+            tone: topMerchantShare > 0.25 ? "warning" : "neutral",
+            group: "spend-control",
+            diversityKey: "merchant-review",
+            insightKey: "merchant-concentration",
+            breakdown: {
+              impact: clamp(topMerchantShare * 100),
+              urgency: clamp(topMerchantShare * 75),
+              confidence: currentTransactionConfidence,
+              personalization: clamp(78 + Math.min(topMerchant[1].count, 10) * 2),
+              recency: dataFreshness.recencyScore,
+              actionability: 88,
             },
             score: 0,
           }
@@ -2634,6 +2794,53 @@ async function AdviserPageContent() {
               personalization: 75,
               recency: 100,
               actionability: 92,
+            },
+            score: 0,
+          }
+        : null,
+      frequentMerchant && frequentMerchant[1].count >= 3
+        ? {
+            id: "merchant_habit",
+            title: `${frequentMerchant[0]} may be a spending habit`,
+            summary: "Repeated purchases are often easier to improve than one large one-off expense.",
+            evidence: `${frequentMerchant[1].count} visits totaling ${formatCurrency(frequentMerchant[1].amount)} in the ${activeTransactionWindowLabel}.`,
+            ctaLabel: "Review habit",
+            href: buildTransactionsHref({ q: frequentMerchant[0] }),
+            tone: frequentMerchant[1].amount > baselineSpend * 0.2 ? "warning" : "neutral",
+            group: "behavior-pattern",
+            insightKey: "merchant-frequency",
+            breakdown: {
+              impact: clamp((frequentMerchant[1].amount / Math.max(currentSpend, 1)) * 100),
+              urgency: clamp(frequentMerchant[1].count * 9 + (frequentMerchant[1].amount / Math.max(baselineSpend, 1)) * 35),
+              confidence: currentPatternConfidence,
+              personalization: clamp(85 + Math.min(frequentMerchant[1].count, 10)),
+              recency: dataFreshness.recencyScore,
+              actionability: 72,
+            },
+            score: 0,
+          }
+        : null,
+      hasTransactionFlow
+        ? {
+            id: "cashflow_rhythm",
+            title: currentNet >= 0 ? "Your cash flow has room to protect" : "Your cash flow needs a calmer rhythm",
+            summary:
+              currentNet >= 0
+                ? "Keeping the surplus visible can help it turn into savings instead of disappearing into small purchases."
+                : "When spending runs ahead of income, a simple weekly check can reduce the surprise.",
+            evidence: `${formatCurrency(currentSummary.income)} income vs ${formatCurrency(currentSummary.expense)} spending in the ${activeTransactionWindowLabel}.`,
+            ctaLabel: "View reports",
+            href: "/reports",
+            tone: currentNet >= 0 ? "positive" : "warning",
+            group: "cashflow",
+            insightKey: "cashflow-rhythm",
+            breakdown: {
+              impact: clamp(Math.abs(currentNet) / Math.max(currentSummary.income || currentSpend || 1, 1) * 100),
+              urgency: clamp(currentNet < 0 ? 88 : 45),
+              confidence: currentTransactionConfidence,
+              personalization: 82,
+              recency: dataFreshness.recencyScore,
+              actionability: 68,
             },
             score: 0,
           }

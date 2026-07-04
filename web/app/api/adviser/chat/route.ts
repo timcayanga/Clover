@@ -12,6 +12,7 @@ import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { recordAdviserChatQuestion } from "@/lib/adviser-actions";
+import { deriveReconciledBalance } from "@/lib/account-balance";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,30 @@ type AdviserThresholdProfile = {
   splitPressure: number;
   investmentSwingPercent: number;
   goalDriftPercent: number;
+};
+
+type AdviserChatAccountSource = {
+  name: string;
+  type: string;
+  currency: string | null;
+  balance: unknown;
+  transactions: Array<{
+    amount: unknown;
+    type: "income" | "expense" | "transfer";
+    isExcluded: boolean;
+    merchantRaw: string;
+    merchantClean: string | null;
+    description: string | null;
+    date: Date;
+    createdAt: Date;
+    rawPayload: unknown;
+  }>;
+  statementCheckpoints: Array<{
+    endingBalance: unknown;
+    status: string;
+    statementEndDate: Date | null;
+    createdAt: Date;
+  }>;
 };
 
 const monthFormatter = new Intl.DateTimeFormat("en-PH", {
@@ -767,6 +792,31 @@ export async function POST(request: Request) {
                   type: true,
                   currency: true,
                   balance: true,
+                  transactions: {
+                    where: { isExcluded: false },
+                    select: {
+                      amount: true,
+                      type: true,
+                      isExcluded: true,
+                      merchantRaw: true,
+                      merchantClean: true,
+                      description: true,
+                      date: true,
+                      createdAt: true,
+                      rawPayload: true,
+                    },
+                    orderBy: { date: "desc" },
+                  },
+                  statementCheckpoints: {
+                    select: {
+                      endingBalance: true,
+                      status: true,
+                      statementEndDate: true,
+                      createdAt: true,
+                    },
+                    orderBy: [{ statementEndDate: "desc" }, { createdAt: "desc" }],
+                    take: 1,
+                  },
                 },
               },
             },
@@ -781,14 +831,39 @@ export async function POST(request: Request) {
         select: {
           id: true,
           name: true,
-          accounts: {
-            select: {
-              name: true,
-              type: true,
-              currency: true,
-              balance: true,
+            accounts: {
+              select: {
+                name: true,
+                type: true,
+                currency: true,
+                balance: true,
+                transactions: {
+                  where: { isExcluded: false },
+                  select: {
+                    amount: true,
+                    type: true,
+                    isExcluded: true,
+                    merchantRaw: true,
+                    merchantClean: true,
+                    description: true,
+                    date: true,
+                    createdAt: true,
+                    rawPayload: true,
+                  },
+                  orderBy: { date: "desc" },
+                },
+                statementCheckpoints: {
+                  select: {
+                    endingBalance: true,
+                    status: true,
+                    statementEndDate: true,
+                    createdAt: true,
+                  },
+                  orderBy: [{ statementEndDate: "desc" }, { createdAt: "desc" }],
+                  take: 1,
+                },
+              },
             },
-          },
         },
         orderBy: { createdAt: "asc" },
       }));
@@ -798,6 +873,28 @@ export async function POST(request: Request) {
     }
 
     await assertWorkspaceAccess(user.clerkUserId, workspace.id);
+
+    const reconcileChatAccountBalance = (account: AdviserChatAccountSource) => {
+      const latestCheckpoint = account.statementCheckpoints[0] ?? null;
+      const checkpointBalance =
+        latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
+      const reconciledBalance =
+        checkpointBalance ??
+        deriveReconciledBalance({
+          balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
+          transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
+          checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
+        });
+      const parsed = Number(reconciledBalance ?? account.balance ?? 0);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const chatAccounts = (workspace.accounts as AdviserChatAccountSource[]).map((account) => ({
+      name: account.name,
+      type: account.type,
+      currency: account.currency,
+      balance: reconcileChatAccountBalance(account),
+    }));
 
     const now = new Date();
     const nextSevenDays = new Date(now);
@@ -1026,8 +1123,15 @@ export async function POST(request: Request) {
           : longTermAverageSavingsRate;
     const spendDelta = baselineSpend > 0 ? ((currentSpend - baselineSpend) / baselineSpend) * 100 : null;
     const incomeDelta = baselineIncome > 0 ? ((currentSummary.income - baselineIncome) / baselineIncome) * 100 : null;
-    const currencyCandidates = new Set(workspace.accounts.map((account) => formatCurrencyCode(account.currency)).filter((currency) => currency.length > 0));
-    const displayCurrency = currencyCandidates.size === 1 ? Array.from(currencyCandidates)[0] : "MIXED";
+    const currencyCandidates = new Set(chatAccounts.map((account) => formatCurrencyCode(account.currency)).filter((currency) => currency.length > 0));
+    const displayCurrency = (() => {
+      const currencies = Array.from(currencyCandidates).sort((left, right) => left.localeCompare(right));
+      if (currencies.includes("PHP")) {
+        return "PHP";
+      }
+      return currencies[0] ?? "PHP";
+    })();
+    const accountAnalysisAccounts = chatAccounts.filter((account) => formatCurrencyCode(account.currency) === displayCurrency);
     const goalValue = user.primaryGoal?.trim() ?? null;
     const goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
     const goalPlan = normalizeGoalPlan(user.goalPlan, goalValue as GoalKey | null, goalTargetAmount);
@@ -1071,7 +1175,7 @@ export async function POST(request: Request) {
       0,
       Math.min(
         100,
-        Math.round(average([workspace.accounts.length >= 5 ? 90 : (workspace.accounts.length / 5) * 100, workspace.accounts.length > 0 ? 75 : 35]))
+        Math.round(average([chatAccounts.length >= 5 ? 90 : (chatAccounts.length / 5) * 100, chatAccounts.length > 0 ? 75 : 35]))
       )
     );
     const historyDepthScore = Math.max(
@@ -1132,19 +1236,19 @@ export async function POST(request: Request) {
         ? Number(latestInvestmentSnapshot.totalValue ?? 0) - Number(previousInvestmentSnapshot.totalValue ?? 0)
         : null;
 
-    const liquidBalance = workspace.accounts
+    const liquidBalance = accountAnalysisAccounts
       .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
-      .reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
-    const totalAccountBalance = workspace.accounts.reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
-    const totalAccountMagnitude = workspace.accounts.reduce((sum, account) => sum + Math.abs(Number(account.balance ?? 0)), 0);
-    const spendableAccountBalance = workspace.accounts
+      .reduce((sum, account) => sum + account.balance, 0);
+    const totalAccountBalance = accountAnalysisAccounts.reduce((sum, account) => sum + account.balance, 0);
+    const totalAccountMagnitude = accountAnalysisAccounts.reduce((sum, account) => sum + Math.abs(account.balance), 0);
+    const spendableAccountBalance = accountAnalysisAccounts
       .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
-      .reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
-    const liabilityAccountBalance = workspace.accounts
+      .reduce((sum, account) => sum + account.balance, 0);
+    const liabilityAccountBalance = accountAnalysisAccounts
       .filter((account) => ["credit_card", "loan", "mortgage", "line_of_credit", "payable", "bnpl"].includes(account.type))
-      .reduce((sum, account) => sum + Math.abs(Number(account.balance ?? 0)), 0);
-    const largestAccountBalance = [...workspace.accounts].sort((left, right) => Math.abs(Number(right.balance ?? 0)) - Math.abs(Number(left.balance ?? 0)))[0] ?? null;
-    const largestAccountShare = totalAccountMagnitude > 0 && largestAccountBalance ? Math.abs(Number(largestAccountBalance.balance ?? 0)) / totalAccountMagnitude : 0;
+      .reduce((sum, account) => sum + Math.abs(account.balance), 0);
+    const largestAccountBalance = [...accountAnalysisAccounts].sort((left, right) => Math.abs(right.balance) - Math.abs(left.balance))[0] ?? null;
+    const largestAccountShare = totalAccountMagnitude > 0 && largestAccountBalance ? Math.abs(largestAccountBalance.balance) / totalAccountMagnitude : 0;
     const accountPressureEstimate = Math.max(
       0,
       Math.min(
