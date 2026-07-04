@@ -86,6 +86,12 @@ const endOfYearUtc = (value: string) => {
 };
 
 const normalizeFilterValue = (value: string) => value.trim().toLowerCase();
+const TRANSFER_CATEGORY_NAMES = ["Transfer", "Transfers"];
+
+const appendAndFilter = (where: Prisma.TransactionWhereInput, filter: Prisma.TransactionWhereInput) => {
+  const existing = where.AND;
+  where.AND = Array.isArray(existing) ? [...existing, filter] : existing ? [existing, filter] : [filter];
+};
 
 const splitFilterValues = (value: string) =>
   value
@@ -268,15 +274,39 @@ export const buildTransactionQueryWhere = (workspaceId: string, filters: Transac
   }
 
   if (typeFilters.length > 0) {
-    const transactionTypes = typeFilters.map((value) => (value === "credit" ? "income" : value === "debit" ? "expense" : "transfer"));
-    where.type =
-      transactionTypes.length === 1
-        ? transactionTypes[0]
-        : ({ in: transactionTypes } as Prisma.TransactionWhereInput["type"]);
+    const typeFilterOr: Prisma.TransactionWhereInput[] = [];
+
+    if (typeFilters.includes("credit")) {
+      typeFilterOr.push({
+        type: "income",
+        NOT: { category: { name: { in: TRANSFER_CATEGORY_NAMES } } },
+      });
+    }
+
+    if (typeFilters.includes("debit")) {
+      typeFilterOr.push({
+        type: "expense",
+        NOT: { category: { name: { in: TRANSFER_CATEGORY_NAMES } } },
+      });
+    }
+
+    if (typeFilters.includes("transfer")) {
+      typeFilterOr.push({
+        OR: [
+          { type: "transfer" },
+          { isTransfer: true },
+          { category: { name: { in: TRANSFER_CATEGORY_NAMES } } },
+        ],
+      });
+    }
+
+    if (typeFilterOr.length > 0) {
+      appendAndFilter(where, { OR: typeFilterOr });
+    }
   }
 
   if (merchantFilters.length > 0) {
-    where.AND = [{ OR: buildMerchantFilters(merchantFilters) }];
+    appendAndFilter(where, { OR: buildMerchantFilters(merchantFilters) });
   }
 
   if (dateFilterMode !== "ltd") {

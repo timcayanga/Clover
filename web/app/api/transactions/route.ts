@@ -10,7 +10,7 @@ import { countWorkspaceOwnerTransactions } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName, getLandbankTransactionDisplayOverride } from "@/lib/transaction-display";
-import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { coerceTransactionTypeFromCategoryName, isTransferCategoryName } from "@/lib/transaction-directions";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
@@ -45,6 +45,15 @@ const getSummaryTransactionType = (transaction: {
     .join(" ");
   const lowerMerchantText = merchantText.toLowerCase();
   const institutionText = transaction.institution?.trim().toLowerCase() ?? "";
+  const normalizedCategoryName = normalizeCategoryName(transaction.categoryName);
+
+  if (normalizedCategoryName === "income") {
+    return "income" as const;
+  }
+
+  if (isTransferCategoryName(transaction.categoryName)) {
+    return "transfer" as const;
+  }
 
   if (/\bbdo\b|\bbanco de oro\b/.test(institutionText)) {
     if (/incoming\s+transfer|interbank\s+deposit|funds?\s+deposited|received\s+a\/c|reciv(?:ed)?\s+a\/c|cash\s+deposit|salary|payroll|interest|intrest|credit\s+movement/.test(lowerMerchantText)) {
@@ -58,11 +67,6 @@ const getSummaryTransactionType = (transaction: {
     if (/internal\s+clearing|internal\s+clearing\s+on-us|on-us\s+transaction|encashment|check\s+issued|check\s+deposit|dm1|icc|ilnsdm1|pdck3|cm1|drt|cd|ck1/.test(lowerMerchantText)) {
       return "transfer" as const;
     }
-  }
-
-  const normalizedCategoryName = normalizeCategoryName(transaction.categoryName);
-  if (normalizedCategoryName === "income") {
-    return "income" as const;
   }
 
   if (transaction.isTransfer) {

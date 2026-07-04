@@ -63,7 +63,7 @@ import {
   normalizeTransactionNoteValue,
 } from "@/lib/transaction-notes";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
-import { coerceTransactionTypeFromCategoryName, inferTransactionTypeFromAmount } from "@/lib/transaction-directions";
+import { coerceTransactionTypeFromCategoryName, isTransferCategoryName } from "@/lib/transaction-directions";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import {
@@ -611,8 +611,8 @@ const getTransactionDisplayType = (
     return "transfer";
   }
 
-  if (transaction.type === "transfer" || transaction.isTransfer) {
-    return inferTransactionTypeFromAmount(transaction.amount) ?? "expense";
+  if (transaction.type === "transfer" || transaction.isTransfer || isTransferCategoryName(transaction.categoryName)) {
+    return "transfer";
   }
 
   return transaction.type;

@@ -61,12 +61,7 @@ export const coerceTransactionTypeFromCategoryName = (
   }
 
   if (isTransferCategoryName(categoryName)) {
-    const inferredFromAmount = inferTransactionTypeFromAmount(amount);
-    if (inferredFromAmount) {
-      return inferredFromAmount;
-    }
-
-    return fallback;
+    return "transfer";
   }
 
   if (normalized === "gifts donations" && fallback === "income") {
