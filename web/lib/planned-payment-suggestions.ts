@@ -2,6 +2,7 @@ import { type CommitmentRecurrence, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { getUpcomingStatementReminders, type StatementReminder } from "@/lib/statement-reminders";
+import { detectRecurringPatterns } from "@/lib/recurring-detection";
 
 type PlannedPaymentTransactionLike = {
   id: string;
@@ -25,7 +26,7 @@ type PlannedPaymentTransactionLike = {
 
 export type PlannedPaymentSuggestion = {
   id: string;
-  sourceKind: "statement_reminder" | "installment";
+  sourceKind: "statement_reminder" | "installment" | "recurring_transaction";
   title: string;
   counterparty: string | null;
   amount: string | null;
@@ -248,12 +249,82 @@ const buildInstallmentSuggestions = (
   return suggestions;
 };
 
+const getDetectedPatternTransactionIds = (rawPayload: unknown) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return [];
+  }
+
+  const transactionIds = (rawPayload as Record<string, unknown>).transactionIds;
+  return Array.isArray(transactionIds) ? transactionIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0) : [];
+};
+
+const buildRecurringTransactionSuggestions = (
+  transactions: PlannedPaymentTransactionLike[],
+  existingCommitmentKeys: Set<string>,
+  existingRecurringPatternKeys: Set<string>
+): PlannedPaymentSuggestion[] => {
+  const accountNames = new Map(transactions.map((transaction) => [transaction.account.id, transaction.account.name]));
+  const patterns = detectRecurringPatterns(transactions);
+  const suggestions: PlannedPaymentSuggestion[] = [];
+
+  for (const pattern of patterns) {
+    const title = (pattern.merchantClean ?? pattern.merchantRaw).trim();
+    const currency = (pattern.currency ?? "PHP").trim().toUpperCase() || "PHP";
+    const merchantKey = normalizeKey(title);
+    const accountKey = pattern.accountId ?? "workspace";
+    const keyParts = [accountKey, currency, merchantKey];
+    const commitmentKey = keyParts.join("::");
+    const recurringPatternKey = commitmentKey;
+
+    if (!title || existingCommitmentKeys.has(commitmentKey) || existingRecurringPatternKeys.has(recurringPatternKey)) {
+      continue;
+    }
+
+    const transactionIds = getDetectedPatternTransactionIds(pattern.rawPayload);
+    const suggestionId = `recurring_transaction::${commitmentKey}`;
+    const lastSeenDate = pattern.lastSeenDate ? new Date(pattern.lastSeenDate) : null;
+    const nextExpectedDate = pattern.nextExpectedDate ? new Date(pattern.nextExpectedDate) : null;
+
+    suggestions.push({
+      id: suggestionId,
+      sourceKind: "recurring_transaction",
+      title,
+      counterparty: title,
+      amount: pattern.amount ? pattern.amount.toFixed(2) : null,
+      currency,
+      dueDate: nextExpectedDate?.toISOString() ?? null,
+      recurrence: pattern.frequency ?? "monthly",
+      accountId: pattern.accountId,
+      accountName: pattern.accountId ? accountNames.get(pattern.accountId) ?? null : null,
+      statementCheckpointId: null,
+      installmentTerms: null,
+      notes: [
+        `Detected from ${pattern.transactionCount} matching transaction${pattern.transactionCount === 1 ? "" : "s"}.`,
+        transactionIds.length > 0 ? `Matched transaction IDs: ${transactionIds.slice(0, 4).join(", ")}${transactionIds.length > 4 ? ", ..." : ""}.` : null,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      sourceLabel: "Potential recurring",
+      sourceDetail: pattern.transactionCount > 1
+        ? `Seen ${pattern.transactionCount} times`
+        : lastSeenDate
+          ? `Last seen ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(lastSeenDate)}`
+          : null,
+      confidence: pattern.confidence,
+      sourceFileName: null,
+    });
+  }
+
+  return suggestions;
+};
+
 export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
   const reminders = await getUpcomingStatementReminders(workspaceId);
   const hasCommitmentTable = await hasCompatibleTable("FinancialCommitment");
   const hasTransactionTable = await hasCompatibleTable("Transaction");
+  const hasRecurringPatternTable = await hasCompatibleTable("RecurringPattern");
 
-  const [existingCommitments, transactions] = await Promise.all([
+  const [existingCommitments, existingRecurringPatterns, transactions] = await Promise.all([
     hasCommitmentTable
       ? prisma.financialCommitment.findMany({
           where: {
@@ -265,6 +336,7 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
             title: true,
             counterparty: true,
             accountId: true,
+            currency: true,
             statementCheckpointId: true,
           },
         })
@@ -273,7 +345,34 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
             title: string;
             counterparty: string | null;
             accountId: string | null;
+            currency: string;
             statementCheckpointId: string | null;
+          }>
+        ),
+    hasRecurringPatternTable
+      ? prisma.recurringPattern.findMany({
+          where: {
+            workspaceId,
+            NOT: {
+              rawPayload: {
+                path: ["dismissed"],
+                equals: true,
+              },
+            },
+          },
+          select: {
+            accountId: true,
+            currency: true,
+            merchantClean: true,
+            merchantRaw: true,
+          },
+        })
+      : Promise.resolve(
+          [] as Array<{
+            accountId: string | null;
+            currency: string;
+            merchantClean: string | null;
+            merchantRaw: string;
           }>
         ),
     hasTransactionTable
@@ -322,6 +421,24 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
       `installment::${[commitment.accountId ?? "workspace", normalizeKey(`${commitment.counterparty ?? commitment.title}`)].join("::")}`
     )
   );
+  const existingRecurringCommitmentKeys = new Set(
+    existingCommitments.map((commitment) =>
+      [
+        commitment.accountId ?? "workspace",
+        (commitment.currency ?? "PHP").trim().toUpperCase() || "PHP",
+        normalizeKey(`${commitment.counterparty ?? commitment.title}`),
+      ].join("::")
+    )
+  );
+  const existingRecurringPatternKeys = new Set(
+    existingRecurringPatterns.map((pattern) =>
+      [
+        pattern.accountId ?? "workspace",
+        (pattern.currency ?? "PHP").trim().toUpperCase() || "PHP",
+        normalizeKey(pattern.merchantClean ?? pattern.merchantRaw),
+      ].join("::")
+    )
+  );
 
   const reminderSuggestions = buildReminderSuggestions(reminders, existingCheckpointIds);
   const installmentSuggestions = buildInstallmentSuggestions(
@@ -329,8 +446,13 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
     reminders,
     existingInstallmentKeys
   );
+  const recurringTransactionSuggestions = buildRecurringTransactionSuggestions(
+    transactions as PlannedPaymentTransactionLike[],
+    existingRecurringCommitmentKeys,
+    existingRecurringPatternKeys
+  );
 
-  return [...reminderSuggestions, ...installmentSuggestions].sort(
+  return [...reminderSuggestions, ...installmentSuggestions, ...recurringTransactionSuggestions].sort(
     (left, right) =>
       new Date(left.dueDate ?? 0).getTime() - new Date(right.dueDate ?? 0).getTime() ||
       right.confidence - left.confidence ||

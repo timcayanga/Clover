@@ -7,11 +7,12 @@ type RecurringSourceTransaction = {
   workspaceId: string;
   accountId: string | null;
   date: Date;
-  amount: { toString: () => string } | string | number;
+  amount: unknown;
   currency: string | null;
   type: "income" | "expense" | "transfer";
   merchantRaw: string;
   merchantClean: string | null;
+  description?: string | null;
   category?: {
     name: string;
   } | null;
@@ -40,8 +41,14 @@ const normalizeMerchantKey = (value: string) =>
   value
     .trim()
     .toLowerCase()
+    .replace(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/g, " ")
+    .replace(/\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b/g, " ")
+    .replace(/\b\d{4,}\b/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\b(pos|visa|mastercard|debit|credit|online|payment|pay|ph|inc|corp|co|ref|auth|card)\b/g, " ")
+    .replace(
+      /\b(pos|visa|mastercard|debit|credit|online|payment|payments|pay|paid|subscription|subscriptions|monthly|bill|bills|billing|autopay|auto|debit|ph|inc|corp|co|ref|auth|card)\b/g,
+      " "
+    )
     .replace(/\s+/g, " ")
     .trim();
 
@@ -53,8 +60,10 @@ const isDismissedRecurringPattern = (value: Prisma.JsonValue | null | undefined)
       (value as Record<string, unknown>).dismissed === true
   );
 
-const toAmount = (value: RecurringSourceTransaction["amount"]) => {
-  const parsed = Number(value?.toString?.() ?? value ?? 0);
+const toAmount = (value: unknown) => {
+  const parsed = Number(
+    value && typeof value === "object" && "toString" in value ? value.toString() : value ?? 0
+  );
   return Number.isFinite(parsed) ? Math.abs(parsed) : 0;
 };
 
@@ -239,7 +248,9 @@ export const detectRecurringPatterns = (transactions: RecurringSourceTransaction
       continue;
     }
 
-    const merchantKey = normalizeMerchantKey(transaction.merchantClean ?? transaction.merchantRaw);
+    const merchantKey = normalizeMerchantKey(
+      [transaction.merchantClean, transaction.merchantRaw, transaction.description].filter(Boolean).join(" ")
+    );
     if (!merchantKey) {
       continue;
     }
@@ -280,6 +291,7 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
       type: true,
       merchantRaw: true,
       merchantClean: true,
+      description: true,
       category: {
         select: {
           name: true,
