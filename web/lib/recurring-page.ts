@@ -5,7 +5,7 @@ import { buildRecurringTransactionSummaries, type RecurringTransactionLike } fro
 import { serializeFinancialCommitment, type FinancialCommitmentSummary } from "@/lib/commitments";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
-import { getPlannedPaymentSuggestions, type PlannedPaymentSuggestion } from "@/lib/planned-payment-suggestions";
+import { getPlannedPaymentSuggestions, getRecurringConfidenceTier, type PlannedPaymentSuggestion } from "@/lib/planned-payment-suggestions";
 
 export type RecurringPageAccount = {
   id: string;
@@ -48,6 +48,7 @@ export type RecurringPatternSummary = {
   lastSeenDate: string | null;
   nextExpectedDate: string | null;
   transactionCount: number;
+  confidenceTier: "high" | "medium" | "low";
   confidence: number;
   reasonSummary: string | null;
   reasonTags: string[];
@@ -281,6 +282,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     lastSeenDate: pattern.lastSeenDate?.toISOString() ?? null,
     nextExpectedDate: pattern.nextExpectedDate?.toISOString() ?? null,
     transactionCount: pattern.transactionCount,
+    confidenceTier: getRecurringConfidenceTier(pattern.confidence),
     confidence: pattern.confidence,
     reasonSummary:
       pattern.rawPayload && typeof pattern.rawPayload === "object" && !Array.isArray(pattern.rawPayload)

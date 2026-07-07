@@ -105,6 +105,12 @@ const reasonBadgeStyle: CSSProperties = {
   background: "rgba(3, 168, 192, 0.08)",
 };
 
+const confidenceTierLabel: Record<"high" | "medium" | "low", string> = {
+  high: "High confidence",
+  medium: "Needs review",
+  low: "Weak signal",
+};
+
 const formatCurrency = (value: string | null) => {
   if (!value) {
     return "No amount set";
@@ -742,7 +748,7 @@ export function CommitmentsPanel({
                 <div className="notification-item__main" style={{ gap: 4 }}>
                   <p className="notification-item__tone">
                     {suggestion.sourceLabel}
-                    {suggestion.confidence ? ` · ${suggestion.confidence}% confidence` : ""}
+                    {suggestion.confidence ? ` · ${confidenceTierLabel[suggestion.confidenceTier]} · ${suggestion.confidence}% confidence` : ""}
                   </p>
                   <h4>{suggestion.title}</h4>
                   <p>
@@ -793,7 +799,7 @@ export function CommitmentsPanel({
               <article key={pattern.id} className="notification-item" style={{ alignItems: "flex-start" }}>
                 <div className="notification-item__main" style={{ gap: 4 }}>
                   <p className="notification-item__tone">
-                    {pattern.frequency ? commitmentRecurrenceLabels[pattern.frequency as keyof typeof commitmentRecurrenceLabels] ?? pattern.frequency : "Recurring"} · {pattern.confidence}% confidence
+                    {pattern.frequency ? commitmentRecurrenceLabels[pattern.frequency as keyof typeof commitmentRecurrenceLabels] ?? pattern.frequency : "Recurring"} · {confidenceTierLabel[pattern.confidenceTier]} · {pattern.confidence}% confidence
                   </p>
                   <h4>{pattern.merchantClean ?? pattern.merchantRaw}</h4>
                   <p>

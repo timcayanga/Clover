@@ -462,6 +462,7 @@ const buildPatternFromTransactions = (
     currency: first.currency,
     title: canonicalTitle,
   });
+  const familySuppressionKey = buildRecurringMerchantFamilySignature(canonicalTitle);
   const confidence = Math.min(
     96,
     Math.round(
@@ -519,6 +520,7 @@ const buildPatternFromTransactions = (
       reasonSummary,
       reasonTags,
       suppressionKey,
+      familySuppressionKey,
     },
   };
 };
@@ -775,10 +777,28 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
           });
     })
   );
+  const dismissedFamilyKeys = new Set(
+    dismissedPatterns
+      .map((pattern) => {
+        const payload =
+          pattern.rawPayload && typeof pattern.rawPayload === "object" && !Array.isArray(pattern.rawPayload)
+            ? (pattern.rawPayload as Record<string, unknown>)
+            : null;
+        if (typeof payload?.familySuppressionKey === "string" && payload.familySuppressionKey.trim()) {
+          return payload.familySuppressionKey.trim();
+        }
+        return buildRecurringMerchantFamilySignature(pattern.merchantClean ?? pattern.merchantRaw ?? "");
+      })
+      .filter(Boolean)
+  );
 
   const patterns = detectedPatterns.filter((pattern) => {
     const key = [pattern.accountId ?? "workspace", pattern.currency, normalizeRecurringMerchantKey(pattern.canonicalTitle)].join("::");
-    return !existingCommitmentKeys.has(key) && !dismissedSuppressionKeys.has(pattern.suppressionKey);
+    return (
+      !existingCommitmentKeys.has(key) &&
+      !dismissedSuppressionKeys.has(pattern.suppressionKey) &&
+      !dismissedFamilyKeys.has(buildRecurringMerchantFamilySignature(pattern.canonicalTitle))
+    );
   });
 
   await prisma.$transaction(async (tx) => {

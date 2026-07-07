@@ -48,6 +48,7 @@ export type PlannedPaymentSuggestion = {
   sourceDetail: string | null;
   reasonSummary: string | null;
   reasonTags: string[];
+  confidenceTier: "high" | "medium" | "low";
   confidence: number;
   sourceFileName: string | null;
 };
@@ -77,6 +78,16 @@ const normalizeKey = (value: string | null | undefined) =>
 const parseAmount = (value: unknown) => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? Math.abs(parsed) : 0;
+};
+
+export const getRecurringConfidenceTier = (confidence: number): "high" | "medium" | "low" => {
+  if (confidence >= 85) {
+    return "high";
+  }
+  if (confidence >= 70) {
+    return "medium";
+  }
+  return "low";
 };
 
 const formatAmountRange = (minimumAmount: number | null, maximumAmount: number | null, currency: string) => {
@@ -229,6 +240,7 @@ const buildReminderSuggestions = (reminders: StatementReminder[], existingCheckp
       sourceDetail: `Due ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(dueDate)}`,
       reasonSummary: "Detected from an uploaded statement due date.",
       reasonTags: ["statement due date", "uploaded file"],
+      confidenceTier: getRecurringConfidenceTier(92),
       confidence: 92,
       sourceFileName: reminder.sourceFileName,
     });
@@ -322,6 +334,7 @@ const buildInstallmentSuggestions = (
         : `Last seen ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(last.date)}`,
       reasonSummary: installmentTerms ? `Installment terms suggest ${installmentTerms} payments.` : "Repeated installment-style charges were detected.",
       reasonTags: installmentTerms ? ["installment terms", "repeated charge"] : ["installment signal", "repeated charge"],
+      confidenceTier: getRecurringConfidenceTier(Math.min(94, 66 + Math.min(group.length, 3) * 8 + (installmentTerms ? 8 : 0))),
       confidence: Math.min(94, 66 + Math.min(group.length, 3) * 8 + (installmentTerms ? 8 : 0)),
       sourceFileName: readTransactionImportFileName(first),
     });
@@ -334,6 +347,7 @@ const buildRecurringTransactionSuggestions = (
   transactions: Awaited<ReturnType<typeof getRecurringSourceTransactions>>,
   existingCommitmentKeys: Set<string>,
   dismissedSuppressionKeys: Set<string>,
+  dismissedFamilyKeys: Set<string>,
   confirmedRecurringMemoryByTitle: Map<string, ConfirmedRecurringMemory[]>,
   confirmedRecurringMemoryByFamily: Map<string, ConfirmedRecurringMemory[]>
 ) => {
@@ -347,7 +361,12 @@ const buildRecurringTransactionSuggestions = (
       pattern.currency,
       normalizeKey(title),
     ].join("::")}`;
-    if (existingCommitmentKeys.has(key) || dismissedSuppressionKeys.has(pattern.suppressionKey)) {
+    const familyKey = buildRecurringMerchantFamilySignature(title);
+    if (
+      existingCommitmentKeys.has(key) ||
+      dismissedSuppressionKeys.has(pattern.suppressionKey) ||
+      dismissedFamilyKeys.has(familyKey)
+    ) {
       continue;
     }
 
@@ -357,7 +376,6 @@ const buildRecurringTransactionSuggestions = (
         ? `${pattern.frequency} around the ${pattern.expectedDayOfMonth}${pattern.expectedDayOfMonth === 1 ? "st" : pattern.expectedDayOfMonth === 2 ? "nd" : pattern.expectedDayOfMonth === 3 ? "rd" : "th"}`
         : pattern.frequency;
     const normalizedTitle = normalizeKey(title);
-    const familyKey = buildRecurringMerchantFamilySignature(title);
     const confirmedMatches = [
       ...(confirmedRecurringMemoryByTitle.get(normalizedTitle) ?? []),
       ...(confirmedRecurringMemoryByFamily.get(familyKey) ?? []),
@@ -375,6 +393,7 @@ const buildRecurringTransactionSuggestions = (
       ? [suggestionType.tag, ...pattern.reasonTags]
       : pattern.reasonTags;
 
+    const confidence = Math.min(98, pattern.confidence + (hasConfirmedMatch ? 6 : 0));
     suggestions.push({
       id: key,
       sourceKind: "recurring_transaction",
@@ -405,7 +424,8 @@ const buildRecurringTransactionSuggestions = (
         .join(" · "),
       reasonSummary: hasConfirmedMatch ? `${pattern.reasonSummary} · matched your saved recurring schedule` : pattern.reasonSummary,
       reasonTags: hasConfirmedMatch ? [...reasonTags, "confirmed before", "saved schedule"] : reasonTags,
-      confidence: Math.min(98, pattern.confidence + (hasConfirmedMatch ? 6 : 0)),
+      confidenceTier: getRecurringConfidenceTier(confidence),
+      confidence,
       sourceFileName: pattern.importFile?.fileName ?? null,
     });
   }
@@ -551,6 +571,20 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
           });
     })
   );
+  const dismissedFamilyKeys = new Set(
+    dismissedPatterns
+      .map((pattern) => {
+        const payload =
+          pattern.rawPayload && typeof pattern.rawPayload === "object" && !Array.isArray(pattern.rawPayload)
+            ? (pattern.rawPayload as Record<string, unknown>)
+            : null;
+        if (typeof payload?.familySuppressionKey === "string" && payload.familySuppressionKey.trim()) {
+          return payload.familySuppressionKey.trim();
+        }
+        return buildRecurringMerchantFamilySignature(pattern.merchantClean ?? pattern.merchantRaw ?? "");
+      })
+      .filter(Boolean)
+  );
   const confirmedRecurringMemoryByTitle = new Map<string, ConfirmedRecurringMemory[]>();
   const confirmedRecurringMemoryByFamily = new Map<string, ConfirmedRecurringMemory[]>();
   for (const commitment of confirmedRecurringCommitments) {
@@ -585,6 +619,7 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
     recurringTransactions,
     existingRecurringTransactionKeys,
     dismissedSuppressionKeys,
+    dismissedFamilyKeys,
     confirmedRecurringMemoryByTitle,
     confirmedRecurringMemoryByFamily
   );

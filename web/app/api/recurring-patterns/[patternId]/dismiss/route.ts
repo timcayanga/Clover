@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { buildRecurringMerchantFamilySignature } from "@/lib/recurring-detection";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,11 @@ export async function POST(
       data: {
         rawPayload: {
           ...toRawPayloadObject(pattern.rawPayload),
+          familySuppressionKey: buildRecurringMerchantFamilySignature(
+            typeof toRawPayloadObject(pattern.rawPayload).canonicalTitle === "string"
+              ? (toRawPayloadObject(pattern.rawPayload).canonicalTitle as string)
+              : pattern.merchantClean ?? pattern.merchantRaw
+          ),
           suppressionKey: normalizeSuppressionKey({
             accountId: pattern.accountId,
             currency: pattern.currency,
