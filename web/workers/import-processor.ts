@@ -4187,11 +4187,7 @@ const collapseDuplicateUploadedAccountsForAccount = async <
       workspaceId,
       type: account.type,
       source: "upload",
-      ...(accountNumber
-        ? {
-            OR: [{ accountNumber }, ...(institution ? [{ institution }] : [])],
-          }
-        : { institution }),
+      ...(accountNumber ? { accountNumber } : { accountNumber: null }),
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: {
@@ -4209,17 +4205,6 @@ const collapseDuplicateUploadedAccountsForAccount = async <
     },
   });
   const duplicates = duplicateCandidates.filter((candidate) => {
-    const candidateMatchesIdentity = matchesImportedAccountIdentity(candidate, {
-      name: account.name,
-      institution,
-      accountNumber,
-      type: account.type,
-      currency: typeof account.currency === "string" && account.currency.trim() ? account.currency : null,
-    });
-    if (candidateMatchesIdentity) {
-      return true;
-    }
-
     if (accountNumber) {
       return canonicalInstitutionKey(candidate.institution) === canonicalInstitutionKey(institution);
     }

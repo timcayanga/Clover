@@ -1,14 +1,36 @@
 import { strict as assert } from "node:assert";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import {
+  mergeFetchedTransactionsPreservingImported,
   mergeOptimisticImportedAccount,
+  uploadSummaryCanDismissImportUi,
   uploadSummaryMatchesImportedAccount,
   type ImportedAccountLike,
 } from "@/lib/imported-account-ui";
+import { combineUploadInsightsSummaries } from "@/lib/import-upload-summary";
+import { findBestImportedAccountMatch, matchesImportedAccountIdentity } from "@/lib/workspace-cache";
 
 type TestAccount = ImportedAccountLike & {
   updatedAt?: string;
   createdAt?: string;
+};
+
+type TestTransaction = {
+  id: string;
+  accountId: string;
+  accountName: string;
+  institution: string | null;
+  accountNumber: string | null;
+  currency: string;
+  type: "income" | "expense" | "transfer";
+  date: string;
+  amount: string;
+  merchantRaw: string;
+  merchantClean: string | null;
+  description: string | null;
+  source: string;
+  importFileId?: string | null;
+  rawPayload?: Record<string, unknown> | null;
 };
 
 const main = () => {
@@ -116,6 +138,258 @@ const main = () => {
     mergedAccountResult[0]?.createdAt,
     matchedServerAccount.createdAt,
     "Custom merge hooks should preserve existing lifecycle metadata."
+  );
+
+  const settledScreenshotSummary: UploadInsightsSummary = {
+    ...summary,
+    optimistic: false,
+    optimisticAccountId: numberedUploadAccount.id,
+    previewTransactions: [],
+    accountSummaries: [
+      {
+        accountId: numberedUploadAccount.id,
+        accountName: numberedUploadAccount.name,
+        institution: numberedUploadAccount.institution,
+        accountNumber: numberedUploadAccount.accountNumber ?? null,
+        accountType: numberedUploadAccount.type,
+        balance: numberedUploadAccount.balance ?? null,
+        rowsImported: 0,
+      },
+    ],
+  };
+
+  assert.equal(
+    uploadSummaryCanDismissImportUi(
+      settledScreenshotSummary,
+      [numberedUploadAccount],
+      "bank",
+      true
+    ),
+    true,
+    "Screenshot imports with visible account summaries should dismiss the foreground import UI even before rows are confirmed."
+  );
+
+  const combinedMultiAccountSummary = combineUploadInsightsSummaries([
+    {
+      ...settledScreenshotSummary,
+      fileName: "unionbank-1.png",
+      accountName: "UnionBank Savings 8037",
+      accountNumber: "8037",
+      balance: "116465.28",
+      accountSummaries: [
+        {
+          accountId: "acc-savings",
+          accountName: "UnionBank Savings 8037",
+          institution: "UnionBank",
+          accountNumber: "8037",
+          accountType: "bank",
+          balance: "116465.28",
+          rowsImported: 12,
+        },
+      ],
+    },
+    {
+      ...settledScreenshotSummary,
+      fileName: "unionbank-2.png",
+      accountName: "UnionBank Wallet 8037",
+      accountNumber: "8037",
+      balance: "116465.28",
+      accountType: "ewallet",
+      accountSummaries: [
+        {
+          accountId: "acc-wallet",
+          accountName: "UnionBank Wallet 8037",
+          institution: "UnionBank",
+          accountNumber: "8037",
+          accountType: "ewallet",
+          balance: "116465.28",
+          rowsImported: 8,
+        },
+      ],
+    },
+  ]);
+
+  assert.equal(
+    combinedMultiAccountSummary?.accountName ?? null,
+    null,
+    "Combined summaries should not inherit a single account name when multiple accounts from the same institution are present."
+  );
+  assert.equal(
+    combinedMultiAccountSummary?.balance ?? null,
+    null,
+    "Combined summaries should not advertise a single account balance when multiple account identities were imported together."
+  );
+
+  assert.equal(
+    matchesImportedAccountIdentity(
+      {
+        name: "GSave #UNOboost 1330",
+        institution: "GSave",
+        accountNumber: "1330",
+        type: "investment",
+        currency: "PHP",
+      },
+      {
+        name: "GSave #UNOboost 1330",
+        institution: "GSave",
+        accountNumber: "40001000551330",
+        type: "investment",
+        currency: "PHP",
+      }
+    ),
+    true,
+    "Masked GSave #UNOboost identities should reconcile against the full UNO time-deposit account number."
+  );
+
+  assert.equal(
+    matchesImportedAccountIdentity(
+      {
+        name: "GSave #UNOboost 1330",
+        institution: "GSave",
+        accountNumber: "1330",
+        type: "investment",
+        currency: "PHP",
+      },
+      {
+        name: "GSave #UNOboost 2023",
+        institution: "GSave",
+        accountNumber: "40007384712023",
+        type: "investment",
+        currency: "PHP",
+      }
+    ),
+    false,
+    "Different GSave #UNOboost deposits should remain distinct even when they share the same institution and product family."
+  );
+
+  assert.equal(
+    matchesImportedAccountIdentity(
+      {
+        name: "GSave #UNOready 4132",
+        institution: "GSave",
+        accountNumber: "4132",
+        type: "bank",
+        currency: "PHP",
+      },
+      {
+        name: "GSave #UNOboost 1330",
+        institution: "GSave",
+        accountNumber: "40001000551330",
+        type: "investment",
+        currency: "PHP",
+      }
+    ),
+    false,
+    "GSave savings and GSave time-deposit identities must not collapse into a single imported account."
+  );
+
+  const bestGsaveMatch = findBestImportedAccountMatch(
+    [
+      {
+        name: "GSave #UNOboost 2023",
+        institution: "GSave",
+        accountNumber: "40007384712023",
+        type: "investment",
+        currency: "PHP",
+      },
+      {
+        name: "GSave #UNOboost 1330",
+        institution: "GSave",
+        accountNumber: "40001000551330",
+        type: "investment",
+        currency: "PHP",
+      },
+      {
+        name: "GSave #UNOboost 4217",
+        institution: "GSave",
+        accountNumber: "40007366884217",
+        type: "investment",
+        currency: "PHP",
+      },
+    ],
+    {
+      name: "GSave #UNOboost 1330",
+      institution: "GSave",
+      accountNumber: "1330",
+      type: "investment",
+      currency: "PHP",
+    }
+  );
+
+  assert.equal(
+    bestGsaveMatch?.accountNumber ?? null,
+    "40001000551330",
+    "Best-match resolution should attach the masked GSave #UNOboost upload account to the correct full-number UNO time deposit."
+  );
+
+  const optimisticImportedTransactions: TestTransaction[] = [
+    {
+      id: "optimistic-1",
+      importFileId: "unionbank-screenshots",
+      rawPayload: { sourceImportFileId: "unionbank-screenshots", sourceRowIndex: 1 },
+      accountId: "optimistic-acc-1",
+      accountName: "UnionBank Savings 8037",
+      institution: "UnionBank",
+      accountNumber: "8037",
+      currency: "PHP",
+      type: "income",
+      date: "2026-04-13",
+      amount: "92627.65",
+      merchantRaw: "ONLINE PAYROLL",
+      merchantClean: "Online Payroll",
+      description: "ONLINE PAYROLL",
+      source: "upload",
+    },
+    {
+      id: "optimistic-2",
+      importFileId: "unionbank-screenshots",
+      rawPayload: { sourceImportFileId: "unionbank-screenshots", sourceRowIndex: 2 },
+      accountId: "optimistic-acc-1",
+      accountName: "UnionBank Savings 8037",
+      institution: "UnionBank",
+      accountNumber: "8037",
+      currency: "PHP",
+      type: "expense",
+      date: "2026-04-08",
+      amount: "6286.77",
+      merchantRaw: "BILLS PAYMENT BANKARD VISA",
+      merchantClean: "Bills Payment",
+      description: "BILLS PAYMENT BANKARD VISA",
+      source: "upload",
+    },
+  ];
+  const partiallySettledServerTransactions: TestTransaction[] = [
+    {
+      id: "persisted-1",
+      importFileId: "unionbank-screenshots",
+      rawPayload: { sourceImportFileId: "unionbank-screenshots", sourceRowIndex: 1 },
+      accountId: "acc-1",
+      accountName: "UnionBank Savings 8037",
+      institution: "UnionBank",
+      accountNumber: "8037",
+      currency: "PHP",
+      type: "income",
+      date: "2026-04-13T00:00:00.000Z",
+      amount: "92627.65",
+      merchantRaw: "ONLINE PAYROLL",
+      merchantClean: "Online Payroll",
+      description: "ONLINE PAYROLL",
+      source: "upload",
+    },
+  ];
+
+  const mergedPartiallySettledTransactions = mergeFetchedTransactionsPreservingImported(
+    partiallySettledServerTransactions,
+    optimisticImportedTransactions,
+    {
+      exactServerTotalCount: 2,
+    }
+  );
+
+  assert.deepEqual(
+    mergedPartiallySettledTransactions.map((transaction) => transaction.amount),
+    ["92627.65", "6286.77"],
+    "A partial same-import server refresh should retain unmatched optimistic rows until the full import settles."
   );
 
   console.log("[PASS] imported-account-ui regression");

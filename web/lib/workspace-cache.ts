@@ -318,11 +318,6 @@ const pruneOrphanImportedAccountPlaceholders = <T extends CachedRecord>(accounts
 export const pruneImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) =>
   pruneOrphanImportedAccountPlaceholders(pruneGenericImportedAccountPlaceholders(accounts));
 
-const isCardLikeImportedAccountType = (value?: string | null) => {
-  const normalized = normalizeWhitespace(String(value ?? "")).toLowerCase();
-  return normalized === "credit_card" || normalized === "line_of_credit";
-};
-
 const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, right: ImportedAccountIdentityLike) => {
   const leftInstitution = canonicalImportedInstitutionKey(left.institution);
   const rightInstitution = canonicalImportedInstitutionKey(right.institution);
@@ -403,19 +398,6 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
   const rightExplicitLastFour = extractLastFourDigits(right.accountNumber);
   if (hasExactAccountNumberMatch && leftType && rightType && leftType === rightType) {
     return 99;
-  }
-  if (
-    leftType &&
-    rightType &&
-    leftType === rightType &&
-    isCardLikeImportedAccountType(leftType) &&
-    leftLastFour &&
-    rightLastFour &&
-    leftLastFour === rightLastFour
-  ) {
-    if ((leftExplicitLastFour && !rightExplicitLastFour) || (!leftExplicitLastFour && rightExplicitLastFour)) {
-      return 94;
-    }
   }
   if ((leftExplicitLastFour && !rightExplicitLastFour) || (!leftExplicitLastFour && rightExplicitLastFour)) {
     return 0;
