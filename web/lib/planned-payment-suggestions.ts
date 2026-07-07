@@ -2,7 +2,12 @@ import { type CommitmentRecurrence, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { getUpcomingStatementReminders, type StatementReminder } from "@/lib/statement-reminders";
-import { detectRecurringPatterns, getRecurringSourceTransactions, makeRecurringSuppressionKey } from "@/lib/recurring-detection";
+import {
+  buildRecurringMerchantFamilySignature,
+  detectRecurringPatterns,
+  getRecurringSourceTransactions,
+  makeRecurringSuppressionKey,
+} from "@/lib/recurring-detection";
 
 type PlannedPaymentTransactionLike = {
   id: string;
@@ -48,6 +53,7 @@ export type PlannedPaymentSuggestion = {
 
 type ConfirmedRecurringMemory = {
   normalizedKey: string;
+  familyKey: string;
   recurrence: CommitmentRecurrence;
   nextDueDate: Date | null;
   dueDate: Date | null;
@@ -303,7 +309,8 @@ const buildRecurringTransactionSuggestions = (
   transactions: Awaited<ReturnType<typeof getRecurringSourceTransactions>>,
   existingCommitmentKeys: Set<string>,
   dismissedSuppressionKeys: Set<string>,
-  confirmedRecurringMemoryByTitle: Map<string, ConfirmedRecurringMemory[]>
+  confirmedRecurringMemoryByTitle: Map<string, ConfirmedRecurringMemory[]>,
+  confirmedRecurringMemoryByFamily: Map<string, ConfirmedRecurringMemory[]>
 ) => {
   const suggestions: PlannedPaymentSuggestion[] = [];
   const patterns = detectRecurringPatterns(transactions).filter((pattern) => pattern.transactionCount >= 2);
@@ -325,7 +332,11 @@ const buildRecurringTransactionSuggestions = (
         ? `${pattern.frequency} around the ${pattern.expectedDayOfMonth}${pattern.expectedDayOfMonth === 1 ? "st" : pattern.expectedDayOfMonth === 2 ? "nd" : pattern.expectedDayOfMonth === 3 ? "rd" : "th"}`
         : pattern.frequency;
     const normalizedTitle = normalizeKey(title);
-    const confirmedMatches = confirmedRecurringMemoryByTitle.get(normalizedTitle) ?? [];
+    const familyKey = buildRecurringMerchantFamilySignature(title);
+    const confirmedMatches = [
+      ...(confirmedRecurringMemoryByTitle.get(normalizedTitle) ?? []),
+      ...(confirmedRecurringMemoryByFamily.get(familyKey) ?? []),
+    ];
     const confirmedMatch =
       confirmedMatches.find(
         (memory) =>
@@ -511,20 +522,26 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
     })
   );
   const confirmedRecurringMemoryByTitle = new Map<string, ConfirmedRecurringMemory[]>();
+  const confirmedRecurringMemoryByFamily = new Map<string, ConfirmedRecurringMemory[]>();
   for (const commitment of confirmedRecurringCommitments) {
     const keys = [normalizeKey(commitment.title), normalizeKey(commitment.counterparty ?? "")].filter(Boolean);
     for (const normalizedKey of keys) {
+      const baseLabel = commitment.counterparty ?? commitment.title;
+      const familyKey = buildRecurringMerchantFamilySignature(baseLabel);
+      const memory = {
+        normalizedKey,
+        familyKey,
+        recurrence: commitment.recurrence,
+        nextDueDate: commitment.nextDueDate,
+        dueDate: commitment.dueDate,
+        accountId: commitment.accountId,
+        currency: (commitment.currency ?? "PHP").toUpperCase(),
+      };
       confirmedRecurringMemoryByTitle.set(normalizedKey, [
         ...(confirmedRecurringMemoryByTitle.get(normalizedKey) ?? []),
-        {
-          normalizedKey,
-          recurrence: commitment.recurrence,
-          nextDueDate: commitment.nextDueDate,
-          dueDate: commitment.dueDate,
-          accountId: commitment.accountId,
-          currency: (commitment.currency ?? "PHP").toUpperCase(),
-        },
+        memory,
       ]);
+      confirmedRecurringMemoryByFamily.set(familyKey, [...(confirmedRecurringMemoryByFamily.get(familyKey) ?? []), memory]);
     }
   }
 
@@ -538,7 +555,8 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
     recurringTransactions,
     existingRecurringTransactionKeys,
     dismissedSuppressionKeys,
-    confirmedRecurringMemoryByTitle
+    confirmedRecurringMemoryByTitle,
+    confirmedRecurringMemoryByFamily
   );
 
   return [...reminderSuggestions, ...installmentSuggestions, ...recurringTransactionSuggestions].sort(

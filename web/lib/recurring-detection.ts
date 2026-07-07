@@ -89,8 +89,10 @@ const recurringMerchantAliases = [
 
 const recurringFamilyNoisePattern =
   /\b(?:subscription|subscr(?:iption)?|recurring|monthly|autopay|premium|membership|member|plan|service|services|merchant|purchase|ecommerce|online|intl|international|foreign|debit|credit|visa|mastercard|pos|approval|reference|ref|auth|descriptor|statement|biller|billers?)\b/g;
+const variableAmountRecurringPattern =
+  /\b(rent|internet|bill|utility|utilities|electric|water|phone|insurance|mortgage|loan|repayment|amortization|dues|globe|smart|pldt|meralco)\b/i;
 
-const normalizeMerchantKey = (value: string) =>
+export const normalizeRecurringMerchantKey = (value: string) =>
   value
     .trim()
     .toLowerCase()
@@ -105,8 +107,8 @@ const normalizeMerchantKey = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const buildMerchantFamilySignature = (value: string) => {
-  const normalized = normalizeMerchantKey(value)
+export const buildRecurringMerchantFamilySignature = (value: string) => {
+  const normalized = normalizeRecurringMerchantKey(value)
     .replace(recurringFamilyNoisePattern, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -124,7 +126,7 @@ const buildMerchantFamilySignature = (value: string) => {
 };
 
 const canonicalizeRecurringMerchant = (value: string) => {
-  const normalized = normalizeMerchantKey(value);
+  const normalized = normalizeRecurringMerchantKey(value);
   for (const alias of recurringMerchantAliases) {
     if (alias.pattern.test(normalized)) {
       return alias.label;
@@ -134,7 +136,7 @@ const canonicalizeRecurringMerchant = (value: string) => {
   return normalized
     .replace(/\b(?:subscription|monthly|autopay|premium|membership|fee)\b/g, " ")
     .replace(/\s+/g, " ")
-    .trim() || buildMerchantFamilySignature(value);
+    .trim() || buildRecurringMerchantFamilySignature(value);
 };
 
 const isDismissedRecurringPattern = (value: Prisma.JsonValue | null | undefined) =>
@@ -193,7 +195,7 @@ export const makeRecurringSuppressionKey = (params: {
   currency: string | null;
   title: string | null;
 }) =>
-  [params.accountId ?? "workspace", (params.currency ?? "PHP").trim().toUpperCase() || "PHP", normalizeMerchantKey(params.title ?? "")]
+  [params.accountId ?? "workspace", (params.currency ?? "PHP").trim().toUpperCase() || "PHP", normalizeRecurringMerchantKey(params.title ?? "")]
     .join("::");
 
 const inferFrequency = (dates: Date[]): { frequency: CommitmentRecurrence | null; nextExpectedDate: Date | null; cadenceConfidence: number } => {
@@ -268,7 +270,7 @@ const buildPatternFromTransactions = (
       expenseTransactions
         .map((transaction) => transaction.merchantClean ?? transaction.merchantRaw)
         .find((value) => Boolean(value && canonicalizeRecurringMerchant(value).length > 0)) ?? expenseTransactions[0]?.merchantRaw ?? ""
-    ) || normalizeMerchantKey(expenseTransactions[0]?.merchantRaw ?? "");
+    ) || normalizeRecurringMerchantKey(expenseTransactions[0]?.merchantRaw ?? "");
   if (!canonicalTitle) {
     return null;
   }
@@ -281,6 +283,11 @@ const buildPatternFromTransactions = (
   const amountStability = stableAmountCount / Math.max(amounts.length, 1);
   const categoryNames = new Set(expenseTransactions.map((transaction) => transaction.category?.name?.toLowerCase() ?? ""));
   const hasKeywordSignal = recurringKeywordPattern.test(textBlob) || categoryNames.has("bills & utilities");
+  const hasVariableAmountSignal =
+    variableAmountRecurringPattern.test(textBlob) ||
+    categoryNames.has("bills & utilities") ||
+    categoryNames.has("insurance") ||
+    categoryNames.has("loans");
   const looksTransferLike = recurringExclusionPattern.test(textBlob);
   const cadence = inferFrequency(expenseTransactions.map((transaction) => transaction.date));
   const dateDays = expenseTransactions.map((transaction) => transaction.date.getDate());
@@ -310,6 +317,20 @@ const buildPatternFromTransactions = (
     return null;
   }
 
+  if (
+    hasKeywordSignal &&
+    hasVariableAmountSignal &&
+    ["monthly", "quarterly", "annual"].includes(cadence.frequency) &&
+    expenseTransactions.length >= 3 &&
+    amountStability >= 0.35
+  ) {
+    // Variable utilities and similar bills often fluctuate because of usage or FX conversion.
+  } else if (hasKeywordSignal && amountStability < 0.55 && expenseTransactions.length < 3) {
+    return null;
+  } else if (hasKeywordSignal && amountStability < 0.35) {
+    return null;
+  }
+
   const uniqueAccountKeys = new Set(
     expenseTransactions.map((transaction) =>
       [
@@ -330,6 +351,7 @@ const buildPatternFromTransactions = (
     cadence.frequency ? `${cadence.frequency} cadence` : null,
     expectedDayOfMonth !== null ? `around the ${ordinal(expectedDayOfMonth)}` : null,
     hasKeywordSignal ? "merchant looks like a bill or subscription" : null,
+    hasVariableAmountSignal && amountStability < 0.75 ? "amount changes like a utility or bill" : null,
     amountStability >= 0.9 ? "amount stays very consistent" : amountStability >= 0.75 ? "amount stays fairly close" : null,
     spansMultipleAccounts ? "seen across multiple accounts" : null,
   ]
@@ -339,6 +361,7 @@ const buildPatternFromTransactions = (
     cadence.frequency ? cadence.frequency : null,
     expectedDayOfMonth !== null ? "same date" : null,
     hasKeywordSignal ? "known merchant" : null,
+    hasVariableAmountSignal && amountStability < 0.75 ? "variable amount" : null,
     amountStability >= 0.9 ? "stable amount" : amountStability >= 0.75 ? "close amount" : null,
     spansMultipleAccounts ? "cross-account" : null,
   ].filter((value): value is string => Boolean(value));
@@ -392,6 +415,7 @@ const buildPatternFromTransactions = (
       transactionIds: expenseTransactions.map((transaction) => transaction.id),
       amountStability,
       hasKeywordSignal,
+      hasVariableAmountSignal,
       looksTransferLike,
       canonicalTitle,
       accountCount: uniqueAccountKeys.size,
@@ -417,8 +441,8 @@ export const detectRecurringPatterns = (transactions: RecurringSourceTransaction
 
     const merchantKey =
       canonicalizeRecurringMerchant(transaction.merchantClean ?? transaction.merchantRaw) ||
-      buildMerchantFamilySignature(transaction.merchantClean ?? transaction.merchantRaw) ||
-      normalizeMerchantKey(transaction.merchantClean ?? transaction.merchantRaw);
+      buildRecurringMerchantFamilySignature(transaction.merchantClean ?? transaction.merchantRaw) ||
+      normalizeRecurringMerchantKey(transaction.merchantClean ?? transaction.merchantRaw);
     if (!merchantKey) {
       continue;
     }
@@ -437,7 +461,7 @@ export const detectRecurringPatterns = (transactions: RecurringSourceTransaction
 
   const dedupedPatterns = new Map<string, DetectedRecurringPattern>();
   for (const pattern of patterns) {
-    const key = [pattern.currency, normalizeMerchantKey(pattern.canonicalTitle)].join("::");
+    const key = [pattern.currency, normalizeRecurringMerchantKey(pattern.canonicalTitle)].join("::");
     const existing = dedupedPatterns.get(key);
     if (
       !existing ||
@@ -460,7 +484,7 @@ const buildRecurringDedupKey = (transaction: RecurringSourceTransaction) =>
     transaction.accountId ?? transaction.account?.name ?? "workspace",
     (transaction.currency ?? "PHP").trim().toUpperCase() || "PHP",
     transaction.date.toISOString().slice(0, 10),
-    normalizeMerchantKey(transaction.merchantClean ?? transaction.merchantRaw),
+    normalizeRecurringMerchantKey(transaction.merchantClean ?? transaction.merchantRaw),
     toAmount(transaction.amount).toFixed(2),
   ].join("::");
 
@@ -623,7 +647,7 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
       [
         commitment.accountId ?? "workspace",
         (commitment.currency ?? "PHP").toUpperCase(),
-        normalizeMerchantKey(commitment.counterparty ?? commitment.title),
+        normalizeRecurringMerchantKey(commitment.counterparty ?? commitment.title),
       ].join("::")
     )
   );
@@ -660,7 +684,7 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
   );
 
   const patterns = detectedPatterns.filter((pattern) => {
-    const key = [pattern.accountId ?? "workspace", pattern.currency, normalizeMerchantKey(pattern.canonicalTitle)].join("::");
+    const key = [pattern.accountId ?? "workspace", pattern.currency, normalizeRecurringMerchantKey(pattern.canonicalTitle)].join("::");
     return !existingCommitmentKeys.has(key) && !dismissedSuppressionKeys.has(pattern.suppressionKey);
   });
 
