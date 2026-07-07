@@ -4,6 +4,7 @@ import { hasCompatibleTable } from "@/lib/data-engine";
 import { getUpcomingStatementReminders, type StatementReminder } from "@/lib/statement-reminders";
 import {
   buildRecurringMerchantFamilySignature,
+  classifyRecurringObligation,
   detectRecurringPatterns,
   getRecurringSourceTransactions,
   makeRecurringSuppressionKey,
@@ -171,6 +172,30 @@ const readTransactionImportFileName = (transaction: PlannedPaymentTransactionLik
 
   const fileName = (rawPayload as Record<string, unknown>).sourceFileName;
   return typeof fileName === "string" && fileName.trim() ? fileName.trim() : null;
+};
+
+const describeRecurringSuggestionType = (title: string, reasonTags: string[]) => {
+  const obligationType = classifyRecurringObligation({
+    text: [title, ...reasonTags].join(" "),
+    categoryNames: reasonTags,
+  });
+
+  switch (obligationType) {
+    case "subscription":
+      return { sourceLabel: "Subscription candidate", tag: "subscription" };
+    case "utility":
+      return { sourceLabel: "Bill candidate", tag: "utility" };
+    case "loan":
+      return { sourceLabel: "Loan payment candidate", tag: "loan" };
+    case "insurance":
+      return { sourceLabel: "Insurance candidate", tag: "insurance" };
+    case "rent":
+      return { sourceLabel: "Rent candidate", tag: "rent" };
+    case "statement_payment":
+      return { sourceLabel: "Statement payment candidate", tag: "statement payment" };
+    default:
+      return { sourceLabel: "Recurring transaction", tag: null };
+  }
 };
 
 const buildReminderSuggestions = (reminders: StatementReminder[], existingCheckpointIds: Set<string>) => {
@@ -345,6 +370,10 @@ const buildRecurringTransactionSuggestions = (
       ) ?? confirmedMatches[0] ?? null;
     const hasConfirmedMatch = Boolean(confirmedMatch);
     const dueDate = selectRememberedDueDate(pattern.nextExpectedDate, confirmedMatch);
+    const suggestionType = describeRecurringSuggestionType(title, pattern.reasonTags);
+    const reasonTags = suggestionType.tag && !pattern.reasonTags.includes(suggestionType.tag)
+      ? [suggestionType.tag, ...pattern.reasonTags]
+      : pattern.reasonTags;
 
     suggestions.push({
       id: key,
@@ -362,10 +391,11 @@ const buildRecurringTransactionSuggestions = (
       notes: [
         `Detected from ${pattern.transactionCount} similar transaction${pattern.transactionCount === 1 ? "" : "s"} across recent uploads.`,
         amountRange ? `Usually ${amountRange}.` : null,
+        dueDate ? `Next expected around ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(dueDate)}.` : null,
       ]
         .filter(Boolean)
         .join(" "),
-      sourceLabel: "Recurring transaction",
+      sourceLabel: suggestionType.sourceLabel,
       sourceDetail: [
         scheduleDetail ? `Looks ${scheduleDetail}` : null,
         hasConfirmedMatch ? "matched your saved recurring item" : null,
@@ -374,7 +404,7 @@ const buildRecurringTransactionSuggestions = (
         .filter(Boolean)
         .join(" · "),
       reasonSummary: hasConfirmedMatch ? `${pattern.reasonSummary} · matched your saved recurring schedule` : pattern.reasonSummary,
-      reasonTags: hasConfirmedMatch ? [...pattern.reasonTags, "confirmed before", "saved schedule"] : pattern.reasonTags,
+      reasonTags: hasConfirmedMatch ? [...reasonTags, "confirmed before", "saved schedule"] : reasonTags,
       confidence: Math.min(98, pattern.confidence + (hasConfirmedMatch ? 6 : 0)),
       sourceFileName: pattern.importFile?.fileName ?? null,
     });

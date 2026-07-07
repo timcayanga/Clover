@@ -57,6 +57,15 @@ type DetectedRecurringPattern = {
   } | null;
 };
 
+export type RecurringObligationType =
+  | "subscription"
+  | "utility"
+  | "loan"
+  | "insurance"
+  | "rent"
+  | "statement_payment"
+  | "general";
+
 const recurringKeywordPattern =
   /\b(rent|internet|bill|utility|utilities|subscription|subscr(?:iption)?|monthly|electric|water|phone|insurance|mortgage|loan|repayment|amortization|dues|fee|netflix|spotify|youtube|icloud|google|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco)\b/i;
 const recurringExclusionPattern =
@@ -188,6 +197,82 @@ const addDays = (date: Date, days: number) => {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
+};
+
+const rollPatternDateForward = (
+  candidateDate: Date,
+  recurrence: CommitmentRecurrence,
+  expectedDayOfMonth: number | null
+) => {
+  const now = new Date();
+  let next = new Date(candidateDate);
+
+  if (expectedDayOfMonth !== null && ["monthly", "quarterly", "annual"].includes(recurrence)) {
+    next.setDate(Math.min(expectedDayOfMonth, 28));
+  }
+
+  const bump = () => {
+    if (recurrence === "weekly") {
+      next = addDays(next, 7);
+      return;
+    }
+    if (recurrence === "biweekly") {
+      next = addDays(next, 14);
+      return;
+    }
+    if (recurrence === "quarterly") {
+      next = addMonths(next, 3);
+      return;
+    }
+    if (recurrence === "annual") {
+      next = addMonths(next, 12);
+      return;
+    }
+    next = addMonths(next, 1);
+  };
+
+  while (next.getTime() <= now.getTime()) {
+    bump();
+  }
+
+  return next;
+};
+
+export const classifyRecurringObligation = (params: {
+  text: string;
+  categoryNames?: string[];
+}): RecurringObligationType => {
+  const normalizedText = params.text.toLowerCase();
+  const categories = new Set((params.categoryNames ?? []).map((value) => value.toLowerCase()));
+
+  if (/\b(netflix|spotify|youtube|disney|prime|apple music|icloud|google one|chatgpt|canva|adobe|scribd|linkedin|subscription|subscr)\b/.test(normalizedText)) {
+    return "subscription";
+  }
+
+  if (/\b(mortgage|loan|repayment|amortization|installment|credit to cash)\b/.test(normalizedText) || categories.has("loans")) {
+    return "loan";
+  }
+
+  if (/\b(insurance|premium policy|insure)\b/.test(normalizedText) || categories.has("insurance")) {
+    return "insurance";
+  }
+
+  if (/\b(rent|landlord|lease)\b/.test(normalizedText)) {
+    return "rent";
+  }
+
+  if (/\b(card payment|statement payment|amount due|total amount due|minimum amount due)\b/.test(normalizedText)) {
+    return "statement_payment";
+  }
+
+  if (
+    /\b(internet|phone|electric|water|utility|utilities|pldt|globe|smart|meralco|broadband|postpaid)\b/.test(normalizedText) ||
+    categories.has("bills & utilities")
+  ) {
+    return "utility";
+  }
+
+  return "general";
 };
 
 export const makeRecurringSuppressionKey = (params: {
@@ -347,9 +432,15 @@ const buildPatternFromTransactions = (
 
   const first = expenseTransactions[0] as RecurringSourceTransaction;
   const last = expenseTransactions[expenseTransactions.length - 1] as RecurringSourceTransaction;
+  const obligationType = classifyRecurringObligation({
+    text: textBlob,
+    categoryNames: Array.from(categoryNames).filter(Boolean),
+  });
+  const nextExpectedDate = rollPatternDateForward(cadence.nextExpectedDate, cadence.frequency, expectedDayOfMonth);
   const reasonSummary = [
     cadence.frequency ? `${cadence.frequency} cadence` : null,
     expectedDayOfMonth !== null ? `around the ${ordinal(expectedDayOfMonth)}` : null,
+    obligationType !== "general" ? `${obligationType.replace(/_/g, " ")} pattern` : null,
     hasKeywordSignal ? "merchant looks like a bill or subscription" : null,
     hasVariableAmountSignal && amountStability < 0.75 ? "amount changes like a utility or bill" : null,
     amountStability >= 0.9 ? "amount stays very consistent" : amountStability >= 0.75 ? "amount stays fairly close" : null,
@@ -360,6 +451,7 @@ const buildPatternFromTransactions = (
   const reasonTags = [
     cadence.frequency ? cadence.frequency : null,
     expectedDayOfMonth !== null ? "same date" : null,
+    obligationType !== "general" ? obligationType.replace(/_/g, " ") : null,
     hasKeywordSignal ? "known merchant" : null,
     hasVariableAmountSignal && amountStability < 0.75 ? "variable amount" : null,
     amountStability >= 0.9 ? "stable amount" : amountStability >= 0.75 ? "close amount" : null,
@@ -400,7 +492,7 @@ const buildPatternFromTransactions = (
     frequency: cadence.frequency,
     firstSeenDate: first.date,
     lastSeenDate: last.date,
-    nextExpectedDate: cadence.nextExpectedDate,
+    nextExpectedDate,
     expectedDayOfMonth,
     transactionCount: expenseTransactions.length,
     confidence,
@@ -419,6 +511,7 @@ const buildPatternFromTransactions = (
       looksTransferLike,
       canonicalTitle,
       accountCount: uniqueAccountKeys.size,
+      obligationType,
       minimumAmount: Number(Math.min(...amounts).toFixed(2)),
       maximumAmount: Number(Math.max(...amounts).toFixed(2)),
       expectedDayOfMonth,
