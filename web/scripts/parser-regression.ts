@@ -2027,6 +2027,40 @@ const main = async () => {
 
   const guessCategoryFallback = dataEngine.guessCategoryFallback as (description: string, type: "income" | "expense" | "transfer") => string;
   const guessCategoryName = parser.guessCategoryName as (text: string, type: "income" | "expense" | "transfer") => string;
+  const classifyMerchant = dataEngine.classifyMerchant as (params: {
+    merchantText: string;
+    categoryText?: string | null;
+    type: "income" | "expense" | "transfer";
+    categoryName?: string | null;
+    merchantRules: Array<{
+      merchantKey: string;
+      merchantPattern: string | null;
+      normalizedName: string;
+      categoryId: string | null;
+      categoryName: string | null;
+      source: string;
+      confidence: number;
+      timesConfirmed: number;
+    }>;
+    trainingSignals: Array<{
+      categoryId: string;
+      categoryName: string | null;
+      merchantKey: string;
+      merchantTokens: string[];
+      type: "income" | "expense" | "transfer";
+      source: string;
+      confidence: number;
+    }>;
+    negativeSignals?: Array<{
+      merchantKey: string;
+      merchantTokens: string[];
+      source: string;
+      confidence: number;
+    }>;
+  }) => {
+    categoryName: string | null;
+    normalizedName: string | null;
+  };
   const getEffectiveTransactionCategoryName = transactionDisplayModule.getEffectiveTransactionCategoryName as (params: {
     categoryName?: string | null;
     rawPayload?: Record<string, unknown> | null;
@@ -2102,6 +2136,26 @@ const main = async () => {
     const actualCategory = guessCategoryName(description, type);
     if (actualCategory !== expectedCategory) {
       throw new Error(`expected guessCategoryName ${description} to classify as ${expectedCategory}, got ${actualCategory}`);
+    }
+  }
+  const noisyUnseenMerchantExpectations: Array<[string, "income" | "expense" | "transfer", string, string]> = [
+    ["GRAB PHILIPPINES REF 8841 CARD XX9737", "expense", "Transport", "Grab"],
+    ["DUNKIN DONUTS PH STORE 0143 CARD PURCHASE", "expense", "Food & Dining", "Dunkin"],
+    ["LINKEDIN PREMIUM SINGAPORE PTE LTD", "expense", "Bills & Utilities", "LinkedIn"],
+  ];
+  for (const [merchantText, type, expectedCategory, expectedName] of noisyUnseenMerchantExpectations) {
+    const result = classifyMerchant({
+      merchantText,
+      type,
+      merchantRules: [],
+      trainingSignals: [],
+      negativeSignals: [],
+    });
+    if (result.categoryName !== expectedCategory) {
+      throw new Error(`expected classifyMerchant ${merchantText} to classify as ${expectedCategory}, got ${result.categoryName ?? "missing"}`);
+    }
+    if (result.normalizedName !== expectedName) {
+      throw new Error(`expected classifyMerchant ${merchantText} to normalize to ${expectedName}, got ${result.normalizedName ?? "missing"}`);
     }
   }
   const aubDisplayedCategory = getEffectiveTransactionCategoryName({

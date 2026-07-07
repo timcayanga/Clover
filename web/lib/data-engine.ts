@@ -817,6 +817,28 @@ export const buildMerchantPrototypeVariants = (merchantText: string, normalizedN
   return [...variants];
 };
 
+const buildMerchantClassificationCandidates = (merchantText: string, normalizedName?: string | null) => {
+  const variants = new Set<string>();
+  const addVariant = (value: string | null | undefined) => {
+    const trimmed = normalizeWhitespace(String(value ?? "")).trim();
+    if (!trimmed || trimmed.length < 2) {
+      return;
+    }
+
+    variants.add(trimmed);
+  };
+
+  addVariant(merchantText);
+  addVariant(normalizedName);
+  addVariant(summarizeMerchantText(merchantText));
+
+  for (const variant of buildMerchantPrototypeVariants(merchantText, normalizedName)) {
+    addVariant(variant);
+  }
+
+  return [...variants];
+};
+
 export const estimateImportLearningConfidence = (params: {
   baseConfidence?: number | null;
   teachabilityScore?: number | null;
@@ -3070,8 +3092,8 @@ export const findExistingImportedStatement = async (params: {
   return null;
 };
 
-const scoreSignal = (tokens: string[], normalizedMerchant: string, signal: TrainingSignalRow) => {
-  const exactMatch = signal.merchantKey && signal.merchantKey === normalizedMerchant;
+const scoreSignal = (tokens: string[], normalizedMerchantCandidates: Set<string>, signal: TrainingSignalRow) => {
+  const exactMatch = signal.merchantKey && normalizedMerchantCandidates.has(signal.merchantKey);
   if (exactMatch) {
     return 100 + signal.confidence;
   }
@@ -3092,8 +3114,8 @@ const scoreSignal = (tokens: string[], normalizedMerchant: string, signal: Train
   return overlap * 18 + signal.confidence * 0.5;
 };
 
-const scoreMerchantRule = (tokens: string[], normalizedMerchant: string, rule: MerchantRuleRow) => {
-  if (rule.merchantKey === normalizedMerchant) {
+const scoreMerchantRule = (tokens: string[], normalizedMerchantCandidates: Set<string>, rule: MerchantRuleRow) => {
+  if (normalizedMerchantCandidates.has(rule.merchantKey)) {
     return 120 + rule.confidence;
   }
 
@@ -3130,9 +3152,12 @@ export const classifyMerchant = (params: {
 
     return coerceTransactionTypeFromCategoryName(categoryName, fallback);
   };
-  const categoryText = [params.categoryText, params.merchantText].filter((value) => typeof value === "string" && value.trim()).join(" ");
+  const normalizedSummary = summarizeMerchantText(params.merchantText);
+  const merchantCandidates = buildMerchantClassificationCandidates(params.merchantText, normalizedSummary);
+  const normalizedMerchantCandidates = new Set(merchantCandidates.map((value) => normalizeMerchantText(value)).filter(Boolean));
+  const normalizedMerchant = merchantCandidates.map((value) => normalizeMerchantText(value)).find(Boolean) ?? normalizeMerchantText(params.merchantText);
+  const categoryText = [params.categoryText, ...merchantCandidates].filter((value) => typeof value === "string" && value.trim()).join(" ");
   const tokens = tokenizeMerchant(categoryText || params.merchantText);
-  const normalizedMerchant = normalizeMerchantText(params.merchantText);
   const hardcodedOverride = getHardcodedCategoryOverride(categoryText || params.merchantText);
   const providedCategory = params.categoryName?.trim();
   const heuristicCategory =
@@ -3153,13 +3178,13 @@ export const classifyMerchant = (params: {
       categorySource: "deterministic_override",
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
-      normalizedName: summarizeMerchantText(params.merchantText),
+      normalizedName: normalizedSummary,
       preferredType: preferredTypeForCategory(hardcodedOverride, params.type, categoryText || params.merchantText),
     };
   }
 
   for (const rule of params.merchantRules) {
-    const score = scoreMerchantRule(tokens, normalizedMerchant, rule);
+    const score = scoreMerchantRule(tokens, normalizedMerchantCandidates, rule);
     if (score > bestRuleScore) {
       bestRuleScore = score;
       bestRule = rule;
@@ -3167,7 +3192,7 @@ export const classifyMerchant = (params: {
   }
 
   const scoreNegativeSignal = (signal: NegativeMerchantSignalRow) => {
-    if (signal.merchantKey === normalizedMerchant) {
+    if (normalizedMerchantCandidates.has(signal.merchantKey)) {
       return 100 + signal.confidence;
     }
 
@@ -3189,8 +3214,8 @@ export const classifyMerchant = (params: {
 
   if (bestRule && bestRuleScore >= 20) {
     const learnedCategory = bestRule.categoryName ?? heuristicCategory;
-    const exact = bestRule.merchantKey === normalizedMerchant;
-    const learnedType = params.trainingSignals.find((signal) => signal.merchantKey === normalizedMerchant)?.type ?? params.type;
+    const exact = normalizedMerchantCandidates.has(bestRule.merchantKey);
+    const learnedType = params.trainingSignals.find((signal) => normalizedMerchantCandidates.has(signal.merchantKey))?.type ?? params.type;
     const rawConfidence = Math.max(0, bestRuleScore) - Math.min(bestRuleScore * 0.75, negativePenalty * (exact ? 0.9 : 0.65));
     const adjustedConfidence = Math.max(20, Math.round(Math.min(negativePenalty > 0 ? (exact ? 85 : 88) : 99, rawConfidence)));
     return {
@@ -3200,13 +3225,13 @@ export const classifyMerchant = (params: {
       categorySource: bestRule.source,
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
-      normalizedName: bestRule.normalizedName || summarizeMerchantText(params.merchantText),
+      normalizedName: bestRule.normalizedName || normalizedSummary,
       preferredType: preferredTypeForCategory(learnedCategory, learnedType, categoryText || params.merchantText),
     };
   }
 
   for (const signal of params.trainingSignals) {
-    const score = scoreSignal(tokens, normalizedMerchant, signal);
+    const score = scoreSignal(tokens, normalizedMerchantCandidates, signal);
     if (score > bestScore) {
       bestScore = score;
       bestSignal = signal;
@@ -3215,17 +3240,18 @@ export const classifyMerchant = (params: {
 
   if (bestSignal && bestScore >= 18) {
     const learnedCategory = bestSignal.categoryName ?? heuristicCategory;
+    const exact = normalizedMerchantCandidates.has(bestSignal.merchantKey);
     const rawConfidence = Math.max(68, bestScore) - Math.min(bestScore * 0.6, negativePenalty * 0.45);
     const confidence = Math.max(20, Math.round(Math.min(negativePenalty > 0 ? 80 : 99, rawConfidence)));
 
     return {
       categoryName: learnedCategory,
       confidence,
-      categoryReason: bestSignal.merchantKey === normalizedMerchant ? "learned-exact" : "learned-pattern",
+      categoryReason: exact ? "learned-exact" : "learned-pattern",
       categorySource: bestSignal.source,
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
-      normalizedName: summarizeMerchantText(params.merchantText),
+      normalizedName: normalizedSummary,
       preferredType: preferredTypeForCategory(learnedCategory, bestSignal.type ?? params.type, categoryText || params.merchantText),
     };
   }
@@ -3238,7 +3264,7 @@ export const classifyMerchant = (params: {
       categorySource: "deterministic_exact",
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
-      normalizedName: summarizeMerchantText(params.merchantText),
+      normalizedName: normalizedSummary,
       preferredType: preferredTypeForCategory(heuristicCategory, params.type, categoryText || params.merchantText),
     };
   }
@@ -3250,7 +3276,7 @@ export const classifyMerchant = (params: {
     categorySource: "deterministic_heuristic",
     merchantKey: normalizedMerchant,
     merchantTokens: tokens,
-    normalizedName: summarizeMerchantText(params.merchantText),
+    normalizedName: normalizedSummary,
     preferredType: preferredTypeForCategory(heuristicCategory, params.type, categoryText || params.merchantText),
   };
 };
