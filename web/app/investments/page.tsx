@@ -22,9 +22,12 @@ import {
 } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceAccountDeletion,
+  accountsWorkspaceCacheKey,
   clearDeletedWorkspaceAccount,
   clearDeletingWorkspaceAccount,
+  getCachedAccountsWorkspace,
   markDeletedWorkspaceAccount,
+  persistAccountsWorkspaceCache,
 } from "@/lib/workspace-cache";
 import {
   canTrackInvestmentDividends,
@@ -113,6 +116,15 @@ type InvestmentSnapshot = {
     createdAt: string;
   } | null;
   holdings: InvestmentSnapshotHolding[];
+};
+
+const getCachedInvestmentWorkspace = (workspaceId: string) => {
+  const cachedSnapshot = getCachedAccountsWorkspace(workspaceId);
+  const cachedAccounts = Array.isArray(cachedSnapshot?.accounts) ? (cachedSnapshot.accounts as Account[]) : [];
+  return {
+    cachedSnapshot,
+    accounts: cachedAccounts,
+  };
 };
 
 const percentFormatter = new Intl.NumberFormat("en-US", {
@@ -376,16 +388,17 @@ const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => 
 export default function InvestmentsPage() {
   const router = useRouter();
   const initialWorkspaceId = readSelectedWorkspaceId();
-  const initialCachedWorkspace = null;
+  const initialCachedWorkspace = initialWorkspaceId ? getCachedInvestmentWorkspace(initialWorkspaceId).cachedSnapshot : null;
+  const initialCachedAccounts = Array.isArray(initialCachedWorkspace?.accounts) ? (initialCachedWorkspace.accounts as Account[]) : [];
   const searchParams = useSearchParams();
   const urlSearchParams = useMemo(() => new URLSearchParams(searchParams?.toString() ?? ""), [searchParams]);
   const searchQueryFromUrl = urlSearchParams.get("q") ?? "";
   const requestedTab = normalizeInvestmentTab(urlSearchParams.get("tab"));
 
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [accounts, setAccounts] = useState<Account[]>(initialCachedAccounts);
+  const [loading, setLoading] = useState(!initialCachedWorkspace);
+  const [hasLoaded, setHasLoaded] = useState(Boolean(initialCachedWorkspace));
   const [message, setMessage] = useState("");
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [investmentSearch, setInvestmentSearch] = useState(searchQueryFromUrl);
@@ -483,7 +496,6 @@ export default function InvestmentsPage() {
     let cancelled = false;
 
     const loadAccounts = async () => {
-      setLoading(true);
       if (!selectedWorkspaceId) {
         if (!cancelled) {
           setAccounts([]);
@@ -491,6 +503,15 @@ export default function InvestmentsPage() {
           setHasLoaded(true);
         }
         return;
+      }
+
+      const cachedWorkspace = getCachedInvestmentWorkspace(selectedWorkspaceId);
+      if (!cancelled && cachedWorkspace.cachedSnapshot) {
+        setAccounts(cachedWorkspace.accounts);
+        setLoading(false);
+        setHasLoaded(true);
+      } else if (!cancelled) {
+        setLoading(true);
       }
 
       try {
@@ -509,10 +530,20 @@ export default function InvestmentsPage() {
 
         const nextAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
         setAccounts(nextAccounts);
+        persistAccountsWorkspaceCache(selectedWorkspaceId, {
+          accounts: nextAccounts,
+          accountRules: cachedWorkspace.cachedSnapshot?.accountRules ?? [],
+          transactions: cachedWorkspace.cachedSnapshot?.transactions ?? [],
+          statementCheckpoints: cachedWorkspace.cachedSnapshot?.statementCheckpoints ?? [],
+          imports: cachedWorkspace.cachedSnapshot?.imports ?? [],
+        });
         persistSelectedWorkspaceId(selectedWorkspaceId);
       } catch {
         if (!cancelled) {
           setMessage("");
+          if (cachedWorkspace.cachedSnapshot) {
+            setAccounts(cachedWorkspace.accounts);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -527,6 +558,42 @@ export default function InvestmentsPage() {
     return () => {
       cancelled = true;
     };
+  }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || typeof window === "undefined") {
+      return;
+    }
+
+    const hydrateFromCache = () => {
+      const cachedWorkspace = getCachedInvestmentWorkspace(selectedWorkspaceId);
+      if (!cachedWorkspace.cachedSnapshot) {
+        return;
+      }
+
+      setAccounts(cachedWorkspace.accounts);
+      setLoading(false);
+      setHasLoaded(true);
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (
+        event.storageArea !== window.localStorage ||
+        (event.key !== accountsWorkspaceCacheKey && event.key !== "clover.selected-workspace-id.v1")
+      ) {
+        return;
+      }
+
+      const activeWorkspaceId = readSelectedWorkspaceId() || selectedWorkspaceId;
+      if (activeWorkspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      hydrateFromCache();
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, [selectedWorkspaceId]);
 
   const investmentAccounts = useMemo(

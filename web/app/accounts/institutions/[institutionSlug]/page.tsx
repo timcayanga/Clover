@@ -14,7 +14,12 @@ import {
   INVESTMENT_SUBTYPES,
   type InvestmentSubtype,
 } from "@/lib/investments";
-import { getCachedAccountsWorkspace, persistAccountsWorkspaceCache, applyOptimisticWorkspaceAccountDeletion } from "@/lib/workspace-cache";
+import {
+  accountsWorkspaceCacheKey,
+  applyOptimisticWorkspaceAccountDeletion,
+  getCachedAccountsWorkspace,
+  persistAccountsWorkspaceCache,
+} from "@/lib/workspace-cache";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 
 type Account = {
@@ -40,6 +45,40 @@ type Account = {
   createdAt: string;
 };
 
+type TransactionType = "income" | "expense" | "transfer";
+
+type Transaction = {
+  id: string;
+  workspaceId: string;
+  accountId: string;
+  accountName: string;
+  institution: string | null;
+  accountNumber: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  reviewStatus: string | null;
+  parserConfidence: number;
+  categoryConfidence: number;
+  accountMatchConfidence: number;
+  duplicateConfidence: number;
+  transferConfidence: number;
+  date: string;
+  amount: string;
+  currency: string;
+  type: TransactionType;
+  merchantRaw: string;
+  merchantClean: string | null;
+  description: string | null;
+  isTransfer: boolean;
+  isExcluded: boolean;
+  createdAt: string;
+  warningReason: string | null;
+  rawPayload: unknown;
+  normalizedPayload: unknown;
+  importFileId?: string | null;
+  source: "upload" | "manual";
+};
+
 type AssetDraft = {
   name: string;
   investmentSubtype: InvestmentSubtype;
@@ -54,9 +93,26 @@ type AssetDraft = {
   balance: string;
 };
 
+type TradeDraft = {
+  accountId: string;
+  date: string;
+  amount: string;
+  currency: string;
+  type: TransactionType;
+  merchantRaw: string;
+  description: string;
+};
+
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
 const formatMoney = (value: number, currency: string) => formatCurrencyAmount(value, currency);
+
+const formatTradeDate = (value: string) =>
+  new Date(value).toLocaleDateString("en-PH", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 
 const parseNullableNumberInput = (value: string) => {
   const trimmed = value.trim();
@@ -95,19 +151,26 @@ const buildAssetDraft = (account: Account): AssetDraft => ({
   balance: account.balance ?? "",
 });
 
-const syncAccountsWorkspaceCache = (workspaceId: string, nextAccounts: Account[]) => {
-  const cachedSnapshot = getCachedAccountsWorkspace(workspaceId);
-  if (!cachedSnapshot) {
-    return;
-  }
+const buildTradeDraft = (accounts: Account[], currency: string): TradeDraft => ({
+  accountId: accounts[0]?.id ?? "",
+  date: new Date().toISOString().slice(0, 10),
+  amount: "",
+  currency,
+  type: "expense",
+  merchantRaw: "",
+  description: "",
+});
 
-  persistAccountsWorkspaceCache(workspaceId, {
-    accounts: nextAccounts,
-    accountRules: cachedSnapshot.accountRules,
-    transactions: cachedSnapshot.transactions,
-    statementCheckpoints: cachedSnapshot.statementCheckpoints,
+const sortTransactionsDesc = (rows: Transaction[]) =>
+  rows.slice().sort((left, right) => {
+    const rightTime = Math.max(new Date(right.date).getTime(), new Date(right.createdAt).getTime());
+    const leftTime = Math.max(new Date(left.date).getTime(), new Date(left.createdAt).getTime());
+    if (rightTime !== leftTime) {
+      return rightTime - leftTime;
+    }
+
+    return right.id.localeCompare(left.id);
   });
-};
 
 export default function InvestmentInstitutionDetailPage() {
   const router = useRouter();
@@ -118,6 +181,7 @@ export default function InvestmentInstitutionDetailPage() {
   );
 
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [institutionDraft, setInstitutionDraft] = useState(routeInstitution);
@@ -125,6 +189,10 @@ export default function InvestmentInstitutionDetailPage() {
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [assetDraft, setAssetDraft] = useState<AssetDraft | null>(null);
   const [savingAssetId, setSavingAssetId] = useState<string | null>(null);
+  const [tradeDraft, setTradeDraft] = useState<TradeDraft>(buildTradeDraft([], routeCurrency));
+  const [editingTradeId, setEditingTradeId] = useState<string | null>(null);
+  const [savingTrade, setSavingTrade] = useState(false);
+  const [deletingTradeId, setDeletingTradeId] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingInstitution, setDeletingInstitution] = useState(false);
 
@@ -133,8 +201,38 @@ export default function InvestmentInstitutionDetailPage() {
     formatCurrencyCode(account.currency) === routeCurrency &&
     getInstitutionDisplayName(account).toLowerCase() === routeInstitution.toLowerCase();
 
+  const syncWorkspaceCache = (nextAccounts: Account[], nextTransactions: Transaction[]) => {
+    if (!workspaceId) {
+      return;
+    }
+
+    const cachedSnapshot = getCachedAccountsWorkspace(workspaceId);
+    if (!cachedSnapshot) {
+      return;
+    }
+
+    const scopedAccountIds = new Set(accounts.map((account) => account.id));
+    nextAccounts.forEach((account) => scopedAccountIds.add(account.id));
+    const preservedAccounts = (cachedSnapshot.accounts as Account[]).filter((account) => !scopedAccountIds.has(account.id));
+    const preservedTransactions = (cachedSnapshot.transactions as Transaction[]).filter(
+      (transaction) => !scopedAccountIds.has(transaction.accountId)
+    );
+
+    persistAccountsWorkspaceCache(workspaceId, {
+      accounts: [...preservedAccounts, ...nextAccounts],
+      accountRules: cachedSnapshot.accountRules,
+      transactions: [...preservedTransactions, ...nextTransactions],
+      statementCheckpoints: cachedSnapshot.statementCheckpoints,
+      imports: cachedSnapshot.imports ?? [],
+    });
+  };
+
   useEffect(() => {
     document.title = `Clover | ${routeInstitution || "Institution"}`;
+  }, [routeInstitution]);
+
+  useEffect(() => {
+    setInstitutionDraft(routeInstitution);
   }, [routeInstitution]);
 
   useEffect(() => {
@@ -146,15 +244,29 @@ export default function InvestmentInstitutionDetailPage() {
       }
 
       const cachedSnapshot = getCachedAccountsWorkspace(workspaceId);
-      const cachedAccounts = Array.isArray(cachedSnapshot?.accounts) ? (cachedSnapshot?.accounts as Account[]) : [];
-      const nextAccounts = cachedAccounts.filter(matchesInstitution);
-      if (nextAccounts.length === 0) {
+      const cachedAccounts = Array.isArray(cachedSnapshot?.accounts) ? (cachedSnapshot.accounts as Account[]) : [];
+      const matchedAccounts = cachedAccounts.filter(matchesInstitution);
+      const scopedAccountIds = new Set(matchedAccounts.map((account) => account.id));
+      const cachedTransactions = Array.isArray(cachedSnapshot?.transactions) ? (cachedSnapshot.transactions as Transaction[]) : [];
+      const matchedTransactions = cachedTransactions.filter((transaction) => scopedAccountIds.has(transaction.accountId));
+
+      if (!cachedSnapshot || matchedAccounts.length === 0) {
         return false;
       }
 
       if (!cancelled) {
-        setAccounts(nextAccounts);
-        setInstitutionDraft(routeInstitution);
+        setAccounts(matchedAccounts);
+        setTransactions(sortTransactionsDesc(matchedTransactions));
+        setTradeDraft((current) => ({
+          ...buildTradeDraft(matchedAccounts, routeCurrency),
+          accountId: current.accountId && scopedAccountIds.has(current.accountId) ? current.accountId : matchedAccounts[0]?.id ?? "",
+          date: current.date || new Date().toISOString().slice(0, 10),
+          amount: current.amount,
+          currency: current.currency || routeCurrency,
+          type: current.type,
+          merchantRaw: current.merchantRaw,
+          description: current.description,
+        }));
         setLoading(false);
       }
 
@@ -173,21 +285,42 @@ export default function InvestmentInstitutionDetailPage() {
       hydrateFromCache();
 
       try {
-        const response = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
-        if (!response.ok) {
+        const [accountsResponse, transactionsResponse] = await Promise.all([
+          fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
+          fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}&pageSize=all&summaryMode=light`),
+        ]);
+
+        if (!accountsResponse.ok) {
           throw new Error("Unable to load this institution.");
         }
 
-        const payload = await response.json();
-        const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-        const nextAccounts = fetchedAccounts.filter(matchesInstitution);
+        const accountsPayload = await accountsResponse.json();
+        const fetchedAccounts = Array.isArray(accountsPayload.accounts) ? (accountsPayload.accounts as Account[]) : [];
+        const matchedAccounts = fetchedAccounts.filter(matchesInstitution);
+        const scopedAccountIds = new Set(matchedAccounts.map((account) => account.id));
+
+        const transactionsPayload = transactionsResponse.ok ? await transactionsResponse.json() : null;
+        const fetchedTransactions = Array.isArray(transactionsPayload?.transactions)
+          ? (transactionsPayload.transactions as Transaction[])
+          : [];
+        const matchedTransactions = fetchedTransactions.filter((transaction) => scopedAccountIds.has(transaction.accountId));
 
         if (cancelled) {
           return;
         }
 
-        setAccounts(nextAccounts);
-        setInstitutionDraft(routeInstitution);
+        setAccounts(matchedAccounts);
+        setTransactions(sortTransactionsDesc(matchedTransactions));
+        setTradeDraft((current) => ({
+          ...buildTradeDraft(matchedAccounts, routeCurrency),
+          accountId: current.accountId && scopedAccountIds.has(current.accountId) ? current.accountId : matchedAccounts[0]?.id ?? "",
+          date: current.date || new Date().toISOString().slice(0, 10),
+          amount: current.amount,
+          currency: current.currency || routeCurrency,
+          type: current.type,
+          merchantRaw: current.merchantRaw,
+          description: current.description,
+        }));
         setLoading(false);
       } catch (error) {
         if (cancelled) {
@@ -205,6 +338,40 @@ export default function InvestmentInstitutionDetailPage() {
       cancelled = true;
     };
   }, [routeCurrency, routeInstitution, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || typeof window === "undefined") {
+      return;
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (
+        event.storageArea !== window.localStorage ||
+        (event.key !== accountsWorkspaceCacheKey && event.key !== "clover.selected-workspace-id.v1")
+      ) {
+        return;
+      }
+
+      const activeWorkspaceId = readSelectedWorkspaceId() || workspaceId;
+      if (activeWorkspaceId !== workspaceId) {
+        return;
+      }
+
+      const cachedSnapshot = getCachedAccountsWorkspace(workspaceId);
+      const cachedAccounts = Array.isArray(cachedSnapshot?.accounts) ? (cachedSnapshot.accounts as Account[]) : [];
+      const matchedAccounts = cachedAccounts.filter(matchesInstitution);
+      const scopedAccountIds = new Set(matchedAccounts.map((account) => account.id));
+      const cachedTransactions = Array.isArray(cachedSnapshot?.transactions) ? (cachedSnapshot.transactions as Transaction[]) : [];
+      const matchedTransactions = cachedTransactions.filter((transaction) => scopedAccountIds.has(transaction.accountId));
+
+      setAccounts(matchedAccounts);
+      setTransactions(sortTransactionsDesc(matchedTransactions));
+      setLoading(false);
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [matchesInstitution, workspaceId]);
 
   const totalValue = useMemo(
     () => accounts.reduce((sum, account) => sum + Math.abs(parseAmount(account.balance)), 0),
@@ -231,9 +398,54 @@ export default function InvestmentInstitutionDetailPage() {
     [assetDraft?.investmentSubtype, editingAsset?.investmentSubtype]
   );
 
+  const editingTrade = useMemo(
+    () => transactions.find((transaction) => transaction.id === editingTradeId) ?? null,
+    [editingTradeId, transactions]
+  );
+
+  const sortedAccounts = useMemo(
+    () => accounts.slice().sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()),
+    [accounts]
+  );
+
+  const tradeNetFlow = useMemo(
+    () =>
+      transactions.reduce((sum, transaction) => {
+        const amount = parseAmount(transaction.amount);
+        if (transaction.type === "income") {
+          return sum + Math.abs(amount);
+        }
+
+        if (transaction.type === "expense") {
+          return sum - Math.abs(amount);
+        }
+
+        return sum;
+      }, 0),
+    [transactions]
+  );
+
   const openAssetEditor = (account: Account) => {
     setEditingAssetId(account.id);
     setAssetDraft(buildAssetDraft(account));
+  };
+
+  const startEditingTrade = (transaction: Transaction) => {
+    setEditingTradeId(transaction.id);
+    setTradeDraft({
+      accountId: transaction.accountId,
+      date: transaction.date.slice(0, 10),
+      amount: String(Math.abs(parseAmount(transaction.amount))),
+      currency: transaction.currency,
+      type: transaction.type,
+      merchantRaw: transaction.merchantRaw,
+      description: transaction.description ?? "",
+    });
+  };
+
+  const resetTradeDraft = () => {
+    setEditingTradeId(null);
+    setTradeDraft(buildTradeDraft(sortedAccounts, routeCurrency));
   };
 
   const saveInstitution = async (event: FormEvent<HTMLFormElement>) => {
@@ -263,12 +475,11 @@ export default function InvestmentInstitutionDetailPage() {
         throw new Error("Unable to update this institution.");
       }
 
-      const updatedAccounts = await Promise.all(responses.map((response) => response.json().then((payload) => payload.account as Account)));
+      const updatedAccounts = await Promise.all(
+        responses.map((response) => response.json().then((payload) => payload.account as Account))
+      );
       setAccounts(updatedAccounts);
-      syncAccountsWorkspaceCache(workspaceId, [
-        ...((getCachedAccountsWorkspace(workspaceId)?.accounts as Account[] | undefined)?.filter((account) => !matchesInstitution(account)) ?? []),
-        ...updatedAccounts,
-      ]);
+      syncWorkspaceCache(updatedAccounts, transactions);
       setMessage(`Institution updated to "${nextInstitution}".`);
       router.replace(
         getInvestmentInstitutionPath({
@@ -321,10 +532,7 @@ export default function InvestmentInstitutionDetailPage() {
       const updatedAccount = payload.account as Account;
       const nextAccounts = accounts.map((account) => (account.id === updatedAccount.id ? updatedAccount : account));
       setAccounts(nextAccounts);
-      syncAccountsWorkspaceCache(workspaceId, [
-        ...((getCachedAccountsWorkspace(workspaceId)?.accounts as Account[] | undefined)?.filter((account) => account.id !== updatedAccount.id) ?? []),
-        updatedAccount,
-      ]);
+      syncWorkspaceCache(nextAccounts, transactions);
       setEditingAssetId(null);
       setAssetDraft(null);
       setMessage(`Updated ${updatedAccount.name}.`);
@@ -332,6 +540,106 @@ export default function InvestmentInstitutionDetailPage() {
       setMessage(error instanceof Error ? error.message : "Unable to update this asset.");
     } finally {
       setSavingAssetId(null);
+    }
+  };
+
+  const saveTrade = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!workspaceId || !tradeDraft.accountId || !tradeDraft.date || !tradeDraft.amount || !tradeDraft.merchantRaw.trim()) {
+      return;
+    }
+
+    setSavingTrade(true);
+    try {
+      if (editingTrade) {
+        const response = await fetch(`/api/transactions/${editingTrade.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accountId: tradeDraft.accountId,
+            date: tradeDraft.date,
+            amount: Number(tradeDraft.amount),
+            currency: tradeDraft.currency,
+            type: tradeDraft.type,
+            merchantRaw: tradeDraft.merchantRaw.trim(),
+            merchantClean: tradeDraft.merchantRaw.trim(),
+            description: tradeDraft.description.trim() || null,
+            isTransfer: tradeDraft.type === "transfer",
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Unable to update this trade.");
+        }
+
+        const payload = await response.json();
+        const nextTransaction = payload.transaction as Transaction;
+        const nextTransactions = sortTransactionsDesc(
+          transactions.map((transaction) => (transaction.id === nextTransaction.id ? nextTransaction : transaction))
+        );
+        setTransactions(nextTransactions);
+        syncWorkspaceCache(accounts, nextTransactions);
+        resetTradeDraft();
+        setMessage("Trade updated.");
+      } else {
+        const response = await fetch("/api/transactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId,
+            accountId: tradeDraft.accountId,
+            date: tradeDraft.date,
+            amount: Number(tradeDraft.amount),
+            currency: tradeDraft.currency,
+            type: tradeDraft.type,
+            merchantRaw: tradeDraft.merchantRaw.trim(),
+            merchantClean: tradeDraft.merchantRaw.trim(),
+            description: tradeDraft.description.trim() || null,
+            preserveType: true,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Unable to add this trade.");
+        }
+
+        const payload = await response.json();
+        const nextTransaction = payload.transaction as Transaction;
+        const nextTransactions = sortTransactionsDesc([nextTransaction, ...transactions]);
+        setTransactions(nextTransactions);
+        syncWorkspaceCache(accounts, nextTransactions);
+        resetTradeDraft();
+        setMessage("Trade added.");
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : editingTrade ? "Unable to update this trade." : "Unable to add this trade.");
+    } finally {
+      setSavingTrade(false);
+    }
+  };
+
+  const deleteTrade = async (transaction: Transaction) => {
+    setDeletingTradeId(transaction.id);
+    try {
+      const response = await fetch(`/api/transactions/${transaction.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to delete this trade.");
+      }
+
+      const nextTransactions = transactions.filter((entry) => entry.id !== transaction.id);
+      setTransactions(nextTransactions);
+      syncWorkspaceCache(accounts, nextTransactions);
+      if (editingTradeId === transaction.id) {
+        resetTradeDraft();
+      }
+      setMessage("Trade deleted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete this trade.");
+    } finally {
+      setDeletingTradeId(null);
     }
   };
 
@@ -354,6 +662,7 @@ export default function InvestmentInstitutionDetailPage() {
       if (failed) {
         throw new Error("Unable to delete this institution.");
       }
+      syncWorkspaceCache([], []);
       router.replace("/accounts");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to delete this institution.");
@@ -367,16 +676,16 @@ export default function InvestmentInstitutionDetailPage() {
 
   return (
     <CloverShell active="accounts" title={routeInstitution || "Institution"} hideCompactBarCopyOnMobile>
-      <div className="institution-detail-page">
-        <section
-          className="institution-detail-hero glass"
-          style={
-            {
-              ["--institution-accent" as string]: institutionBrand.accent,
-              ["--institution-accent-soft" as string]: institutionBrand.background,
-            } as CSSProperties
-          }
-        >
+      <div
+        className="institution-detail-page"
+        style={
+          {
+            ["--institution-accent" as string]: institutionBrand.accent,
+            ["--institution-accent-soft" as string]: institutionBrand.background,
+          } as CSSProperties
+        }
+      >
+        <section className="institution-detail-hero glass">
           <div className="institution-detail-hero__head">
             <div className="institution-detail-hero__brand">
               <AccountBrandMark accountBrand={institutionBrand} label={routeInstitution} />
@@ -384,7 +693,7 @@ export default function InvestmentInstitutionDetailPage() {
                 <p className="eyebrow">Investment institution</p>
                 <h1>{routeInstitution}</h1>
                 <span>
-                  {accounts.length} asset{accounts.length === 1 ? "" : "s"} · {routeCurrency}
+                  {accounts.length} asset{accounts.length === 1 ? "" : "s"} · {transactions.length} trade{transactions.length === 1 ? "" : "s"} · {routeCurrency}
                 </span>
               </div>
             </div>
@@ -393,38 +702,30 @@ export default function InvestmentInstitutionDetailPage() {
             </button>
           </div>
 
+          <form className="institution-detail-hero__editor" onSubmit={saveInstitution}>
+            <label className="settings-field">
+              <span>Institution name</span>
+              <input value={institutionDraft} onChange={(event) => setInstitutionDraft(event.target.value)} />
+            </label>
+            <button className="button button-secondary button-small" type="submit" disabled={savingInstitution}>
+              {savingInstitution ? "Saving..." : "Save name"}
+            </button>
+          </form>
+
           <div className="institution-detail-hero__metrics">
             <article className="institution-detail-metric">
               <span>Total value</span>
               <strong>{formatMoney(totalValue, routeCurrency)}</strong>
             </article>
             <article className="institution-detail-metric">
-              <span>Assets</span>
+              <span>Holdings</span>
               <strong>{accounts.length}</strong>
             </article>
             <article className="institution-detail-metric">
-              <span>Currency</span>
-              <strong>{routeCurrency}</strong>
+              <span>Trade flow</span>
+              <strong>{formatMoney(tradeNetFlow, routeCurrency)}</strong>
             </article>
           </div>
-        </section>
-
-        <section className="institution-detail-panel glass">
-          <div className="institution-detail-panel__head">
-            <div>
-              <p className="eyebrow">Institution</p>
-              <h2>Provider details</h2>
-            </div>
-          </div>
-          <form className="institution-detail-form" onSubmit={saveInstitution}>
-            <label className="settings-field">
-              <span>Institution name</span>
-              <input value={institutionDraft} onChange={(event) => setInstitutionDraft(event.target.value)} />
-            </label>
-            <button className="button button-secondary button-small" type="submit" disabled={savingInstitution}>
-              {savingInstitution ? "Saving..." : "Save institution"}
-            </button>
-          </form>
         </section>
 
         <section className="institution-detail-panel glass">
@@ -435,7 +736,7 @@ export default function InvestmentInstitutionDetailPage() {
             </div>
           </div>
 
-          {accounts.length === 0 ? (
+          {sortedAccounts.length === 0 ? (
             <p className="institution-detail-empty">No investment assets are linked to this institution in {routeCurrency}.</p>
           ) : (
             <div className="institution-assets-table-wrap">
@@ -451,7 +752,7 @@ export default function InvestmentInstitutionDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {accounts.map((account) => (
+                  {sortedAccounts.map((account) => (
                     <tr key={account.id}>
                       <td>{account.name}</td>
                       <td>{getInvestmentSubtypeLabel(account.investmentSubtype)}</td>
@@ -478,7 +779,7 @@ export default function InvestmentInstitutionDetailPage() {
           <section className="institution-detail-panel glass">
             <div className="institution-detail-panel__head">
               <div>
-                <p className="eyebrow">Edit asset</p>
+                <p className="eyebrow">Edit holding</p>
                 <h2>{editingAsset.name}</h2>
               </div>
             </div>
@@ -537,19 +838,156 @@ export default function InvestmentInstitutionDetailPage() {
               </div>
 
               <div className="institution-asset-editor__actions">
-                <button className="button button-secondary button-small" type="button" onClick={() => {
-                  setEditingAssetId(null);
-                  setAssetDraft(null);
-                }}>
+                <button
+                  className="button button-secondary button-small"
+                  type="button"
+                  onClick={() => {
+                    setEditingAssetId(null);
+                    setAssetDraft(null);
+                  }}
+                >
                   Cancel
                 </button>
                 <button className="button button-primary button-small" type="submit" disabled={savingAssetId === editingAsset.id}>
-                  {savingAssetId === editingAsset.id ? "Saving..." : "Save asset"}
+                  {savingAssetId === editingAsset.id ? "Saving..." : "Save holding"}
                 </button>
               </div>
             </form>
           </section>
         ) : null}
+
+        <section className="institution-detail-panel glass">
+          <div className="institution-detail-panel__head">
+            <div>
+              <p className="eyebrow">History</p>
+              <h2>Trading history</h2>
+            </div>
+          </div>
+
+          <form className="institution-trade-editor" onSubmit={saveTrade}>
+            <div className="institution-asset-editor__grid">
+              <label className="settings-field">
+                <span>Asset</span>
+                <select
+                  value={tradeDraft.accountId}
+                  onChange={(event) => setTradeDraft((current) => ({ ...current, accountId: event.target.value }))}
+                >
+                  {sortedAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="settings-field">
+                <span>Date</span>
+                <input
+                  type="date"
+                  value={tradeDraft.date}
+                  onChange={(event) => setTradeDraft((current) => ({ ...current, date: event.target.value }))}
+                />
+              </label>
+              <label className="settings-field">
+                <span>Type</span>
+                <select
+                  value={tradeDraft.type}
+                  onChange={(event) => setTradeDraft((current) => ({ ...current, type: event.target.value as TransactionType }))}
+                >
+                  <option value="expense">Buy / cash out</option>
+                  <option value="income">Sell / cash in</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </label>
+              <label className="settings-field">
+                <span>Amount</span>
+                <input
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={tradeDraft.amount}
+                  onChange={(event) => setTradeDraft((current) => ({ ...current, amount: event.target.value }))}
+                />
+              </label>
+              <label className="settings-field">
+                <span>Title</span>
+                <input
+                  placeholder="Buy Order Completed"
+                  value={tradeDraft.merchantRaw}
+                  onChange={(event) => setTradeDraft((current) => ({ ...current, merchantRaw: event.target.value }))}
+                />
+              </label>
+              <label className="settings-field">
+                <span>Currency</span>
+                <input
+                  value={tradeDraft.currency}
+                  onChange={(event) => setTradeDraft((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
+                />
+              </label>
+            </div>
+            <label className="settings-field">
+              <span>Notes</span>
+              <input
+                placeholder="Optional notes"
+                value={tradeDraft.description}
+                onChange={(event) => setTradeDraft((current) => ({ ...current, description: event.target.value }))}
+              />
+            </label>
+            <div className="institution-asset-editor__actions">
+              {editingTrade ? (
+                <button className="button button-secondary button-small" type="button" onClick={resetTradeDraft}>
+                  Cancel edit
+                </button>
+              ) : null}
+              <button className="button button-primary button-small" type="submit" disabled={savingTrade || sortedAccounts.length === 0}>
+                {savingTrade ? (editingTrade ? "Saving..." : "Adding...") : editingTrade ? "Save trade" : "Add trade"}
+              </button>
+            </div>
+          </form>
+
+          {transactions.length === 0 ? (
+            <p className="institution-detail-empty">No trading history yet for this institution.</p>
+          ) : (
+            <div className="institution-assets-table-wrap">
+              <table className="institution-assets-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Asset</th>
+                    <th>Entry</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Notes</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((transaction) => (
+                    <tr key={transaction.id}>
+                      <td>{formatTradeDate(transaction.date)}</td>
+                      <td>{accounts.find((account) => account.id === transaction.accountId)?.name ?? transaction.accountName}</td>
+                      <td>{transaction.merchantClean ?? transaction.merchantRaw}</td>
+                      <td>{transaction.type}</td>
+                      <td>{formatMoney(parseAmount(transaction.amount), transaction.currency)}</td>
+                      <td>{transaction.description ?? "—"}</td>
+                      <td className="institution-assets-table__actions">
+                        <button className="button button-secondary button-small" type="button" onClick={() => startEditingTrade(transaction)}>
+                          Edit
+                        </button>
+                        <button
+                          className="button button-danger button-small"
+                          type="button"
+                          onClick={() => void deleteTrade(transaction)}
+                          disabled={deletingTradeId === transaction.id}
+                        >
+                          {deletingTradeId === transaction.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
         <section className="institution-detail-panel glass institution-detail-panel--danger">
           <div className="institution-detail-panel__head">

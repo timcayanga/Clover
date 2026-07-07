@@ -20660,6 +20660,16 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 12px;
 }
 
+.institution-detail-hero__editor {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.institution-detail-hero__editor .settings-field {
+  flex: 1 1 auto;
+}
+
 .institution-detail-metric {
   display: grid;
   gap: 8px;
@@ -20756,6 +20766,11 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .institution-asset-editor {
+  display: grid;
+  gap: 14px;
+}
+
+.institution-trade-editor {
   display: grid;
   gap: 14px;
 }
@@ -26346,7 +26361,8 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .institution-detail-hero__head,
-  .institution-detail-form {
+  .institution-detail-form,
+  .institution-detail-hero__editor {
     display: grid;
     grid-template-columns: 1fr;
   }
