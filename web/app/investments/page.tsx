@@ -428,6 +428,7 @@ export default function InvestmentsPage() {
   const [manualDividendAmount, setManualDividendAmount] = useState("");
   const [manualBalance, setManualBalance] = useState("");
   const [manualCurrency, setManualCurrency] = useState("PHP");
+  const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState<InvestmentTab>(urlSearchParams.get("asset") ? "portfolio" : requestedTab);
 
   useEffect(() => {
@@ -1078,6 +1079,7 @@ export default function InvestmentsPage() {
       setManualDividendAmount("");
       setManualBalance("");
       setManualCurrency("PHP");
+      setManualMoreOpen(false);
       setAddOpen(false);
       setMessage(`Investment "${name}" created.`);
     } catch (error) {
@@ -2042,8 +2044,19 @@ export default function InvestmentsPage() {
               <div>
                 <p className="eyebrow">Investments</p>
                 <h4 id="add-investment-title">Add an investment</h4>
+                <p className="panel-muted" style={{ margin: "6px 0 0" }}>
+                  Start with the basics first. Add extra details only if you need them.
+                </p>
               </div>
-              <button className="icon-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close add investment">
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => {
+                  setManualMoreOpen(false);
+                  setAddOpen(false);
+                }}
+                aria-label="Close add investment"
+              >
                 ×
               </button>
             </div>
@@ -2053,9 +2066,6 @@ export default function InvestmentsPage() {
                 <label>
                   Holding name
                   <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: Bitcoin or BPI" />
-                  <span className="field-help">
-                    Use the human-readable holding name here. The code or token stays in the field below, and the institution stays separate as the platform or broker.
-                  </span>
                 </label>
                 <InstitutionAutocomplete
                   label="Institution"
@@ -2063,7 +2073,6 @@ export default function InvestmentsPage() {
                   onChange={setManualInstitution}
                   placeholder="Example: COL Financial"
                   variant="investment"
-                  helperText="Choose the broker, bank, wallet, or platform behind this investment."
                 />
                 <label>
                   Investment subtype
@@ -2099,81 +2108,96 @@ export default function InvestmentsPage() {
                       inputMode="decimal"
                       placeholder="0.00"
                     />
-                    <span className="field-help">This is the current total value of the holding, not the amount you paid to buy it.</span>
                   </label>
                 </div>
-                <span className="field-help">Use a fiat currency such as PHP or USD. Keep BTC, USDT, and similar codes in the asset field above.</span>
 
-                {manualInvestmentSubtype ? (
-                  <div className="accounts-investment-fields">
-                    {manualInvestmentFieldConfigs.map((field) => {
-                      const value = getManualInvestmentFieldValue(field.key);
-                      const onChange =
-                        field.key === "investmentSymbol"
-                          ? setManualInvestmentSymbol
-                          : field.key === "investmentQuantity"
-                            ? setManualInvestmentQuantity
-                            : field.key === "investmentCostBasis"
-                              ? setManualInvestmentCostBasis
-                              : field.key === "investmentPrincipal"
-                                ? setManualInvestmentPrincipal
-                                : field.key === "investmentStartDate"
-                                  ? setManualInvestmentStartDate
-                                  : field.key === "investmentMaturityDate"
-                                    ? setManualInvestmentMaturityDate
-                                    : field.key === "investmentInterestRate"
-                                      ? setManualInvestmentInterestRate
-                                      : field.key === "investmentMaturityValue"
-                                        ? setManualInvestmentMaturityValue
-                                        : setManualInvestmentSymbol;
+                <div style={{ display: "grid", gap: 10 }}>
+                  <button
+                    type="button"
+                    className="button button-secondary button-small"
+                    onClick={() => setManualMoreOpen((current) => !current)}
+                    aria-expanded={manualMoreOpen}
+                    style={{ justifySelf: "start" }}
+                  >
+                    <span>{manualMoreOpen ? "Less" : "More"}</span>
+                    <span aria-hidden="true" style={{ display: "inline-flex", transform: manualMoreOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 160ms ease" }}>
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
+                        <path d="m5 8 5 5 5-5" />
+                      </svg>
+                    </span>
+                  </button>
 
-                      return (
-                        <label key={field.key}>
-                          {field.label}
-                          <input
-                            value={value}
-                            onChange={(event) => onChange(event.target.value)}
-                            placeholder={field.placeholder}
-                            inputMode={field.inputMode}
-                            type={field.type}
-                          />
-                          {field.key === "investmentCostBasis" ? (
-                          <span className="field-help">
-                            Enter the total purchase value for this holding. If you bought the same asset at different times, use the combined total or create separate lots.
-                          </span>
-                        ) : null}
-                      </label>
-                    );
-                  })}
-                    {manualCanTrackPurchases ? (
-                      <div className="accounts-manual-form__optional-block">
-                        <p className="eyebrow">Purchase history</p>
-                        <label>
-                          Purchase date
-                          <input type="date" value={manualPurchaseDate} onChange={(event) => setManualPurchaseDate(event.target.value)} />
-                        </label>
-                      </div>
-                    ) : null}
-                    {manualCanTrackDividends ? (
-                      <div className="accounts-manual-form__optional-block">
-                        <p className="eyebrow">Dividends</p>
-                        <label>
-                          Dividend date
-                          <input type="date" value={manualDividendDate} onChange={(event) => setManualDividendDate(event.target.value)} />
-                        </label>
-                        <label>
-                          Dividend amount
-                          <input
-                            value={manualDividendAmount}
-                            onChange={(event) => setManualDividendAmount(event.target.value)}
-                            inputMode="decimal"
-                            placeholder="0.00"
-                          />
-                        </label>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
+                  {manualMoreOpen && manualInvestmentSubtype ? (
+                    <div className="accounts-investment-fields">
+                      {manualInvestmentFieldConfigs.map((field) => {
+                        const value = getManualInvestmentFieldValue(field.key);
+                        const onChange =
+                          field.key === "investmentSymbol"
+                            ? setManualInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? setManualInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? setManualInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? setManualInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? setManualInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? setManualInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? setManualInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? setManualInvestmentMaturityValue
+                                          : setManualInvestmentSymbol;
+
+                        return (
+                          <label key={field.key}>
+                            {field.label}
+                            <input
+                              value={value}
+                              onChange={(event) => onChange(event.target.value)}
+                              placeholder={field.placeholder}
+                              inputMode={field.inputMode}
+                              type={field.type}
+                            />
+                            {field.key === "investmentCostBasis" ? (
+                              <span className="field-help">
+                                Enter the total purchase value for this holding. If you bought the same asset at different times, use the combined total or create separate lots.
+                              </span>
+                            ) : null}
+                          </label>
+                        );
+                      })}
+                      {manualCanTrackPurchases ? (
+                        <div className="accounts-manual-form__optional-block">
+                          <p className="eyebrow">Purchase history</p>
+                          <label>
+                            Purchase date
+                            <input type="date" value={manualPurchaseDate} onChange={(event) => setManualPurchaseDate(event.target.value)} />
+                          </label>
+                        </div>
+                      ) : null}
+                      {manualCanTrackDividends ? (
+                        <div className="accounts-manual-form__optional-block">
+                          <p className="eyebrow">Dividends</p>
+                          <label>
+                            Dividend date
+                            <input type="date" value={manualDividendDate} onChange={(event) => setManualDividendDate(event.target.value)} />
+                          </label>
+                          <label>
+                            Dividend amount
+                            <input
+                              value={manualDividendAmount}
+                              onChange={(event) => setManualDividendAmount(event.target.value)}
+                              inputMode="decimal"
+                              placeholder="0.00"
+                            />
+                          </label>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
 
                 <button className="button button-primary" type="submit" disabled={isSaving || !selectedWorkspaceId}>
                   {isSaving ? "Saving..." : "Create investment"}
