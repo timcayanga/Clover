@@ -311,6 +311,7 @@ export function CommitmentsPanel({
   const [notes, setNotes] = useState("");
   const [accountId, setAccountId] = useState("");
   const [transactionId, setTransactionId] = useState("");
+  const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [selectedKind, setSelectedKind] = useState<CommitmentKind>(() => {
     for (const entryKind of kindOrder) {
       if (commitments.some((item) => item.kind === entryKind)) {
@@ -430,6 +431,7 @@ export function CommitmentsPanel({
     setNotes("");
     setAccountId("");
     setTransactionId("");
+    setManualMoreOpen(false);
     setPatternDraft({
       title: "",
       counterparty: "",
@@ -1138,6 +1140,7 @@ export function CommitmentsPanel({
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start", paddingRight: 44 }}>
               <div>
                 <p className="eyebrow">Add recurring</p>
+                <h3 style={{ margin: "4px 0 0" }}>Keep track of something that repeats</h3>
               </div>
             </div>
 
@@ -1159,14 +1162,6 @@ export function CommitmentsPanel({
                     ))}
                   </select>
                 </label>
-              </div>
-
-              <div style={{ display: "grid", gap: 6 }}>
-                <p className="eyebrow">{formCopy.eyebrow}</p>
-                <h4 style={{ margin: 0 }}>{formCopy.headline}</h4>
-                <p className="panel-muted" style={{ margin: 0 }}>
-                  {formCopy.helper}
-                </p>
               </div>
 
               <label className="settings-field">
@@ -1269,54 +1264,77 @@ export function CommitmentsPanel({
                 </div>
               ) : null}
 
-              {formCopy.showLinkedAccount ? (
-                <label className="settings-field">
-                  <span>{formCopy.linkedAccountLabel ?? "Linked account"}</span>
-                  <select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="settings-select">
-                    <option value="">None</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                        {account.institution ? ` · ${account.institution}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {formCopy.linkedAccountHelp ? <span className="panel-muted">{formCopy.linkedAccountHelp}</span> : null}
-                </label>
-              ) : null}
+              {(formCopy.showLinkedAccount || formCopy.showTransaction || formCopy.showNotes || Boolean(formCopy.linkedAccountHelp)) ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  <button
+                    type="button"
+                    className="button button-secondary button-small"
+                    onClick={() => setManualMoreOpen((current) => !current)}
+                    aria-expanded={manualMoreOpen}
+                    style={{ justifySelf: "start" }}
+                  >
+                    <span>{manualMoreOpen ? "Less" : "More"}</span>
+                    <span aria-hidden="true" style={{ display: "inline-flex", transform: manualMoreOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 160ms ease" }}>
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
+                        <path d="m5 8 5 5 5-5" />
+                      </svg>
+                    </span>
+                  </button>
 
-              {selectedAccount && suggestedKind && formCopy.showLinkedAccount ? (
-                <p className="panel-muted" style={{ margin: 0 }}>
-                  Because <strong>{selectedAccount.name}</strong> is a {formatAccountTypeLabel(selectedAccount.type).toLowerCase()}, Clover suggests the{" "}
-                  <strong>{commitmentKindLabels[suggestedKind as CommitmentKind]}</strong> recurring type for this item.
-                </p>
-              ) : null}
+                  {manualMoreOpen ? (
+                    <div style={{ display: "grid", gap: 16 }}>
+                      {formCopy.showLinkedAccount ? (
+                        <label className="settings-field">
+                          <span>{formCopy.linkedAccountLabel ?? "Linked account"}</span>
+                          <select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="settings-select">
+                            <option value="">None</option>
+                            {accounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.name}
+                                {account.institution ? ` · ${account.institution}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                          {formCopy.linkedAccountHelp ? <span className="panel-muted">{formCopy.linkedAccountHelp}</span> : null}
+                        </label>
+                      ) : null}
 
-              {formCopy.showTransaction ? (
-                <label className="settings-field">
-                  <span>{formCopy.transactionLabel ?? "Linked transaction"}</span>
-                  <select value={transactionId} onChange={(event) => setTransactionId(event.target.value)} className="settings-select">
-                    <option value="">None</option>
-                    {recentTransactions.map((transaction) => (
-                      <option key={transaction.id} value={transaction.id}>
-                        {formatTransactionLabel(transaction)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
+                      {selectedAccount && suggestedKind && formCopy.showLinkedAccount ? (
+                        <p className="panel-muted" style={{ margin: 0 }}>
+                          Because <strong>{selectedAccount.name}</strong> is a {formatAccountTypeLabel(selectedAccount.type).toLowerCase()}, Clover suggests the{" "}
+                          <strong>{commitmentKindLabels[suggestedKind as CommitmentKind]}</strong> recurring type for this item.
+                        </p>
+                      ) : null}
 
-              {formCopy.showNotes ? (
-                <label className="settings-field">
-                  <span>{formCopy.notesLabel ?? "Notes"}</span>
-                  <textarea
-                    className="settings-textarea"
-                    value={notes}
-                    onChange={(event) => setNotes(event.target.value)}
-                    placeholder={formCopy.notesPlaceholder ?? "Add context, reminders, or payoff details."}
-                    rows={4}
-                  />
-                </label>
+                      {formCopy.showTransaction ? (
+                        <label className="settings-field">
+                          <span>{formCopy.transactionLabel ?? "Linked transaction"}</span>
+                          <select value={transactionId} onChange={(event) => setTransactionId(event.target.value)} className="settings-select">
+                            <option value="">None</option>
+                            {recentTransactions.map((transaction) => (
+                              <option key={transaction.id} value={transaction.id}>
+                                {formatTransactionLabel(transaction)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+
+                      {formCopy.showNotes ? (
+                        <label className="settings-field">
+                          <span>{formCopy.notesLabel ?? "Notes"}</span>
+                          <textarea
+                            className="settings-textarea"
+                            value={notes}
+                            onChange={(event) => setNotes(event.target.value)}
+                            placeholder={formCopy.notesPlaceholder ?? "Add context, reminders, or payoff details."}
+                            rows={4}
+                          />
+                        </label>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
