@@ -68,6 +68,9 @@ const recurringMerchantAliases = [
   { pattern: /\bopenai\b.*\b(chatgpt|subscr(?:iption)?)\b|\bchatgpt\b/i, label: "OpenAI ChatGPT" },
   { pattern: /\bnetflix\b/i, label: "Netflix" },
   { pattern: /\bspotify\b/i, label: "Spotify" },
+  { pattern: /\bdisney\b.*\bplus\b|\bdisney\+\b/i, label: "Disney+" },
+  { pattern: /\bprime\b.*\b(video|membership)\b|\bamazon\b.*\bprime\b/i, label: "Amazon Prime" },
+  { pattern: /\bapple\b.*\bmusic\b/i, label: "Apple Music" },
   { pattern: /\byoutube\b.*\b(premium|music|subscription)?\b/i, label: "YouTube" },
   { pattern: /\bapple\b.*\b(icloud|itunes|bill|services?)\b|\bicloud\b/i, label: "Apple / iCloud" },
   { pattern: /\bgoogle\b.*\b(one|storage|workspace|subscription)?\b/i, label: "Google" },
@@ -81,7 +84,11 @@ const recurringMerchantAliases = [
   { pattern: /\bglobe\b/i, label: "Globe" },
   { pattern: /\bsmart\b/i, label: "Smart" },
   { pattern: /\bgrab\b.*\b(unlimited|subscription|plus)\b/i, label: "Grab" },
+  { pattern: /\bamazon web services\b|\baws\b/i, label: "Amazon Web Services" },
 ];
+
+const recurringFamilyNoisePattern =
+  /\b(?:subscription|subscr(?:iption)?|recurring|monthly|autopay|premium|membership|member|plan|service|services|merchant|purchase|ecommerce|online|intl|international|foreign|debit|credit|visa|mastercard|pos|approval|reference|ref|auth|descriptor|statement|biller|billers?)\b/g;
 
 const normalizeMerchantKey = (value: string) =>
   value
@@ -90,11 +97,31 @@ const normalizeMerchantKey = (value: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\bsubscr(?:iption)?\b/g, " subscription ")
     .replace(/\b\d{4,}\b/g, " ")
+    .replace(/\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/g, " ")
     .replace(/\b(?:[a-z]{2,4}\.com|com|phl|ph|sgp|usa|us|irl|sg|my|hk|au)\b/g, " ")
     .replace(/\b(?:makati|taguig|pasig|quezon|mandaluyong|angeles|manila|city)\b/g, " ")
+    .replace(/\b(?:branch|store|merchant|retail|digital|transaction|trx|memo|description|desc)\b/g, " ")
     .replace(/\b(pos|visa|mastercard|debit|credit|online|payment|pay|ph|inc|corp|co|ref|auth|card)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+const buildMerchantFamilySignature = (value: string) => {
+  const normalized = normalizeMerchantKey(value)
+    .replace(recurringFamilyNoisePattern, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const tokens = normalized
+    .split(" ")
+    .filter((token) => token.length >= 3)
+    .filter((token) => !/^\d+$/.test(token));
+
+  if (tokens.length === 0) {
+    return normalized;
+  }
+
+  return tokens.slice(0, 2).join(" ");
+};
 
 const canonicalizeRecurringMerchant = (value: string) => {
   const normalized = normalizeMerchantKey(value);
@@ -107,7 +134,7 @@ const canonicalizeRecurringMerchant = (value: string) => {
   return normalized
     .replace(/\b(?:subscription|monthly|autopay|premium|membership|fee)\b/g, " ")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim() || buildMerchantFamilySignature(value);
 };
 
 const isDismissedRecurringPattern = (value: Prisma.JsonValue | null | undefined) =>
@@ -213,7 +240,10 @@ const inferFrequency = (dates: Date[]): { frequency: CommitmentRecurrence | null
   return { frequency: null, nextExpectedDate: null, cadenceConfidence: 0 };
 };
 
-const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]): DetectedRecurringPattern | null => {
+const buildPatternFromTransactions = (
+  transactions: RecurringSourceTransaction[],
+  scope: "account" | "workspace"
+): DetectedRecurringPattern | null => {
   const expenseTransactions = transactions
     .filter((transaction) => transaction.type === "expense")
     .sort((left, right) => left.date.getTime() - right.date.getTime());
@@ -280,6 +310,20 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
     return null;
   }
 
+  const uniqueAccountKeys = new Set(
+    expenseTransactions.map((transaction) =>
+      [
+        transaction.accountId ?? "",
+        transaction.account?.institution ?? "",
+        transaction.account?.name ?? "",
+      ].join("::")
+    )
+  );
+  const spansMultipleAccounts = uniqueAccountKeys.size > 1;
+  if (scope === "workspace" && !spansMultipleAccounts) {
+    return null;
+  }
+
   const first = expenseTransactions[0] as RecurringSourceTransaction;
   const last = expenseTransactions[expenseTransactions.length - 1] as RecurringSourceTransaction;
   const reasonSummary = [
@@ -287,6 +331,7 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
     expectedDayOfMonth !== null ? `around the ${ordinal(expectedDayOfMonth)}` : null,
     hasKeywordSignal ? "merchant looks like a bill or subscription" : null,
     amountStability >= 0.9 ? "amount stays very consistent" : amountStability >= 0.75 ? "amount stays fairly close" : null,
+    spansMultipleAccounts ? "seen across multiple accounts" : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -295,21 +340,23 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
     expectedDayOfMonth !== null ? "same date" : null,
     hasKeywordSignal ? "known merchant" : null,
     amountStability >= 0.9 ? "stable amount" : amountStability >= 0.75 ? "close amount" : null,
+    spansMultipleAccounts ? "cross-account" : null,
   ].filter((value): value is string => Boolean(value));
   const suppressionKey = makeRecurringSuppressionKey({
-    accountId: first.accountId,
+    accountId: scope === "workspace" ? null : first.accountId,
     currency: first.currency,
     title: canonicalTitle,
   });
   const confidence = Math.min(
-    94,
+    96,
     Math.round(
       35 +
         Math.min(expenseTransactions.length, 6) * 7 +
         cadence.cadenceConfidence * 0.25 +
         amountStability * 20 +
         (expectedDayOfMonth !== null ? Math.max(0, 8 - Math.min(dayVariance, 8)) : 0) +
-        (hasKeywordSignal ? 10 : 0)
+        (hasKeywordSignal ? 10 : 0) +
+        (spansMultipleAccounts ? 6 : 0)
     )
   );
 
@@ -319,7 +366,7 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
 
   return {
     workspaceId: first.workspaceId,
-    accountId: first.accountId,
+    accountId: scope === "workspace" && spansMultipleAccounts ? null : first.accountId,
     merchantRaw: first.merchantRaw,
     merchantClean: canonicalTitle,
     canonicalTitle,
@@ -341,11 +388,13 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
     importFile: last.importFile ?? null,
     rawPayload: {
       source: "recurring_detection",
+      scope,
       transactionIds: expenseTransactions.map((transaction) => transaction.id),
       amountStability,
       hasKeywordSignal,
       looksTransferLike,
       canonicalTitle,
+      accountCount: uniqueAccountKeys.size,
       minimumAmount: Number(Math.min(...amounts).toFixed(2)),
       maximumAmount: Number(Math.max(...amounts).toFixed(2)),
       expectedDayOfMonth,
@@ -358,25 +407,49 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
 };
 
 export const detectRecurringPatterns = (transactions: RecurringSourceTransaction[]) => {
-  const groups = new Map<string, RecurringSourceTransaction[]>();
+  const accountGroups = new Map<string, RecurringSourceTransaction[]>();
+  const workspaceGroups = new Map<string, RecurringSourceTransaction[]>();
 
   for (const transaction of transactions) {
     if (transaction.type !== "expense") {
       continue;
     }
 
-    const merchantKey = canonicalizeRecurringMerchant(transaction.merchantClean ?? transaction.merchantRaw) || normalizeMerchantKey(transaction.merchantClean ?? transaction.merchantRaw);
+    const merchantKey =
+      canonicalizeRecurringMerchant(transaction.merchantClean ?? transaction.merchantRaw) ||
+      buildMerchantFamilySignature(transaction.merchantClean ?? transaction.merchantRaw) ||
+      normalizeMerchantKey(transaction.merchantClean ?? transaction.merchantRaw);
     if (!merchantKey) {
       continue;
     }
 
     const currency = (transaction.currency ?? "PHP").trim().toUpperCase() || "PHP";
-    const key = `${transaction.workspaceId}::${transaction.accountId ?? "workspace"}::${currency}::${merchantKey}`;
-    groups.set(key, [...(groups.get(key) ?? []), transaction]);
+    const accountKey = `${transaction.workspaceId}::${transaction.accountId ?? "workspace"}::${currency}::${merchantKey}`;
+    const workspaceKey = `${transaction.workspaceId}::workspace::${currency}::${merchantKey}`;
+    accountGroups.set(accountKey, [...(accountGroups.get(accountKey) ?? []), transaction]);
+    workspaceGroups.set(workspaceKey, [...(workspaceGroups.get(workspaceKey) ?? []), transaction]);
   }
 
-  return Array.from(groups.values())
-    .map(buildPatternFromTransactions)
+  const patterns = [
+    ...Array.from(accountGroups.values()).map((group) => buildPatternFromTransactions(group, "account")),
+    ...Array.from(workspaceGroups.values()).map((group) => buildPatternFromTransactions(group, "workspace")),
+  ].filter((pattern): pattern is DetectedRecurringPattern => Boolean(pattern));
+
+  const dedupedPatterns = new Map<string, DetectedRecurringPattern>();
+  for (const pattern of patterns) {
+    const key = [pattern.currency, normalizeMerchantKey(pattern.canonicalTitle)].join("::");
+    const existing = dedupedPatterns.get(key);
+    if (
+      !existing ||
+      pattern.confidence > existing.confidence ||
+      pattern.transactionCount > existing.transactionCount ||
+      (pattern.accountId === null && existing.accountId !== null)
+    ) {
+      dedupedPatterns.set(key, pattern);
+    }
+  }
+
+  return Array.from(dedupedPatterns.values())
     .filter((pattern): pattern is DetectedRecurringPattern => Boolean(pattern))
     .sort((left, right) => right.confidence - left.confidence || right.transactionCount - left.transactionCount);
 };
