@@ -132,6 +132,11 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
           className="accounts-brand-mark__logo"
           src={currentLogoSrc}
           alt={label}
+          style={{
+            objectFit: accountBrand.logoFit ?? "cover",
+            padding: accountBrand.logoPadding ?? undefined,
+            boxSizing: accountBrand.logoPadding ? "border-box" : undefined,
+          }}
           loading="eager"
           fetchPriority="high"
           decoding="async"

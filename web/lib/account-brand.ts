@@ -15,6 +15,8 @@ export type AccountBrand = {
   accent: string;
   background: string;
   logoBackground?: string;
+  logoFit?: "cover" | "contain";
+  logoPadding?: string;
   foreground: string;
 };
 
@@ -181,6 +183,8 @@ const makeBrand = (params: {
   accent: string;
   background?: string;
   logoBackground?: string;
+  logoFit?: "cover" | "contain";
+  logoPadding?: string;
   foreground?: string;
 }): AccountBrand => {
   const resolvedBackground =
@@ -195,6 +199,8 @@ const makeBrand = (params: {
     accent: params.accent,
     background: resolvedBackground,
     logoBackground: params.logoBackground,
+    logoFit: params.logoFit,
+    logoPadding: params.logoPadding,
     foreground: resolvedForeground,
   };
 };
@@ -430,6 +436,10 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       fallbackIconSrc: bankIcon,
       accent: "#DB0011",
       background: "linear-gradient(135deg, rgba(219, 0, 17, 0.16), rgba(219, 0, 17, 0.06))",
+      logoBackground: "#ffffff",
+      logoFit: "contain",
+      logoPadding: "3px",
+      foreground: "#0f172a",
     }),
   },
   {
