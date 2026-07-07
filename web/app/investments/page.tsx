@@ -806,7 +806,6 @@ export default function InvestmentsPage() {
       className="button button-primary button-small investments-page__add-button"
       type="button"
       onClick={() => setAddOpen(true)}
-      disabled={!selectedWorkspaceId}
       aria-label="Add investment"
     >
       <span className="button-icon" aria-hidden="true">
@@ -1190,7 +1189,6 @@ export default function InvestmentsPage() {
               className="button button-primary button-small investments-page__add-button investments-mobile-icon-button investments-mobile-icon-button--primary"
               type="button"
               onClick={() => setAddOpen(true)}
-              disabled={!selectedWorkspaceId}
               aria-label="Add investment"
             >
               <span className="button-icon" aria-hidden="true">
@@ -1616,7 +1614,7 @@ export default function InvestmentsPage() {
                   transactionHref="/transactions?manual=1"
                   actions={
                     <>
-                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
+                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)}>
                         Add investment
                       </button>
                       <Link className="button button-secondary button-small" href="/accounts">
@@ -1679,7 +1677,7 @@ export default function InvestmentsPage() {
                   transactionHref="/transactions?manual=1"
                   actions={
                     <>
-                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
+                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)}>
                         Add investment
                       </button>
                       <Link className="button button-secondary button-small" href="/accounts">
@@ -1753,7 +1751,7 @@ export default function InvestmentsPage() {
                   transactionHref="/transactions?manual=1"
                   actions={
                     <>
-                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
+                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)}>
                         Add investment
                       </button>
                       <Link className="button button-secondary button-small" href="/accounts">
