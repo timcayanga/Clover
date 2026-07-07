@@ -46,6 +46,15 @@ export type PlannedPaymentSuggestion = {
   sourceFileName: string | null;
 };
 
+type ConfirmedRecurringMemory = {
+  normalizedKey: string;
+  recurrence: CommitmentRecurrence;
+  nextDueDate: Date | null;
+  dueDate: Date | null;
+  accountId: string | null;
+  currency: string;
+};
+
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const INSTALLMENT_SIGNAL = /\b(installment|amortization|credit-?to-?cash|sip balance|balance summary)\b/i;
 
@@ -88,6 +97,23 @@ const addMonths = (date: Date, months: number) => {
   const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
   next.setDate(Math.min(day, lastDay));
   return next;
+};
+
+const absoluteDayDistance = (left: Date, right: Date) => Math.round(Math.abs(right.getTime() - left.getTime()) / DAY_IN_MS);
+
+const selectRememberedDueDate = (patternDueDate: Date, memory: ConfirmedRecurringMemory | null) => {
+  if (!memory) {
+    return patternDueDate;
+  }
+
+  const candidates = [memory.nextDueDate, memory.dueDate].filter((value): value is Date => Boolean(value));
+  for (const candidate of candidates) {
+    if (candidate.getTime() > Date.now() - DAY_IN_MS && absoluteDayDistance(candidate, patternDueDate) <= 45) {
+      return candidate;
+    }
+  }
+
+  return patternDueDate;
 };
 
 const getReminderKey = (reminder: StatementReminder) =>
@@ -277,7 +303,7 @@ const buildRecurringTransactionSuggestions = (
   transactions: Awaited<ReturnType<typeof getRecurringSourceTransactions>>,
   existingCommitmentKeys: Set<string>,
   dismissedSuppressionKeys: Set<string>,
-  confirmedRecurringTitles: Set<string>
+  confirmedRecurringMemoryByTitle: Map<string, ConfirmedRecurringMemory[]>
 ) => {
   const suggestions: PlannedPaymentSuggestion[] = [];
   const patterns = detectRecurringPatterns(transactions).filter((pattern) => pattern.transactionCount >= 2);
@@ -299,7 +325,15 @@ const buildRecurringTransactionSuggestions = (
         ? `${pattern.frequency} around the ${pattern.expectedDayOfMonth}${pattern.expectedDayOfMonth === 1 ? "st" : pattern.expectedDayOfMonth === 2 ? "nd" : pattern.expectedDayOfMonth === 3 ? "rd" : "th"}`
         : pattern.frequency;
     const normalizedTitle = normalizeKey(title);
-    const hasConfirmedMatch = confirmedRecurringTitles.has(normalizedTitle);
+    const confirmedMatches = confirmedRecurringMemoryByTitle.get(normalizedTitle) ?? [];
+    const confirmedMatch =
+      confirmedMatches.find(
+        (memory) =>
+          memory.currency === pattern.currency &&
+          (memory.accountId === null || pattern.accountId === null || memory.accountId === pattern.accountId)
+      ) ?? confirmedMatches[0] ?? null;
+    const hasConfirmedMatch = Boolean(confirmedMatch);
+    const dueDate = selectRememberedDueDate(pattern.nextExpectedDate, confirmedMatch);
 
     suggestions.push({
       id: key,
@@ -308,8 +342,8 @@ const buildRecurringTransactionSuggestions = (
       counterparty: title,
       amount: pattern.amount > 0 ? pattern.amount.toFixed(2) : null,
       currency: pattern.currency,
-      dueDate: pattern.nextExpectedDate.toISOString(),
-      recurrence: pattern.frequency,
+      dueDate: dueDate.toISOString(),
+      recurrence: confirmedMatch?.recurrence ?? pattern.frequency,
       accountId: pattern.accountId,
       accountName: pattern.account?.name ?? null,
       statementCheckpointId: null,
@@ -323,14 +357,14 @@ const buildRecurringTransactionSuggestions = (
       sourceLabel: "Recurring transaction",
       sourceDetail: [
         scheduleDetail ? `Looks ${scheduleDetail}` : null,
-        hasConfirmedMatch ? "matched a confirmed recurring item" : null,
+        hasConfirmedMatch ? "matched your saved recurring item" : null,
         `Seen through ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(pattern.lastSeenDate)}`,
       ]
         .filter(Boolean)
         .join(" · "),
-      reasonSummary: hasConfirmedMatch ? `${pattern.reasonSummary} · matched a confirmed recurring item` : pattern.reasonSummary,
-      reasonTags: hasConfirmedMatch ? [...pattern.reasonTags, "confirmed before"] : pattern.reasonTags,
-      confidence: Math.min(98, pattern.confidence + (hasConfirmedMatch ? 4 : 0)),
+      reasonSummary: hasConfirmedMatch ? `${pattern.reasonSummary} · matched your saved recurring schedule` : pattern.reasonSummary,
+      reasonTags: hasConfirmedMatch ? [...pattern.reasonTags, "confirmed before", "saved schedule"] : pattern.reasonTags,
+      confidence: Math.min(98, pattern.confidence + (hasConfirmedMatch ? 6 : 0)),
       sourceFileName: pattern.importFile?.fileName ?? null,
     });
   }
@@ -434,6 +468,11 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
           select: {
             title: true,
             counterparty: true,
+            accountId: true,
+            currency: true,
+            recurrence: true,
+            dueDate: true,
+            nextDueDate: true,
           },
         })
       : Promise.resolve([]),
@@ -471,11 +510,23 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
           });
     })
   );
-  const confirmedRecurringTitles = new Set(
-    confirmedRecurringCommitments.flatMap((commitment) =>
-      [normalizeKey(commitment.title), normalizeKey(commitment.counterparty ?? "")].filter(Boolean)
-    )
-  );
+  const confirmedRecurringMemoryByTitle = new Map<string, ConfirmedRecurringMemory[]>();
+  for (const commitment of confirmedRecurringCommitments) {
+    const keys = [normalizeKey(commitment.title), normalizeKey(commitment.counterparty ?? "")].filter(Boolean);
+    for (const normalizedKey of keys) {
+      confirmedRecurringMemoryByTitle.set(normalizedKey, [
+        ...(confirmedRecurringMemoryByTitle.get(normalizedKey) ?? []),
+        {
+          normalizedKey,
+          recurrence: commitment.recurrence,
+          nextDueDate: commitment.nextDueDate,
+          dueDate: commitment.dueDate,
+          accountId: commitment.accountId,
+          currency: (commitment.currency ?? "PHP").toUpperCase(),
+        },
+      ]);
+    }
+  }
 
   const reminderSuggestions = buildReminderSuggestions(reminders, existingCheckpointIds);
   const installmentSuggestions = buildInstallmentSuggestions(
@@ -487,7 +538,7 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
     recurringTransactions,
     existingRecurringTransactionKeys,
     dismissedSuppressionKeys,
-    confirmedRecurringTitles
+    confirmedRecurringMemoryByTitle
   );
 
   return [...reminderSuggestions, ...installmentSuggestions, ...recurringTransactionSuggestions].sort(

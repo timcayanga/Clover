@@ -74,6 +74,9 @@ const parseReminderDate = (value: unknown) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const toUtcMidday = (date: Date) =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0, 0));
+
 const addMonths = (date: Date, months: number) => {
   const next = new Date(date);
   const day = next.getDate();
@@ -98,6 +101,9 @@ const readExplicitPaymentDueDate = (sourceMetadata: Record<string, unknown> | nu
     sourceMetadata?.statementDueDate,
     sourceMetadata?.payment_date,
     sourceMetadata?.due_date,
+    sourceMetadata?.payment_due_date,
+    sourceMetadata?.nextPaymentDueDate,
+    sourceMetadata?.next_due_date,
   ];
 
   for (const candidate of candidates) {
@@ -115,16 +121,33 @@ const readExplicitPaymentDueDate = (sourceMetadata: Record<string, unknown> | nu
   return parseReminderDate(fallbackValue);
 };
 
-const inferDueDateFromHistory = (statementEndDate: Date | null, knownDueDays: number[]) => {
-  if (!statementEndDate || knownDueDays.length === 0) {
+const inferDueDateFromHistory = (
+  statementEndDate: Date | null,
+  knownDueDays: number[],
+  knownLagsInDays: number[]
+) => {
+  if (!statementEndDate) {
+    return null;
+  }
+
+  const normalizedStatementEndDate = toUtcMidday(statementEndDate);
+  if (knownLagsInDays.length > 0) {
+    const sortedLags = [...knownLagsInDays].sort((left, right) => left - right);
+    const lag = sortedLags[Math.floor((sortedLags.length - 1) / 2)] ?? sortedLags[0] ?? 0;
+    if (lag > 0) {
+      return new Date(normalizedStatementEndDate.getTime() + lag * DAY_IN_MS);
+    }
+  }
+
+  if (knownDueDays.length === 0) {
     return null;
   }
 
   const sortedDays = [...knownDueDays].sort((left, right) => left - right);
   const inferredDay = sortedDays[Math.floor((sortedDays.length - 1) / 2)] ?? sortedDays[0] ?? 1;
-  const baseDate = new Date(statementEndDate);
+  const baseDate = new Date(normalizedStatementEndDate);
   baseDate.setUTCDate(Math.min(inferredDay, 28));
-  return baseDate.getTime() <= statementEndDate.getTime() ? addMonths(baseDate, 1) : baseDate;
+  return baseDate.getTime() <= normalizedStatementEndDate.getTime() ? addMonths(baseDate, 1) : baseDate;
 };
 
 const inferCreditCardCheckpoint = (checkpoint: ReminderCheckpoint, sourceMetadata: Record<string, unknown> | null) => {
@@ -186,6 +209,7 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
   const now = Date.now();
   const remindersByAccountKey = new Map<string, StatementReminder>();
   const knownDueDaysByAccountKey = new Map<string, number[]>();
+  const knownLagDaysByAccountKey = new Map<string, number[]>();
 
   for (const checkpoint of checkpoints) {
     const sourceMetadata = extractSourceMetadata(checkpoint);
@@ -203,6 +227,12 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
       continue;
     }
     knownDueDaysByAccountKey.set(accountKey, [...(knownDueDaysByAccountKey.get(accountKey) ?? []), explicitDueDate.getUTCDate()]);
+    if (checkpoint.statementEndDate) {
+      const lagDays = Math.round((toUtcMidday(explicitDueDate).getTime() - toUtcMidday(checkpoint.statementEndDate).getTime()) / DAY_IN_MS);
+      if (lagDays > 0 && lagDays <= 45) {
+        knownLagDaysByAccountKey.set(accountKey, [...(knownLagDaysByAccountKey.get(accountKey) ?? []), lagDays]);
+      }
+    }
   }
 
   for (const checkpoint of checkpoints) {
@@ -230,7 +260,11 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
     );
     const paymentDueDate =
       readExplicitPaymentDueDate(sourceMetadata, checkpoint) ??
-      inferDueDateFromHistory(checkpoint.statementEndDate, knownDueDaysByAccountKey.get(accountKey) ?? []);
+      inferDueDateFromHistory(
+        checkpoint.statementEndDate,
+        knownDueDaysByAccountKey.get(accountKey) ?? [],
+        knownLagDaysByAccountKey.get(accountKey) ?? []
+      );
     if (!paymentDueDate || paymentDueDate.getTime() <= now) {
       continue;
     }
