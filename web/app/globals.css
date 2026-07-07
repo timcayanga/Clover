@@ -22315,6 +22315,8 @@ button.accounts-detail__transaction-head-cell {
 
 .institution-autocomplete__suggestion {
   display: grid;
+  width: 100%;
+  justify-self: stretch;
   gap: 2px;
   padding: 10px 12px;
   border: 0;
