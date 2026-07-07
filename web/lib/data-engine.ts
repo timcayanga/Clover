@@ -777,7 +777,7 @@ const stripMerchantPrototypeNoise = (value: string) =>
 
 const splitMerchantPrototypeSegments = (value: string) =>
   normalizeWhitespace(value)
-    .split(/(?:\s*[\/|•·,;]\s*|\s+(?:-+|–|—)\s+)/g)
+    .split(/(?:\s*[/*|•·,;]\s*|\s+(?:-+|–|—)\s+)/g)
     .map((part) => normalizeWhitespace(part))
     .filter((part) => part.length >= 3)
     .filter((part) => !/^(?:bank|statement|payment|transfer|cash|atm|credit|debit)$/i.test(part));
@@ -1141,6 +1141,149 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/business|invoice|client|contract/.test(lower)) return "Business";
   if (/fee|interest|loan|financial|bank charge/.test(lower)) return "Financial";
   return "Other";
+};
+
+const GENERIC_CATEGORY_NAMES = new Set(["other", "transfers"]);
+const GENERIC_MERCHANT_RAIL_KEYS = new Set(["paypal", "grab", "grabpay", "gcash", "maya", "visa", "mastercard", "amex"]);
+
+const isGenericCategoryName = (value: string | null | undefined) => GENERIC_CATEGORY_NAMES.has(String(value ?? "").trim().toLowerCase());
+
+const isExplicitTransferLikeDescription = (value: string | null | undefined) => {
+  const lower = normalizeWhitespace(String(value ?? "")).toLowerCase();
+  const compact = lower.replace(/\s+/g, "");
+  return (
+    /transfer|instapay|pesonet|fund\s+transfer|wallet\s+transfer|bank\s+transfer|incoming\s+transfer|outgoing\s+transfer|incoming\s+interbank\s+transfer|outgoing\s+interbank\s+transfer|gcash\s+cash\s+in|cash\s+in\b/.test(
+      lower
+    ) ||
+    /incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|wallettransfer|banktransfer|gcashcashin|cashin/.test(
+      compact
+    ) ||
+    isLikelyPersonTransferName(lower)
+  );
+};
+
+const rescueHeuristicCategory = (params: {
+  merchantText: string;
+  categoryText?: string | null;
+  type: TransactionType;
+  heuristicCategory: string;
+  merchantCandidates: string[];
+}) => {
+  const baseText = [params.categoryText, params.merchantText, ...params.merchantCandidates]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+  const explicitTransferLike = isExplicitTransferLikeDescription(baseText);
+  const categoryScores = new Map<string, number>();
+  const categoryVariant = new Map<string, string>();
+
+  const registerCategory = (category: string, variant: string, weight: number) => {
+    const key = category.trim();
+    if (!key || key.toLowerCase() === "other") {
+      return;
+    }
+
+    categoryScores.set(key, (categoryScores.get(key) ?? 0) + weight);
+    const existing = categoryVariant.get(key);
+    if (!existing || tokenizeMerchant(variant).length > tokenizeMerchant(existing).length) {
+      categoryVariant.set(key, variant);
+    }
+  };
+
+  for (const variant of params.merchantCandidates) {
+    const trimmedVariant = normalizeWhitespace(variant).trim();
+    if (!trimmedVariant) {
+      continue;
+    }
+
+    const rescuedCategory = guessCategoryFallback(trimmedVariant, params.type);
+    if (rescuedCategory === "Other") {
+      continue;
+    }
+
+    const tokens = tokenizeMerchant(trimmedVariant);
+    const tokenWeight = Math.min(4, Math.max(1, tokens.length));
+    const normalizedVariant = normalizeMerchantText(trimmedVariant);
+    const looksSpecific = normalizedVariant.length >= 4 && !/^(?:payment|deposit|withdrawal|cash|transfer|bank|credit|debit|wallet)$/.test(normalizedVariant);
+    let weight = tokenWeight + (looksSpecific ? 2 : 0);
+    if (rescuedCategory !== "Transfers") {
+      weight += 1;
+    }
+
+    registerCategory(rescuedCategory, trimmedVariant, weight);
+  }
+
+  const rankedCategories = [...categoryScores.entries()].sort((left, right) => right[1] - left[1]);
+  const winner = rankedCategories[0];
+  if (!winner) {
+    return null;
+  }
+
+  const [winnerCategory, winnerScore] = winner;
+  if (winnerCategory === "Transfers" && isGenericCategoryName(params.heuristicCategory)) {
+    return null;
+  }
+
+  if (params.heuristicCategory === "Transfers") {
+    if (explicitTransferLike || winnerCategory === "Transfers" || winnerScore < 5) {
+      return null;
+    }
+  } else if (params.heuristicCategory === "Other") {
+    if (winnerScore < 4) {
+      return null;
+    }
+  } else {
+    return null;
+  }
+
+  const sourceVariant = categoryVariant.get(winnerCategory) ?? params.merchantText;
+  const normalizedName = summarizeMerchantText(sourceVariant) || summarizeMerchantText(params.merchantText);
+  return {
+    categoryName: winnerCategory,
+    normalizedName,
+    confidence: params.heuristicCategory === "Transfers" ? 72 : 68,
+    categoryReason: params.heuristicCategory === "Transfers" ? "heuristic-transfer-rescue" : "heuristic-other-rescue",
+    categorySource: "deterministic_rescue",
+    variant: sourceVariant,
+  };
+};
+
+const pickCategoryAlignedNormalizedName = (params: {
+  targetCategory: string;
+  merchantText: string;
+  merchantCandidates: string[];
+  type: TransactionType;
+  fallbackName: string;
+}) => {
+  const rankedCandidates = [...new Set(params.merchantCandidates.map((value) => normalizeWhitespace(value).trim()).filter(Boolean))].sort((left, right) => {
+    const tokenDelta = tokenizeMerchant(right).length - tokenizeMerchant(left).length;
+    return tokenDelta !== 0 ? tokenDelta : right.length - left.length;
+  });
+  const fallbackNormalized = normalizeMerchantText(params.fallbackName);
+
+  for (const candidate of rankedCandidates) {
+    const summarized = summarizeMerchantText(candidate);
+    const normalizedSummary = normalizeMerchantText(summarized);
+    if (!normalizedSummary || GENERIC_MERCHANT_RAIL_KEYS.has(normalizedSummary)) {
+      continue;
+    }
+
+    const candidateCategory = guessCategoryFallback(candidate, params.type);
+    if (candidateCategory === params.targetCategory) {
+      return summarized;
+    }
+  }
+
+  if (GENERIC_MERCHANT_RAIL_KEYS.has(fallbackNormalized)) {
+    for (const candidate of rankedCandidates) {
+      const summarized = summarizeMerchantText(candidate);
+      const normalizedSummary = normalizeMerchantText(summarized);
+      if (normalizedSummary && !GENERIC_MERCHANT_RAIL_KEYS.has(normalizedSummary)) {
+        return summarized;
+      }
+    }
+  }
+
+  return params.fallbackName;
 };
 
 export const defaultCategoryForType = (type: TransactionType) => CATEGORY_FALLBACKS[type];
@@ -3162,6 +3305,21 @@ export const classifyMerchant = (params: {
   const providedCategory = params.categoryName?.trim();
   const heuristicCategory =
     providedCategory && providedCategory.toLowerCase() !== "other" ? providedCategory : guessCategoryFallback(categoryText || params.merchantText, params.type);
+  const rescuedHeuristic = rescueHeuristicCategory({
+    merchantText: params.merchantText,
+    categoryText,
+    type: params.type,
+    heuristicCategory,
+    merchantCandidates,
+  });
+  const finalHeuristicCategory = rescuedHeuristic?.categoryName ?? heuristicCategory;
+  const alignedNormalizedName = pickCategoryAlignedNormalizedName({
+    targetCategory: finalHeuristicCategory,
+    merchantText: params.merchantText,
+    merchantCandidates,
+    type: params.type,
+    fallbackName: rescuedHeuristic?.normalizedName || normalizedSummary,
+  });
   const negativeSignals = params.negativeSignals ?? [];
 
   let bestRule: MerchantRuleRow | null = null;
@@ -3178,7 +3336,7 @@ export const classifyMerchant = (params: {
       categorySource: "deterministic_override",
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
-      normalizedName: normalizedSummary,
+      normalizedName: alignedNormalizedName,
       preferredType: preferredTypeForCategory(hardcodedOverride, params.type, categoryText || params.merchantText),
     };
   }
@@ -3213,7 +3371,7 @@ export const classifyMerchant = (params: {
   }
 
   if (bestRule && bestRuleScore >= 20) {
-    const learnedCategory = bestRule.categoryName ?? heuristicCategory;
+    const learnedCategory = bestRule.categoryName ?? finalHeuristicCategory;
     const exact = normalizedMerchantCandidates.has(bestRule.merchantKey);
     const learnedType = params.trainingSignals.find((signal) => normalizedMerchantCandidates.has(signal.merchantKey))?.type ?? params.type;
     const rawConfidence = Math.max(0, bestRuleScore) - Math.min(bestRuleScore * 0.75, negativePenalty * (exact ? 0.9 : 0.65));
@@ -3225,7 +3383,7 @@ export const classifyMerchant = (params: {
       categorySource: bestRule.source,
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
-      normalizedName: bestRule.normalizedName || normalizedSummary,
+      normalizedName: bestRule.normalizedName || alignedNormalizedName,
       preferredType: preferredTypeForCategory(learnedCategory, learnedType, categoryText || params.merchantText),
     };
   }
@@ -3239,7 +3397,7 @@ export const classifyMerchant = (params: {
   }
 
   if (bestSignal && bestScore >= 18) {
-    const learnedCategory = bestSignal.categoryName ?? heuristicCategory;
+    const learnedCategory = bestSignal.categoryName ?? finalHeuristicCategory;
     const exact = normalizedMerchantCandidates.has(bestSignal.merchantKey);
     const rawConfidence = Math.max(68, bestScore) - Math.min(bestScore * 0.6, negativePenalty * 0.45);
     const confidence = Math.max(20, Math.round(Math.min(negativePenalty > 0 ? 80 : 99, rawConfidence)));
@@ -3251,33 +3409,37 @@ export const classifyMerchant = (params: {
       categorySource: bestSignal.source,
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
-      normalizedName: normalizedSummary,
+      normalizedName: alignedNormalizedName,
       preferredType: preferredTypeForCategory(learnedCategory, bestSignal.type ?? params.type, categoryText || params.merchantText),
     };
   }
 
   if (HARDCODED_EXACT_MERCHANT_KEYS.has(normalizedMerchant)) {
     return {
-      categoryName: heuristicCategory,
+      categoryName: finalHeuristicCategory,
       confidence: 99,
       categoryReason: "hardcoded-exact",
       categorySource: "deterministic_exact",
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
-      normalizedName: normalizedSummary,
-      preferredType: preferredTypeForCategory(heuristicCategory, params.type, categoryText || params.merchantText),
+      normalizedName: alignedNormalizedName,
+      preferredType: preferredTypeForCategory(finalHeuristicCategory, params.type, categoryText || params.merchantText),
     };
   }
 
   return {
-    categoryName: heuristicCategory,
-    confidence: heuristicCategory === "Other" ? 35 : Math.max(35, 62 - Math.min(22, Math.round(negativePenalty * 0.25))),
-    categoryReason: heuristicCategory === "Other" ? "heuristic-other" : "heuristic-rule",
-    categorySource: "deterministic_heuristic",
+    categoryName: finalHeuristicCategory,
+    confidence:
+      rescuedHeuristic?.confidence ??
+      (finalHeuristicCategory === "Other" ? 35 : Math.max(35, 62 - Math.min(22, Math.round(negativePenalty * 0.25)))),
+    categoryReason:
+      rescuedHeuristic?.categoryReason ??
+      (finalHeuristicCategory === "Other" ? "heuristic-other" : "heuristic-rule"),
+    categorySource: rescuedHeuristic?.categorySource ?? "deterministic_heuristic",
     merchantKey: normalizedMerchant,
     merchantTokens: tokens,
-    normalizedName: normalizedSummary,
-    preferredType: preferredTypeForCategory(heuristicCategory, params.type, categoryText || params.merchantText),
+    normalizedName: alignedNormalizedName,
+    preferredType: preferredTypeForCategory(finalHeuristicCategory, params.type, categoryText || params.merchantText),
   };
 };
 

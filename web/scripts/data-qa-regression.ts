@@ -90,6 +90,78 @@ const buildBadSample = (): DataQaRunInput => ({
   },
 });
 
+const buildUnseenMerchantSample = (): DataQaRunInput => ({
+  workspaceId: "workspace-test",
+  importFileId: "import-unseen-merchant",
+  source: "local_training",
+  fileName: "fresh-credit-card.pdf",
+  fileType: "application/pdf",
+  parserVersion: "v2",
+  parsedRows: [
+    {
+      date: "2026-02-02",
+      amount: "-220.00",
+      merchantRaw: "UNSEEN PAYEE 001",
+      merchantClean: "UNSEEN PAYEE 001",
+      categoryName: "Other",
+      type: "expense",
+      confidence: 74,
+    },
+    {
+      date: "2026-02-03",
+      amount: "-180.00",
+      merchantRaw: "ANOTHER STRANGE RAW ROW",
+      merchantClean: "ANOTHER STRANGE RAW ROW",
+      categoryName: "Other",
+      type: "expense",
+      confidence: 72,
+    },
+    {
+      date: "2026-02-04",
+      amount: "-120.00",
+      merchantRaw: "TRANSFER LIKE NOISE",
+      merchantClean: "TRANSFER LIKE NOISE",
+      categoryName: "Transfers",
+      type: "expense",
+      confidence: 71,
+    },
+    {
+      date: "2026-02-05",
+      amount: "-95.00",
+      merchantRaw: "TRANSFER LIKE NOISE TWO",
+      merchantClean: "TRANSFER LIKE NOISE TWO",
+      categoryName: "Transfers",
+      type: "expense",
+      confidence: 73,
+    },
+    {
+      date: "2026-02-06",
+      amount: "-88.00",
+      merchantRaw: "TRANSFER LIKE NOISE THREE",
+      merchantClean: "TRANSFER LIKE NOISE THREE",
+      categoryName: "Transfers",
+      type: "expense",
+      confidence: 70,
+    },
+  ],
+  metadata: {
+    institution: "BPI",
+    accountNumber: "000011112222",
+    accountName: "BPI 2222",
+    accountType: "credit_card",
+    openingBalance: null,
+    endingBalance: null,
+    startDate: "2026-02-01",
+    endDate: "2026-02-28",
+    confidence: 84,
+  },
+  timings: {
+    totalMs: 1800,
+    parsingMs: 1200,
+    usedDeterministicParser: true,
+  },
+});
+
 const buildImageSample = (): DataQaRunInput => ({
   workspaceId: "workspace-test",
   importFileId: "import-image-statement",
@@ -324,6 +396,16 @@ const main = async () => {
   assert.ok(bad.findings.some((finding) => finding.code === "statement.identity_missing"), "the broken sample should flag missing identity");
   assert.ok(bad.findings.some((finding) => finding.code === "performance.slow_parse"), "the broken sample should flag slow parsing");
   assert.ok(bad.score < good.score, "the broken sample should score lower than the healthy sample");
+
+  const unseenMerchantSample = evaluateDataQaRun(buildUnseenMerchantSample());
+  assert.ok(
+    unseenMerchantSample.findings.some((finding) => finding.code === "transactions.other_category_rate_high"),
+    "the unseen-merchant sample should flag high Other-category drift"
+  );
+  assert.ok(
+    unseenMerchantSample.findings.some((finding) => finding.code === "transactions.transfer_category_rate_high"),
+    "the unseen-merchant sample should flag high Transfers-category drift"
+  );
 
   console.log("data-qa regression passed");
 };

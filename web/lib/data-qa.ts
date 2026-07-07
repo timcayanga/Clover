@@ -125,6 +125,8 @@ export type DataQaEvaluation = {
     dateCoverage: number;
     merchantNormalizationCoverage: number;
     categoryFallbackRate: number;
+    transferCategoryRate: number;
+    otherCategoryRate: number;
     lowConfidenceRate: number;
     hasStatementIdentity: boolean;
     hasStatementBalances: boolean;
@@ -239,6 +241,12 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
         const category = normalizeKey(row.categoryName);
         return !category || category === "other";
       }) / rowCount
+    : 0;
+  const transferCategoryRate = rowCount > 0
+    ? countRowsWithValue(rows, (row) => normalizeKey(row.categoryName) === "transfers") / rowCount
+    : 0;
+  const otherCategoryRate = rowCount > 0
+    ? countRowsWithValue(rows, (row) => normalizeKey(row.categoryName) === "other") / rowCount
     : 0;
   const lowConfidenceRate = rowCount > 0
     ? countRowsWithValue(rows, (row) => (typeof row.confidence === "number" ? row.confidence < 85 : true)) / rowCount
@@ -405,6 +413,38 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
     });
   }
 
+  if (otherCategoryRate > 0.2) {
+    findings.push({
+      code: "transactions.other_category_rate_high",
+      severity: rowCount >= 5 ? "warning" : "info",
+      field: "categoryName",
+      message: "Too many rows still landed in the catch-all Other category.",
+      observedValue: { otherCategoryRate },
+      expectedValue: { maxOtherCategoryRate: 0.2 },
+      suggestion: "Strengthen merchant normalization and add a rescue categorization pass for noisy unseen merchants before leaving rows in Other.",
+      confidence: 82,
+      metadata: {
+        source: input.source,
+      },
+    });
+  }
+
+  if (transferCategoryRate > 0.5) {
+    findings.push({
+      code: "transactions.transfer_category_rate_high",
+      severity: rowCount >= 8 ? "warning" : "info",
+      field: "categoryName",
+      message: "A large share of rows were categorized as Transfers, which can hide missed merchant categorization.",
+      observedValue: { transferCategoryRate },
+      expectedValue: { maxTransferCategoryRate: 0.5 },
+      suggestion: "Check whether transfer heuristics are swallowing merchant-coded purchases, subscriptions, and transportation rows on unseen files.",
+      confidence: 76,
+      metadata: {
+        source: input.source,
+      },
+    });
+  }
+
   if (lowConfidenceRate > 0.35) {
     findings.push({
       code: "transactions.low_confidence_rows",
@@ -564,6 +604,8 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       dateCoverage,
       merchantNormalizationCoverage,
       categoryFallbackRate,
+      transferCategoryRate,
+      otherCategoryRate,
       lowConfidenceRate,
       hasStatementIdentity,
       hasStatementBalances,
@@ -591,6 +633,8 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       dateCoverage,
       merchantNormalizationCoverage,
       categoryFallbackRate,
+      transferCategoryRate,
+      otherCategoryRate,
       lowConfidenceRate,
       hasStatementIdentity,
       hasStatementBalances,
