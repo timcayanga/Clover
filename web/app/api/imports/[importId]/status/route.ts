@@ -8,43 +8,70 @@ import {
   upsertImportEnrichmentJob,
 } from "@/lib/import-enrichment-jobs";
 import { loadImportStatusSnapshot } from "@/lib/import-status-snapshot";
-import { readCheckpointImportMode } from "@/lib/import-workflow";
+import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
 import { prisma } from "@/lib/prisma";
 import { processImportEnrichmentJobs } from "@/workers/import-processor";
 import { after, NextResponse } from "next/server";
-import {
-  VISUAL_IMPORT_RETRY_LIMIT,
-  coerceVisualImportAttempt,
-  getNextVisualImportAttempt,
-  getVisualImportRepairMessage,
-  getVisualImportRetryMessage,
-  shouldStopStaleVisualImportRetry,
-  type VisualImportRecoveryMode,
-} from "@/lib/import-visual-recovery";
 
 export const dynamic = "force-dynamic";
 
-const STALE_RECEIPT_PROCESSING_MS = 75 * 1000;
-const STALE_RECEIPT_QUEUE_MS = 25 * 1000;
-const STALE_RECEIPT_RECONCILING_MS = 45 * 1000;
-const STALE_RECEIPT_STAGED_MS = 45 * 1000;
-const STALE_RECEIPT_EMPTY_DONE_MS = 30 * 1000;
-const STALE_STATEMENT_IMAGE_QUEUE_MS = 25 * 1000;
-const STALE_STATEMENT_IMAGE_READING_MS = 75 * 1000;
-const STALE_STATEMENT_IMAGE_RECONCILING_MS = 45 * 1000;
-const STALE_STATEMENT_IMAGE_STAGED_MS = 45 * 1000;
-const STALE_STATEMENT_IMAGE_EMPTY_DONE_MS = 30 * 1000;
+const STALE_RECEIPT_PROCESSING_MS = 3 * 60 * 1000;
+const STALE_STATEMENT_IMAGE_QUEUE_MS = 15 * 1000;
+const STALE_STATEMENT_IMAGE_READING_MS = 45 * 1000;
+const STALE_STATEMENT_IMAGE_BACKUP_HANDOFF_MS = 90 * 1000;
+const STALE_STATEMENT_IMAGE_RECONCILING_MS = 30 * 1000;
+const STALE_STATEMENT_IMAGE_STAGED_MS = 30 * 1000;
+const STALE_STATEMENT_IMAGE_EMPTY_DONE_MS = 15 * 1000;
 
 const isImageImportFile = (fileName?: string | null, fileType?: string | null) =>
   String(fileType ?? "").toLowerCase().startsWith("image/") ||
   /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(String(fileName ?? "").toLowerCase());
 
-const isPdfImportFile = (fileName?: string | null, fileType?: string | null) =>
-  String(fileType ?? "").toLowerCase() === "application/pdf" ||
-  /\.pdf$/i.test(String(fileName ?? "").toLowerCase());
+const isBackupParserHandoffMessage = (value?: string | null) =>
+  /backup parser|double-checking this file|local parse looks incomplete/i.test(String(value ?? ""));
 
-const isVisualImportFile = (fileName?: string | null, fileType?: string | null) =>
-  isImageImportFile(fileName, fileType) || isPdfImportFile(fileName, fileType);
+const isRecoverableImageImportMode = (value?: string | null) =>
+  value === "statement" || value === "account_detail" || value === "portfolio";
+
+const buildRecoverableImageImportLabel = (importMode?: string | null) => {
+  switch (importMode) {
+    case "account_detail":
+      return "account screenshot";
+    case "portfolio":
+      return "portfolio screenshot";
+    default:
+      return "screenshot";
+  }
+};
+
+const buildRecoverableImageImportSuccessMessage = (importMode?: string | null) => {
+  switch (importMode) {
+    case "account_detail":
+      return "Account detail snapshot saved.";
+    case "portfolio":
+      return "Portfolio snapshot saved.";
+    default:
+      return "Screenshot transactions imported.";
+  }
+};
+
+const shouldPersistPublishedAccountSummaries = (snapshot: Awaited<ReturnType<typeof loadImportStatusSnapshot>>) => {
+  if (!snapshot?.statementCheckpoint || snapshot.accountSummaries.length === 0) {
+    return false;
+  }
+
+  const sourceMetadata =
+    snapshot.statementCheckpoint.sourceMetadata &&
+    typeof snapshot.statementCheckpoint.sourceMetadata === "object" &&
+    !Array.isArray(snapshot.statementCheckpoint.sourceMetadata)
+      ? (snapshot.statementCheckpoint.sourceMetadata as Record<string, unknown>)
+      : null;
+  const existingVisibleFlag = sourceMetadata?.publishedVisibleImportComplete === true;
+  const existingSummaries = Array.isArray(sourceMetadata?.publishedAccountSummaries) ? sourceMetadata.publishedAccountSummaries : [];
+  const nextSerialized = JSON.stringify(snapshot.accountSummaries);
+  const existingSerialized = JSON.stringify(existingSummaries);
+  return !existingVisibleFlag || nextSerialized !== existingSerialized;
+};
 
 export async function GET(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   try {
@@ -70,115 +97,41 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       return NextResponse.json({ error: "Import not found" }, { status: 404 });
     }
 
+    if (shouldPersistPublishedAccountSummaries(snapshot)) {
+      await prisma.accountStatementCheckpoint
+        .update({
+          where: { importFileId: importId },
+          data: {
+            sourceMetadata: mergeCheckpointSourceMetadata(snapshot.statementCheckpoint?.sourceMetadata, {
+              publishedVisibleImportComplete: snapshot.visibleImportComplete,
+              publishedAccountSummaries: snapshot.accountSummaries,
+            }),
+          },
+        })
+        .catch(() => null);
+    }
+
     const importMode = readCheckpointImportMode(snapshot.statementCheckpoint?.sourceMetadata);
     const updatedAtMs = new Date(snapshot.importFile.updatedAt).getTime();
     const statementImageProcessingAgeMs = Number.isFinite(updatedAtMs) ? Date.now() - updatedAtMs : 0;
-    const visualProcessingAttempt = coerceVisualImportAttempt(snapshot.importFile.processingAttempt);
-    const visualImportIsOutOfRetryBudget = shouldStopStaleVisualImportRetry({
-      processingAttempt: snapshot.importFile.processingAttempt,
-      processingPhase: snapshot.importFile.processingPhase,
-    });
-    const countVisibleTransactions = async () =>
-      prisma.transaction
-        .count({
-          where: {
-            deletedAt: null,
-            OR: [
-              { importFileId: importId },
-              {
-                rawPayload: {
-                  path: ["sourceImportFileId"],
-                  equals: importId,
-                },
-              },
-            ],
-          },
-        })
-        .catch(() => 0);
-    const keepVisualImportRecoverableAfterFailure = async (
-      recoveryMode: VisualImportRecoveryMode,
-      options?: { parsedRowsMessage?: string; parsedRowsCount?: number | null }
-    ) => {
-      const refreshedRows = await countVisibleTransactions();
-      if (refreshedRows > 0) {
-        await updateImportFileCompat(importId, {
-          status: "done",
-          processingPhase: "complete",
-          processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
-          confirmedTransactionsCount: refreshedRows,
-        }).catch(() => null);
-        return;
-      }
-
-      const parsedRowsCount = Number(options?.parsedRowsCount ?? snapshot.parsedRowsCount ?? 0);
-      if (parsedRowsCount > 0) {
-        await updateImportFileCompat(importId, {
-          status: "processing",
-          processingPhase: "reconciling",
-          processingMessage:
-            options?.parsedRowsMessage ?? "Clover parsed rows from this file and is retrying the final save step.",
-          confirmedTransactionsCount: 0,
-        }).catch(() => null);
-        return;
-      }
-
-      const nextAttempt = getNextVisualImportAttempt(snapshot.importFile.processingAttempt);
-      if (nextAttempt <= VISUAL_IMPORT_RETRY_LIMIT) {
-        await updateImportFileCompat(importId, {
-          status: "processing",
-          processingPhase: "queued_retry",
-          processingAttempt: nextAttempt,
-          processingMessage: getVisualImportRetryMessage(recoveryMode, nextAttempt),
-          parsedRowsCount: 0,
-          confirmedTransactionsCount: 0,
-        }).catch(() => null);
-        return;
-      }
-
-      await updateImportFileCompat(importId, {
-        status: "failed",
-        processingPhase: "repair_needed",
-        processingMessage: getVisualImportRepairMessage(recoveryMode),
-        parsedRowsCount: 0,
-        confirmedTransactionsCount: 0,
-      }).catch(() => null);
-    };
+    const backupParserHandoffInProgress = isBackupParserHandoffMessage(snapshot.importFile.processingMessage);
+    const imageImportLabel = buildRecoverableImageImportLabel(importMode);
     const staleStatementImageQueue =
-      importMode === "statement" &&
+      isRecoverableImageImportMode(importMode) &&
       snapshot.importFile.status === "processing" &&
       (snapshot.importFile.processingPhase === "queued_retry" || snapshot.importFile.processingPhase === "reading_account_details") &&
-      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount === 0 &&
       Number.isFinite(updatedAtMs) &&
       statementImageProcessingAgeMs >
         (snapshot.importFile.processingPhase === "reading_account_details"
-          ? STALE_STATEMENT_IMAGE_READING_MS
+          ? backupParserHandoffInProgress
+            ? STALE_STATEMENT_IMAGE_BACKUP_HANDOFF_MS
+            : STALE_STATEMENT_IMAGE_READING_MS
           : STALE_STATEMENT_IMAGE_QUEUE_MS);
 
     if (staleStatementImageQueue) {
-      if (visualImportIsOutOfRetryBudget) {
-        await updateImportFileCompat(importId, {
-          status: "failed",
-          processingPhase: "repair_needed",
-          processingMessage: getVisualImportRepairMessage("statement"),
-          parsedRowsCount: 0,
-          confirmedTransactionsCount: 0,
-        });
-        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
-          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-          promoteFailedVisibleImport: true,
-        });
-        if (refreshedSnapshot) {
-          return NextResponse.json({
-            ...refreshedSnapshot,
-            statementSelfHeal: {
-              reason: "statement_image_retry_budget_exhausted",
-              retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
-            },
-          });
-        }
-      }
       await updateImportFileCompat(importId, {
         status: "processing",
         processingPhase: "reading_account_details",
@@ -191,11 +144,35 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           await processImportFileText(importId, {
             actorUserId: userId,
             qaSource: "import_processing",
-            importMode: "statement",
+            importMode: isRecoverableImageImportMode(importMode) ? importMode : "statement",
             pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
           });
         } catch {
-          await keepVisualImportRecoverableAfterFailure("statement");
+          const refreshedRows = await prisma.transaction
+            .count({
+              where: {
+                deletedAt: null,
+                OR: [
+                  { importFileId: importId },
+                  {
+                    rawPayload: {
+                      path: ["sourceImportFileId"],
+                      equals: importId,
+                    },
+                  },
+                ],
+              },
+            })
+            .catch(() => 0);
+          if (refreshedRows === 0) {
+            await updateImportFileCompat(importId, {
+              status: "failed",
+              processingPhase: "repair_needed",
+              processingMessage: `Clover couldn't finish reading this ${imageImportLabel}. Please retry the upload.`,
+              parsedRowsCount: 0,
+              confirmedTransactionsCount: 0,
+            }).catch(() => null);
+          }
         }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
@@ -213,109 +190,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       }
     }
 
-    const staleReceiptQueue =
-      importMode === "receipt" &&
-      snapshot.importFile.status === "processing" &&
-      (snapshot.importFile.processingPhase === "queued_retry" ||
-        snapshot.importFile.processingPhase === "reading_receipt_vision" ||
-        snapshot.importFile.processingPhase === "reading_account_details") &&
-      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
-      snapshot.confirmedTransactionsCount === 0 &&
-      snapshot.parsedRowsCount === 0 &&
-      Number.isFinite(updatedAtMs) &&
-      statementImageProcessingAgeMs > STALE_RECEIPT_QUEUE_MS;
-
-    if (staleReceiptQueue) {
-      if (visualImportIsOutOfRetryBudget) {
-        await updateImportFileCompat(importId, {
-          status: "failed",
-          processingPhase: "repair_needed",
-          processingMessage: getVisualImportRepairMessage("receipt"),
-          parsedRowsCount: 0,
-          confirmedTransactionsCount: 0,
-        });
-        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
-          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-          promoteFailedVisibleImport: true,
-        });
-        if (refreshedSnapshot) {
-          return NextResponse.json({
-            ...refreshedSnapshot,
-            receiptSelfHeal: {
-              reason: "receipt_retry_budget_exhausted",
-              retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
-            },
-          });
-        }
-      }
-      await updateImportFileCompat(importId, {
-        status: "processing",
-        processingPhase: "reading_receipt_vision",
-        processingMessage: "Retrying receipt import...",
-      });
-      after(async () => {
-        try {
-          const { getConfiguredPdfJsBaseUrl } = await import("@/lib/import-file-text.server");
-          const { processImportFileText } = await import("@/workers/import-processor");
-          await processImportFileText(importId, {
-            actorUserId: userId,
-            qaSource: "import_processing",
-            importMode: "receipt",
-            pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
-          });
-        } catch {
-          await keepVisualImportRecoverableAfterFailure("receipt");
-        }
-      });
-      const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
-        importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-        promoteFailedVisibleImport: true,
-      });
-      if (refreshedSnapshot) {
-        return NextResponse.json({
-          ...refreshedSnapshot,
-          receiptSelfHeal: {
-            reason: "stale_receipt_queue",
-            staleAfterSeconds: Math.round(STALE_RECEIPT_QUEUE_MS / 1000),
-          },
-        });
-      }
-    }
-
-    const visualImportWithoutMode =
-      importMode === null && isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType);
     const staleStatementImageEmptyDone =
-      (importMode === "statement" || visualImportWithoutMode) &&
+      isRecoverableImageImportMode(importMode) &&
       (snapshot.importFile.status === "done" || snapshot.importFile.status === "failed") &&
-      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount === 0 &&
       Number.isFinite(updatedAtMs) &&
-      (snapshot.importFile.status === "failed" || statementImageProcessingAgeMs > STALE_STATEMENT_IMAGE_EMPTY_DONE_MS);
+      statementImageProcessingAgeMs > STALE_STATEMENT_IMAGE_EMPTY_DONE_MS;
 
     if (staleStatementImageEmptyDone) {
-      if (visualProcessingAttempt >= VISUAL_IMPORT_RETRY_LIMIT) {
-        await updateImportFileCompat(importId, {
-          status: "failed",
-          processingPhase: "repair_needed",
-          processingMessage: getVisualImportRepairMessage("statement"),
-          parsedRowsCount: 0,
-          confirmedTransactionsCount: 0,
-        });
-        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
-          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-          promoteFailedVisibleImport: true,
-        });
-        if (refreshedSnapshot) {
-          return NextResponse.json({
-            ...refreshedSnapshot,
-            statementSelfHeal: {
-              reason: "statement_image_empty_done_retry_budget_exhausted",
-              retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
-            },
-          });
-        }
-      }
       await updateImportFileCompat(importId, {
         status: "processing",
         processingPhase: "reading_account_details",
@@ -328,11 +212,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           await processImportFileText(importId, {
             actorUserId: userId,
             qaSource: "import_processing",
-            importMode: "statement",
+            importMode: isRecoverableImageImportMode(importMode) ? importMode : "statement",
             pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
           });
         } catch {
-          await keepVisualImportRecoverableAfterFailure("statement");
+          await updateImportFileCompat(importId, {
+            status: "failed",
+            processingPhase: "repair_needed",
+            processingMessage: `Clover couldn't finish reading this ${imageImportLabel}. Please retry the upload.`,
+            parsedRowsCount: 0,
+            confirmedTransactionsCount: 0,
+          }).catch(() => null);
         }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
@@ -350,78 +240,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       }
     }
 
-    const staleReceiptEmptyDone =
-      importMode === "receipt" &&
-      (snapshot.importFile.status === "done" || snapshot.importFile.status === "failed") &&
-      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
-      snapshot.confirmedTransactionsCount === 0 &&
-      snapshot.parsedRowsCount === 0 &&
-      Number.isFinite(updatedAtMs) &&
-      (snapshot.importFile.status === "failed" || statementImageProcessingAgeMs > STALE_RECEIPT_EMPTY_DONE_MS);
-
-    if (staleReceiptEmptyDone) {
-      if (visualProcessingAttempt >= VISUAL_IMPORT_RETRY_LIMIT) {
-        await updateImportFileCompat(importId, {
-          status: "failed",
-          processingPhase: "repair_needed",
-          processingMessage: getVisualImportRepairMessage("receipt"),
-          parsedRowsCount: 0,
-          confirmedTransactionsCount: 0,
-        });
-        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
-          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-          promoteFailedVisibleImport: true,
-        });
-        if (refreshedSnapshot) {
-          return NextResponse.json({
-            ...refreshedSnapshot,
-            receiptSelfHeal: {
-              reason: "receipt_empty_done_retry_budget_exhausted",
-              retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
-            },
-          });
-        }
-      }
-      await updateImportFileCompat(importId, {
-        status: "processing",
-        processingPhase: "reading_receipt_vision",
-        processingMessage: "Retrying receipt import...",
-      });
-      after(async () => {
-        try {
-          const { getConfiguredPdfJsBaseUrl } = await import("@/lib/import-file-text.server");
-          const { processImportFileText } = await import("@/workers/import-processor");
-          await processImportFileText(importId, {
-            actorUserId: userId,
-            qaSource: "import_processing",
-            importMode: "receipt",
-            pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
-          });
-        } catch {
-          await keepVisualImportRecoverableAfterFailure("receipt");
-        }
-      });
-      const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
-        importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-        promoteFailedVisibleImport: true,
-      });
-      if (refreshedSnapshot) {
-        return NextResponse.json({
-          ...refreshedSnapshot,
-          receiptSelfHeal: {
-            reason: "stale_receipt_empty_done",
-            staleAfterSeconds: Math.round(STALE_RECEIPT_EMPTY_DONE_MS / 1000),
-          },
-        });
-      }
-    }
-
     const staleStatementImageReconciling =
-      importMode === "statement" &&
+      isRecoverableImageImportMode(importMode) &&
       snapshot.importFile.status === "processing" &&
       snapshot.importFile.processingPhase === "reconciling" &&
-      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
-      !snapshot.accountDetailOnlyImport &&
+      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount > 0 &&
       Number.isFinite(updatedAtMs) &&
@@ -441,15 +264,34 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             await updateImportFileCompat(importId, {
               status: "done",
               processingPhase: "complete",
-              processingMessage: "Screenshot transactions imported.",
+              processingMessage: buildRecoverableImageImportSuccessMessage(importMode),
               confirmedTransactionsCount: result.confirmedTransactionsCount ?? result.imported,
             }).catch(() => null);
           }
         } catch {
-          await keepVisualImportRecoverableAfterFailure("statement", {
-            parsedRowsMessage: "Clover read rows from this screenshot and is retrying the final save step.",
-            parsedRowsCount: snapshot.parsedRowsCount,
-          });
+          const refreshedRows = await prisma.transaction
+            .count({
+              where: {
+                deletedAt: null,
+                OR: [
+                  { importFileId: importId },
+                  {
+                    rawPayload: {
+                      path: ["sourceImportFileId"],
+                      equals: importId,
+                    },
+                  },
+                ],
+              },
+            })
+            .catch(() => 0);
+          if (refreshedRows === 0) {
+            await updateImportFileCompat(importId, {
+              status: "failed",
+              processingPhase: "repair_needed",
+              processingMessage: `Clover read rows from this ${imageImportLabel}, but could not save them yet. Please retry the import.`,
+            }).catch(() => null);
+          }
         }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
@@ -467,62 +309,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       }
     }
 
-    const staleReceiptReconciling =
-      importMode === "receipt" &&
-      snapshot.importFile.status === "processing" &&
-      snapshot.importFile.processingPhase === "reconciling" &&
-      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
-      snapshot.confirmedTransactionsCount === 0 &&
-      snapshot.parsedRowsCount > 0 &&
-      Number.isFinite(updatedAtMs) &&
-      Date.now() - updatedAtMs > STALE_RECEIPT_RECONCILING_MS;
-
-    if (staleReceiptReconciling) {
-      await updateImportFileCompat(importId, {
-        status: "processing",
-        processingPhase: "reconciling",
-        processingMessage: "Saving receipt transaction...",
-      });
-      after(async () => {
-        try {
-          const { confirmImportFile } = await import("@/workers/import-processor");
-          const result = await confirmImportFile(importId, null);
-          if (result.status === "done") {
-            await updateImportFileCompat(importId, {
-              status: "done",
-              processingPhase: "complete",
-              processingMessage: "Receipt transaction imported.",
-              confirmedTransactionsCount: result.confirmedTransactionsCount ?? result.imported,
-            }).catch(() => null);
-          }
-        } catch {
-          await keepVisualImportRecoverableAfterFailure("receipt", {
-            parsedRowsMessage: "Clover read this receipt and is retrying the final save step.",
-            parsedRowsCount: snapshot.parsedRowsCount,
-          });
-        }
-      });
-      const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
-        importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-        promoteFailedVisibleImport: true,
-      });
-      if (refreshedSnapshot) {
-        return NextResponse.json({
-          ...refreshedSnapshot,
-          receiptSelfHeal: {
-            reason: "stale_receipt_reconciling",
-            staleAfterSeconds: Math.round(STALE_RECEIPT_RECONCILING_MS / 1000),
-          },
-        });
-      }
-    }
-
     const staleStatementImageStaged =
-      importMode === "statement" &&
+      isRecoverableImageImportMode(importMode) &&
       snapshot.importFile.status === "processing" &&
       snapshot.importFile.processingPhase === "staged" &&
-      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
-      !snapshot.accountDetailOnlyImport &&
+      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount > 0 &&
       Number.isFinite(updatedAtMs) &&
@@ -542,15 +333,34 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             await updateImportFileCompat(importId, {
               status: "done",
               processingPhase: "complete",
-              processingMessage: "Screenshot transactions imported.",
+              processingMessage: buildRecoverableImageImportSuccessMessage(importMode),
               confirmedTransactionsCount: result.confirmedTransactionsCount ?? result.imported,
             }).catch(() => null);
           }
         } catch {
-          await keepVisualImportRecoverableAfterFailure("statement", {
-            parsedRowsMessage: "Clover saved rows from this screenshot and is retrying the final linking step.",
-            parsedRowsCount: snapshot.parsedRowsCount,
-          });
+          const refreshedRows = await prisma.transaction
+            .count({
+              where: {
+                deletedAt: null,
+                OR: [
+                  { importFileId: importId },
+                  {
+                    rawPayload: {
+                      path: ["sourceImportFileId"],
+                      equals: importId,
+                    },
+                  },
+                ],
+              },
+            })
+            .catch(() => 0);
+          if (refreshedRows === 0) {
+            await updateImportFileCompat(importId, {
+              status: "failed",
+              processingPhase: "repair_needed",
+              processingMessage: `Clover saved rows from this ${imageImportLabel}, but could not finish linking them yet. Please retry the import.`,
+            }).catch(() => null);
+          }
         }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
@@ -568,56 +378,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       }
     }
 
-    const staleReceiptStaged =
-      importMode === "receipt" &&
-      snapshot.importFile.status === "processing" &&
-      snapshot.importFile.processingPhase === "staged" &&
-      isVisualImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
-      snapshot.confirmedTransactionsCount === 0 &&
-      snapshot.parsedRowsCount > 0 &&
-      Number.isFinite(updatedAtMs) &&
-      Date.now() - updatedAtMs > STALE_RECEIPT_STAGED_MS;
-
-    if (staleReceiptStaged) {
-      await updateImportFileCompat(importId, {
-        status: "processing",
-        processingPhase: "reconciling",
-        processingMessage: "Finalizing receipt transaction...",
-      });
-      after(async () => {
-        try {
-          const { confirmImportFile } = await import("@/workers/import-processor");
-          const result = await confirmImportFile(importId, null);
-          if (result.status === "done") {
-            await updateImportFileCompat(importId, {
-              status: "done",
-              processingPhase: "complete",
-              processingMessage: "Receipt transaction imported.",
-              confirmedTransactionsCount: result.confirmedTransactionsCount ?? result.imported,
-            }).catch(() => null);
-          }
-        } catch {
-          await keepVisualImportRecoverableAfterFailure("receipt", {
-            parsedRowsMessage: "Clover saved this receipt and is retrying the final linking step.",
-            parsedRowsCount: snapshot.parsedRowsCount,
-          });
-        }
-      });
-      const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
-        importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-        promoteFailedVisibleImport: true,
-      });
-      if (refreshedSnapshot) {
-        return NextResponse.json({
-          ...refreshedSnapshot,
-          receiptSelfHeal: {
-            reason: "stale_receipt_staged",
-            staleAfterSeconds: Math.round(STALE_RECEIPT_STAGED_MS / 1000),
-          },
-        });
-      }
-    }
-
     const receiptHasVisibleData =
       Boolean(snapshot.receiptDocument) ||
       Boolean(snapshot.receiptTransaction) ||
@@ -628,45 +388,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       snapshot.importFile.status === "processing" &&
       !receiptHasVisibleData &&
       Number.isFinite(updatedAtMs) &&
-      Date.now() - updatedAtMs >
-        (snapshot.importFile.processingPhase === "queued_retry"
-          ? STALE_RECEIPT_QUEUE_MS
-          : STALE_RECEIPT_PROCESSING_MS);
+      Date.now() - updatedAtMs > STALE_RECEIPT_PROCESSING_MS;
 
     if (staleReceiptProcessing) {
       await updateImportFileCompat(importId, {
-        status: "processing",
-        processingPhase: "reading_receipt_vision",
-        processingMessage: "Restarting receipt reading...",
+        status: "failed",
+        processingPhase: "repair_needed",
+        processingMessage: "Clover couldn't finish reading this receipt. Please retry or use a clearer photo.",
         parsedRowsCount: 0,
         confirmedTransactionsCount: 0,
-      });
-      after(async () => {
-        try {
-          const { getConfiguredPdfJsBaseUrl } = await import("@/lib/import-file-text.server");
-          const { processImportFileText } = await import("@/workers/import-processor");
-          await processImportFileText(importId, {
-            actorUserId: userId,
-            qaSource: "import_processing",
-            importMode: "receipt",
-            pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
-          });
-        } catch {
-          const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
-            importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-            promoteFailedVisibleImport: true,
-          }).catch(() => null);
-          const refreshedHasVisibleData =
-            Boolean(refreshedSnapshot?.receiptDocument) ||
-            Boolean(refreshedSnapshot?.receiptTransaction) ||
-            Number(refreshedSnapshot?.confirmedTransactionsCount ?? 0) > 0 ||
-            Number(refreshedSnapshot?.parsedRowsCount ?? 0) > 0;
-          if (!refreshedHasVisibleData) {
-            await keepVisualImportRecoverableAfterFailure("receipt", {
-              parsedRowsCount: refreshedSnapshot?.parsedRowsCount ?? snapshot.parsedRowsCount,
-            });
-          }
-        }
       });
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
         importFile: (await fetchImportFileCompat(importId)) ?? importFile,
@@ -677,11 +407,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           ...refreshedSnapshot,
           receiptSelfHeal: {
             reason: "stale_receipt_processing",
-            staleAfterSeconds: Math.round(
-              (snapshot.importFile.processingPhase === "queued_retry"
-                ? STALE_RECEIPT_QUEUE_MS
-                : STALE_RECEIPT_PROCESSING_MS) / 1000
-            ),
+            staleAfterSeconds: Math.round(STALE_RECEIPT_PROCESSING_MS / 1000),
           },
         });
       }

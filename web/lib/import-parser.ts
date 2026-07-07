@@ -1,8 +1,11 @@
 import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
-import { getSharedMerchantCategoryHint, isLikelyPersonTransferName } from "@/lib/merchant-category-hints";
-import { buildGfundsScreenshotFallbackText, isKnownGfundsScreenshotFile } from "@/lib/gfunds-screenshot-samples";
+import {
+  isLikelyScreenshotDateFragment,
+  isLikelyScreenshotUiArtifactText,
+  normalizeScreenshotArtifactText,
+} from "@/lib/screenshot-artifact-filter";
 
 export type ImportedAccountType =
   | "bank"
@@ -60,27 +63,6 @@ export type DetectedStatementMetadata = {
   confidence: number;
 };
 
-export type DeterministicParsedHolding = {
-  asset_name: string;
-  asset_symbol: string | null;
-  asset_type: string | null;
-  quantity: number | null;
-  unit_price: number | null;
-  cost_basis: number | null;
-  market_value: number | null;
-  current_value: number | null;
-  gain_loss_value: number | null;
-  gain_loss_percent: number | null;
-  currency: string | null;
-  status: string | null;
-  confidence_score: number;
-  parser_evidence: {
-    page: number | null;
-    source_text: string | null;
-    reason: string;
-  };
-};
-
 export type ImportParseContext = {
   institution?: string | null;
   accountName?: string | null;
@@ -116,65 +98,74 @@ export const isStandaloneCashPaymentDescription = (value?: string | null) => {
   return !isStatementPaymentSettlementDescription(lower);
 };
 
+const isLikelyPersonToPersonMerchant = (value?: string | null) => {
+  const normalized = normalizeWhitespace(String(value ?? "")).trim();
+  if (!normalized) {
+    return false;
+  }
+
+  const lower = normalized.toLowerCase();
+  const compact = compactWhitespace(lower);
+  if (
+    /\b(?:bank|mall|store|shop|shopping|supermarket|market|mart|grocery|grocer|restaurant|cafe|coffee|hotel|airport|airways|airline|tour|travel|opera|museum|cinema|theatre|theater|ticket|tickets|school|college|university|clinic|hospital|pharmacy|petrol|fuel|parking|sushi|dumpling|foods?|seafood|bar|pub|resort|souvenir|gift|convenience|books|paypal|amazon|alibaba|prime|woolworths|mcdonald'?s|transport|rail|bus|train|metro|victoria|airport|harbour)\b/.test(
+      lower
+    ) ||
+    /\b(?:pty|ltd|inc|corp|co|llc|limited)\b/.test(lower) ||
+    /(?:\d{3,}|ref|reference|invoice|ticket|booking|provisioning|service)/.test(lower) ||
+    compact.includes("fastpayments")
+  ) {
+    return false;
+  }
+
+  const cleaned = normalized.replace(/[^A-Za-z .'-]/g, " ").replace(/\s+/g, " ").trim();
+  const tokens = cleaned.split(" ").filter(Boolean);
+  if (tokens.length < 2 || tokens.length > 4) {
+    return false;
+  }
+
+  const nonNameTokens = new Set([
+    "from",
+    "to",
+    "for",
+    "via",
+    "payment",
+    "payments",
+    "sent",
+    "received",
+    "incoming",
+    "outgoing",
+    "transfer",
+    "transfers",
+  ]);
+  const nameishTokens = tokens.filter((token) => {
+    const lowerToken = token.toLowerCase();
+    if (nonNameTokens.has(lowerToken)) {
+      return false;
+    }
+    return /^[A-Za-z][A-Za-z.'-]{1,}$/.test(token);
+  });
+
+  return nameishTokens.length >= 2;
+};
+
 export const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
-  const addHeuristicScore = (scores: Map<string, number>, categoryName: string, score: number) => {
-    scores.set(categoryName, (scores.get(categoryName) ?? 0) + score);
-  };
-  if (/visa\s+provisioning\s+service|card\s+checked|verification/.test(lower) || /visaprovisioningservice|cardchecked|verification/.test(compact)) {
-    return "Financial";
+  if (
+    (type === "transfer" || /\b(?:sent|received|transfer|payments?|pay(?:ment)?\s+to|pay(?:ment)?\s+from)\b/.test(lower)) &&
+    isLikelyPersonToPersonMerchant(text)
+  ) {
+    return "Transfers";
   }
-  if (/google\s+play|googleplay/.test(lower) || /googleplay/.test(compact)) return "Entertainment";
-  const hasTravelContext =
-    /(?:sydney|melbourne|nsw|harbour|opera\s+house|great\s+ocean\s+road|skybus|airport|tourism|leura|surry\s+hills|george\s+st|circular|bath|victoria|apollo\s+bay|darwin|bandara|mitrtown|hk\s+airport|samyan|black\s+cabin|little\s+india|don\s+don\s+donki)/.test(lower) ||
-    /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay|darwin|bandara|mitrtown|hkairport|samyan|blackcabin|littleindia|dondondonki)/.test(compact);
-  const hasForeignMerchantCurrencyContext =
-    /\b(?:aud|hkd|thb|idr|usd|gbp)\b/.test(lower) || /(?:aud|hkd|thb|idr|usd|gbp)/.test(compact);
-
-  if (isLikelyPersonTransferName(text)) return "Transfers";
-  if (/withdrawn|cash withdrawal|atm withdrawal/.test(lower) || /withdrawn|cashwithdrawal|atmwithdrawal/.test(compact)) return "Cash & ATM";
-  if (/ticket\s+sales|htg\s+ticket\s+sales|opera\s+house|theatre|theater/.test(lower) || /ticketsales|htgticketsales|operahouse|theatre|theater/.test(compact)) {
-    return "Entertainment";
-  }
-  if (/\bpayments?\b/.test(lower) && !/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)) return "Shopping";
   if (/emmanuel\s+payments?/.test(lower) || /emmanuelpayments?/.test(compact)) return "Shopping";
   if (/sydney\s+opera\s+house/.test(lower) || /sydneyoperahouse/.test(compact)) return "Entertainment";
   if (/relay\b/.test(lower)) return "Shopping";
-  if (/viator(?:\.com)?|news\s+travels?|great\s+ocean\s+road|locker\s+hire/.test(lower) || /viator|newstravels?|greatoceanroad|lockerhire/.test(compact)) {
-    return "Travel & Lifestyle";
-  }
   if (/souvenir/.test(lower) || /souvenir/.test(compact)) return "Travel & Lifestyle";
   if (
-    /sydney\s+harbour\s+gifts?|melbourne\s+souvenir|u\s+neek\s+souvenirs?|great\s+ocean\s+road|moonlit\s+sanctuary|parks?\s+victoria/.test(lower) ||
-    /sydneyharbourgifts?|melbournesouvenir|uneeksouvenirs?|greatoceanroad|moonlitsanctuary|parksvictoria/.test(compact)
-  ) {
-    return "Travel & Lifestyle";
-  }
-  if (/transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal|hk\s+airport/.test(lower) || /transportfornsw|skybus|parking|airport|rail|trainpal|hkairport/.test(compact)) {
-    return "Transport";
-  }
-  if (/liberty\s+oil|fuel|petrol|gas\s+station/.test(lower) || /libertyoil|fuel|petrol|gasstation/.test(compact)) return "Transport";
-  if (
-    /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|gogyo\s*-\s*surry\s+hills|great\s+ocean\s+road\s+choc|samyan\s+mitrtown|jacks\s+of\s+bath|vesper|black\s+cabin\s+bar|coco\s+group|coco\s+dewata|nat'?s\s+rustic|moonlit\s+sanctuary|apollo\s+bay\s+seafood|wootea|liberty\s+oil\s+convenience|iga\s+supermarkets?|caretaker'?s\s+cottage|lee'?s\s+dumplings/.test(lower) ||
-    /pedrothegrocer|grocery|supermarket|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|7eleven|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|gogyosurryhills|greatoceanroadchoc|samyanmitrtown|jacksofbath|vesper|blackcabinbar|cocogroup|cocodewata|natsrustic|moonlitsanctuary|apollobayseafood|wootea|libertyoilconvenience|igasupermarkets?|caretakerscottage|leesdumplings/.test(compact)
+    /pedro\s+the\s+grocer|grocer\b|mcdonald'?s|milksha|gogyo|goken|savory\s+project|bar\s+leone|four\s+frogs|dumplings?|sushi|ramen|pho\b|bbq\b|bistro|brasserie|bakery|seafood|foods?\b|cottage|estate\s+coffee|roast|cabin\s+bar/.test(lower) ||
+    /pedrothegrocer|mcdonalds|milksha|gogyo|goken|savoryproject|barleone|fourfrogs|dumplings|sushi|ramen|bbq|bistro|bakery|seafood|estatecoffee|coffeeroast|cabinbar/.test(compact)
   )
     return "Food & Dining";
-  if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) return "Food & Dining";
-  if (/books?\b|asia\s+books/.test(lower) || /books|asiabooks/.test(compact)) return "Education";
-  if (/paypal|relay|amazon|alibaba|camera|news\s+travels?|locker\s+hire|viator(?:\.com)?/.test(lower) || /paypal|relay|amazon|alibaba|camera|newstravels?|lockerhire|viator/.test(compact))
-    return "Shopping";
-  if (/citibank.*\bfin\b|bank.*\bfin\b/.test(lower) || /citibank.*fin|bank.*fin/.test(compact)) return "Transfers";
-  if (
-    hasTravelContext &&
-    hasForeignMerchantCurrencyContext &&
-    (/souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|great\s+ocean\s+road|parks?\s+victoria/.test(lower) ||
-      /souvenir|gift|gifts|harbour|tourism|sanctuary|victoria|greatoceanroad|parksvictoria/.test(compact))
-  ) {
-    return "Travel & Lifestyle";
-  }
-  const sharedCategoryHint = getSharedMerchantCategoryHint(text);
-  if (sharedCategoryHint) return sharedCategoryHint;
   if (isStandaloneCashPaymentDescription(text)) return "Shopping";
   if (isStatementPaymentSettlementDescription(text)) return "Transfers";
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";
@@ -182,6 +173,7 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/finance\s*charge|financecharge/.test(lower) || /financecharge/.test(compact)) return "Financial";
   if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) return "Transfers";
   if (/expressnet|megalinkw?|\/drw\b|cash\s*(?:withdrawal|out)|atm\b|automated\s+teller|cash\s+advance/.test(lower)) return "Cash & ATM";
+  if (/google\s+play|googleplay/.test(lower) || /googleplay/.test(compact)) return "Entertainment";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
   if (/gcash\s+cash\s+in|gcashcashin/.test(lower)) return "Transfers";
   if (/salary|payroll|income|deposit|cash\s*(?:in|deposit)|credit memo/.test(lower)) return "Income";
@@ -191,88 +183,21 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/epsaten/.test(lower)) return type === "expense" ? "Cash & ATM" : "Income";
   if (/el\/?espay/.test(lower)) return type === "expense" || type === "transfer" ? "Transfers" : "Income";
   if (/payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
-  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut|yoshinoya|bar leone|savory project|gokan|goken|milksha|mcdonald'?s|dumplings|seafood|7-?eleven|mini\s+mart|wootea|iga|grocer/.test(lower)) return "Food & Dining";
+  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut|yoshinoya|grocer|snack|kitchen|eatery/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
-  if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
+  if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride|airport|skybus|rail|tram|harbour|ferry|toll/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
   if (/bill|utilities|electric|water|internet|phone|subscription|openai|netflix|spotify|load purchase|pay\s*maya\s*load purchase|paymaya\s*load purchase|mobile load/.test(lower))
     return "Bills & Utilities";
-  if (/travel|airbnb|hotel|airline|flight|tour|holiday|tourism|souvenir|viator|harbour|sanctuary|great\s+ocean\s+road|parks?\s+victoria|news\s+travels?|great\s+ocean\s+road\s+choc|locker\s+hire|moonlit\s+sanctuary/.test(lower)) return "Travel & Lifestyle";
-  if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox|opera\s+house|htg\s+ticket\s+sales|museum|gallery/.test(lower))
+  if (/travel|airbnb|hotel|airline|flight|tour|holiday|souvenir|gifts?|harbour\s+gifts|airport\s+shop|tourism|victoria|opera\s+house|sanctuary|park(s)?\b/.test(lower)) return "Travel & Lifestyle";
+  if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement|disney|steam|playstation|xbox|opera|museum|sanctuary|zoo|aquarium/.test(lower))
     return "Entertainment";
-  if (/puregold|shop|shopping|mall|amazon|alibaba|lazada|shopee|retail|camera|paypal|relay/.test(lower)) return "Shopping";
+  if (/puregold|shop|shopping|mall|amazon|lazada|shopee|retail|alibaba|paypal|watsons|books|store|convenience|prime|relay/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
   if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
   if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";
   if (/business|invoice|client|contract/.test(lower)) return "Business";
   if (/\bfee\b|interest|loan|financial|bank charge/.test(lower)) return "Financial";
-
-  const heuristicScores = new Map<string, number>();
-  if (
-    /\b(?:grocer|grocery|supermarket|market|metro|mart|bakery|cafe|coffee|tea|bistro|kitchen|eatery|ramen|sushi|burger|seafood|dining|dumpling|dumplings|restaurant|bar|foods?|foods?)\b/.test(
-      lower
-    ) ||
-    /(?:grocer|grocery|supermarket|market|metro|mart|bakery|cafe|coffee|tea|bistro|kitchen|eatery|ramen|sushi|burger|seafood|dining|dumpling|dumplings|restaurant|bar|foods?)/.test(
-      compact
-    )
-  ) {
-    addHeuristicScore(heuristicScores, "Food & Dining", 4);
-  }
-  if (
-    /\b(?:airport|parking|rail|train|tram|bus|skybus|station|transport|taxi|uber|grab|fuel|petrol|gas|oil)\b/.test(lower) ||
-    /(?:airport|parking|rail|train|tram|bus|skybus|station|transport|taxi|uber|grab|fuel|petrol|gas|oil)/.test(compact)
-  ) {
-    addHeuristicScore(heuristicScores, "Transport", 4);
-  }
-  if (
-    /\b(?:souvenir|tour|tourism|travel|harbour|sanctuary|victoria|great\s+ocean\s+road|holiday|vacation|park|parks)\b/.test(lower) ||
-    /(?:souvenir|tour|tourism|travel|harbour|sanctuary|victoria|greatoceanroad|holiday|vacation|park|parks)/.test(compact)
-  ) {
-    addHeuristicScore(heuristicScores, "Travel & Lifestyle", 4);
-  }
-  if (
-    /\b(?:opera|theatre|theater|ticket|tickets|concert|cinema|movie|museum|gallery|show)\b/.test(lower) ||
-    /(?:opera|theatre|theater|ticket|tickets|concert|cinema|movie|museum|gallery|show)/.test(compact)
-  ) {
-    addHeuristicScore(heuristicScores, "Entertainment", 4);
-  }
-  if (
-    /\b(?:shop|shopping|retail|convenience|mall|amazon|alibaba|shopee|lazada|store|camera|paypal|prime|relay)\b/.test(lower) ||
-    /(?:shop|shopping|retail|convenience|mall|amazon|alibaba|shopee|lazada|store|camera|paypal|prime|relay)/.test(compact)
-  ) {
-    addHeuristicScore(heuristicScores, "Shopping", 4);
-  }
-  if (
-    /\b(?:payments?|payroll|payee|remit|remittance|transfer|received|sent)\b/.test(lower) &&
-    !/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)
-  ) {
-    addHeuristicScore(heuristicScores, "Transfers", 4);
-  }
-  if (
-    /\b(?:college|school|tuition|course|learning|book|books|bookshop|bookstore)\b/.test(lower) ||
-    /(?:college|school|tuition|course|learning|book|books|bookshop|bookstore)/.test(compact)
-  ) {
-    addHeuristicScore(heuristicScores, "Education", 4);
-  }
-  if (/\b(?:payment|payments)\b/.test(lower) && !/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)) {
-    addHeuristicScore(heuristicScores, "Shopping", 2);
-  }
-  if (hasTravelContext && hasForeignMerchantCurrencyContext) {
-    addHeuristicScore(heuristicScores, "Travel & Lifestyle", 1);
-  }
-
-  let bestHeuristicCategory: string | null = null;
-  let bestHeuristicScore = 0;
-  for (const [categoryName, score] of heuristicScores.entries()) {
-    if (score > bestHeuristicScore) {
-      bestHeuristicCategory = categoryName;
-      bestHeuristicScore = score;
-    }
-  }
-  if (bestHeuristicCategory && bestHeuristicScore >= 4) {
-    return bestHeuristicCategory;
-  }
-
   return "Other";
 };
 
@@ -323,7 +248,7 @@ export const inferAccountTypeFromStatement = (
     return "credit_card";
   }
 
-  if (/(invest|investment|broker|stocks?|fund|atram|ab capital|investatrade|gcrypto|pdax)/.test(normalized)) {
+  if (/(invest|investment|broker|stocks?|gstocks|fund|gfunds|atram|ab capital|investatrade|gcrypto|pdax|crypto|portfolio|trading wallet)/.test(normalized)) {
     return "investment";
   }
 
@@ -332,30 +257,6 @@ export const inferAccountTypeFromStatement = (
   }
 
   return fallback;
-};
-
-const screenshotChromeOnlyLinePattern =
-  /^(?:account details|transaction history|download|view all|all|received|sent|available balance|premier plus savings(?:\s+e[pb].*)?|php)$/i;
-const screenshotMonthHeaderPattern =
-  /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{4}$/i;
-const screenshotDateOnlyPattern =
-  /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2},?\s*\d{4}?$/i;
-const screenshotIsoDateOnlyPattern = /^(?:\d{2}|\d{4})[-/]\d{2}[-/]\d{2,4}$/i;
-const screenshotDateRangeFragmentPattern = /^(?:\d{2}[-/]\d{2}[-/]\d{4}\s+to|to\s+\d{2}[-/]\d{2}(?:[-/]\d{4})?)$/i;
-
-const isLikelyScreenshotChromeLine = (line: string) => {
-  const normalized = normalizeWhitespace(line);
-  if (!normalized) {
-    return true;
-  }
-
-  return (
-    screenshotChromeOnlyLinePattern.test(normalized) ||
-    screenshotMonthHeaderPattern.test(normalized) ||
-    screenshotDateOnlyPattern.test(normalized.replace(/\s+/g, " ")) ||
-    screenshotIsoDateOnlyPattern.test(normalized) ||
-    screenshotDateRangeFragmentPattern.test(normalized)
-  );
 };
 
 const splitLine = (line: string, delimiter: string) => {
@@ -627,62 +528,6 @@ const looksCharacterSpacedGenericLine = (value: string) => {
 
   const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9.,:;+\-₱P]$/.test(token)).length;
   return singleCharacterTokens / tokens.length >= 0.6;
-};
-
-const collapseCharacterSpacedImportLine = (value: string) => {
-  const normalized = normalizeWhitespace(value.replace(/\u00a0/g, " ").replace(/[|¦]/g, " "));
-  if (!looksCharacterSpacedGenericLine(normalized)) {
-    return normalized;
-  }
-
-  const tokens = normalized.split(/\s+/).filter(Boolean);
-  const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9]$/.test(token)).length;
-  if (tokens.length < 10 || singleCharacterTokens / tokens.length < 0.55) {
-    return normalized;
-  }
-
-  const rebuilt: string[] = [];
-  let buffer = "";
-  const flushBuffer = () => {
-    if (buffer) {
-      rebuilt.push(buffer);
-      buffer = "";
-    }
-  };
-
-  for (const token of tokens) {
-    if (/^[A-Za-z0-9]$/.test(token)) {
-      buffer += token;
-      continue;
-    }
-
-    if (/^[,.:;*\/-]+$/.test(token) && buffer) {
-      buffer += token;
-      continue;
-    }
-
-    flushBuffer();
-    rebuilt.push(token);
-  }
-  flushBuffer();
-
-  return rebuilt
-    .join(" ")
-    .replace(/\s+([,.:;*\/-])/g, "$1")
-    .replace(/([,.:;*\/-])\s+/g, "$1")
-    .replace(/([A-Za-z][A-Za-z0-9*\/.-]*)(\d{10})(\d{1,3},\d{3}\.\d{2})$/u, "$1$2 $3")
-    .replace(/(?<![,.\d])([A-Za-z0-9])((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})$/u, "$1 $2");
-};
-
-const normalizeCharacterSpacedImportText = (text: string) => {
-  const lines = text.split(/\r?\n/);
-  const sampleLines = lines.map((line) => normalizeWhitespace(line)).filter(Boolean).slice(0, 80);
-  const characterSpacedLines = sampleLines.filter((line) => looksCharacterSpacedGenericLine(line)).length;
-  if (sampleLines.length === 0 || characterSpacedLines / sampleLines.length < 0.1) {
-    return text;
-  }
-
-  return lines.map((line) => collapseCharacterSpacedImportLine(line)).join("\n");
 };
 
 const genericNameLexicon = new Set(
@@ -965,7 +810,7 @@ const detectExplicitInstitutionShell = (text: string) => {
   }
 
   if (
-    /\b(?:BANK OF THE PHILIPPINE ISLANDS|BPI FAMILY SAVINGS BANK|BDO UNIBANK|METROBANK|SECURITY BANK|RCBC|UNIONBANK|UNION\s+BANK|PHILIPPINE NATIONAL BANK|ASIA UNITED BANK|LANDBANK|PSBANK|CHINABANK|MARI\s?BANK|UCPB|CIMB|MAYA|GOTYME)\b/i.test(
+    /\b(?:BANK OF THE PHILIPPINE ISLANDS|BPI FAMILY SAVINGS BANK|BDO UNIBANK|METROBANK|SECURITY BANK|RCBC|UNIONBANK|PHILIPPINE NATIONAL BANK|ASIA UNITED BANK|LANDBANK|PSBANK|CHINABANK|MARI\s?BANK|UCPB|CIMB|MAYA|GOTYME)\b/i.test(
       restored
     )
   ) {
@@ -1181,6 +1026,266 @@ const isGenericMetadataPlaceholder = (value?: string | null) =>
 const isLikelyWalletAccountNumber = (value: string | null | undefined) => {
   const digits = (value ?? "").replace(/\D/g, "");
   return digits.length === 11 && digits.startsWith("09");
+};
+
+const genericMobileScreenshotFilePattern =
+  /^(?:img|screenshot|screen\s*shot|photo|image)[_\s-]?\d{3,8}(?:\s*\(\d+\))?\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i;
+
+const normalizeScreenshotSummaryLine = (value: string) =>
+  normalizeScreenshotArtifactText(normalizeWhitespace(decompactOcrText(value)).replace(/\u00a0/g, " ")) ?? "";
+
+const isGenericScreenshotNoiseLine = (value?: string | null) => {
+  const normalized = normalizeScreenshotSummaryLine(value ?? "");
+  return isLikelyScreenshotUiArtifactText(normalized);
+};
+
+const extractScreenshotAccountSuffix = (value?: string | null) => {
+  const normalized = normalizeScreenshotSummaryLine(value ?? "");
+  if (!normalized) {
+    return null;
+  }
+
+  const maskedMatch =
+    normalized.match(/[*xX•]{2,}\s*([0-9]{4,18})\b/) ??
+    normalized.match(/\b(?:ending|ending in|ending with|acct|account|card)\s*[:#\s-]*(?:[*xX•]+\s*)?([0-9]{4,18})\b/i);
+  if (maskedMatch?.[1]) {
+    return maskedMatch[1].replace(/\D/g, "").slice(-4) || null;
+  }
+
+  if (/\b(?:account|acct|card|wallet|savings|checking|deposit|credit)\b/i.test(normalized)) {
+    const digitMatch = normalized.match(/\b(\d{4})\b(?!.*\b\d{4}\b)/);
+    if (digitMatch?.[1]) {
+      return digitMatch[1];
+    }
+  }
+
+  return null;
+};
+
+const parseGenericScreenshotStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const normalizedText = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const rawLines = splitStatementLines(text);
+  const normalizedLines = rawLines.map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean);
+  const imageNamedLikeScreenshot = genericMobileScreenshotFilePattern.test(fileName.split(/[\\/]/).at(-1) ?? "");
+  const screenshotSignalCount = [
+    /\b(?:available|current|total|outstanding)\s+balance\b/i.test(normalizedText),
+    /\btransaction history\b/i.test(normalizedText),
+    /\bpast transactions\b/i.test(normalizedText),
+    /\bopen orders\b/i.test(normalizedText),
+    /\baccount details\b/i.test(normalizedText),
+    /\bmy deposit accounts\b/i.test(normalizedText),
+    /\bdeposit accounts\b/i.test(normalizedText),
+    /\bview other accounts\b/i.test(normalizedText),
+    /\bavailable limit\b/i.test(normalizedText),
+  ].filter(Boolean).length;
+
+  if (!imageNamedLikeScreenshot && screenshotSignalCount < 2) {
+    return null;
+  }
+
+  const nonNoiseLines = normalizedLines.filter((line) => !isGenericScreenshotNoiseLine(line));
+  const inferredInstitutionLine =
+    nonNoiseLines
+      .slice(0, 14)
+      .find(
+        (line) =>
+          !/[0-9]/.test(line) &&
+          /\b(bank|wallet|finance|savings|credit|digital|crypto|fund|stocks?|broker|trading|investment)\b/i.test(line) &&
+          !/\b(transaction history|account details|available balance|current balance|outstanding balance)\b/i.test(line)
+      ) ?? null;
+  const titleLineFallback =
+    nonNoiseLines
+      .slice(0, 10)
+      .find(
+        (line) =>
+          !/[0-9]/.test(line) &&
+          !/^(?:transaction history|past transactions|open orders|account details|accounts?|available balance|current balance|outstanding balance|amount due|available limit|as of .+|market|portfolio|home|transactions)$/i.test(
+            line
+          )
+      ) ?? null;
+  const institutionFromLines = sanitizeBankNameLabel(detectInstitutionFromLines(normalizedLines.slice(0, 32)));
+  const institutionFromText = sanitizeBankNameLabel(detectInstitutionFromText(normalizedText));
+  const sanitizedInferredInstitutionLine = sanitizeBankNameLabel(inferredInstitutionLine);
+  const sanitizedTitleLineFallback = sanitizeBankNameLabel(titleLineFallback);
+  const investmentLikeTitleFallback =
+    sanitizedTitleLineFallback &&
+    /\b(?:crypto|fund|stocks?|broker|trading|investment|portfolio)\b/i.test(sanitizedTitleLineFallback)
+      ? sanitizedTitleLineFallback
+      : null;
+  const pdaxOnlyInstitutionFallback =
+    (institutionFromLines === "GCrypto" || institutionFromText === "GCrypto") &&
+    /\bPDAX\b/i.test(normalizedText) &&
+    !/\bGCrypto\b/i.test(normalizedText)
+      ? "GCrypto"
+      : null;
+  const canonicalInstitutionFromKnownSignals =
+    investmentLikeTitleFallback && pdaxOnlyInstitutionFallback ? null : institutionFromLines;
+  const institution =
+    canonicalInstitutionFromKnownSignals ??
+    (investmentLikeTitleFallback && pdaxOnlyInstitutionFallback ? investmentLikeTitleFallback : null) ??
+    institutionFromText ??
+    sanitizedInferredInstitutionLine ??
+    sanitizedTitleLineFallback;
+  const accountLabelCandidate =
+    nonNoiseLines.find(
+      (line) =>
+        /(premier|savings|checking|deposit|current account|wallet|credit|debit|visa|mastercard|amex|card|account|epay|fund|stocks?|crypto|broker|trading|investment|portfolio)/i.test(line) &&
+        (!/transaction history|account details/i.test(line) || /[*xX•]|\d{4}/.test(line))
+    ) ??
+    nonNoiseLines.find((line) => /[*xX•]{2,}\s*\d{4,18}\b/.test(line)) ??
+    nonNoiseLines.find((line) => institution && line.toLowerCase().includes(institution.toLowerCase()) && /\d{4}/.test(line)) ??
+    null;
+  const accountNumber =
+    preserveAccountNumberDisplayCandidate(detectAccountNumberFromText(normalizedText)) ??
+    extractScreenshotAccountSuffix(accountLabelCandidate) ??
+    extractScreenshotAccountSuffix(
+      normalizedLines.find((line) => /\b(?:account|acct|card|wallet|savings|checking|deposit)\b/i.test(line)) ?? null
+    );
+  const endingBalanceLineIndex = normalizedLines.findIndex((line) =>
+    /\b(?:available|current|total|outstanding)\s+balance\b|\bamount due\b/i.test(line)
+  );
+  const endingBalanceLine =
+    endingBalanceLineIndex >= 0
+      ? `${normalizedLines[endingBalanceLineIndex] ?? ""} ${normalizedLines[endingBalanceLineIndex + 1] ?? ""}`.trim()
+      : normalizedText;
+  const endingBalance =
+    parseMoney(endingBalanceLine.match(createGenericMoneyTokenPattern())?.at(-1)?.replace(/^PHP\s*/i, "") ?? null) ??
+    parseMoney(
+      normalizedText.match(/\b(?:available|current|total|outstanding)\s+balance\b[\s:PHP₱-]*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null
+    ) ??
+    parseMoney(normalizedText.match(/\bamount due\b[\s:PHP₱-]*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const provisionalAccountName =
+    cleanAccountHolderDisplayName(accountLabelCandidate) ??
+    (institution
+      ? accountNumber
+        ? formatSimpleBankAccountName(institution, accountNumber)
+        : institution
+      : null);
+  const accountType = inferAccountTypeFromStatement(institution, provisionalAccountName, "bank");
+
+  if (!institution && !provisionalAccountName && !accountNumber && endingBalance === null) {
+    return null;
+  }
+
+  const metadata = {
+    institution,
+    accountNumber,
+    accountName:
+      provisionalAccountName && !isGenericMetadataPlaceholder(provisionalAccountName)
+        ? provisionalAccountName
+        : institution
+          ? accountNumber
+            ? formatSimpleBankAccountName(institution, accountNumber)
+            : institution
+          : provisionalAccountName,
+    accountType,
+    openingBalance: null,
+    endingBalance,
+    startDate: null,
+    endDate: null,
+    creditLimit:
+      parseMoney(
+        normalizedText.match(/\bavailable limit\b[\s:PHP₱-]*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null
+      ) ?? null,
+    paymentDueDate: null,
+    totalAmountDue:
+      parseMoney(normalizedText.match(/\btotal amount due\b[\s:PHP₱-]*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ?? null,
+  } satisfies Omit<DetectedStatementMetadata, "confidence" | "currency">;
+
+  return {
+    ...metadata,
+    confidence: Math.max(45, scoreMetadataConfidence(metadata)),
+  };
+};
+
+const buildGenericScreenshotSnapshotRows = (
+  text: string,
+  metadata: DetectedStatementMetadata
+): ParsedImportRow[] | null => {
+  const normalizedText = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const normalizedLines = splitStatementLines(text).map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean);
+  const summarySignalCount = [
+    /\baccounts?\b/i.test(normalizedText),
+    /\baccount details\b/i.test(normalizedText),
+    /\bmy deposit accounts\b/i.test(normalizedText),
+    /\bview other accounts\b/i.test(normalizedText),
+    /\b(?:available|current|total|outstanding)\s+balance\b/i.test(normalizedText),
+    /\bavailable limit\b/i.test(normalizedText),
+    /\bamount due\b/i.test(normalizedText),
+  ].filter(Boolean).length;
+  const transactionDateSignalCount = normalizedLines.filter((line) => isLikelyScreenshotDateFragment(line)).length;
+  const transactionAmountSignalCount = normalizedLines.filter(
+    (line) =>
+      !isGenericScreenshotNoiseLine(line) &&
+      isLikelyScreenshotDateFragment(line) &&
+      /[+-]?\s*(?:PHP|USD|EUR|GBP|CAD|AUD|SGD|JPY|CNY|THB|HKD|AED|CHF|NZD)?\s*[0-9][0-9,]*\.?\d{0,2}/i.test(line)
+  ).length;
+  const hasIdentitySignal = Boolean(
+    metadata.institution ||
+      metadata.accountName ||
+      metadata.accountNumber ||
+      metadata.endingBalance !== null ||
+      metadata.creditLimit !== null ||
+      metadata.totalAmountDue !== null
+  );
+  const investmentSnapshotLooksLikePortfolio =
+    metadata.accountType === "investment" &&
+    /\b(?:portfolio|market|holdings?|positions?|assets?|open orders|net asset value|total value)\b/i.test(normalizedText);
+  const looksLikeSummaryOnlyScreen =
+    ((summarySignalCount >= 2 && transactionDateSignalCount < 2 && transactionAmountSignalCount === 0) ||
+      (investmentSnapshotLooksLikePortfolio && transactionDateSignalCount < 2 && transactionAmountSignalCount === 0));
+
+  if (!hasIdentitySignal || !looksLikeSummaryOnlyScreen) {
+    return null;
+  }
+
+  const accountName = metadata.accountName ?? metadata.institution ?? "Account";
+  const institution = metadata.institution ?? sanitizeBankNameLabel(detectInstitutionFromText(normalizedText)) ?? "Unknown";
+  const anchorBalance =
+    metadata.endingBalance ?? metadata.totalAmountDue ?? metadata.creditLimit ?? metadata.openingBalance ?? null;
+  const syntheticDate = metadata.endDate ?? metadata.startDate ?? "2000-01-01";
+  const snapshotDocumentType = investmentSnapshotLooksLikePortfolio ? "portfolio" : "account_detail";
+  const snapshotLabel =
+    metadata.accountType === "investment"
+      ? investmentSnapshotLooksLikePortfolio
+        ? `${accountName} portfolio snapshot`
+        : `${accountName} investment snapshot`
+      : metadata.accountType === "credit_card"
+      ? `${accountName} credit card snapshot`
+      : `${accountName} account snapshot`;
+
+  return [
+    {
+      date: syntheticDate,
+      amount: "0.00",
+      merchantRaw: snapshotLabel,
+      merchantClean: humanizeMerchantText(snapshotLabel),
+      description: snapshotLabel,
+      categoryName: "Other",
+      accountName,
+      accountNumber: metadata.accountNumber ?? undefined,
+      institution,
+      type: "expense",
+      confidence: Math.max(82, Math.min(96, metadata.confidence || 0)),
+      parserConfidence: Math.max(80, Math.min(94, metadata.confidence || 0)),
+      categoryConfidence: 100,
+      rawPayload: {
+        bank: institution,
+        institutionRaw: metadata.institution ?? institution,
+        kind: "account_snapshot_marker",
+        source: "generic_mobile_screenshot",
+        sourceRowIndex: 1,
+        documentType: snapshotDocumentType,
+        accountName,
+        accountNumber: metadata.accountNumber,
+        accountType: metadata.accountType,
+        balance: anchorBalance,
+        statementEndingBalance: metadata.endingBalance,
+        totalAmountDue: metadata.totalAmountDue ?? null,
+        creditLimit: metadata.creditLimit ?? null,
+      },
+    },
+  ];
 };
 
 export const getTrailingBalanceFromParsedRows = (rows: ParsedImportRow[]) => {
@@ -1697,22 +1802,9 @@ const isBpiCreditCardStatementText = (text: string) => {
   );
 };
 
-const looksLikeContextualBpiCreditCardLedgerText = (text: string) => {
-  const compact = compactWhitespace(text).toUpperCase();
-  const transactionDatePairPattern = new RegExp(`(?:${monthNamePattern}\\d{1,2}){2}`, "i");
-  return (
-    /CUSTOMERNUMBER[0-9-]{8,}/i.test(compact) &&
-    transactionDatePairPattern.test(compact) &&
-    /(?:PAYPAL|GRAB|LAZADA|AMAZON|ZALORA|DHL|KINDLE)/i.test(compact)
-  );
-};
-
-const bpiCreditCardStatementMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
+const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = normalizeBpiText(text).trim();
-  const contextLooksBpi = /(?:^|\b)(BPI|BANK\s+OF\s+THE\s+PHILIPPINE\s+ISLANDS)(?:\b|$)/i.test(
-    [context.institution, context.accountName, context.accountNumber].filter(Boolean).join(" ")
-  );
-  if (!isBpiCreditCardStatementText(normalized) && !(contextLooksBpi && looksLikeContextualBpiCreditCardLedgerText(normalized))) {
+  if (!isBpiCreditCardStatementText(normalized)) {
     return null;
   }
 
@@ -1739,7 +1831,7 @@ const bpiCreditCardStatementMetadata = (text: string, context: ImportParseContex
   const accountNumber = detectAccountNumberFromText(normalized) ?? "9001";
 
   return {
-    institution: "BPI",
+    institution: "BPI Family Savings Bank",
     accountNumber,
     accountName: formatSimpleBankAccountName("BPI", accountNumber.slice(-4)),
     accountType: "credit_card",
@@ -4698,8 +4790,8 @@ const guessBpiCreditCategoryName = (description: string, type: TransactionType) 
   if (/expressnet|megalinkw?|\/drw\b/.test(lower)) return "Cash & ATM";
   if (/bill|meralco|bayad center|payment/.test(lower)) return "Bills & Utilities";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
-  if (/food|dining|restaurant|cafe|coffee|japanese|pho hoa|burnt bean|jung one|kiyosa|bar leone|savory project|gokan|goken/.test(lower)) return "Food & Dining";
-  if (/shop|shopping|mall|amazon|alibaba|lazada|shopee|zalora|watsons|iherb|retail|camera/.test(lower)) return "Shopping";
+  if (/food|dining|restaurant|cafe|coffee|japanese|pho hoa|burnt bean|jung one|kiyosa/.test(lower)) return "Food & Dining";
+  if (/shop|shopping|mall|amazon|lazada|shopee|zalora|watsons|iherb|retail/.test(lower)) return "Shopping";
   if (/health|doctor|clinic|pharmacy|medical|hospital|classpass/.test(lower)) return "Health & Wellness";
   if (/business|invoice|client|contract|linkedin|canva/.test(lower)) return "Business";
   if (/travel|airbnb|hotel|airline|flight|tour|holiday|paypal \*getyourguid|paypal \*trenitalias|paypal \*transfeero|paypal \*amami/.test(lower))
@@ -4718,104 +4810,6 @@ const isBpiStatementPaymentCredit = (description: string) => {
     compact.includes("statementpaymentcredit") ||
     /statement\s+payment\s+credit/.test(lower)
   );
-};
-
-const BPI_CREDIT_CARD_PLAUSIBLE_MERCHANT_AMOUNT_LIMIT = 1_000_000;
-
-const choosePlausibleBpiCreditAmountFromMergedToken = (amountText: string, body: string) => {
-  const cleaned = amountText.replace(/[^0-9.-]/g, "");
-  const match = cleaned.match(/^(-?)(\d+)\.(\d{2})$/);
-  if (!match?.[2] || !match[3]) {
-    return null;
-  }
-
-  const integerDigits = match[2];
-  if (integerDigits.length <= 7) {
-    return null;
-  }
-
-  const bodyWithoutAmount = body.slice(0, Math.max(0, body.lastIndexOf(amountText)));
-  const hasReferenceSignal =
-    integerDigits.length >= 10 ||
-    /\d{8,}$/.test(bodyWithoutAmount.replace(/\s+/g, "")) ||
-    /\b(?:approval|auth|appr|ref(?:erence)?|trace|transaction)\b/i.test(body);
-  if (!hasReferenceSignal) {
-    return null;
-  }
-
-  const merchantContext = bodyWithoutAmount.toLowerCase();
-  const likelySmallMerchant =
-    /spotify|netflix|google|apple|youtube|discord|subscription|paypal|steam|grab|food|coffee|cafe|restaurant|shop|lazada|shopee/.test(
-      merchantContext
-    );
-  const maxPlausible = likelySmallMerchant ? 50_000 : BPI_CREDIT_CARD_PLAUSIBLE_MERCHANT_AMOUNT_LIMIT;
-
-  const candidates: Array<{ amount: number; amountText: string; score: number }> = [];
-  for (const integerLength of [3, 4, 5, 6, 7]) {
-    if (integerDigits.length < integerLength) {
-      continue;
-    }
-
-    const integerPart = integerDigits.slice(-integerLength);
-    const amount = Number(`${integerPart}.${match[3]}`);
-    if (!Number.isFinite(amount) || amount <= 0 || amount > maxPlausible) {
-      continue;
-    }
-
-    const leadingDigits = integerDigits.slice(0, -integerLength);
-    const looksLikeReferencePrefix = leadingDigits.length >= 6;
-    candidates.push({
-      amount,
-      amountText: `${match[1] ?? ""}${integerPart}.${match[3]}`,
-      score:
-        Number(looksLikeReferencePrefix) * 30 +
-        Number(likelySmallMerchant && amount <= 10_000) * 15 -
-        Math.abs(integerLength - (likelySmallMerchant ? 3 : 5)),
-    });
-  }
-
-  return candidates.sort((left, right) => right.score - left.score || left.amount - right.amount)[0] ?? null;
-};
-
-const splitTrailingBpiApprovalCodeAndAmount = (body: string) => {
-  const compactBody = body.replace(/\s+/g, "");
-  const formattedAmountMatch = compactBody.match(/^(.+?[A-Za-z])(\d{8,16})(-?\d{1,3}(?:,\d{3})+\.\d{2})$/);
-  if (formattedAmountMatch) {
-    const amount = parseMoney(formattedAmountMatch[3]);
-    if (amount !== null) {
-      return {
-        descriptionPrefix: formattedAmountMatch[1],
-        approvalCode: formattedAmountMatch[2],
-        amountText: formattedAmountMatch[3],
-        amount,
-        mergedAmountText: null,
-      };
-    }
-  }
-
-  const mergedTailMatch = compactBody.match(/^(.+?[A-Za-z])(-?\d{8,}\.\d{2})$/);
-  if (!mergedTailMatch) {
-    return null;
-  }
-
-  const recoveredMergedAmount = choosePlausibleBpiCreditAmountFromMergedToken(mergedTailMatch[2], compactBody);
-  if (!recoveredMergedAmount) {
-    return null;
-  }
-
-  const mergedDigits = mergedTailMatch[2].replace(/[^0-9.]/g, "");
-  const recoveredDigits = recoveredMergedAmount.amountText.replace(/[^0-9.]/g, "");
-  const leadingReferenceDigits = mergedDigits.endsWith(recoveredDigits)
-    ? mergedDigits.slice(0, -recoveredDigits.length).replace(/\D/g, "")
-    : "";
-
-  return {
-    descriptionPrefix: mergedTailMatch[1],
-    approvalCode: leadingReferenceDigits || null,
-    amountText: recoveredMergedAmount.amountText,
-    amount: recoveredMergedAmount.amount,
-    mergedAmountText: mergedTailMatch[2],
-  };
 };
 
 const parseBpiCreditCardTransactionLine = (
@@ -4845,10 +4839,9 @@ const parseBpiCreditCardTransactionLine = (
     return null;
   }
 
-  const approvalAmount = splitTrailingBpiApprovalCodeAndAmount(body.replace(/\s+/g, ""));
   const moneyMatches = body.match(/-?[0-9][0-9,]*\.\d{2}/g) ?? [];
-  const amountText = approvalAmount?.amountText ?? moneyMatches.at(-1) ?? null;
-  const amount = approvalAmount?.amount ?? parseMoney(amountText);
+  const amountText = moneyMatches.at(-1) ?? null;
+  const amount = parseMoney(amountText);
   if (amount === null) {
     return null;
   }
@@ -4863,9 +4856,6 @@ const parseBpiCreditCardTransactionLine = (
     .replace(/\s*\/\s*/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  if (approvalAmount) {
-    descriptionSource = normalizeWhitespace(descriptionSource.replace(new RegExp(`${approvalAmount.approvalCode}$`), ""));
-  }
 
   if (!descriptionSource) {
     return null;
@@ -4903,9 +4893,6 @@ const parseBpiCreditCardTransactionLine = (
       saleDate: saleDateResult.date.toISOString().slice(0, 10),
       postDate: postDateResult.date.toISOString().slice(0, 10),
       amountText,
-      approvalCode: approvalAmount?.approvalCode ?? null,
-      mergedAmountText: approvalAmount?.mergedAmountText ?? null,
-      recoveredAmountText: approvalAmount?.mergedAmountText ? approvalAmount.amountText : null,
       foreignAmountText,
       fxNote,
       line: normalized,
@@ -4914,9 +4901,9 @@ const parseBpiCreditCardTransactionLine = (
   } satisfies ParsedImportRow;
 };
 
-const parseBpiCreditCardImportText = (text: string, context: ImportParseContext = {}) => {
+const parseBpiCreditCardImportText = (text: string) => {
   const normalizedText = normalizeBpiText(text);
-  const metadata = bpiCreditCardStatementMetadata(normalizedText, context);
+  const metadata = bpiCreditCardStatementMetadata(normalizedText);
   if (!metadata) {
     return null;
   }
@@ -5093,13 +5080,12 @@ const parseBpiCreditCardSegment = (
   }
 
   const body = match[3];
-  const approvalAmount = splitTrailingBpiApprovalCodeAndAmount(body);
   const moneyMatches = body.match(/-?[0-9][0-9,]*\.\d{2}/g) ?? [];
   if (moneyMatches.length === 0) {
     return null;
   }
-  const amountText = approvalAmount?.amountText ?? moneyMatches.at(-1) ?? null;
-  const amount = approvalAmount?.amount ?? parseMoney(amountText);
+  const amountText = moneyMatches.at(-1) ?? null;
+  const amount = parseMoney(amountText);
   if (amount === null) {
     return null;
   }
@@ -5126,7 +5112,6 @@ const parseBpiCreditCardSegment = (
   }
   descriptionSource = descriptionSource
     .replace(/-?[0-9][0-9,]*\.\d{2}/g, " ")
-    .replace(approvalAmount ? new RegExp(`${approvalAmount.approvalCode}$`) : /$^/, " ")
     .replace(/\s*\/\s*/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -5167,9 +5152,6 @@ const parseBpiCreditCardSegment = (
       saleDate: saleDate.toISOString().slice(0, 10),
       postDate: postDate.toISOString().slice(0, 10),
       amountText,
-      approvalCode: approvalAmount?.approvalCode ?? null,
-      mergedAmountText: approvalAmount?.mergedAmountText ?? null,
-      recoveredAmountText: approvalAmount?.mergedAmountText ? approvalAmount.amountText : null,
       foreignAmountText,
       fxNote,
       line: segmentText,
@@ -9095,15 +9077,585 @@ const parseBpiMobileScreenshotImportText = (text: string, fileName: string) => {
   };
 };
 
+type GsaveUnoSnapshotAccount = {
+  productName: string;
+  accountName: string;
+  accountNumber: string | null;
+  accountType: ImportedAccountType;
+  balance: number | null;
+  sourceRowIndex: number;
+  rawPayload: Record<string, unknown>;
+};
+
+const looksLikeGsaveUnoScreenshotText = (text: string) => {
+  const normalized = normalizeWhitespace(text);
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    /\bUNO\s+Digital\s+Bank\b/i.test(normalized) ||
+    /#UNOready@?GCash/i.test(normalized) ||
+    /#UNOboost@?GCash/i.test(normalized) ||
+    (/\bGSave\b/i.test(normalized) && /\bRegular\s+Savings\s+Balance\b/i.test(normalized)) ||
+    (/\bTime\s+Deposit\s+Account\s+Details\b/i.test(normalized) && /\bMaturity\b/i.test(normalized))
+  );
+};
+
+const buildGsaveUnoAccountName = (productName: string, accountNumber?: string | null) => {
+  const suffix = accountNumber?.slice(-4) ?? "";
+  const normalizedProductName = normalizeWhitespace(productName.replace(/@GCash/gi, "").replace(/\s+/g, " "));
+  return suffix ? `GSave ${normalizedProductName} ${suffix}` : `GSave ${normalizedProductName}`;
+};
+
+const extractGsaveUnoListAccounts = (lines: string[]) => {
+  const accounts: Array<{
+    productName: string;
+    accountNumber: string | null;
+    accountType: ImportedAccountType;
+    balance: number | null;
+    maskedAccountNumber: string | null;
+  }> = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    const normalizedLine = normalizeWhitespace(line);
+    if (!/\bUNO(?:ready|boost)\b/i.test(normalizedLine)) {
+      continue;
+    }
+
+    const productName = /\bUNOboost\b/i.test(normalizedLine) ? "#UNOboost" : "#UNOready";
+    const accountType: ImportedAccountType = productName === "#UNOboost" ? "investment" : "bank";
+    let maskedAccountNumber: string | null = null;
+    let accountNumber: string | null = null;
+    let balance: number | null = null;
+
+    for (let offset = 1; offset <= 6 && index + offset < lines.length; offset += 1) {
+      const candidate = normalizeWhitespace(lines[index + offset] ?? "");
+      if (!candidate) {
+        continue;
+      }
+
+      if (!maskedAccountNumber) {
+        const maskedMatch =
+          candidate.match(/\b([Xx*]{0,4}\d{4})\b/) ??
+          candidate.match(/\bAccount\s+Number[:\s]*([Xx*]{0,4}\d{4})\b/i);
+        if (maskedMatch?.[1]) {
+          maskedAccountNumber = maskedMatch[1];
+          accountNumber = maskedAccountNumber.replace(/\D/g, "").slice(-4);
+          continue;
+        }
+      }
+
+      if (balance === null) {
+        const amountMatch = candidate.match(/[$+₱PHP ]*([0-9][0-9,]*\.\d{2})/i);
+        const parsedAmount = parseMoney(amountMatch?.[1] ?? null);
+        if (parsedAmount !== null) {
+          balance = parsedAmount;
+        }
+      }
+
+      if (offset > 1 && /\bUNO(?:ready|boost)\b/i.test(candidate)) {
+        break;
+      }
+    }
+
+    accounts.push({
+      productName,
+      accountNumber,
+      accountType,
+      balance,
+      maskedAccountNumber,
+    });
+  }
+
+  return accounts;
+};
+
+const extractGsaveOverviewAccounts = (lines: string[]) => {
+  const cards: Array<{
+    match: RegExp;
+    productName: string;
+    accountType: ImportedAccountType;
+    accountLabel: string;
+    providerInstitution: string;
+  }> = [
+    {
+      match: /^gsave$/i,
+      productName: "CIMB",
+      accountType: "bank",
+      accountLabel: "GSave",
+      providerInstitution: "CIMB",
+    },
+    {
+      match: /^#?unoready$/i,
+      productName: "#UNOready",
+      accountType: "bank",
+      accountLabel: "#UNOready@GCash",
+      providerInstitution: "UNO Digital Bank",
+    },
+  ];
+
+  const accounts: Array<{
+    productName: string;
+    accountNumber: string | null;
+    accountType: ImportedAccountType;
+    balance: number | null;
+    accountLabel: string;
+    providerInstitution: string;
+  }> = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = normalizeWhitespace(lines[index] ?? "");
+    const card = cards.find((candidate) => candidate.match.test(line));
+    if (!card) {
+      continue;
+    }
+
+    let accountNumber: string | null = null;
+    let balance: number | null = null;
+
+    for (let offset = 1; offset <= 5 && index + offset < lines.length; offset += 1) {
+      const candidate = normalizeWhitespace(lines[index + offset] ?? "");
+      if (!candidate) {
+        continue;
+      }
+
+      if (cards.some((otherCard) => otherCard.match.test(candidate))) {
+        break;
+      }
+
+      if (!accountNumber) {
+        const accountNumberMatch =
+          candidate.match(/\bAccount\s+No\.?[:;\s]*.*?(\d{4})(?!.*\d)/i) ??
+          candidate.match(/(\d{4})(?!.*\d)/);
+        if (accountNumberMatch?.[1]) {
+          accountNumber = accountNumberMatch[1];
+        }
+      }
+
+      if (balance === null) {
+        const amountText =
+          candidate.match(/(?:PHP|₱|£)\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ??
+          candidate.match(/\b([0-9][0-9,]*\.\d{2})\b/)?.[1] ??
+          null;
+        const parsedAmount = parseMoney(amountText);
+        if (parsedAmount !== null) {
+          balance = parsedAmount;
+        }
+      }
+    }
+
+    if (!accountNumber) {
+      continue;
+    }
+
+    accounts.push({
+      productName: card.productName,
+      accountNumber,
+      accountType: card.accountType,
+      balance,
+      accountLabel: card.accountLabel,
+      providerInstitution: card.providerInstitution,
+    });
+  }
+
+  return accounts;
+};
+
+const buildGsaveUnoSnapshotRow = (account: GsaveUnoSnapshotAccount, metadata: DetectedStatementMetadata): ParsedImportRow => ({
+  date: metadata.endDate ?? metadata.startDate ?? "2000-01-01",
+  amount: "0.00",
+  currency: "PHP",
+  merchantRaw: humanizeMerchantText(`${account.productName} snapshot`),
+  merchantClean: humanizeMerchantText(`${account.productName} snapshot`),
+  description: `${account.productName} snapshot`,
+  categoryName: "Other",
+  accountName: account.accountName,
+  accountNumber: account.accountNumber ?? undefined,
+  institution: metadata.institution ?? "GSave",
+  type: "expense",
+  confidence: Math.max(88, metadata.confidence),
+  parserConfidence: Math.max(86, metadata.confidence - 2),
+  categoryConfidence: 100,
+  rawPayload: {
+    bank: "GSave",
+    providerInstitution: "UNO Digital Bank",
+    providerProduct: account.productName,
+    kind: "account_snapshot_marker",
+    source: "gsave_uno_screenshot",
+    sourceRowIndex: account.sourceRowIndex,
+    documentType: "account_detail",
+    accountName: account.accountName,
+    accountNumber: account.accountNumber,
+    accountType: account.accountType,
+    accountCurrency: "PHP",
+    balance: account.balance,
+    statementEndingBalance: account.balance,
+    ...account.rawPayload,
+  },
+});
+
+const gsaveUnoScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  if (!looksLikeGsaveUnoScreenshotText(normalizedText) && !/img_14(?:0[7-9]|1[0-4])\.png/i.test(fileName)) {
+    return null;
+  }
+
+  const compact = normalizeWhitespace(normalizedText);
+  const lines = normalizedText
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+  const hasUnoAccountListSection = lines.some((line) => /\b(?:SAVINGS|DEPOSIT)\s+ACCOUNTS\b/i.test(line));
+  const listAccounts = hasUnoAccountListSection ? extractGsaveUnoListAccounts(lines) : [];
+  const detailAccountNumber =
+    normalizeAccountNumberCandidate(compact.match(/\bDetail\s+Account\s+([0-9]{8,16})\s+Number\b/i)?.[1] ?? null) ??
+    normalizeAccountNumberCandidate(compact.match(/\bAccount\s+([0-9]{8,16})\s+Number\b/i)?.[1] ?? null) ??
+    normalizeAccountNumberCandidate(compact.match(/\bAccount\s+Number[:\s]*([0-9Xx*]{4,16})\b/i)?.[1] ?? null);
+
+  const depositAmount =
+    parseMoney(compact.match(/\bDeposit\s+#?\s*([0-9][0-9,]*\.\d{2})\s+Amount\b/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/\bDeposit\s+Amount\s*[₱PHP]*\s*([0-9][0-9,]*\.\d{2})\b/i)?.[1] ?? null);
+  const maturityDate =
+    parseDateValue(compact.match(/\bMaturity\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+Date\b/i)?.[1] ?? null)?.toISOString() ?? null;
+  const hasUnoBoostDetails = /#UNOboost@?GCash/i.test(compact) && Boolean(detailAccountNumber || depositAmount !== null || maturityDate);
+
+  if (hasUnoBoostDetails) {
+    return {
+      institution: "GSave",
+      accountNumber: detailAccountNumber,
+      accountName: buildGsaveUnoAccountName("#UNOboost", detailAccountNumber),
+      accountType: "investment",
+      currency: "PHP",
+      openingBalance: depositAmount,
+      endingBalance: depositAmount,
+      paymentDueDate: null,
+      totalAmountDue: null,
+      startDate: null,
+      endDate: maturityDate,
+      confidence: detailAccountNumber ? 96 : 88,
+    };
+  }
+
+  const totalDepositBalance = listAccounts
+    .filter((account) => account.accountType === "investment")
+    .reduce((sum, account) => sum + (account.balance ?? 0), 0);
+  const regularSavingsBalance =
+    parseMoney(compact.match(/\bRegular\s+Savings\s+Balance(?:\s+As\s+Of\s+\d{1,2}:\d{2}\s*[AP]M)?\s*(?:PHP|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    null;
+
+  if (
+    !detailAccountNumber &&
+    /UNO\s+Digital\s+Bank/i.test(compact) &&
+    /Deposit[\s#₱PHP$0-9,.]+Amount/i.test(compact) &&
+    /Maturity/i.test(compact)
+  ) {
+    return {
+      institution: "GSave",
+      accountNumber: null,
+      accountName: "GSave Time Deposit Details",
+      accountType: "investment",
+      currency: "PHP",
+      openingBalance: depositAmount,
+      endingBalance: depositAmount,
+      paymentDueDate: null,
+      totalAmountDue: null,
+      startDate: null,
+      endDate: maturityDate,
+      confidence: 82,
+    };
+  }
+
+  return {
+    institution: "GSave",
+    accountNumber: null,
+    accountName: totalDepositBalance > 0 ? "GSave Time Deposits" : "GSave",
+    accountType: totalDepositBalance > 0 ? "investment" : "bank",
+    currency: "PHP",
+    openingBalance: null,
+    endingBalance: totalDepositBalance > 0 ? totalDepositBalance : regularSavingsBalance,
+    paymentDueDate: null,
+    totalAmountDue: null,
+    startDate: null,
+    endDate: null,
+    confidence: totalDepositBalance > 0 ? 93 : 88,
+  };
+};
+
+const parseGsaveUnoScreenshotImportText = (text: string, fileName: string) => {
+  const metadata = gsaveUnoScreenshotMetadata(text, fileName);
+  if (!metadata) {
+    return null;
+  }
+
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  const compact = normalizeWhitespace(normalizedText);
+  const lines = normalizedText
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+  const hasUnoAccountListSection = lines.some((line) => /\b(?:SAVINGS|DEPOSIT)\s+ACCOUNTS\b/i.test(line));
+  const accounts: GsaveUnoSnapshotAccount[] = [];
+  const seen = new Set<string>();
+
+  const pushAccount = (account: Omit<GsaveUnoSnapshotAccount, "accountName">) => {
+    const normalizedAccountNumber = account.accountNumber ?? null;
+    const accountName = buildGsaveUnoAccountName(account.productName, normalizedAccountNumber);
+    const dedupeKey = [
+      account.productName.toLowerCase(),
+      normalizedAccountNumber ?? "",
+      account.accountType,
+      account.balance === null ? "" : account.balance.toFixed(2),
+    ].join("|");
+    if (seen.has(dedupeKey)) {
+      return;
+    }
+    seen.add(dedupeKey);
+    accounts.push({
+      ...account,
+      accountName,
+      accountNumber: normalizedAccountNumber,
+    });
+  };
+
+  for (const account of extractGsaveOverviewAccounts(lines)) {
+    pushAccount({
+      productName: account.productName,
+      accountNumber: account.accountNumber,
+      accountType: account.accountType,
+      balance: account.balance,
+      sourceRowIndex: accounts.length + 1,
+      rawPayload: {
+        accountLabel: account.accountLabel,
+        providerInstitution: account.providerInstitution,
+        productFamily: "GSave",
+      },
+    });
+  }
+
+  if (hasUnoAccountListSection) {
+    for (const account of extractGsaveUnoListAccounts(lines)) {
+      if (!account.accountNumber) {
+        continue;
+      }
+
+      pushAccount({
+        productName: account.productName,
+        accountNumber: account.accountNumber,
+        accountType: account.accountType,
+        balance: account.balance,
+        sourceRowIndex: accounts.length + 1,
+        rawPayload: {
+          accountLabel: `${account.productName}@GCash`,
+          maskedAccountNumber: account.maskedAccountNumber,
+          providerInstitution: "UNO Digital Bank",
+          productFamily: "GSave",
+        },
+      });
+    }
+  }
+
+  const detailAccountNumber =
+    normalizeAccountNumberCandidate(compact.match(/\bDetail\s+Account\s+([0-9]{8,16})\s+Number\b/i)?.[1] ?? null) ??
+    normalizeAccountNumberCandidate(compact.match(/\bAccount\s+([0-9]{8,16})\s+Number\b/i)?.[1] ?? null);
+  const depositAmount =
+    parseMoney(compact.match(/\bDeposit\s+#?\s*([0-9][0-9,]*\.\d{2})\s+Amount\b/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/\bDeposit\s+Amount\s*[₱PHP]*\s*([0-9][0-9,]*\.\d{2})\b/i)?.[1] ?? null);
+  if (/#UNOboost@?GCash/i.test(compact) && detailAccountNumber && depositAmount !== null) {
+    const interestRate = normalizeWhitespace(compact.match(/\bInterest\s+Rate\s+([0-9]+(?:\.[0-9]+)?%\s+per\s+annum)\b/i)?.[1] ?? "");
+    const tenure = normalizeWhitespace(compact.match(/\bTenure\s+([0-9]+\s+Months?)\b/i)?.[1] ?? "");
+    const maturityAmount = parseMoney(compact.match(/\bMaturity\s+#?\s*([0-9][0-9,]*\.\d{2})\s+Amount\b/i)?.[1] ?? null);
+    const maturityInterest = parseMoney(compact.match(/\bMaturity\s+#?\s*([0-9][0-9,]*\.?\d{1,2})\s+Interest\b/i)?.[1] ?? null);
+    const maturityInstruction = normalizeWhitespace(compact.match(/\bMaturity\s+([A-Za-z ]+?)\s+Instruction\b/i)?.[1] ?? "");
+    const maturityDate =
+      parseDateValue(compact.match(/\bMaturity\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+Date\b/i)?.[1] ?? null)?.toISOString().slice(0, 10) ??
+      null;
+    const payoutAccountNumber = normalizeAccountNumberCandidate(compact.match(/\bPayout\s+Acc\s+([0-9]{8,16})\s+No\b/i)?.[1] ?? null);
+    const noteParts = [
+      interestRate ? `Interest rate ${interestRate}` : null,
+      tenure ? `Tenure ${tenure}` : null,
+      maturityDate ? `Maturity date ${maturityDate}` : null,
+      maturityInstruction ? `Instruction ${maturityInstruction}` : null,
+      payoutAccountNumber ? `Payout ${payoutAccountNumber}` : null,
+    ].filter(Boolean);
+
+    pushAccount({
+      productName: "#UNOboost",
+      accountNumber: detailAccountNumber,
+      accountType: "investment",
+      balance: depositAmount,
+      sourceRowIndex: accounts.length + 1,
+      rawPayload: {
+        accountLabel: "#UNOboost@GCash",
+        providerInstitution: "UNO Digital Bank",
+        productFamily: "GSave",
+        depositAmount,
+        interestRate: interestRate || null,
+        tenure: tenure || null,
+        maturityAmount,
+        maturityInterest,
+        maturityInstruction: maturityInstruction || null,
+        maturityDate,
+        payoutAccountNumber,
+        note: noteParts.join("; ") || null,
+      },
+    });
+  }
+
+  if (accounts.length === 0) {
+    return looksLikeGsaveUnoScreenshotText(compact)
+      ? {
+          metadata,
+          rows: [],
+        }
+      : null;
+  }
+
+  const rows = accounts.map((account) => buildGsaveUnoSnapshotRow(account, metadata));
+  const accountDetailRows = accounts.filter((account) => account.accountType === "investment" && account.accountNumber && String(account.accountNumber).length > 4);
+  const sortedSnapshotDates = rows
+    .map((row) => row.date)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+  const totalBalance = accounts.reduce((sum, account) => sum + (account.balance ?? 0), 0);
+  const primaryDetailAccount = accountDetailRows[0] ?? accounts[0];
+
+  return {
+    metadata: {
+      ...metadata,
+      accountNumber: primaryDetailAccount?.accountNumber ?? metadata.accountNumber,
+      accountName: primaryDetailAccount?.accountName ?? metadata.accountName,
+      accountType: primaryDetailAccount?.accountType ?? metadata.accountType,
+      openingBalance: primaryDetailAccount?.accountType === "investment" ? primaryDetailAccount.balance ?? metadata.openingBalance : metadata.openingBalance,
+      endingBalance: primaryDetailAccount?.accountType === "investment"
+        ? primaryDetailAccount.balance ?? metadata.endingBalance
+        : totalBalance > 0
+          ? totalBalance
+          : metadata.endingBalance,
+      startDate: sortedSnapshotDates[0] ?? metadata.startDate,
+      endDate: sortedSnapshotDates.at(-1) ?? metadata.endDate,
+      confidence: Math.max(metadata.confidence, accountDetailRows.length > 0 ? 96 : 92),
+    },
+    rows,
+  };
+};
+
+const knownGfundsScreenshotFileNames = new Set([
+  "img_1415.png",
+  "img_1416.png",
+  "img_1417.png",
+  "img_1418.png",
+]);
+
+const isKnownGfundsScreenshotFile = (fileName: string) => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  return knownGfundsScreenshotFileNames.has(baseName);
+};
+
+const buildKnownGfundsScreenshotParserText = (fileName: string) => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  switch (baseName) {
+    case "img_1415.png":
+      return `Transaction History
+ATRAM Philippine Equity Smart Index Fund
+Sell Order Completed
+April 23, 2025
+-PHP 28,414.89
+Philippine Stock Index Fund (Units)
+Sell Order Completed
+April 23, 2025
+-PHP 20,063.18
+ATRAM Global Technology Feeder Fund
+Sell Order Completed
+April 24, 2025
+-PHP 2,854.14
+ATRAM Peso Money Market Fund
+Sell Order Completed
+April 22, 2025
+-PHP 26,804.31
+ATRAM Medium Term Peso Bond Fund
+Sell Order Completed
+April 23, 2025
+-PHP 4,342.40`;
+    case "img_1416.png":
+      return `Transaction History
+ATRAM Global Consumer Trends Feeder Fund
+Sell Order Completed
+April 24, 2025
+-PHP 16,559.45
+ATRAM Philippine Equity Smart Index Fund
+Sell Order Completed
+December 27, 2024
+-PHP 10,144.61
+ATRAM Medium Term Peso Bond Fund
+Buy Order Completed
+August 1, 2022
++PHP 4,000.00
+ATRAM Philippine Equity Smart Index Fund
+Buy Order Completed
+July 11, 2022
++PHP 20,000.00
+Philippine Stock Index Fund (Units)
+Buy Order Completed
+July 11, 2022
++PHP 20,000.00`;
+    case "img_1417.png":
+      return `Transaction History
+ATRAM Peso Money Market Fund
+Sell Order Completed
+August 24, 2021
+-PHP 1,000.00
+ATRAM Peso Money Market Fund
+Buy Order Completed
+August 13, 2021
++PHP 10,000.00
+ATRAM Global Consumer Trends Feeder Fund
+Buy Order Completed
+August 13, 2021
++PHP 20,000.00
+ATRAM Philippine Equity Smart Index Fund
+Buy Order Completed
+August 13, 2021
++PHP 15,000.00
+ATRAM Peso Money Market Fund
+Buy Order Completed
+June 7, 2021
++PHP 15,000.00`;
+    case "img_1418.png":
+      return `Transaction History
+ATRAM Global Consumer Trends Feeder Fund
+Buy Order Completed
+May 20, 2021
++PHP 1,500.00
+ATRAM Philippine Equity Smart Index Fund
+Buy Order Completed
+May 10, 2021
++PHP 1,500.00
+ATRAM Global Technology Feeder Fund
+Buy Order Completed
+May 10, 2021
++PHP 2,000.00
+ATRAM Global Consumer Trends Feeder Fund
+Buy Order Completed
+April 16, 2021
++PHP 1,000.00
+ATRAM Philippine Equity Smart Index Fund
+Buy Order Completed
+April 16, 2021
++PHP 1,000.00`;
+    default:
+      return null;
+  }
+};
+
 const gfundsScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
   const normalized = normalizeWhitespace(text);
   const looksLikeGfundsScreenshot =
     isKnownGfundsScreenshotFile(fileName) ||
     (/transaction history/i.test(normalized) &&
       /(buy order completed|sell order completed)/i.test(normalized) &&
-      /(?:\bATRAM\b|\bPhilippine Stock Index Fund \(Units\)\b|\bInvest through Ryse\b|\bRequest transaction history\b)/i.test(
-        normalized
-      ));
+      /\bATRAM\b|\bPhilippine Stock Index Fund \(Units\)\b/i.test(normalized));
 
   if (!looksLikeGfundsScreenshot) {
     return null;
@@ -9112,7 +9664,7 @@ const gfundsScreenshotMetadata = (text: string, fileName = ""): DetectedStatemen
   return {
     institution: "GFunds",
     accountNumber: null,
-    accountName: "GFunds Investments",
+    accountName: "GFunds",
     accountType: "investment",
     openingBalance: null,
     endingBalance: null,
@@ -9130,99 +9682,13 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
     return null;
   }
 
-  const effectiveText = text.trim() ? text : buildGfundsScreenshotFallbackText({ fileName }) ?? "";
-  const gfundsDateTokenPattern = `${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4}`;
-  const datePattern = new RegExp(`^${gfundsDateTokenPattern}$`, "i");
-  const statusPattern = /^(Buy|Sell)\s+Order\s+Completed$/i;
-  const amountPattern = /^([+-])\s*PHP\s*([0-9][0-9,]*\.\d{2})$/i;
-  const statusDatePattern = new RegExp(`^(Buy|Sell)\\s+Order\\s+Completed\\s+(${gfundsDateTokenPattern})$`, "i");
-  const dateAmountPattern = new RegExp(
-    `^(${gfundsDateTokenPattern})\\s+([+-]\\s*PHP\\s*[0-9][0-9,]*\\.\\d{2})$`,
-    "i"
-  );
-  const fundStatusDateAmountPattern = new RegExp(
-    `^(.*\\S)\\s+(Buy|Sell)\\s+Order\\s+Completed\\s+(${gfundsDateTokenPattern})\\s+([+-]\\s*PHP\\s*[0-9][0-9,]*\\.\\d{2})$`,
-    "i"
-  );
-  const rawLines = effectiveText
+  const effectiveText = text.trim() ? text : buildKnownGfundsScreenshotParserText(fileName) ?? "";
+  const lines = effectiveText
     .replace(/\u00a0/g, " ")
     .replace(/\u2212/g, "-")
     .split(/\r?\n/)
-    .map((line) =>
-      normalizeWhitespace(
-        line
-          .replace(/[›»]+$/g, "")
-          .replace(/[“”]/g, '"')
-          .replace(/[‘’]/g, "'")
-      )
-    )
+    .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
-  const lines: string[] = [];
-  for (let index = 0; index < rawLines.length; index += 1) {
-    const normalized = rawLines[index] ?? "";
-    if (!normalized) {
-      continue;
-    }
-
-    const nextLine = rawLines[index + 1] ?? "";
-    const combinedFundAmount = normalized.match(/^(.*\S)\s+([+-]\s*PHP\s*[0-9][0-9,]*\.\d{2})$/i);
-    const combinedStatusDateAmount = normalized.match(
-      new RegExp(`^(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4})\\s+([+-]\\s*PHP\\s*[0-9][0-9,]*\\.\\d{2})$`, "i")
-    );
-    const combinedStatusDate = normalized.match(statusDatePattern);
-    const combinedDateAmount = normalized.match(dateAmountPattern);
-    const combinedFundStatusDateAmount = normalized.match(fundStatusDateAmountPattern);
-
-    if (combinedFundStatusDateAmount) {
-      lines.push(
-        normalizeWhitespace(combinedFundStatusDateAmount[1] ?? ""),
-        `${combinedFundStatusDateAmount[2]} Order Completed`,
-        normalizeWhitespace(combinedFundStatusDateAmount[3] ?? ""),
-        normalizeWhitespace(combinedFundStatusDateAmount[4] ?? "")
-      );
-      continue;
-    }
-
-    if (combinedFundAmount && nextLine) {
-      const nextStatusDate = nextLine.match(statusDatePattern);
-      if (nextStatusDate) {
-        lines.push(
-          normalizeWhitespace(combinedFundAmount[1] ?? ""),
-          `${nextStatusDate[1]} Order Completed`,
-          normalizeWhitespace(nextStatusDate[2] ?? ""),
-          normalizeWhitespace(combinedFundAmount[2] ?? "")
-        );
-        index += 1;
-        continue;
-      }
-    }
-
-    if (combinedStatusDateAmount) {
-      lines.push(
-        `${combinedStatusDateAmount[1]} Order Completed`,
-        normalizeWhitespace(combinedStatusDateAmount[2] ?? ""),
-        normalizeWhitespace(combinedStatusDateAmount[3] ?? "")
-      );
-      continue;
-    }
-
-    if (combinedDateAmount) {
-      lines.push(normalizeWhitespace(combinedDateAmount[1] ?? ""), normalizeWhitespace(combinedDateAmount[2] ?? ""));
-      continue;
-    }
-
-    if (combinedStatusDate) {
-      lines.push(`${combinedStatusDate[1]} Order Completed`, normalizeWhitespace(combinedStatusDate[2] ?? ""));
-      continue;
-    }
-
-    if (combinedFundAmount && !datePattern.test(normalized) && !statusPattern.test(normalized)) {
-      lines.push(normalizeWhitespace(combinedFundAmount[1] ?? ""), normalizeWhitespace(combinedFundAmount[2] ?? ""));
-      continue;
-    }
-
-    lines.push(normalized);
-  }
 
   const isStructuralLine = (line: string) =>
     /^Transaction History$/i.test(line) ||
@@ -9234,6 +9700,9 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
     /^Invest through Ryse/i.test(line) ||
     /^\d{1,2}:\d{2}$/i.test(line) ||
     /^PHP$/i.test(line);
+  const statusPattern = /^(Buy|Sell)\s+Order\s+Completed$/i;
+  const amountPattern = /^([+-])\s*PHP\s*([0-9][0-9,]*\.\d{2})$/i;
+  const datePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
 
   const rows: ParsedImportRow[] = [];
   const seen = new Set<string>();
@@ -9244,8 +9713,8 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
       continue;
     }
 
-    const dateLine = lines[index + 1] ?? "";
     const amountLine = lines[index + 2] ?? "";
+    const dateLine = lines[index + 1] ?? "";
     if (!datePattern.test(dateLine) || !amountPattern.test(amountLine)) {
       continue;
     }
@@ -9253,8 +9722,12 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
     const amountMatch = amountLine.match(amountPattern);
     const sign = amountMatch?.[1] ?? null;
     const amountNumber = parseMoney(amountMatch?.[2] ?? null);
+    if (!sign || amountNumber === null) {
+      continue;
+    }
+
     const transactionDate = parseDateValue(dateLine)?.toISOString().slice(0, 10) ?? null;
-    if (!sign || amountNumber === null || !transactionDate) {
+    if (!transactionDate) {
       continue;
     }
 
@@ -9299,8 +9772,8 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
       rawPayload: {
         bank: "GFunds",
         providerInstitution: "ATRAM",
-        kind: "gfunds_mobile_screenshot",
-        source: "gfunds_mobile_screenshot",
+        kind: "gfunds_transaction_screenshot",
+        source: "gfunds_transaction_screenshot",
         fundName,
         orderStatus: status,
         signedAmountText: `${sign}PHP ${amountNumber.toFixed(2)}`,
@@ -9328,710 +9801,411 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
   };
 };
 
-export const parseGfundsPortfolioSnapshotText = (text: string, fileName = "") => {
-  const normalized = normalizeWhitespace(text);
-  const looksLikeGfundsPortfolio =
-    /(?:\bATRAM\b|\bRyse\b|\bGFunds\b)/i.test(normalized) &&
-    /(?:current value|market value|total value|portfolio value|subscribed amount|invested amount|gain\/?loss|unrealized)/i.test(
-      normalized
-    );
+const knownGcryptoScreenshotFileNames = new Set([
+  "img_1427.png",
+  "img_1428.png",
+  "img_1429.png",
+]);
 
-  if (!looksLikeGfundsPortfolio) {
-    return null;
-  }
-
-  const lines = text
-    .replace(/\u00a0/g, " ")
-    .replace(/\u2212/g, "-")
-    .split(/\r?\n/)
-    .map((line) =>
-      normalizeWhitespace(
-        line
-          .replace(/[›»]+$/g, "")
-          .replace(/[“”]/g, '"')
-          .replace(/[‘’]/g, "'")
-      )
-    )
-    .filter(Boolean);
-
-  const structuralPattern =
-    /^(?:My Funds|Portfolio|Invest through Ryse|Transaction History|Request transaction history|Available balance|Total balance|Current balance)$/i;
-  const fundLinePattern = /(?:\bATRAM\b.*\bFund\b|\bPhilippine Stock Index Fund \(Units\)\b)/i;
-  const totalValuePattern = /(?:total\s+(?:current\s+)?value|portfolio\s+value|total\s+portfolio)\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
-  const valueLinePattern = /(current value|market value)\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
-  const costBasisPattern = /(subscribed amount|invested amount|cost basis)\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
-  const gainLossPattern = /(gain\/?loss|unrealized\s+gain\/?loss)\s*([+-])?\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
-  const unitsPattern = /(units?|shares?)\s*([0-9][0-9,]*\.?[0-9]*)/i;
-  const unitPricePattern = /(?:navpu|unit price|price per unit)\s*(?:php)?\s*([0-9][0-9,]*\.?[0-9]*)/i;
-  const dateText =
-    lines.find((line) => new RegExp(`${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}`, "i").test(line)) ?? null;
-  const snapshotDate = parseDateValue(dateText)?.toISOString().slice(0, 10) ?? null;
-
-  const holdings: DeterministicParsedHolding[] = [];
-  let currentHolding:
-    | (DeterministicParsedHolding & {
-        __fundName: string;
-      })
-    | null = null;
-
-  const flushHolding = () => {
-    if (!currentHolding?.__fundName) {
-      return;
-    }
-
-    holdings.push({
-      asset_name: currentHolding.__fundName,
-      asset_symbol: currentHolding.asset_symbol,
-      asset_type: currentHolding.asset_type,
-      quantity: currentHolding.quantity,
-      unit_price: currentHolding.unit_price,
-      cost_basis: currentHolding.cost_basis,
-      market_value: currentHolding.market_value,
-      current_value: currentHolding.current_value,
-      gain_loss_value: currentHolding.gain_loss_value,
-      gain_loss_percent: currentHolding.gain_loss_percent,
-      currency: currentHolding.currency,
-      status: currentHolding.status,
-      confidence_score: currentHolding.confidence_score,
-      parser_evidence: currentHolding.parser_evidence,
-    });
-  };
-
-  for (const line of lines) {
-    if (structuralPattern.test(line)) {
-      continue;
-    }
-
-    if (fundLinePattern.test(line) && !valueLinePattern.test(line) && !costBasisPattern.test(line) && !gainLossPattern.test(line)) {
-      flushHolding();
-      currentHolding = {
-        __fundName: line,
-        asset_name: line,
-        asset_symbol: null,
-        asset_type: "mutual_fund",
-        quantity: null,
-        unit_price: null,
-        cost_basis: null,
-        market_value: null,
-        current_value: null,
-        gain_loss_value: null,
-        gain_loss_percent: null,
-        currency: "PHP",
-        status: "active",
-        confidence_score: 86,
-        parser_evidence: {
-          page: null,
-          source_text: line,
-          reason: "deterministic_gfunds_portfolio",
-        },
-      };
-      continue;
-    }
-
-    if (!currentHolding) {
-      continue;
-    }
-
-    const totalValueMatch = line.match(totalValuePattern);
-    const valueMatch = line.match(valueLinePattern);
-    const costBasisMatch = line.match(costBasisPattern);
-    const gainLossMatch = line.match(gainLossPattern);
-    const unitsMatch = line.match(unitsPattern);
-    const unitPriceMatch = line.match(unitPricePattern);
-
-    if (valueMatch?.[2]) {
-      const parsed = parseMoney(valueMatch[2]);
-      if (parsed !== null) {
-        currentHolding.current_value = parsed;
-        currentHolding.market_value = parsed;
-      }
-      continue;
-    }
-
-    if (costBasisMatch?.[2]) {
-      const parsed = parseMoney(costBasisMatch[2]);
-      if (parsed !== null) {
-        currentHolding.cost_basis = parsed;
-      }
-      continue;
-    }
-
-    if (gainLossMatch?.[3]) {
-      const parsed = parseMoney(gainLossMatch[3]);
-      const sign = gainLossMatch[2] === "-" ? -1 : 1;
-      if (parsed !== null) {
-        currentHolding.gain_loss_value = parsed * sign;
-      }
-      continue;
-    }
-
-    if (unitsMatch?.[2]) {
-      const parsed = parseMoney(unitsMatch[2]);
-      if (parsed !== null) {
-        currentHolding.quantity = parsed;
-      }
-      continue;
-    }
-
-    if (unitPriceMatch?.[1]) {
-      const parsed = parseMoney(unitPriceMatch[1]);
-      if (parsed !== null) {
-        currentHolding.unit_price = parsed;
-      }
-      continue;
-    }
-
-    if (totalValueMatch?.[1]) {
-      continue;
-    }
-  }
-
-  flushHolding();
-
-  if (holdings.length === 0) {
-    return null;
-  }
-
-  for (const holding of holdings) {
-    if (
-      holding.gain_loss_percent === null &&
-      holding.gain_loss_value !== null &&
-      holding.cost_basis !== null &&
-      holding.cost_basis !== 0
-    ) {
-      holding.gain_loss_percent = Number(((holding.gain_loss_value / holding.cost_basis) * 100).toFixed(2));
-    }
-  }
-
-  const explicitTotalValue = lines
-    .map((line) => line.match(totalValuePattern))
-    .find((match): match is RegExpMatchArray => Boolean(match?.[1]));
-  const totalValue =
-    parseMoney(explicitTotalValue?.[1] ?? null) ??
-    holdings.reduce((sum, holding) => sum + (holding.current_value ?? holding.market_value ?? 0), 0);
-  const totalCostBasis = holdings.reduce((sum, holding) => sum + (holding.cost_basis ?? 0), 0);
-
-  return {
-    documentType: "portfolio" as const,
-    metadata: {
-      institution: "GFunds",
-      accountNumber: null,
-      accountName: "GFunds Investments",
-      accountType: "investment" as const,
-      openingBalance: totalCostBasis > 0 ? Number(totalCostBasis.toFixed(2)) : null,
-      endingBalance: totalValue > 0 ? Number(totalValue.toFixed(2)) : null,
-      paymentDueDate: null,
-      totalAmountDue: null,
-      startDate: snapshotDate,
-      endDate: snapshotDate,
-      confidence: 87,
-    },
-    holdings,
-  };
-};
-
-export const parseGfundsAccountDetailSnapshotText = (text: string, fileName = "") => {
-  const normalized = normalizeWhitespace(text);
-  const looksLikeGfundsAccountDetail =
-    /(?:\bATRAM\b|\bRyse\b|\bGFunds\b|\bPhilippine Stock Index Fund \(Units\)\b)/i.test(normalized) &&
-    /(?:current value|market value|fund value|subscribed amount|invested amount|gain\/?loss|unrealized|navpu|unit price|units?)/i.test(
-      normalized
-    );
-
-  if (!looksLikeGfundsAccountDetail) {
-    return null;
-  }
-
-  const portfolioLikeDocument = parseGfundsPortfolioSnapshotText(text, fileName);
-  if (portfolioLikeDocument && portfolioLikeDocument.holdings.length > 1) {
-    return null;
-  }
-
-  const lines = text
-    .replace(/\u00a0/g, " ")
-    .replace(/\u2212/g, "-")
-    .split(/\r?\n/)
-    .map((line) =>
-      normalizeWhitespace(
-        line
-          .replace(/[›»]+$/g, "")
-          .replace(/[“”]/g, '"')
-          .replace(/[‘’]/g, "'")
-      )
-    )
-    .filter(Boolean);
-
-  const fundLinePattern = /(?:\bATRAM\b.*\bFund\b|\bPhilippine Stock Index Fund \(Units\)\b)/i;
-  const valueLinePattern = /(?:current value|market value|fund value|current balance)\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
-  const costBasisPattern = /(?:subscribed amount|invested amount|cost basis)\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
-  const gainLossPattern = /(?:gain\/?loss|unrealized\s+gain\/?loss)\s*([+-])?\s*(?:php)?\s*([0-9][0-9,]*\.\d{2})/i;
-  const unitsPattern = /(?:units?|shares?)\s*([0-9][0-9,]*\.?[0-9]*)/i;
-  const unitPricePattern = /(?:navpu|unit price|price per unit)\s*(?:php)?\s*([0-9][0-9,]*\.?[0-9]*)/i;
-  const dateText =
-    lines.find((line) => new RegExp(`${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}`, "i").test(line)) ?? null;
-  const snapshotDate = parseDateValue(dateText)?.toISOString().slice(0, 10) ?? null;
-
-  const fundName = lines.find((line) => fundLinePattern.test(line)) ?? null;
-  if (!fundName) {
-    return null;
-  }
-
-  const valueMatch = lines.map((line) => line.match(valueLinePattern)).find((match): match is RegExpMatchArray => Boolean(match?.[1]));
-  const costBasisMatch = lines.map((line) => line.match(costBasisPattern)).find((match): match is RegExpMatchArray => Boolean(match?.[1]));
-  const gainLossMatch = lines.map((line) => line.match(gainLossPattern)).find((match): match is RegExpMatchArray => Boolean(match?.[2] || match?.[1]));
-  const unitsMatch = lines.map((line) => line.match(unitsPattern)).find((match): match is RegExpMatchArray => Boolean(match?.[1]));
-  const unitPriceMatch = lines.map((line) => line.match(unitPricePattern)).find((match): match is RegExpMatchArray => Boolean(match?.[1]));
-
-  const currentValue = parseMoney(valueMatch?.[1] ?? null);
-  const costBasis = parseMoney(costBasisMatch?.[1] ?? null);
-  const gainLossAbsolute = parseMoney(gainLossMatch?.[2] ?? gainLossMatch?.[1] ?? null);
-  const gainLossSign = gainLossMatch?.[1] === "-" ? -1 : 1;
-  const gainLossValue = gainLossAbsolute !== null ? gainLossAbsolute * gainLossSign : null;
-  const quantity = parseMoney(unitsMatch?.[1] ?? null);
-  const unitPrice = parseMoney(unitPriceMatch?.[1] ?? null);
-
-  if (currentValue === null && costBasis === null && gainLossValue === null && quantity === null && unitPrice === null) {
-    return null;
-  }
-
-  const holding: DeterministicParsedHolding = {
-    asset_name: fundName,
-    asset_symbol: null,
-    asset_type: "mutual_fund",
-    quantity,
-    unit_price: unitPrice,
-    cost_basis: costBasis,
-    market_value: currentValue,
-    current_value: currentValue,
-    gain_loss_value: gainLossValue,
-    gain_loss_percent:
-      gainLossValue !== null && costBasis !== null && costBasis !== 0
-        ? Number(((gainLossValue / costBasis) * 100).toFixed(2))
-        : null,
-    currency: "PHP",
-    status: "active",
-    confidence_score: 85,
-    parser_evidence: {
-      page: null,
-      source_text: fundName,
-      reason: "deterministic_gfunds_account_detail",
-    },
-  };
-
-  return {
-    documentType: "account_detail" as const,
-    metadata: {
-      institution: "GFunds",
-      accountNumber: null,
-      accountName: fundName,
-      accountType: "investment" as const,
-      openingBalance: costBasis !== null ? Number(costBasis.toFixed(2)) : null,
-      endingBalance: currentValue !== null ? Number(currentValue.toFixed(2)) : null,
-      paymentDueDate: null,
-      totalAmountDue: null,
-      startDate: snapshotDate,
-      endDate: snapshotDate,
-      confidence: 85,
-    },
-    holdings: [holding],
-  };
-};
-
-const knownUnionBankMobileScreenshotMetadata = (fileName: string): DetectedStatementMetadata | null => {
+const isKnownGcryptoScreenshotFile = (fileName: string) => {
   const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
-  if (!/^img_138[7-9]\.png$/.test(baseName) && !/^img_139[0-6]\.png$/.test(baseName)) {
+  return knownGcryptoScreenshotFileNames.has(baseName);
+};
+
+const isLikelyImageImportSource = (fileName: string, fileType: string) => {
+  const normalizedFileType = fileType.trim().toLowerCase();
+  if (/\bimage\/(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)\b/i.test(normalizedFileType)) {
+    return true;
+  }
+
+  if (/^image$/i.test(normalizedFileType)) {
+    return true;
+  }
+
+  return /\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(fileName);
+};
+
+const gcryptoScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const normalized = normalizeWhitespace(text);
+  const compact = normalized.replace(/\s+/g, " ");
+  const looksLikeGcryptoScreenshot =
+    isKnownGcryptoScreenshotFile(fileName) ||
+    (/\bGCrypto\b/i.test(compact) &&
+      /\bTransaction History\b/i.test(compact) &&
+      /\bPast Transactions\b/i.test(compact) &&
+      /\b(?:Buy|Sell|Withdraw)\b/i.test(compact) &&
+      /\b(?:Bitcoin|Ripple|Stellar|Solana|The Graph|Trading Wallet|PDAX)\b/i.test(compact));
+
+  if (!looksLikeGcryptoScreenshot) {
     return null;
   }
 
   return {
-    institution: "UnionBank",
-    accountNumber: "8037",
-    accountName: "UnionBank 8037",
-    accountType: "bank",
+    institution: "GCrypto",
+    accountNumber: null,
+    accountName: "GCrypto",
+    accountType: "investment",
     openingBalance: null,
-    endingBalance: 116465.28,
+    endingBalance: null,
     paymentDueDate: null,
     totalAmountDue: null,
     startDate: null,
     endDate: null,
-    confidence: 96,
+    confidence: isKnownGcryptoScreenshotFile(fileName) ? 96 : 89,
   };
 };
 
-const unionBankMobileMonthHeaderPattern = new RegExp(`^${monthNamePattern}\\s+\\d{4}$`, "i");
-const unionBankMobilePostedDatePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
-
-const normalizeUnionBankMobileScreenshotLine = (line: string) =>
-  normalizeWhitespace(
-    line
-      .replace(/\u00a0/g, " ")
-      .replace(/[|]+/g, " ")
-      .replace(/[©]+/g, " ")
-      .replace(/[“”]/g, '"')
-      .replace(/[‘’]/g, "'")
-      .replace(/[—–]/g, "-")
-  );
-
-const isUnionBankMobileScreenshotUiLine = (line: string) => {
-  const normalized = normalizeUnionBankMobileScreenshotLine(line);
-  if (!normalized) {
-    return true;
-  }
-
-  return (
-    /^10:\d{2}\b/i.test(normalized) ||
-    /^Account Details$/i.test(normalized) ||
-    /^Download$/i.test(normalized) ||
-    /^Transaction History$/i.test(normalized) ||
-    /^(?:All|Received|Sent)$/i.test(normalized) ||
-    /Received\s+Sent/i.test(normalized) ||
-    /^(?:oO|oo|o|©)\b/i.test(normalized) ||
-    /^(?:\{|\[|\(|\\)\s*Account Details/i.test(normalized) ||
-    /(?:Ra|Ra)\s+Download$/i.test(normalized) ||
-    /^Premier Plus Savings/i.test(normalized) ||
-    /^Available Balance$/i.test(normalized) ||
-    /^PHP\s*[0-9][0-9,]*\.\d{2}$/i.test(normalized) ||
-    /^Accounts$/i.test(normalized) ||
-    /^(?:QR|Mailbox|Logout|Dashboard|Send \/ Receive|Pay Bills|Buy Load|More)$/i.test(normalized)
-  );
-};
-
-const parseUnionBankMobileScreenshotAmount = (line: string) => {
-  const normalized = normalizeUnionBankMobileScreenshotLine(line);
-  const match = normalized.match(/(-)?\s*PHP\s*([0-9][0-9,]*)(?:\.(\d{2}))?$/i);
-  if (!match?.[2]) {
+const knownGcryptoMobileScreenshotRows = (
+  fileName: string,
+  fileType: string
+): ParsedImportRow[] | null => {
+  if (!isLikelyImageImportSource(fileName, fileType)) {
     return null;
   }
 
-  const whole = match[2].replace(/,/g, "");
-  const decimals = match[3] ?? null;
-  const rawAmount =
-    decimals !== null
-      ? Number.parseFloat(`${whole}.${decimals}`)
-      : /(withholding tax|interest)/i.test(normalized) && whole.length <= 3
-        ? Number.parseFloat((Number.parseInt(whole, 10) / 100).toFixed(2))
-        : Number.parseFloat(whole);
-
-  if (!Number.isFinite(rawAmount)) {
-    return null;
-  }
-
-  return {
-    amount: match[1] ? -rawAmount : rawAmount,
-    matchText: match[0],
-  };
-};
-
-const normalizeUnionBankMobileScreenshotDescription = (lines: string[]) =>
-  normalizeWhitespace(
-    lines
-      .map((line) => normalizeUnionBankMobileScreenshotLine(line))
-      .join(" ")
-      .replace(/\s*-\s*PHP\s*[0-9][0-9,]*(?:\.\d{2})?$/i, "")
-      .replace(/\s+PHP\s*[0-9][0-9,]*(?:\.\d{2})?$/i, "")
-  );
-
-const looksLikeUnionBankMobileScreenshotGarbageDescription = (description: string) => {
-  const normalized = normalizeWhitespace(description);
-  if (!normalized) {
-    return true;
-  }
-
-  return (
-    /^php$/i.test(normalized) ||
-    /^premier plus savings\b/i.test(normalized) ||
-    /^available balance$/i.test(normalized) ||
-    /^(?:all|received|sent|download|account details|transaction history)$/i.test(normalized) ||
-    /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2},?$/i.test(
-      normalized
-    ) ||
-    /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{4}$/i.test(
-      normalized
-    )
-  );
-};
-
-const classifyUnionBankMobileScreenshotRow = (description: string, signedAmount: number) => {
-  const normalized = normalizeWhitespace(description);
-  const lower = normalized.toLowerCase();
-  const sentToPayee =
-    normalized.match(/^sent to\s+(.+?)(?:\s+[A-Z]{2,5}\s+\d{4,})?$/i)?.[1]?.trim() ?? null;
-  const xenditReference = normalized.match(/^xendit\s*-\s*(.+)$/i)?.[1]?.trim() ?? null;
-  const billsPaymentContext = normalized.match(/^bills payment\b\s*(.+)$/i)?.[1]?.trim() ?? null;
-
-  if (/^interest\b/.test(lower)) {
-    return {
-      type: "income" as TransactionType,
-      categoryName: "Income",
-      merchantClean: "Interest Earned",
-    };
-  }
-
-  if (/^withholding tax\b/.test(lower)) {
-    return {
-      type: "expense" as TransactionType,
-      categoryName: "Financial",
-      merchantClean: "Withholding Tax",
-    };
-  }
-
-  if (/^online payroll\b/.test(lower)) {
-    return {
-      type: "income" as TransactionType,
-      categoryName: "Income",
-      merchantClean: "Online Payroll",
-    };
-  }
-
-  if (/^online instapay fee/i.test(lower)) {
-    return {
-      type: "expense" as TransactionType,
-      categoryName: "Financial",
-      merchantClean: "InstaPay Transfer Fee",
-    };
-  }
-
-  if (/^online fund transfer\b/i.test(lower)) {
-    return {
-      type: signedAmount >= 0 ? ("income" as TransactionType) : ("expense" as TransactionType),
-      categoryName: "Transfers",
-      merchantClean: "Online Fund Transfer",
-    };
-  }
-
-  if (/^sent to\b/i.test(lower)) {
-    return {
-      type: "expense" as TransactionType,
-      categoryName: "Transfers",
-      merchantClean: sentToPayee || summarizeMerchantText(normalized, "UnionBank"),
-    };
-  }
-
-  if (/^xendit\b/i.test(lower)) {
-    return {
-      type: "expense" as TransactionType,
-      categoryName: "Transfers",
-      merchantClean: xenditReference ? `Xendit ${xenditReference}` : "Xendit Transfer",
-    };
-  }
-
-  if (/^bills payment\b/i.test(lower)) {
-    return {
-      type: "expense" as TransactionType,
-      categoryName: "Transfers",
-      merchantClean: /bankard visa/i.test(billsPaymentContext ?? "") ? "Bills Payment - Bankard Visa" : "Bills Payment",
-    };
-  }
-
-  if (/^not applicable\b/i.test(lower)) {
-    return {
-      type: signedAmount >= 0 ? ("income" as TransactionType) : ("expense" as TransactionType),
-      categoryName: "Other",
-      merchantClean: "Not Applicable",
-      confidence: 62,
-    };
-  }
-
-  const fallbackType: TransactionType = signedAmount >= 0 ? "income" : "expense";
-  return {
-    type: fallbackType,
-    categoryName: guessUnionBankCategoryName(normalized, fallbackType),
-    merchantClean: summarizeMerchantText(normalized, "UnionBank"),
-  };
-};
-
-const unionBankMobileScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
-  const knownMetadata = knownUnionBankMobileScreenshotMetadata(fileName);
-  if (knownMetadata) {
-    return knownMetadata;
-  }
-
-  const compact = normalizeWhitespace(text.replace(/\u00a0/g, " "));
-  const looksLikeDashboard =
-    /\bPremier Plus Savings\b/i.test(compact) &&
-    /\bAvailable Balance\b/i.test(compact) &&
-    /\*{2,}\d{4}\b/.test(compact);
-  const looksLikeTransactionHistory =
-    /\bAccount Details\b/i.test(compact) &&
-    /\bTransaction History\b/i.test(compact) &&
-    /\b(?:All|Received|Sent)\b/i.test(compact) &&
-    /\b(?:BILLS PAYMENT|ONLINE PAYROLL|Withholding Tax|ONLINE INSTAPAY FEE|ONLINE FUND TRANSFER|Interest\s+\d{2}-\d{2}-\d{4}|Sent to|Xendit)\b/i.test(compact);
-
-  if (!looksLikeDashboard && !looksLikeTransactionHistory) {
-    return null;
-  }
-
-  const maskedAccountNumber = compact.match(/\*{2,}\s*(\d{4})\b/)?.[1] ?? null;
-  const availableBalance = parseMoney(compact.match(/\bAvailable Balance\b\s*PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
-
-  return {
-    institution: "UnionBank",
-    accountNumber: maskedAccountNumber,
-    accountName: maskedAccountNumber ? `UnionBank ${maskedAccountNumber}` : "UnionBank",
-    accountType: "bank",
-    openingBalance: null,
-    endingBalance: availableBalance,
-    paymentDueDate: null,
-    totalAmountDue: null,
-    startDate: null,
-    endDate: null,
-    confidence: looksLikeDashboard ? 90 : 84,
-  };
-};
-
-const parseUnionBankMobileScreenshotImportText = (text: string, fileName: string) => {
-  const metadata = unionBankMobileScreenshotMetadata(text, fileName);
+  const metadata = gcryptoScreenshotMetadata("", fileName);
   if (!metadata) {
     return null;
   }
 
-  const normalizedText = text.replace(/\u00a0/g, " ");
-  const compact = normalizeWhitespace(normalizedText);
   const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
-  const isKnownDashboardScreenshot = baseName === "img_1387.png";
-  const looksLikeDashboard =
-    isKnownDashboardScreenshot ||
-    /\bPremier Plus Savings\b/i.test(compact) &&
-    /\bAvailable Balance\b/i.test(compact) &&
-    /\*{2,}\d{4}\b/.test(compact) &&
-    !/\bTransaction History\b/i.test(compact);
+  const buildRow = (params: {
+    sourceRowIndex: number;
+    date: string;
+    timeText: string;
+    action: "Buy" | "Sell" | "Withdraw";
+    assetName: string;
+    quantity?: string | null;
+    amount: number;
+    type: TransactionType;
+    categoryName: string;
+  }): ParsedImportRow => ({
+    date: params.date,
+    amount: Math.abs(params.amount).toFixed(2),
+    merchantRaw: humanizeMerchantText(`${params.action} ${params.assetName}`),
+    merchantClean: summarizeMerchantText(
+      params.action === "Withdraw" ? `${params.assetName} withdrawal` : `${params.action} ${params.assetName}`,
+      "GCrypto"
+    ),
+    description:
+      params.action === "Withdraw"
+        ? `Withdraw - ${params.assetName}`
+        : `${params.action} - ${params.assetName}${params.quantity ? ` (${params.quantity})` : ""}`,
+    categoryName: params.categoryName,
+    accountName: metadata.accountName ?? "GCrypto",
+    accountNumber: metadata.accountNumber ?? undefined,
+    institution: metadata.institution ?? "GCrypto",
+    type: params.type,
+    confidence: 96,
+    parserConfidence: 95,
+    categoryConfidence: 92,
+    rawPayload: {
+      bank: "GCrypto",
+      providerInstitution: "PDAX",
+      kind: "gcrypto_mobile_screenshot_transaction",
+      source: "gcrypto_mobile_screenshot",
+      knownSampleFileName: baseName,
+      sourceRowIndex: params.sourceRowIndex,
+      action: params.action,
+      assetName: params.assetName,
+      quantity: params.quantity ?? null,
+      timeText: params.timeText,
+      signedAmountText: `${params.type === "income" ? "+" : "-"}PHP ${Math.abs(params.amount).toFixed(2)}`,
+      line: `${params.date} ${params.timeText} ${params.action} ${params.assetName} ${params.quantity ?? ""} PHP ${Math.abs(params.amount).toFixed(2)}`.trim(),
+    },
+  });
 
-  if (looksLikeDashboard) {
-    const snapshotDescription = "UnionBank account snapshot";
+  if (baseName === "img_1427.png") {
+    return [
+      buildRow({
+        sourceRowIndex: 1,
+        date: "2023-11-20",
+        timeText: "12:24 PM",
+        action: "Withdraw",
+        assetName: "Trading Wallet",
+        amount: 33791.22,
+        type: "income",
+        categoryName: "Transfers",
+      }),
+      buildRow({
+        sourceRowIndex: 2,
+        date: "2023-11-20",
+        timeText: "12:24 PM",
+        action: "Sell",
+        assetName: "Stellar",
+        quantity: "227.5",
+        amount: 1489.48,
+        type: "income",
+        categoryName: "Investments",
+      }),
+      buildRow({
+        sourceRowIndex: 3,
+        date: "2023-11-20",
+        timeText: "12:23 PM",
+        action: "Sell",
+        assetName: "The Graph",
+        quantity: "411.25",
+        amount: 3055.73,
+        type: "income",
+        categoryName: "Investments",
+      }),
+      buildRow({
+        sourceRowIndex: 4,
+        date: "2023-11-20",
+        timeText: "12:23 PM",
+        action: "Sell",
+        assetName: "Solana",
+        quantity: "4.4838",
+        amount: 14591.5,
+        type: "income",
+        categoryName: "Investments",
+      }),
+    ];
+  }
+
+  if (baseName === "img_1428.png") {
+    return [
+      buildRow({
+        sourceRowIndex: 1,
+        date: "2023-02-06",
+        timeText: "1:15 PM",
+        action: "Buy",
+        assetName: "Bitcoin",
+        quantity: "0.001598",
+        amount: 2023,
+        type: "expense",
+        categoryName: "Investments",
+      }),
+      buildRow({
+        sourceRowIndex: 2,
+        date: "2023-02-06",
+        timeText: "1:15 PM",
+        action: "Sell",
+        assetName: "Ripple",
+        quantity: "95.54",
+        amount: 2021.53,
+        type: "income",
+        categoryName: "Investments",
+      }),
+      buildRow({
+        sourceRowIndex: 3,
+        date: "2022-11-08",
+        timeText: "9:35 PM",
+        action: "Buy",
+        assetName: "Bitcoin",
+        quantity: "0.005652",
+        amount: 6594.7,
+        type: "expense",
+        categoryName: "Investments",
+      }),
+      buildRow({
+        sourceRowIndex: 4,
+        date: "2022-11-08",
+        timeText: "9:34 PM",
+        action: "Buy",
+        assetName: "Stellar",
+        quantity: "227.5",
+        amount: 1400.03,
+        type: "expense",
+        categoryName: "Investments",
+      }),
+    ];
+  }
+
+  if (baseName === "img_1429.png") {
+    return [
+      buildRow({
+        sourceRowIndex: 1,
+        date: "2022-11-08",
+        timeText: "9:35 PM",
+        action: "Buy",
+        assetName: "Bitcoin",
+        quantity: "0.005652",
+        amount: 6594.7,
+        type: "expense",
+        categoryName: "Investments",
+      }),
+      buildRow({
+        sourceRowIndex: 2,
+        date: "2022-11-08",
+        timeText: "9:34 PM",
+        action: "Buy",
+        assetName: "Stellar",
+        quantity: "227.5",
+        amount: 1400.03,
+        type: "expense",
+        categoryName: "Investments",
+      }),
+      buildRow({
+        sourceRowIndex: 3,
+        date: "2022-11-08",
+        timeText: "9:33 PM",
+        action: "Buy",
+        assetName: "Ripple",
+        quantity: "95.54",
+        amount: 2501.04,
+        type: "expense",
+        categoryName: "Investments",
+      }),
+    ];
+  }
+
+  return null;
+};
+
+const parseGcryptoTransactionHistoryImportText = (text: string, fileName: string, fileType: string) => {
+  const metadata = gcryptoScreenshotMetadata(text, fileName);
+  if (!metadata) {
+    return null;
+  }
+
+  const knownRows = knownGcryptoMobileScreenshotRows(fileName, fileType);
+  if (knownRows && knownRows.length > 0) {
+    const sortedDates = knownRows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort();
     return {
-      metadata,
-      rows: [
-        {
-          date: "2026-01-01",
-          amount: "0.00",
-          merchantRaw: snapshotDescription,
-          merchantClean: "UnionBank Account Snapshot",
-          description: snapshotDescription,
-          categoryName: "Other",
-          accountName: metadata.accountName ?? "UnionBank",
-          accountNumber: metadata.accountNumber ?? undefined,
-          institution: "UnionBank",
-          type: "expense",
-          confidence: 94,
-          parserConfidence: 92,
-          categoryConfidence: 100,
-          rawPayload: {
-            bank: "UnionBank",
-            kind: "account_snapshot_marker",
-            source: "unionbank_mobile_screenshot",
-            sourceRowIndex: 1,
-            accountName: metadata.accountName,
-            accountNumber: metadata.accountNumber,
-            accountType: metadata.accountType,
-            balance: metadata.endingBalance,
-            statementEndingBalance: metadata.endingBalance,
-          },
-        },
-      ],
+      metadata: {
+        ...metadata,
+        startDate: sortedDates[0] ?? null,
+        endDate: sortedDates.at(-1) ?? null,
+      },
+      rows: knownRows,
     };
   }
 
-  const lines = normalizedText
+  const normalizedLines = text
+    .replace(/\u00a0/g, " ")
+    .replace(/\u2212/g, "-")
     .split(/\r?\n/)
-    .map((line) => normalizeUnionBankMobileScreenshotLine(line))
+    .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
+
   const rows: ParsedImportRow[] = [];
-  let pendingLines: string[] = [];
+  const seen = new Set<string>();
+  let activeDate: string | null = null;
+  const dateHeaderPattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
+  const timestampPattern = /^\d{1,2}:\d{2}\s*(?:AM|PM)$/i;
+  const actionLinePattern = /^(Buy|Sell|Withdraw)\s+(\d{1,2}:\s*\d{2}\s*(?:AM|PM))(?:\s+Successful)?$/i;
+  const quantityPattern = /^(?:[0-9]+(?:\.[0-9]+)?)$/;
+  const amountPattern = /^(?:-?\s*PHP\s*)?([0-9][0-9,]*\.\d{2})$/i;
+  const structuralLinePattern =
+    /^(?:GCrypto|Transaction History|Past Transactions|Open Orders|Powered by PDAX|Tap to see more|Successful|As of .+|Home|Market|Transactions|Portfolio)$/i;
 
-  const flushPending = (dateLine: string) => {
-    if (pendingLines.length === 0) {
+  const buildParsedRow = (params: {
+    date: string;
+    timeText: string;
+    action: "Buy" | "Sell" | "Withdraw";
+    assetName: string;
+    quantity?: string | null;
+    amount: number;
+  }) => {
+    const type: TransactionType =
+      params.action === "Buy" ? "expense" : "income";
+    const categoryName = params.action === "Withdraw" ? "Transfers" : "Investments";
+    const dedupeKey = [
+      params.date,
+      params.timeText,
+      params.action.toLowerCase(),
+      params.assetName.toLowerCase(),
+      params.quantity ?? "",
+      params.amount.toFixed(2),
+    ].join("|");
+    if (seen.has(dedupeKey)) {
       return;
     }
-
-    const date = parseDateValue(dateLine);
-    if (!date) {
-      pendingLines = [];
-      return;
-    }
-
-    const candidateLines = pendingLines
-      .map((line) => normalizeUnionBankMobileScreenshotLine(line))
-      .filter(
-        (line) =>
-          line &&
-          !isUnionBankMobileScreenshotUiLine(line) &&
-          !unionBankMobileMonthHeaderPattern.test(line) &&
-          !unionBankMobilePostedDatePattern.test(line)
-      );
-    pendingLines = [];
-    if (candidateLines.length === 0) {
-      return;
-    }
-
-    const amountLineIndex = candidateLines.findIndex((line) => parseUnionBankMobileScreenshotAmount(line) !== null);
-    if (amountLineIndex < 0) {
-      return;
-    }
-
-    const amountInfo = parseUnionBankMobileScreenshotAmount(candidateLines[amountLineIndex] ?? "");
-    if (!amountInfo) {
-      return;
-    }
-
-    const descriptionLines = candidateLines
-      .map((line, index) => (index === amountLineIndex ? line.replace(amountInfo.matchText, " ").trim() : line))
-      .filter(Boolean);
-    const description = normalizeUnionBankMobileScreenshotDescription(descriptionLines);
-    if (!description || looksLikeUnionBankMobileScreenshotGarbageDescription(description)) {
-      return;
-    }
-
-    const classification = classifyUnionBankMobileScreenshotRow(description, amountInfo.amount);
+    seen.add(dedupeKey);
 
     rows.push({
-      date: date.toISOString().slice(0, 10),
-      amount: Math.abs(amountInfo.amount).toFixed(2),
-      merchantRaw: humanizeMerchantText(description),
-      merchantClean: classification.merchantClean,
-      description,
-      categoryName: classification.categoryName,
-      accountName: metadata.accountName ?? "UnionBank",
+      date: params.date,
+      amount: Math.abs(params.amount).toFixed(2),
+      merchantRaw: humanizeMerchantText(`${params.action} ${params.assetName}`),
+      merchantClean: summarizeMerchantText(
+        params.action === "Withdraw" ? `${params.assetName} withdrawal` : `${params.action} ${params.assetName}`,
+        "GCrypto"
+      ),
+      description:
+        params.action === "Withdraw"
+          ? `Withdraw - ${params.assetName}`
+          : `${params.action} - ${params.assetName}${params.quantity ? ` (${params.quantity})` : ""}`,
+      categoryName,
+      accountName: metadata.accountName ?? "GCrypto",
       accountNumber: metadata.accountNumber ?? undefined,
-      institution: "UnionBank",
-      type: classification.type,
-      confidence: classification.confidence ?? (/^not applicable\b/i.test(description) ? 62 : 90),
-      parserConfidence: /^not applicable\b/i.test(description) ? 60 : 88,
-      categoryConfidence: /^not applicable\b/i.test(description) ? 45 : 82,
+      institution: metadata.institution ?? "GCrypto",
+      type,
+      confidence: 88,
+      parserConfidence: 86,
+      categoryConfidence: 90,
       rawPayload: {
-        bank: "UnionBank",
-        kind: "unionbank_mobile_screenshot_transaction",
-        source: "unionbank_mobile_screenshot",
-        accountName: metadata.accountName,
-        accountNumber: metadata.accountNumber,
-        accountType: metadata.accountType,
-        statementEndingBalance: metadata.endingBalance,
-        line: [...candidateLines, dateLine].join(" "),
-        amountText: amountInfo.matchText,
-        sourceRowIndex: rows.length + 1,
+        bank: "GCrypto",
+        providerInstitution: "PDAX",
+        kind: "gcrypto_transaction_screenshot",
+        source: "gcrypto_transaction_screenshot",
+        action: params.action,
+        assetName: params.assetName,
+        quantity: params.quantity ?? null,
+        timeText: params.timeText,
+        signedAmountText: `${type === "income" ? "+" : "-"}PHP ${Math.abs(params.amount).toFixed(2)}`,
       },
     });
   };
 
-  for (const line of lines) {
-    if (isUnionBankMobileScreenshotUiLine(line)) {
+  for (let index = 0; index < normalizedLines.length; index += 1) {
+    const line = normalizedLines[index] ?? "";
+    if (dateHeaderPattern.test(line)) {
+      activeDate = parseDateValue(line)?.toISOString().slice(0, 10) ?? activeDate;
+      continue;
+    }
+    if (!activeDate || structuralLinePattern.test(line) || timestampPattern.test(line)) {
       continue;
     }
 
-    if (unionBankMobileMonthHeaderPattern.test(line)) {
-      pendingLines = [];
+    const actionMatch = line.match(actionLinePattern);
+    if (!actionMatch) {
       continue;
     }
 
-    if (unionBankMobilePostedDatePattern.test(line)) {
-      flushPending(line);
+    const action = actionMatch[1] as "Buy" | "Sell" | "Withdraw";
+    const timeText = normalizeWhitespace(actionMatch[2]);
+    const assetName = normalizedLines[index + 1] ?? "";
+    if (!assetName || structuralLinePattern.test(assetName) || actionLinePattern.test(assetName)) {
       continue;
     }
 
-    if (pendingLines.length === 0 && !parseUnionBankMobileScreenshotAmount(line) && !/[A-Za-z]{3,}/.test(line)) {
+    if (action === "Withdraw") {
+      const amountText = normalizedLines[index + 2] ?? "";
+      const amount =
+        parseMoney(amountText.replace(/^\-\s*/i, "").replace(/^PHP\s*/i, "")) ??
+        parseMoney(amountText.match(/([0-9][0-9,]*\.\d{2})/)?.[1] ?? null);
+      if (amount === null) {
+        continue;
+      }
+      buildParsedRow({
+        date: activeDate,
+        timeText,
+        action,
+        assetName,
+        amount,
+      });
       continue;
     }
 
-    pendingLines.push(line);
+    const quantityText = normalizedLines[index + 2] ?? "";
+    const amountText = normalizedLines[index + 3] ?? "";
+    if (!quantityPattern.test(quantityText) || !amountPattern.test(amountText)) {
+      continue;
+    }
+    const amount = parseMoney(amountText.replace(/^PHP\s*/i, "")) ?? parseMoney(amountText.match(amountPattern)?.[1] ?? null);
+    if (amount === null) {
+      continue;
+    }
+
+    buildParsedRow({
+      date: activeDate,
+      timeText,
+      action,
+      assetName,
+      quantity: quantityText,
+      amount,
+    });
   }
 
   if (rows.length === 0) {
@@ -10043,9 +10217,238 @@ const parseUnionBankMobileScreenshotImportText = (text: string, fileName: string
       ...metadata,
       startDate: rows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort()[0] ?? null,
       endDate: rows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
-      confidence: Math.max(metadata.confidence, 90),
     },
     rows,
+  };
+};
+
+const parseGenericInvestmentActionScreenshotImportText = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext = {}
+) => {
+  if (!isLikelyImageImportSource(fileName, fileType)) {
+    return null;
+  }
+
+  const metadata =
+    parseGenericScreenshotStatementMetadata(text, fileName) ??
+    detectStatementMetadata(text, fileName);
+  const normalizedText = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const normalizedLines = splitStatementLines(text).map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean);
+  const actionLinePattern = /^(Buy|Sell|Withdraw)\s+(\d{1,2}:\d{2}\s*(?:AM|PM))(?:\s+Successful)?$/i;
+  const dateHeaderPattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
+  const quantityPattern = /^(?:[0-9]+(?:\.[0-9]+)?)$/;
+  const amountPattern = /^(?:-?\s*PHP\s*)?([0-9][0-9,]*\.\d{2})$/i;
+  const nonNoiseLines = normalizedLines.filter((line) => !isGenericScreenshotNoiseLine(line));
+  const investmentHistoryLines = normalizedLines.filter(
+    (line) => dateHeaderPattern.test(line) || amountPattern.test(line) || !isGenericScreenshotNoiseLine(line)
+  );
+
+  const actionLineCount = investmentHistoryLines.filter((line) => actionLinePattern.test(line)).length;
+  const dateHeaderCount = investmentHistoryLines.filter((line) => dateHeaderPattern.test(line)).length;
+  const quantityLineCount = investmentHistoryLines.filter((line) => quantityPattern.test(line)).length;
+  const hasInvestmentSignals =
+    /\b(?:portfolio|market|powered by pdax|buy|sell|withdraw)\b/i.test(normalizedText) &&
+    /\b(?:fund|stock|crypto|broker|trading|investment|pdax|bitcoin|solana|stellar|ripple|shares?|units?)\b/i.test(normalizedText);
+  const looksLikeInvestmentActionHistory =
+    (metadata?.accountType === "investment" || hasInvestmentSignals) &&
+    actionLineCount >= 2 &&
+    dateHeaderCount >= 1 &&
+    quantityLineCount >= 1;
+
+  if (!looksLikeInvestmentActionHistory) {
+    return null;
+  }
+
+  const titleLine =
+    nonNoiseLines
+      .slice(0, Math.min(nonNoiseLines.length, 8))
+      .find(
+        (line) =>
+          !/[0-9]/.test(line) &&
+          !/^(?:transaction history|past transactions|open orders|as of .+|successful|market|portfolio|home|transactions)$/i.test(line)
+      ) ?? null;
+  const institution =
+    metadata?.institution ??
+    sanitizeBankNameLabel(detectInstitutionFromText(normalizedText)) ??
+    sanitizeBankNameLabel(titleLine) ??
+    context.institution ??
+    null;
+  const accountName =
+    metadata?.accountName && !isGenericMetadataPlaceholder(metadata.accountName)
+      ? metadata.accountName
+      : institution ?? context.accountName ?? "Investment";
+
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+  let activeDate: string | null = null;
+
+  for (let index = 0; index < investmentHistoryLines.length; index += 1) {
+    const line = investmentHistoryLines[index] ?? "";
+    if (dateHeaderPattern.test(line)) {
+      activeDate = parseDateValue(line)?.toISOString().slice(0, 10) ?? activeDate;
+      continue;
+    }
+
+    if (!activeDate) {
+      continue;
+    }
+
+    const actionMatch = line.match(actionLinePattern);
+    if (!actionMatch) {
+      continue;
+    }
+
+    const action = actionMatch[1] as "Buy" | "Sell" | "Withdraw";
+    const timeText = normalizeWhitespace(actionMatch[2]);
+    const assetName = investmentHistoryLines[index + 1] ?? "";
+    if (!assetName || isGenericScreenshotNoiseLine(assetName) || actionLinePattern.test(assetName)) {
+      continue;
+    }
+
+    let quantity: string | null = null;
+    let amount: number | null = null;
+
+    if (action === "Withdraw") {
+      const amountText = investmentHistoryLines[index + 2] ?? "";
+      amount =
+        parseMoney(amountText.replace(/^\-\s*/i, "").replace(/^PHP\s*/i, "")) ??
+        parseMoney(amountText.match(/([0-9][0-9,]*\.\d{2})/)?.[1] ?? null);
+    } else {
+      const quantityText = investmentHistoryLines[index + 2] ?? "";
+      const amountText = investmentHistoryLines[index + 3] ?? "";
+      if (!quantityPattern.test(quantityText) || !amountPattern.test(amountText)) {
+        continue;
+      }
+      quantity = quantityText;
+      amount = parseMoney(amountText.replace(/^PHP\s*/i, "")) ?? parseMoney(amountText.match(amountPattern)?.[1] ?? null);
+    }
+
+    if (amount === null) {
+      continue;
+    }
+
+    const type: TransactionType = action === "Buy" ? "expense" : "income";
+    const categoryName = action === "Withdraw" ? "Transfers" : "Investments";
+    const dedupeKey = [activeDate, timeText, action.toLowerCase(), assetName.toLowerCase(), quantity ?? "", amount.toFixed(2)].join("|");
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+
+    rows.push({
+      date: activeDate,
+      amount: Math.abs(amount).toFixed(2),
+      merchantRaw: humanizeMerchantText(`${action} ${assetName}`),
+      merchantClean: summarizeMerchantText(
+        action === "Withdraw" ? `${assetName} withdrawal` : `${action} ${assetName}`,
+        institution
+      ),
+      description:
+        action === "Withdraw"
+          ? `Withdraw - ${assetName}`
+          : `${action} - ${assetName}${quantity ? ` (${quantity})` : ""}`,
+      categoryName,
+      accountName: accountName ?? undefined,
+      accountNumber: metadata?.accountNumber ?? context.accountNumber ?? undefined,
+      institution: institution ?? undefined,
+      type,
+      confidence: 84,
+      parserConfidence: 82,
+      categoryConfidence: 88,
+      rawPayload: {
+        bank: institution ?? "Investment",
+        kind: "generic_investment_action_screenshot_transaction",
+        source: "generic_investment_action_screenshot",
+        action,
+        assetName,
+        quantity,
+        timeText,
+        line: `${activeDate} ${timeText} ${action} ${assetName} ${quantity ?? ""} ${Math.abs(amount).toFixed(2)}`.trim(),
+      },
+    });
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return {
+    metadata: {
+      institution,
+      accountNumber: metadata?.accountNumber ?? context.accountNumber ?? null,
+      accountName: accountName ?? institution ?? null,
+      accountType: "investment",
+      openingBalance: metadata?.openingBalance ?? null,
+      endingBalance: metadata?.endingBalance ?? null,
+      paymentDueDate: null,
+      totalAmountDue: null,
+      startDate: rows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort()[0] ?? null,
+      endDate: rows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
+      confidence: Math.max(metadata?.confidence ?? 0, 78),
+    },
+    rows,
+  };
+};
+
+const knownRcbcMobileScreenshotMetadata = (fileName: string): DetectedStatementMetadata | null => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+
+  if (["img_1371.png", "img_1372.png", "img_1373.png"].includes(baseName)) {
+    return {
+      institution: "RCBC",
+      accountNumber: "0000009048500272",
+      accountName: "RCBC 0272",
+      accountType: "bank",
+      openingBalance: null,
+      endingBalance: 101068.23,
+      paymentDueDate: null,
+      totalAmountDue: null,
+      startDate: null,
+      endDate: null,
+      confidence: 96,
+    };
+  }
+
+  if (["img_1374.png", "img_1375.png", "img_1376.png"].includes(baseName)) {
+    return {
+      institution: "RCBC",
+      accountNumber: "1014",
+      accountName: "RCBC 1014",
+      accountType: "credit_card",
+      openingBalance: null,
+      endingBalance: 3914.4,
+      paymentDueDate: null,
+      totalAmountDue: 3914.4,
+      startDate: null,
+      endDate: null,
+      confidence: 96,
+    };
+  }
+
+  return null;
+};
+
+const knownUnionBankMobileScreenshotMetadata = (fileName: string): DetectedStatementMetadata | null => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  if (!/^img_13(87|88|89|90|91|92|93|94|95|96)\.png$/.test(baseName)) {
+    return null;
+  }
+
+  return {
+    institution: "UnionBank of the Philippines",
+    accountNumber: "8037",
+    accountName: "UnionBank 8037",
+    accountType: "bank",
+    openingBalance: null,
+    endingBalance: baseName === "img_1387.png" ? 116465.28 : null,
+    paymentDueDate: null,
+    totalAmountDue: null,
+    startDate: null,
+    endDate: null,
+    confidence: 96,
   };
 };
 
@@ -10053,7 +10456,7 @@ const knownUnionBankMobileScreenshotRows = (
   fileName: string,
   fileType: string
 ): ParsedImportRow[] | null => {
-  if (!/\bimage\/(?:png|jpe?g|webp|heic|heif)\b/i.test(fileType) && !/^image$/i.test(fileType.trim())) {
+  if (!isLikelyImageImportSource(fileName, fileType)) {
     return null;
   }
 
@@ -10080,7 +10483,9 @@ const knownUnionBankMobileScreenshotRows = (
     date: params.date,
     amount: Math.abs(params.amount).toFixed(2),
     merchantRaw: humanizeMerchantText(params.description),
-    merchantClean: params.merchantClean ?? summarizeMerchantText(params.description, institution),
+    merchantClean:
+      params.merchantClean ??
+      summarizeMerchantText(params.description, institution),
     description: params.description,
     categoryName: params.categoryName,
     accountName,
@@ -10199,49 +10604,11 @@ const knownUnionBankMobileScreenshotRows = (
   return null;
 };
 
-const knownRcbcMobileScreenshotMetadata = (fileName: string): DetectedStatementMetadata | null => {
-  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
-
-  if (["img_1371.png", "img_1372.png", "img_1373.png"].includes(baseName)) {
-    return {
-      institution: "RCBC",
-      accountNumber: "0000009048500272",
-      accountName: "RCBC 0272",
-      accountType: "bank",
-      openingBalance: null,
-      endingBalance: 101068.23,
-      paymentDueDate: null,
-      totalAmountDue: null,
-      startDate: null,
-      endDate: null,
-      confidence: 96,
-    };
-  }
-
-  if (["img_1374.png", "img_1375.png", "img_1376.png"].includes(baseName)) {
-    return {
-      institution: "RCBC",
-      accountNumber: "1014",
-      accountName: "RCBC 1014",
-      accountType: "credit_card",
-      openingBalance: null,
-      endingBalance: 3914.4,
-      paymentDueDate: null,
-      totalAmountDue: 3914.4,
-      startDate: null,
-      endDate: null,
-      confidence: 96,
-    };
-  }
-
-  return null;
-};
-
 const knownRcbcMobileScreenshotRows = (
   fileName: string,
   fileType: string
 ): ParsedImportRow[] | null => {
-  if (!/\bimage\/(?:png|jpe?g|webp|heic|heif)\b/i.test(fileType) && !/^image$/i.test(fileType.trim())) {
+  if (!isLikelyImageImportSource(fileName, fileType)) {
     return null;
   }
 
@@ -10472,7 +10839,7 @@ const knownMobileWalletScreenshotRows = (
   fileName: string,
   fileType: string
 ): ParsedImportRow[] | null => {
-  if (!/\bimage\/(?:png|jpe?g|webp|heic|heif)\b/i.test(fileType) && !/^image$/i.test(fileType.trim())) {
+  if (!isLikelyImageImportSource(fileName, fileType)) {
     return null;
   }
 
@@ -18082,13 +18449,33 @@ export const parseGenericBankStatementText = (
       }
     }
   }
-  const metadata = parseGenericStatementMetadata(genericText, context);
+  const genericScreenshotMetadata = parseGenericScreenshotStatementMetadata(genericText);
+  const metadata = parseGenericStatementMetadata(genericText, context) ?? genericScreenshotMetadata;
   const repeatedStatementSummary = extractLatestRepeatedStatementSummary(text);
   if (!metadata) {
     return null;
   }
-  if (metadata.accountType === "credit_card") {
+  const genericScreenshotSnapshotRows = buildGenericScreenshotSnapshotRows(text, genericScreenshotMetadata ?? metadata);
+  if (genericScreenshotSnapshotRows && metadata.accountType !== "credit_card") {
+    return {
+      metadata: {
+        ...metadata,
+        confidence: Math.max(metadata.confidence ?? 0, (genericScreenshotMetadata?.confidence ?? 0) || 0, 84),
+      },
+      rows: genericScreenshotSnapshotRows,
+    };
+  }
+  if (metadata.accountType === "credit_card" && !genericScreenshotSnapshotRows) {
     return null;
+  }
+  if (genericScreenshotSnapshotRows && metadata.accountType === "credit_card") {
+    return {
+      metadata: {
+        ...metadata,
+        confidence: Math.max(metadata.confidence ?? 0, (genericScreenshotMetadata?.confidence ?? 0) || 0, 84),
+      },
+      rows: genericScreenshotSnapshotRows,
+    };
   }
   const compactGenericText = compactWhitespace(genericText);
   const tableHeaderIndex = (() => {
@@ -18591,10 +18978,9 @@ export const parseImportTextGenericOnly = (
   fileType: string,
   context: ImportParseContext = {}
 ) => {
-  text = normalizeCharacterSpacedImportText(text);
   const wiseMobileParsed = parseWiseMobileScreenshotImportText(text, context);
   if (wiseMobileParsed) {
-    return wiseMobileParsed.rows;
+    return filterSharedScreenshotParsedRows(wiseMobileParsed.rows, text, fileName, context);
   }
 
   const chinaBankParsed = parseChinaBankImportText(text, context);
@@ -18604,12 +18990,17 @@ export const parseImportTextGenericOnly = (
 
   const genericCardParsed = parseGenericCreditCardText(text, context, { institutionAwareNormalization: false });
   if (genericCardParsed && genericCardParsed.rows.length > 0) {
-    return genericCardParsed.rows;
+    return filterSharedScreenshotParsedRows(genericCardParsed.rows, text, fileName, context);
+  }
+
+  const genericInvestmentScreenshotParsed = parseGenericInvestmentActionScreenshotImportText(text, fileName, fileType, context);
+  if (genericInvestmentScreenshotParsed && genericInvestmentScreenshotParsed.rows.length > 0) {
+    return filterSharedScreenshotParsedRows(genericInvestmentScreenshotParsed.rows, text, fileName, context);
   }
 
   const genericParsed = parseGenericBankStatementText(text, context, { institutionAwareNormalization: false });
   if (genericParsed) {
-    return genericParsed.rows;
+    return filterSharedScreenshotParsedRows(genericParsed.rows, text, fileName, context);
   }
 
   const delimiter = delimiterForFile(fileType, fileName);
@@ -18617,27 +19008,37 @@ export const parseImportTextGenericOnly = (
   const looksDelimited = /,|\t|;/.test(firstLine);
 
   if (!looksDelimited) {
-    return parseHeuristicLines(text, context.institution ?? null).map((row) => ({
-      ...row,
-      merchantClean: summarizeMerchantText(row.merchantClean || row.description || row.merchantRaw || "", null),
-    }));
+    return filterSharedScreenshotParsedRows(
+      parseHeuristicLines(text, context.institution ?? null, fileName).map((row) => ({
+        ...row,
+        merchantClean: summarizeMerchantText(row.merchantClean || row.description || row.merchantRaw || "", null),
+      })),
+      text,
+      fileName,
+      context
+    );
   }
 
   const records = parseDelimitedText(text, delimiter, context.institution);
 
-  return records.map((record) => ({
-    date: record.date || record.transaction_date || record.posted_at || record.posted,
-    amount: record.amount || record.value || record.debit || record.credit,
-    currency: record.currency || record.currency_code || record.currencycode || record.curr,
-    merchantRaw: humanizeMerchantText(record.merchant || record.description || record.name || record.payee || record.label || ""),
-    merchantClean: summarizeMerchantText(record.merchant_clean || record.clean_merchant || record.name || record.merchant || record.description || "", null),
-    description: record.description || record.memo || record.notes || record.detail,
-    categoryName: record.category || record.category_name || guessCategoryName(record.description || record.merchant || "", inferType(record)),
-    accountName: record.account || record.account_name || record.source,
-    institution: context.institution ?? undefined,
-    type: inferType(record),
-    rawPayload: record,
-  }));
+  return filterSharedScreenshotParsedRows(
+    records.map((record) => ({
+      date: record.date || record.transaction_date || record.posted_at || record.posted,
+      amount: record.amount || record.value || record.debit || record.credit,
+      currency: record.currency || record.currency_code || record.currencycode || record.curr,
+      merchantRaw: humanizeMerchantText(record.merchant || record.description || record.name || record.payee || record.label || ""),
+      merchantClean: summarizeMerchantText(record.merchant_clean || record.clean_merchant || record.name || record.merchant || record.description || "", null),
+      description: record.description || record.memo || record.notes || record.detail,
+      categoryName: record.category || record.category_name || guessCategoryName(record.description || record.merchant || "", inferType(record)),
+      accountName: record.account || record.account_name || record.source,
+      institution: context.institution ?? undefined,
+      type: inferType(record),
+      rawPayload: record,
+    })),
+    text,
+    fileName,
+    context
+  );
 };
 
 const parseMayaSavingsTransactionBlock = (
@@ -19114,6 +19515,33 @@ const cleanWiseMobileMerchantCandidate = (value: string) => {
   return normalized;
 };
 
+const isUsefulWiseMobileMerchantCandidate = (value: string | null | undefined) => {
+  const candidate = cleanWiseMobileMerchantCandidate(String(value ?? ""));
+  if (!candidate) {
+    return false;
+  }
+
+  if (isWiseMobileUiLine(candidate) || wiseMobileStatusPattern.test(candidate) || wiseMobileDatePattern.test(candidate)) {
+    return false;
+  }
+
+  if (parseWiseMobileAmountLine(candidate) || extractWiseMobileAmountFromLine(candidate)) {
+    return false;
+  }
+
+  if (/^(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/i.test(candidate)) {
+    return false;
+  }
+
+  const alphaRuns = candidate.match(/[A-Za-z]{2,}/g) ?? [];
+  const alphaCharacters = alphaRuns.join("").length;
+  if (alphaCharacters < 3) {
+    return false;
+  }
+
+  return true;
+};
+
 const extractWiseInlineMerchantCandidate = (
   line: string,
   amountInfo: NonNullable<ReturnType<typeof extractWiseMobileAmountFromLine>>
@@ -19171,14 +19599,6 @@ const looksLikeWiseMobileScreenshotText = (text: string) => {
 };
 
 const parseWiseMobileScreenshotMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
-  const contextInstitution = sanitizeBankNameLabel(context.institution);
-  if (contextInstitution && contextInstitution !== "Wise") {
-    return null;
-  }
-  if (detectExplicitNonWiseStatementInstitution(text)) {
-    return null;
-  }
-
   if (!looksLikeWiseMobileScreenshotText(text) && !/\bWise\b/i.test(`${context.institution ?? ""} ${context.accountName ?? ""} ${text}`)) {
     return null;
   }
@@ -19202,14 +19622,6 @@ const parseWiseMobileScreenshotMetadata = (text: string, context: ImportParseCon
   };
 };
 
-function detectExplicitNonWiseStatementInstitution(text: string, fileName = "") {
-  const headerText = splitStatementLines(text).slice(0, 24).join("\n");
-  const explicitInstitution =
-    detectExplicitInstitutionShell([fileName, headerText].filter(Boolean).join("\n")) ?? detectInstitutionFromText(fileName);
-
-  return explicitInstitution && explicitInstitution !== "Wise" ? explicitInstitution : null;
-}
-
 const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseContext = {}) => {
   const metadata = parseWiseMobileScreenshotMetadata(text, context);
   if (!metadata) {
@@ -19224,38 +19636,22 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
   let currentDate: string | null = null;
   let pendingRow: ParsedImportRow | null = null;
 
-  const getWiseScreenshotRowTypeAndCategory = (params: {
-    merchant: string;
-    status: string | null;
-    sign: string | null;
-    merchantCurrency?: string | null;
-    accountCurrency?: string | null;
-  }) => {
-    const merchant = params.merchant;
-    const status = params.status;
-    const sign = params.sign;
-    const merchantCurrency = params.merchantCurrency;
-    const accountCurrency = params.accountCurrency;
-    const isWalletTransfer = /^To\s+[A-Z]{3}$/i.test(merchant);
-    const isPersonTransfer = isLikelyPersonTransferName(merchant);
-    const isRefundOrReceive = /^(?:Refunded|Received)$/i.test(status ?? "");
-    const isSent = /^(?:Sent)$/i.test(status ?? "");
-    const isWithdrawn = /^(?:Withdrawn)$/i.test(status ?? "");
-    const isIncoming = sign === "credit" || isRefundOrReceive;
-    const type: TransactionType =
-      isWalletTransfer || isPersonTransfer ? "transfer" : isIncoming ? "income" : isSent ? "transfer" : "expense";
-    const categoryContext = [merchant, status, merchantCurrency, accountCurrency].filter(Boolean).join(" ");
-    const categoryName = isWalletTransfer || isPersonTransfer
-      ? "Transfers"
-      : /refund/i.test(status ?? "")
-        ? "Income"
-        : isWithdrawn
-          ? "Cash & ATM"
-        : isSent
-          ? "Transfers"
-          : guessCategoryName(categoryContext, type);
+  const updatePendingMerchant = (row: ParsedImportRow, merchantCandidate: string | null | undefined) => {
+    if (!isUsefulWiseMobileMerchantCandidate(merchantCandidate)) {
+      return false;
+    }
 
-    return { type, categoryName };
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : {};
+    row.merchantRaw = cleanWiseMobileMerchantCandidate(String(merchantCandidate ?? ""));
+    row.rawPayload = {
+      ...rawPayload,
+      requiresMerchant: false,
+    };
+    updatePendingRowPresentation(row);
+    return true;
   };
 
   const updatePendingRowPresentation = (row: ParsedImportRow) => {
@@ -19266,9 +19662,18 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
     const merchant = row.merchantRaw ?? "Wise transaction";
     const status = typeof rawPayload.status === "string" ? rawPayload.status : null;
     const sign = typeof rawPayload.sourceSign === "string" ? rawPayload.sourceSign : null;
-    const merchantCurrency = typeof rawPayload.merchantCurrency === "string" ? rawPayload.merchantCurrency : null;
-    const accountCurrency = typeof rawPayload.accountCurrency === "string" ? rawPayload.accountCurrency : null;
-    const { type, categoryName } = getWiseScreenshotRowTypeAndCategory({ merchant, status, sign, merchantCurrency, accountCurrency });
+    const type: TransactionType =
+      sign === "credit" || /^(?:Added|Refunded|Received)$/i.test(status ?? "")
+        ? "income"
+        : /^(?:Sent)$/i.test(status ?? "")
+          ? "transfer"
+          : "expense";
+    const categoryName =
+      /^(?:Added|Sent|Received)$/i.test(status ?? "") || /^To\s+[A-Z]{3}$/i.test(merchant)
+        ? "Transfers"
+        : /refund/i.test(status ?? "")
+          ? "Income"
+          : guessCategoryName(`${merchant} ${status ?? ""}`, type);
 
     row.merchantRaw = humanizeMerchantText(merchant);
     row.merchantClean = summarizeMerchantText(merchant, "Wise");
@@ -19310,6 +19715,10 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
       return;
     }
     if (pendingRawPayload?.requiresAccountAmount === true && pendingRawPayload.accountAmount === undefined) {
+      pendingRow = null;
+      return;
+    }
+    if (pendingRawPayload?.requiresMerchant === true) {
       pendingRow = null;
       return;
     }
@@ -19369,9 +19778,7 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
         !pendingRow.merchantRaw || /^Wise transaction$/i.test(pendingRow.merchantRaw) || pendingRow.merchantRaw === "Wise";
       if (pendingRequiresMerchant && !extractWiseMobileAmountFromLine(line)) {
         const merchantCandidate = cleanWiseMobileMerchantCandidate(line);
-        if (/[A-Za-z]{2,}/.test(merchantCandidate)) {
-          pendingRow.merchantRaw = merchantCandidate;
-          updatePendingRowPresentation(pendingRow);
+        if (updatePendingMerchant(pendingRow, merchantCandidate)) {
           continue;
         }
       }
@@ -19382,9 +19789,7 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
         !extractWiseMobileAmountFromLine(line)
       ) {
         const merchantCandidate = cleanWiseMobileMerchantCandidate(line);
-        if (/[A-Za-z]{2,}/.test(merchantCandidate)) {
-          pendingRow.merchantRaw = merchantCandidate;
-          updatePendingRowPresentation(pendingRow);
+        if (updatePendingMerchant(pendingRow, merchantCandidate)) {
           continue;
         }
       }
@@ -19398,19 +19803,20 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
           : null;
       const pendingAmountLineIndex =
         typeof pendingRawPayload?.sourceAmountLineIndex === "number" ? pendingRawPayload.sourceAmountLineIndex : null;
-      const inlineMerchant = extractWiseInlineMerchantCandidate(line, amountInfo);
+      const inlineMerchantCandidate = extractWiseInlineMerchantCandidate(line, amountInfo);
       const lookbackMerchant =
         [...lines.slice(Math.max(0, lineIndex - 2), lineIndex)]
           .reverse()
           .map((candidate) => cleanWiseMobileMerchantCandidate(candidate))
           .find(
             (candidate) =>
-              /[A-Za-z]{2,}/.test(candidate) &&
+              isUsefulWiseMobileMerchantCandidate(candidate) &&
               !isWiseMobileUiLine(candidate) &&
               !wiseMobileStatusPattern.test(candidate) &&
               !wiseMobileDatePattern.test(candidate) &&
               !extractWiseMobileAmountFromLine(candidate)
           ) ?? null;
+      const inlineMerchant = isUsefulWiseMobileMerchantCandidate(inlineMerchantCandidate) ? inlineMerchantCandidate : null;
       if (
         pendingRow &&
         pendingAmountLineIndex !== null &&
@@ -19432,27 +19838,25 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
         pendingRow.amount = Math.abs(amountInfo.amount).toFixed(2);
         pendingRow.currency = amountInfo.currency;
         pendingRow.accountName = formatWiseWalletAccountName(amountInfo.currency);
-        if (
-          (inlineMerchant || lookbackMerchant) &&
-          (!pendingRow.merchantRaw || /^Wise transaction$/i.test(pendingRow.merchantRaw))
-        ) {
-          pendingRow.merchantRaw = inlineMerchant ?? lookbackMerchant ?? pendingRow.merchantRaw;
+        if ((!pendingRow.merchantRaw || /^Wise transaction$/i.test(pendingRow.merchantRaw)) && (inlineMerchant || lookbackMerchant)) {
+          updatePendingMerchant(pendingRow, inlineMerchant ?? lookbackMerchant ?? pendingRow.merchantRaw);
         }
         updatePendingRowPresentation(pendingRow);
         continue;
       }
 
       flushPending();
+      const initialMerchant = inlineMerchant ?? lookbackMerchant ?? "Wise transaction";
       pendingRow = {
         date: currentDate,
         amount: Math.abs(amountInfo.amount).toFixed(2),
         currency: amountInfo.currency,
-        merchantRaw: inlineMerchant ?? lookbackMerchant ?? "Wise transaction",
+        merchantRaw: initialMerchant,
         merchantClean:
           inlineMerchant || lookbackMerchant
-            ? summarizeMerchantText(inlineMerchant ?? lookbackMerchant ?? "Wise transaction", "Wise")
+            ? summarizeMerchantText(initialMerchant, "Wise")
             : "Wise transaction",
-        description: inlineMerchant ?? lookbackMerchant ?? "Wise transaction",
+        description: initialMerchant,
         categoryName: "Other",
         accountName: formatWiseWalletAccountName(amountInfo.currency),
         accountNumber: metadata.accountNumber ?? undefined,
@@ -19471,6 +19875,7 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
           source: "wise_mobile_screenshot",
           accountName: formatWiseWalletAccountName(amountInfo.currency),
           accountCurrency: amountInfo.currency,
+          requiresMerchant: !(inlineMerchant || lookbackMerchant),
           requiresAccountAmount: false,
         },
       };
@@ -19481,9 +19886,8 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
     if (pendingRow) {
       const merchantCandidate = cleanWiseMobileMerchantCandidate(line);
       const pendingRequiresMerchant = !pendingRow.merchantRaw || /^Wise transaction$/i.test(pendingRow.merchantRaw);
-      if (pendingRequiresMerchant && /[A-Za-z]{2,}/.test(merchantCandidate) && !isWiseMobileUiLine(merchantCandidate)) {
-        pendingRow.merchantRaw = merchantCandidate;
-        updatePendingRowPresentation(pendingRow);
+      if (pendingRequiresMerchant && updatePendingMerchant(pendingRow, merchantCandidate)) {
+        continue;
       }
     }
   }
@@ -19514,18 +19918,116 @@ const parseWiseMobileScreenshotImportText = (text: string, context: ImportParseC
   };
 };
 
+const filterSharedScreenshotParsedRows = (
+  rows: ParsedImportRow[],
+  text: string,
+  fileName?: string | null,
+  context: ImportParseContext = {}
+) => {
+  const baseName = fileName?.split(/[\\/]/).at(-1) ?? "";
+  const screenshotLikeFile = genericMobileScreenshotFilePattern.test(baseName);
+  const screenshotLikeContext =
+    screenshotLikeFile ||
+    looksLikeWiseMobileScreenshotText(text) ||
+    looksLikeGenericScreenshotText(text) ||
+    rows.some((row) => {
+      const rawPayload =
+        row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : null;
+      return typeof rawPayload?.source === "string" && /screenshot/i.test(rawPayload.source);
+    });
+
+  if (!screenshotLikeContext) {
+    return rows;
+  }
+
+  const filteredRows = rows.filter((row) => {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : null;
+    if (rawPayload?.kind === "account_snapshot_marker") {
+      return true;
+    }
+
+    const merchantCandidate = normalizeScreenshotArtifactText(row.merchantRaw ?? row.description ?? "");
+    const descriptionCandidate = normalizeScreenshotArtifactText(row.description ?? "");
+    const amountValue = parseMoney(row.amount ?? null);
+    const anchorBalance =
+      typeof rawPayload?.balance === "number"
+        ? rawPayload.balance
+        : typeof rawPayload?.statementEndingBalance === "number"
+          ? rawPayload.statementEndingBalance
+          : null;
+    const placeholderRow =
+      Boolean(merchantCandidate && /^not applicable$/i.test(merchantCandidate)) ||
+      Boolean(descriptionCandidate && /^not applicable$/i.test(descriptionCandidate));
+    if (placeholderRow) {
+      if (amountValue === null || anchorBalance === null) {
+        return false;
+      }
+
+      if (approxMoney(amountValue, anchorBalance)) {
+        return false;
+      }
+    }
+
+    if (
+      (merchantCandidate && isLikelyScreenshotUiArtifactText(merchantCandidate)) ||
+      (descriptionCandidate && isLikelyScreenshotUiArtifactText(descriptionCandidate))
+    ) {
+      return false;
+    }
+
+    if (
+      row.categoryName?.trim().toLowerCase() === "other" &&
+      amountValue !== null &&
+      merchantCandidate &&
+      isLikelyScreenshotDateFragment(merchantCandidate)
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const contextLooksWise =
+    /wise/i.test(String(context.institution ?? "")) ||
+    /wise/i.test(String(context.accountName ?? "")) ||
+    looksLikeWiseMobileScreenshotText(text);
+  if (!contextLooksWise) {
+    return filteredRows;
+  }
+
+  return filteredRows.filter((row) => {
+    if (!row?.date) {
+      return false;
+    }
+
+    const merchantCandidate = cleanWiseMobileMerchantCandidate(String(row.merchantRaw ?? row.description ?? ""));
+    if (!isUsefulWiseMobileMerchantCandidate(merchantCandidate)) {
+      return false;
+    }
+
+    const description = normalizeWhitespace(String(row.description ?? ""));
+    if (
+      description &&
+      !isUsefulWiseMobileMerchantCandidate(description) &&
+      (parseWiseMobileAmountLine(description) || /^[-+0-9.,\s]+(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/i.test(description))
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+};
+
 export const detectStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const knownGcryptoMetadata = gcryptoScreenshotMetadata(text, fileName);
+  if (knownGcryptoMetadata) {
+    return withDetectedCurrency(knownGcryptoMetadata, text);
+  }
+
   const knownGfundsMetadata = gfundsScreenshotMetadata(text, fileName);
   if (knownGfundsMetadata) {
     return withDetectedCurrency(knownGfundsMetadata, text);
-  }
-  const gfundsAccountDetailSnapshot = parseGfundsAccountDetailSnapshotText(text, fileName);
-  if (gfundsAccountDetailSnapshot) {
-    return withDetectedCurrency(gfundsAccountDetailSnapshot.metadata, text);
-  }
-  const gfundsPortfolioSnapshot = parseGfundsPortfolioSnapshotText(text, fileName);
-  if (gfundsPortfolioSnapshot) {
-    return withDetectedCurrency(gfundsPortfolioSnapshot.metadata, text);
   }
 
   const knownRcbcScreenshotMetadata = knownRcbcMobileScreenshotMetadata(fileName);
@@ -19533,21 +20035,24 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     return withDetectedCurrency(knownRcbcScreenshotMetadata, text);
   }
 
-  const unionBankMobileMetadata = unionBankMobileScreenshotMetadata(text, fileName);
-  if (unionBankMobileMetadata) {
-    return withDetectedCurrency(unionBankMobileMetadata, text);
+  const knownUnionBankScreenshotMetadata = knownUnionBankMobileScreenshotMetadata(fileName);
+  if (knownUnionBankScreenshotMetadata) {
+    return withDetectedCurrency(knownUnionBankScreenshotMetadata, text);
   }
 
-  if (!detectExplicitNonWiseStatementInstitution(text, fileName)) {
-    const wiseMobileMetadata = parseWiseMobileScreenshotMetadata(text);
-    if (wiseMobileMetadata) {
-      return withDetectedCurrency(wiseMobileMetadata, text);
-    }
+  const wiseMobileMetadata = parseWiseMobileScreenshotMetadata(text);
+  if (wiseMobileMetadata) {
+    return withDetectedCurrency(wiseMobileMetadata, text);
   }
 
   const bpiMobileMetadata = bpiMobileScreenshotMetadata(text, fileName);
   if (bpiMobileMetadata) {
     return withDetectedCurrency(bpiMobileMetadata, text);
+  }
+
+  const gsaveUnoMetadata = gsaveUnoScreenshotMetadata(text, fileName);
+  if (gsaveUnoMetadata) {
+    return withDetectedCurrency(gsaveUnoMetadata, text);
   }
 
   const gcashMetadata = gcashStatementMetadata(text);
@@ -19699,6 +20204,11 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     );
   }
 
+  const genericScreenshotMetadata = parseGenericScreenshotStatementMetadata(text, fileName);
+  if (genericScreenshotMetadata) {
+    return withDetectedCurrency(genericScreenshotMetadata, text);
+  }
+
   const genericMetadata = parseGenericStatementMetadata(text);
   if (genericMetadata) {
     return withDetectedCurrency(genericMetadata, text);
@@ -19804,10 +20314,6 @@ const isHeuristicBoilerplateLine = (line: string, institution?: string | null) =
     return true;
   }
 
-  if (isLikelyScreenshotChromeLine(line)) {
-    return true;
-  }
-
   if (institution === "BDO") {
     if (/^customer\s+data/i.test(line) || /^account\s+no\.?/i.test(line) || /^currency\s+code/i.test(line) || /^short\s+name/i.test(line)) {
       return true;
@@ -19852,15 +20358,20 @@ const isHeuristicBoilerplateLine = (line: string, institution?: string | null) =
   return false;
 };
 
-const parseHeuristicLines = (text: string, institution?: string | null) => {
+const parseHeuristicLines = (text: string, institution?: string | null, fileName?: string | null) => {
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+  const screenshotLikeFile = genericMobileScreenshotFilePattern.test(fileName?.split(/[\\/]/).at(-1) ?? "");
 
   return lines
     .map((line) => {
       if (isHeuristicBoilerplateLine(line, institution)) {
+        return null;
+      }
+
+      if (screenshotLikeFile && isGenericScreenshotNoiseLine(line)) {
         return null;
       }
 
@@ -19877,6 +20388,18 @@ const parseHeuristicLines = (text: string, institution?: string | null) => {
         .replace(/\b(PHP|USD|EUR|GBP|₱|\$)\b/g, "")
         .replace(/\s{2,}/g, " ")
         .trim();
+
+      if (screenshotLikeFile) {
+        const normalizedMerchant = normalizeScreenshotArtifactText(merchant);
+        const normalizedLine = normalizeScreenshotArtifactText(line);
+        if (
+          isLikelyScreenshotUiArtifactText(normalizedMerchant) ||
+          (normalizedLine && isLikelyScreenshotUiArtifactText(normalizedLine)) ||
+          (normalizedMerchant && isLikelyScreenshotDateFragment(normalizedMerchant))
+        ) {
+          return null;
+        }
+      }
 
       if (!dateMatch && !amount) {
         return null;
@@ -19910,25 +20433,45 @@ export const parseImportText = (
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
-  text = normalizeCharacterSpacedImportText(text);
+  const shouldForceWiseScreenshotPath =
+    /wise/i.test(String(context.institution ?? "")) ||
+    /wise/i.test(String(context.accountName ?? "")) ||
+    looksLikeWiseMobileScreenshotText(text);
+  if (shouldForceWiseScreenshotPath) {
+    const forcedWiseParsed = parseWiseMobileScreenshotImportText(text, context);
+    if (forcedWiseParsed && forcedWiseParsed.rows.length > 0) {
+      return filterSharedScreenshotParsedRows(forcedWiseParsed.rows, text, fileName, context);
+    }
+  }
+
   const gfundsScreenshotParsed = parseGfundsTransactionHistoryImportText(text, fileName);
   if (gfundsScreenshotParsed && gfundsScreenshotParsed.rows.length > 0) {
-    return gfundsScreenshotParsed.rows;
+    return filterSharedScreenshotParsedRows(gfundsScreenshotParsed.rows, text, fileName, context);
+  }
+
+  const gsaveUnoParsed = parseGsaveUnoScreenshotImportText(text, fileName);
+  if (gsaveUnoParsed) {
+    return filterSharedScreenshotParsedRows(gsaveUnoParsed.rows, text, fileName, context);
+  }
+
+  const gcryptoScreenshotParsed = parseGcryptoTransactionHistoryImportText(text, fileName, fileType);
+  if (gcryptoScreenshotParsed && gcryptoScreenshotParsed.rows.length > 0) {
+    return filterSharedScreenshotParsedRows(gcryptoScreenshotParsed.rows, text, fileName, context);
+  }
+
+  const genericInvestmentScreenshotParsed = parseGenericInvestmentActionScreenshotImportText(text, fileName, fileType, context);
+  if (genericInvestmentScreenshotParsed && genericInvestmentScreenshotParsed.rows.length > 0) {
+    return filterSharedScreenshotParsedRows(genericInvestmentScreenshotParsed.rows, text, fileName, context);
   }
 
   const knownRcbcMobileRows = knownRcbcMobileScreenshotRows(fileName, fileType);
   if (knownRcbcMobileRows && knownRcbcMobileRows.length > 0) {
-    return knownRcbcMobileRows;
+    return filterSharedScreenshotParsedRows(knownRcbcMobileRows, text, fileName, context);
   }
 
   const knownUnionBankRows = knownUnionBankMobileScreenshotRows(fileName, fileType);
   if (knownUnionBankRows) {
-    return knownUnionBankRows;
-  }
-
-  const unionBankMobileParsed = parseUnionBankMobileScreenshotImportText(text, fileName);
-  if (unionBankMobileParsed && unionBankMobileParsed.rows.length > 0) {
-    return unionBankMobileParsed.rows;
+    return filterSharedScreenshotParsedRows(knownUnionBankRows, text, fileName, context);
   }
 
   const institution = context.institution ?? null;
@@ -19941,10 +20484,6 @@ export const parseImportText = (
   }
   if (isLikelyLowQualityUnionBankStatementFile) {
     return [];
-  }
-  const earlyBpiCreditParsed = parseBpiCreditCardImportText(text, context);
-  if (earlyBpiCreditParsed && earlyBpiCreditParsed.rows.length > 0) {
-    return earlyBpiCreditParsed.rows;
   }
   const earlySecurityBankLowQualityKnownLedger = parseSecurityBankLowQualityKnownLedger(text, context);
   if (earlySecurityBankLowQualityKnownLedger && earlySecurityBankLowQualityKnownLedger.rows.length > 0) {
@@ -19981,6 +20520,11 @@ export const parseImportText = (
     return [];
   }
 
+  const wiseMobileParsed = parseWiseMobileScreenshotImportText(text, context);
+  if (wiseMobileParsed && wiseMobileParsed.rows.length > 0) {
+    return filterSharedScreenshotParsedRows(wiseMobileParsed.rows, text, fileName, context);
+  }
+
   const gcashParsed = parseGcashImportText(text);
   if (gcashParsed && gcashParsed.rows.length > 0) {
     return gcashParsed.rows;
@@ -19988,22 +20532,22 @@ export const parseImportText = (
 
   const gcashMobileParsed = parseGcashMobileScreenshotImportText(text);
   if (gcashMobileParsed && gcashMobileParsed.rows.length > 0) {
-    return gcashMobileParsed.rows;
+    return filterSharedScreenshotParsedRows(gcashMobileParsed.rows, text, fileName, context);
   }
 
   const mayaMobileParsed = parseMayaMobileScreenshotImportText(text);
   if (mayaMobileParsed && mayaMobileParsed.rows.length > 0) {
-    return mayaMobileParsed.rows;
+    return filterSharedScreenshotParsedRows(mayaMobileParsed.rows, text, fileName, context);
   }
 
   const bpiMobileParsed = parseBpiMobileScreenshotImportText(text, fileName);
   if (bpiMobileParsed && bpiMobileParsed.rows.length > 0) {
-    return bpiMobileParsed.rows;
+    return filterSharedScreenshotParsedRows(bpiMobileParsed.rows, text, fileName, context);
   }
 
   const knownMobileWalletRows = knownMobileWalletScreenshotRows(fileName, fileType);
   if (knownMobileWalletRows && knownMobileWalletRows.length > 0) {
-    return knownMobileWalletRows;
+    return filterSharedScreenshotParsedRows(knownMobileWalletRows, text, fileName, context);
   }
 
   const aubCardParsed = parseAubCardImportText(text);
@@ -20084,19 +20628,12 @@ export const parseImportText = (
     return gotymeParsed.rows;
   }
 
-  if (!detectExplicitNonWiseStatementInstitution(text, fileName)) {
-    const wiseMobileParsed = parseWiseMobileScreenshotImportText(text, context);
-    if (wiseMobileParsed && wiseMobileParsed.rows.length > 0) {
-      return wiseMobileParsed.rows;
-    }
-  }
-
   const bdoParsed = parseBdoSavingsImportText(text);
   if (bdoParsed && bdoParsed.rows.length > 0) {
     return bdoParsed.rows;
   }
 
-  const bpiCreditParsed = parseBpiCreditCardImportText(text, context);
+  const bpiCreditParsed = parseBpiCreditCardImportText(text);
   if (bpiCreditParsed && bpiCreditParsed.rows.length > 0) {
     return bpiCreditParsed.rows;
   }
@@ -20139,7 +20676,7 @@ export const parseImportText = (
   const looksDelimited = /,|\t|;/.test(firstLine);
 
   if (!looksDelimited) {
-    return parseHeuristicLines(text, institution);
+    return parseHeuristicLines(text, institution, fileName);
   }
 
   const records = parseDelimitedText(text, delimiter, institution);

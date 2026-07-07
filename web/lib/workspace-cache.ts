@@ -4,7 +4,6 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import {
   isWiseWalletWithoutVisibleAccountNumber,
   normalizeImportedAccountKey,
-  normalizeImportedCurrencyCode,
   type ImportedAccountIdentityLike,
 } from "@/lib/imported-account-identity";
 export { normalizeImportedAccountKey } from "@/lib/imported-account-identity";
@@ -84,11 +83,6 @@ export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v10";
 export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v10";
 export const deletedAccountsWorkspaceCacheKey = "clover.accounts.deleted-account-ids.v1";
 export const deletingAccountsWorkspaceCacheKey = "clover.accounts.deleting-account-ids.v1";
-export const workspaceCacheUpdatedEventName = "clover:workspace-cache-updated";
-
-export type WorkspaceCacheUpdatedEventDetail = {
-  key: string;
-};
 
 const isCachedRecordArray = (value: unknown): value is CachedRecord[] =>
   Array.isArray(value) && value.every((entry) => entry && typeof entry === "object");
@@ -338,30 +332,32 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
   const rightAccountDigits = String(right.accountNumber ?? "").replace(/\D/g, "");
   const hasExactAccountNumberMatch = Boolean(leftAccountDigits && rightAccountDigits && leftAccountDigits === rightAccountDigits);
   const hasConflictingExplicitAccountNumbers = Boolean(leftAccountDigits && rightAccountDigits && leftAccountDigits !== rightAccountDigits);
-  const canTreatConflictingAccountNumbersAsRelated =
+  const leftStem = normalizeImportedAccountNameStem(left.name ?? left.institution ?? null);
+  const rightStem = normalizeImportedAccountNameStem(right.name ?? right.institution ?? null);
+  const canTreatMaskedImportedAccountNumbersAsRelated =
     hasConflictingExplicitAccountNumbers &&
-    leftInstitution === "unionbank" &&
-    rightInstitution === "unionbank" &&
+    leftInstitution &&
+    rightInstitution &&
+    leftInstitution === rightInstitution &&
     leftType &&
     rightType &&
     leftType === rightType &&
+    leftStem &&
+    rightStem &&
+    leftStem === rightStem &&
     (leftAccountDigits.length <= 4 || rightAccountDigits.length <= 4) &&
     (leftAccountDigits.endsWith(rightAccountDigits) || rightAccountDigits.endsWith(leftAccountDigits));
+  const canTreatConflictingAccountNumbersAsRelated =
+    canTreatMaskedImportedAccountNumbersAsRelated ||
+    (hasConflictingExplicitAccountNumbers &&
+      leftInstitution === "unionbank" &&
+      rightInstitution === "unionbank" &&
+      leftType &&
+      rightType &&
+      leftType === rightType &&
+      (leftAccountDigits.length <= 4 || rightAccountDigits.length <= 4) &&
+      (leftAccountDigits.endsWith(rightAccountDigits) || rightAccountDigits.endsWith(leftAccountDigits)));
   if (hasConflictingExplicitAccountNumbers && !canTreatConflictingAccountNumbersAsRelated) {
-    return 0;
-  }
-
-  const leftWiseWalletCurrency = isWiseWalletWithoutVisibleAccountNumber(left)
-    ? normalizeImportedCurrencyCode(left.currency)
-    : null;
-  const rightWiseWalletCurrency = isWiseWalletWithoutVisibleAccountNumber(right)
-    ? normalizeImportedCurrencyCode(right.currency)
-    : null;
-  if (
-    leftWiseWalletCurrency &&
-    rightWiseWalletCurrency &&
-    leftWiseWalletCurrency !== rightWiseWalletCurrency
-  ) {
     return 0;
   }
 
@@ -445,8 +441,6 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
     return 0;
   }
 
-  const leftStem = normalizeImportedAccountNameStem(left.name ?? left.institution ?? null);
-  const rightStem = normalizeImportedAccountNameStem(right.name ?? right.institution ?? null);
   if (leftStem && rightStem && leftStem === rightStem) {
     if (!leftLastFour || !rightLastFour) {
       return 90;
@@ -539,14 +533,6 @@ const writeJsonCache = (key: string, value: unknown) => {
 
   if (sessionStorageRef) {
     sessionStorageRef.setItem(key, serialized);
-  }
-
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(
-      new CustomEvent<WorkspaceCacheUpdatedEventDetail>(workspaceCacheUpdatedEventName, {
-        detail: { key },
-      })
-    );
   }
 };
 
@@ -703,11 +689,37 @@ const getMobileScreenshotPayloadKind = (entry: CachedRecord | ImportedWorkspaceT
   const payload = rawPayload as Record<string, unknown>;
   const kind = typeof payload.kind === "string" ? payload.kind.trim() : "";
   const source = typeof payload.source === "string" ? payload.source.trim() : "";
-  if (kind === "gcash_mobile_screenshot_transaction" || source === "gcash_mobile_screenshot") {
+  const bank = typeof payload.bank === "string" ? payload.bank.trim() : "";
+  const institution = typeof payload.institutionRaw === "string" ? payload.institutionRaw.trim() : "";
+  const identityText = [kind, source, bank, institution].filter(Boolean).join(" ").toLowerCase();
+  const explicitSourceKindMatch = identityText.match(/\b([a-z0-9]+)_mobile_screenshot\b/);
+  const explicitWalletMatch = identityText.match(/\b([a-z0-9]+)_wallet_screenshot\b/);
+  if (explicitSourceKindMatch?.[1]) {
+    return explicitSourceKindMatch[1];
+  }
+  if (explicitWalletMatch?.[1]) {
+    return explicitWalletMatch[1];
+  }
+  if (/gcash/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
     return "gcash";
   }
-  if (kind === "maya_mobile_screenshot_known_transaction" || source === "maya_mobile_screenshot") {
+  if (/maya/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
     return "maya";
+  }
+  if (/wise/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
+    return "wise";
+  }
+  if (/unionbank/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
+    return "unionbank";
+  }
+  if (/rcbc/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
+    return "rcbc";
+  }
+  if (/security\s*bank/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
+    return "securitybank";
+  }
+  if (/bpi/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
+    return "bpi";
   }
 
   return null;

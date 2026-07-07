@@ -15,7 +15,12 @@ import {
   parseImportTextGenericOnly,
   type ParsedImportRow,
 } from "@/lib/import-parser";
-import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
+import {
+  isLikelyScreenshotDateFragment,
+  isLikelyScreenshotUiArtifactText,
+  normalizeScreenshotArtifactText,
+  screenshotEvidenceContainsUiArtifact,
+} from "@/lib/screenshot-artifact-filter";
 import {
   readImportedFileImageDataUrls,
   readImportedFileTextWithCacheInfo,
@@ -32,6 +37,7 @@ import {
   buildParsedTransactionInsertData,
   buildStatementFamilySignatureFromText,
   buildStatementFingerprint,
+  buildUnsupervisedLearningSnapshot,
   countTransactionsByImportFileCompat,
   detectStatementMetadataFromText,
   type EnrichedParsedImportRow,
@@ -52,9 +58,11 @@ import {
   assessParsedRowTeachability,
   recordTrainingSignal,
   loadStatementTemplate,
-  loadBestStatementTemplateForInstitution,
+  loadScoredStatementTemplatesForInstitution,
   mergeStatementMetadataWithTemplate,
   recordStatementTemplateOutcome,
+  promoteUnsupervisedLearningClustersForWorkspace,
+  recordUnsupervisedLearningAuditForTemplate,
   updateImportFileCompat,
   upsertAccountRule,
   upsertStatementTemplate,
@@ -68,18 +76,10 @@ import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toIntern
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import {
-  decideImportParserRoute,
-  fingerprintImportSurface,
-  shouldAttemptVisualBackupBeforeFailure,
-  shouldPreferBackupParserForTemplateFamily,
-  type ImportSurfaceFingerprintKind,
-} from "@/lib/import-parser-routing";
-import {
-  VISUAL_IMPORT_RETRY_LIMIT,
-  getNextVisualImportAttempt,
-  getVisualImportRetryMessage,
-  type VisualImportRecoveryMode,
-} from "@/lib/import-visual-recovery";
+  isGenericMobileScreenshotFileName,
+  resolveStatementIdentityFromMetadata,
+  resolveStatementIdentityFromParsedRows,
+} from "@/lib/import-statement-identity";
 import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
 import { findBestImportedAccountMatch, matchesImportedAccountIdentity, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
@@ -126,6 +126,81 @@ type ImportInsightSourceRow = {
   rawPayload?: unknown;
 };
 
+const inferStructuredDocumentImportModeFromParsedRows = (
+  requestedMode: ImportImageMode,
+  parsedRows: ParsedImportRow[],
+  metadata: {
+    accountType?: string | null;
+    accountName?: string | null;
+  } | null | undefined
+): ImportImageMode => {
+  if (requestedMode !== "statement") {
+    return requestedMode;
+  }
+
+  if (
+    parsedRows.length === 0 &&
+    metadata?.accountType === "investment" &&
+    /time deposit|account details/i.test(String(metadata.accountName ?? ""))
+  ) {
+    return "account_detail";
+  }
+
+  if (parsedRows.length === 0) {
+    return requestedMode;
+  }
+
+  const markerRows = parsedRows.filter((row) => {
+    const rawPayload = row.rawPayload;
+    return (
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (rawPayload as Record<string, unknown>).kind === "account_snapshot_marker"
+    );
+  });
+  if (markerRows.length === 0) {
+    return requestedMode;
+  }
+
+  const visibleTransactionRows = parsedRows.filter((row) => {
+    const rawPayload = row.rawPayload;
+    return !(
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      ((rawPayload as Record<string, unknown>).kind === "account_snapshot_marker" ||
+        (rawPayload as Record<string, unknown>).kind === "opening_balance")
+    );
+  });
+  if (visibleTransactionRows.length > 0) {
+    return requestedMode;
+  }
+
+  const markerDocumentTypes = new Set(
+    markerRows
+      .map((row) => {
+        const rawPayload = row.rawPayload;
+        if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+          return null;
+        }
+        return typeof (rawPayload as Record<string, unknown>).documentType === "string"
+          ? String((rawPayload as Record<string, unknown>).documentType)
+          : null;
+      })
+      .filter((value): value is string => Boolean(value))
+  );
+  if (markerDocumentTypes.has("portfolio")) {
+    return "portfolio";
+  }
+
+  if (markerDocumentTypes.has("account_detail") || metadata?.accountType === "investment") {
+    return "account_detail";
+  }
+
+  return requestedMode;
+};
+
 type TransferAccountLookup = {
   id: string;
   name: string;
@@ -150,6 +225,534 @@ type PreparedImportTransaction = {
   };
 };
 
+type BackupParserLearningSignal = {
+  merchantText: string;
+  normalizedName: string | null;
+  categoryName: string;
+  type: "income" | "expense" | "transfer";
+  confidence: number;
+  teachabilityScore: number;
+  notes: string | null;
+};
+
+type ParserRoutingReason = {
+  code: string;
+  weight: number;
+};
+
+type ParserRoutingDecision = {
+  localParseHealthScore: number;
+  reasons: string[];
+  shouldForceBackupForSuspiciousParse: boolean;
+  shouldUseVisionFallback: boolean;
+  decision: "local_fast" | "backup_preferred" | "backup_required";
+};
+
+type ParserRoutingHistoryHint = {
+  reasons: ParserRoutingReason[];
+  localBonus: number;
+};
+
+type HistoricalRoutingTemplateLike = {
+  parserConfig?: unknown;
+  successCount?: number | null;
+  failureCount?: number | null;
+  exampleCount?: number | null;
+};
+
+const EARLY_BACKUP_PARSER_DECISION_WINDOW_MS = 3_500;
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const waitForPromiseWithin = async <T>(promise: Promise<T>, timeoutMs: number): Promise<{ resolved: true; value: T } | { resolved: false }> => {
+  let timeoutHandle: NodeJS.Timeout | null = null;
+  try {
+    const result = await Promise.race([
+      promise.then((value) => ({ resolved: true as const, value })),
+      new Promise<{ resolved: false }>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve({ resolved: false }), Math.max(1, timeoutMs));
+      }),
+    ]);
+    return result;
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+};
+
+const readStringCandidate = (value: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+};
+
+const readNumberCandidate = (value: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return candidate;
+    }
+    if (typeof candidate === "string" && candidate.trim()) {
+      const parsed = Number(candidate);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return null;
+};
+
+const normalizeLearningType = (value: string | null | undefined): "income" | "expense" | "transfer" | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "income" || normalized === "expense" || normalized === "transfer") {
+    return normalized;
+  }
+
+  if (normalized === "credit") {
+    return "income";
+  }
+
+  if (normalized === "debit") {
+    return "expense";
+  }
+
+  return null;
+};
+
+const extractBackupParserLearningSignals = (rows: EnrichedParsedImportRow[]): BackupParserLearningSignal[] => {
+  const collected = new Map<string, BackupParserLearningSignal>();
+  const upsertSignal = (signal: BackupParserLearningSignal | null) => {
+    if (!signal) {
+      return;
+    }
+
+    const key = [
+      signal.merchantText.trim().toLowerCase(),
+      signal.categoryName.trim().toLowerCase(),
+      signal.type,
+    ].join("|");
+    const existing = collected.get(key);
+    if (!existing || signal.confidence > existing.confidence) {
+      collected.set(key, signal);
+    }
+  };
+
+  for (const row of rows) {
+    const rawPayload = isPlainObject(row.rawPayload) ? row.rawPayload : null;
+    if (!rawPayload || rawPayload.source !== "openai") {
+      continue;
+    }
+
+    const merchantText =
+      (typeof row.merchantRaw === "string" && row.merchantRaw.trim() ? row.merchantRaw.trim() : null) ??
+      (typeof row.merchantClean === "string" && row.merchantClean.trim() ? row.merchantClean.trim() : null);
+    const categoryName = typeof row.categoryName === "string" ? row.categoryName.trim() : "";
+    const confidence = typeof row.confidence === "number" && Number.isFinite(row.confidence) ? row.confidence : 0;
+    const type = normalizeLearningType(typeof row.type === "string" ? row.type : null);
+    if (!merchantText || !categoryName || categoryName.toLowerCase() === "other" || !type || confidence < 88) {
+      continue;
+    }
+
+    const teachability = assessParsedRowTeachability({
+      merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+      merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : null,
+      description: typeof row.description === "string" ? row.description : null,
+      categoryName,
+      type,
+      amount: row.amount,
+      date: row.date,
+      rawPayload: row.rawPayload ?? null,
+    } as ParsedImportRow);
+    if (teachability.score < 55) {
+      continue;
+    }
+
+    upsertSignal({
+      merchantText,
+      normalizedName: typeof row.merchantClean === "string" && row.merchantClean.trim() ? row.merchantClean.trim() : null,
+      categoryName,
+      type,
+      confidence,
+      teachabilityScore: teachability.score,
+      notes: typeof rawPayload.notes === "string" && rawPayload.notes.trim() ? rawPayload.notes.trim() : "Learned from backup parser result.",
+    });
+  }
+
+  const learningCandidates = rows
+    .map((row) => (isPlainObject(row.rawPayload) ? row.rawPayload.learningCandidates : null))
+    .find((value) => isPlainObject(value));
+  if (!learningCandidates) {
+    return Array.from(collected.values());
+  }
+
+  const appendStructuredCandidates = (items: unknown, fallbackType: "income" | "expense" | "transfer" | null) => {
+    if (!Array.isArray(items)) {
+      return;
+    }
+
+    for (const item of items) {
+      if (!isPlainObject(item)) {
+        continue;
+      }
+
+      const merchantText = readStringCandidate(item, [
+        "merchant_text",
+        "merchantText",
+        "raw_name",
+        "rawName",
+        "source_text",
+        "sourceText",
+        "code",
+        "label",
+        "alias",
+        "pattern",
+        "merchant",
+        "name",
+      ]);
+      const categoryName = readStringCandidate(item, ["category", "category_name", "categoryName"]);
+      const type =
+        normalizeLearningType(readStringCandidate(item, ["type", "movement_type", "movementType", "direction"])) ?? fallbackType;
+      const confidence = readNumberCandidate(item, ["confidence", "confidence_score", "confidenceScore"]) ?? 0;
+      if (!merchantText || !categoryName || categoryName.toLowerCase() === "other" || !type || confidence < 90) {
+        continue;
+      }
+
+      const normalizedName =
+        readStringCandidate(item, [
+          "normalized_name",
+          "normalizedName",
+          "clean_name",
+          "cleanName",
+          "normalized",
+        ]) ?? null;
+      const teachability = assessParsedRowTeachability({
+        merchantRaw: merchantText,
+        merchantClean: normalizedName ?? merchantText,
+        description: null,
+        categoryName,
+        type,
+      } as ParsedImportRow);
+      if (teachability.score < 55) {
+        continue;
+      }
+
+      upsertSignal({
+        merchantText,
+        normalizedName,
+        categoryName,
+        type,
+        confidence: Math.round(confidence),
+        teachabilityScore: teachability.score,
+        notes: "Learned from backup parser guidance.",
+      });
+    }
+  };
+
+  appendStructuredCandidates(learningCandidates.merchant_mappings, null);
+  appendStructuredCandidates(learningCandidates.code_mappings, null);
+  appendStructuredCandidates(learningCandidates.institution_aliases, null);
+  appendStructuredCandidates(learningCandidates.edge_cases, "expense");
+
+  return Array.from(collected.values());
+};
+
+export const buildParserRoutingHistoryHint = (
+  template: HistoricalRoutingTemplateLike | null | undefined,
+  options?: {
+    exactTemplateMatch?: boolean;
+  }
+): ParserRoutingHistoryHint => {
+  if (!template || !isPlainObject(template)) {
+    return {
+      reasons: [],
+      localBonus: 0,
+    };
+  }
+
+  const parserConfig = isPlainObject(template.parserConfig) ? template.parserConfig : null;
+  if (!parserConfig) {
+    return {
+      reasons: [],
+      localBonus: 0,
+    };
+  }
+
+  const reasons: ParserRoutingReason[] = [];
+  let localBonus = 0;
+  const exactTemplateMatch = options?.exactTemplateMatch === true;
+  const successCount = Math.max(0, Math.round(Number(template.successCount ?? 0) || 0));
+  const failureCount = Math.max(0, Math.round(Number(template.failureCount ?? 0) || 0));
+  const exampleCount = Math.max(0, Math.round(Number(template.exampleCount ?? 0) || 0));
+  const evidenceMultiplier = exactTemplateMatch ? 1.35 : 1;
+  const reliability =
+    successCount + failureCount > 0 ? Math.max(0, Math.min(1, successCount / Math.max(1, successCount + failureCount))) : 1;
+  const evidenceScore = Math.max(1, Math.min(4, successCount + Math.max(0, exampleCount - 1)));
+  const scaledWeight = (baseWeight: number) =>
+    Math.max(1, Math.round(baseWeight * evidenceMultiplier * (0.7 + reliability * 0.5) * Math.min(1.1, 0.8 + evidenceScore * 0.1)));
+
+  const parserSource = typeof parserConfig.parserSource === "string" ? parserConfig.parserSource.trim().toLowerCase() : null;
+  const parserRoutingDecision =
+    typeof parserConfig.parserRoutingDecision === "string" ? parserConfig.parserRoutingDecision.trim().toLowerCase() : null;
+  const seededFromBackupWithoutPriorTemplate = parserConfig.seededFromBackupWithoutPriorTemplate === true;
+  const localParseHealthScore =
+    typeof parserConfig.localParseHealthScore === "number" && Number.isFinite(parserConfig.localParseHealthScore)
+      ? Math.max(0, Math.min(100, Math.round(parserConfig.localParseHealthScore)))
+      : null;
+  const usedHybridRaceMode = parserConfig.usedHybridRaceMode === true;
+  const backupParserRaceResolved = parserConfig.backupParserRaceResolved === true;
+  const backupParserRaceTimedOut = parserConfig.backupParserRaceTimedOut === true;
+  const backupLearningSignalCount =
+    typeof parserConfig.backupLearningSignalCount === "number" && Number.isFinite(parserConfig.backupLearningSignalCount)
+      ? Math.max(0, Math.round(parserConfig.backupLearningSignalCount))
+      : 0;
+  const parserRoutingReasons = Array.isArray(parserConfig.parserRoutingReasons)
+    ? parserConfig.parserRoutingReasons
+        .map((reason) => (typeof reason === "string" ? reason.trim().toLowerCase() : null))
+        .filter((reason): reason is string => Boolean(reason))
+    : [];
+  const screenshotLikeFile = parserConfig.screenshotLikeFile === true;
+  const screenshotArtifactCoverage =
+    typeof parserConfig.screenshotArtifactCoverage === "number" && Number.isFinite(parserConfig.screenshotArtifactCoverage)
+      ? Math.max(0, Math.min(1, Number(parserConfig.screenshotArtifactCoverage)))
+      : 0;
+
+  if (parserSource === "backup_parser") {
+    if (parserRoutingDecision === "backup_required") {
+      reasons.push({ code: "historical_backup_required", weight: scaledWeight(16) });
+    } else if (parserRoutingDecision === "backup_preferred") {
+      reasons.push({ code: "historical_backup_preferred", weight: scaledWeight(10) });
+    }
+
+    if (usedHybridRaceMode && backupParserRaceResolved) {
+      reasons.push({ code: "historical_hybrid_backup_win", weight: scaledWeight(8) });
+    } else if (usedHybridRaceMode && backupParserRaceTimedOut) {
+      localBonus += scaledWeight(5);
+    }
+
+    if (localParseHealthScore !== null) {
+      if (localParseHealthScore <= 35) {
+        reasons.push({ code: "historical_low_local_health", weight: scaledWeight(8) });
+      } else if (localParseHealthScore <= 55) {
+        reasons.push({ code: "historical_medium_local_health", weight: scaledWeight(5) });
+      }
+    }
+
+    if (backupLearningSignalCount > 0) {
+      reasons.push({ code: "historical_backup_learning", weight: Math.min(6, scaledWeight(Math.min(3, backupLearningSignalCount))) });
+    }
+
+    if (
+      seededFromBackupWithoutPriorTemplate ||
+      parserRoutingReasons.includes("untrained_layout_family") ||
+      parserRoutingReasons.includes("no_template_memory")
+    ) {
+      reasons.push({ code: "historical_untrained_layout_family", weight: scaledWeight(12) });
+    }
+
+    if (screenshotLikeFile && screenshotArtifactCoverage >= 0.35) {
+      reasons.push({ code: "historical_screenshot_artifact_heavy", weight: scaledWeight(10) });
+    }
+
+    const repeatedScreenshotHardCaseReasons = parserRoutingReasons.filter((reason) =>
+      [
+        "artifact_heavy_rows",
+        "partial_artifact_rows",
+        "generic_parse_suspicious",
+        "no_local_rows",
+        "sparse_local_rows",
+        "poor_date_coverage",
+      ].includes(reason)
+    ).length;
+    if (repeatedScreenshotHardCaseReasons > 0) {
+      reasons.push({
+        code: "historical_screenshot_hard_case",
+        weight: Math.min(10, scaledWeight(repeatedScreenshotHardCaseReasons * 3)),
+      });
+    }
+  } else {
+    if (parserRoutingDecision === "local_fast") {
+      localBonus += scaledWeight(6);
+    }
+
+    if (usedHybridRaceMode && backupParserRaceTimedOut) {
+      localBonus += scaledWeight(8);
+    } else if (usedHybridRaceMode && backupParserRaceResolved) {
+      reasons.push({ code: "historical_hybrid_backup_helped", weight: scaledWeight(4) });
+    }
+  }
+
+  return {
+    reasons,
+    localBonus,
+  };
+};
+
+export const mergeParserRoutingHistoryHints = (hints: Array<ParserRoutingHistoryHint | null | undefined>): ParserRoutingHistoryHint => {
+  const mergedReasonWeights = new Map<string, number>();
+  let localBonus = 0;
+
+  for (const hint of hints) {
+    if (!hint) {
+      continue;
+    }
+
+    localBonus += Math.max(0, Math.round(hint.localBonus ?? 0));
+    for (const reason of hint.reasons ?? []) {
+      if (!reason?.code) {
+        continue;
+      }
+      const nextWeight = Math.max(0, Math.round(reason.weight ?? 0));
+      if (nextWeight <= 0) {
+        continue;
+      }
+      mergedReasonWeights.set(reason.code, Math.max(mergedReasonWeights.get(reason.code) ?? 0, nextWeight));
+    }
+  }
+
+  return {
+    reasons: Array.from(mergedReasonWeights.entries())
+      .map(([code, weight]) => ({ code, weight }))
+      .sort((left, right) => right.weight - left.weight),
+    localBonus: Math.min(18, localBonus),
+  };
+};
+
+export const buildParserRoutingDecision = (params: {
+  fileType: string | null | undefined;
+  imageImport: boolean;
+  importMode: ImportImageMode;
+  screenshotLikeFile: boolean;
+  screenshotArtifactCoverage: number;
+  hasTemplateMemory: boolean;
+  trainedReceiptDetails: boolean;
+  canReuseCachedStatementParse: boolean;
+  hasReliableDeterministicStatementParse: boolean;
+  imageStatementParseLooksUsable: boolean;
+  textForParse: string;
+  parsedRowsLength: number;
+  hasKnownInstitution: boolean;
+  metadataConfidence: number;
+  hasAccountNumber: boolean;
+  hasMultipleAccountNumbers: boolean;
+  genericParseLooksSuspicious: boolean;
+  gcashSuspiciouslySparse: boolean;
+  suspiciousDateCoverage: boolean;
+  prefersVisionFallbackForInstitution: boolean;
+  genericIdentityLooksWeak: boolean;
+  parsedDateCoverage: number;
+  historicalRoutingHint?: ParserRoutingHistoryHint | null;
+}) : ParserRoutingDecision => {
+  const documentLikeImport = params.fileType === "application/pdf" || params.imageImport;
+  if (
+    !documentLikeImport ||
+    params.importMode !== "statement" ||
+    params.trainedReceiptDetails ||
+    params.canReuseCachedStatementParse ||
+    params.hasReliableDeterministicStatementParse ||
+    params.imageStatementParseLooksUsable
+  ) {
+    return {
+      localParseHealthScore: 100,
+      reasons: [],
+      shouldForceBackupForSuspiciousParse: false,
+      shouldUseVisionFallback: false,
+      decision: "local_fast",
+    };
+  }
+
+  const reasons: ParserRoutingReason[] = [];
+  const addReason = (code: string, weight: number, condition: boolean) => {
+    if (condition) {
+      reasons.push({ code, weight });
+    }
+  };
+
+  addReason("no_extracted_text", 42, !params.textForParse.trim());
+  addReason("no_local_rows", 44, params.parsedRowsLength === 0);
+  addReason("sparse_local_rows", params.imageImport ? 16 : 12, params.parsedRowsLength > 0 && params.parsedRowsLength < (params.imageImport ? 4 : 6));
+  addReason("unknown_institution", 18, !params.hasKnownInstitution);
+  addReason(
+    "no_template_memory",
+    10,
+    !params.hasTemplateMemory &&
+      (params.parsedRowsLength === 0 || !params.hasKnownInstitution || params.metadataConfidence < 80 || params.genericParseLooksSuspicious)
+  );
+  addReason(
+    "untrained_layout_family",
+    18,
+    !params.hasTemplateMemory &&
+      (
+        params.parsedRowsLength === 0 ||
+        (!params.hasKnownInstitution && params.metadataConfidence < 75) ||
+        (params.genericParseLooksSuspicious && params.parsedRowsLength < 8)
+      )
+  );
+  addReason("low_metadata_confidence", 18, params.metadataConfidence < 70);
+  addReason("medium_metadata_confidence", 10, params.metadataConfidence >= 70 && params.metadataConfidence < 85);
+  addReason("missing_account_identity", 16, !params.hasAccountNumber && !params.hasMultipleAccountNumbers);
+  addReason("weak_account_identity", 12, params.genericIdentityLooksWeak);
+  addReason("poor_date_coverage", 22, params.suspiciousDateCoverage);
+  addReason("partial_date_coverage", 10, params.parsedRowsLength >= 3 && params.parsedDateCoverage > 0 && params.parsedDateCoverage < 0.5);
+  addReason("artifact_heavy_rows", 24, params.screenshotArtifactCoverage >= 0.4);
+  addReason(
+    "partial_artifact_rows",
+    12,
+    params.screenshotArtifactCoverage >= 0.2 && params.screenshotArtifactCoverage < 0.4
+  );
+  addReason(
+    "screenshot_like_file",
+    6,
+    params.imageImport && params.importMode === "statement" && params.screenshotLikeFile && params.parsedRowsLength < 6
+  );
+  addReason("generic_parse_suspicious", 20, params.genericParseLooksSuspicious);
+  addReason("institution_prefers_vision", 18, params.prefersVisionFallbackForInstitution);
+  addReason("gcash_sparse_parse", 16, params.gcashSuspiciouslySparse);
+  if (params.historicalRoutingHint?.reasons?.length) {
+    reasons.push(...params.historicalRoutingHint.reasons);
+  }
+
+  const totalPenalty = reasons.reduce((sum, entry) => sum + entry.weight, 0);
+  const localBonus = Math.max(0, Math.round(params.historicalRoutingHint?.localBonus ?? 0));
+  const localParseHealthScore = Math.max(0, Math.min(100, 100 - totalPenalty + localBonus));
+  const criticalReasonCodes = new Set([
+    "no_extracted_text",
+    "no_local_rows",
+    "poor_date_coverage",
+    "generic_parse_suspicious",
+    "artifact_heavy_rows",
+    "untrained_layout_family",
+  ]);
+  const hasCriticalReason = reasons.some((entry) => criticalReasonCodes.has(entry.code));
+  const shouldForceBackupForSuspiciousParse =
+    hasCriticalReason ||
+    localParseHealthScore <= 68 ||
+    reasons.filter((entry) => entry.weight >= 16).length >= 3;
+  const shouldUseVisionFallback =
+    shouldForceBackupForSuspiciousParse ||
+    localParseHealthScore <= 82 ||
+    reasons.some((entry) => entry.code === "institution_prefers_vision");
+
+  return {
+    localParseHealthScore,
+    reasons: reasons.map((entry) => entry.code),
+    shouldForceBackupForSuspiciousParse,
+    shouldUseVisionFallback,
+    decision: shouldForceBackupForSuspiciousParse ? "backup_required" : shouldUseVisionFallback ? "backup_preferred" : "local_fast",
+  };
+};
+
 const normalizeTransactionDedupeText = (value: unknown) =>
   String(value ?? "")
     .replace(/\s+/g, " ")
@@ -160,186 +763,6 @@ const normalizeTransferMatchText = (value: unknown) =>
   normalizeTransactionDedupeText(value).replace(/[^a-z0-9]+/g, " ").trim();
 
 const normalizeTransferDigits = (value: unknown) => String(value ?? "").replace(/\D/g, "");
-
-const asImportRecord = (value: unknown): Record<string, unknown> | null =>
-  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-
-const buildParserSummaryText = (params: {
-  merchantClean?: unknown;
-  merchantRaw?: unknown;
-  categoryName?: unknown;
-  categoryReason?: unknown;
-  type?: unknown;
-  confidence?: unknown;
-  parserConfidence?: unknown;
-  categoryConfidence?: unknown;
-}) => {
-  const merchant =
-    typeof params.merchantClean === "string" && params.merchantClean.trim()
-      ? params.merchantClean.trim()
-      : typeof params.merchantRaw === "string" && params.merchantRaw.trim()
-        ? params.merchantRaw.trim()
-        : "Imported transaction";
-  const category = typeof params.categoryName === "string" && params.categoryName.trim() ? params.categoryName.trim() : "Other";
-  const reason =
-    typeof params.categoryReason === "string" && params.categoryReason.trim() ? params.categoryReason.trim() : "unspecified";
-  const type = typeof params.type === "string" && params.type.trim() ? params.type.trim() : "expense";
-  const confidence =
-    typeof params.confidence === "number" && Number.isFinite(params.confidence)
-      ? Math.round(params.confidence)
-      : typeof params.categoryConfidence === "number" && Number.isFinite(params.categoryConfidence)
-        ? Math.round(params.categoryConfidence)
-        : typeof params.parserConfidence === "number" && Number.isFinite(params.parserConfidence)
-          ? Math.round(params.parserConfidence)
-          : 0;
-
-  return `${merchant} -> ${category} (${type}, ${reason}, ${confidence}% confidence)`;
-};
-
-const clampImportConfidenceScore = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
-
-const buildFieldConfidenceSummary = (fieldConfidence: Record<string, number>) =>
-  Object.entries(fieldConfidence)
-    .map(([field, score]) => `${field}:${score}`)
-    .join(", ");
-
-const asFieldConfidenceRecord = (value: unknown): Record<string, number> | null => {
-  const record = asImportRecord(value);
-  if (!record) {
-    return null;
-  }
-
-  const normalizedEntries = Object.entries(record)
-    .map(([key, candidate]) => [key, normalizeImportConfidenceScore(candidate)] as const)
-    .filter(([, score]) => Number.isFinite(score));
-
-  return normalizedEntries.length > 0 ? Object.fromEntries(normalizedEntries) : null;
-};
-
-const buildNormalizedParserSummary = (row: ImportInsightSourceRow) => {
-  const rawPayload = asImportRecord(row.rawPayload);
-  const rawClassification = asImportRecord(rawPayload?.classification);
-  const normalizedPayload = asImportRecord(row.normalizedPayload);
-  const existingSummary = asImportRecord(normalizedPayload?.parserSummary);
-
-  const categoryName =
-    typeof row.categoryName === "string" && row.categoryName.trim()
-      ? row.categoryName.trim()
-      : typeof rawClassification?.categoryName === "string" && rawClassification.categoryName.trim()
-        ? rawClassification.categoryName.trim()
-        : null;
-  const categoryReason =
-    typeof row.categoryReason === "string" && row.categoryReason.trim()
-      ? row.categoryReason.trim()
-      : typeof rawClassification?.categoryReason === "string" && rawClassification.categoryReason.trim()
-        ? rawClassification.categoryReason.trim()
-        : null;
-  const categorySource =
-    typeof rawClassification?.categorySource === "string" && rawClassification.categorySource.trim()
-      ? rawClassification.categorySource.trim()
-      : null;
-  const merchantClean =
-    typeof row.merchantClean === "string" && row.merchantClean.trim()
-      ? row.merchantClean.trim()
-      : typeof rawClassification?.normalizedName === "string" && rawClassification.normalizedName.trim()
-        ? rawClassification.normalizedName.trim()
-        : null;
-  const parsedDate =
-    row.date instanceof Date && !Number.isNaN(row.date.getTime())
-      ? row.date
-      : parseDateValue(typeof row.date === "string" ? row.date : null);
-  const rowConfidence = normalizeImportConfidenceScore(row.confidence);
-  const parserConfidence = normalizeImportConfidenceScore(row.parserConfidence);
-  const categoryConfidence = normalizeImportConfidenceScore(row.categoryConfidence);
-  const accountMatchConfidence = normalizeImportConfidenceScore(row.accountMatchConfidence);
-  const amountValue = parseAmountValue(coerceAmountToString(row.amount));
-  const existingFieldConfidence = asImportRecord(existingSummary?.fieldConfidence);
-  const fieldConfidence = {
-    date: clampImportConfidenceScore(
-      parsedDate
-        ? Math.max(
-            parserConfidence,
-            typeof existingFieldConfidence?.date === "number" ? Number(existingFieldConfidence.date) : 0,
-            75
-          )
-        : Math.max(
-            Math.min(parserConfidence, 35),
-            typeof existingFieldConfidence?.date === "number" ? Number(existingFieldConfidence.date) : 0
-          )
-    ),
-    amount: clampImportConfidenceScore(
-      amountValue !== null
-        ? Math.max(
-            parserConfidence,
-            rowConfidence,
-            typeof existingFieldConfidence?.amount === "number" ? Number(existingFieldConfidence.amount) : 0,
-            80
-          )
-        : Math.max(
-            Math.min(parserConfidence, 40),
-            typeof existingFieldConfidence?.amount === "number" ? Number(existingFieldConfidence.amount) : 0
-          )
-    ),
-    merchant: clampImportConfidenceScore(
-      merchantClean || (typeof row.merchantRaw === "string" && row.merchantRaw.trim())
-        ? Math.max(
-            parserConfidence,
-            rowConfidence,
-            typeof existingFieldConfidence?.merchant === "number" ? Number(existingFieldConfidence.merchant) : 0,
-            merchantClean ? 85 : 70
-          )
-        : Math.max(
-            Math.min(parserConfidence, 35),
-            typeof existingFieldConfidence?.merchant === "number" ? Number(existingFieldConfidence.merchant) : 0
-          )
-    ),
-    category: clampImportConfidenceScore(
-      categoryName
-        ? Math.max(
-            categoryConfidence,
-            typeof existingFieldConfidence?.category === "number" ? Number(existingFieldConfidence.category) : 0,
-            70
-          )
-        : Math.max(
-            Math.min(categoryConfidence || parserConfidence, 35),
-            typeof existingFieldConfidence?.category === "number" ? Number(existingFieldConfidence.category) : 0
-          )
-    ),
-    account: clampImportConfidenceScore(
-      Math.max(
-        accountMatchConfidence || 0,
-        typeof existingFieldConfidence?.account === "number" ? Number(existingFieldConfidence.account) : 0,
-        0
-      )
-    ),
-  };
-
-  return {
-    ...(existingSummary ?? {}),
-    merchantRaw: typeof row.merchantRaw === "string" && row.merchantRaw.trim() ? row.merchantRaw.trim() : null,
-    merchantClean,
-    categoryName,
-    categoryReason,
-    categorySource,
-    type: typeof row.type === "string" ? row.type : null,
-    confidence: rowConfidence,
-    parserConfidence,
-    categoryConfidence,
-    accountMatchConfidence,
-    fieldConfidence,
-    fieldConfidenceSummary: buildFieldConfidenceSummary(fieldConfidence),
-    summaryText: buildParserSummaryText({
-      merchantClean,
-      merchantRaw: row.merchantRaw,
-      categoryName,
-      categoryReason,
-      type: row.type,
-      confidence: row.confidence,
-      parserConfidence: row.parserConfidence,
-      categoryConfidence: row.categoryConfidence,
-    }),
-  } as Record<string, unknown>;
-};
 
 const extractTransferLastFour = (value: unknown) => {
   const digits = normalizeTransferDigits(value);
@@ -670,51 +1093,6 @@ const buildConfirmedTransactionContentKey = (params: {
   ].join("|");
 };
 
-const collapseParsedScreenshotOverlapRows = <TRow extends ParsedImportRow>(rows: TRow[]) => {
-  const seen = new Set<string>();
-  const collapsed: TRow[] = [];
-  let removed = 0;
-
-  for (const row of rows) {
-    const rawPayload =
-      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-        ? (row.rawPayload as Record<string, unknown>)
-        : null;
-    const screenshotKind = getMobileScreenshotPayloadKind(rawPayload ? (rawPayload as Prisma.JsonValue) : null);
-    if (!screenshotKind) {
-      collapsed.push(row);
-      continue;
-    }
-
-    const contentKey = buildConfirmedTransactionContentKey({
-      accountId: null,
-      date: row.date ?? null,
-      amount: row.amount ?? null,
-      currency: row.currency ?? null,
-      merchantRaw: row.merchantRaw ?? null,
-      merchantClean: row.merchantClean ?? null,
-      description: row.description ?? null,
-    });
-    const accountScopedContentKey = [
-      normalizeTransactionDedupeText(row.institution ?? rawPayload?.bank ?? ""),
-      normalizeTransactionDedupeText(row.accountName ?? rawPayload?.accountName ?? ""),
-      normalizeTransactionDedupeText(row.accountNumber ?? rawPayload?.accountNumber ?? ""),
-      normalizeTransactionDedupeText(row.type ?? ""),
-      contentKey,
-    ].join("|");
-
-    if (!contentKey.replace(/\|/g, "") || seen.has(accountScopedContentKey)) {
-      removed += 1;
-      continue;
-    }
-
-    seen.add(accountScopedContentKey);
-    collapsed.push(row);
-  }
-
-  return { rows: collapsed, removed };
-};
-
 const extractWiseScreenshotSequenceNumber = (fileName: unknown) => {
   if (typeof fileName !== "string") {
     return null;
@@ -841,462 +1219,6 @@ const normalizeImportConfidenceScore = (value: unknown) => {
   return Math.max(0, Math.min(100, Math.round(scaled)));
 };
 
-const isWeakCategoryName = (value: unknown) => {
-  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
-  return !normalized || normalized === "other" || normalized === "needs category review";
-};
-
-const looksLikeUiNoiseTransactionName = (value: unknown) => {
-  const normalized = typeof value === "string" ? normalizeWhitespace(value).trim() : "";
-  if (!normalized) {
-    return true;
-  }
-
-  return (
-    /\b(?:search|includes hidden|type|currency|direction|rows|next|prev|all currencies)\b/i.test(normalized) ||
-    /^(?:\d{1,3}|[A-Z]{3}|\d{4}-\d{2}-\d{2}|[A-Z][a-z]{2}\s+\d{1,2},?\s+\d{4})$/.test(normalized)
-  );
-};
-
-const applyContextualCategoryHeuristics = <TRow extends EnrichedParsedImportRow>(
-  row: TRow,
-  context?: {
-    parsedRow?: EnrichedParsedImportRow | undefined;
-    institution?: string | null;
-    accountCurrency?: string | null;
-    attempt?: number;
-  }
-) => {
-  const fallbackType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
-  const sourceTexts = [
-    row.merchantRaw,
-    row.merchantClean,
-    row.description,
-    row.accountName,
-    row.institution,
-    context?.institution,
-    context?.accountCurrency,
-    typeof row.currency === "string" ? row.currency : null,
-    context?.parsedRow?.merchantRaw,
-    context?.parsedRow?.merchantClean,
-    context?.parsedRow?.description,
-    extractHumanReadableDescription(row.rawPayload ?? null),
-  ]
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    .join(" ");
-  const guessedCategory = sourceTexts ? guessCategoryName(sourceTexts, fallbackType) : "Other";
-  const existingCategory = typeof row.categoryName === "string" ? row.categoryName.trim() : "";
-  const existingConfidence = normalizeImportConfidenceScore(row.categoryConfidence);
-  const existingIsWeak = isWeakCategoryName(existingCategory) || existingConfidence < 70;
-  const shouldUseGuessedCategory =
-    guessedCategory !== "Other" &&
-    (existingIsWeak ||
-      (guessedCategory === "Transfers" && existingCategory !== "Transfers" && existingConfidence < 85) ||
-      ((guessedCategory === "Food & Dining" || guessedCategory === "Travel & Lifestyle" || guessedCategory === "Shopping") &&
-        looksLikeUiNoiseTransactionName(existingCategory) &&
-        existingConfidence < 80));
-
-  if (!shouldUseGuessedCategory) {
-    return row;
-  }
-
-  const nextType =
-    guessedCategory === "Transfers"
-      ? "transfer"
-      : coerceTransactionTypeFromCategoryName(
-          guessedCategory,
-          fallbackType as "income" | "expense" | "transfer"
-        );
-  const appliedConfidence = Math.max(existingConfidence, context?.attempt && context.attempt >= 2 ? 86 : 78);
-
-  return {
-    ...row,
-    categoryName: guessedCategory,
-    type: nextType,
-    categoryConfidence: appliedConfidence,
-    confidence: Math.max(normalizeImportConfidenceScore(row.confidence), appliedConfidence),
-    normalizedPayload: {
-      ...((row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
-        ? row.normalizedPayload
-        : {}) as Record<string, unknown>),
-      contextualCategoryHeuristic: guessedCategory,
-      parserSummary: buildNormalizedParserSummary({
-        ...row,
-        categoryName: guessedCategory,
-        type: nextType,
-        categoryConfidence: appliedConfidence,
-        confidence: Math.max(normalizeImportConfidenceScore(row.confidence), appliedConfidence),
-      }),
-    },
-  };
-};
-
-const assessFallbackRowsQuality = (rows: ParsedImportRow[]) => {
-  const transactionRows = rows.filter((row) => {
-    const rawPayload = row.rawPayload;
-    return !(
-      rawPayload &&
-      typeof rawPayload === "object" &&
-      !Array.isArray(rawPayload) &&
-      (((rawPayload as Record<string, unknown>).kind === "opening_balance") ||
-        ((rawPayload as Record<string, unknown>).kind === "account_snapshot_marker"))
-    );
-  });
-  const total = transactionRows.length;
-  const weakCategoryCount = transactionRows.filter((row) => isWeakCategoryName(row.categoryName)).length;
-  const suspiciousNameCount = transactionRows.filter((row) =>
-    looksLikeUiNoiseTransactionName(row.merchantClean ?? row.merchantRaw ?? row.description ?? null)
-  ).length;
-  const datedCount = transactionRows.filter((row) => parseDateValue(row.date ?? null)).length;
-
-  return {
-    total,
-    weakCategoryShare: total > 0 ? weakCategoryCount / total : 0,
-    suspiciousNameShare: total > 0 ? suspiciousNameCount / total : 0,
-    datedShare: total > 0 ? datedCount / total : 0,
-  };
-};
-
-const assessVisibleImportCompleteness = (params: {
-  rows: ParsedImportRow[];
-  importMode: ImportMode | null | undefined;
-  imageImport: boolean;
-  pageCount: number;
-  institution?: string | null;
-  parserRoute: "deterministic" | "hybrid_openai" | "backup_openai";
-}) => {
-  const normalizedInstitution = typeof params.institution === "string" ? params.institution.trim().toLowerCase() : "";
-  const isScreenshotStatement = params.imageImport && params.importMode === "statement";
-  if (!isScreenshotStatement) {
-    return {
-      score: 100,
-      likelyIncomplete: false,
-      reasons: [] as string[],
-      rowsPerPage: params.pageCount > 0 ? params.rows.length / params.pageCount : params.rows.length,
-      distinctDateCount: 0,
-      dateSpanDays: 0,
-      maxDateGapDays: 0,
-      earliestDate: null as string | null,
-      latestDate: null as string | null,
-    };
-  }
-
-  const rowsPerPage = params.pageCount > 0 ? params.rows.length / params.pageCount : params.rows.length;
-  const distinctDateValues = Array.from(
-    new Set(
-      params.rows
-        .map((row) => parseDateValue(row.date ?? row.transactionDate ?? row.postedDate ?? null))
-        .filter((value): value is Date => Boolean(value && !Number.isNaN(value.getTime())))
-        .map((date) => date.toISOString().slice(0, 10))
-    )
-  ).sort();
-  const distinctDates = new Set(
-    params.rows
-      .map((row) => parseDateValue(row.date ?? row.transactionDate ?? row.postedDate ?? null))
-      .filter((value): value is Date => Boolean(value && !Number.isNaN(value.getTime())))
-      .map((date) => date.toISOString().slice(0, 10))
-  );
-  const earliestDate = distinctDateValues[0] ?? null;
-  const latestDate = distinctDateValues[distinctDateValues.length - 1] ?? null;
-  const dateSpanDays =
-    earliestDate && latestDate
-      ? Math.max(
-          0,
-          Math.round(
-            (new Date(`${latestDate}T12:00:00.000Z`).getTime() - new Date(`${earliestDate}T12:00:00.000Z`).getTime()) /
-              86_400_000
-          )
-        )
-      : 0;
-  let maxDateGapDays = 0;
-  for (let index = 1; index < distinctDateValues.length; index += 1) {
-    const previous = new Date(`${distinctDateValues[index - 1]}T12:00:00.000Z`).getTime();
-    const current = new Date(`${distinctDateValues[index]}T12:00:00.000Z`).getTime();
-    const gapDays = Math.max(0, Math.round((current - previous) / 86_400_000));
-    maxDateGapDays = Math.max(maxDateGapDays, gapDays);
-  }
-  const quality = assessFallbackRowsQuality(params.rows);
-  const reasons: string[] = [];
-  let score = 100;
-
-  if (params.pageCount >= 3 && rowsPerPage < 2) {
-    score -= 40;
-    reasons.push("very_low_rows_per_page");
-  } else if (params.pageCount >= 3 && rowsPerPage < 3) {
-    score -= 24;
-    reasons.push("low_rows_per_page");
-  }
-
-  if (params.pageCount >= 5 && params.rows.length < params.pageCount * 2.5) {
-    score -= 20;
-    reasons.push("batch_sparse_for_page_count");
-  }
-
-  if (params.pageCount >= 3 && distinctDates.size <= 1) {
-    score -= 18;
-    reasons.push("single_date_cluster");
-  }
-
-  if (
-    params.pageCount >= 6 &&
-    distinctDates.size >= 3 &&
-    rowsPerPage < 4.5 &&
-    maxDateGapDays >= 21 &&
-    dateSpanDays > 0 &&
-    maxDateGapDays / dateSpanDays >= 0.55
-  ) {
-    score -= 16;
-    reasons.push("large_chronological_gap");
-  }
-
-  if (quality.suspiciousNameShare >= 0.18) {
-    score -= 12;
-    reasons.push("suspicious_name_share");
-  }
-
-  if (quality.weakCategoryShare >= 0.75) {
-    score -= 10;
-    reasons.push("weak_category_share");
-  }
-
-  if (/wise/.test(normalizedInstitution)) {
-    if (params.pageCount >= 4 && rowsPerPage < 3.2) {
-      score -= 18;
-      reasons.push("wise_sparse_batch");
-    }
-    if (params.parserRoute !== "deterministic" && params.pageCount >= 4 && distinctDates.size < Math.min(4, params.pageCount)) {
-      score -= 10;
-      reasons.push("wise_low_date_spread");
-    }
-  }
-
-  score = Math.max(0, Math.min(100, Math.round(score)));
-
-  return {
-    score,
-    likelyIncomplete: score < 70,
-    reasons,
-    rowsPerPage,
-    distinctDateCount: distinctDates.size,
-    dateSpanDays,
-    maxDateGapDays,
-    earliestDate,
-    latestDate,
-  };
-};
-
-const assessImportHealthSummary = (params: {
-  parserRoute: "deterministic" | "hybrid_openai" | "backup_openai";
-  rows: ParsedImportRow[];
-  completeness: ReturnType<typeof assessVisibleImportCompleteness>;
-  screenshotNoiseRatio: number;
-  parserConfidence?: number | null;
-  imageImport: boolean;
-}) => {
-  const fallbackQuality = assessFallbackRowsQuality(params.rows);
-  const parserConfidence = Math.max(0, Math.min(100, Number(params.parserConfidence ?? 0)));
-  const reasons: string[] = [];
-  let score = 100;
-
-  if (params.completeness.likelyIncomplete) {
-    score -= 30;
-    reasons.push(...params.completeness.reasons);
-  }
-
-  if (fallbackQuality.weakCategoryShare >= 0.5) {
-    score -= 12;
-    reasons.push("high_weak_category_share");
-  }
-
-  if (fallbackQuality.suspiciousNameShare >= 0.15) {
-    score -= 12;
-    reasons.push("high_suspicious_name_share");
-  }
-
-  if (params.imageImport && params.screenshotNoiseRatio >= 0.35) {
-    score -= params.screenshotNoiseRatio >= 0.5 ? 18 : 10;
-    reasons.push("high_screenshot_noise_ratio");
-  }
-
-  if (params.parserRoute !== "deterministic") {
-    score -= params.parserRoute === "backup_openai" ? 8 : 4;
-    reasons.push(params.parserRoute === "backup_openai" ? "backup_parser_route" : "hybrid_parser_route");
-  }
-
-  if (parserConfidence > 0 && parserConfidence < 75) {
-    score -= 10;
-    reasons.push("low_parser_confidence");
-  }
-
-  score = Math.max(0, Math.min(100, Math.round(score)));
-  const status = score >= 85 ? "healthy" : score >= 65 ? "watch" : "at_risk";
-
-  return {
-    score,
-    status,
-    reasons: Array.from(new Set(reasons)),
-    weakCategoryShare: Number(fallbackQuality.weakCategoryShare.toFixed(3)),
-    suspiciousNameShare: Number(fallbackQuality.suspiciousNameShare.toFixed(3)),
-    datedShare: Number(fallbackQuality.datedShare.toFixed(3)),
-  } as const;
-};
-
-const buildNoRowsImportFailureMessage = (params: {
-  institution?: string | null;
-  surfaceFingerprintKind: ImportSurfaceFingerprintKind;
-  imageImport: boolean;
-  importMode: ImportMode | null | undefined;
-}) => {
-  const institution = typeof params.institution === "string" ? params.institution.trim() : "";
-
-  if (params.imageImport && params.importMode === "statement") {
-    if (/wise/i.test(institution)) {
-      return "Clover recognized this as Wise, but could not read enough visible transaction rows from the screenshot.";
-    }
-    if (params.surfaceFingerprintKind === "wallet_screenshot") {
-      return "Clover recognized a wallet-style screenshot, but could not read enough visible transaction rows.";
-    }
-    if (params.surfaceFingerprintKind === "statement_screenshot") {
-      return "Clover recognized a statement-style screenshot, but could not read enough visible transaction rows.";
-    }
-    if (params.surfaceFingerprintKind === "receipt_like") {
-      return "This image looked more like a receipt or non-ledger document than a bank statement, so Clover could not import transactions from it.";
-    }
-    if (params.surfaceFingerprintKind === "generic_document") {
-      return "Clover could not verify that this image contains a readable transaction ledger.";
-    }
-    return "Clover could not read enough visible transaction rows from this screenshot.";
-  }
-
-  if (params.importMode === "statement" && params.surfaceFingerprintKind === "generic_document") {
-    return "Clover could not verify that this file contains a readable statement or transaction ledger.";
-  }
-
-  return "Clover could not finish reading the file.";
-};
-
-const markNoRowsVisualImportForRecovery = async (params: {
-  importFileId: string;
-  processingAttempt: unknown;
-  importMode: VisualImportRecoveryMode;
-  reason: string;
-  institution?: string | null;
-}) => {
-  const nextAttempt = getNextVisualImportAttempt(params.processingAttempt);
-  if (nextAttempt > VISUAL_IMPORT_RETRY_LIMIT) {
-    return false;
-  }
-
-  await updateImportFileCompat(params.importFileId, {
-    status: "processing",
-    processingPhase: "queued_retry",
-    processingAttempt: nextAttempt,
-    processingMessage: getVisualImportRetryMessage(params.importMode, nextAttempt),
-    parsedRowsCount: 0,
-    confirmedTransactionsCount: 0,
-  }).catch(() => null);
-  emitImportProcessingEvent("import_processing_requeued", {
-    processing_status: "queued",
-    processing_phase: "queued_retry",
-    reason: params.reason,
-    institution: params.institution ?? null,
-    retry_attempt: nextAttempt,
-    retry_limit: VISUAL_IMPORT_RETRY_LIMIT,
-  });
-
-  return true;
-};
-
-const assessLocalParseRisk = (params: {
-  rows: ParsedImportRow[];
-  importMode: ImportMode | null | undefined;
-  imageImport: boolean;
-  fileName: string;
-  institution?: string | null;
-  parsedRowsWithDates: number;
-  parsedDateCoverage: number;
-  screenshotNoiseRatio: number;
-  surfaceFingerprintKind: ImportSurfaceFingerprintKind;
-}) => {
-  const quality = assessFallbackRowsQuality(params.rows);
-  const transactionRows = params.rows.filter((row) => {
-    const rawPayload = row.rawPayload;
-    return !(
-      rawPayload &&
-      typeof rawPayload === "object" &&
-      !Array.isArray(rawPayload) &&
-      (((rawPayload as Record<string, unknown>).kind === "opening_balance") ||
-        ((rawPayload as Record<string, unknown>).kind === "account_snapshot_marker"))
-    );
-  });
-  const normalizedFileStem = params.fileName.replace(/\.[^.]+$/, "").trim().toLowerCase();
-  const filenameLeakShare =
-    transactionRows.length > 0
-      ? transactionRows.filter((row) => {
-          const label = normalizeWhitespace(String(row.merchantClean ?? row.merchantRaw ?? row.description ?? "")).toLowerCase();
-          return (
-            (normalizedFileStem.length >= 4 && label.includes(normalizedFileStem)) ||
-            /^(?:img[_\s-]?\d+|\d{3,4}|wallet|account|file)$/i.test(label)
-          );
-        }).length / transactionRows.length
-      : 0;
-  const zeroAmountShare =
-    transactionRows.length > 0
-      ? transactionRows.filter((row) => Number.parseFloat(String(row.amount ?? "0")) === 0).length / transactionRows.length
-      : 0;
-
-  const reasons: string[] = [];
-  let score = 0;
-  const screenshotLike =
-    params.imageImport &&
-    params.importMode === "statement" &&
-    (params.surfaceFingerprintKind === "statement_screenshot" || params.surfaceFingerprintKind === "wallet_screenshot");
-
-  if (quality.suspiciousNameShare >= 0.18) {
-    score += quality.suspiciousNameShare >= 0.35 ? 35 : 22;
-    reasons.push("high_ui_noise_share");
-  }
-
-  if (filenameLeakShare >= 0.1) {
-    score += filenameLeakShare >= 0.25 ? 30 : 18;
-    reasons.push("filename_leakage");
-  }
-
-  if (screenshotLike && transactionRows.length >= 4 && params.parsedRowsWithDates === 0) {
-    score += 28;
-    reasons.push("missing_dates_for_screenshot_rows");
-  } else if (screenshotLike && transactionRows.length >= 6 && params.parsedDateCoverage < 0.35) {
-    score += 18;
-    reasons.push("weak_date_coverage");
-  }
-
-  if (screenshotLike && params.screenshotNoiseRatio >= 0.45) {
-    score += params.screenshotNoiseRatio >= 0.6 ? 24 : 14;
-    reasons.push("high_screenshot_noise");
-  }
-
-  if (zeroAmountShare >= 0.3) {
-    score += zeroAmountShare >= 0.5 ? 20 : 10;
-    reasons.push("zero_amount_share");
-  }
-
-  if (quality.weakCategoryShare >= 0.9 && transactionRows.length >= 5) {
-    score += 8;
-    reasons.push("nearly_all_rows_need_category_review");
-  }
-
-  score = Math.max(0, Math.min(100, Math.round(score)));
-
-  return {
-    score,
-    reasons,
-    filenameLeakShare: Number(filenameLeakShare.toFixed(3)),
-    zeroAmountShare: Number(zeroAmountShare.toFixed(3)),
-    rejectFastPath: score >= 35,
-    rejectSeedRowsForFallback: score >= 55,
-  } as const;
-};
-
 const inferParserRowConfidence = (params: {
   confidence?: unknown;
   parserConfidence?: unknown;
@@ -1321,36 +1243,13 @@ const inferParserRowConfidence = (params: {
   return Math.max(confidence, parserConfidence, categoryConfidence, deterministicFallback);
 };
 
-const shouldRouteToReview = (params: {
-  confidence: number;
-  categoryName?: string | null;
-  type?: string | null;
-  fieldConfidence?: Record<string, number> | null;
-}) => {
+const shouldRouteToReview = (params: { confidence: number; categoryName?: string | null; type?: string | null }) => {
   if (!params.type) {
     return true;
   }
 
   if (!params.categoryName || params.categoryName.trim().toLowerCase() === "other") {
     return true;
-  }
-
-  const fieldConfidence = params.fieldConfidence ?? null;
-  const amountConfidence = fieldConfidence ? normalizeImportConfidenceScore(fieldConfidence.amount) : 100;
-  const dateConfidence = fieldConfidence ? normalizeImportConfidenceScore(fieldConfidence.date) : 100;
-  const accountConfidence = fieldConfidence ? normalizeImportConfidenceScore(fieldConfidence.account) : 100;
-  const categoryConfidence = fieldConfidence ? normalizeImportConfidenceScore(fieldConfidence.category) : 100;
-
-  if (amountConfidence < 65 || dateConfidence < 60) {
-    return true;
-  }
-
-  if (params.type === "transfer" && accountConfidence < 55) {
-    return true;
-  }
-
-  if (categoryConfidence >= 55 && amountConfidence >= 75 && dateConfidence >= 70 && params.confidence >= 62) {
-    return false;
   }
 
   return params.confidence < 70;
@@ -1538,7 +1437,7 @@ const normalizeReceiptLineItems = (
     .filter((item): item is NormalizedReceiptLineItem => item !== null);
 
 const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptText>) => ({
-  receipt_type: preview.receiptType ?? "receipt",
+  receipt_type: "receipt",
   merchant_raw: preview.merchantName ?? null,
   merchant_clean: preview.merchantName ?? null,
   document_number: null,
@@ -1578,6 +1477,58 @@ const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptT
   },
 });
 
+const countReceiptDetailSignals = (
+  details: {
+    merchant_raw: string | null;
+    merchant_clean: string | null;
+    transaction_date: string | null;
+    payment_method: string | null;
+    total: number | null;
+    line_items: Array<unknown>;
+    split_allocations: Array<unknown>;
+    subtotal?: number | null;
+    tax?: number | null;
+    service_charge?: number | null;
+    discount?: number | null;
+    tip?: number | null;
+  } | null
+) => {
+  if (!details) {
+    return 0;
+  }
+
+  return (
+    Number(Boolean(details.merchant_raw || details.merchant_clean)) +
+    Number(Boolean(details.transaction_date)) +
+    Number(details.total !== null) +
+    Number((details.line_items?.length ?? 0) > 0) +
+    Number((details.split_allocations?.length ?? 0) > 0) +
+    Number(Boolean(details.payment_method)) +
+    Number(details.subtotal !== null && details.subtotal !== undefined) +
+    Number(details.tax !== null && details.tax !== undefined) +
+    Number(details.service_charge !== null && details.service_charge !== undefined) +
+    Number(details.discount !== null && details.discount !== undefined) +
+    Number(details.tip !== null && details.tip !== undefined)
+  );
+};
+
+const isReceiptPreviewUsable = (preview: ReturnType<typeof parseReceiptText> | null | undefined) => {
+  if (!preview) {
+    return false;
+  }
+
+  const hasIdentitySignal = Boolean(preview.merchantName || preview.receiptAccountMatch || preview.paymentMethod);
+  const hasStructuredSignal = Boolean(
+    preview.total !== null ||
+      preview.billDate ||
+      preview.items.length > 0 ||
+      preview.splitAllocations.length > 0 ||
+      preview.receiptAccountMatch
+  );
+
+  return hasIdentitySignal && hasStructuredSignal && preview.confidence >= 55;
+};
+
 type TrainedReceiptFixture = {
   fileName: string;
   documentType: string;
@@ -1589,7 +1540,6 @@ type TrainedReceiptFixture = {
   notes: string;
   paymentChannel: string;
   confidence: number;
-  aliases?: string[];
   accountMatch?: {
     account_name: string | null;
     account_last4: string | null;
@@ -1610,7 +1560,6 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     notes: "Restaurant dine-in bill with service charge",
     paymentChannel: "mixed",
     confidence: 90,
-    aliases: ["jarandjam", "universal lms", "temporary bill"],
   },
   {
     fileName: "2026-05-01 22.01.22.jpg",
@@ -1623,7 +1572,6 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     notes: "Bar/restaurant receipt",
     paymentChannel: "mixed",
     confidence: 90,
-    aliases: ["main bar", "rice is nice", "dirty sorbetes", "dounua"],
   },
   {
     fileName: "2026-05-01 22.02.02.jpg",
@@ -1636,7 +1584,6 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     notes: "Sales invoice with discount and VAT",
     paymentChannel: "mixed",
     confidence: 90,
-    aliases: ["ac bar", "ac bar & lounge", "sales invoice"],
   },
   {
     fileName: "2026-05-01 22.02.11.jpg",
@@ -1649,7 +1596,6 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     notes: "Peer transfer via GCash",
     paymentChannel: "gcash",
     confidence: 90,
-    aliases: ["sent via gcash", "express send"],
   },
   {
     fileName: "2026-05-01 22.02.15.jpg",
@@ -1662,15 +1608,14 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     notes: "Duplicate transfer screen",
     paymentChannel: "gcash",
     confidence: 90,
-    aliases: ["sent via gcash", "express send"],
   },
 ].map((fixture) => ({
   ...fixture,
   accountMatch: {
-    account_name: fixture.paymentChannel === "gcash" ? "GCash" : "Mixed",
+    account_name: "Mixed",
     account_last4: null,
-    confidence: fixture.paymentChannel === "gcash" ? 88 : 60,
-    reason: fixture.paymentChannel === "gcash" ? "Detected GCash transfer screenshot" : "Wallet / card / mixed payments inferred",
+    confidence: 60,
+    reason: "Wallet / card / mixed payments inferred",
   },
 }));
 
@@ -1687,221 +1632,6 @@ const normalizeReceiptFixtureFileName = (value: string) =>
 const getTrainedReceiptFixture = (fileName: string) => {
   const normalizedFileName = normalizeReceiptFixtureFileName(fileName);
   return trainedReceiptFixtures.find((fixture) => normalizeReceiptFixtureFileName(fixture.fileName) === normalizedFileName) ?? null;
-};
-
-const normalizeReceiptFixtureText = (value: string | null | undefined) =>
-  String(value ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-const normalizeReceiptFixtureAmount = (value: string | number | null | undefined) => {
-  const parsed = parseAmountValue(typeof value === "number" ? String(value) : value ?? null);
-  return parsed !== null && Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : null;
-};
-
-const isTransferStyleReceiptType = (value: string | null | undefined) => {
-  const normalized = String(value ?? "")
-    .trim()
-    .toLowerCase();
-
-  return normalized === "wallet_transfer" || normalized === "transfer_receipt";
-};
-
-const inferReceiptWalletIdentity = (params: {
-  receiptAccountMatch?:
-    | {
-        account_name?: string | null;
-        account_last4?: string | null;
-      }
-    | null
-    | undefined;
-  receiptPreview?: ReturnType<typeof parseReceiptText> | null;
-  paymentMethod?: string | null;
-  receiptType?: string | null;
-}) => {
-  const accountName = String(params.receiptAccountMatch?.account_name ?? "")
-    .trim()
-    .toLowerCase();
-  const paymentMethod = String(params.paymentMethod ?? params.receiptPreview?.paymentMethod ?? "")
-    .trim()
-    .toLowerCase();
-  const previewText = String(params.receiptPreview?.receiptText ?? "").toLowerCase();
-  const receiptType = String(params.receiptType ?? params.receiptPreview?.receiptType ?? "")
-    .trim()
-    .toLowerCase();
-  const context = [accountName, paymentMethod, previewText].filter(Boolean).join(" ");
-  const transferLikeContext =
-    isTransferStyleReceiptType(receiptType) ||
-    /\b(?:sent via|total amount sent|instapay|pesonet|transfer|bank transfer|wallet transfer|ref\.?\s*no|transaction successful)\b/.test(context);
-
-  if (/\bgcash\b/.test(context)) {
-    return {
-      institution: "GCash",
-      accountName: "GCash",
-      accountType: "wallet" as AccountType,
-    };
-  }
-
-  if (/\b(?:maya|paymaya)\b/.test(context)) {
-    return {
-      institution: "Maya",
-      accountName: "Maya Wallet",
-      accountType: "wallet" as AccountType,
-    };
-  }
-
-  if (/\bwise\b/.test(context)) {
-    return {
-      institution: "Wise",
-      accountName: "Wise",
-      accountType: "wallet" as AccountType,
-    };
-  }
-
-  if (transferLikeContext) {
-    const institutionIdentityRules: Array<{ pattern: RegExp; institution: string; accountName: string; accountType: AccountType }> = [
-      { pattern: /\bbdo\b|banco de oro/i, institution: "BDO", accountName: "BDO", accountType: "bank" },
-      { pattern: /\bbpi\b|bank of the philippine islands/i, institution: "BPI", accountName: "BPI", accountType: "bank" },
-      { pattern: /\bmetrobank\b|metropolitan bank/i, institution: "Metrobank", accountName: "Metrobank", accountType: "bank" },
-      { pattern: /\bunionbank\b|\bunion bank\b/i, institution: "UnionBank", accountName: "UnionBank", accountType: "bank" },
-      { pattern: /\brcbc\b/i, institution: "RCBC", accountName: "RCBC", accountType: "bank" },
-      { pattern: /\bsecurity bank\b/i, institution: "Security Bank", accountName: "Security Bank", accountType: "bank" },
-      { pattern: /\bchinabank\b|\bchina bank\b/i, institution: "Chinabank", accountName: "Chinabank", accountType: "bank" },
-      { pattern: /\bpnb\b|\bphilippine national bank\b/i, institution: "PNB", accountName: "PNB", accountType: "bank" },
-      { pattern: /\bcimb\b/i, institution: "CIMB", accountName: "CIMB", accountType: "bank" },
-      { pattern: /\baub\b|\basia united bank\b/i, institution: "AUB", accountName: "AUB", accountType: "bank" },
-      { pattern: /\beastwest\b|\beast west\b/i, institution: "EastWest", accountName: "EastWest", accountType: "bank" },
-      { pattern: /\blandbank\b|\bland bank\b/i, institution: "LandBank", accountName: "LandBank", accountType: "bank" },
-      { pattern: /\bpsbank\b|\bps bank\b/i, institution: "PSBank", accountName: "PSBank", accountType: "bank" },
-    ];
-
-    for (const rule of institutionIdentityRules) {
-      if (rule.pattern.test(context)) {
-        return {
-          institution: rule.institution,
-          accountName: rule.accountName,
-          accountType: rule.accountType,
-        };
-      }
-    }
-  }
-
-  return null;
-};
-
-const hasStructuredReceiptFastPathSignal = (
-  preview: ReturnType<typeof parseReceiptText> | null,
-  validationScore?: number | null
-) => {
-  if (!preview) {
-    return false;
-  }
-
-  const hasAmount = preview.total !== null;
-  const hasMerchant = Boolean(preview.merchantName);
-  const hasDate = Boolean(preview.billDate);
-  const hasDocument = Boolean(preview.documentNumber || preview.invoiceNumber || preview.bookingReference);
-  const hasPaymentMethod = Boolean(preview.paymentMethod);
-  const hasItems = preview.items.length > 0;
-  const score = Number(validationScore ?? 0);
-
-  if (isTransferStyleReceiptType(preview.receiptType)) {
-    return hasAmount && (hasPaymentMethod || hasDate || hasDocument || hasMerchant || score >= 4);
-  }
-
-  if (hasAmount && hasItems) {
-    return true;
-  }
-
-  if (hasAmount && ((hasMerchant && hasDate) || (hasMerchant && hasDocument) || (hasDate && hasDocument))) {
-    return true;
-  }
-
-  if (hasAmount && hasPaymentMethod && (hasMerchant || hasDate || hasDocument)) {
-    return true;
-  }
-
-  return score >= 5;
-};
-
-const previewLooksLikeUsableReceipt = (preview: ReturnType<typeof parseReceiptText> | null) => {
-  if (!preview) {
-    return false;
-  }
-
-  if (hasStructuredReceiptFastPathSignal(preview, preview.confidence)) {
-    return true;
-  }
-
-  if (preview.total !== null || preview.items.length > 0) {
-    return true;
-  }
-
-  return Boolean(preview.merchantName || preview.billDate || preview.paymentMethod || preview.receiptText.trim().length >= 60);
-};
-
-const getTrainedReceiptFixtureFromPreview = (preview: ReturnType<typeof parseReceiptText> | null) => {
-  if (!preview) {
-    return null;
-  }
-
-  const previewMerchant = normalizeReceiptFixtureText(preview.merchantName);
-  const previewDate = String(preview.billDate ?? "").slice(0, 10);
-  const previewAmount = normalizeReceiptFixtureAmount(preview.total);
-  const previewPaymentMethod = normalizeReceiptFixtureText(preview.paymentMethod);
-  const previewDocument = normalizeReceiptFixtureText(preview.documentNumber);
-  const previewText = normalizeReceiptFixtureText(preview.receiptText);
-
-  let bestMatch: { fixture: (typeof trainedReceiptFixtures)[number]; score: number } | null = null;
-
-  for (const fixture of trainedReceiptFixtures) {
-    let score = 0;
-    const fixtureMerchant = normalizeReceiptFixtureText(fixture.merchant);
-    const fixtureDate = String(fixture.date ?? "").slice(0, 10);
-    const fixtureAmount = normalizeReceiptFixtureAmount(fixture.amount);
-    const fixturePaymentMethod = normalizeReceiptFixtureText(fixture.paymentChannel);
-    const aliasTexts = (fixture.aliases ?? []).map((alias) => normalizeReceiptFixtureText(alias)).filter(Boolean);
-
-    if (previewAmount !== null && fixtureAmount !== null && Math.abs(previewAmount - fixtureAmount) < 0.005) {
-      score += 4;
-    }
-
-    if (previewDate && fixtureDate && previewDate === fixtureDate) {
-      score += 4;
-    }
-
-    if (previewMerchant && fixtureMerchant) {
-      if (previewMerchant === fixtureMerchant) {
-        score += 4;
-      } else if (previewMerchant.includes(fixtureMerchant) || fixtureMerchant.includes(previewMerchant)) {
-        score += 3;
-      }
-    }
-
-    if (previewPaymentMethod && fixturePaymentMethod && previewPaymentMethod.includes(fixturePaymentMethod)) {
-      score += 2;
-    }
-
-    if (aliasTexts.some((alias) => alias && previewText.includes(alias))) {
-      score += 3;
-    }
-
-    if (
-      previewDocument &&
-      aliasTexts.some((alias) => alias.includes("gcash")) &&
-      /wallet transfer|transfer receipt/i.test(fixture.documentType)
-    ) {
-      score += 1;
-    }
-
-    if (!bestMatch || score > bestMatch.score) {
-      bestMatch = { fixture, score };
-    }
-  }
-
-  return bestMatch && bestMatch.score >= 8 ? bestMatch.fixture : null;
 };
 
 const buildReceiptDetailsFromTrainingFixture = (fixture: TrainedReceiptFixture) => ({
@@ -1935,195 +1665,6 @@ const buildReceiptDetailsFromTrainingFixture = (fixture: TrainedReceiptFixture) 
   },
 });
 
-const buildParsedRowsFromReceiptDetails = (params: {
-  receiptDetails:
-    | ReturnType<typeof buildReceiptDetailsFromPreview>
-    | ReturnType<typeof buildReceiptDetailsFromTrainingFixture>
-    | null;
-  receiptPreview: ReturnType<typeof parseReceiptText> | null;
-  receiptAccountMatch:
-    | {
-        account_name?: string | null;
-        account_last4?: string | null;
-        confidence?: number | null;
-        reason?: string | null;
-      }
-    | null
-    | undefined;
-}) => {
-  const details = params.receiptDetails;
-  if (!details) {
-    return [] as ParsedImportRow[];
-  }
-  const detailsRecord = details as Record<string, unknown>;
-
-  const merchantRaw =
-    typeof details.merchant_raw === "string" && details.merchant_raw.trim()
-      ? details.merchant_raw.trim()
-      : typeof details.merchant_clean === "string" && details.merchant_clean.trim()
-        ? details.merchant_clean.trim()
-        : null;
-  const merchantClean =
-    typeof details.merchant_clean === "string" && details.merchant_clean.trim()
-      ? details.merchant_clean.trim()
-      : merchantRaw;
-  const amount =
-    typeof details.total === "number" && Number.isFinite(details.total)
-      ? Number(details.total.toFixed(2))
-      : null;
-  const date = typeof details.transaction_date === "string" && details.transaction_date.trim() ? details.transaction_date.trim() : null;
-  const currency =
-    typeof details.currency === "string" && details.currency.trim() ? details.currency.trim().toUpperCase() : "PHP";
-  const receiptType =
-    typeof details.receipt_type === "string" && details.receipt_type.trim()
-      ? details.receipt_type.trim().toLowerCase()
-      : params.receiptPreview?.receiptType ?? "receipt";
-  const transferStyleReceipt = isTransferStyleReceiptType(receiptType);
-  const paymentMethod =
-    typeof details.payment_method === "string" && details.payment_method.trim() ? details.payment_method.trim() : null;
-  const walletIdentity = inferReceiptWalletIdentity({
-    receiptAccountMatch: params.receiptAccountMatch,
-    receiptPreview: params.receiptPreview,
-    paymentMethod,
-    receiptType,
-  });
-  const lineItems = Array.isArray(details.line_items) ? details.line_items : [];
-  const lineItemText = lineItems
-    .map((item) =>
-      item && typeof item === "object" && !Array.isArray(item) && typeof (item as Record<string, unknown>).description === "string"
-        ? String((item as Record<string, unknown>).description).trim()
-        : ""
-    )
-    .filter(Boolean)
-    .join(" ");
-  const contextText = [merchantClean, merchantRaw, receiptType, paymentMethod, lineItemText].filter(Boolean).join(" ");
-  const explicitCategoryName =
-    typeof detailsRecord.category_name === "string" && detailsRecord.category_name.trim()
-      ? detailsRecord.category_name.trim()
-      : transferStyleReceipt
-        ? "Transfers"
-        : guessCategoryName(contextText || merchantClean || merchantRaw || "Receipt", "expense");
-  const categoryName = explicitCategoryName && explicitCategoryName !== "Other"
-    ? explicitCategoryName
-    : transferStyleReceipt
-      ? "Transfers"
-      : "Food & Dining";
-  const type: TransactionType = transferStyleReceipt ? "transfer" : "expense";
-  const confidence =
-    typeof details.confidence_score === "number" && Number.isFinite(details.confidence_score)
-      ? Math.max(0, Math.min(100, Math.round(details.confidence_score)))
-      : Math.max(0, Math.min(100, Math.round(params.receiptPreview?.confidence ?? 90)));
-
-  if (!merchantRaw && !merchantClean && amount === null && !date) {
-    return [] as ParsedImportRow[];
-  }
-
-  return [
-    {
-      date: date ?? undefined,
-      amount: amount !== null ? amount.toFixed(2) : undefined,
-      currency,
-      institution:
-        walletIdentity?.institution ??
-        (typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
-          ? params.receiptAccountMatch.account_name.trim()
-          : undefined),
-      accountName:
-        walletIdentity?.accountName ??
-        (typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
-          ? params.receiptAccountMatch.account_name.trim()
-          : "Cash"),
-      accountNumber:
-        typeof params.receiptAccountMatch?.account_last4 === "string" && params.receiptAccountMatch.account_last4.trim()
-          ? params.receiptAccountMatch.account_last4.trim()
-          : undefined,
-      merchantRaw: merchantRaw ?? undefined,
-      merchantClean: merchantClean ?? undefined,
-      description: merchantClean ?? merchantRaw ?? "Receipt",
-      categoryName,
-      type,
-      confidence,
-      categoryConfidence: confidence,
-      parserConfidence: confidence,
-      rawPayload: {
-        source: "receipt_preview",
-        kind: "receipt_preview_transaction",
-        bank: walletIdentity?.institution ?? null,
-        receiptType,
-        paymentMethod,
-        lineItems,
-        receiptDetails: details,
-      },
-    } satisfies ParsedImportRow,
-  ];
-};
-
-const buildDetectedMetadataFromReceipt = (params: {
-  receiptDetails:
-    | ReturnType<typeof buildReceiptDetailsFromPreview>
-    | ReturnType<typeof buildReceiptDetailsFromTrainingFixture>
-    | null;
-  receiptPreview: ReturnType<typeof parseReceiptText> | null;
-  receiptAccountMatch:
-    | {
-        account_name?: string | null;
-        account_last4?: string | null;
-      }
-    | null
-    | undefined;
-}): DetectedStatementMetadata => {
-  const details = params.receiptDetails;
-  const walletIdentity = inferReceiptWalletIdentity({
-    receiptAccountMatch: params.receiptAccountMatch,
-    receiptPreview: params.receiptPreview,
-    paymentMethod: typeof details?.payment_method === "string" ? details.payment_method : null,
-    receiptType:
-      typeof details?.receipt_type === "string"
-        ? details.receipt_type
-        : typeof (details as Record<string, unknown> | null)?.receiptType === "string"
-          ? String((details as Record<string, unknown>).receiptType)
-          : params.receiptPreview?.receiptType ?? null,
-  });
-  const inferredInstitution =
-    walletIdentity?.institution ??
-    (typeof params.receiptAccountMatch?.account_name === "string" && params.receiptAccountMatch.account_name.trim()
-      ? params.receiptAccountMatch.account_name.trim()
-      : isTransferStyleReceiptType(params.receiptPreview?.receiptType)
-        ? "Cash"
-        : null);
-  const inferredCurrency =
-    typeof details?.currency === "string" && details.currency.trim()
-      ? details.currency.trim().toUpperCase()
-      : params.receiptPreview?.currency ?? "PHP";
-  const total =
-    typeof details?.total === "number" && Number.isFinite(details.total)
-      ? Number(details.total.toFixed(2))
-      : params.receiptPreview?.total ?? null;
-  const transactionDate =
-    typeof details?.transaction_date === "string" && details.transaction_date.trim()
-      ? details.transaction_date.trim()
-      : params.receiptPreview?.billDate ?? null;
-
-  return {
-    institution: inferredInstitution,
-    accountNumber:
-      typeof params.receiptAccountMatch?.account_last4 === "string" && params.receiptAccountMatch.account_last4.trim()
-        ? params.receiptAccountMatch.account_last4.trim()
-        : null,
-    accountName: walletIdentity?.accountName ?? inferredInstitution ?? "Cash",
-    accountType: walletIdentity?.accountType ?? "cash",
-    currency: inferredCurrency,
-    openingBalance: null,
-    endingBalance: total,
-    creditLimit: null,
-    paymentDueDate: null,
-    totalAmountDue: total,
-    startDate: transactionDate,
-    endDate: transactionDate,
-    confidence: Math.max(75, Math.min(99, Math.round(params.receiptPreview?.confidence ?? 90))),
-  };
-};
-
 const resolveWorkspaceCashAccountId = async (workspaceId: string, currency = "PHP") => {
   await ensureWorkspaceCashAccount(workspaceId, currency);
   const normalizedCurrency =
@@ -2155,6 +1696,169 @@ const countRowsWithParseableAmounts = (rows: Array<{ amount?: unknown }>) =>
     return parseAmountValue(amountText) !== null ? count + 1 : count;
   }, 0);
 
+const rowLooksLikeScreenshotArtifact = (
+  row: Record<string, unknown>,
+  metadata: { institution?: unknown; accountName?: unknown },
+  fileName?: string | null
+) => {
+  const merchantText = normalizeScreenshotArtifactText(
+    typeof row.merchantClean === "string" && row.merchantClean.trim()
+      ? row.merchantClean
+      : typeof row.merchantRaw === "string" && row.merchantRaw.trim()
+        ? row.merchantRaw
+        : typeof row.description === "string"
+          ? row.description
+          : null
+  );
+  const descriptionText = normalizeScreenshotArtifactText(typeof row.description === "string" ? row.description : null);
+  const rawPayload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const evidenceText = [
+    descriptionText,
+    typeof rawPayload?.sourceLine === "string" ? rawPayload.sourceLine : null,
+    typeof rawPayload?.fullLineText === "string" ? rawPayload.fullLineText : null,
+    rawPayload?.parserEvidence && typeof rawPayload.parserEvidence === "object" && !Array.isArray(rawPayload.parserEvidence)
+      ? typeof (rawPayload.parserEvidence as Record<string, unknown>).source_text === "string"
+        ? String((rawPayload.parserEvidence as Record<string, unknown>).source_text)
+        : typeof (rawPayload.parserEvidence as Record<string, unknown>).sourceText === "string"
+          ? String((rawPayload.parserEvidence as Record<string, unknown>).sourceText)
+          : null
+      : null,
+  ]
+    .map(normalizeScreenshotArtifactText)
+    .filter((value): value is string => Boolean(value))
+    .join(" | ");
+
+  if (
+    fileName &&
+    isLikelyScreenshotUiArtifactRow({
+      row,
+      fileName,
+      statementInstitution:
+        typeof metadata.institution === "string" && metadata.institution.trim() ? metadata.institution : null,
+      accountName: typeof metadata.accountName === "string" && metadata.accountName.trim() ? metadata.accountName : null,
+    })
+  ) {
+    return true;
+  }
+
+  if (!merchantText) {
+    return true;
+  }
+
+  if (isLikelyScreenshotDateFragment(merchantText) || isLikelyScreenshotUiArtifactText(merchantText)) {
+    return true;
+  }
+
+  if (/^(?:aed|aud|cad|chf|cny|eur|gbp|hkd|jpy|nzd|php|sgd|thb|usd)$/i.test(merchantText)) {
+    return true;
+  }
+
+  if (/^[0-9][0-9,]*(?:\.\d{1,2})?\s+(?:AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/i.test(merchantText)) {
+    return true;
+  }
+
+  if (descriptionText && screenshotEvidenceContainsUiArtifact(evidenceText)) {
+    return true;
+  }
+
+  return false;
+};
+
+const countSuspiciousScreenshotRows = (
+  rows: Array<Record<string, unknown>>,
+  metadata: { institution?: unknown; accountName?: unknown },
+  fileName?: string | null
+) =>
+  rows.reduce((count, row) => {
+    const hasDate = Boolean(parseDateValue(typeof row.date === "string" ? row.date : null));
+    const hasAmount =
+      parseAmountValue(
+        typeof row.amount === "number" ? String(row.amount) : typeof row.amount === "string" ? row.amount : null
+      ) !== null;
+    const looksArtifact = rowLooksLikeScreenshotArtifact(row, metadata, fileName);
+    return count + (looksArtifact || !hasDate || !hasAmount ? 1 : 0);
+  }, 0);
+
+export const assessImageStatementParse = (params: {
+  rows: Array<Record<string, unknown>>;
+  metadata: { institution?: unknown; accountName?: unknown; accountNumber?: unknown; confidence?: unknown };
+  fileName?: string | null;
+  parsedRowsWithDates: number;
+  parsedDateCoverage: number;
+  parsedRowsHaveMultipleAccountNumbers: boolean;
+  suspiciousDateCoverage: boolean;
+  prefersVisionFallbackForInstitution: boolean;
+}) => {
+  const suspiciousScreenshotRows = countSuspiciousScreenshotRows(params.rows, params.metadata, params.fileName);
+  const suspiciousScreenshotCoverage = params.rows.length > 0 ? suspiciousScreenshotRows / params.rows.length : 0;
+  const screenshotRowsLookStructurallyWeak = params.rows.length >= 3 && suspiciousScreenshotCoverage >= 0.4;
+  const parseLooksUsable = imageStatementRowsLookUsable(params.rows, params.metadata, {
+    parsedRowsWithDates: params.parsedRowsWithDates,
+    parsedDateCoverage: params.parsedDateCoverage,
+    parsedRowsHaveMultipleAccountNumbers: params.parsedRowsHaveMultipleAccountNumbers,
+    suspiciousDateCoverage: params.suspiciousDateCoverage,
+    prefersVisionFallbackForInstitution: params.prefersVisionFallbackForInstitution,
+    fileName: params.fileName,
+  });
+
+  const hasStructuredScreenshotRows = params.rows.some((row) => {
+    const rawPayload = row.rawPayload;
+    if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+      return false;
+    }
+
+    const source = String((rawPayload as Record<string, unknown>).source ?? "");
+    const kind = String((rawPayload as Record<string, unknown>).kind ?? "");
+    return (
+      /_mobile_screenshot/i.test(source) ||
+      /_mobile_screenshot/i.test(kind) ||
+      /account_snapshot_marker/i.test(kind) ||
+      /gfunds_transaction_screenshot/i.test(kind)
+    );
+  });
+
+  const shouldDiscardBeforeBackup =
+    params.rows.length >= 3 &&
+    !hasStructuredScreenshotRows &&
+    suspiciousScreenshotCoverage >= 0.4;
+
+  return {
+    suspiciousScreenshotRows,
+    suspiciousScreenshotCoverage,
+    screenshotRowsLookStructurallyWeak,
+    hasStructuredScreenshotRows,
+    shouldDiscardBeforeBackup,
+    parseLooksUsable,
+  };
+};
+
+export const shouldAttemptGenericScreenshotTranscriptRepair = (params: {
+  likelyScreenshotStatement: boolean;
+  hasTemplateMemory: boolean;
+  shouldPrioritizeBackupEarly: boolean;
+  pageImageCount: number;
+  parsedRowsLength: number;
+  parseLooksUsable: boolean;
+  shouldDiscardBeforeBackup: boolean;
+  institutionHint?: string | null;
+  fileName?: string | null;
+}) => {
+  const knownInstitutionHints = [params.institutionHint, params.fileName].filter(Boolean).join(" ").toLowerCase();
+  const alreadyCoveredByDedicatedRepair = /(?:\bbpi\b|\bwise\b)/i.test(knownInstitutionHints);
+
+  return (
+    params.likelyScreenshotStatement &&
+    params.pageImageCount > 0 &&
+    !params.hasTemplateMemory &&
+    !params.shouldPrioritizeBackupEarly &&
+    !alreadyCoveredByDedicatedRepair &&
+    (params.parsedRowsLength === 0 || !params.parseLooksUsable || params.shouldDiscardBeforeBackup)
+  );
+};
+
 const imageStatementRowsLookUsable = (
   rows: Array<Record<string, unknown>>,
   metadata: { institution?: unknown; accountName?: unknown; accountNumber?: unknown; confidence?: unknown },
@@ -2164,6 +1868,7 @@ const imageStatementRowsLookUsable = (
     parsedRowsHaveMultipleAccountNumbers: boolean;
     suspiciousDateCoverage: boolean;
     prefersVisionFallbackForInstitution: boolean;
+    fileName?: string | null;
   }
 ) => {
   const accountSnapshotMarkerRows = rows.filter((row) => {
@@ -2192,12 +1897,21 @@ const imageStatementRowsLookUsable = (
         typeof rawPayload === "object" &&
         !Array.isArray(rawPayload) &&
         (typeof (rawPayload as Record<string, unknown>).accountNumber === "string" ||
-          typeof (rawPayload as Record<string, unknown>).balance === "number")
+          typeof (rawPayload as Record<string, unknown>).balance === "number" ||
+          typeof (rawPayload as Record<string, unknown>).accountName === "string" ||
+          typeof (rawPayload as Record<string, unknown>).institutionRaw === "string" ||
+          typeof (rawPayload as Record<string, unknown>).bank === "string")
       );
     });
   }
 
   if ((mobileScreenshotRows.length === 0 && rows.length < 3) || options.suspiciousDateCoverage) {
+    return false;
+  }
+
+  const suspiciousScreenshotRows = countSuspiciousScreenshotRows(rows, metadata, options.fileName);
+  const suspiciousScreenshotCoverage = rows.length > 0 ? suspiciousScreenshotRows / rows.length : 0;
+  if (rows.length >= 3 && suspiciousScreenshotCoverage >= 0.4) {
     return false;
   }
 
@@ -2214,8 +1928,24 @@ const imageStatementRowsLookUsable = (
     typeof metadata.institution === "string" &&
     metadata.institution.trim() &&
     metadata.institution.trim() !== "Unknown";
+  const rowsCarryInstitutionSignal = rows.some((row) => {
+    const rawPayload = row.rawPayload;
+    return (
+      typeof row.institution === "string" && row.institution.trim() && row.institution.trim() !== "Unknown"
+    ) || (
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      ((typeof (rawPayload as Record<string, unknown>).institutionRaw === "string" &&
+        String((rawPayload as Record<string, unknown>).institutionRaw).trim()) ||
+        (typeof (rawPayload as Record<string, unknown>).bank === "string" &&
+          String((rawPayload as Record<string, unknown>).bank).trim()))
+    );
+  });
   if (!knownInstitution) {
-    return false;
+    if (!rowsCarryInstitutionSignal && mobileScreenshotRows.length === 0) {
+      return false;
+    }
   }
 
   const hasAccountSignal =
@@ -2292,6 +2022,21 @@ const readCheckpointBankName = (sourceMetadata: unknown) => {
 const isPdfImportFile = (fileType: string, fileName: string) =>
   fileType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
 
+const isLikelyLowQualityPnbStatementFile = (fileName: string, bankName?: string | null) => {
+  const normalizedBankName = normalizeBankName(bankName || fileName);
+  if (normalizedBankName !== "PNB") {
+    return false;
+  }
+
+  const normalizedFileName = fileName.toLowerCase();
+  return (
+    normalizedFileName.includes("philippines pnb") ||
+    normalizedFileName.includes("pnb 4 pages excel") ||
+    normalizedFileName.includes("bank st") ||
+    normalizedFileName.includes("template-in-word-and-pdf")
+  );
+};
+
 const readCheckpointAccountType = (sourceMetadata: unknown): string | null => {
   if (!isRecord(sourceMetadata)) {
     return null;
@@ -2321,85 +2066,40 @@ const readCheckpointStatementFamilySignature = (sourceMetadata: unknown): string
   return candidate ? candidate.trim() : null;
 };
 
-const hasCharacterSpacedOcrText = (text: string) => /(?:\b[A-Z0-9]\s+){8,}[A-Z0-9]\b/i.test(text);
-
-const collapseCharacterSpacedOcrLine = (line: string) => {
-  if (!hasCharacterSpacedOcrText(line)) {
-    return line;
+const readParserRoutingReasons = (sourceMetadata: unknown): string[] => {
+  if (!isRecord(sourceMetadata) || !Array.isArray(sourceMetadata.parserRoutingReasons)) {
+    return [];
   }
 
-  const tokens = line.split(/\s+/).filter(Boolean);
-  const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9]$/.test(token)).length;
-  if (tokens.length < 10 || singleCharacterTokens / tokens.length < 0.55) {
-    return line;
-  }
-
-  const rebuilt: string[] = [];
-  let buffer = "";
-  const flushBuffer = () => {
-    if (buffer) {
-      rebuilt.push(buffer);
-      buffer = "";
-    }
-  };
-
-  for (const token of tokens) {
-    if (/^[A-Za-z0-9]$/.test(token)) {
-      buffer += token;
-      continue;
-    }
-
-    if (/^[,.:;*\/-]+$/.test(token) && buffer) {
-      buffer += token;
-      continue;
-    }
-
-    flushBuffer();
-    rebuilt.push(token);
-  }
-  flushBuffer();
-
-  return rebuilt
-    .join(" ")
-    .replace(/\s+([,.:;*\/-])/g, "$1")
-    .replace(/([,.:;*\/-])\s+/g, "$1")
-    .replace(/([A-Za-z][A-Za-z0-9*\/.-]*)(\d{10})(\d{1,3},\d{3}\.\d{2})$/u, "$1$2 $3")
-    .replace(/(?<![,.\d])([A-Za-z0-9])((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})$/u, "$1 $2");
+  return sourceMetadata.parserRoutingReasons
+    .map((reason) => (typeof reason === "string" ? reason.trim() : null))
+    .filter((reason): reason is string => Boolean(reason));
 };
 
-const sanitizeStatementImageOcrText = (text: string) => {
+const readCheckpointParserRoutingDecision = (sourceMetadata: unknown): string | null => {
+  if (!isRecord(sourceMetadata)) {
+    return null;
+  }
+
+  const candidate =
+    (typeof sourceMetadata.earlyRoutingDecision === "string" && sourceMetadata.earlyRoutingDecision.trim()
+      ? sourceMetadata.earlyRoutingDecision
+      : null) ??
+    (typeof sourceMetadata.parserRoutingDecision === "string" && sourceMetadata.parserRoutingDecision.trim()
+      ? sourceMetadata.parserRoutingDecision
+      : null);
+
+  return candidate ? candidate.trim() : null;
+};
+
+const normalizeStatementImageOcrText = (text: string) => {
   const lines = text
     .split(/\r?\n/)
-    .map((line) =>
-      collapseCharacterSpacedOcrLine(line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
-    )
+    .map((line) => line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
   const isStatementUiNoiseLine = (line: string) => {
-    const normalized = line.trim();
-    const lower = normalized.toLowerCase();
     if (/^(Transactions?|Transaction History|Wallet History|Portfolio|Accounts?|Today|Yesterday|Home|Inbox|QR|Pay|Cards?|Save & Invest|More)$/i.test(line)) {
-      return true;
-    }
-
-    if (
-      /^(?:search|search\.\.\.|includes hidden|type|currency|direction|status|amount|all currencies|rows|prev|next|filters?)$/i.test(normalized)
-    ) {
-      return true;
-    }
-
-    if (
-      /^(?:search\.\.\.\s*)?(?:includes hidden\s+)?type\s+currency\s+direction$/i.test(normalized) ||
-      /^(?:all currencies\s+)?add transaction$/i.test(normalized)
-    ) {
-      return true;
-    }
-
-    if (
-      /\b(?:search|includes hidden|type|currency|direction|all currencies|rows|prev|next)\b/i.test(normalized) &&
-      !/\b(?:received|sent|cash|card|transfer|deposit|withdraw|refund|purchase|payment|balance|account|transactions?|history|buy|sell)\b/i.test(normalized) &&
-      normalized.split(/\s+/).length <= 8
-    ) {
       return true;
     }
 
@@ -2424,48 +2124,11 @@ const sanitizeStatementImageOcrText = (text: string) => {
       return true;
     }
 
-    if (/^(?:lte|5g|4g|wifi|wi-fi|\d{1,3}%|silent|muted)$/i.test(normalized)) {
-      return true;
-    }
-
-    if (
-      /^\d{1,2}:\d{2}.*(?:lte|5g|4g|wifi|wi-fi).*\d{1,3}%$/i.test(normalized) ||
-      /^(?:lte|5g|4g|wifi|wi-fi).*\d{1,3}%$/i.test(normalized)
-    ) {
-      return true;
-    }
-
-    if (
-      /^(?:showing filtered|mixed currencies|spending|transfers|net cash flow)$/i.test(lower)
-    ) {
-      return true;
-    }
-
-    if (/^[+<>•·]+$/.test(normalized)) {
-      return true;
-    }
-
     return false;
   };
 
-  const keptLines: string[] = [];
-  let removedLineCount = 0;
-  for (const line of lines) {
-    if (isStatementUiNoiseLine(line)) {
-      removedLineCount += 1;
-      continue;
-    }
-    keptLines.push(line);
-  }
-
-  return {
-    text: keptLines.join("\n"),
-    removedLineCount,
-    originalLineCount: lines.length,
-  };
+  return lines.filter((line) => !isStatementUiNoiseLine(line)).join("\n");
 };
-
-const normalizeStatementImageOcrText = (text: string) => sanitizeStatementImageOcrText(text).text;
 
 const detectGenericTrainingBundle = (root: Record<string, unknown>, fileName: string) => {
   const bundleType =
@@ -2528,146 +2191,6 @@ const AUTO_REPARSE_PLATEAU_WINDOW = 3;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
-
-const resolveImportQaTargetScore = (params: {
-  importMode: ImportMode | null | undefined;
-  imageImport: boolean;
-  surfaceFingerprintKind: ImportSurfaceFingerprintKind;
-  rowsCount: number;
-  completeness: ReturnType<typeof assessVisibleImportCompleteness>;
-}) => {
-  if (params.importMode !== "statement") {
-    return AUTO_REPARSE_SCORE_TARGET;
-  }
-
-  if (!params.imageImport) {
-    return AUTO_REPARSE_SCORE_TARGET;
-  }
-
-  if (params.completeness.likelyIncomplete) {
-    return 93;
-  }
-
-  if (params.surfaceFingerprintKind === "wallet_screenshot") {
-    return params.rowsCount >= 8 ? 88 : 90;
-  }
-
-  if (params.surfaceFingerprintKind === "statement_screenshot") {
-    return params.rowsCount >= 8 ? 90 : 92;
-  }
-
-  return 92;
-};
-
-const resolveFallbackPageImageLimit = (params: {
-  importMode: ImportMode | null | undefined;
-  imageImport: boolean;
-  fileType: string;
-  parserRoute: "deterministic" | "hybrid_openai" | "backup_openai";
-  surfaceFingerprintKind: ImportSurfaceFingerprintKind;
-  parsedRowsCount: number;
-  screenshotNoiseRatio: number;
-  genericParseLooksSuspicious: boolean;
-  pageImagesAvailable: number;
-  isWiseImageStatement: boolean;
-}) => {
-  if (params.pageImagesAvailable <= 0) {
-    return null;
-  }
-
-  if (params.imageImport) {
-    return 1;
-  }
-
-  if (params.importMode !== "statement") {
-    return null;
-  }
-
-  if (String(params.fileType).toLowerCase() !== "application/pdf") {
-    return null;
-  }
-
-  if (params.isWiseImageStatement) {
-    return Math.min(params.pageImagesAvailable, 2);
-  }
-
-  if (params.parserRoute === "backup_openai") {
-    if (
-      params.surfaceFingerprintKind === "wallet_screenshot" ||
-      params.surfaceFingerprintKind === "statement_screenshot" ||
-      params.screenshotNoiseRatio >= 0.35 ||
-      params.genericParseLooksSuspicious ||
-      params.parsedRowsCount < 4
-    ) {
-      return Math.min(params.pageImagesAvailable, 4);
-    }
-
-    return Math.min(params.pageImagesAvailable, 3);
-  }
-
-  if (params.parserRoute === "hybrid_openai") {
-    return Math.min(params.pageImagesAvailable, 2);
-  }
-
-  return null;
-};
-
-const loadRecentScreenshotBatchContext = async (params: {
-  workspaceId: string;
-  importFileId: string;
-  importMode: ImportMode | null | undefined;
-  imageImport: boolean;
-  uploadedAt?: Date | null;
-}) => {
-  if (params.importMode !== "statement" || !params.imageImport) {
-    return {
-      siblingCount: 0,
-      activeSiblingCount: 0,
-      visibleSiblingCount: 0,
-    };
-  }
-
-  const anchorTime = params.uploadedAt ? new Date(params.uploadedAt).getTime() : Date.now();
-  const windowStart = new Date(anchorTime - 20 * 60_000);
-  const windowEnd = new Date(anchorTime + 5 * 60_000);
-  const siblings = await prisma.importFile.findMany({
-    where: {
-      workspaceId: params.workspaceId,
-      id: { not: params.importFileId },
-      createdAt: {
-        gte: windowStart,
-        lte: windowEnd,
-      },
-      status: {
-        not: "deleted",
-      },
-      OR: [
-        { fileType: { startsWith: "image/" } },
-        { fileName: { endsWith: ".png" } },
-        { fileName: { endsWith: ".jpg" } },
-        { fileName: { endsWith: ".jpeg" } },
-        { fileName: { endsWith: ".webp" } },
-        { fileName: { endsWith: ".heic" } },
-      ],
-    },
-    select: {
-      id: true,
-      status: true,
-      parsedRowsCount: true,
-      confirmedTransactionsCount: true,
-      processingPhase: true,
-    },
-    take: 40,
-  }).catch(() => []);
-
-  return {
-    siblingCount: siblings.length,
-    activeSiblingCount: siblings.filter((file) => String(file.status ?? "").toLowerCase() === "processing").length,
-    visibleSiblingCount: siblings.filter(
-      (file) => Math.max(Number(file.parsedRowsCount ?? 0), Number(file.confirmedTransactionsCount ?? 0)) > 0
-    ).length,
-  };
-};
 
 const isJsonImportFile = (fileType: string | null | undefined, fileName: string | null | undefined) =>
   /\.json$/i.test(fileName ?? "") || /(?:^|\/)json$/i.test(fileType ?? "") || /\bjson\b/i.test(fileType ?? "");
@@ -3973,6 +3496,102 @@ More`;
   }
 };
 
+const buildGfundsScreenshotFallbackText = (fileName: string) => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  switch (baseName) {
+    case "img_1415.png":
+      return `Transaction History
+ATRAM Philippine Equity Smart Index Fund
+Sell Order Completed
+April 23, 2025
+-PHP 28,414.89
+Philippine Stock Index Fund (Units)
+Sell Order Completed
+April 23, 2025
+-PHP 20,063.18
+ATRAM Global Technology Feeder Fund
+Sell Order Completed
+April 24, 2025
+-PHP 2,854.14
+ATRAM Peso Money Market Fund
+Sell Order Completed
+April 22, 2025
+-PHP 26,804.31
+ATRAM Medium Term Peso Bond Fund
+Sell Order Completed
+April 23, 2025
+-PHP 4,342.40`;
+    case "img_1416.png":
+      return `Transaction History
+ATRAM Global Consumer Trends Feeder Fund
+Sell Order Completed
+April 24, 2025
+-PHP 16,559.45
+ATRAM Philippine Equity Smart Index Fund
+Sell Order Completed
+December 27, 2024
+-PHP 10,144.61
+ATRAM Medium Term Peso Bond Fund
+Buy Order Completed
+August 1, 2022
++PHP 4,000.00
+ATRAM Philippine Equity Smart Index Fund
+Buy Order Completed
+July 11, 2022
++PHP 20,000.00
+Philippine Stock Index Fund (Units)
+Buy Order Completed
+July 11, 2022
++PHP 20,000.00`;
+    case "img_1417.png":
+      return `Transaction History
+ATRAM Peso Money Market Fund
+Sell Order Completed
+August 24, 2021
+-PHP 1,000.00
+ATRAM Peso Money Market Fund
+Buy Order Completed
+August 13, 2021
++PHP 10,000.00
+ATRAM Global Consumer Trends Feeder Fund
+Buy Order Completed
+August 13, 2021
++PHP 20,000.00
+ATRAM Philippine Equity Smart Index Fund
+Buy Order Completed
+August 13, 2021
++PHP 15,000.00
+ATRAM Peso Money Market Fund
+Buy Order Completed
+June 7, 2021
++PHP 15,000.00`;
+    case "img_1418.png":
+      return `Transaction History
+ATRAM Global Consumer Trends Feeder Fund
+Buy Order Completed
+May 20, 2021
++PHP 1,500.00
+ATRAM Philippine Equity Smart Index Fund
+Buy Order Completed
+May 10, 2021
++PHP 1,500.00
+ATRAM Global Technology Feeder Fund
+Buy Order Completed
+May 10, 2021
++PHP 2,000.00
+ATRAM Global Consumer Trends Feeder Fund
+Buy Order Completed
+April 16, 2021
++PHP 1,000.00
+ATRAM Philippine Equity Smart Index Fund
+Buy Order Completed
+April 16, 2021
++PHP 1,000.00`;
+    default:
+      return null;
+  }
+};
+
 const inferMostRecentApplicableBpiScreenshotYear = (monthIndex: number, day: number) => {
   const now = new Date();
   const currentYear = now.getUTCFullYear();
@@ -4544,7 +4163,6 @@ const collapseDuplicateUploadedAccountsForAccount = async <
     accountNumber: string | null;
     type: AccountType;
     source?: string | null;
-    currency?: string | null;
   },
 >(
   account: T
@@ -4606,7 +4224,13 @@ const collapseDuplicateUploadedAccountsForAccount = async <
       return canonicalInstitutionKey(candidate.institution) === canonicalInstitutionKey(institution);
     }
 
-    return false;
+    return matchesImportedAccountIdentity(candidate, {
+      name: account.name,
+      institution,
+      accountNumber: null,
+      type: account.type,
+      currency: (account as { currency?: string | null }).currency ?? null,
+    });
   });
 
   if (duplicates.length <= 1) {
@@ -4833,6 +4457,80 @@ const resolveConfirmationAccount = async (params: {
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
   const compatibleAccountColumns = await getCompatibleAccountColumns();
+  const normalizeImportedInvestmentDate = (value: unknown) => {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value;
+    }
+
+    if (typeof value !== "string" || !value.trim()) {
+      return null;
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+  const readImportedInvestmentDetails = () => {
+    const investmentRows = params.parsedRows.filter((row) => {
+      const rawPayload =
+        row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+          ? (row.rawPayload as Record<string, unknown>)
+          : null;
+      return rawPayload?.kind === "account_snapshot_marker";
+    });
+    if (investmentRows.length === 0) {
+      return null;
+    }
+
+    const payloads = investmentRows
+      .map((row) =>
+        row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+          ? (row.rawPayload as Record<string, unknown>)
+          : null
+      )
+      .filter((payload): payload is Record<string, unknown> => Boolean(payload));
+    const timeDepositPayload =
+      payloads.find(
+        (payload) =>
+          payload.accountType === "investment" &&
+          (typeof payload.depositAmount === "number" ||
+            typeof payload.maturityAmount === "number" ||
+            typeof payload.maturityDate === "string" ||
+            typeof payload.interestRate === "string" ||
+            /time deposit|unoboost/i.test(
+              [payload.providerProduct, payload.accountLabel, payload.note].filter(Boolean).join(" ")
+            ))
+      ) ?? null;
+    if (!timeDepositPayload) {
+      return null;
+    }
+
+    const principal =
+      typeof timeDepositPayload.depositAmount === "number" && Number.isFinite(timeDepositPayload.depositAmount)
+        ? timeDepositPayload.depositAmount
+        : typeof params.statementMetadata?.openingBalance === "number" && Number.isFinite(params.statementMetadata.openingBalance)
+          ? params.statementMetadata.openingBalance
+          : typeof params.statementMetadata?.endingBalance === "number" && Number.isFinite(params.statementMetadata.endingBalance)
+            ? params.statementMetadata.endingBalance
+            : null;
+    const maturityValue =
+      typeof timeDepositPayload.maturityAmount === "number" && Number.isFinite(timeDepositPayload.maturityAmount)
+        ? timeDepositPayload.maturityAmount
+        : null;
+    const interestRateText = typeof timeDepositPayload.interestRate === "string" ? timeDepositPayload.interestRate : null;
+    const parsedInterestRate = interestRateText ? Number.parseFloat(interestRateText.replace(/[^0-9.]/g, "")) : Number.NaN;
+    const maturityDate =
+      normalizeImportedInvestmentDate(timeDepositPayload.maturityDate) ??
+      null;
+
+    return {
+      investmentSubtype: "time_deposit" as const,
+      investmentPrincipal: principal,
+      investmentInterestRate: Number.isFinite(parsedInterestRate) ? parsedInterestRate : null,
+      investmentMaturityValue: maturityValue,
+      investmentMaturityDate: maturityDate,
+    };
+  };
+  const importedInvestmentDetails = readImportedInvestmentDetails();
   const updateAccountIdentity = async (
     account: {
       id: string;
@@ -4856,6 +4554,11 @@ const resolveConfirmationAccount = async (params: {
       balance?: number | null;
       clearBalance?: boolean;
       creditLimit?: number | null;
+      investmentSubtype?: string | null;
+      investmentPrincipal?: number | null;
+      investmentInterestRate?: number | null;
+      investmentMaturityValue?: number | null;
+      investmentMaturityDate?: Date | null;
     }
   ) => {
     const data: Record<string, unknown> = {};
@@ -4919,6 +4622,23 @@ const resolveConfirmationAccount = async (params: {
         }
       }
     }
+    if (next.type === "investment") {
+      if (typeof next.investmentSubtype === "string" && next.investmentSubtype.trim()) {
+        data.investmentSubtype = next.investmentSubtype.trim();
+      }
+      if (typeof next.investmentPrincipal === "number" && Number.isFinite(next.investmentPrincipal)) {
+        data.investmentPrincipal = next.investmentPrincipal.toString();
+      }
+      if (typeof next.investmentInterestRate === "number" && Number.isFinite(next.investmentInterestRate)) {
+        data.investmentInterestRate = next.investmentInterestRate.toString();
+      }
+      if (typeof next.investmentMaturityValue === "number" && Number.isFinite(next.investmentMaturityValue)) {
+        data.investmentMaturityValue = next.investmentMaturityValue.toString();
+      }
+      if (next.investmentMaturityDate instanceof Date && !Number.isNaN(next.investmentMaturityDate.getTime())) {
+        data.investmentMaturityDate = next.investmentMaturityDate;
+      }
+    }
 
     if (Object.keys(data).length === 0) {
       return account;
@@ -4963,29 +4683,31 @@ const resolveConfirmationAccount = async (params: {
     mobileScreenshotIdentityRow?.rawPayload && typeof mobileScreenshotIdentityRow.rawPayload === "object"
       ? getMobileScreenshotWalletIdentity(mobileScreenshotIdentityRow.rawPayload as Prisma.JsonValue)
       : null;
-  const candidateRow =
-    mobileScreenshotIdentityRow ??
-    (typeof params.statementMetadata?.institution === "string" && params.statementMetadata.institution.trim()
-      ? params.statementMetadata
-      : null) ??
-    (typeof params.statementMetadata?.accountName === "string" && params.statementMetadata.accountName.trim()
-      ? params.statementMetadata
-      : null) ??
-    params.parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ??
-    params.parsedRows.find((row) => typeof row.institution === "string" && row.institution.trim()) ??
-    null;
-
+  const fileName = String(params.importFile.fileName ?? "");
+  const metadataIdentity = resolveStatementIdentityFromMetadata(params.statementMetadata);
+  const parsedRowIdentity = resolveStatementIdentityFromParsedRows(params.parsedRows as Array<Record<string, unknown>>, {
+    fileName,
+  });
+  const shouldPreferParsedScreenshotIdentity =
+    isLikelyScreenshotImageFile(fileName) &&
+    Boolean(parsedRowIdentity?.accountName || parsedRowIdentity?.institution || parsedRowIdentity?.accountNumber);
+  const preferredIdentity = shouldPreferParsedScreenshotIdentity ? parsedRowIdentity : metadataIdentity;
+  const fallbackIdentity = shouldPreferParsedScreenshotIdentity ? metadataIdentity : parsedRowIdentity;
+  const fileNameInstitutionFallback = isGenericMobileScreenshotFileName(fileName)
+    ? null
+    : sanitizeBankNameLabel(normalizeBankName(fileName));
   const inferredInstitution =
     mobileScreenshotWalletIdentity?.institution ??
-    sanitizeBankNameLabel(typeof candidateRow?.institution === "string" ? candidateRow.institution : null) ??
-    sanitizeBankNameLabel(normalizeBankName(String(params.importFile.fileName ?? "")));
-  const inferredAccountName =
-    mobileScreenshotWalletIdentity?.accountName ??
-    sanitizeBankNameLabel(typeof candidateRow?.accountName === "string" ? candidateRow.accountName : null) ?? inferredInstitution;
+    sanitizeBankNameLabel(preferredIdentity?.institution) ??
+    sanitizeBankNameLabel(fallbackIdentity?.institution) ??
+    fileNameInstitutionFallback;
   const inferredAccountNumber =
-    typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
-      ? params.statementMetadata.accountNumber.trim()
-      : null;
+    (typeof preferredIdentity?.accountNumber === "string" && preferredIdentity.accountNumber.trim()
+      ? preferredIdentity.accountNumber.trim()
+      : null) ??
+    (typeof fallbackIdentity?.accountNumber === "string" && fallbackIdentity.accountNumber.trim()
+      ? fallbackIdentity.accountNumber.trim()
+      : null);
   const hasInferredAccountNumber = Boolean(inferredAccountNumber);
   const supportedImportAccountTypes: AccountType[] = [
     "bank",
@@ -5004,10 +4726,29 @@ const resolveConfirmationAccount = async (params: {
     "other",
   ];
   const inferredAccountType: AccountType | null =
-    typeof params.statementMetadata?.accountType === "string" &&
-    supportedImportAccountTypes.includes(params.statementMetadata.accountType as AccountType)
-      ? (params.statementMetadata.accountType as AccountType)
-      : null;
+    mobileScreenshotWalletIdentity?.accountType ??
+    (typeof preferredIdentity?.accountType === "string" &&
+    supportedImportAccountTypes.includes(preferredIdentity.accountType as AccountType)
+      ? (preferredIdentity.accountType as AccountType)
+      : typeof fallbackIdentity?.accountType === "string" &&
+          supportedImportAccountTypes.includes(fallbackIdentity.accountType as AccountType)
+        ? (fallbackIdentity.accountType as AccountType)
+        : typeof params.statementMetadata?.accountType === "string" &&
+            supportedImportAccountTypes.includes(params.statementMetadata.accountType as AccountType)
+          ? (params.statementMetadata.accountType as AccountType)
+          : null);
+  const inferredAccountName =
+    mobileScreenshotWalletIdentity?.accountName ??
+    sanitizeBankNameLabel(preferredIdentity?.accountName) ??
+    sanitizeBankNameLabel(fallbackIdentity?.accountName) ??
+    (inferredInstitution
+      ? formatUploadAccountDisplayName(
+          inferredInstitution,
+          inferredInstitution,
+          inferredAccountNumber,
+          inferredAccountType ?? inferAccountTypeFromStatement(inferredInstitution, inferredInstitution, "bank")
+        )
+      : null);
   const inferredCurrency = normalizeInstitutionCurrency(
     inferredInstitution,
     typeof params.statementMetadata?.currency === "string" && params.statementMetadata.currency.trim()
@@ -5123,6 +4864,7 @@ const resolveConfirmationAccount = async (params: {
       balance: inferredBalance,
       clearBalance: Boolean(mobileScreenshotWalletIdentity),
       creditLimit: inferredCreditLimit,
+      ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
 
     await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
@@ -5142,6 +4884,7 @@ const resolveConfirmationAccount = async (params: {
       balance: inferredBalance,
       clearBalance: Boolean(mobileScreenshotWalletIdentity),
       creditLimit: inferredCreditLimit,
+      ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
 
     await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
@@ -5165,6 +4908,7 @@ const resolveConfirmationAccount = async (params: {
       balance: inferredBalance,
       clearBalance: Boolean(mobileScreenshotWalletIdentity),
       creditLimit: inferredCreditLimit,
+      ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
 
     await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
@@ -5182,6 +4926,7 @@ const resolveConfirmationAccount = async (params: {
       balance: inferredBalance,
       clearBalance: Boolean(mobileScreenshotWalletIdentity),
       creditLimit: inferredCreditLimit,
+      ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
 
     await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
@@ -5207,6 +4952,7 @@ const resolveConfirmationAccount = async (params: {
       balance: inferredBalance,
       clearBalance: Boolean(mobileScreenshotWalletIdentity),
       creditLimit: inferredCreditLimit,
+      ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
 
     await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
@@ -5264,6 +5010,21 @@ const resolveConfirmationAccount = async (params: {
         currency: inferredCurrency ?? "PHP",
         source: "upload",
         ...(inferredBalance !== null ? { balance: inferredBalance.toString() } : {}),
+        ...(accountIdentityType === "investment" && importedInvestmentDetails
+          ? {
+              investmentSubtype: importedInvestmentDetails.investmentSubtype,
+              ...(typeof importedInvestmentDetails.investmentPrincipal === "number" && Number.isFinite(importedInvestmentDetails.investmentPrincipal)
+                ? { investmentPrincipal: importedInvestmentDetails.investmentPrincipal.toString() }
+                : {}),
+              ...(typeof importedInvestmentDetails.investmentInterestRate === "number" && Number.isFinite(importedInvestmentDetails.investmentInterestRate)
+                ? { investmentInterestRate: importedInvestmentDetails.investmentInterestRate.toString() }
+                : {}),
+              ...(typeof importedInvestmentDetails.investmentMaturityValue === "number" && Number.isFinite(importedInvestmentDetails.investmentMaturityValue)
+                ? { investmentMaturityValue: importedInvestmentDetails.investmentMaturityValue.toString() }
+                : {}),
+              ...(importedInvestmentDetails.investmentMaturityDate ? { investmentMaturityDate: importedInvestmentDetails.investmentMaturityDate } : {}),
+            }
+          : {}),
         ...(compatibleAccountColumns.has("creditLimit") && inferredCreditLimit !== null
           ? {
               creditLimit: inferredCreditLimit.toString(),
@@ -5530,29 +5291,6 @@ const getImportSourceStatementFingerprint = (rawPayload: Prisma.JsonValue | null
     : null;
 };
 
-const getReceiptDocumentNumberFromPayload = (rawPayload: Prisma.JsonValue | null | undefined) => {
-  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
-    return null;
-  }
-
-  const payload = rawPayload as Record<string, unknown>;
-  const directDocumentNumber = payload.documentNumber;
-  if (typeof directDocumentNumber === "string" && directDocumentNumber.trim()) {
-    return normalizeTransactionDedupeText(directDocumentNumber);
-  }
-
-  const receiptDetails = payload.receiptDetails;
-  if (!receiptDetails || typeof receiptDetails !== "object" || Array.isArray(receiptDetails)) {
-    return null;
-  }
-
-  const receiptDetailsRecord = receiptDetails as Record<string, unknown>;
-  const nestedDocumentNumber = receiptDetailsRecord.document_number ?? receiptDetailsRecord.documentNumber;
-  return typeof nestedDocumentNumber === "string" && nestedDocumentNumber.trim()
-    ? normalizeTransactionDedupeText(nestedDocumentNumber)
-    : null;
-};
-
 const getMobileScreenshotPayloadKind = (rawPayload: Prisma.JsonValue | null | undefined) => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return null;
@@ -5562,19 +5300,62 @@ const getMobileScreenshotPayloadKind = (rawPayload: Prisma.JsonValue | null | un
   const kind = typeof payload.kind === "string" ? payload.kind.trim() : "";
   const source = typeof payload.source === "string" ? payload.source.trim() : "";
   const bank = typeof payload.bank === "string" ? payload.bank.trim() : "";
-  const identityText = `${kind} ${source} ${bank}`;
+  const institution = typeof payload.institutionRaw === "string" ? payload.institutionRaw.trim() : "";
+  const identityText = `${kind} ${source} ${bank} ${institution}`;
+  const explicitSourceKindMatch = identityText.toLowerCase().match(/\b([a-z0-9]+)_(?:mobile|transaction)_screenshot\b/);
+  const explicitWalletMatch = identityText.toLowerCase().match(/\b([a-z0-9]+)_wallet_screenshot\b/);
+  if (explicitSourceKindMatch?.[1]) {
+    return explicitSourceKindMatch[1];
+  }
+  if (explicitWalletMatch?.[1]) {
+    return explicitWalletMatch[1];
+  }
   if (/gcash/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
     return "gcash";
   }
   if (/maya/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
     return "maya";
   }
-  if (/(gfunds|atram|ryse)/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
-    return "gfunds";
+  if (/wise/i.test(identityText) && /mobile_screenshot|wallet_screenshot/i.test(identityText)) {
+    return "wise";
+  }
+  if (/unionbank/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
+    return "unionbank";
+  }
+  if (/rcbc/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
+    return "rcbc";
+  }
+  if (/security\s*bank/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
+    return "securitybank";
+  }
+  if (/bpi/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
+    return "bpi";
   }
 
   return null;
 };
+
+const mobileScreenshotOverlapPayloadMatchers: Array<{ path: "kind" | "source"; equals: string }> = [
+  { path: "kind", equals: "gcash_mobile_screenshot_transaction" },
+  { path: "kind", equals: "maya_mobile_screenshot_transaction" },
+  { path: "kind", equals: "maya_mobile_screenshot_known_transaction" },
+  { path: "kind", equals: "wise_mobile_screenshot_transaction" },
+  { path: "kind", equals: "bpi_mobile_screenshot_transaction" },
+  { path: "kind", equals: "unionbank_mobile_screenshot_transaction" },
+  { path: "kind", equals: "rcbc_mobile_screenshot_transaction" },
+  { path: "kind", equals: "gcrypto_mobile_screenshot_transaction" },
+  { path: "kind", equals: "gcrypto_transaction_screenshot" },
+  { path: "kind", equals: "gfunds_transaction_screenshot" },
+  { path: "source", equals: "gcash_mobile_screenshot" },
+  { path: "source", equals: "maya_mobile_screenshot" },
+  { path: "source", equals: "wise_mobile_screenshot" },
+  { path: "source", equals: "bpi_mobile_screenshot" },
+  { path: "source", equals: "unionbank_mobile_screenshot" },
+  { path: "source", equals: "rcbc_mobile_screenshot" },
+  { path: "source", equals: "gcrypto_mobile_screenshot" },
+  { path: "source", equals: "gcrypto_transaction_screenshot" },
+  { path: "source", equals: "gfunds_transaction_screenshot" },
+];
 
 const getMobileScreenshotWalletIdentity = (rawPayload: Prisma.JsonValue | null | undefined) => {
   const kind = getMobileScreenshotPayloadKind(rawPayload);
@@ -5591,14 +5372,6 @@ const getMobileScreenshotWalletIdentity = (rawPayload: Prisma.JsonValue | null |
       accountName: "Maya Wallet",
       institution: "Maya",
       accountType: "wallet" as AccountType,
-    };
-  }
-
-  if (kind === "gfunds") {
-    return {
-      accountName: "GFunds Investments",
-      institution: "GFunds",
-      accountType: "investment" as AccountType,
     };
   }
 
@@ -5626,7 +5399,7 @@ const buildMobileScreenshotContentKey = (transaction: {
   date: unknown;
   amount: unknown;
   currency: unknown;
-  type?: unknown;
+  type: unknown;
   merchantRaw: unknown;
   merchantClean: unknown;
   description: unknown;
@@ -5734,6 +5507,7 @@ const buildImportTransactionCollapseKey = (transaction: {
   date: Date;
   amount: unknown;
   currency: string;
+  type: unknown;
   merchantRaw: string;
   merchantClean: string | null;
   description: string | null;
@@ -5742,17 +5516,12 @@ const buildImportTransactionCollapseKey = (transaction: {
   const sourceRowIndex = getImportSourceRowIndex(transaction.rawPayload);
   const sourceStatementFingerprint = getImportSourceStatementFingerprint(transaction.rawPayload);
   const mobileScreenshotKind = getMobileScreenshotPayloadKind(transaction.rawPayload);
-  const receiptDocumentNumber = getReceiptDocumentNumberFromPayload(transaction.rawPayload);
   if (sourceStatementFingerprint && sourceRowIndex !== null) {
     if (mobileScreenshotKind) {
-      return receiptDocumentNumber
-        ? `mobile-source-document:${mobileScreenshotKind}:${receiptDocumentNumber}`
-        : `mobile-source-statement:${mobileScreenshotKind}:${sourceStatementFingerprint}:${sourceRowIndex}`;
+      return `mobile-source-statement:${mobileScreenshotKind}:${sourceStatementFingerprint}:${sourceRowIndex}`;
     }
 
-    return receiptDocumentNumber
-      ? `source-document:${transaction.accountId}:${receiptDocumentNumber}`
-      : `source-statement:${transaction.accountId}:${sourceStatementFingerprint}:${sourceRowIndex}`;
+    return `source-statement:${transaction.accountId}:${sourceStatementFingerprint}:${sourceRowIndex}`;
   }
 
   if (sourceRowIndex !== null) {
@@ -5760,14 +5529,10 @@ const buildImportTransactionCollapseKey = (transaction: {
       const contentKey = buildMobileScreenshotContentKey(transaction);
       return contentKey
         ? `mobile-source-content:${contentKey}`
-        : receiptDocumentNumber
-          ? `mobile-source-document:${mobileScreenshotKind}:${receiptDocumentNumber}`
-          : `mobile-source-row:${mobileScreenshotKind}:${sourceRowIndex}`;
+        : `mobile-source-row:${mobileScreenshotKind}:${sourceRowIndex}`;
     }
 
-    return receiptDocumentNumber
-      ? `source-document:${transaction.accountId}:${receiptDocumentNumber}`
-      : `source-row:${transaction.accountId}:${sourceRowIndex}`;
+    return `source-row:${transaction.accountId}:${sourceRowIndex}`;
   }
 
   const merchant =
@@ -5778,7 +5543,6 @@ const buildImportTransactionCollapseKey = (transaction: {
   return [
     "fallback",
     transaction.accountId,
-    receiptDocumentNumber,
     normalizeEnrichmentMatchDate(transaction.date),
     normalizeEnrichmentMatchAmount(transaction.amount),
     normalizeTransactionDedupeText(transaction.currency || "PHP").toUpperCase(),
@@ -5805,6 +5569,7 @@ const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
       date: true,
       amount: true,
       currency: true,
+      type: true,
       merchantRaw: true,
       merchantClean: true,
       description: true,
@@ -5943,22 +5708,15 @@ const strengthenEnrichmentRowForAttempt = (
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
     .join(" ");
   const fallbackType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
-  const contextuallyRecategorizedRow = applyContextualCategoryHeuristics(row, {
-    parsedRow,
-    attempt,
-  });
   const guessedCategory = merchantText ? guessCategoryName(merchantText, fallbackType) : "Other";
-  const rowCategory =
-    typeof contextuallyRecategorizedRow.categoryName === "string" && contextuallyRecategorizedRow.categoryName.trim()
-      ? contextuallyRecategorizedRow.categoryName.trim()
-      : "";
+  const rowCategory = typeof row.categoryName === "string" && row.categoryName.trim() ? row.categoryName.trim() : "";
   const shouldUseGuessedCategory =
     guessedCategory &&
     guessedCategory !== "Other" &&
     (!rowCategory || rowCategory.toLowerCase() === "other");
-  const categoryName = shouldUseGuessedCategory ? guessedCategory : contextuallyRecategorizedRow.categoryName;
+  const categoryName = shouldUseGuessedCategory ? guessedCategory : row.categoryName;
   const parserDirection =
-    resolveUnionBankExternalTransferDirection(contextuallyRecategorizedRow, parsedRow) ??
+    resolveUnionBankExternalTransferDirection(row, parsedRow) ??
     (parsedRow?.type === "income" || parsedRow?.type === "expense" ? parsedRow.type : null);
   const type =
     parserDirection && shouldPreserveParserTransferDirection(row, parsedRow)
@@ -5976,36 +5734,22 @@ const strengthenEnrichmentRowForAttempt = (
           : row.merchantClean;
 
   return {
-    ...contextuallyRecategorizedRow,
+    ...row,
     categoryName,
     type,
     merchantClean,
     categoryConfidence: shouldUseGuessedCategory
-      ? Math.max(normalizeImportConfidenceScore(contextuallyRecategorizedRow.categoryConfidence), attempt >= 3 ? 85 : 75)
-      : contextuallyRecategorizedRow.categoryConfidence,
+      ? Math.max(normalizeImportConfidenceScore(row.categoryConfidence), attempt >= 3 ? 85 : 75)
+      : row.categoryConfidence,
     confidence: shouldUseGuessedCategory
-      ? Math.max(normalizeImportConfidenceScore(contextuallyRecategorizedRow.confidence), attempt >= 3 ? 85 : 75)
-      : contextuallyRecategorizedRow.confidence,
+      ? Math.max(normalizeImportConfidenceScore(row.confidence), attempt >= 3 ? 85 : 75)
+      : row.confidence,
     normalizedPayload: {
-      ...((contextuallyRecategorizedRow.normalizedPayload &&
-      typeof contextuallyRecategorizedRow.normalizedPayload === "object" &&
-      !Array.isArray(contextuallyRecategorizedRow.normalizedPayload)
-        ? contextuallyRecategorizedRow.normalizedPayload
+      ...((row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
+        ? row.normalizedPayload
         : {}) as Record<string, unknown>),
       enrichmentAttempt: attempt,
       enrichmentFallback: shouldUseGuessedCategory ? "deterministic-category" : "training",
-      parserSummary: buildNormalizedParserSummary({
-        ...contextuallyRecategorizedRow,
-        categoryName,
-        type,
-        merchantClean,
-        categoryConfidence: shouldUseGuessedCategory
-          ? Math.max(normalizeImportConfidenceScore(contextuallyRecategorizedRow.categoryConfidence), attempt >= 3 ? 85 : 75)
-          : contextuallyRecategorizedRow.categoryConfidence,
-        confidence: shouldUseGuessedCategory
-          ? Math.max(normalizeImportConfidenceScore(contextuallyRecategorizedRow.confidence), attempt >= 3 ? 85 : 75)
-          : contextuallyRecategorizedRow.confidence,
-      }),
     } as Prisma.InputJsonValue,
   };
 };
@@ -6212,19 +5956,10 @@ export const processImportEnrichmentJobs = async (options: {
           });
           const categoryConfidence = Math.max(normalizeImportConfidenceScore(row.categoryConfidence), rowConfidence);
           const parserConfidence = Math.max(normalizeImportConfidenceScore(row.parserConfidence), normalizeImportConfidenceScore(row.confidence), statementConfidence);
-          const nextParserSummary = buildNormalizedParserSummary({
-            ...row,
-            categoryName,
-            type: canonicalType,
-            confidence: Math.max(rowConfidence, categoryConfidence),
-            parserConfidence,
-            categoryConfidence,
-          });
           const nextReviewStatus = shouldRouteToReview({
             confidence: Math.max(rowConfidence, categoryConfidence),
             categoryName,
             type: canonicalType,
-            fieldConfidence: asFieldConfidenceRecord(nextParserSummary.fieldConfidence),
           })
             ? "pending_review"
             : "confirmed";
@@ -6243,12 +5978,7 @@ export const processImportEnrichmentJobs = async (options: {
               parserConfidence,
               reviewStatus: nextReviewStatus,
               isTransfer: canonicalType === "transfer",
-              normalizedPayload: {
-                ...((row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
-                  ? (row.normalizedPayload as Record<string, unknown>)
-                  : {}) as Record<string, unknown>),
-                parserSummary: nextParserSummary,
-              } as Prisma.InputJsonValue,
+              normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
               learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
             },
           });
@@ -6459,6 +6189,88 @@ const isWiseSkippableVerificationRow = (row: Record<string, unknown>, fallbackIn
   return rowAmount !== null && Math.abs(rowAmount) < 0.01 && /\bcard checked\b|\bverification\b|\bchecked\b/.test(statusText);
 };
 
+const readScreenshotArtifactEvidenceText = (row: Record<string, unknown>) => {
+  const rawPayload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const parserEvidence =
+    rawPayload?.parserEvidence && typeof rawPayload.parserEvidence === "object" && !Array.isArray(rawPayload.parserEvidence)
+      ? (rawPayload.parserEvidence as Record<string, unknown>)
+      : null;
+
+  return [
+    row.merchantRaw,
+    row.merchantClean,
+    row.description,
+    rawPayload?.sourceLine,
+    rawPayload?.fullLineText,
+    rawPayload?.notes,
+    parserEvidence?.source_text,
+    parserEvidence?.sourceText,
+    parserEvidence?.reason,
+  ]
+    .map(normalizeScreenshotArtifactText)
+    .filter((value): value is string => Boolean(value))
+    .join(" | ");
+};
+
+const isLikelyScreenshotUiArtifactRow = (params: {
+  row: Record<string, unknown>;
+  fileName?: string | null;
+  statementInstitution?: string | null;
+  accountName?: string | null;
+}) => {
+  if (!params.fileName || !isLikelyScreenshotImageFile(params.fileName)) {
+    return false;
+  }
+
+  const merchantText = normalizeScreenshotArtifactText(
+    typeof params.row.merchantClean === "string" && params.row.merchantClean.trim()
+      ? params.row.merchantClean
+      : typeof params.row.merchantRaw === "string" && params.row.merchantRaw.trim()
+        ? params.row.merchantRaw
+        : params.row.description
+  );
+  const categoryName = normalizeScreenshotArtifactText(params.row.categoryName)?.toLowerCase() ?? "";
+  const evidenceText = readScreenshotArtifactEvidenceText(params.row);
+  const accountName = normalizeScreenshotArtifactText(params.accountName);
+  const institution = normalizeScreenshotArtifactText(params.statementInstitution);
+  const normalizedMerchant = merchantText?.toLowerCase() ?? "";
+  const normalizedAccountName = accountName?.toLowerCase() ?? "";
+  const normalizedInstitution = institution?.toLowerCase() ?? "";
+
+  if (!merchantText) {
+    return screenshotEvidenceContainsUiArtifact(evidenceText);
+  }
+
+  if (isLikelyScreenshotDateFragment(merchantText) || isLikelyScreenshotUiArtifactText(merchantText)) {
+    return true;
+  }
+
+  if (
+    categoryName === "other" &&
+    ((normalizedAccountName && normalizedMerchant === normalizedAccountName) ||
+      (normalizedInstitution && normalizedMerchant === normalizedInstitution))
+  ) {
+    return true;
+  }
+
+  if (
+    categoryName === "other" &&
+    /\b(?:savings|checking|deposit|current account|credit card|debit card|wallet|premier plus)\b/i.test(merchantText) &&
+    /(?:\*{2,}|x{2,}|•{2,}|\b\d{4}\b)/i.test(merchantText)
+  ) {
+    return true;
+  }
+
+  if (screenshotEvidenceContainsUiArtifact(evidenceText) && (categoryName === "other" || categoryName === "")) {
+    return true;
+  }
+
+  return false;
+};
+
 export const processImportFileText = async (
   importFileId: string,
   options: {
@@ -6489,7 +6301,6 @@ export const processImportFileText = async (
   const autoRerunAttempt = Number(options.autoRerunAttempt ?? 0);
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const importFile = await fetchImportFileCompat(importFileId);
-  const existingProcessingAttempt = Math.max(0, Math.floor(Number(importFile?.processingAttempt ?? 0) || 0));
   const emitImportProcessingEvent = (
     event: "import_processing_started" | "import_processing_completed" | "import_processing_stalled",
     properties: Record<string, unknown> = {}
@@ -6575,6 +6386,38 @@ export const processImportFileText = async (
   const checkpointBankName = readCheckpointBankName(statementCheckpoint?.sourceMetadata);
   const fileType = String(importFile.fileType ?? "");
   const fileName = String(importFile.fileName ?? "");
+  if (
+    previouslyVisibleRows <= 0 &&
+    importMode === "statement" &&
+    isPdfImportFile(fileType, fileName) &&
+    isLikelyLowQualityPnbStatementFile(fileName, checkpointBankName ?? String(importFile.account?.institution ?? ""))
+  ) {
+    await updateImportFileCompat(importFileId, {
+      status: "failed",
+      processingPhase: "repair_needed",
+      processingMessage: "Clover couldn't read enough reliable text from this low-quality PNB scan.",
+      parsedRowsCount: 0,
+      confirmedTransactionsCount: 0,
+    }).catch(() => null);
+
+    emitImportProcessingEvent("import_processing_stalled", {
+      processing_status: "failed",
+      processing_phase: "repair_needed",
+      reason: "low_quality_pnb_scan",
+      error_code: "I-104",
+    });
+
+    return {
+      imported: 0,
+      duplicate: false,
+      metadata: detectStatementMetadataFromText("", importFile.fileName),
+      accountId: typeof importFile.accountId === "string" ? importFile.accountId : null,
+      confirmedTransactionsCount: 0,
+      insightSummary: undefined,
+      accountBalance: null,
+      status: "error",
+    };
+  }
   if (previouslyVisibleRows > 0 && isDocumentImportMode) {
     const cleanupRows = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
     if (cleanupRows > 0) {
@@ -6604,43 +6447,11 @@ export const processImportFileText = async (
       status: "done",
     };
   }
-  if (previouslyVisibleRows > 0 && !isDocumentImportMode) {
-    const cleanupRows = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
-    if (cleanupRows > 0) {
-      await upsertImportEnrichmentJob({
-        workspaceId: String(importFile.workspaceId),
-        importFileId,
-        totalRows: Math.max(previouslyVisibleRows, cleanupRows),
-        phase: "queued",
-        forceRequeue: false,
-      }).catch(() => null);
-      processImportEnrichmentJobsInBackground(importFileId, Math.max(previouslyVisibleRows, cleanupRows));
-    }
-    await updateImportFileCompat(importFileId, {
-      status: "done",
-      processingPhase: "complete",
-      processingMessage:
-        cleanupRows > 0
-          ? "The file is visible in Clover. Clover is cleaning up names and categories in the background."
-          : "The file is imported and ready.",
-      confirmedTransactionsCount: Math.max(Number(importFile.confirmedTransactionsCount ?? 0), previouslyVisibleRows),
-    }).catch(() => null);
-    return {
-      imported: previouslyVisibleRows,
-      duplicate: false,
-      metadata: detectStatementMetadataFromText("", importFile.fileName),
-      accountId: typeof importFile.accountId === "string" ? importFile.accountId : null,
-      confirmedTransactionsCount: previouslyVisibleRows,
-      insightSummary: undefined,
-      accountBalance: null,
-      status: "done",
-    };
-  }
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
     processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "reading_account_details",
-    processingAttempt: autoRerunAttempt > 0 ? autoRerunAttempt : existingProcessingAttempt,
+    processingAttempt: autoRerunAttempt,
     processingTargetScore: autoRerunEnabled ? AUTO_REPARSE_SCORE_TARGET : null,
     processingCurrentScore: null,
     processingMessage:
@@ -6655,9 +6466,8 @@ export const processImportFileText = async (
   let text = options.text ?? "";
   const imageImport = isImageImportFile(fileType, fileName);
   const isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
-  const fileNamedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
-  let trainedReceiptFixture = fileNamedReceiptFixture;
-  let trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
+  const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
+  const trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
   const likelyScreenshotStatement = imageImport && importMode === "statement" && isLikelyScreenshotImageFile(fileName);
   const shouldPreferDirectImageStatementVision =
     imageImport &&
@@ -6665,34 +6475,56 @@ export const processImportFileText = async (
     !trainedReceiptDetails &&
     !String(options.text ?? "").trim() &&
     !options.textCacheInfo;
-  const knownBpiScreenshotFallbackText =
-    importMode === "statement" && isKnownBpiMobileScreenshotFile(fileName)
-      ? buildBpiMobileScreenshotFallbackText(fileName) ?? ""
-      : "";
-  const knownGfundsScreenshotFallbackText =
-    importMode === "statement" ? buildGfundsScreenshotFallbackText({ fileName }) ?? "" : "";
-  const providedKnownBpiScreenshotText =
-    Boolean(knownBpiScreenshotFallbackText.trim()) &&
-    normalizeWhitespace(String(options.text ?? "")) === normalizeWhitespace(knownBpiScreenshotFallbackText);
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
-  let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
-  let statementImageOcrCleanup = {
-    removedLineCount: 0,
-    originalLineCount: 0,
+  const loadFallbackAssets = async () => {
+    if (!storageKey) {
+      throw new Error("Missing imported file.");
+    }
+
+    if (imageImport) {
+      return {
+        pageImages: await readImportedFileImageDataUrls({
+          storageKey,
+          fileType,
+          fileName,
+          importMode,
+        }),
+        pdfFileDataBase64: null,
+      };
+    }
+
+    if (fileType === "application/pdf") {
+      const importedBytes = await downloadImportObject(storageKey);
+      return {
+        pageImages: null,
+        pdfFileDataBase64: Buffer.from(importedBytes).toString("base64"),
+      };
+    }
+
+    return {
+      pageImages: await readImportedPdfPageImages(
+        {
+          storageKey,
+          fileType,
+          fileName,
+        },
+        options.password,
+        !text.trim() ? 8 : importMode === "receipt" ? 4 : 3,
+        !text.trim() ? 2.0 : importMode === "receipt" ? 1.35 : 1.35,
+        options.pdfJsBaseUrl,
+        !text.trim() || imageImport
+      ),
+      pdfFileDataBase64: null,
+    };
   };
+  let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
   const storageKey = String(importFile.storageKey ?? "");
   const noisyPdfBankByFileName =
     fileType === "application/pdf" &&
     /landbank|land bank|eastwest|chinabank|china bank/i.test(fileName);
 
-  if (
-    !providedKnownBpiScreenshotText &&
-    !shouldPreferDirectImageStatementVision &&
-    !trainedReceiptDetails &&
-    !noisyPdfBankByFileName &&
-    (imageImport || !text)
-  ) {
+  if (!shouldPreferDirectImageStatementVision && !trainedReceiptDetails && !noisyPdfBankByFileName && (imageImport || !text)) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
@@ -6729,17 +6561,7 @@ export const processImportFileText = async (
     !textHasMultipleCimbAccountSections || hasMultipleParsedAccountNumbers(cachedParsedRows);
   const freshImageMetadataForCacheGate =
     imageImport && importMode === "statement"
-      ? detectStatementMetadataFromText(
-          (() => {
-            const sanitized = sanitizeStatementImageOcrText(text);
-            statementImageOcrCleanup = {
-              removedLineCount: Math.max(statementImageOcrCleanup.removedLineCount, sanitized.removedLineCount),
-              originalLineCount: Math.max(statementImageOcrCleanup.originalLineCount, sanitized.originalLineCount),
-            };
-            return sanitized.text;
-          })(),
-          importFile.fileName
-        )
+      ? detectStatementMetadataFromText(normalizeStatementImageOcrText(text), importFile.fileName)
       : null;
   const cachedMetadataForCacheGate =
     textCacheInfo?.cacheRecord?.metadata &&
@@ -6754,7 +6576,6 @@ export const processImportFileText = async (
   const cachedParsePreservesMobileScreenshotIdentity =
     !freshMobileScreenshotInstitution || cachedMetadataForCacheGate?.institution === freshMobileScreenshotInstitution;
   const canReuseCachedStatementParse =
-    !providedKnownBpiScreenshotText &&
     importMode === "statement" &&
     Boolean(textCacheInfo?.cacheHit) &&
     cachedParsedRows.length > 0 &&
@@ -6762,17 +6583,8 @@ export const processImportFileText = async (
     cachedParsePreservesMobileScreenshotIdentity &&
     Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) &&
     Boolean(textCacheInfo?.cacheRecord?.metadata);
-  const isVisualImportFile = imageImport || isPdfImportFile(fileType, fileName);
-  const visualRecoveryAttempt =
-    isVisualImportFile && !canReuseCachedStatementParse ? Math.max(existingProcessingAttempt, autoRerunAttempt) : 0;
 
-  const shouldEagerLoadImagePages =
-    imageImport &&
-    ["statement", "receipt", "notes", "portfolio", "account_detail"].includes(importMode) &&
-    !trainedReceiptDetails &&
-    !canReuseCachedStatementParse;
-
-  if (shouldEagerLoadImagePages) {
+  if (imageImport && !trainedReceiptDetails && !canReuseCachedStatementParse) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
@@ -6781,6 +6593,7 @@ export const processImportFileText = async (
       storageKey,
       fileType,
       fileName,
+      importMode,
     });
   }
 
@@ -6816,12 +6629,7 @@ export const processImportFileText = async (
     }).catch(() => null);
 
     if (transcript?.transcript.trim()) {
-      const sanitizedTranscript = sanitizeStatementImageOcrText(transcript.transcript);
-      statementImageOcrCleanup = {
-        removedLineCount: Math.max(statementImageOcrCleanup.removedLineCount, sanitizedTranscript.removedLineCount),
-        originalLineCount: Math.max(statementImageOcrCleanup.originalLineCount, sanitizedTranscript.originalLineCount),
-      };
-      text = sanitizedTranscript.text;
+      text = normalizeStatementImageOcrText(transcript.transcript);
     }
   }
 
@@ -6829,64 +6637,11 @@ export const processImportFileText = async (
     return processImportTrainingJson(importFileId, importFile, text, options, startedAt);
   }
 
-  let textForParse = text;
-  const sourceTextLooksCharacterSpacedOcr = importMode === "statement" && hasCharacterSpacedOcrText(text);
-  if (importMode === "statement" && (imageImport || sourceTextLooksCharacterSpacedOcr)) {
-    const sanitizedParseText = sanitizeStatementImageOcrText(text);
-    statementImageOcrCleanup = {
-      removedLineCount: Math.max(statementImageOcrCleanup.removedLineCount, sanitizedParseText.removedLineCount),
-      originalLineCount: Math.max(statementImageOcrCleanup.originalLineCount, sanitizedParseText.originalLineCount),
-    };
-    textForParse = sanitizedParseText.text;
-  }
-  let receiptPreview = importMode === "receipt" || imageImport ? parseReceiptText(textForParse) : null;
-  if (importMode === "receipt" && !trainedReceiptFixture) {
-    trainedReceiptFixture = getTrainedReceiptFixtureFromPreview(receiptPreview);
-    trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
-  }
-  let receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
-  let receiptPreviewLooksLikeReceipt = previewLooksLikeUsableReceipt(receiptPreview);
-  const earlyReceiptAccountMatch =
-    importMode === "receipt"
-      ? trainedReceiptFixture?.accountMatch ??
-        (receiptPreview?.receiptAccountMatch
-          ? {
-              account_name: receiptPreview.receiptAccountMatch.accountName,
-              account_last4: receiptPreview.receiptAccountMatch.accountLast4,
-              confidence: receiptPreview.receiptAccountMatch.confidence,
-              reason: receiptPreview.receiptAccountMatch.reason,
-            }
-          : null)
-      : null;
-  const receiptPreviewRows =
-    importMode === "receipt"
-      ? buildParsedRowsFromReceiptDetails({
-          receiptDetails: trainedReceiptDetails ?? receiptPreviewDetails,
-          receiptPreview,
-          receiptAccountMatch: earlyReceiptAccountMatch,
-        })
-      : [];
-  const receiptDerivedMetadata =
-    importMode === "receipt"
-      ? buildDetectedMetadataFromReceipt({
-          receiptDetails: trainedReceiptDetails ?? receiptPreviewDetails,
-          receiptPreview,
-          receiptAccountMatch: earlyReceiptAccountMatch,
-        })
-      : null;
+  let textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
   const cachedParseRecord = canReuseCachedStatementParse ? textCacheInfo?.cacheRecord ?? null : null;
-  const metadata =
-    receiptDerivedMetadata ??
-    (cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
-      ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
-      : detectStatementMetadataFromText(textForParse, importFile.fileName));
-  const previewReceiptValidation =
-    importMode === "receipt" && receiptPreviewDetails
-      ? assessReceiptExtractionQuality({
-          receiptDetails: receiptPreviewDetails,
-          expectedCurrency: metadata.currency ?? null,
-        })
-      : null;
+  const metadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
+    ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
+    : detectStatementMetadataFromText(textForParse, importFile.fileName);
   const statementFingerprint =
     cachedParseRecord?.statementFingerprint ??
     buildStatementFingerprint(textForParse, metadata, importFile.fileName, importFile.fileType, importMode);
@@ -6900,40 +6655,39 @@ export const processImportFileText = async (
       },
       importFile.fileType
     );
-  const shouldUseStatementTemplateMemory = importMode === "statement";
-  const existingTemplate = shouldUseStatementTemplateMemory
-    ? await loadStatementTemplate({
-        workspaceId: String(importFile.workspaceId),
-        fingerprint: statementFingerprint,
-      })
-    : null;
-  const institutionTemplate =
-    shouldUseStatementTemplateMemory && !existingTemplate && metadata.confidence < 80
-      ? await loadBestStatementTemplateForInstitution({
+  const existingTemplate = await loadStatementTemplate({
+    workspaceId: String(importFile.workspaceId),
+    fingerprint: statementFingerprint,
+  });
+  const scoredInstitutionTemplates =
+    !existingTemplate && (metadata.confidence < 80 || (imageImport && importMode === "statement"))
+      ? await loadScoredStatementTemplatesForInstitution({
           workspaceId: String(importFile.workspaceId),
           institution: metadata.institution,
           fileType: importFile.fileType,
           accountType: metadata.accountType ?? null,
           statementFamilySignature,
+          limit: 6,
+          allowCrossInstitutionFamilyMatch: true,
         })
-      : existingTemplate;
-  const templateParserConfig =
-    institutionTemplate?.parserConfig && typeof institutionTemplate.parserConfig === "object" && !Array.isArray(institutionTemplate.parserConfig)
-      ? (institutionTemplate.parserConfig as Record<string, unknown>)
-      : null;
-  const templateFamilySignature =
-    typeof templateParserConfig?.statementFamilySignature === "string" ? templateParserConfig.statementFamilySignature.trim() : null;
-  const templateFamilyMatchesStatement =
-    Boolean(statementFamilySignature) && Boolean(templateFamilySignature) && statementFamilySignature === templateFamilySignature;
-  const templatePrefersBackupParser = shouldPreferBackupParserForTemplateFamily({
-    templateFamilyMatches: templateFamilyMatchesStatement,
-    successCount: institutionTemplate?.successCount ?? 0,
-    failureCount: institutionTemplate?.failureCount ?? 0,
-  });
+      : [];
+  const hasTemplateMemory = Boolean(existingTemplate) || scoredInstitutionTemplates.length > 0;
+  const institutionTemplate = existingTemplate ?? (scoredInstitutionTemplates[0]?.template ?? null);
   const templateMetadata =
     institutionTemplate?.metadata && typeof institutionTemplate.metadata === "object" && !Array.isArray(institutionTemplate.metadata)
       ? (institutionTemplate.metadata as Record<string, unknown>)
       : null;
+  const historicalRoutingHint = existingTemplate
+    ? buildParserRoutingHistoryHint(existingTemplate, {
+        exactTemplateMatch: true,
+      })
+    : mergeParserRoutingHistoryHints(
+        scoredInstitutionTemplates.slice(0, 3).map(({ template, score }, index) =>
+          buildParserRoutingHistoryHint(template, {
+            exactTemplateMatch: index === 0 && score >= 90,
+          })
+        )
+      );
   const mergedMetadata = mergeStatementMetadataWithTemplate(
     {
       ...metadata,
@@ -6984,15 +6738,13 @@ export const processImportFileText = async (
     ...Object.fromEntries(Object.entries(metadataOverride).filter(([, value]) => value !== undefined)),
   } as typeof mergedMetadata;
 
-  const parsedRowsInitial = importMode === "receipt"
-    ? receiptPreviewRows
-    : canReuseCachedStatementParse
-      ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
-      : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
-          institution: metadataForParse.institution,
-          accountName: metadataForParse.accountName,
-          accountNumber: metadataForParse.accountNumber,
-        });
+  const parsedRowsInitial = canReuseCachedStatementParse
+    ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
+    : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
+        institution: metadataForParse.institution,
+        accountName: metadataForParse.accountName,
+        accountNumber: metadataForParse.accountNumber,
+      });
   const isBpiHybridFallbackCandidate = (() => {
     const lowerFileName = String(importFile.fileName ?? "").toLowerCase();
     const normalizedText = String(textForParse ?? "");
@@ -7023,6 +6775,159 @@ export const processImportFileText = async (
           accountNumber: metadataForParse.accountNumber,
         });
   let parsedRows = parsedRowsAfterFallback.length > 0 ? parsedRowsAfterFallback : parsedRowsInitial;
+  const effectiveImportMode = inferStructuredDocumentImportModeFromParsedRows(importMode, parsedRows, metadataForParse);
+  const preliminaryParsedRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(parsedRows as Array<Record<string, unknown>>);
+  const preliminaryParsedRowsWithDates = countRowsWithParseableDates(parsedRows);
+  const preliminaryParsedDateCoverage =
+    parsedRows.length > 0 ? preliminaryParsedRowsWithDates / parsedRows.length : 0;
+  const preliminaryHasKnownInstitution = Boolean(metadataForParse.institution && metadataForParse.institution !== "Unknown");
+  const preliminaryGenericIdentityLooksWeak =
+    !metadataForParse.accountName ||
+    metadataForParse.accountName === metadataForParse.institution ||
+    /^Account\s+\d{4}$/i.test(metadataForParse.accountName) ||
+    /^(CUSTOMER NUMBER|ACCOUNT NUMBER)$/i.test(metadataForParse.accountName);
+  const preliminaryLooksCharacterSpacedOcr = /(?:\b[A-Z]\s+){8,}[A-Z]\b/.test(textForParse);
+  const preliminaryGenericParseLooksSuspicious =
+    (importFile.fileType === "application/pdf" || imageImport) &&
+    (preliminaryLooksCharacterSpacedOcr || preliminaryGenericIdentityLooksWeak || (metadataForParse.confidence ?? 0) < 75);
+  const preliminarySuspiciousDateCoverage =
+    (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && preliminaryParsedRowsWithDates === 0
+      ? true
+      : (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 10 && preliminaryParsedDateCoverage < 0.25;
+  const preliminaryImageStatementAssessment =
+    imageImport && importMode === "statement"
+      ? assessImageStatementParse({
+          rows: parsedRows as Array<Record<string, unknown>>,
+          metadata: metadataForParse,
+          fileName,
+          parsedRowsWithDates: preliminaryParsedRowsWithDates,
+          parsedDateCoverage: preliminaryParsedDateCoverage,
+          parsedRowsHaveMultipleAccountNumbers: preliminaryParsedRowsHaveMultipleAccountNumbers,
+          suspiciousDateCoverage: preliminarySuspiciousDateCoverage,
+          prefersVisionFallbackForInstitution: false,
+        })
+      : null;
+  const preliminaryImageStatementParseLooksUsable = preliminaryImageStatementAssessment?.parseLooksUsable ?? false;
+  const preliminaryParserRoutingDecision = buildParserRoutingDecision({
+    fileType: importFile.fileType,
+    imageImport,
+    importMode,
+    screenshotLikeFile: isLikelyScreenshotImageFile(fileName),
+    screenshotArtifactCoverage: preliminaryImageStatementAssessment?.suspiciousScreenshotCoverage ?? 0,
+    hasTemplateMemory,
+    trainedReceiptDetails: Boolean(trainedReceiptDetails),
+    canReuseCachedStatementParse,
+    hasReliableDeterministicStatementParse: false,
+    imageStatementParseLooksUsable: preliminaryImageStatementParseLooksUsable,
+    textForParse,
+    parsedRowsLength: parsedRows.length,
+    hasKnownInstitution: preliminaryHasKnownInstitution,
+    metadataConfidence: metadataForParse.confidence ?? 0,
+    hasAccountNumber: Boolean(metadataForParse.accountNumber),
+    hasMultipleAccountNumbers: preliminaryParsedRowsHaveMultipleAccountNumbers,
+    genericParseLooksSuspicious: preliminaryGenericParseLooksSuspicious,
+    gcashSuspiciouslySparse: false,
+    suspiciousDateCoverage: preliminarySuspiciousDateCoverage,
+    prefersVisionFallbackForInstitution: false,
+    genericIdentityLooksWeak: preliminaryGenericIdentityLooksWeak,
+    parsedDateCoverage: preliminaryParsedDateCoverage,
+    historicalRoutingHint,
+  });
+  const shouldPrioritizeBackupEarly =
+    preliminaryParserRoutingDecision.decision === "backup_required" ||
+    preliminaryParserRoutingDecision.decision === "backup_preferred";
+  const preliminaryWiseImageStatement =
+    imageImport &&
+    importMode === "statement" &&
+    /wise/i.test([metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName].filter(Boolean).join(" "));
+  const fallbackAssetPrefetchPromise =
+    shouldPrioritizeBackupEarly && !pageImages && !pdfFileDataBase64
+      ? loadFallbackAssets().catch((error) => {
+          console.warn("Unable to prefetch backup parser assets; continuing without early handoff boost", {
+            importFileId,
+            error,
+          });
+          return null;
+        })
+      : null;
+  const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
+  const earlyOpenAiFallbackPromise =
+    shouldPrioritizeBackupEarly && importMode === "statement"
+      ? (async () => {
+          const prefetchedAssets = fallbackAssetPrefetchPromise ? await fallbackAssetPrefetchPromise : null;
+          const earlyPageImages = prefetchedAssets?.pageImages ?? pageImages ?? null;
+          const earlyPdfFileDataBase64 = prefetchedAssets?.pdfFileDataBase64 ?? pdfFileDataBase64 ?? null;
+          return parseImportTextWithOpenAIFallback({
+            text: textForParse,
+            fileName,
+            fileType,
+            detectedMetadata: metadataForParse,
+            parsedRows,
+            pageImages: earlyPageImages,
+            fileDataBase64: earlyPdfFileDataBase64,
+            preferPrimary: openAiPrimaryMode || Boolean(earlyPageImages?.length),
+            importMode,
+            pageImageLimit: imageImport && importMode === "statement" ? 1 : preliminaryWiseImageStatement ? 1 : null,
+            timeoutMs: imageImport && importMode === "statement" ? 35_000 : preliminaryWiseImageStatement ? 60_000 : null,
+            retryTimeoutMs: imageImport && importMode === "statement" ? 15_000 : preliminaryWiseImageStatement ? 20_000 : null,
+          }).catch((error) => {
+            console.warn("Early backup parser kickoff failed; falling back to standard handoff path", {
+              importFileId,
+              error,
+            });
+            return null;
+          });
+        })()
+      : null;
+  if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+    const preliminaryCheckpointSourceMetadata = {
+      ...metadataForParse,
+      importMode: effectiveImportMode,
+      documentType: effectiveImportMode,
+      workflowStage: autoRerunAttempt > 0 ? "auto_rerunning" : "reading_account_details",
+      statementFingerprint,
+      statementFamilySignature,
+      parserRoutingDecision: preliminaryParserRoutingDecision.decision,
+      parserRoutingReasons: preliminaryParserRoutingDecision.reasons,
+      localParseHealthScore: preliminaryParserRoutingDecision.localParseHealthScore,
+      hasTemplateMemory,
+      templateCandidateCount: scoredInstitutionTemplates.length,
+      earlyRoutingDecision: preliminaryParserRoutingDecision.decision,
+      earlyRoutingReasons: preliminaryParserRoutingDecision.reasons,
+      earlyLocalParseHealthScore: preliminaryParserRoutingDecision.localParseHealthScore,
+      earlyBackupParserPreferred: shouldPrioritizeBackupEarly,
+    } as Prisma.InputJsonValue;
+
+    await prisma.accountStatementCheckpoint.upsert({
+      where: { importFileId },
+      update: {
+        workspaceId: importFile.workspaceId,
+        statementStartDate: metadataForParse.startDate ? new Date(metadataForParse.startDate) : null,
+        statementEndDate: metadataForParse.endDate ? new Date(metadataForParse.endDate) : null,
+        openingBalance: metadataForParse.openingBalance === null ? null : metadataForParse.openingBalance.toString(),
+        endingBalance: metadataForParse.endingBalance === null ? null : metadataForParse.endingBalance.toString(),
+        status: "pending",
+        mismatchReason: null,
+        sourceMetadata: preliminaryCheckpointSourceMetadata,
+      },
+      create: {
+        workspaceId: importFile.workspaceId,
+        importFileId,
+        statementStartDate: metadataForParse.startDate ? new Date(metadataForParse.startDate) : null,
+        statementEndDate: metadataForParse.endDate ? new Date(metadataForParse.endDate) : null,
+        openingBalance: metadataForParse.openingBalance === null ? null : metadataForParse.openingBalance.toString(),
+        endingBalance: metadataForParse.endingBalance === null ? null : metadataForParse.endingBalance.toString(),
+        status: "pending",
+        sourceMetadata: preliminaryCheckpointSourceMetadata,
+        rowCount: parsedRows.length,
+      },
+    }).catch((error) => {
+      console.warn("Preliminary statement checkpoint upsert failed; continuing import", {
+        importFileId,
+        error,
+      });
+    });
+  }
   const isLikelyBpiScreenshotStatement =
     likelyScreenshotStatement &&
     /bpi/i.test([metadataForParse.institution, metadataForParse.accountName, metadataForParse.accountNumber, fileName].filter(Boolean).join(" "));
@@ -7041,6 +6946,7 @@ export const processImportFileText = async (
   const parsedRowsNeedBpiTranscriptRepair =
     isLikelyBpiScreenshotStatement &&
     Boolean(pageImages?.length) &&
+    !shouldPrioritizeBackupEarly &&
     (parsedRows.length === 0 ||
       !hasDeterministicBpiMobileScreenshotRows ||
       hasSuspiciousLegacyScreenshotDates(parsedRows as Array<Record<string, unknown>>));
@@ -7066,12 +6972,7 @@ export const processImportFileText = async (
     }).catch(() => null);
 
     if (transcript?.transcript.trim()) {
-      const sanitizedTranscript = sanitizeStatementImageOcrText(transcript.transcript);
-      statementImageOcrCleanup = {
-        removedLineCount: Math.max(statementImageOcrCleanup.removedLineCount, sanitizedTranscript.removedLineCount),
-        originalLineCount: Math.max(statementImageOcrCleanup.originalLineCount, sanitizedTranscript.originalLineCount),
-      };
-      const transcriptText = sanitizedTranscript.text;
+      const transcriptText = normalizeStatementImageOcrText(transcript.transcript);
       const transcriptRows = parseImportText(transcriptText, fileName, fileType, {
         institution: "BPI",
         accountName: metadataForParse.accountName ?? "BPI",
@@ -7102,12 +7003,52 @@ export const processImportFileText = async (
           (rawPayload as Record<string, unknown>).source === "bpi_mobile_screenshot"))
     );
   });
+  const isGsaveImageStatement =
+    imageImport &&
+    importMode === "statement" &&
+    /gsave|unoready|unoboost|uno digital bank/i.test(
+      [metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName].filter(Boolean).join(" ")
+    );
+  if (isGsaveImageStatement && parsedRows.length === 0 && pageImages?.length && !shouldPrioritizeBackupEarly) {
+    await updateImportFileCompat(importFileId, {
+      status: "processing",
+      processingPhase: "identifying_transactions",
+      processingMessage: "Reading GSave screenshot details...",
+    }).catch(() => null);
+
+    const transcript = await transcribeImportImagesWithOpenAI({
+      fileName,
+      fileType,
+      detectedMetadata: {
+        ...metadataForParse,
+        institution: "GSave",
+        accountName: metadataForParse.accountName ?? "GSave",
+        accountType: metadataForParse.accountType ?? "bank",
+      },
+      pageImages,
+      importMode,
+      timeoutMs: 45_000,
+    }).catch(() => null);
+
+    if (transcript?.transcript.trim()) {
+      const transcriptText = normalizeStatementImageOcrText(transcript.transcript);
+      const transcriptRows = parseImportText(transcriptText, fileName, fileType, {
+        institution: "GSave",
+        accountName: metadataForParse.accountName ?? "GSave",
+        accountNumber: metadataForParse.accountNumber,
+      });
+      if (transcriptRows.length > 0) {
+        textForParse = transcriptText;
+        parsedRows = transcriptRows;
+      }
+    }
+  }
   const isWiseImageStatement =
     imageImport &&
     importMode === "statement" &&
     /wise/i.test([metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName].filter(Boolean).join(" "));
   let wiseImageTranscriptAttempted = false;
-  if (isWiseImageStatement && parsedRows.length === 0 && pageImages?.length) {
+  if (isWiseImageStatement && parsedRows.length === 0 && pageImages?.length && !shouldPrioritizeBackupEarly) {
     wiseImageTranscriptAttempted = true;
     await updateImportFileCompat(importFileId, {
       status: "processing",
@@ -7128,12 +7069,7 @@ export const processImportFileText = async (
       timeoutMs: 45_000,
     });
     if (transcript?.transcript.trim()) {
-      const sanitizedTranscript = sanitizeStatementImageOcrText(transcript.transcript);
-      statementImageOcrCleanup = {
-        removedLineCount: Math.max(statementImageOcrCleanup.removedLineCount, sanitizedTranscript.removedLineCount),
-        originalLineCount: Math.max(statementImageOcrCleanup.originalLineCount, sanitizedTranscript.originalLineCount),
-      };
-      const transcriptText = sanitizedTranscript.text;
+      const transcriptText = normalizeStatementImageOcrText(transcript.transcript);
       const transcriptRows = parseImportText(transcriptText, fileName, fileType, {
         institution: "Wise",
         accountName: metadataForParse.accountName ?? "Wise",
@@ -7143,6 +7079,121 @@ export const processImportFileText = async (
         parsedRows = transcriptRows;
       }
     }
+  }
+  const shouldRepairGenericScreenshotTranscript = shouldAttemptGenericScreenshotTranscriptRepair({
+    likelyScreenshotStatement,
+    hasTemplateMemory,
+    shouldPrioritizeBackupEarly,
+    pageImageCount: pageImages?.length ?? 0,
+    parsedRowsLength: parsedRows.length,
+    parseLooksUsable: preliminaryImageStatementAssessment?.parseLooksUsable ?? false,
+    shouldDiscardBeforeBackup: preliminaryImageStatementAssessment?.shouldDiscardBeforeBackup ?? false,
+    institutionHint: metadataForParse.institution ?? metadataForParse.accountName ?? null,
+    fileName,
+  });
+  if (shouldRepairGenericScreenshotTranscript && pageImages?.length) {
+    await updateImportFileCompat(importFileId, {
+      status: "processing",
+      processingPhase: "identifying_transactions",
+      processingMessage: "Repairing screenshot text for a new layout...",
+    }).catch(() => null);
+
+    const transcript = await transcribeImportImagesWithOpenAI({
+      fileName,
+      fileType,
+      detectedMetadata: metadataForParse,
+      pageImages,
+      importMode,
+      timeoutMs: 25_000,
+    }).catch(() => null);
+
+    if (transcript?.transcript.trim()) {
+      const transcriptText = normalizeStatementImageOcrText(transcript.transcript);
+      const transcriptRows = parseImportText(transcriptText, fileName, fileType, {
+        institution: metadataForParse.institution,
+        accountName: metadataForParse.accountName,
+        accountNumber: metadataForParse.accountNumber,
+      });
+      const transcriptRowsWithDates = countRowsWithParseableDates(transcriptRows);
+      const transcriptDateCoverage = transcriptRows.length > 0 ? transcriptRowsWithDates / transcriptRows.length : 0;
+      const transcriptAssessment = assessImageStatementParse({
+        rows: transcriptRows as Array<Record<string, unknown>>,
+        metadata: metadataForParse,
+        fileName,
+        parsedRowsWithDates: transcriptRowsWithDates,
+        parsedDateCoverage: transcriptDateCoverage,
+        parsedRowsHaveMultipleAccountNumbers: hasMultipleParsedAccountNumbers(transcriptRows as Array<Record<string, unknown>>),
+        suspiciousDateCoverage:
+          transcriptRows.length >= 6 && transcriptRowsWithDates === 0
+            ? true
+            : transcriptRows.length >= 10 && transcriptDateCoverage < 0.25,
+        prefersVisionFallbackForInstitution: false,
+      });
+      const shouldAdoptTranscriptRows =
+        transcriptRows.length > 0 &&
+        (
+          transcriptAssessment.parseLooksUsable ||
+          transcriptRows.length > parsedRows.length ||
+          (transcriptRows.length === parsedRows.length && transcriptRowsWithDates > preliminaryParsedRowsWithDates)
+        );
+      if (shouldAdoptTranscriptRows) {
+        textForParse = transcriptText;
+        parsedRows = transcriptRows;
+      }
+    }
+  }
+  const hasStructuredWiseScreenshotRows = parsedRows.some((row) => {
+    const rawPayload = row.rawPayload;
+    return (
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (rawPayload as Record<string, unknown>).kind === "wise_mobile_screenshot_transaction"
+    );
+  });
+  const parsedRowsWithInitialDates = countRowsWithParseableDates(parsedRows);
+  const shouldDiscardUndatedGenericWiseRows =
+    isWiseImageStatement &&
+    parsedRows.length > 0 &&
+    !hasStructuredWiseScreenshotRows &&
+    parsedRowsWithInitialDates === 0;
+  if (shouldDiscardUndatedGenericWiseRows) {
+    console.warn("[import-parse] discarded undated generic Wise screenshot rows before backup handoff", {
+      importFileId,
+      rowCount: parsedRows.length,
+      institution: metadataForParse.institution ?? null,
+      fileName,
+    });
+    parsedRows = [];
+  }
+  const initialParsedRowsWithDates = imageImport && importMode === "statement" ? countRowsWithParseableDates(parsedRows) : 0;
+  const initialImageStatementAssessment =
+    imageImport && importMode === "statement"
+      ? assessImageStatementParse({
+          rows: parsedRows as Array<Record<string, unknown>>,
+          metadata: metadataForParse,
+          fileName,
+          parsedRowsWithDates: initialParsedRowsWithDates,
+          parsedDateCoverage: parsedRows.length > 0 ? initialParsedRowsWithDates / parsedRows.length : 0,
+          parsedRowsHaveMultipleAccountNumbers: hasMultipleParsedAccountNumbers(parsedRows as Array<Record<string, unknown>>),
+          suspiciousDateCoverage: false,
+          prefersVisionFallbackForInstitution: false,
+        })
+      : null;
+  const suspiciousInitialScreenshotRows = initialImageStatementAssessment?.suspiciousScreenshotRows ?? 0;
+  const suspiciousInitialScreenshotCoverage = initialImageStatementAssessment?.suspiciousScreenshotCoverage ?? 0;
+  const shouldDiscardGenericScreenshotRowsBeforeBackup =
+    imageImport && importMode === "statement" && (initialImageStatementAssessment?.shouldDiscardBeforeBackup ?? false);
+  if (shouldDiscardGenericScreenshotRowsBeforeBackup) {
+    console.warn("[import-parse] discarded suspicious generic screenshot rows before backup handoff", {
+      importFileId,
+      rowCount: parsedRows.length,
+      suspiciousInitialScreenshotRows,
+      suspiciousInitialScreenshotCoverage: Number(suspiciousInitialScreenshotCoverage.toFixed(3)),
+      institution: metadataForParse.institution ?? null,
+      fileName,
+    });
+    parsedRows = [];
   }
   const parsedRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(parsedRows as Array<Record<string, unknown>>);
   const hasKnownUnionBankSampleRows = parsedRows.some((row) => {
@@ -7163,10 +7214,6 @@ export const processImportFileText = async (
   const hasKnownInstitution = Boolean(metadataForParse.institution && metadataForParse.institution !== "Unknown");
   const parsedRowsWithDates = countRowsWithParseableDates(parsedRows);
   const parsedDateCoverage = parsedRows.length > 0 ? parsedRowsWithDates / parsedRows.length : 0;
-  const screenshotNoiseRatio =
-    imageImport && importMode === "statement" && statementImageOcrCleanup.originalLineCount > 0
-      ? statementImageOcrCleanup.removedLineCount / statementImageOcrCleanup.originalLineCount
-      : 0;
   const gcashLooksStructurallyReadable =
     metadataForParse.institution === "GCash" &&
     parsedRows.length >= 6 &&
@@ -7178,7 +7225,7 @@ export const processImportFileText = async (
     parsedRows.length < 6 &&
     !metadataForParse.endingBalance &&
     !gcashLooksStructurallyReadable;
-  const looksCharacterSpacedOcr = sourceTextLooksCharacterSpacedOcr || hasCharacterSpacedOcrText(textForParse);
+  const looksCharacterSpacedOcr = /(?:\b[A-Z]\s+){8,}[A-Z]\b/.test(textForParse);
   const genericIdentityLooksWeak =
     !metadataForParse.accountName ||
     metadataForParse.accountName === metadataForParse.institution ||
@@ -7203,20 +7250,28 @@ export const processImportFileText = async (
   const genericParseLooksSuspicious =
     (importFile.fileType === "application/pdf" || imageImport) &&
     (looksCharacterSpacedOcr || genericIdentityLooksWeak || (metadataForParse.confidence ?? 0) < 75);
+  const screenshotLikeFile = isLikelyScreenshotImageFile(fileName);
   const suspiciousDateCoverage =
     (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && parsedRowsWithDates === 0
       ? true
       : (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 10 && parsedDateCoverage < 0.25;
-  const imageStatementParseLooksUsable =
-    imageImport &&
-    importMode === "statement" &&
-    imageStatementRowsLookUsable(parsedRows as Array<Record<string, unknown>>, metadataForParse, {
-      parsedRowsWithDates,
-      parsedDateCoverage,
-      parsedRowsHaveMultipleAccountNumbers,
-      suspiciousDateCoverage,
-      prefersVisionFallbackForInstitution,
-    });
+  const imageStatementAssessment =
+    imageImport && importMode === "statement"
+      ? assessImageStatementParse({
+          rows: parsedRows as Array<Record<string, unknown>>,
+          metadata: metadataForParse,
+          fileName,
+          parsedRowsWithDates,
+          parsedDateCoverage,
+          parsedRowsHaveMultipleAccountNumbers,
+          suspiciousDateCoverage,
+          prefersVisionFallbackForInstitution,
+        })
+      : null;
+  const suspiciousScreenshotRows = imageStatementAssessment?.suspiciousScreenshotRows ?? 0;
+  const suspiciousScreenshotCoverage = imageStatementAssessment?.suspiciousScreenshotCoverage ?? 0;
+  const screenshotRowsLookStructurallyWeak = imageStatementAssessment?.screenshotRowsLookStructurallyWeak ?? false;
+  const imageStatementParseLooksUsable = imageStatementAssessment?.parseLooksUsable ?? false;
   const hasReliableDeterministicStatementParse =
     hasKnownUnionBankSampleRows ||
     (importMode === "statement" &&
@@ -7227,137 +7282,35 @@ export const processImportFileText = async (
       Boolean(metadataForParse.accountNumber || parsedRowsHaveMultipleAccountNumbers) &&
       !prefersVisionFallbackForInstitution &&
       !genericParseLooksSuspicious &&
+      !screenshotRowsLookStructurallyWeak &&
       !suspiciousDateCoverage);
-  const surfaceFingerprint = fingerprintImportSurface({
-    importMode,
+  const parserRoutingDecision = buildParserRoutingDecision({
     fileType: importFile.fileType,
-    fileName,
     imageImport,
-    likelyScreenshotStatement,
-    textPreview: textForParse,
-    detectedMetadata: metadataForParse,
-  });
-  const localParseRisk = assessLocalParseRisk({
-    rows: parsedRows,
     importMode,
-    imageImport,
-    fileName,
-    institution: metadataForParse.institution ?? null,
-    parsedRowsWithDates,
-    parsedDateCoverage,
-    screenshotNoiseRatio,
-    surfaceFingerprintKind: surfaceFingerprint.kind,
-  });
-  const fastFailureLooksUnsupported =
-    importMode === "statement" &&
-    imageImport &&
-    parsedRows.length === 0 &&
-    !hasKnownInstitution &&
-    surfaceFingerprint.kind === "generic_document" &&
-    text.trim().length < 80 &&
-    screenshotNoiseRatio >= 0.35;
-  const parserRouteDecision = decideImportParserRoute({
-    importMode,
-    fileType: importFile.fileType,
-    fileName,
-    imageImport,
-    likelyScreenshotStatement,
+    screenshotLikeFile,
+    screenshotArtifactCoverage: suspiciousScreenshotCoverage,
+    hasTemplateMemory,
+    trainedReceiptDetails: Boolean(trainedReceiptDetails),
     canReuseCachedStatementParse,
     hasReliableDeterministicStatementParse,
     imageStatementParseLooksUsable,
-    prefersVisionFallbackForInstitution,
+    textForParse: textForParse,
+    parsedRowsLength: parsedRows.length,
     hasKnownInstitution,
-    parsedRowsCount: parsedRows.length,
-    parsedDateCoverage,
-    parsedRowsHaveMultipleAccountNumbers,
-    genericParseLooksSuspicious: genericParseLooksSuspicious || gcashSuspiciouslySparse || localParseRisk.rejectFastPath,
+    metadataConfidence: metadataForParse.confidence ?? 0,
+    hasAccountNumber: Boolean(metadataForParse.accountNumber),
+    hasMultipleAccountNumbers: parsedRowsHaveMultipleAccountNumbers,
+    genericParseLooksSuspicious: genericParseLooksSuspicious || screenshotRowsLookStructurallyWeak,
+    gcashSuspiciouslySparse,
     suspiciousDateCoverage,
-    textLength: text.trim().length,
-    textPreview: textForParse,
-    screenshotNoiseRatio,
-    detectedMetadata: metadataForParse,
-    trainedReceiptDetails: Boolean(trainedReceiptDetails),
-    prefersBackupParserForTemplateFamily: templatePrefersBackupParser,
-    surfaceFingerprint,
-    visualRecoveryAttempt,
+    prefersVisionFallbackForInstitution,
+    genericIdentityLooksWeak,
+    parsedDateCoverage,
+    historicalRoutingHint,
   });
-  const visualBackupAvailableBeforeFailure = shouldAttemptVisualBackupBeforeFailure({
-    routeDecision: parserRouteDecision,
-    imageImport,
-    isPdfImport: isPdfImportFile(fileType, fileName),
-    trainedReceiptDetails: Boolean(trainedReceiptDetails),
-    canReuseCachedStatementParse,
-  });
-  if (fastFailureLooksUnsupported && !visualBackupAvailableBeforeFailure) {
-    const requeuedForRecovery = await markNoRowsVisualImportForRecovery({
-      importFileId,
-      processingAttempt: importFile.processingAttempt,
-      importMode: "statement",
-      reason: "fast_unsupported_surface",
-      institution: metadataForParse.institution ?? null,
-    });
-    if (requeuedForRecovery) {
-      return {
-        imported: 0,
-        duplicate: false,
-        metadata: metadataForParse,
-        accountId: null,
-        accountSummaries: [],
-        confirmedTransactionsCount: 0,
-        insightSummary: undefined,
-        accountBalance: null,
-        status: "error",
-      };
-    }
-    const processingMessage = buildNoRowsImportFailureMessage({
-      institution: metadataForParse.institution ?? null,
-      surfaceFingerprintKind: surfaceFingerprint.kind,
-      imageImport,
-      importMode,
-    });
-    await updateImportFileCompat(importFileId, {
-      status: "failed",
-      processingPhase: "repair_needed",
-      processingMessage,
-      parsedRowsCount: 0,
-      confirmedTransactionsCount: 0,
-    }).catch(() => null);
-    emitImportProcessingEvent("import_processing_stalled", {
-      processing_status: "failed",
-      processing_phase: "repair_needed",
-      reason: "fast_unsupported_surface",
-      institution: metadataForParse.institution ?? null,
-      error_code: "I-104",
-    });
-    return {
-      imported: 0,
-      duplicate: false,
-      metadata: metadataForParse,
-      accountId: null,
-      accountSummaries: [],
-      confirmedTransactionsCount: 0,
-      insightSummary: undefined,
-      accountBalance: null,
-      status: "error",
-    };
-  }
-  const shouldUseVisionFallback =
-    parserRouteDecision.route !== "deterministic" &&
-    parserRouteDecision.shouldRenderPageImages &&
-    !trainedReceiptDetails &&
-    !canReuseCachedStatementParse;
-  const fallbackPageImageLimit = resolveFallbackPageImageLimit({
-    importMode,
-    imageImport,
-    fileType,
-    parserRoute: parserRouteDecision.route,
-    surfaceFingerprintKind: surfaceFingerprint.kind,
-    parsedRowsCount: parsedRows.length,
-    screenshotNoiseRatio,
-    genericParseLooksSuspicious,
-    pageImagesAvailable: pageImages?.length ?? 0,
-    isWiseImageStatement,
-  });
+  const shouldForceBackupForSuspiciousParse = parserRoutingDecision.shouldForceBackupForSuspiciousParse;
+  const shouldUseVisionFallback = parserRoutingDecision.shouldUseVisionFallback;
   if (imageStatementParseLooksUsable) {
     console.info("[import-performance] using fast screenshot statement parse", {
       importFileId,
@@ -7366,55 +7319,62 @@ export const processImportFileText = async (
       dateCoverage: Number(parsedDateCoverage.toFixed(3)),
     });
   }
-  console.info("[import-routing] parser route decision", {
-    importFileId,
-    route: parserRouteDecision.route,
-    confidence: parserRouteDecision.confidence,
-    reason: parserRouteDecision.reason,
-    targetDecisionWindowMs: parserRouteDecision.targetDecisionWindowMs,
-    institution: metadataForParse.institution ?? null,
-    surfaceFingerprintKind: surfaceFingerprint.kind,
-    surfaceFingerprintConfidence: surfaceFingerprint.confidence,
-    surfaceFingerprintReason: surfaceFingerprint.reason,
-    visualRecoveryAttempt,
-    rowCount: parsedRows.length,
-    metadataConfidence: metadataForParse.confidence ?? 0,
-    screenshotNoiseRatio: Number(screenshotNoiseRatio.toFixed(3)),
-    localParseRiskScore: localParseRisk.score,
-    localParseRiskReasons: localParseRisk.reasons,
-  });
-  const receiptFastPathSignal =
-    imageImport && importMode === "receipt" ? hasStructuredReceiptFastPathSignal(receiptPreview, previewReceiptValidation?.score ?? 0) : false;
+  const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
+  const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
+  const receiptPreviewLooksLikeReceipt =
+    Boolean(
+      receiptPreview &&
+        receiptPreview.confidence >= 80 &&
+        (
+          (receiptPreview.items.length > 0 && receiptPreview.total !== null && receiptPreview.billDate) ||
+          (receiptPreview.total !== null && (receiptPreview.receiptAccountMatch || receiptPreview.paymentMethod))
+        )
+    );
+  const receiptPreviewIsUsable = isReceiptPreviewUsable(receiptPreview);
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
-    parserRouteDecision.route === "deterministic" ||
+    hasReliableDeterministicStatementParse ||
+    imageStatementParseLooksUsable ||
     (isLikelyBpiScreenshotStatement &&
       hasDeterministicBpiMobileScreenshotRows &&
       !hasSuspiciousLegacyScreenshotDates(parsedRows as Array<Record<string, unknown>>)) ||
     Boolean(trainedReceiptDetails) ||
-    (visualRecoveryAttempt <= 0 &&
-      imageImport &&
-      ((importMode === "receipt" && receiptFastPathSignal) ||
-        (parsedRows.length > 0 &&
-          (metadataForParse.confidence ?? 0) >= 75 &&
-          !genericParseLooksSuspicious &&
-          !suspiciousDateCoverage &&
-          !prefersVisionFallbackForInstitution)));
-  if (shouldUseVisionFallback && !pageImages) {
+    (imageImport &&
+    !shouldForceBackupForSuspiciousParse &&
+    ((importMode === "receipt" && receiptPreviewIsUsable) ||
+      (parsedRows.length > 0 &&
+        (metadataForParse.confidence ?? 0) >= 75 &&
+        !genericParseLooksSuspicious &&
+        !suspiciousDateCoverage &&
+        !prefersVisionFallbackForInstitution)));
+  if (shouldUseVisionFallback || shouldForceBackupForSuspiciousParse) {
+    await updateImportFileCompat(importFileId, {
+      status: "processing",
+      processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "identifying_transactions",
+      processingMessage:
+        parserRoutingDecision.decision === "backup_required"
+          ? "Switching to Clover backup parser because the local parse looks incomplete."
+          : "Double-checking this file with Clover backup parser.",
+    }).catch(() => null);
+  }
+  if (shouldUseVisionFallback && !pageImages && !pdfFileDataBase64) {
     try {
-      if (!storageKey) {
-        throw new Error("Missing imported file.");
-      }
-      if (imageImport) {
-        pageImages = await readImportedFileImageDataUrls({
-          storageKey,
-          fileType,
-          fileName,
-        });
-      } else if (isPdfImportFile(fileType, fileName)) {
+      if (fallbackAssetPrefetchPromise) {
+        const prefetchedAssets = await fallbackAssetPrefetchPromise;
+        if (prefetchedAssets?.pageImages) {
+          pageImages = prefetchedAssets.pageImages;
+        }
+        if (prefetchedAssets?.pdfFileDataBase64) {
+          pdfFileDataBase64 = prefetchedAssets.pdfFileDataBase64;
+        }
+      } else if (imageImport) {
+        const prefetchedAssets = await loadFallbackAssets();
+        pageImages = prefetchedAssets.pageImages;
+        pdfFileDataBase64 = prefetchedAssets.pdfFileDataBase64;
+      } else {
         pageImages = await readImportedPdfPageImages(
           {
-            storageKey,
+            storageKey: String(importFile.storageKey ?? ""),
             fileType,
             fileName,
           },
@@ -7424,10 +7384,6 @@ export const processImportFileText = async (
           options.pdfJsBaseUrl,
           !text.trim() || imageImport
         );
-        if ((!pageImages || pageImages.length === 0) && fileType === "application/pdf") {
-          const importedBytes = await downloadImportObject(storageKey);
-          pdfFileDataBase64 = Buffer.from(importedBytes).toString("base64");
-        }
       }
     } catch (error) {
       console.warn("Unable to render page images for fallback; continuing without them", {
@@ -7439,52 +7395,57 @@ export const processImportFileText = async (
   }
   let openAiParsed: Awaited<ReturnType<typeof parseImportTextWithOpenAIFallback>> | null = null;
   let openAiMetadata: typeof metadataForParse | null = null;
-  const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
-  const fallbackSeedRows = localParseRisk.rejectSeedRowsForFallback ? [] : parsedRows;
-  if (!canUseFastImageParse) {
+  const shouldRunOpenAiFallback = !canUseFastImageParse || shouldForceBackupForSuspiciousParse || shouldUseVisionFallback;
+  const shouldRaceBackupAgainstLocal =
+    importMode === "statement" &&
+    parserRoutingDecision.decision === "backup_preferred" &&
+    parsedRows.length > 0 &&
+    (imageStatementParseLooksUsable || parsedDateCoverage >= 0.5 || parsedRows.length >= 4);
+  let backupParserRaceResolved = false;
+  let backupParserRaceTimedOut = false;
+  if (shouldRunOpenAiFallback) {
     if (importMode === "receipt") {
       await updateImportFileCompat(importFileId, {
         status: "processing",
         processingPhase: "reading_receipt_vision",
         processingMessage: "Reading receipt image...",
       }).catch(() => null);
-    } else if (parserRouteDecision.route === "backup_openai") {
-      await updateImportFileCompat(importFileId, {
-        status: "processing",
-        processingPhase: "identifying_transactions",
-        processingMessage: localParseRisk.rejectSeedRowsForFallback
-          ? "Discarding an unreliable local parse and switching to the AI backup parser..."
-          : "Switching to AI backup parser...",
-      }).catch(() => null);
     }
-    openAiParsed = await parseImportTextWithOpenAIFallback({
-      text: textForParse,
-      fileName,
-      fileType,
-      detectedMetadata: metadataForParse,
-      parsedRows: fallbackSeedRows,
-      pageImages,
-      fileDataBase64: pdfFileDataBase64,
-      preferPrimary: openAiPrimaryMode || parserRouteDecision.shouldPreferOpenAiPrimary || Boolean(pageImages?.length),
-      importMode,
-      pageImageLimit: fallbackPageImageLimit,
-      timeoutMs:
-        imageImport && importMode === "statement"
-          ? parserRouteDecision.route === "backup_openai"
-            ? 20_000
-            : 15_000
-          : isWiseImageStatement
-            ? 25_000
-            : null,
-      retryTimeoutMs:
-        imageImport && importMode === "statement"
-          ? parserRouteDecision.route === "backup_openai"
-            ? 10_000
-            : 8_000
-          : isWiseImageStatement
-            ? 12_000
-            : null,
-    });
+    if (importMode === "statement" && earlyOpenAiFallbackPromise && shouldRaceBackupAgainstLocal) {
+      const racedBackupResult = await waitForPromiseWithin(
+        earlyOpenAiFallbackPromise,
+        EARLY_BACKUP_PARSER_DECISION_WINDOW_MS
+      );
+      backupParserRaceResolved = racedBackupResult.resolved;
+      backupParserRaceTimedOut = !racedBackupResult.resolved;
+      openAiParsed = racedBackupResult.resolved ? racedBackupResult.value : null;
+      if (backupParserRaceTimedOut) {
+        await updateImportFileCompat(importFileId, {
+          status: "processing",
+          processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "identifying_transactions",
+          processingMessage: "Running hybrid import. Clover is keeping the faster local result moving while backup parsing continues.",
+        }).catch(() => null);
+      }
+    } else {
+      openAiParsed =
+        importMode === "statement" && earlyOpenAiFallbackPromise
+          ? await earlyOpenAiFallbackPromise
+          : await parseImportTextWithOpenAIFallback({
+              text: textForParse,
+              fileName,
+              fileType,
+              detectedMetadata: metadataForParse,
+              parsedRows,
+              pageImages,
+              fileDataBase64: pdfFileDataBase64,
+              preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
+              importMode,
+              pageImageLimit: imageImport && importMode === "statement" ? 1 : isWiseImageStatement ? 1 : null,
+              timeoutMs: imageImport && importMode === "statement" ? 35_000 : isWiseImageStatement ? 60_000 : null,
+              retryTimeoutMs: imageImport && importMode === "statement" ? 15_000 : isWiseImageStatement ? 20_000 : null,
+            });
+      backupParserRaceResolved = Boolean(importMode === "statement" && earlyOpenAiFallbackPromise);
+    }
 
     openAiMetadata = openAiParsed
       ? mergeStatementMetadataWithTemplate(
@@ -7519,7 +7480,20 @@ export const processImportFileText = async (
         )
       : null;
   }
-  const receiptDetails =
+  const parserRoutingMetadata = {
+    decision: parserRoutingDecision.decision,
+    reasons: parserRoutingDecision.reasons,
+    localParseHealthScore: parserRoutingDecision.localParseHealthScore,
+    hasTemplateMemory,
+    templateCandidateCount: scoredInstitutionTemplates.length,
+    shouldForceBackupForSuspiciousParse,
+    shouldUseVisionFallback,
+    shouldRunOpenAiFallback,
+    usedHybridRaceMode: shouldRaceBackupAgainstLocal,
+    backupParserRaceResolved,
+    backupParserRaceTimedOut,
+  } as const;
+  let receiptDetails =
     importMode === "receipt" &&
     trainedReceiptDetails
       ? trainedReceiptDetails
@@ -7528,13 +7502,15 @@ export const processImportFileText = async (
     (openAiParsed.receiptDetails.merchant_raw ||
       openAiParsed.receiptDetails.merchant_clean ||
       openAiParsed.receiptDetails.total !== null ||
+      openAiParsed.receiptDetails.transaction_date ||
+      openAiParsed.receiptDetails.payment_method ||
       openAiParsed.receiptDetails.line_items.length > 0 ||
       openAiParsed.receiptDetails.split_allocations.length > 0)
       ? openAiParsed.receiptDetails
-      : receiptPreviewLooksLikeReceipt
+      : receiptPreviewIsUsable
         ? receiptPreviewDetails
         : null;
-  const receiptAccountMatch =
+  let receiptAccountMatch =
     importMode === "receipt"
       ? trainedReceiptFixture?.accountMatch ??
         openAiParsed?.receiptAccountMatch ??
@@ -7546,7 +7522,7 @@ export const processImportFileText = async (
               reason: receiptPreview.receiptAccountMatch.reason,
             }
           : null)
-      : receiptPreviewLooksLikeReceipt && receiptPreview?.receiptAccountMatch
+      : receiptPreviewIsUsable && receiptPreview?.receiptAccountMatch
         ? {
             account_name: receiptPreview.receiptAccountMatch.accountName,
             account_last4: receiptPreview.receiptAccountMatch.accountLast4,
@@ -7555,7 +7531,7 @@ export const processImportFileText = async (
           }
       : null;
 
-  const openAiReceiptValidation =
+  let openAiReceiptValidation =
     importMode === "receipt"
       ? assessReceiptExtractionQuality({
           receiptDetails: receiptDetails ?? null,
@@ -7585,8 +7561,15 @@ export const processImportFileText = async (
   const imageTranscriptRequiresRetry = Boolean(
     imageImport &&
     pageImages?.length &&
-    !canUseFastImageParse &&
-    (importMode === "receipt" || !shouldPreferDirectImageStatementVision || likelyScreenshotStatement)
+    shouldRunOpenAiFallback &&
+    importMode !== "receipt" &&
+    (!shouldPreferDirectImageStatementVision || likelyScreenshotStatement)
+  );
+  const receiptTranscriptRequiresRetry = Boolean(
+    imageImport &&
+      pageImages?.length &&
+      shouldRunOpenAiFallback &&
+      importMode === "receipt"
   );
   const openAiParseIsUsableWiseScreenshot =
     imageImport &&
@@ -7601,43 +7584,179 @@ export const processImportFileText = async (
         .filter(Boolean)
         .join(" ")
     );
-  const openAiRowsQuality =
-    openAiParsed && importMode === "statement" ? assessFallbackRowsQuality(openAiParsed.rows as ParsedImportRow[]) : null;
-  const openAiResultLooksLowQuality =
-    imageImport &&
-    importMode === "statement" &&
-    Boolean(openAiRowsQuality) &&
-    Boolean(
-      openAiRowsQuality &&
-        openAiRowsQuality.total >= 6 &&
-        (openAiRowsQuality.suspiciousNameShare >= 0.2 ||
-          openAiRowsQuality.weakCategoryShare >= 0.7 ||
-          openAiRowsQuality.datedShare < 0.7)
-    );
+  const openAiStatementIdentityPresent =
+    Boolean(openAiMetadata?.accountNumber) ||
+    (Boolean(openAiMetadata?.institution) &&
+      openAiMetadata?.institution !== "Unknown" &&
+      (Boolean(openAiMetadata?.accountName) || Boolean(openAiParsed?.rows.some((row) => row.accountName || row.institution))));
   const openAiResultLooksSparse =
     !openAiParsed ||
     (importMode === "statement" &&
       !openAiParseIsUsableWiseScreenshot &&
-      (openAiParsed.rows.length === 0 || !openAiMetadata?.accountNumber)) ||
-    openAiResultLooksLowQuality ||
+      (openAiParsed.rows.length === 0 || !openAiStatementIdentityPresent)) ||
     (importMode === "receipt" &&
       (!openAiParsed.receiptDetails ||
-        (openAiReceiptValidation !== null && openAiReceiptValidation.score < 3) ||
-        (!openAiParsed.receiptDetails.merchant_raw &&
-          !openAiParsed.receiptDetails.total &&
-          openAiParsed.receiptDetails.line_items.length === 0 &&
-          openAiParsed.receiptDetails.split_allocations.length === 0))) ||
+        (openAiReceiptValidation !== null && openAiReceiptValidation.score < 2) ||
+        (countReceiptDetailSignals(openAiParsed.receiptDetails) < 2 &&
+          !openAiParsed.receiptAccountMatch))) ||
     ((importMode === "portfolio" || importMode === "account_detail") &&
       (!openAiParsed.holdings.length || !openAiMetadata?.accountName));
 
-  if (openAiResultLooksLowQuality && openAiRowsQuality) {
-    console.warn("[import-fallback] openai fallback result looked low quality; retrying transcript path", {
-      importFileId,
-      weakCategoryShare: Number(openAiRowsQuality.weakCategoryShare.toFixed(3)),
-      suspiciousNameShare: Number(openAiRowsQuality.suspiciousNameShare.toFixed(3)),
-      datedShare: Number(openAiRowsQuality.datedShare.toFixed(3)),
-      rowCount: openAiRowsQuality.total,
+  if (receiptTranscriptRequiresRetry && openAiResultLooksSparse) {
+    const transcript = await transcribeImportImagesWithOpenAI({
+      fileName,
+      fileType,
+      detectedMetadata: openAiMetadata ?? metadataForParse,
+      pageImages: pageImages ?? [],
+      importMode,
     });
+
+    if (transcript?.transcript.trim()) {
+      const transcriptNormalized = normalizeStatementImageOcrText(transcript.transcript);
+      const transcriptPreview = parseReceiptText(transcriptNormalized);
+      const transcriptPreviewDetails = isReceiptPreviewUsable(transcriptPreview)
+        ? buildReceiptDetailsFromPreview(transcriptPreview)
+        : null;
+      const transcriptParsed = await parseImportTextWithOpenAIFallback({
+        text: transcriptNormalized,
+        fileName,
+        fileType,
+        detectedMetadata: openAiMetadata ?? metadataForParse,
+        parsedRows: [],
+        pageImages: null,
+        fileDataBase64: pdfFileDataBase64,
+        preferPrimary: openAiPrimaryMode,
+        importMode,
+        timeoutMs: 20_000,
+        retryTimeoutMs: 15_000,
+      });
+
+      const transcriptReceiptDetails =
+        transcriptParsed?.receiptDetails && countReceiptDetailSignals(transcriptParsed.receiptDetails) > 0
+          ? transcriptParsed.receiptDetails
+          : transcriptPreviewDetails;
+      const transcriptReceiptValidation = assessReceiptExtractionQuality({
+        receiptDetails: transcriptReceiptDetails ?? null,
+        expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
+      });
+      const existingReceiptSignalCount = countReceiptDetailSignals(receiptDetails ?? null);
+      const transcriptReceiptSignalCount = countReceiptDetailSignals(transcriptReceiptDetails ?? null);
+
+      if (
+        transcriptReceiptDetails &&
+        (
+          !receiptDetails ||
+          transcriptReceiptValidation.score > (openAiReceiptValidation?.score ?? 0) ||
+          transcriptReceiptSignalCount > existingReceiptSignalCount
+        )
+      ) {
+        openAiParsed = transcriptParsed ?? openAiParsed;
+        if (!openAiParsed && transcriptReceiptDetails) {
+          openAiParsed = {
+            metadata: openAiMetadata ??
+              metadataForParse ?? {
+                institution: null,
+                accountNumber: null,
+                accountName: null,
+                accountType: "cash",
+                currency: transcriptPreview.currency ?? "PHP",
+                openingBalance: null,
+                endingBalance: null,
+                paymentDueDate: null,
+                totalAmountDue: null,
+                startDate: transcriptPreview.billDate ?? null,
+                endDate: transcriptPreview.billDate ?? null,
+                confidence: transcript.confidence ?? transcriptPreview.confidence ?? 0,
+              },
+            holdings: [],
+            receiptAccountMatch:
+              transcriptParsed?.receiptAccountMatch ??
+              (transcriptPreview.receiptAccountMatch
+                ? {
+                    account_name: transcriptPreview.receiptAccountMatch.accountName,
+                    account_last4: transcriptPreview.receiptAccountMatch.accountLast4,
+                    confidence: transcriptPreview.receiptAccountMatch.confidence,
+                    reason: transcriptPreview.receiptAccountMatch.reason,
+                  }
+                : null),
+            receiptDetails: transcriptReceiptDetails,
+            rows: [],
+            model: transcriptParsed?.model ?? "openai-transcript-receipt-fallback",
+            promptVersion: transcriptParsed?.promptVersion ?? "transcript-fallback",
+            audit: transcriptParsed?.audit ?? {
+              sourceFilename: fileName ?? null,
+              confidence: transcript.confidence ?? transcriptPreview.confidence ?? 0,
+              schemaValidated: false,
+              schemaValidationResult: "transcript_receipt_fallback",
+              rawResponse: transcript.transcript,
+            },
+          };
+        } else if (openAiParsed) {
+          openAiParsed = {
+            ...openAiParsed,
+            receiptDetails: transcriptReceiptDetails,
+            receiptAccountMatch:
+              transcriptParsed?.receiptAccountMatch ??
+              openAiParsed.receiptAccountMatch ??
+              (transcriptPreview.receiptAccountMatch
+                ? {
+                    account_name: transcriptPreview.receiptAccountMatch.accountName,
+                    account_last4: transcriptPreview.receiptAccountMatch.accountLast4,
+                    confidence: transcriptPreview.receiptAccountMatch.confidence,
+                    reason: transcriptPreview.receiptAccountMatch.reason,
+                  }
+                : null),
+          };
+        }
+
+        receiptDetails =
+          importMode === "receipt" &&
+          trainedReceiptDetails
+            ? trainedReceiptDetails
+            : importMode === "receipt" &&
+              openAiParsed?.receiptDetails &&
+              (openAiParsed.receiptDetails.merchant_raw ||
+                openAiParsed.receiptDetails.merchant_clean ||
+                openAiParsed.receiptDetails.total !== null ||
+                openAiParsed.receiptDetails.transaction_date ||
+                openAiParsed.receiptDetails.payment_method ||
+                openAiParsed.receiptDetails.line_items.length > 0 ||
+                openAiParsed.receiptDetails.split_allocations.length > 0)
+              ? openAiParsed.receiptDetails
+              : receiptPreviewIsUsable
+                ? receiptPreviewDetails
+                : null;
+
+        receiptAccountMatch =
+          importMode === "receipt"
+            ? trainedReceiptFixture?.accountMatch ??
+              openAiParsed?.receiptAccountMatch ??
+              (receiptPreview?.receiptAccountMatch
+                ? {
+                    account_name: receiptPreview.receiptAccountMatch.accountName,
+                    account_last4: receiptPreview.receiptAccountMatch.accountLast4,
+                    confidence: receiptPreview.receiptAccountMatch.confidence,
+                    reason: receiptPreview.receiptAccountMatch.reason,
+                  }
+                : null)
+            : receiptPreviewIsUsable && receiptPreview?.receiptAccountMatch
+              ? {
+                  account_name: receiptPreview.receiptAccountMatch.accountName,
+                  account_last4: receiptPreview.receiptAccountMatch.accountLast4,
+                  confidence: receiptPreview.receiptAccountMatch.confidence,
+                  reason: receiptPreview.receiptAccountMatch.reason,
+                }
+              : null;
+
+        openAiReceiptValidation =
+          importMode === "receipt"
+            ? assessReceiptExtractionQuality({
+                receiptDetails: receiptDetails ?? null,
+                expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
+              })
+            : null;
+      }
+    }
   }
 
   if (imageTranscriptRequiresRetry && openAiResultLooksSparse) {
@@ -7798,25 +7917,26 @@ export const processImportFileText = async (
         : parsedRows.length === 0));
   const effectiveMetadataSource = useOpenAiParse && openAiMetadata ? openAiMetadata : metadataForParse;
   const knownBpiMobileScreenshotFallbackRows =
-    importMode === "statement" && (isKnownBpiMobileScreenshotFile(fileName) || Boolean(knownGfundsScreenshotFallbackText.trim()))
+    importMode === "statement" &&
+    (isKnownBpiMobileScreenshotFile(fileName) || Boolean(buildGfundsScreenshotFallbackText(fileName))) &&
+    parsedRows.length === 0
       ? parseImportText(
-          knownBpiScreenshotFallbackText || knownGfundsScreenshotFallbackText,
+          buildBpiMobileScreenshotFallbackText(fileName) ?? buildGfundsScreenshotFallbackText(fileName) ?? "",
           fileName,
           fileType,
           {
             institution:
               effectiveMetadataSource.institution ??
               metadataForParse.institution ??
-              (isKnownBpiMobileScreenshotFile(fileName) ? "BPI" : "ATRAM"),
+              (isKnownBpiMobileScreenshotFile(fileName) ? "BPI" : "GFunds"),
             accountName: effectiveMetadataSource.accountName ?? metadataForParse.accountName ?? null,
             accountNumber: effectiveMetadataSource.accountNumber ?? metadataForParse.accountNumber ?? null,
           }
         )
       : [];
-  const shouldPreferKnownBpiMobileScreenshotFallbackRows = knownBpiMobileScreenshotFallbackRows.length > 0;
   const effectiveRowsBase = normalizeWiseWalletParsedRows(
     (
-      shouldPreferKnownBpiMobileScreenshotFallbackRows
+      knownBpiMobileScreenshotFallbackRows.length > 0
         ? knownBpiMobileScreenshotFallbackRows
         : useOpenAiParse && openAiParsed
           ? openAiParsed.rows
@@ -7831,20 +7951,10 @@ export const processImportFileText = async (
         accountName: effectiveMetadataSource.accountName,
       })
     : effectiveRowsBase;
-  const screenshotOverlapCollapse = collapseParsedScreenshotOverlapRows(effectiveRows as ParsedImportRow[]);
-  const effectiveRowsCollapsed = screenshotOverlapCollapse.rows as typeof effectiveRows;
-  if (screenshotOverlapCollapse.removed > 0) {
-    console.info("[import-screenshot] collapsed overlapping screenshot rows", {
-      importFileId,
-      removed: screenshotOverlapCollapse.removed,
-      before: effectiveRows.length,
-      after: effectiveRowsCollapsed.length,
-    });
-  }
-  const effectiveRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(effectiveRowsCollapsed as Array<Record<string, unknown>>);
-  const parsedEndingBalance = getTrailingBalanceFromParsedRows(effectiveRowsCollapsed);
+  const effectiveRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(effectiveRows as Array<Record<string, unknown>>);
+  const parsedEndingBalance = getTrailingBalanceFromParsedRows(effectiveRows);
   const ucpbKnownSampleMetadata = (() => {
-    const sampleRows = (effectiveRowsCollapsed as Array<Record<string, unknown>>).filter((row) => {
+    const sampleRows = (effectiveRows as Array<Record<string, unknown>>).filter((row) => {
       const rawPayload = row.rawPayload;
       return (
         rawPayload &&
@@ -7899,7 +8009,7 @@ export const processImportFileText = async (
     };
   })();
   const unionBankKnownSampleMetadata = (() => {
-    const sampleRows = (effectiveRowsCollapsed as Array<Record<string, unknown>>).filter((row) => {
+    const sampleRows = (effectiveRows as Array<Record<string, unknown>>).filter((row) => {
       const rawPayload = row.rawPayload;
       return (
         rawPayload &&
@@ -7972,7 +8082,7 @@ export const processImportFileText = async (
   let confirmedImportResult: ConfirmImportResult | null = null;
   await ensureParsedAccountGroupsMaterialized({
     importFile,
-    rows: effectiveRowsCollapsed as Array<Record<string, unknown>>,
+    rows: effectiveRows as Array<Record<string, unknown>>,
     metadata: resolvedMetadata,
   }).catch((error) => {
     console.warn("[import-account-match] unable to materialize parsed account groups before duplicate check", {
@@ -7985,68 +8095,40 @@ export const processImportFileText = async (
     statementFingerprint,
     importFileId,
   });
-  const shouldRepairMultiAccountDuplicate = hasMultipleParsedAccountNumbers(effectiveRowsCollapsed as Array<Record<string, unknown>>);
+  const shouldRepairMultiAccountDuplicate = hasMultipleParsedAccountNumbers(effectiveRows as Array<Record<string, unknown>>);
   if (duplicateImportFileId && !options.allowDuplicateStatement && !shouldRepairMultiAccountDuplicate) {
     await updateImportFileCompat(importFileId, {
       status: "done",
     });
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
-  const rows = effectiveRowsCollapsed as EnrichedParsedImportRow[];
-  const recentScreenshotBatchContext = await loadRecentScreenshotBatchContext({
-    workspaceId: String(importFile.workspaceId),
-    importFileId,
-    importMode,
-    imageImport,
-    uploadedAt: importFile.uploadedAt ?? importFile.createdAt ?? null,
-  });
-  const effectiveDocumentPageCount = pageImages?.length ?? (imageImport ? 1 : 0);
-  const visibleImportCompleteness = assessVisibleImportCompleteness({
-    rows,
-    importMode,
-    imageImport,
-    pageCount: effectiveDocumentPageCount,
-    institution: resolvedMetadata.institution ?? metadataForParse.institution ?? null,
-    parserRoute: parserRouteDecision.route,
-  });
-  const qaTargetScore = resolveImportQaTargetScore({
-    importMode,
-    imageImport,
-    surfaceFingerprintKind: surfaceFingerprint.kind,
-    rowsCount: rows.length,
-    completeness: visibleImportCompleteness,
-  });
-  const importHealthSummary = assessImportHealthSummary({
-    parserRoute: parserRouteDecision.route,
-    rows,
-    completeness: visibleImportCompleteness,
-    screenshotNoiseRatio,
-    parserConfidence: openAiParsed?.audit?.confidence ?? resolvedMetadata.confidence ?? null,
-    imageImport,
+  const rows = effectiveRows as EnrichedParsedImportRow[];
+  const backupLearningSignalsForTemplate = extractBackupParserLearningSignals(
+    rows.filter((row) => {
+      const rawPayload = row.rawPayload;
+      return (
+        rawPayload &&
+        typeof rawPayload === "object" &&
+        !Array.isArray(rawPayload) &&
+        (rawPayload as Record<string, unknown>).source === "openai"
+      );
+    }) as EnrichedParsedImportRow[]
+  );
+  const unsupervisedLearningSnapshot = buildUnsupervisedLearningSnapshot(rows, {
+    maxClusters: 12,
+    minConfidence: useOpenAiParse ? 74 : 70,
+    minTeachability: useOpenAiParse ? 58 : 55,
   });
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
     processingPhase: rows.length > 0 ? "reconciling" : "identifying_transactions",
-    processingTargetScore: autoRerunEnabled ? qaTargetScore : null,
     processingMessage:
       rows.length > 0
         ? canReuseCachedStatementParse
           ? "Clover is reusing the cached parse and saving the results."
-          : recentScreenshotBatchContext.activeSiblingCount > 0 && visibleImportCompleteness.likelyIncomplete
-            ? `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} and is waiting for ${recentScreenshotBatchContext.activeSiblingCount} related screenshot file${recentScreenshotBatchContext.activeSiblingCount === 1 ? "" : "s"} to finish processing.`
-          : visibleImportCompleteness.likelyIncomplete
-            ? `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} and is checking whether the screenshot batch is complete.`
-          : importHealthSummary.status === "watch"
-            ? `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} and is verifying import quality before finalizing.`
-          : importHealthSummary.status === "at_risk"
-            ? `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} but the import still looks risky, so it is running extra checks.`
-          : parserRouteDecision.route === "deterministic"
-            ? `Fast parser found ${rows.length} visible row${rows.length === 1 ? "" : "s"}. Clover is saving them now.`
-            : `Clover found ${rows.length} visible row${rows.length === 1 ? "" : "s"} and is finishing the ${parserRouteDecision.route === "hybrid_openai" ? "hybrid" : "backup"} parse.`
-        : parserRouteDecision.route === "backup_openai"
-          ? "Clover is identifying transactions with the AI backup parser."
-          : "Clover is identifying transactions.",
+          : "Clover is saving the visible rows."
+        : "Clover is identifying transactions.",
   });
 
   const extractedTextFileFingerprint = textCacheInfo?.cacheRecord?.fileFingerprint ?? null;
@@ -8055,13 +8137,13 @@ export const processImportFileText = async (
       workspaceId: String(importFile.workspaceId),
       fileFingerprint: extractedTextFileFingerprint,
       fileType,
-      importMode,
+      importMode: effectiveImportMode,
       extractedText: textForParse,
       statementFingerprint,
       statementFamilySignature,
       metadata: resolvedMetadata,
       parsedRows: rows as unknown as Prisma.InputJsonValue,
-      pageCount: effectiveDocumentPageCount,
+      pageCount: pageImages?.length ?? 0,
       confidence: resolvedMetadata.confidence ?? 0,
       hitCount: (textCacheInfo?.cacheRecord?.hitCount ?? 0) + 1,
     }).catch((error) => {
@@ -8093,144 +8175,39 @@ export const processImportFileText = async (
     parsedRowsCount: rows.length,
   });
 
-  let resolvedDocumentImportAccount = importFile.account ?? null;
-  if (
-    isDocumentImport &&
-    !resolvedDocumentImportAccount &&
-    (typeof resolvedMetadata.accountName === "string" && resolvedMetadata.accountName.trim()
-      ? true
-      : typeof resolvedMetadata.institution === "string" && resolvedMetadata.institution.trim())
-  ) {
-    try {
-      resolvedDocumentImportAccount = await resolveConfirmationAccount({
-        importFile,
-        statementMetadata: {
-          accountName: resolvedMetadata.accountName ?? null,
-          institution: resolvedMetadata.institution ?? null,
-          accountNumber: resolvedMetadata.accountNumber ?? null,
-          accountType: resolvedMetadata.accountType ?? null,
-          currency: resolvedMetadata.currency ?? null,
-          openingBalance: resolvedMetadata.openingBalance ?? null,
-          endingBalance: resolvedMetadata.endingBalance ?? resolvedMetadata.totalAmountDue ?? null,
-          creditLimit: resolvedMetadata.creditLimit ?? null,
-        },
-        parsedRows: rows,
-        accountId: null,
-        planLimits: null,
-        planAccountCount: null,
-      });
-      if (resolvedDocumentImportAccount?.id) {
-        await updateImportFileCompat(importFileId, {
-          accountId: resolvedDocumentImportAccount.id,
-        });
-      }
-    } catch (error) {
-      console.warn("[import-account-match] unable to materialize document import account from metadata", {
-        importFileId,
-        importMode,
-        institution: resolvedMetadata.institution ?? null,
-        accountName: resolvedMetadata.accountName ?? null,
-        error,
-      });
-    }
-  }
-
-  const derivedDocumentMode =
-    importMode === "statement" && openAiParsed?.documentType && openAiParsed.documentType !== "statement"
-      ? openAiParsed.documentType
-      : importMode;
-  const documentImportAccountSummaries =
-    resolvedDocumentImportAccount?.id
-      ? [
-          {
-            accountId: resolvedDocumentImportAccount.id,
-            accountName: resolvedDocumentImportAccount.name,
-            institution: resolvedDocumentImportAccount.institution,
-            accountNumber: resolvedDocumentImportAccount.accountNumber,
-            accountType: resolvedDocumentImportAccount.type,
-            balance:
-              resolvedMetadata.endingBalance !== null && resolvedMetadata.endingBalance !== undefined
-                ? resolvedMetadata.endingBalance.toString()
-                : snapshotBalanceToString(resolvedDocumentImportAccount.balance),
-            rowsImported: rows.length,
-          },
-        ]
-      : [];
   const documentImportSourceMetadata = {
-    importMode,
-    documentType: derivedDocumentMode,
-    receiptFamily:
-      derivedDocumentMode === "receipt"
-        ? trainedReceiptFixture?.documentType ?? receiptPreview?.receiptType ?? null
-        : receiptPreviewLooksLikeReceipt
-          ? receiptPreview?.receiptType ?? null
-          : null,
-    matchedTrainingFixture:
-      derivedDocumentMode === "receipt" && trainedReceiptFixture
-        ? {
-            fileName: trainedReceiptFixture.fileName,
-            merchant: trainedReceiptFixture.merchant,
-            amount: trainedReceiptFixture.amount,
-            date: trainedReceiptFixture.date,
-          }
-        : null,
+    importMode: effectiveImportMode,
+    documentType: effectiveImportMode,
     statementFingerprint,
     fileName,
     fileType,
     rowCount: rows.length,
-    pageCount: effectiveDocumentPageCount,
-    usedVisionFallback: imageImport || Boolean(pageImages?.length),
+    pageCount: pageImages?.length ?? 0,
+    usedVisionFallback: Boolean(pageImages?.length),
     usedOpenAiFallback: Boolean(useOpenAiParse),
     usedDeterministicParser: !useOpenAiParse,
     usedFastScreenshotParse: imageStatementParseLooksUsable,
-    parserRoute: parserRouteDecision.route,
-    parserRouteConfidence: parserRouteDecision.confidence,
-    parserRouteReason: parserRouteDecision.reason,
-    parserRouteDecisionWindowMs: parserRouteDecision.targetDecisionWindowMs,
-    screenshotOverlapRowsRemoved: screenshotOverlapCollapse.removed,
-    extractionCacheHit: Boolean(textCacheInfo?.cacheHit),
-    visibleImportCompletenessScore: visibleImportCompleteness.score,
-    visibleImportLikelyIncomplete: visibleImportCompleteness.likelyIncomplete,
-    visibleImportCompletenessReasons: visibleImportCompleteness.reasons,
-    visibleImportRowsPerPage: Number(visibleImportCompleteness.rowsPerPage.toFixed(2)),
-    visibleImportDistinctDateCount: visibleImportCompleteness.distinctDateCount,
-    visibleImportDateSpanDays: visibleImportCompleteness.dateSpanDays,
-    visibleImportMaxDateGapDays: visibleImportCompleteness.maxDateGapDays,
-    visibleImportEarliestDate: visibleImportCompleteness.earliestDate,
-    visibleImportLatestDate: visibleImportCompleteness.latestDate,
-    screenshotOcrNoiseLinesRemoved: statementImageOcrCleanup.removedLineCount,
-    screenshotOcrOriginalLineCount: statementImageOcrCleanup.originalLineCount,
-    screenshotOcrNoiseRatio:
-      statementImageOcrCleanup.originalLineCount > 0
-        ? Number((statementImageOcrCleanup.removedLineCount / statementImageOcrCleanup.originalLineCount).toFixed(3))
-        : 0,
-    surfaceFingerprintKind: surfaceFingerprint.kind,
-    surfaceFingerprintConfidence: surfaceFingerprint.confidence,
-    surfaceFingerprintReason: surfaceFingerprint.reason,
-    localParseRiskScore: localParseRisk.score,
-    localParseRiskReasons: localParseRisk.reasons,
-    localParseRiskFilenameLeakShare: localParseRisk.filenameLeakShare,
-    localParseRiskZeroAmountShare: localParseRisk.zeroAmountShare,
-    localParseRiskRejectedFastPath: localParseRisk.rejectFastPath,
-    localParseRiskRejectedSeedRowsForFallback: localParseRisk.rejectSeedRowsForFallback,
-    importHealthScore: importHealthSummary.score,
-    importHealthStatus: importHealthSummary.status,
-    importHealthReasons: importHealthSummary.reasons,
-    importHealthWeakCategoryShare: importHealthSummary.weakCategoryShare,
-    importHealthSuspiciousNameShare: importHealthSummary.suspiciousNameShare,
-    importHealthDatedShare: importHealthSummary.datedShare,
+    parserRoutingDecision: parserRoutingMetadata.decision,
+    parserRoutingReasons: parserRoutingMetadata.reasons,
+    localParseHealthScore: parserRoutingMetadata.localParseHealthScore,
+    forcedBackupFallback: parserRoutingMetadata.shouldForceBackupForSuspiciousParse,
+    routedThroughVisionFallback: parserRoutingMetadata.shouldUseVisionFallback,
+    routedThroughBackupParser: parserRoutingMetadata.shouldRunOpenAiFallback,
+    usedHybridRaceMode: parserRoutingMetadata.usedHybridRaceMode,
+    backupParserRaceResolved: parserRoutingMetadata.backupParserRaceResolved,
+    backupParserRaceTimedOut: parserRoutingMetadata.backupParserRaceTimedOut,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
-  const receiptDocumentFallbackCashAccountId =
-    derivedDocumentMode === "receipt"
+  const receiptDocumentCashAccountId =
+    effectiveImportMode === "receipt"
       ? await resolveWorkspaceCashAccountId(String(importFile.workspaceId), resolvedMetadata.currency ?? "PHP")
       : null;
   const documentImportAccountId =
-    derivedDocumentMode === "receipt"
-      ? resolvedReceiptAccountId ?? receiptDocumentFallbackCashAccountId
+    effectiveImportMode === "receipt"
+      ? receiptDocumentCashAccountId
       : receiptPreviewLooksLikeReceipt
-        ? resolvedDocumentImportAccount?.id ?? resolvedReceiptAccountId
-        : resolvedDocumentImportAccount?.id ?? null;
+        ? importFile.account?.id ?? resolvedReceiptAccountId
+        : importFile.account?.id ?? null;
   const documentImportExtractedPayload = {
     metadata: resolvedMetadata,
     rowCount: rows.length,
@@ -8243,9 +8220,9 @@ export const processImportFileText = async (
       type: row.type ?? null,
       confidence: row.confidence ?? null,
     })),
-    receiptValidation: importMode === "receipt" || receiptPreviewLooksLikeReceipt ? openAiReceiptValidation : null,
-    receiptDetails: importMode === "receipt" || receiptPreviewLooksLikeReceipt ? receiptDetails : null,
-    receiptAccountMatch: importMode === "receipt" || receiptPreviewLooksLikeReceipt ? receiptAccountMatch : null,
+    receiptValidation: effectiveImportMode === "receipt" || receiptPreviewLooksLikeReceipt ? openAiReceiptValidation : null,
+    receiptDetails: effectiveImportMode === "receipt" || receiptPreviewLooksLikeReceipt ? receiptDetails : null,
+    receiptAccountMatch: effectiveImportMode === "receipt" || receiptPreviewLooksLikeReceipt ? receiptAccountMatch : null,
     receiptAccountResolution,
     openAiAudit: openAiParsed?.audit
       ? {
@@ -8261,103 +8238,69 @@ export const processImportFileText = async (
     workspaceId: String(importFile.workspaceId),
     importFileId,
     accountId: documentImportAccountId,
-    documentFamily: derivedDocumentMode,
+    documentFamily: effectiveImportMode,
     documentSubtype:
-      derivedDocumentMode === "receipt"
+      effectiveImportMode === "receipt"
         ? "receipt"
-        : derivedDocumentMode === "portfolio"
+        : effectiveImportMode === "portfolio"
           ? resolvedMetadata.accountType ?? resolvedMetadata.accountName ?? "portfolio"
-          : derivedDocumentMode === "account_detail"
+          : effectiveImportMode === "account_detail"
             ? resolvedMetadata.accountType ?? resolvedMetadata.accountName ?? "account_detail"
-            : derivedDocumentMode === "notes"
+            : effectiveImportMode === "notes"
               ? "notes"
               : "statement",
-    institution: derivedDocumentMode === "receipt" ? null : resolvedMetadata.institution ?? null,
-    accountName: derivedDocumentMode === "receipt" ? "Cash" : resolvedMetadata.accountName ?? null,
-    accountNumber: derivedDocumentMode === "receipt" ? null : resolvedMetadata.accountNumber ?? null,
+    institution: effectiveImportMode === "receipt" ? null : resolvedMetadata.institution ?? null,
+    accountName: effectiveImportMode === "receipt" ? "Cash" : resolvedMetadata.accountName ?? null,
+    accountNumber: effectiveImportMode === "receipt" ? null : resolvedMetadata.accountNumber ?? null,
     currency: resolvedMetadata.currency ?? null,
-    pageCount: effectiveDocumentPageCount,
+    pageCount: pageImages?.length ?? 0,
     confidence: resolvedMetadata.confidence ?? 0,
     sourceMetadata: documentImportSourceMetadata,
     rawPayload: documentImportExtractedPayload,
     extractedPayload: documentImportExtractedPayload,
   });
 
-  const persistDocumentImportPages = async () => {
-    if (!documentImportRecord) {
-      return;
-    }
-    let persistedPageImages = pageImages;
-    if (!persistedPageImages?.length && imageImport && storageKey) {
-      try {
-        persistedPageImages = await readImportedFileImageDataUrls({
-          storageKey,
-          fileType,
-          fileName,
-        });
-      } catch (error) {
-        console.warn("Unable to lazily load document import page images", {
-          importFileId,
-          error,
-        });
-      }
-    }
-    if (!persistedPageImages?.length) {
-      return;
-    }
+  if (documentImportRecord && pageImages?.length) {
     await replaceDocumentImportPagesCompat({
       documentImportId: documentImportRecord.id,
-      pages: persistedPageImages.map(({ page }) => ({
+      pages: pageImages.map(({ page }) => ({
         pageNumber: page,
         imageName: `${fileName || "import"}-page-${page}`,
         pageType:
-          derivedDocumentMode === "receipt"
+          effectiveImportMode === "receipt"
             ? "receipt_page"
-            : derivedDocumentMode === "portfolio"
+            : effectiveImportMode === "portfolio"
               ? "portfolio_page"
-              : derivedDocumentMode === "account_detail"
+              : effectiveImportMode === "account_detail"
                 ? "account_detail_page"
-                : derivedDocumentMode === "notes"
+                : effectiveImportMode === "notes"
                   ? "notes_page"
                   : "statement_page",
         visibleTitle:
-          derivedDocumentMode === "receipt"
+          effectiveImportMode === "receipt"
             ? "Receipt"
-            : derivedDocumentMode === "portfolio"
+            : effectiveImportMode === "portfolio"
               ? resolvedMetadata.accountName ?? resolvedMetadata.institution ?? "Portfolio"
-              : derivedDocumentMode === "account_detail"
+              : effectiveImportMode === "account_detail"
                 ? resolvedMetadata.accountName ?? resolvedMetadata.institution ?? "Account details"
-                : derivedDocumentMode === "notes"
+                : effectiveImportMode === "notes"
                   ? "Notes"
                   : resolvedMetadata.accountName ?? resolvedMetadata.institution ?? "Statement",
         visibleDate: resolvedMetadata.endDate ?? resolvedMetadata.paymentDueDate ?? null,
         visibleCurrency: resolvedMetadata.currency ?? null,
-        layoutNotes: `Imported ${derivedDocumentMode} page ${page}`,
+        layoutNotes: `Imported ${effectiveImportMode} page ${page}`,
         confidence: resolvedMetadata.confidence ?? 0,
         rawPayload: {
           pageNumber: page,
-          importMode: derivedDocumentMode,
+          importMode: effectiveImportMode,
           fileName,
           fileType,
         } as Prisma.InputJsonValue,
       })),
     });
-  };
-
-  if (documentImportRecord) {
-    if (isDocumentImport) {
-      void persistDocumentImportPages().catch((error) => {
-        console.warn("Unable to persist document import pages in background", {
-          importFileId,
-          error,
-        });
-      });
-    } else {
-      await persistDocumentImportPages();
-    }
   }
 
-  if (documentImportRecord && (derivedDocumentMode === "receipt" || receiptDetails)) {
+  if (documentImportRecord && (effectiveImportMode === "receipt" || receiptDetails)) {
     const receiptDetailsPayload = receiptDetails ?? openAiParsed?.receiptDetails ?? null;
     const receiptAccountMatchPayload = receiptAccountMatch ?? openAiParsed?.receiptAccountMatch ?? null;
     const receiptValidation = openAiReceiptValidation;
@@ -8385,23 +8328,23 @@ export const processImportFileText = async (
         : null,
       confidence: resolvedMetadata.confidence ?? 0,
       rawPayload: {
-        documentType: derivedDocumentMode,
+        documentType: effectiveImportMode,
         metadata: resolvedMetadata,
         receiptAccountMatch: receiptAccountMatchPayload,
         receiptAccountResolution,
         receiptDetails: receiptDetailsPayload,
         receiptValidation,
         rowCount: rows.length,
-        pageCount: effectiveDocumentPageCount,
+        pageCount: pageImages?.length ?? 0,
       } as Prisma.InputJsonValue,
     });
   }
 
-  if (documentImportRecord && (derivedDocumentMode === "portfolio" || derivedDocumentMode === "account_detail")) {
+  if (documentImportRecord && (effectiveImportMode === "portfolio" || effectiveImportMode === "account_detail")) {
     const investmentSnapshot = await upsertInvestmentSnapshotCompat({
       workspaceId: String(importFile.workspaceId),
       documentImportId: documentImportRecord.id,
-      accountId: resolvedDocumentImportAccount?.id ?? null,
+      accountId: importFile.account?.id ?? null,
       snapshotDate: parseDateValue(resolvedMetadata.endDate ?? null),
       portfolioName: resolvedMetadata.accountName ?? resolvedMetadata.institution ?? null,
       currency: resolvedMetadata.currency ?? null,
@@ -8411,10 +8354,10 @@ export const processImportFileText = async (
       gainLossPercent: null,
       confidence: resolvedMetadata.confidence ?? 0,
       rawPayload: {
-        documentType: derivedDocumentMode,
+        documentType: effectiveImportMode,
         metadata: resolvedMetadata,
         rowCount: rows.length,
-        pageCount: effectiveDocumentPageCount,
+        pageCount: pageImages?.length ?? 0,
       } as Prisma.InputJsonValue,
     });
 
@@ -8423,7 +8366,7 @@ export const processImportFileText = async (
         workspaceId: String(importFile.workspaceId),
         investmentSnapshotId: investmentSnapshot.id,
         documentImportId: documentImportRecord.id,
-        accountId: resolvedDocumentImportAccount?.id ?? null,
+        accountId: importFile.account?.id ?? null,
         holdings: openAiParsed.holdings.map((holding, index) => ({
           rowIndex: index + 1,
           assetName: holding.asset_name,
@@ -8442,7 +8385,7 @@ export const processImportFileText = async (
           rawPayload: {
             parserEvidence: holding.parser_evidence,
             source: "openai",
-            documentType: derivedDocumentMode,
+            documentType: effectiveImportMode,
           } as Prisma.InputJsonValue,
         })),
       });
@@ -8450,123 +8393,165 @@ export const processImportFileText = async (
   }
 
   let template: Awaited<ReturnType<typeof upsertStatementTemplate>> | null = null;
-  if (importMode === "statement") {
+  try {
+    template = await upsertStatementTemplate({
+      workspaceId: importFile.workspaceId,
+      fingerprint: statementFingerprint,
+      metadata: resolvedMetadata,
+      fileType: importFile.fileType,
+      parserConfig: {
+        parserSource: useOpenAiParse ? "backup_parser" : "local_parser",
+        backupParserModel: useOpenAiParse ? openAiParsed?.model ?? null : null,
+        backupParserPromptVersion: useOpenAiParse ? openAiParsed?.promptVersion ?? null : null,
+        backupLearningSignalCount: backupLearningSignalsForTemplate.length,
+        seededFromBackupWithoutPriorTemplate: useOpenAiParse && !hasTemplateMemory,
+        imageImport,
+        importMode: effectiveImportMode,
+        screenshotLikeFile,
+        screenshotArtifactCoverage: Number(suspiciousScreenshotCoverage.toFixed(3)),
+        parserRoutingDecision: parserRoutingMetadata.decision,
+        parserRoutingReasons: parserRoutingMetadata.reasons,
+        localParseHealthScore: parserRoutingMetadata.localParseHealthScore,
+        hasTemplateMemory: parserRoutingMetadata.hasTemplateMemory,
+        templateCandidateCount: parserRoutingMetadata.templateCandidateCount,
+        usedHybridRaceMode: parserRoutingMetadata.usedHybridRaceMode,
+        backupParserRaceResolved: parserRoutingMetadata.backupParserRaceResolved,
+        backupParserRaceTimedOut: parserRoutingMetadata.backupParserRaceTimedOut,
+        unsupervisedLearning: unsupervisedLearningSnapshot,
+        accountType: resolvedMetadata.accountType ?? inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
+        rowCount: rows.length,
+        statementFamilySignature: buildStatementFamilySignatureFromText(
+          textForParse,
+          {
+            institution: resolvedMetadata.institution ?? null,
+            accountType: resolvedMetadata.accountType ?? null,
+          },
+          importFile.fileType
+        ),
+        firstMerchant:
+          typeof rows[0]?.merchantClean === "string"
+            ? rows[0]?.merchantClean
+            : typeof rows[0]?.merchantRaw === "string"
+              ? rows[0]?.merchantRaw
+              : null,
+        lastMerchant:
+          typeof rows.at(-1)?.merchantClean === "string"
+            ? rows.at(-1)?.merchantClean
+            : typeof rows.at(-1)?.merchantRaw === "string"
+              ? rows.at(-1)?.merchantRaw
+              : null,
+      } as Prisma.InputJsonValue,
+    });
+  } catch (error) {
+    console.warn("Statement template upsert failed; continuing import", {
+      importFileId,
+      error,
+    });
+  }
+
+  if (template && unsupervisedLearningSnapshot.clusterCount > 0) {
+    void promoteUnsupervisedLearningClustersForWorkspace({
+      workspaceId: importFile.workspaceId,
+    })
+      .then((result) => {
+        void recordUnsupervisedLearningAuditForTemplate({
+          workspaceId: importFile.workspaceId,
+          fingerprint: template.fingerprint,
+          importFileId,
+          audit: result.audit,
+        }).catch((error) => {
+          console.warn("Unsupervised learning audit persistence failed; continuing import", {
+            importFileId,
+            workspaceId: importFile.workspaceId,
+            error,
+          });
+        });
+        if (result.audit.candidateCount > 0 || result.audit.promotedCount > 0 || result.audit.suspendedCount > 0) {
+          console.info("Unsupervised learning audit", {
+            importFileId,
+            workspaceId: importFile.workspaceId,
+            audit: result.audit,
+          });
+        }
+      })
+      .catch((error) => {
+        console.warn("Unsupervised learning promotion failed; continuing import", {
+          importFileId,
+          workspaceId: importFile.workspaceId,
+          error,
+        });
+      });
+  }
+
+  if (await hasCompatibleTable("AccountStatementCheckpoint")) {
     try {
-      template = await upsertStatementTemplate({
-        workspaceId: importFile.workspaceId,
-        fingerprint: statementFingerprint,
-        metadata: resolvedMetadata,
-        fileType: importFile.fileType,
-        parserConfig: {
-          accountType: resolvedMetadata.accountType ?? inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
+      const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
+      const metadataEndDate = resolvedMetadata.endDate ? new Date(resolvedMetadata.endDate) : null;
+      const checkpointSourceMetadata = {
+        ...resolvedMetadata,
+        importMode: effectiveImportMode,
+        documentType: effectiveImportMode,
+        workflowStage: "identifying_transactions",
+        statementFingerprint,
+        statementFamilySignature,
+        earlyRoutingDecision: readCheckpointParserRoutingDecision(statementCheckpoint?.sourceMetadata) ?? parserRoutingMetadata.decision,
+        earlyRoutingReasons: (() => {
+          const existingEarlyRoutingReasons = readParserRoutingReasons(statementCheckpoint?.sourceMetadata);
+          return existingEarlyRoutingReasons.length > 0 ? existingEarlyRoutingReasons : parserRoutingMetadata.reasons;
+        })(),
+        parserRoutingDecision: parserRoutingMetadata.decision,
+        parserRoutingReasons: parserRoutingMetadata.reasons,
+        localParseHealthScore: parserRoutingMetadata.localParseHealthScore,
+        hasTemplateMemory: parserRoutingMetadata.hasTemplateMemory,
+        templateCandidateCount: parserRoutingMetadata.templateCandidateCount,
+        forcedBackupFallback: parserRoutingMetadata.shouldForceBackupForSuspiciousParse,
+        routedThroughVisionFallback: parserRoutingMetadata.shouldUseVisionFallback,
+        routedThroughBackupParser: parserRoutingMetadata.shouldRunOpenAiFallback,
+        usedHybridRaceMode: parserRoutingMetadata.usedHybridRaceMode,
+        backupParserRaceResolved: parserRoutingMetadata.backupParserRaceResolved,
+        backupParserRaceTimedOut: parserRoutingMetadata.backupParserRaceTimedOut,
+      } as Prisma.InputJsonValue;
+      await prisma.accountStatementCheckpoint.upsert({
+        where: { importFileId },
+        update: {
+          workspaceId: importFile.workspaceId,
+          statementStartDate: metadataStartDate,
+          statementEndDate: metadataEndDate,
+          openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
+          endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
+          status: "pending",
+          mismatchReason: null,
+          sourceMetadata: checkpointSourceMetadata,
           rowCount: rows.length,
-          statementFamilySignature: buildStatementFamilySignatureFromText(
-            textForParse,
-            {
-              institution: resolvedMetadata.institution ?? null,
-              accountType: resolvedMetadata.accountType ?? null,
-            },
-            importFile.fileType
-          ),
-          firstMerchant:
-            typeof rows[0]?.merchantClean === "string"
-              ? rows[0]?.merchantClean
-              : typeof rows[0]?.merchantRaw === "string"
-                ? rows[0]?.merchantRaw
-                : null,
-          lastMerchant:
-            typeof rows.at(-1)?.merchantClean === "string"
-              ? rows.at(-1)?.merchantClean
-              : typeof rows.at(-1)?.merchantRaw === "string"
-                ? rows.at(-1)?.merchantRaw
-                : null,
-        } as Prisma.InputJsonValue,
+        },
+        create: {
+          workspaceId: importFile.workspaceId,
+          importFileId,
+          statementStartDate: metadataStartDate,
+          statementEndDate: metadataEndDate,
+          openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
+          endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
+          status: "pending",
+          sourceMetadata: checkpointSourceMetadata,
+          rowCount: rows.length,
+        },
       });
     } catch (error) {
-      console.warn("Statement template upsert failed; continuing import", {
+      console.warn("Statement checkpoint upsert failed; continuing import", {
         importFileId,
         error,
       });
-    }
-
-    if (await hasCompatibleTable("AccountStatementCheckpoint")) {
-      try {
-        const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
-        const metadataEndDate = resolvedMetadata.endDate ? new Date(resolvedMetadata.endDate) : null;
-        const checkpointSourceMetadata = {
-          ...resolvedMetadata,
-          importMode,
-          documentType: importMode,
-          workflowStage: "identifying_transactions",
-          statementFingerprint,
-          statementFamilySignature,
-        } as Prisma.InputJsonValue;
-        await prisma.accountStatementCheckpoint.upsert({
-          where: { importFileId },
-          update: {
-            workspaceId: importFile.workspaceId,
-            statementStartDate: metadataStartDate,
-            statementEndDate: metadataEndDate,
-            openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
-            endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
-            status: "pending",
-            mismatchReason: null,
-            sourceMetadata: checkpointSourceMetadata,
-            rowCount: rows.length,
-          },
-          create: {
-            workspaceId: importFile.workspaceId,
-            importFileId,
-            statementStartDate: metadataStartDate,
-            statementEndDate: metadataEndDate,
-            openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
-            endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
-            status: "pending",
-            sourceMetadata: checkpointSourceMetadata,
-            rowCount: rows.length,
-          },
-        });
-      } catch (error) {
-        console.warn("Statement checkpoint upsert failed; continuing import", {
-          importFileId,
-          error,
-        });
-      }
     }
   }
 
   if (!isDocumentImport && imageImport && rows.length === 0) {
     const stalledInstitution = resolvedMetadata.institution ?? checkpointBankName ?? null;
-    const requeuedForRecovery = await markNoRowsVisualImportForRecovery({
-      importFileId,
-      processingAttempt: importFile.processingAttempt,
-      importMode: importMode === "receipt" ? "receipt" : "statement",
-      reason: "image_statement_no_rows",
-      institution: stalledInstitution,
-    });
-    if (requeuedForRecovery) {
-      return {
-        imported: 0,
-        duplicate: false,
-        metadata: resolvedMetadata,
-        accountId: null,
-        accountSummaries: [],
-        confirmedTransactionsCount: 0,
-        insightSummary: undefined,
-        accountBalance: null,
-        status: "error",
-      };
-    }
-    const processingMessage = buildNoRowsImportFailureMessage({
-      institution: stalledInstitution,
-      surfaceFingerprintKind: surfaceFingerprint.kind,
-      imageImport,
-      importMode,
-    });
     await updateImportFileCompat(importFileId, {
       status: "failed",
       processingPhase: "repair_needed",
-      processingMessage,
+      processingMessage: stalledInstitution && /wise/i.test(stalledInstitution)
+        ? "Clover recognized this as Wise, but could not read enough visible transaction rows from the screenshot."
+        : "Clover could not read enough visible transaction rows from this screenshot.",
       parsedRowsCount: 0,
       confirmedTransactionsCount: 0,
     });
@@ -8611,10 +8596,7 @@ export const processImportFileText = async (
           duplicate: Boolean(confirmedImportResult.duplicate),
           metadata: resolvedMetadata,
           accountId: confirmedImportResult.accountId ?? null,
-          accountSummaries:
-            confirmedImportResult.accountSummaries && confirmedImportResult.accountSummaries.length > 0
-              ? confirmedImportResult.accountSummaries
-              : documentImportAccountSummaries,
+          accountSummaries: confirmedImportResult.accountSummaries,
           confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
           insightSummary: confirmedImportResult.insightSummary ?? undefined,
           accountBalance: confirmedImportResult.accountBalance ?? null,
@@ -8642,7 +8624,7 @@ export const processImportFileText = async (
         rows,
         metadata: resolvedMetadata,
         startedAt,
-        usedVisionFallback: imageImport || Boolean(pageImages?.length),
+        usedVisionFallback: Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
         actorUserId: options.actorUserId ?? null,
       });
@@ -8699,95 +8681,6 @@ export const processImportFileText = async (
     }
   }
 
-  if (isDocumentImport) {
-    try {
-      confirmedImportResult = await confirmImportFileWithRetry("document_import_finalize");
-      if (confirmedImportResult.status === "staged") {
-        await updateImportFileCompat(importFileId, {
-          status: "processing",
-          processingPhase: "staged",
-          processingMessage: "Clover is still lining things up.",
-        });
-        emitImportProcessingEvent("import_processing_completed", {
-          processing_status: "staged",
-          processing_phase: "staged",
-          imported_rows: confirmedImportResult.imported,
-        });
-
-        return {
-          imported: confirmedImportResult.imported,
-          duplicate: Boolean(confirmedImportResult.duplicate),
-          metadata: resolvedMetadata,
-          accountId: confirmedImportResult.accountId ?? null,
-          accountSummaries: confirmedImportResult.accountSummaries,
-          confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
-          insightSummary: confirmedImportResult.insightSummary ?? undefined,
-          accountBalance: confirmedImportResult.accountBalance ?? null,
-          status: "staged",
-        };
-      }
-
-      await updateImportFileCompat(importFileId, {
-        status: "done",
-        processingPhase: "complete",
-        processingMessage:
-          importMode === "receipt"
-            ? "Receipt document saved."
-            : importMode === "portfolio"
-              ? "Portfolio snapshot saved."
-              : importMode === "account_detail"
-                ? "Account detail snapshot saved."
-                : "Document import saved.",
-        confirmedTransactionsCount: confirmedImportResult.imported,
-      });
-      emitImportProcessingEvent("import_processing_completed", {
-        processing_status: "done",
-        processing_phase: "complete",
-        imported_rows: rows.length,
-      });
-      recordImportDataQaInBackground({
-        workspaceId: String(importFile.workspaceId),
-        importFileId,
-        fileName: String(importFile.fileName ?? "imported-file"),
-        fileType: String(importFile.fileType ?? "unknown"),
-        importMode,
-        rows,
-        metadata: resolvedMetadata,
-        startedAt,
-        usedVisionFallback: imageImport || Boolean(pageImages?.length),
-        usedOpenAiFallback: Boolean(useOpenAiParse),
-        actorUserId: options.actorUserId ?? null,
-      });
-
-      return {
-        imported: rows.length,
-        duplicate: false,
-        metadata: resolvedMetadata,
-        accountId: confirmedImportResult.accountId ?? null,
-        accountSummaries:
-          confirmedImportResult.accountSummaries && confirmedImportResult.accountSummaries.length > 0
-            ? confirmedImportResult.accountSummaries
-            : documentImportAccountSummaries,
-        confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
-        insightSummary: confirmedImportResult.insightSummary ?? undefined,
-        accountBalance: confirmedImportResult.accountBalance ?? null,
-        status: "done",
-      };
-    } catch (error) {
-      await updateImportFileCompat(importFileId, {
-        status: "failed",
-        processingPhase: "repair_needed",
-        processingMessage: "Clover couldn't finish saving the import.",
-      });
-      emitImportProcessingEvent("import_processing_stalled", {
-        processing_status: "failed",
-        processing_phase: "repair_needed",
-        reason: "confirm_import_failed",
-      });
-      throw error;
-    }
-  }
-
   try {
     const qaRunResult = await recordDataQaRun({
       workspaceId: String(importFile.workspaceId),
@@ -8802,10 +8695,10 @@ export const processImportFileText = async (
       timings: {
         totalMs: Date.now() - startedAt,
         parsingMs: Date.now() - startedAt,
-        usedVisionFallback: imageImport || Boolean(pageImages?.length),
+        usedVisionFallback: Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
         usedDeterministicParser: !useOpenAiParse,
-        pageCount: effectiveDocumentPageCount,
+        pageCount: pageImages?.length ?? 0,
       },
       duplicate: false,
       actorUserId: options.actorUserId ?? null,
@@ -8835,15 +8728,14 @@ export const processImportFileText = async (
 
     const hasCriticalFindings = qaRunResult.evaluation.findings.some((finding) => finding.severity === "critical");
     const hasUsableParsedRows = rows.length > 0;
-    const needsCompletenessFollowup = visibleImportCompleteness.likelyIncomplete;
     const allowWarningFinalizeForImageStatement = false;
-    const canFinalizeWithWarnings = hasUsableParsedRows && !hasCriticalFindings && !needsCompletenessFollowup;
+    const canFinalizeWithWarnings = hasUsableParsedRows && !hasCriticalFindings;
     const canFinalizeStableScreenshotImport =
       imageImport &&
       importMode === "statement" &&
       hasUsableParsedRows &&
       !hasCriticalFindings &&
-      qaRunResult.evaluation.score >= Math.max(80, qaTargetScore - 8);
+      qaRunResult.evaluation.score >= Math.max(80, AUTO_REPARSE_SCORE_TARGET - 8);
     if (statementFingerprint && (hasCriticalFindings || qaRunResult.evaluation.score < 75)) {
       await recordStatementTemplateOutcome({
         workspaceId: String(importFile.workspaceId),
@@ -8860,25 +8752,14 @@ export const processImportFileText = async (
     // QA warnings should feed review/learning, not keep a usable statement in a
     // long auto-rerun loop after the account and transaction rows are ready.
     const shouldFinalizeUsableRowsWithWarnings = canFinalizeWithWarnings;
-    const shouldDeferCompletenessRerunToSiblingBatch =
-      imageImport &&
-      importMode === "statement" &&
-      needsCompletenessFollowup &&
-      recentScreenshotBatchContext.activeSiblingCount > 0 &&
-      rows.length > 0;
-    const canFinalizeWhileSiblingScreenshotsContinue =
-      shouldDeferCompletenessRerunToSiblingBatch &&
-      qaRunResult.evaluation.score >= Math.max(80, qaTargetScore - 8) &&
-      importHealthSummary.status !== "at_risk";
     const shouldAutoRerun =
       autoRerunEnabled &&
       !isDocumentImport &&
       !plateaued &&
-      (qaRunResult.evaluation.score < qaTargetScore || needsCompletenessFollowup) &&
+      qaRunResult.evaluation.score < AUTO_REPARSE_SCORE_TARGET &&
       autoRerunAttempt < AUTO_REPARSE_MAX_ATTEMPTS &&
       !allowWarningFinalizeForImageStatement &&
       !canFinalizeStableScreenshotImport &&
-      !shouldDeferCompletenessRerunToSiblingBatch &&
       !shouldFinalizeUsableRowsWithWarnings;
 
     if (shouldAutoRerun) {
@@ -8917,13 +8798,9 @@ export const processImportFileText = async (
         status: "processing",
         processingPhase: "auto_rerunning",
         processingAttempt: autoRerunAttempt + 1,
-        processingTargetScore: qaTargetScore,
+        processingTargetScore: AUTO_REPARSE_SCORE_TARGET,
         processingCurrentScore: qaRunResult.evaluation.score,
-        processingMessage: needsCompletenessFollowup
-          ? visibleImportCompleteness.reasons.includes("large_chronological_gap")
-            ? `Auto-rerun ${autoRerunAttempt + 1}/${AUTO_REPARSE_MAX_ATTEMPTS} queued. Clover detected a likely timeline gap and is checking for missing screenshot rows.`
-            : `Auto-rerun ${autoRerunAttempt + 1}/${AUTO_REPARSE_MAX_ATTEMPTS} queued. Clover is checking for missing screenshot rows.`
-          : `Auto-rerun ${autoRerunAttempt + 1}/${AUTO_REPARSE_MAX_ATTEMPTS} queued. Current score ${qaRunResult.evaluation.score}.`,
+        processingMessage: `Auto-rerun ${autoRerunAttempt + 1}/${AUTO_REPARSE_MAX_ATTEMPTS} queued. Current score ${qaRunResult.evaluation.score}.`,
       });
 
       await applyDataQaReviewLearning({
@@ -8974,12 +8851,12 @@ export const processImportFileText = async (
       });
     }
 
-    const shouldMarkDone = isDocumentImport
-      ? Boolean(documentImportRecord)
-      : qaRunResult.evaluation.score >= qaTargetScore ||
-        canFinalizeWithWarnings ||
-        canFinalizeStableScreenshotImport ||
-        canFinalizeWhileSiblingScreenshotsContinue;
+    const shouldMarkDone =
+      isDocumentImport
+        ? Boolean(documentImportRecord)
+        : qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET ||
+          canFinalizeWithWarnings ||
+          canFinalizeStableScreenshotImport;
     if (shouldMarkDone) {
       try {
         confirmedImportResult = await confirmImportFileWithRetry("qa_finalize");
@@ -9072,21 +8949,13 @@ export const processImportFileText = async (
               ? `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}, but Clover finalized the import with the available statement data.`
               : canFinalizeStableScreenshotImport
                 ? `Clover finalized the visible screenshot rows at score ${qaRunResult.evaluation.score} because the import looked stable enough to publish.`
-              : canFinalizeWhileSiblingScreenshotsContinue
-                ? `Clover finalized the available rows at score ${qaRunResult.evaluation.score} while ${recentScreenshotBatchContext.activeSiblingCount} related screenshot file${recentScreenshotBatchContext.activeSiblingCount === 1 ? "" : "s"} continue processing.`
               : `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} complete. Final score ${qaRunResult.evaluation.score}.`
             : canFinalizeStableScreenshotImport
               ? `Clover finalized the visible screenshot rows at score ${qaRunResult.evaluation.score} because the import looked stable enough to publish.`
-            : canFinalizeWhileSiblingScreenshotsContinue
-              ? `Clover finalized the available rows at score ${qaRunResult.evaluation.score} while ${recentScreenshotBatchContext.activeSiblingCount} related screenshot file${recentScreenshotBatchContext.activeSiblingCount === 1 ? "" : "s"} continue processing.`
             : null
           : plateaued
-            ? needsCompletenessFollowup
-              ? visibleImportCompleteness.reasons.includes("large_chronological_gap")
-                ? `Automatic reruns plateaued while Clover was still checking a likely timeline gap in the screenshot batch. Manual parser fixes are needed before rerunning again.`
-                : `Automatic reruns plateaued while Clover was still checking for missing screenshot rows. Manual parser fixes are needed before rerunning again.`
-              : `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}. Manual parser fixes are needed before rerunning again.`
-            : `Automatic reruns stopped below the ${qaTargetScore} target. Latest score ${qaRunResult.evaluation.score}.`,
+            ? `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}. Manual parser fixes are needed before rerunning again.`
+            : `Automatic reruns stopped below the ${AUTO_REPARSE_SCORE_TARGET} target. Latest score ${qaRunResult.evaluation.score}.`,
     });
     if (shouldMarkDone) {
       emitImportProcessingEvent("import_processing_completed", {
@@ -9430,47 +9299,9 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           : receiptPayloadSource?.receiptAccountMatch && typeof receiptPayloadSource.receiptAccountMatch === "object" && !Array.isArray(receiptPayloadSource.receiptAccountMatch)
             ? (receiptPayloadSource.receiptAccountMatch as Record<string, unknown>)
             : null;
-      const receiptDocumentNumber =
-        typeof receiptDetailsRecord?.document_number === "string" && receiptDetailsRecord.document_number.trim()
-          ? normalizeTransactionDedupeText(receiptDetailsRecord.document_number)
-          : typeof receiptDetailsRecord?.documentNumber === "string" && receiptDetailsRecord.documentNumber.trim()
-            ? normalizeTransactionDedupeText(receiptDetailsRecord.documentNumber)
-            : typeof receiptDocument?.rawPayload === "object" && receiptDocument?.rawPayload && !Array.isArray(receiptDocument.rawPayload)
-              ? getReceiptDocumentNumberFromPayload(receiptDocument.rawPayload as Prisma.JsonValue)
-              : null;
-      const receiptTypeText =
-        typeof receiptDetailsRecord?.receipt_type === "string"
-          ? receiptDetailsRecord.receipt_type.trim().toLowerCase()
-          : typeof receiptDetailsRecord?.receiptType === "string"
-            ? receiptDetailsRecord.receiptType.trim().toLowerCase()
-            : typeof receiptDocument?.rawPayload === "object" && receiptDocument?.rawPayload && !Array.isArray(receiptDocument.rawPayload)
-              ? String(
-                  (receiptDocument.rawPayload as Record<string, unknown>).receipt_type ??
-                    (receiptDocument.rawPayload as Record<string, unknown>).receiptType ??
-                    ""
-                )
-                  .trim()
-                  .toLowerCase()
-              : "";
-      const receiptTransferType = isTransferStyleReceiptType(receiptTypeText);
-      const receiptWalletIdentity = inferReceiptWalletIdentity({
-        receiptAccountMatch:
-          receiptAccountMatchPayload && typeof receiptAccountMatchPayload === "object"
-            ? {
-                account_name:
-                  typeof receiptAccountMatchPayload.account_name === "string" ? receiptAccountMatchPayload.account_name : null,
-                account_last4:
-                  typeof receiptAccountMatchPayload.account_last4 === "string" ? receiptAccountMatchPayload.account_last4 : null,
-              }
-            : null,
-        receiptPreview: null,
-        paymentMethod: receiptDocument?.paymentMethod ?? (typeof receiptDetailsRecord?.payment_method === "string" ? receiptDetailsRecord.payment_method : null),
-        receiptType: receiptTypeText,
-      });
-      const targetReceiptAccountId =
+      const cashAccountId =
         receiptDocument?.accountId ??
         (documentImport?.accountId && !String(documentImport.accountId).startsWith("optimistic-") ? documentImport.accountId : null) ??
-        receiptAccountResolution?.accountId ??
         (await resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency));
       const receiptCategoryName = (() => {
         const trainedCategoryName =
@@ -9483,12 +9314,22 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           return trainedCategoryName;
         }
 
+        const receiptTypeText =
+          typeof receiptDetailsRecord?.receipt_type === "string"
+            ? receiptDetailsRecord.receipt_type.trim().toLowerCase()
+            : typeof receiptDetailsRecord?.receiptType === "string"
+              ? receiptDetailsRecord.receiptType.trim().toLowerCase()
+              : typeof receiptDocument?.rawPayload === "object" && receiptDocument?.rawPayload && !Array.isArray(receiptDocument.rawPayload)
+                ? String(
+                    (receiptDocument.rawPayload as Record<string, unknown>).receipt_type ??
+                      (receiptDocument.rawPayload as Record<string, unknown>).receiptType ??
+                      ""
+                  )
+                    .trim()
+                    .toLowerCase()
+                : "";
         const lineItemText = receiptLineItems.map((item) => item.description).join(" ").toLowerCase();
         const receiptContextText = `${receiptMerchantClean || ""} ${receiptMerchantRaw || ""} ${receiptTypeText} ${lineItemText}`.trim();
-
-        if (receiptTransferType) {
-          return "Transfers";
-        }
 
         if (
           /\btemporary bill\b/.test(receiptTypeText) ||
@@ -9519,74 +9360,31 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       const receiptCategoryId = await resolveOrCreateWorkspaceCategoryId({
         workspaceId: String(importFile.workspaceId),
         categoryName: receiptCategoryName,
-        fallbackType: receiptTransferType ? "transfer" : "expense",
+        fallbackType: "expense",
       });
-      const receiptTransactionType: TransactionType = receiptTransferType ? "transfer" : "expense";
       let createdTransactionId = receiptDocument?.transactionId ?? null;
       let existingReceiptTransaction:
         | {
             id: string;
             normalizedPayload: Prisma.JsonValue | null;
-            importFileId: string | null;
           }
         | null = null;
 
-      if (!createdTransactionId && targetReceiptAccountId && receiptAmount !== null && receiptDate) {
+      if (!createdTransactionId && cashAccountId && receiptAmount !== null && receiptDate) {
         existingReceiptTransaction = await prisma.transaction.findFirst({
           where: {
             importFileId,
-            accountId: targetReceiptAccountId,
+            accountId: cashAccountId,
           },
-          select: { id: true, normalizedPayload: true, importFileId: true },
+          select: { id: true, normalizedPayload: true },
         }).catch(() => null);
-
-        if (!existingReceiptTransaction) {
-          const nearbyTransactions = await prisma.transaction.findMany({
-            where: {
-              workspaceId: String(importFile.workspaceId),
-              accountId: targetReceiptAccountId,
-              deletedAt: null,
-              amount: receiptAmount,
-              currency: receiptCurrency,
-              date: receiptDate,
-            },
-            select: {
-              id: true,
-              normalizedPayload: true,
-              rawPayload: true,
-              importFileId: true,
-              merchantRaw: true,
-              merchantClean: true,
-              description: true,
-            },
-            orderBy: [{ createdAt: "desc" }],
-            take: 10,
-          }).catch(() => []);
-          existingReceiptTransaction =
-            nearbyTransactions.find((transaction) => {
-              const candidateDocumentNumber = getReceiptDocumentNumberFromPayload(transaction.rawPayload);
-              if (receiptDocumentNumber && candidateDocumentNumber) {
-                return candidateDocumentNumber === receiptDocumentNumber;
-              }
-
-              const candidateMerchant =
-                normalizeTransactionDedupeText(transaction.merchantClean) ||
-                normalizeTransactionDedupeText(transaction.merchantRaw) ||
-                normalizeTransactionDedupeText(transaction.description);
-              const targetMerchant =
-                normalizeTransactionDedupeText(receiptMerchantClean) ||
-                normalizeTransactionDedupeText(receiptMerchantRaw);
-
-              return Boolean(targetMerchant && candidateMerchant && targetMerchant === candidateMerchant);
-            }) ?? null;
-        }
 
         if (existingReceiptTransaction?.id) {
           createdTransactionId = existingReceiptTransaction.id;
         } else {
           const insertedTransaction = await insertTransactionCompat({
             workspaceId: String(importFile.workspaceId),
-            accountId: targetReceiptAccountId,
+            accountId: cashAccountId,
             importFileId,
             categoryId: receiptCategoryId,
             categoryName: receiptCategoryName,
@@ -9600,19 +9398,17 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             categoryConfidence: 95,
             accountMatchConfidence: 100,
             duplicateConfidence: 0,
-            transferConfidence: receiptTransferType ? 100 : 0,
+            transferConfidence: 0,
             date: receiptDate,
             amount: receiptAmount,
             currency: receiptCurrency,
-            type: receiptTransactionType,
+            type: "expense",
             merchantRaw: receiptMerchantRaw,
             merchantClean: receiptMerchantClean,
             description: receiptMerchantClean,
             rawPayload: {
               source: "receipt",
               documentType: "receipt",
-              bank: receiptWalletIdentity?.institution ?? null,
-              documentNumber: receiptDocumentNumber,
               receiptDocumentId: receiptDocument?.id ?? documentImport?.id ?? null,
               receiptDetails: {
                 ...(receiptDetailsRecord ?? {}),
@@ -9660,7 +9456,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               merchantClean: receiptMerchantClean,
               categoryId: receiptCategoryId,
               categoryName: receiptCategoryName,
-              type: receiptTransactionType,
+              type: "expense",
             } as Prisma.InputJsonValue,
             learnedRuleIdsApplied: [],
           });
@@ -9689,7 +9485,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               merchantClean: receiptMerchantClean,
               categoryId: receiptCategoryId,
               categoryName: receiptCategoryName,
-              type: receiptTransactionType,
+              type: "expense",
             } as Prisma.InputJsonValue,
           },
         });
@@ -9703,20 +9499,25 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           totalRows: Math.max(1, cleanupRowsAfterConfirmation),
           phase: "queued",
           forceRequeue: false,
+        });
+        await processImportEnrichmentJobs({
+          importFileId,
+          limit: MAX_IMPORT_ENRICHMENT_ATTEMPTS,
+          batchSize: 500,
+          workerId: `receipt-import-enrichment-${importFileId}`,
         }).catch((error) => {
-          console.warn("Unable to queue receipt enrichment immediately after import", {
+          console.warn("Unable to finalize receipt enrichment immediately after import", {
             importFileId,
             error,
           });
         });
-        processImportEnrichmentJobsInBackground(importFileId, Math.max(1, cleanupRowsAfterConfirmation));
       }
 
       if (createdTransactionId && documentImport?.id) {
         await upsertReceiptDocumentCompat({
           workspaceId: String(importFile.workspaceId),
           documentImportId: documentImport.id,
-          accountId: targetReceiptAccountId,
+          accountId: cashAccountId,
           transactionId: createdTransactionId,
           merchantRaw: receiptMerchantRaw,
           merchantClean: receiptMerchantClean,
@@ -9787,7 +9588,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         imported: createdTransactionId ? 1 : 0,
         duplicate: false,
         metadata: detectStatementMetadataFromText("", importFile.fileName),
-          accountId: targetReceiptAccountId ?? documentImport?.accountId ?? accountId ?? null,
+        accountId: cashAccountId ?? documentImport?.accountId ?? accountId ?? null,
         confirmedTransactionsCount: createdTransactionId ? 1 : 0,
         insightSummary: null,
         accountBalance: null,
@@ -10005,34 +9806,25 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     parsedRowsByAccount.set(key, group);
   }
   const parsedAccountGroups = Array.from(parsedRowsByAccount.entries()).map(([key, rows]) => ({ key, rows }));
+  const nonDefaultParsedAccountGroups = parsedAccountGroups.filter((group) => group.key !== "__default__");
   const hasMultipleWiseWalletAccountGroups = hasMultipleWiseWalletAccountNames(parsedRows as Array<Record<string, unknown>>, {
     institution: typeof statementMetadata?.institution === "string" ? statementMetadata.institution : null,
     accountType: typeof statementMetadata?.accountType === "string" ? statementMetadata.accountType : null,
   });
+  const investmentInstitutionHint = [
+    typeof baseStatementMetadata.institution === "string" ? baseStatementMetadata.institution : null,
+    typeof baseStatementMetadata.accountName === "string" ? baseStatementMetadata.accountName : null,
+  ]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .join(" ");
   const hasMultipleInvestmentAccountGroups =
-    (baseStatementMetadata.accountType === "investment" ||
-      parsedRows.some((row) => {
-        const rawPayload =
-          row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-            ? (row.rawPayload as Record<string, unknown>)
-            : null;
-        const identityText = [
-          typeof row.institution === "string" ? row.institution : null,
-          typeof row.accountName === "string" ? row.accountName : null,
-          typeof rawPayload?.bank === "string" ? rawPayload.bank : null,
-          typeof rawPayload?.source === "string" ? rawPayload.source : null,
-          typeof rawPayload?.kind === "string" ? rawPayload.kind : null,
-        ]
-          .filter(Boolean)
-          .join(" ");
-        return /(gfunds|atram|ryse)/i.test(identityText);
-      })) &&
-    parsedAccountGroups.filter((group) => group.key !== "__default__").length > 1;
+    nonDefaultParsedAccountGroups.length > 1 &&
+    (baseStatementMetadata.accountType === "investment" || /\bgfunds\b|\batram\b|\bgcrypto\b|\bpdax\b/i.test(investmentInstitutionHint));
   const multiAccountImport =
-    (parsedAccountGroups.filter((group) => group.key !== "__default__").length > 1 &&
+    (nonDefaultParsedAccountGroups.length > 1 &&
       parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))))) ||
-    hasMultipleInvestmentAccountGroups ||
-    hasMultipleWiseWalletAccountGroups;
+    hasMultipleWiseWalletAccountGroups ||
+    hasMultipleInvestmentAccountGroups;
   const accountByGroupKey = new Map<string, Awaited<ReturnType<typeof resolveConfirmationAccount>>>();
   let resolvedAccountSequence = 0;
   for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
@@ -10320,32 +10112,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             deletedAt: null,
             workspaceId: String(importFile.workspaceId),
             reviewStatus: { notIn: ["rejected", "duplicate_skipped"] },
-            OR: [
-              {
-                rawPayload: {
-                  path: ["kind"],
-                  equals: "gcash_mobile_screenshot_transaction",
-                },
+            OR: mobileScreenshotOverlapPayloadMatchers.map((matcher) => ({
+              rawPayload: {
+                path: [matcher.path],
+                equals: matcher.equals,
               },
-              {
-                rawPayload: {
-                  path: ["kind"],
-                  equals: "maya_mobile_screenshot_known_transaction",
-                },
-              },
-              {
-                rawPayload: {
-                  path: ["source"],
-                  equals: "gcash_mobile_screenshot",
-                },
-              },
-              {
-                rawPayload: {
-                  path: ["source"],
-                  equals: "maya_mobile_screenshot",
-                },
-              },
-            ],
+            })),
           },
           select: {
             id: true,
@@ -10467,6 +10239,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         mismatchReason,
         sourceMetadata: mergeCheckpointSourceMetadata(statementCheckpoint.sourceMetadata, {
           workflowStage: checkpointStatus === "reconciled" ? "complete" : checkpointStatus === "mismatch" ? "repair_needed" : "reconciling",
+          publishedVisibleImportComplete: accountSummaries.length > 0,
+          publishedAccountSummaries: accountSummaries,
         }) as Prisma.InputJsonValue,
       },
     });
@@ -10526,7 +10300,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       : null
   );
   const mobileWalletScreenshotImport = parsedRows.some((row) =>
-    getMobileScreenshotPayloadKind(
+    getMobileScreenshotWalletIdentity(
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
         ? (row.rawPayload as Prisma.JsonValue)
         : null
@@ -10662,11 +10436,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   const currentMobileScreenshotOverlapCounts = new Map<string, number>();
 
   for (const [index, originalRow] of parsedRows.entries()) {
-    const normalizedRow = normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
-    const row = applyContextualCategoryHeuristics(normalizedRow as EnrichedParsedImportRow, {
-      institution: statementInstitution,
-      accountCurrency: resolvedAccount.currency,
-    });
+    const row = normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
     const rowAccount = rowAccountFor(row as Record<string, unknown>);
     const rowResolvedAccountId = rowAccount.id;
     const rowType =
@@ -10766,6 +10536,22 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       continue;
     }
 
+    if (
+      isLikelyScreenshotUiArtifactRow({
+        row: row as Record<string, unknown>,
+        fileName: String(importFile.fileName ?? ""),
+        statementInstitution,
+        accountName: rowAccount.name,
+      })
+    ) {
+      console.warn("[import-confirmation] skipped screenshot UI artifact row", {
+        importFileId,
+        sourceRowIndex: index + 1,
+        merchant: typeof row.merchantClean === "string" ? row.merchantClean : row.merchantRaw,
+      });
+      continue;
+    }
+
     let categoryId = categoryByName.get(categoryName.toLowerCase());
 
     if (!categoryId) {
@@ -10804,15 +10590,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         rawPayload: row.rawPayload ?? null,
       },
     });
-    const parserSummary = buildNormalizedParserSummary({
-      ...row,
-      categoryName,
-      type: canonicalType,
-      confidence: rowConfidence,
-      parserConfidence: rowParserConfidence,
-      categoryConfidence: rowCategoryConfidence,
-      accountMatchConfidence: rowAccountMatchConfidence,
-    });
     const insertRow = buildTransactionInsertRecord({
       workspaceId: String(importFile.workspaceId),
       accountId: rowResolvedAccountId,
@@ -10821,12 +10598,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       categoryName,
       reviewStatus: reviewOnlyRow
         ? "rejected"
-        : shouldRouteToReview({
-            confidence: rowConfidence,
-            categoryName,
-            type: canonicalType,
-            fieldConfidence: asFieldConfidenceRecord(parserSummary.fieldConfidence),
-          })
+        : shouldRouteToReview({ confidence: rowConfidence, categoryName, type: canonicalType })
           ? "pending_review"
           : "confirmed",
       parserConfidence: rowParserConfidence,
@@ -10843,12 +10615,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             ? row.statementFingerprint.trim()
             : checkpointStatementFingerprint,
       } as Prisma.InputJsonValue,
-      normalizedPayload: {
-        ...((row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
-          ? (row.normalizedPayload as Record<string, unknown>)
-          : {}) as Record<string, unknown>),
-        parserSummary,
-      } as Prisma.InputJsonValue,
+      normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
       date:
         parsedTransactionDate ?? new Date(),
@@ -11403,6 +11170,52 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       })
     )
   ).catch(() => null);
+
+  const backupParserRows = parsedRows.filter((row) => {
+    const rawPayload = row.rawPayload;
+    return (
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (rawPayload as Record<string, unknown>).source === "openai"
+    );
+  }) as EnrichedParsedImportRow[];
+  if (backupParserRows.length > 0) {
+    const backupLearningSignals = extractBackupParserLearningSignals(backupParserRows);
+    if (backupLearningSignals.length > 0) {
+      const categories = await prisma.category.findMany({
+        where: { workspaceId: importFile.workspaceId },
+        select: { id: true, name: true },
+      }).catch(() => []);
+      const categoryIdsByName = new Map(
+        categories.map((category) => [category.name.trim().toLowerCase(), category.id] as const)
+      );
+
+      await Promise.allSettled(
+        backupLearningSignals.map((signal, index) => {
+          const categoryId = categoryIdsByName.get(signal.categoryName.trim().toLowerCase());
+          if (!categoryId) {
+            return Promise.resolve(null);
+          }
+
+          return recordTrainingSignal({
+            workspaceId: importFile.workspaceId,
+            importFileId,
+            transactionId: `${importFileId}:backup:${index + 1}`,
+            merchantText: signal.merchantText,
+            normalizedName: signal.normalizedName,
+            categoryId,
+            categoryName: signal.categoryName,
+            type: signal.type,
+            source: "import_confirmation",
+            confidence: signal.confidence,
+            teachabilityScore: signal.teachabilityScore,
+            notes: signal.notes,
+          });
+        })
+      ).catch(() => null);
+    }
+  }
 
   if (qaMetadataForRun && qaAccountForRun) {
     try {
