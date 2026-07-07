@@ -1638,6 +1638,38 @@ const genericSimplifierRules: SimplifierRule[] = [
     patterns: [/\bcash\s+out\b/i],
     replacement: "Cash Out",
   },
+  {
+    patterns: [/\bgrab(?:food|car|taxi|express|mart|pay)?\b/i],
+    replacement: "Grab",
+  },
+  {
+    patterns: [/\bdunkin(?:\s+donuts?)?\b/i, /\bdunkindonuts?\b/i],
+    replacement: "Dunkin",
+  },
+  {
+    patterns: [/\blinkedin(?:\s+premium)?\b/i, /\blinkedinpremium\b/i],
+    replacement: "LinkedIn",
+  },
+  {
+    patterns: [/\bfoodpanda(?:\s+ph)?\b/i, /\bfoodpandaph\b/i],
+    replacement: "Foodpanda",
+  },
+  {
+    patterns: [/\bspotify\b/i],
+    replacement: "Spotify",
+  },
+  {
+    patterns: [/\bnetflix\b/i],
+    replacement: "Netflix",
+  },
+  {
+    patterns: [/\bopenai\b/i, /\bchatgpt\b/i],
+    replacement: "OpenAI ChatGPT Subscription",
+  },
+  {
+    patterns: [/\bgoogle\s+one\b/i, /\bgoogleone\b/i],
+    replacement: "Google One",
+  },
 ];
 
 const stripLeadingStatementNoise = (value: string) => {

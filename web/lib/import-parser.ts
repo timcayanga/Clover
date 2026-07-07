@@ -173,6 +173,8 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   ) {
     return "Travel & Lifestyle";
   }
+  const sharedCategoryHint = getSharedMerchantCategoryHint(text);
+  if (sharedCategoryHint) return sharedCategoryHint;
   if (isStandaloneCashPaymentDescription(text)) return "Shopping";
   if (isStatementPaymentSettlementDescription(text)) return "Transfers";
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";
@@ -189,8 +191,6 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/epsaten/.test(lower)) return type === "expense" ? "Cash & ATM" : "Income";
   if (/el\/?espay/.test(lower)) return type === "expense" || type === "transfer" ? "Transfers" : "Income";
   if (/payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
-  const sharedCategoryHint = getSharedMerchantCategoryHint(text);
-  if (sharedCategoryHint) return sharedCategoryHint;
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut|yoshinoya|bar leone|savory project|gokan|goken|milksha|mcdonald'?s|dumplings|seafood|7-?eleven|mini\s+mart|wootea|iga|grocer/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";

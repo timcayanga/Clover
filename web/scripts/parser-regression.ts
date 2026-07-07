@@ -2058,6 +2058,9 @@ const main = async () => {
     ["Apollo Bay Seafood", "expense", "Food & Dining"],
     ["News Travels", "expense", "Travel & Lifestyle"],
     ["Htg Ticket Sales", "expense", "Entertainment"],
+    ["Grab Philippines", "expense", "Transport"],
+    ["Dunkin Donuts", "expense", "Food & Dining"],
+    ["LinkedIn Premium", "expense", "Bills & Utilities"],
   ];
   for (const [description, type, expectedCategory] of enrichmentFallbackExpectations) {
     const actualCategory = guessCategoryFallback(description, type);
@@ -2090,6 +2093,9 @@ const main = async () => {
     ["News Travels", "expense", "Travel & Lifestyle"],
     ["HTG Ticket Sales", "expense", "Entertainment"],
     ["Viator.com", "expense", "Shopping"],
+    ["Grab Philippines", "expense", "Transport"],
+    ["DUNKIN DONUTS PH", "expense", "Food & Dining"],
+    ["LINKEDIN PREMIUM", "expense", "Bills & Utilities"],
   ];
   for (const [description, type, expectedCategory] of categoryGuessExpectations) {
     const actualCategory = guessCategoryName(description, type);

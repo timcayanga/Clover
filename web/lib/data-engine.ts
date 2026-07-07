@@ -522,6 +522,11 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Shopping";
   }
 
+  const sharedCategoryHint = getSharedMerchantCategoryHint(merchantText);
+  if (sharedCategoryHint) {
+    return sharedCategoryHint;
+  }
+
   if (
     /incoming\s+(?:interbank\s+)?transfer|outgoing\s+(?:interbank\s+)?transfer|fund\s+transfer|interbank\s+fund\s+transfer|system\s+(?:debit|credit)|miscellaneous\s+debit|investment\s+sweep|card\s+payment|payment\s*-\s*thank\s+you/.test(lower) ||
     /incoming(?:interbank)?transfer|outgoing(?:interbank)?transfer|fundtransfer|interbankfundtransfer|system(?:debit|credit)|miscellaneousdebit|investmentsweep|cardpayment|paymentthankyou/.test(compact) ||
@@ -536,11 +541,6 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
 
   if (/to:\s*gcash\s+cash\s+in|gcash\s+cash\s+in/.test(lower) || /togcashcashin|gcashcashin/.test(compact)) {
     return "Transfers";
-  }
-
-  const sharedCategoryHint = getSharedMerchantCategoryHint(merchantText);
-  if (sharedCategoryHint) {
-    return sharedCategoryHint;
   }
 
   if (
@@ -1076,6 +1076,8 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (override) return override;
   if (/deposit to gsave|withdraw from gsave|seamoney credit|maribank credit/.test(lower)) return "Financial";
   if (/google\s+play|googleplay/.test(lower) || /googleplay/.test(compact)) return "Entertainment";
+  const sharedCategoryHint = getSharedMerchantCategoryHint(description);
+  if (sharedCategoryHint) return sharedCategoryHint;
   if (/transfer|instapay|pesonet|wise to|to savings|to checking|wa\s+(?:cr|db)|et\s+(?:cr|db)\s+ibft|st\s+(?:cm|dm)\s+gen|mo\s+dm/.test(lower)) return "Transfers";
   if (/expressnet|megalink|withdrawal|atm\b|cash withdrawal|cash out|atmwdl|atm withdrawal|et\s+wdl/.test(lower)) return "Cash & ATM";
   if (/service\s*charge|servicecharge|service\s*fee|bank\s*charge|bankcharge|svchg|finance\s+charges?|late\s+payment\s+fee|annual\s+fee/.test(lower)) return "Financial";
@@ -1086,8 +1088,6 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/interest\s+earned|interestearned|salary|payroll|income|deposit|cash\s*in\b|cashin\b|cash\/?check\s+deposit|received|credit memo/.test(lower)) return "Income";
   if (/interbankservicecharge|atmwithdrawalacquirerfee|financecharge|financecharges|latepaymentfee|annualfee/.test(compact)) return "Financial";
   if (/incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|systemdebit|systemcredit|miscellaneousdebit|investmentsweep/.test(compact)) return "Transfers";
-  const sharedCategoryHint = getSharedMerchantCategoryHint(description);
-  if (sharedCategoryHint) return sharedCategoryHint;
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|bar leone|savory project|gokan|goken|mcdonald'?s|milksha|woolworths|coles|dumplings|sushi|seafood|mini\s+mart|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|four\s+frogs|apollo\s+bay\s+seafood|wootea|iga\s+supermarkets?|caretaker'?s\s+cottage|lee'?s\s+dumplings|grocer/.test(lower)) return "Food & Dining";
   if (/vesper|black\s+cabin\s+bar/.test(lower) || /vesper|blackcabinbar/.test(compact)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
