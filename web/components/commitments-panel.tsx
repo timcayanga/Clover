@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CurrencySelector } from "@/components/currency-selector";
 import {
@@ -89,6 +89,20 @@ type CommitmentFormCopy = {
   showLinkedAccount: boolean;
   showTransaction: boolean;
   showNotes: boolean;
+};
+
+const reasonBadgeStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: 999,
+  border: "1px solid rgba(3, 168, 192, 0.18)",
+  padding: "4px 10px",
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: "var(--accent)",
+  background: "rgba(3, 168, 192, 0.08)",
 };
 
 const formatCurrency = (value: string | null) => {
@@ -265,6 +279,7 @@ export function CommitmentsPanel({
     sourceLabel: string;
     sourceDetail: string | null;
     reasonSummary: string | null;
+    reasonTags: string[];
     statementCheckpointId: string | null;
     installmentTerms: string;
   } | null>(null);
@@ -561,6 +576,7 @@ export function CommitmentsPanel({
       sourceLabel: "Recurring pattern",
       sourceDetail: pattern.nextExpectedDate ? `Next due ${formatDate(pattern.nextExpectedDate)}` : null,
       reasonSummary: pattern.reasonSummary,
+      reasonTags: pattern.reasonTags,
       statementCheckpointId: "",
       installmentTerms: "",
     });
@@ -581,6 +597,7 @@ export function CommitmentsPanel({
       sourceLabel: suggestion.sourceLabel,
       sourceDetail: suggestion.sourceDetail,
       reasonSummary: suggestion.reasonSummary,
+      reasonTags: suggestion.reasonTags,
       statementCheckpointId: suggestion.statementCheckpointId,
       installmentTerms: suggestion.installmentTerms ?? "",
     });
@@ -734,6 +751,15 @@ export function CommitmentsPanel({
                     {suggestion.sourceDetail ? ` · ${suggestion.sourceDetail}` : ""}
                     {suggestion.sourceFileName ? ` · ${suggestion.sourceFileName}` : ""}
                   </p>
+                  {suggestion.reasonTags.length > 0 ? (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {suggestion.reasonTags.map((tag) => (
+                        <span key={tag} style={reasonBadgeStyle}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   {suggestion.reasonSummary ? <p className="panel-muted">{suggestion.reasonSummary}</p> : null}
                   {suggestion.notes ? <p className="panel-muted">{suggestion.notes}</p> : null}
                 </div>
@@ -776,6 +802,15 @@ export function CommitmentsPanel({
                     {pattern.transactionCount > 1 ? ` · seen ${pattern.transactionCount} times` : ""}
                     {pattern.nextExpectedDate ? ` · next ${formatDate(pattern.nextExpectedDate)}` : ""}
                   </p>
+                  {pattern.reasonTags.length > 0 ? (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {pattern.reasonTags.map((tag) => (
+                        <span key={tag} style={reasonBadgeStyle}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   {pattern.reasonSummary ? <p className="panel-muted">{pattern.reasonSummary}</p> : null}
                 </div>
                 <div className="notification-item__time" style={{ minWidth: 170, display: "grid", gap: 8 }}>
@@ -830,6 +865,15 @@ export function CommitmentsPanel({
                   <p className="panel-muted" style={{ margin: "6px 0 0" }}>
                     {reviewingSuggestion.reasonSummary}
                   </p>
+                ) : null}
+                {reviewingSuggestion.reasonTags.length > 0 ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                    {reviewingSuggestion.reasonTags.map((tag) => (
+                      <span key={tag} style={reasonBadgeStyle}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 ) : null}
               </div>
               <button

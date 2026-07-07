@@ -44,6 +44,7 @@ type DetectedRecurringPattern = {
   transactionCount: number;
   confidence: number;
   reasonSummary: string;
+  reasonTags: string[];
   suppressionKey: string;
   rawPayload: Prisma.InputJsonValue;
   account: {
@@ -289,6 +290,12 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
   ]
     .filter(Boolean)
     .join(" · ");
+  const reasonTags = [
+    cadence.frequency ? cadence.frequency : null,
+    expectedDayOfMonth !== null ? "same date" : null,
+    hasKeywordSignal ? "known merchant" : null,
+    amountStability >= 0.9 ? "stable amount" : amountStability >= 0.75 ? "close amount" : null,
+  ].filter((value): value is string => Boolean(value));
   const suppressionKey = makeRecurringSuppressionKey({
     accountId: first.accountId,
     currency: first.currency,
@@ -328,6 +335,7 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
     transactionCount: expenseTransactions.length,
     confidence,
     reasonSummary,
+    reasonTags,
     suppressionKey,
     account: last.account ?? null,
     importFile: last.importFile ?? null,
@@ -343,6 +351,7 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
       expectedDayOfMonth,
       dayVariance: Number(dayVariance.toFixed(2)),
       reasonSummary,
+      reasonTags,
       suppressionKey,
     },
   };

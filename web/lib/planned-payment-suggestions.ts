@@ -41,6 +41,7 @@ export type PlannedPaymentSuggestion = {
   sourceLabel: string;
   sourceDetail: string | null;
   reasonSummary: string | null;
+  reasonTags: string[];
   confidence: number;
   sourceFileName: string | null;
 };
@@ -170,6 +171,7 @@ const buildReminderSuggestions = (reminders: StatementReminder[], existingCheckp
       sourceLabel: "Statement due date",
       sourceDetail: `Due ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(dueDate)}`,
       reasonSummary: "Detected from an uploaded statement due date.",
+      reasonTags: ["statement due date", "uploaded file"],
       confidence: 92,
       sourceFileName: reminder.sourceFileName,
     });
@@ -262,6 +264,7 @@ const buildInstallmentSuggestions = (
         ? `Due ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(dueDate)}`
         : `Last seen ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(last.date)}`,
       reasonSummary: installmentTerms ? `Installment terms suggest ${installmentTerms} payments.` : "Repeated installment-style charges were detected.",
+      reasonTags: installmentTerms ? ["installment terms", "repeated charge"] : ["installment signal", "repeated charge"],
       confidence: Math.min(94, 66 + Math.min(group.length, 3) * 8 + (installmentTerms ? 8 : 0)),
       sourceFileName: readTransactionImportFileName(first),
     });
@@ -273,7 +276,8 @@ const buildInstallmentSuggestions = (
 const buildRecurringTransactionSuggestions = (
   transactions: Awaited<ReturnType<typeof getRecurringSourceTransactions>>,
   existingCommitmentKeys: Set<string>,
-  dismissedSuppressionKeys: Set<string>
+  dismissedSuppressionKeys: Set<string>,
+  confirmedRecurringTitles: Set<string>
 ) => {
   const suggestions: PlannedPaymentSuggestion[] = [];
   const patterns = detectRecurringPatterns(transactions).filter((pattern) => pattern.transactionCount >= 2);
@@ -294,6 +298,8 @@ const buildRecurringTransactionSuggestions = (
       pattern.expectedDayOfMonth && ["monthly", "quarterly", "annual"].includes(pattern.frequency)
         ? `${pattern.frequency} around the ${pattern.expectedDayOfMonth}${pattern.expectedDayOfMonth === 1 ? "st" : pattern.expectedDayOfMonth === 2 ? "nd" : pattern.expectedDayOfMonth === 3 ? "rd" : "th"}`
         : pattern.frequency;
+    const normalizedTitle = normalizeKey(title);
+    const hasConfirmedMatch = confirmedRecurringTitles.has(normalizedTitle);
 
     suggestions.push({
       id: key,
@@ -317,12 +323,14 @@ const buildRecurringTransactionSuggestions = (
       sourceLabel: "Recurring transaction",
       sourceDetail: [
         scheduleDetail ? `Looks ${scheduleDetail}` : null,
+        hasConfirmedMatch ? "matched a confirmed recurring item" : null,
         `Seen through ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(pattern.lastSeenDate)}`,
       ]
         .filter(Boolean)
         .join(" · "),
-      reasonSummary: pattern.reasonSummary,
-      confidence: pattern.confidence,
+      reasonSummary: hasConfirmedMatch ? `${pattern.reasonSummary} · matched a confirmed recurring item` : pattern.reasonSummary,
+      reasonTags: hasConfirmedMatch ? [...pattern.reasonTags, "confirmed before"] : pattern.reasonTags,
+      confidence: Math.min(98, pattern.confidence + (hasConfirmedMatch ? 4 : 0)),
       sourceFileName: pattern.importFile?.fileName ?? null,
     });
   }
@@ -337,7 +345,7 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
   const hasRecurringPatternTable = await hasCompatibleTable("RecurringPattern");
   const recurringTransactions = await getRecurringSourceTransactions(workspaceId);
 
-  const [existingCommitments, transactions, dismissedPatterns] = await Promise.all([
+  const [existingCommitments, transactions, dismissedPatterns, confirmedRecurringCommitments] = await Promise.all([
     hasCommitmentTable
       ? prisma.financialCommitment.findMany({
           where: {
@@ -416,6 +424,19 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
           },
         })
       : Promise.resolve([]),
+    hasCommitmentTable
+      ? prisma.financialCommitment.findMany({
+          where: {
+            workspaceId,
+            status: { not: "resolved" },
+            recurrence: { not: "once" },
+          },
+          select: {
+            title: true,
+            counterparty: true,
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   const existingCheckpointIds = new Set(
@@ -450,6 +471,11 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
           });
     })
   );
+  const confirmedRecurringTitles = new Set(
+    confirmedRecurringCommitments.flatMap((commitment) =>
+      [normalizeKey(commitment.title), normalizeKey(commitment.counterparty ?? "")].filter(Boolean)
+    )
+  );
 
   const reminderSuggestions = buildReminderSuggestions(reminders, existingCheckpointIds);
   const installmentSuggestions = buildInstallmentSuggestions(
@@ -460,7 +486,8 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
   const recurringTransactionSuggestions = buildRecurringTransactionSuggestions(
     recurringTransactions,
     existingRecurringTransactionKeys,
-    dismissedSuppressionKeys
+    dismissedSuppressionKeys,
+    confirmedRecurringTitles
   );
 
   return [...reminderSuggestions, ...installmentSuggestions, ...recurringTransactionSuggestions].sort(

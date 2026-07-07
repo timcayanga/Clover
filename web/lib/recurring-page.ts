@@ -50,6 +50,7 @@ export type RecurringPatternSummary = {
   transactionCount: number;
   confidence: number;
   reasonSummary: string | null;
+  reasonTags: string[];
   account: {
     id: string;
     name: string;
@@ -287,6 +288,14 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
             ? (pattern.rawPayload as Record<string, unknown>).reasonSummary as string
             : null)
         : null,
+    reasonTags:
+      pattern.rawPayload &&
+      typeof pattern.rawPayload === "object" &&
+      !Array.isArray(pattern.rawPayload) &&
+      Array.isArray((pattern.rawPayload as Record<string, unknown>).reasonTags)
+        ? ((pattern.rawPayload as Record<string, unknown>).reasonTags as unknown[])
+            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+        : [],
     account: pattern.account
       ? {
           id: pattern.account.id,
