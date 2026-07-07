@@ -7,7 +7,7 @@ type RecurringSourceTransaction = {
   workspaceId: string;
   accountId: string | null;
   date: Date;
-  amount: unknown;
+  amount: { toString: () => string } | string | number;
   currency: string | null;
   type: "income" | "expense" | "transfer";
   merchantRaw: string;
@@ -15,6 +15,14 @@ type RecurringSourceTransaction = {
   description?: string | null;
   category?: {
     name: string;
+  } | null;
+  account?: {
+    id: string | null;
+    name: string | null;
+    institution: string | null;
+  } | null;
+  importFile?: {
+    fileName: string;
   } | null;
 };
 
@@ -32,23 +40,26 @@ type DetectedRecurringPattern = {
   transactionCount: number;
   confidence: number;
   rawPayload: Prisma.InputJsonValue;
+  account: {
+    id: string | null;
+    name: string | null;
+    institution: string | null;
+  } | null;
+  importFile: {
+    fileName: string;
+  } | null;
 };
 
 const recurringKeywordPattern =
-  /\b(rent|internet|bill|utility|utilities|subscription|subscriptions|membership|premium|monthly|electric|water|phone|insurance|mortgage|loan|fee|netflix|spotify|youtube|icloud|google|openai|chatgpt|adobe|microsoft|canva|grab|globe|smart|pldt|meralco)\b/i;
+  /\b(rent|internet|bill|utility|utilities|subscription|subscr(?:iption)?|monthly|electric|water|phone|insurance|mortgage|loan|fee|netflix|spotify|youtube|icloud|google|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|grab|globe|smart|pldt|meralco)\b/i;
 
 const normalizeMerchantKey = (value: string) =>
   value
     .trim()
     .toLowerCase()
-    .replace(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/g, " ")
-    .replace(/\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b/g, " ")
-    .replace(/\b\d{4,}\b/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
-    .replace(
-      /\b(pos|visa|mastercard|debit|credit|online|payment|payments|pay|paid|subscription|subscriptions|monthly|bill|bills|billing|autopay|auto|debit|ph|inc|corp|co|ref|auth|card)\b/g,
-      " "
-    )
+    .replace(/\bsubscr(?:iption)?\b/g, " subscription ")
+    .replace(/\b(pos|visa|mastercard|debit|credit|online|payment|pay|ph|inc|corp|co|ref|auth|card)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -60,10 +71,8 @@ const isDismissedRecurringPattern = (value: Prisma.JsonValue | null | undefined)
       (value as Record<string, unknown>).dismissed === true
   );
 
-const toAmount = (value: unknown) => {
-  const parsed = Number(
-    value && typeof value === "object" && "toString" in value ? value.toString() : value ?? 0
-  );
+const toAmount = (value: RecurringSourceTransaction["amount"]) => {
+  const parsed = Number(value?.toString?.() ?? value ?? 0);
   return Number.isFinite(parsed) ? Math.abs(parsed) : 0;
 };
 
@@ -141,45 +150,8 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
   const expenseTransactions = transactions
     .filter((transaction) => transaction.type === "expense")
     .sort((left, right) => left.date.getTime() - right.date.getTime());
-  const categoryNames = new Set(expenseTransactions.map((transaction) => transaction.category?.name?.toLowerCase() ?? ""));
-  const textBlob = expenseTransactions
-    .map((transaction) => `${transaction.merchantClean ?? ""} ${transaction.merchantRaw} ${transaction.category?.name ?? ""}`)
-    .join(" ");
-  const hasKeywordSignal = recurringKeywordPattern.test(textBlob) || categoryNames.has("bills & utilities");
-
   if (expenseTransactions.length < 2) {
-    const transaction = expenseTransactions[0];
-    const amount = transaction ? toAmount(transaction.amount) : 0;
-
-    if (!transaction || !hasKeywordSignal || amount <= 0) {
-      return null;
-    }
-
-    const confidence = recurringKeywordPattern.test(`${transaction.merchantClean ?? ""} ${transaction.merchantRaw}`)
-      ? 72
-      : 66;
-
-    return {
-      workspaceId: transaction.workspaceId,
-      accountId: transaction.accountId,
-      merchantRaw: transaction.merchantRaw,
-      merchantClean: transaction.merchantClean ?? transaction.merchantRaw,
-      amount: Number(amount.toFixed(2)),
-      currency: (transaction.currency ?? "PHP").trim().toUpperCase() || "PHP",
-      frequency: "monthly",
-      firstSeenDate: transaction.date,
-      lastSeenDate: transaction.date,
-      nextExpectedDate: addMonths(transaction.date, 1),
-      transactionCount: 1,
-      confidence,
-      rawPayload: {
-        source: "recurring_detection",
-        detectionType: "single_keyword_transaction",
-        transactionIds: [transaction.id],
-        amountStability: 1,
-        hasKeywordSignal,
-      },
-    };
+    return null;
   }
 
   const amounts = expenseTransactions.map((transaction) => toAmount(transaction.amount)).filter((amount) => amount > 0);
@@ -188,9 +160,17 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
     return null;
   }
 
-  const amountTolerance = Math.max(20, typicalAmount * 0.12);
+  const amountTolerance = Math.max(20, typicalAmount * 0.18);
   const stableAmountCount = amounts.filter((amount) => Math.abs(amount - typicalAmount) <= amountTolerance).length;
   const amountStability = stableAmountCount / Math.max(amounts.length, 1);
+  const categoryNames = new Set(expenseTransactions.map((transaction) => transaction.category?.name?.toLowerCase() ?? ""));
+  const textBlob = expenseTransactions
+    .map(
+      (transaction) =>
+        `${transaction.merchantClean ?? ""} ${transaction.merchantRaw} ${transaction.description ?? ""} ${transaction.category?.name ?? ""}`
+    )
+    .join(" ");
+  const hasKeywordSignal = recurringKeywordPattern.test(textBlob) || categoryNames.has("bills & utilities");
   const cadence = inferFrequency(expenseTransactions.map((transaction) => transaction.date));
 
   if (!cadence.frequency || !cadence.nextExpectedDate) {
@@ -231,6 +211,8 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
     nextExpectedDate: cadence.nextExpectedDate,
     transactionCount: expenseTransactions.length,
     confidence,
+    account: last.account ?? null,
+    importFile: last.importFile ?? null,
     rawPayload: {
       source: "recurring_detection",
       transactionIds: expenseTransactions.map((transaction) => transaction.id),
@@ -248,9 +230,7 @@ export const detectRecurringPatterns = (transactions: RecurringSourceTransaction
       continue;
     }
 
-    const merchantKey = normalizeMerchantKey(
-      [transaction.merchantClean, transaction.merchantRaw, transaction.description].filter(Boolean).join(" ")
-    );
+    const merchantKey = normalizeMerchantKey(transaction.merchantClean ?? transaction.merchantRaw);
     if (!merchantKey) {
       continue;
     }
@@ -266,42 +246,165 @@ export const detectRecurringPatterns = (transactions: RecurringSourceTransaction
     .sort((left, right) => right.confidence - left.confidence || right.transactionCount - left.transactionCount);
 };
 
+const buildRecurringDedupKey = (transaction: RecurringSourceTransaction) =>
+  [
+    transaction.workspaceId,
+    transaction.accountId ?? transaction.account?.name ?? "workspace",
+    (transaction.currency ?? "PHP").trim().toUpperCase() || "PHP",
+    transaction.date.toISOString().slice(0, 10),
+    normalizeMerchantKey(transaction.merchantClean ?? transaction.merchantRaw),
+    toAmount(transaction.amount).toFixed(2),
+  ].join("::");
+
+export const getRecurringSourceTransactions = async (workspaceId: string): Promise<RecurringSourceTransaction[]> => {
+  const hasTransactionTable = await hasCompatibleTable("Transaction");
+  const hasParsedTransactionTable = await hasCompatibleTable("ParsedTransaction");
+
+  const [transactions, parsedTransactions] = await Promise.all([
+    hasTransactionTable
+      ? prisma.transaction.findMany({
+          where: {
+            workspaceId,
+            deletedAt: null,
+            isExcluded: false,
+            type: "expense",
+            date: {
+              gte: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
+            },
+          },
+          select: {
+            id: true,
+            workspaceId: true,
+            accountId: true,
+            date: true,
+            amount: true,
+            currency: true,
+            type: true,
+            merchantRaw: true,
+            merchantClean: true,
+            description: true,
+            category: {
+              select: {
+                name: true,
+              },
+            },
+            account: {
+              select: {
+                id: true,
+                name: true,
+                institution: true,
+              },
+            },
+            importFile: {
+              select: {
+                fileName: true,
+              },
+            },
+          },
+          orderBy: [{ date: "asc" }, { merchantClean: "asc" }, { merchantRaw: "asc" }],
+          take: 1200,
+        })
+      : Promise.resolve([]),
+    hasParsedTransactionTable
+      ? prisma.parsedTransaction.findMany({
+          where: {
+            workspaceId,
+            date: {
+              gte: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
+            },
+          },
+          select: {
+            id: true,
+            workspaceId: true,
+            date: true,
+            amount: true,
+            currency: true,
+            merchantRaw: true,
+            merchantClean: true,
+            categoryName: true,
+            accountName: true,
+            institution: true,
+            importFile: {
+              select: {
+                fileName: true,
+              },
+            },
+          },
+          orderBy: [{ date: "asc" }, { merchantClean: "asc" }, { merchantRaw: "asc" }],
+          take: 1200,
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const normalizedTransactions: RecurringSourceTransaction[] = transactions.map((transaction) => ({
+    id: transaction.id,
+    workspaceId: transaction.workspaceId,
+    accountId: transaction.accountId,
+    date: transaction.date,
+    amount: transaction.amount,
+    currency: transaction.currency,
+    type: transaction.type,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    description: transaction.description,
+    category: transaction.category ?? null,
+    account: transaction.account ?? null,
+    importFile: transaction.importFile ?? null,
+  }));
+
+  const normalizedParsedTransactions: RecurringSourceTransaction[] = parsedTransactions.flatMap((transaction) => {
+    if (!transaction.date || !transaction.merchantRaw || transaction.amount === null) {
+      return [];
+    }
+
+    return [
+      {
+        id: `parsed:${transaction.id}`,
+        workspaceId: transaction.workspaceId,
+        accountId: null,
+        date: transaction.date,
+        amount: transaction.amount,
+        currency: transaction.currency,
+        type: "expense" as const,
+        merchantRaw: transaction.merchantRaw,
+        merchantClean: transaction.merchantClean,
+        description: transaction.merchantRaw,
+        category: transaction.categoryName ? { name: transaction.categoryName } : null,
+        account: {
+          id: null,
+          name: transaction.accountName ?? null,
+          institution: transaction.institution ?? null,
+        },
+        importFile: transaction.importFile ?? null,
+      },
+    ];
+  });
+
+  const combined: RecurringSourceTransaction[] = [...normalizedTransactions, ...normalizedParsedTransactions];
+
+  const deduped = new Map<string, RecurringSourceTransaction>();
+  for (const transaction of combined) {
+    if (transaction.type !== "expense") {
+      continue;
+    }
+
+    const key = buildRecurringDedupKey(transaction);
+    if (!deduped.has(key)) {
+      deduped.set(key, transaction);
+    }
+  }
+
+  return Array.from(deduped.values()).sort(
+    (left, right) => left.date.getTime() - right.date.getTime() || left.merchantRaw.localeCompare(right.merchantRaw)
+  );
+};
+
 export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
   if (!(await hasCompatibleTable("RecurringPattern"))) {
     return [];
   }
 
-  const transactions = await prisma.transaction.findMany({
-    where: {
-      workspaceId,
-      deletedAt: null,
-      isExcluded: false,
-      type: "expense",
-      date: {
-        gte: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
-      },
-    },
-    select: {
-      id: true,
-      workspaceId: true,
-      accountId: true,
-      date: true,
-      amount: true,
-      currency: true,
-      type: true,
-      merchantRaw: true,
-      merchantClean: true,
-      description: true,
-      category: {
-        select: {
-          name: true,
-        },
-      },
-    },
-    orderBy: [{ merchantClean: "asc" }, { merchantRaw: "asc" }, { date: "asc" }],
-    take: 1200,
-  });
-
+  const transactions = await getRecurringSourceTransactions(workspaceId);
   const detectedPatterns = detectRecurringPatterns(transactions);
   const existingCommitments = await prisma.financialCommitment.findMany({
     where: { workspaceId, status: { not: "resolved" } },
@@ -363,7 +466,21 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
         });
       } else {
         await tx.recurringPattern.create({
-          data: pattern,
+          data: {
+            workspaceId: pattern.workspaceId,
+            accountId: pattern.accountId,
+            merchantRaw: pattern.merchantRaw,
+            merchantClean: pattern.merchantClean,
+            amount: pattern.amount,
+            currency: pattern.currency,
+            frequency: pattern.frequency,
+            firstSeenDate: pattern.firstSeenDate,
+            lastSeenDate: pattern.lastSeenDate,
+            nextExpectedDate: pattern.nextExpectedDate,
+            transactionCount: pattern.transactionCount,
+            confidence: pattern.confidence,
+            rawPayload: pattern.rawPayload,
+          },
         });
       }
     }

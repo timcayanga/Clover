@@ -710,7 +710,7 @@ export function CommitmentsPanel({
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div>
               <p className="eyebrow">Planned payments</p>
-              <h3 style={{ margin: 0 }}>Clover found potential payments from your uploads and transactions</h3>
+              <h3 style={{ margin: 0 }}>Clover found potential recurring and upcoming payments</h3>
             </div>
             <span className="button button-secondary button-small">
               {plannedPaymentSuggestions.length} suggestion{plannedPaymentSuggestions.length === 1 ? "" : "s"}

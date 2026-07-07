@@ -31,6 +31,7 @@ type ReminderCheckpoint = {
     name: string;
     institution: string | null;
     type: string;
+    currency: string | null;
   } | null;
   importFile: {
     fileName: string;
@@ -81,6 +82,26 @@ const extractSourceMetadata = (checkpoint: ReminderCheckpoint) => {
   return checkpoint.sourceMetadata as Record<string, unknown>;
 };
 
+const inferCreditCardCheckpoint = (checkpoint: ReminderCheckpoint, sourceMetadata: Record<string, unknown> | null) => {
+  const explicitAccountType =
+    typeof sourceMetadata?.accountType === "string"
+      ? sourceMetadata.accountType.trim().toLowerCase()
+      : checkpoint.account?.type?.trim().toLowerCase() ?? null;
+  if (explicitAccountType === "credit_card") {
+    return true;
+  }
+
+  const text = [
+    checkpoint.importFile?.fileName ?? "",
+    typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : "",
+    typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return /\b(visa|mastercard|amex|jcb|bankard|credit\s*card|platinum|world|black)\b/.test(text);
+};
+
 export const getUpcomingStatementReminders = async (workspaceId: string): Promise<StatementReminder[]> => {
   if (!(await hasCompatibleTable("AccountStatementCheckpoint"))) {
     return [];
@@ -123,11 +144,7 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
   for (const checkpoint of checkpoints) {
     const sourceMetadata = extractSourceMetadata(checkpoint);
     const institution = typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : checkpoint.account?.institution ?? null;
-    const accountType =
-      typeof sourceMetadata?.accountType === "string"
-        ? sourceMetadata.accountType
-        : checkpoint.account?.type ?? null;
-    if (accountType !== "credit_card") {
+    if (!inferCreditCardCheckpoint(checkpoint, sourceMetadata)) {
       continue;
     }
 
