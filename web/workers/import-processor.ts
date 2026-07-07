@@ -4569,7 +4569,11 @@ const collapseDuplicateUploadedAccountsForAccount = async <
       workspaceId,
       type: account.type,
       source: "upload",
-      ...(accountNumber ? { accountNumber } : { accountNumber: null }),
+      ...(accountNumber
+        ? {
+            OR: [{ accountNumber }, ...(institution ? [{ institution }] : [])],
+          }
+        : { institution }),
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: {
@@ -4587,17 +4591,22 @@ const collapseDuplicateUploadedAccountsForAccount = async <
     },
   });
   const duplicates = duplicateCandidates.filter((candidate) => {
+    const candidateMatchesIdentity = matchesImportedAccountIdentity(candidate, {
+      name: account.name,
+      institution,
+      accountNumber,
+      type: account.type,
+      currency: typeof account.currency === "string" && account.currency.trim() ? account.currency : null,
+    });
+    if (candidateMatchesIdentity) {
+      return true;
+    }
+
     if (accountNumber) {
       return canonicalInstitutionKey(candidate.institution) === canonicalInstitutionKey(institution);
     }
 
-    return matchesImportedAccountIdentity(candidate, {
-      name: account.name,
-      institution,
-      accountNumber: null,
-      type: account.type,
-      currency: typeof account.currency === "string" && account.currency.trim() ? account.currency : null,
-    });
+    return false;
   });
 
   if (duplicates.length <= 1) {

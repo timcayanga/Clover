@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import { getAccountBrand } from "@/lib/account-brand";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
+import { findBestImportedAccountMatch, matchesImportedAccountIdentity } from "@/lib/workspace-cache";
 
 type ImportedAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
 
@@ -3011,6 +3012,31 @@ const main = async () => {
   );
   if (ambiguousReceiptAccount !== null) {
     throw new Error("expected ambiguous receipt account hint to stay unresolved");
+  }
+
+  const existingCreditCardPlaceholder = {
+    id: "acct-bpi-9737-placeholder",
+    name: "BPI 9737",
+    institution: "BPI",
+    accountNumber: null,
+    type: "credit_card" as const,
+    currency: "PHP",
+    source: "upload" as const,
+  };
+  const explicitCreditCardIdentity = {
+    name: "BPI Rewards",
+    institution: "BPI",
+    accountNumber: "4000123412349737",
+    type: "credit_card" as const,
+    currency: "PHP",
+    source: "upload" as const,
+  };
+  if (!matchesImportedAccountIdentity(existingCreditCardPlaceholder, explicitCreditCardIdentity)) {
+    throw new Error("expected uploaded credit card placeholder to match the same explicit card number by last four digits");
+  }
+  const resolvedCreditCardPlaceholder = findBestImportedAccountMatch([existingCreditCardPlaceholder], explicitCreditCardIdentity);
+  if (!resolvedCreditCardPlaceholder || resolvedCreditCardPlaceholder.id !== existingCreditCardPlaceholder.id) {
+    throw new Error("expected explicit uploaded credit card import to resolve to the existing placeholder card");
   }
 
   const equalSplitReceiptPreview = parseReceiptText([
