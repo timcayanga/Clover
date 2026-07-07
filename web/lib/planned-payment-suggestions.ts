@@ -2,7 +2,7 @@ import { type CommitmentRecurrence, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { getUpcomingStatementReminders, type StatementReminder } from "@/lib/statement-reminders";
-import { detectRecurringPatterns, getRecurringSourceTransactions } from "@/lib/recurring-detection";
+import { detectRecurringPatterns, getRecurringSourceTransactions, makeRecurringSuppressionKey } from "@/lib/recurring-detection";
 
 type PlannedPaymentTransactionLike = {
   id: string;
@@ -40,6 +40,7 @@ export type PlannedPaymentSuggestion = {
   notes: string | null;
   sourceLabel: string;
   sourceDetail: string | null;
+  reasonSummary: string | null;
   confidence: number;
   sourceFileName: string | null;
 };
@@ -168,6 +169,7 @@ const buildReminderSuggestions = (reminders: StatementReminder[], existingCheckp
           : `Due from ${reminder.sourceFileName ?? "uploaded statement"}.`,
       sourceLabel: "Statement due date",
       sourceDetail: `Due ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(dueDate)}`,
+      reasonSummary: "Detected from an uploaded statement due date.",
       confidence: 92,
       sourceFileName: reminder.sourceFileName,
     });
@@ -259,6 +261,7 @@ const buildInstallmentSuggestions = (
       sourceDetail: reminder
         ? `Due ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(dueDate)}`
         : `Last seen ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(last.date)}`,
+      reasonSummary: installmentTerms ? `Installment terms suggest ${installmentTerms} payments.` : "Repeated installment-style charges were detected.",
       confidence: Math.min(94, 66 + Math.min(group.length, 3) * 8 + (installmentTerms ? 8 : 0)),
       sourceFileName: readTransactionImportFileName(first),
     });
@@ -269,7 +272,8 @@ const buildInstallmentSuggestions = (
 
 const buildRecurringTransactionSuggestions = (
   transactions: Awaited<ReturnType<typeof getRecurringSourceTransactions>>,
-  existingCommitmentKeys: Set<string>
+  existingCommitmentKeys: Set<string>,
+  dismissedSuppressionKeys: Set<string>
 ) => {
   const suggestions: PlannedPaymentSuggestion[] = [];
   const patterns = detectRecurringPatterns(transactions).filter((pattern) => pattern.transactionCount >= 2);
@@ -281,7 +285,7 @@ const buildRecurringTransactionSuggestions = (
       pattern.currency,
       normalizeKey(title),
     ].join("::")}`;
-    if (existingCommitmentKeys.has(key)) {
+    if (existingCommitmentKeys.has(key) || dismissedSuppressionKeys.has(pattern.suppressionKey)) {
       continue;
     }
 
@@ -317,6 +321,7 @@ const buildRecurringTransactionSuggestions = (
       ]
         .filter(Boolean)
         .join(" · "),
+      reasonSummary: pattern.reasonSummary,
       confidence: pattern.confidence,
       sourceFileName: pattern.importFile?.fileName ?? null,
     });
@@ -329,9 +334,10 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
   const reminders = await getUpcomingStatementReminders(workspaceId);
   const hasCommitmentTable = await hasCompatibleTable("FinancialCommitment");
   const hasTransactionTable = await hasCompatibleTable("Transaction");
+  const hasRecurringPatternTable = await hasCompatibleTable("RecurringPattern");
   const recurringTransactions = await getRecurringSourceTransactions(workspaceId);
 
-  const [existingCommitments, transactions] = await Promise.all([
+  const [existingCommitments, transactions, dismissedPatterns] = await Promise.all([
     hasCommitmentTable
       ? prisma.financialCommitment.findMany({
           where: {
@@ -392,6 +398,24 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
           },
         })
       : Promise.resolve([] as PlannedPaymentTransactionLike[]),
+    hasRecurringPatternTable
+      ? prisma.recurringPattern.findMany({
+          where: {
+            workspaceId,
+            rawPayload: {
+              path: ["dismissed"],
+              equals: true,
+            },
+          },
+          select: {
+            accountId: true,
+            currency: true,
+            merchantClean: true,
+            merchantRaw: true,
+            rawPayload: true,
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   const existingCheckpointIds = new Set(
@@ -411,6 +435,21 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
       ].join("::")}`
     )
   );
+  const dismissedSuppressionKeys = new Set(
+    dismissedPatterns.map((pattern) => {
+      const payload =
+        pattern.rawPayload && typeof pattern.rawPayload === "object" && !Array.isArray(pattern.rawPayload)
+          ? (pattern.rawPayload as Record<string, unknown>)
+          : null;
+      return typeof payload?.suppressionKey === "string"
+        ? payload.suppressionKey
+        : makeRecurringSuppressionKey({
+            accountId: pattern.accountId,
+            currency: pattern.currency,
+            title: pattern.merchantClean ?? pattern.merchantRaw,
+          });
+    })
+  );
 
   const reminderSuggestions = buildReminderSuggestions(reminders, existingCheckpointIds);
   const installmentSuggestions = buildInstallmentSuggestions(
@@ -418,7 +457,11 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
     reminders,
     existingInstallmentKeys
   );
-  const recurringTransactionSuggestions = buildRecurringTransactionSuggestions(recurringTransactions, existingRecurringTransactionKeys);
+  const recurringTransactionSuggestions = buildRecurringTransactionSuggestions(
+    recurringTransactions,
+    existingRecurringTransactionKeys,
+    dismissedSuppressionKeys
+  );
 
   return [...reminderSuggestions, ...installmentSuggestions, ...recurringTransactionSuggestions].sort(
     (left, right) =>

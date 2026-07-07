@@ -264,6 +264,7 @@ export function CommitmentsPanel({
     notes: string;
     sourceLabel: string;
     sourceDetail: string | null;
+    reasonSummary: string | null;
     statementCheckpointId: string | null;
     installmentTerms: string;
   } | null>(null);
@@ -559,6 +560,7 @@ export function CommitmentsPanel({
       notes: `Detected from ${pattern.transactionCount} matching transaction${pattern.transactionCount === 1 ? "" : "s"}.`,
       sourceLabel: "Recurring pattern",
       sourceDetail: pattern.nextExpectedDate ? `Next due ${formatDate(pattern.nextExpectedDate)}` : null,
+      reasonSummary: pattern.reasonSummary,
       statementCheckpointId: "",
       installmentTerms: "",
     });
@@ -578,6 +580,7 @@ export function CommitmentsPanel({
       notes: suggestion.notes ?? "",
       sourceLabel: suggestion.sourceLabel,
       sourceDetail: suggestion.sourceDetail,
+      reasonSummary: suggestion.reasonSummary,
       statementCheckpointId: suggestion.statementCheckpointId,
       installmentTerms: suggestion.installmentTerms ?? "",
     });
@@ -731,6 +734,7 @@ export function CommitmentsPanel({
                     {suggestion.sourceDetail ? ` · ${suggestion.sourceDetail}` : ""}
                     {suggestion.sourceFileName ? ` · ${suggestion.sourceFileName}` : ""}
                   </p>
+                  {suggestion.reasonSummary ? <p className="panel-muted">{suggestion.reasonSummary}</p> : null}
                   {suggestion.notes ? <p className="panel-muted">{suggestion.notes}</p> : null}
                 </div>
                 <div className="notification-item__time" style={{ minWidth: 170, display: "grid", gap: 8 }}>
@@ -772,6 +776,7 @@ export function CommitmentsPanel({
                     {pattern.transactionCount > 1 ? ` · seen ${pattern.transactionCount} times` : ""}
                     {pattern.nextExpectedDate ? ` · next ${formatDate(pattern.nextExpectedDate)}` : ""}
                   </p>
+                  {pattern.reasonSummary ? <p className="panel-muted">{pattern.reasonSummary}</p> : null}
                 </div>
                 <div className="notification-item__time" style={{ minWidth: 170, display: "grid", gap: 8 }}>
                   <button
@@ -821,6 +826,11 @@ export function CommitmentsPanel({
                   {reviewingSuggestion.sourceLabel}
                   {reviewingSuggestion.sourceDetail ? ` · ${reviewingSuggestion.sourceDetail}` : ""}
                 </p>
+                {reviewingSuggestion.reasonSummary ? (
+                  <p className="panel-muted" style={{ margin: "6px 0 0" }}>
+                    {reviewingSuggestion.reasonSummary}
+                  </p>
+                ) : null}
               </div>
               <button
                 className="button button-secondary button-small recurring-modal-close"

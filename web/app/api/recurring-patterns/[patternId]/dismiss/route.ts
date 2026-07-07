@@ -23,6 +23,25 @@ const toRawPayloadObject = (value: unknown) => {
   return {};
 };
 
+const normalizeSuppressionKey = (params: {
+  accountId?: string | null;
+  currency?: string | null;
+  title?: string | null;
+  fallbackTitle?: string | null;
+}) => {
+  const title = params.title ?? params.fallbackTitle ?? "";
+  return [
+    params.accountId ?? "workspace",
+    (params.currency ?? "PHP").trim().toUpperCase() || "PHP",
+    title
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  ].join("::");
+};
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ patternId: string }> }
@@ -36,6 +55,10 @@ export async function POST(
       select: {
         id: true,
         workspaceId: true,
+        accountId: true,
+        currency: true,
+        merchantClean: true,
+        merchantRaw: true,
         rawPayload: true,
       },
     });
@@ -51,6 +74,15 @@ export async function POST(
       data: {
         rawPayload: {
           ...toRawPayloadObject(pattern.rawPayload),
+          suppressionKey: normalizeSuppressionKey({
+            accountId: pattern.accountId,
+            currency: pattern.currency,
+            title:
+              typeof toRawPayloadObject(pattern.rawPayload).canonicalTitle === "string"
+                ? (toRawPayloadObject(pattern.rawPayload).canonicalTitle as string)
+                : pattern.merchantClean ?? pattern.merchantRaw,
+            fallbackTitle: pattern.merchantClean ?? pattern.merchantRaw,
+          }),
           dismissed: true,
           dismissedAt: new Date().toISOString(),
         },

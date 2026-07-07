@@ -43,6 +43,8 @@ type DetectedRecurringPattern = {
   expectedDayOfMonth: number | null;
   transactionCount: number;
   confidence: number;
+  reasonSummary: string;
+  suppressionKey: string;
   rawPayload: Prisma.InputJsonValue;
   account: {
     id: string | null;
@@ -135,6 +137,9 @@ const average = (values: number[]) => {
   return filtered.length > 0 ? filtered.reduce((sum, value) => sum + value, 0) / filtered.length : 0;
 };
 
+const ordinal = (value: number) =>
+  `${value}${value % 10 === 1 && value % 100 !== 11 ? "st" : value % 10 === 2 && value % 100 !== 12 ? "nd" : value % 10 === 3 && value % 100 !== 13 ? "rd" : "th"}`;
+
 const daysBetween = (left: Date, right: Date) => Math.round(Math.abs(right.getTime() - left.getTime()) / 86_400_000);
 
 const monthDiff = (left: Date, right: Date) =>
@@ -155,6 +160,14 @@ const addDays = (date: Date, days: number) => {
   return next;
 };
 
+export const makeRecurringSuppressionKey = (params: {
+  accountId: string | null;
+  currency: string | null;
+  title: string | null;
+}) =>
+  [params.accountId ?? "workspace", (params.currency ?? "PHP").trim().toUpperCase() || "PHP", normalizeMerchantKey(params.title ?? "")]
+    .join("::");
+
 const inferFrequency = (dates: Date[]): { frequency: CommitmentRecurrence | null; nextExpectedDate: Date | null; cadenceConfidence: number } => {
   const sortedDates = [...dates].sort((left, right) => left.getTime() - right.getTime());
   if (sortedDates.length < 2) {
@@ -171,6 +184,10 @@ const inferFrequency = (dates: Date[]): { frequency: CommitmentRecurrence | null
     positiveMonthGaps.length > 0 &&
     sameDayOfMonthCount >= Math.min(2, sortedDates.length) &&
     positiveMonthGaps.every((gap) => gap >= 1 && gap <= 4);
+  const looksAnnualAcrossGaps =
+    positiveMonthGaps.length > 0 &&
+    sameDayOfMonthCount >= Math.min(2, sortedDates.length) &&
+    positiveMonthGaps.every((gap) => gap >= 10 && gap <= 14);
 
   if (typicalInterval >= 6 && typicalInterval <= 8) {
     return { frequency: "weekly", nextExpectedDate: addDays(lastSeenDate, 7), cadenceConfidence: 84 };
@@ -188,8 +205,8 @@ const inferFrequency = (dates: Date[]): { frequency: CommitmentRecurrence | null
     return { frequency: "quarterly", nextExpectedDate: addMonths(lastSeenDate, 3), cadenceConfidence: 78 };
   }
 
-  if (typicalInterval >= 330 && typicalInterval <= 400) {
-    return { frequency: "annual", nextExpectedDate: addMonths(lastSeenDate, 12), cadenceConfidence: 72 };
+  if ((typicalInterval >= 300 && typicalInterval <= 430) || looksAnnualAcrossGaps) {
+    return { frequency: "annual", nextExpectedDate: addMonths(lastSeenDate, 12), cadenceConfidence: looksAnnualAcrossGaps ? 80 : 72 };
   }
 
   return { frequency: null, nextExpectedDate: null, cadenceConfidence: 0 };
@@ -264,6 +281,19 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
 
   const first = expenseTransactions[0] as RecurringSourceTransaction;
   const last = expenseTransactions[expenseTransactions.length - 1] as RecurringSourceTransaction;
+  const reasonSummary = [
+    cadence.frequency ? `${cadence.frequency} cadence` : null,
+    expectedDayOfMonth !== null ? `around the ${ordinal(expectedDayOfMonth)}` : null,
+    hasKeywordSignal ? "merchant looks like a bill or subscription" : null,
+    amountStability >= 0.9 ? "amount stays very consistent" : amountStability >= 0.75 ? "amount stays fairly close" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const suppressionKey = makeRecurringSuppressionKey({
+    accountId: first.accountId,
+    currency: first.currency,
+    title: canonicalTitle,
+  });
   const confidence = Math.min(
     94,
     Math.round(
@@ -297,6 +327,8 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
     expectedDayOfMonth,
     transactionCount: expenseTransactions.length,
     confidence,
+    reasonSummary,
+    suppressionKey,
     account: last.account ?? null,
     importFile: last.importFile ?? null,
     rawPayload: {
@@ -310,6 +342,8 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
       maximumAmount: Number(Math.max(...amounts).toFixed(2)),
       expectedDayOfMonth,
       dayVariance: Number(dayVariance.toFixed(2)),
+      reasonSummary,
+      suppressionKey,
     },
   };
 };
@@ -511,10 +545,41 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
       ].join("::")
     )
   );
+  const dismissedPatterns = await prisma.recurringPattern.findMany({
+    where: {
+      workspaceId,
+      rawPayload: {
+        path: ["dismissed"],
+        equals: true,
+      },
+    },
+    select: {
+      accountId: true,
+      currency: true,
+      merchantClean: true,
+      merchantRaw: true,
+      rawPayload: true,
+    },
+  });
+  const dismissedSuppressionKeys = new Set(
+    dismissedPatterns.map((pattern) => {
+      const payload =
+        pattern.rawPayload && typeof pattern.rawPayload === "object" && !Array.isArray(pattern.rawPayload)
+          ? (pattern.rawPayload as Record<string, unknown>)
+          : null;
+      return typeof payload?.suppressionKey === "string"
+        ? payload.suppressionKey
+        : makeRecurringSuppressionKey({
+            accountId: pattern.accountId,
+            currency: pattern.currency,
+            title: pattern.merchantClean ?? pattern.merchantRaw,
+          });
+    })
+  );
 
   const patterns = detectedPatterns.filter((pattern) => {
     const key = [pattern.accountId ?? "workspace", pattern.currency, normalizeMerchantKey(pattern.canonicalTitle)].join("::");
-    return !existingCommitmentKeys.has(key);
+    return !existingCommitmentKeys.has(key) && !dismissedSuppressionKeys.has(pattern.suppressionKey);
   });
 
   await prisma.$transaction(async (tx) => {

@@ -49,6 +49,7 @@ export type RecurringPatternSummary = {
   nextExpectedDate: string | null;
   transactionCount: number;
   confidence: number;
+  reasonSummary: string | null;
   account: {
     id: string;
     name: string;
@@ -226,6 +227,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
             nextExpectedDate: true,
             transactionCount: true,
             confidence: true,
+            rawPayload: true,
             account: {
               select: {
                 id: true,
@@ -279,6 +281,12 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     nextExpectedDate: pattern.nextExpectedDate?.toISOString() ?? null,
     transactionCount: pattern.transactionCount,
     confidence: pattern.confidence,
+    reasonSummary:
+      pattern.rawPayload && typeof pattern.rawPayload === "object" && !Array.isArray(pattern.rawPayload)
+        ? (typeof (pattern.rawPayload as Record<string, unknown>).reasonSummary === "string"
+            ? (pattern.rawPayload as Record<string, unknown>).reasonSummary as string
+            : null)
+        : null,
     account: pattern.account
       ? {
           id: pattern.account.id,
