@@ -61,6 +61,24 @@ const parseAmount = (value: unknown) => {
   return Number.isFinite(parsed) ? Math.abs(parsed) : 0;
 };
 
+const formatAmountRange = (minimumAmount: number | null, maximumAmount: number | null, currency: string) => {
+  if (minimumAmount === null || maximumAmount === null) {
+    return null;
+  }
+
+  const formatter = new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: currency || "PHP",
+    minimumFractionDigits: 2,
+  });
+
+  if (Math.abs(minimumAmount - maximumAmount) < 0.01) {
+    return formatter.format(minimumAmount);
+  }
+
+  return `${formatter.format(minimumAmount)} to ${formatter.format(maximumAmount)}`;
+};
+
 const addMonths = (date: Date, months: number) => {
   const next = new Date(date);
   const day = next.getDate();
@@ -257,7 +275,7 @@ const buildRecurringTransactionSuggestions = (
   const patterns = detectRecurringPatterns(transactions).filter((pattern) => pattern.transactionCount >= 2);
 
   for (const pattern of patterns) {
-    const title = (pattern.merchantClean ?? pattern.merchantRaw).trim();
+    const title = (pattern.canonicalTitle || pattern.merchantClean || pattern.merchantRaw).trim();
     const key = `recurring_transaction::${[
       pattern.accountId ?? "workspace",
       pattern.currency,
@@ -266,6 +284,12 @@ const buildRecurringTransactionSuggestions = (
     if (existingCommitmentKeys.has(key)) {
       continue;
     }
+
+    const amountRange = formatAmountRange(pattern.minimumAmount ?? null, pattern.maximumAmount ?? null, pattern.currency);
+    const scheduleDetail =
+      pattern.expectedDayOfMonth && ["monthly", "quarterly", "annual"].includes(pattern.frequency)
+        ? `${pattern.frequency} around the ${pattern.expectedDayOfMonth}${pattern.expectedDayOfMonth === 1 ? "st" : pattern.expectedDayOfMonth === 2 ? "nd" : pattern.expectedDayOfMonth === 3 ? "rd" : "th"}`
+        : pattern.frequency;
 
     suggestions.push({
       id: key,
@@ -280,9 +304,19 @@ const buildRecurringTransactionSuggestions = (
       accountName: pattern.account?.name ?? null,
       statementCheckpointId: null,
       installmentTerms: null,
-      notes: `Detected from ${pattern.transactionCount} similar transaction${pattern.transactionCount === 1 ? "" : "s"} across recent uploads.`,
+      notes: [
+        `Detected from ${pattern.transactionCount} similar transaction${pattern.transactionCount === 1 ? "" : "s"} across recent uploads.`,
+        amountRange ? `Usually ${amountRange}.` : null,
+      ]
+        .filter(Boolean)
+        .join(" "),
       sourceLabel: "Recurring transaction",
-      sourceDetail: `Seen through ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(pattern.lastSeenDate)}`,
+      sourceDetail: [
+        scheduleDetail ? `Looks ${scheduleDetail}` : null,
+        `Seen through ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(pattern.lastSeenDate)}`,
+      ]
+        .filter(Boolean)
+        .join(" · "),
       confidence: pattern.confidence,
       sourceFileName: pattern.importFile?.fileName ?? null,
     });

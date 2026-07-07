@@ -31,12 +31,16 @@ type DetectedRecurringPattern = {
   accountId: string | null;
   merchantRaw: string;
   merchantClean: string | null;
+  canonicalTitle: string;
   amount: number;
+  minimumAmount: number;
+  maximumAmount: number;
   currency: string;
   frequency: CommitmentRecurrence;
   firstSeenDate: Date;
   lastSeenDate: Date;
   nextExpectedDate: Date;
+  expectedDayOfMonth: number | null;
   transactionCount: number;
   confidence: number;
   rawPayload: Prisma.InputJsonValue;
@@ -51,7 +55,30 @@ type DetectedRecurringPattern = {
 };
 
 const recurringKeywordPattern =
-  /\b(rent|internet|bill|utility|utilities|subscription|subscr(?:iption)?|monthly|electric|water|phone|insurance|mortgage|loan|fee|netflix|spotify|youtube|icloud|google|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|grab|globe|smart|pldt|meralco)\b/i;
+  /\b(rent|internet|bill|utility|utilities|subscription|subscr(?:iption)?|monthly|electric|water|phone|insurance|mortgage|loan|repayment|amortization|dues|fee|netflix|spotify|youtube|icloud|google|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco)\b/i;
+const recurringExclusionPattern =
+  /\b(transfer|instapay|fund transfer|outward|inward|cash payment|bills payment|payment to card|card payment|atm withdrawal|cash advance|top up|cash in|incoming credit|refund|reversal)\b/i;
+const recurringNoiseTitlePattern =
+  /^(transfer from|transfer to|interbank transfer|instapay ?fee|load purchase|in app purchase for mobile|atm withdrawal|withholding tax|interest applied|mobile load)/i;
+
+const recurringMerchantAliases = [
+  { pattern: /\bopenai\b.*\b(chatgpt|subscr(?:iption)?)\b|\bchatgpt\b/i, label: "OpenAI ChatGPT" },
+  { pattern: /\bnetflix\b/i, label: "Netflix" },
+  { pattern: /\bspotify\b/i, label: "Spotify" },
+  { pattern: /\byoutube\b.*\b(premium|music|subscription)?\b/i, label: "YouTube" },
+  { pattern: /\bapple\b.*\b(icloud|itunes|bill|services?)\b|\bicloud\b/i, label: "Apple / iCloud" },
+  { pattern: /\bgoogle\b.*\b(one|storage|workspace|subscription)?\b/i, label: "Google" },
+  { pattern: /\badobe\b/i, label: "Adobe" },
+  { pattern: /\bcanva\b/i, label: "Canva" },
+  { pattern: /\bscribd\b/i, label: "Scribd" },
+  { pattern: /\blinkedin\b/i, label: "LinkedIn" },
+  { pattern: /\bmicrosoft\b.*\b(365|subscription|office)\b/i, label: "Microsoft" },
+  { pattern: /\bmeralco\b/i, label: "Meralco" },
+  { pattern: /\bpldt\b/i, label: "PLDT" },
+  { pattern: /\bglobe\b/i, label: "Globe" },
+  { pattern: /\bsmart\b/i, label: "Smart" },
+  { pattern: /\bgrab\b.*\b(unlimited|subscription|plus)\b/i, label: "Grab" },
+];
 
 const normalizeMerchantKey = (value: string) =>
   value
@@ -59,9 +86,26 @@ const normalizeMerchantKey = (value: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\bsubscr(?:iption)?\b/g, " subscription ")
+    .replace(/\b\d{4,}\b/g, " ")
+    .replace(/\b(?:[a-z]{2,4}\.com|com|phl|ph|sgp|usa|us|irl|sg|my|hk|au)\b/g, " ")
+    .replace(/\b(?:makati|taguig|pasig|quezon|mandaluyong|angeles|manila|city)\b/g, " ")
     .replace(/\b(pos|visa|mastercard|debit|credit|online|payment|pay|ph|inc|corp|co|ref|auth|card)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+const canonicalizeRecurringMerchant = (value: string) => {
+  const normalized = normalizeMerchantKey(value);
+  for (const alias of recurringMerchantAliases) {
+    if (alias.pattern.test(normalized)) {
+      return alias.label;
+    }
+  }
+
+  return normalized
+    .replace(/\b(?:subscription|monthly|autopay|premium|membership|fee)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
 
 const isDismissedRecurringPattern = (value: Prisma.JsonValue | null | undefined) =>
   Boolean(
@@ -84,6 +128,11 @@ const median = (values: number[]) => {
 
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 0 ? ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2 : (sorted[middle] ?? 0);
+};
+
+const average = (values: number[]) => {
+  const filtered = values.filter(Number.isFinite);
+  return filtered.length > 0 ? filtered.reduce((sum, value) => sum + value, 0) / filtered.length : 0;
 };
 
 const daysBetween = (left: Date, right: Date) => Math.round(Math.abs(right.getTime() - left.getTime()) / 86_400_000);
@@ -160,20 +209,52 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
     return null;
   }
 
-  const amountTolerance = Math.max(20, typicalAmount * 0.18);
-  const stableAmountCount = amounts.filter((amount) => Math.abs(amount - typicalAmount) <= amountTolerance).length;
-  const amountStability = stableAmountCount / Math.max(amounts.length, 1);
-  const categoryNames = new Set(expenseTransactions.map((transaction) => transaction.category?.name?.toLowerCase() ?? ""));
   const textBlob = expenseTransactions
     .map(
       (transaction) =>
         `${transaction.merchantClean ?? ""} ${transaction.merchantRaw} ${transaction.description ?? ""} ${transaction.category?.name ?? ""}`
     )
     .join(" ");
+  const canonicalTitle =
+    canonicalizeRecurringMerchant(
+      expenseTransactions
+        .map((transaction) => transaction.merchantClean ?? transaction.merchantRaw)
+        .find((value) => Boolean(value && canonicalizeRecurringMerchant(value).length > 0)) ?? expenseTransactions[0]?.merchantRaw ?? ""
+    ) || normalizeMerchantKey(expenseTransactions[0]?.merchantRaw ?? "");
+  if (!canonicalTitle) {
+    return null;
+  }
+  if (recurringNoiseTitlePattern.test(canonicalTitle)) {
+    return null;
+  }
+
+  const amountTolerance = Math.max(20, typicalAmount * 0.18);
+  const stableAmountCount = amounts.filter((amount) => Math.abs(amount - typicalAmount) <= amountTolerance).length;
+  const amountStability = stableAmountCount / Math.max(amounts.length, 1);
+  const categoryNames = new Set(expenseTransactions.map((transaction) => transaction.category?.name?.toLowerCase() ?? ""));
   const hasKeywordSignal = recurringKeywordPattern.test(textBlob) || categoryNames.has("bills & utilities");
+  const looksTransferLike = recurringExclusionPattern.test(textBlob);
   const cadence = inferFrequency(expenseTransactions.map((transaction) => transaction.date));
+  const dateDays = expenseTransactions.map((transaction) => transaction.date.getDate());
+  const expectedDayOfMonth = cadence.frequency === "monthly" || cadence.frequency === "quarterly" || cadence.frequency === "annual"
+    ? Math.round(median(dateDays))
+    : null;
+  const dayVariance =
+    expectedDayOfMonth === null ? 0 : average(dateDays.map((day) => Math.abs(day - expectedDayOfMonth)));
 
   if (!cadence.frequency || !cadence.nextExpectedDate) {
+    return null;
+  }
+
+  if (looksTransferLike && !hasKeywordSignal) {
+    return null;
+  }
+
+  if (!hasKeywordSignal && !["monthly", "quarterly", "annual"].includes(cadence.frequency)) {
+    return null;
+  }
+
+  if (!hasKeywordSignal && amountStability < 0.85) {
     return null;
   }
 
@@ -190,6 +271,7 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
         Math.min(expenseTransactions.length, 6) * 7 +
         cadence.cadenceConfidence * 0.25 +
         amountStability * 20 +
+        (expectedDayOfMonth !== null ? Math.max(0, 8 - Math.min(dayVariance, 8)) : 0) +
         (hasKeywordSignal ? 10 : 0)
     )
   );
@@ -202,13 +284,17 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
     workspaceId: first.workspaceId,
     accountId: first.accountId,
     merchantRaw: first.merchantRaw,
-    merchantClean: first.merchantClean ?? first.merchantRaw,
+    merchantClean: canonicalTitle,
+    canonicalTitle,
     amount: Number(typicalAmount.toFixed(2)),
+    minimumAmount: Number(Math.min(...amounts).toFixed(2)),
+    maximumAmount: Number(Math.max(...amounts).toFixed(2)),
     currency: (first.currency ?? "PHP").trim().toUpperCase() || "PHP",
     frequency: cadence.frequency,
     firstSeenDate: first.date,
     lastSeenDate: last.date,
     nextExpectedDate: cadence.nextExpectedDate,
+    expectedDayOfMonth,
     transactionCount: expenseTransactions.length,
     confidence,
     account: last.account ?? null,
@@ -218,6 +304,12 @@ const buildPatternFromTransactions = (transactions: RecurringSourceTransaction[]
       transactionIds: expenseTransactions.map((transaction) => transaction.id),
       amountStability,
       hasKeywordSignal,
+      looksTransferLike,
+      canonicalTitle,
+      minimumAmount: Number(Math.min(...amounts).toFixed(2)),
+      maximumAmount: Number(Math.max(...amounts).toFixed(2)),
+      expectedDayOfMonth,
+      dayVariance: Number(dayVariance.toFixed(2)),
     },
   };
 };
@@ -230,7 +322,7 @@ export const detectRecurringPatterns = (transactions: RecurringSourceTransaction
       continue;
     }
 
-    const merchantKey = normalizeMerchantKey(transaction.merchantClean ?? transaction.merchantRaw);
+    const merchantKey = canonicalizeRecurringMerchant(transaction.merchantClean ?? transaction.merchantRaw) || normalizeMerchantKey(transaction.merchantClean ?? transaction.merchantRaw);
     if (!merchantKey) {
       continue;
     }
@@ -421,7 +513,7 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
   );
 
   const patterns = detectedPatterns.filter((pattern) => {
-    const key = [pattern.accountId ?? "workspace", pattern.currency, normalizeMerchantKey(pattern.merchantClean ?? pattern.merchantRaw)].join("::");
+    const key = [pattern.accountId ?? "workspace", pattern.currency, normalizeMerchantKey(pattern.canonicalTitle)].join("::");
     return !existingCommitmentKeys.has(key);
   });
 
@@ -453,7 +545,7 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
           where: { id: existingPattern.id },
           data: {
             merchantRaw: pattern.merchantRaw,
-            merchantClean: pattern.merchantClean,
+            merchantClean: pattern.canonicalTitle,
             amount: pattern.amount,
             frequency: pattern.frequency,
             firstSeenDate: pattern.firstSeenDate,
@@ -470,7 +562,7 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
             workspaceId: pattern.workspaceId,
             accountId: pattern.accountId,
             merchantRaw: pattern.merchantRaw,
-            merchantClean: pattern.merchantClean,
+            merchantClean: pattern.canonicalTitle,
             amount: pattern.amount,
             currency: pattern.currency,
             frequency: pattern.frequency,
