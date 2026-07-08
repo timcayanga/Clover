@@ -8065,7 +8065,7 @@ export const processImportFileText = async (
       : unionBankKnownSampleMetadata?.endingBalance ?? ucpbKnownSampleMetadata?.endingBalance ?? effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
   };
   let confirmedImportResult: ConfirmImportResult | null = null;
-  await ensureParsedAccountGroupsMaterialized({
+  const materializedParsedAccounts = await ensureParsedAccountGroupsMaterialized({
     importFile,
     rows: effectiveRows as Array<Record<string, unknown>>,
     metadata: resolvedMetadata,
@@ -8074,7 +8074,32 @@ export const processImportFileText = async (
       importFileId,
       error,
     });
+    return [];
   });
+  const materializedParsedAccount =
+    materializedParsedAccounts.length === 1
+      ? (materializedParsedAccounts[0] ?? null)
+      : findBestImportedAccountMatch(materializedParsedAccounts, {
+            name: typeof resolvedMetadata.accountName === "string" ? resolvedMetadata.accountName : null,
+            institution: typeof resolvedMetadata.institution === "string" ? resolvedMetadata.institution : null,
+            accountNumber: typeof resolvedMetadata.accountNumber === "string" ? resolvedMetadata.accountNumber : null,
+            type: typeof resolvedMetadata.accountType === "string" ? resolvedMetadata.accountType : null,
+            currency: typeof resolvedMetadata.currency === "string" ? resolvedMetadata.currency : null,
+          }) ??
+        materializedParsedAccounts[0] ??
+        null;
+  const linkedImportAccountId = importFile.account?.id ?? materializedParsedAccount?.id ?? null;
+  if (!importFile.account?.id && materializedParsedAccount?.id) {
+    await updateImportFileCompat(importFileId, {
+      accountId: materializedParsedAccount.id,
+    }).catch((error) => {
+      console.warn("[import-account-match] unable to persist materialized import account link", {
+        importFileId,
+        accountId: materializedParsedAccount.id,
+        error,
+      });
+    });
+  }
   const duplicateImportFileId = await findExistingImportedStatement({
     workspaceId: importFile.workspaceId,
     statementFingerprint,
@@ -8191,8 +8216,8 @@ export const processImportFileText = async (
     effectiveImportMode === "receipt"
       ? receiptDocumentCashAccountId
       : receiptPreviewLooksLikeReceipt
-        ? importFile.account?.id ?? resolvedReceiptAccountId
-        : importFile.account?.id ?? null;
+        ? linkedImportAccountId ?? resolvedReceiptAccountId
+        : linkedImportAccountId;
   const documentImportExtractedPayload = {
     metadata: resolvedMetadata,
     rowCount: rows.length,
@@ -8329,7 +8354,7 @@ export const processImportFileText = async (
     const investmentSnapshot = await upsertInvestmentSnapshotCompat({
       workspaceId: String(importFile.workspaceId),
       documentImportId: documentImportRecord.id,
-      accountId: importFile.account?.id ?? null,
+      accountId: linkedImportAccountId,
       snapshotDate: parseDateValue(resolvedMetadata.endDate ?? null),
       portfolioName: resolvedMetadata.accountName ?? resolvedMetadata.institution ?? null,
       currency: resolvedMetadata.currency ?? null,
@@ -8351,7 +8376,7 @@ export const processImportFileText = async (
         workspaceId: String(importFile.workspaceId),
         investmentSnapshotId: investmentSnapshot.id,
         documentImportId: documentImportRecord.id,
-        accountId: importFile.account?.id ?? null,
+        accountId: linkedImportAccountId,
         holdings: openAiParsed.holdings.map((holding, index) => ({
           rowIndex: index + 1,
           assetName: holding.asset_name,
