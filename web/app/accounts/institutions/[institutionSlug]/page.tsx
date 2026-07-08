@@ -167,7 +167,16 @@ const readTransactionAssetName = (transaction: Transaction) => {
     return rawAssetName;
   }
 
+  const rawFundName = typeof rawPayload?.fundName === "string" ? rawPayload.fundName.trim() : "";
+  if (rawFundName) {
+    return rawFundName;
+  }
+
   const description = transaction.description?.trim() ?? "";
+  const trailingStatusMatch = description.match(/^(.+?)\s*-\s*(?:buy|sell)\s+order\s+completed$/i);
+  if (trailingStatusMatch?.[1]?.trim()) {
+    return trailingStatusMatch[1].trim();
+  }
   const descriptionMatch = description.match(/^(?:buy|sell|withdraw)\s*-\s*(.+?)(?:\s+\(|$)/i);
   if (descriptionMatch?.[1]?.trim()) {
     return descriptionMatch[1].trim();
@@ -761,9 +770,7 @@ export default function InvestmentInstitutionDetailPage() {
               <div>
                 <p className="eyebrow">Investment institution</p>
                 <h1>{routeInstitution}</h1>
-                <span>
-                  {accounts.length} asset{accounts.length === 1 ? "" : "s"} · {transactions.length} trade{transactions.length === 1 ? "" : "s"} · {routeCurrency}
-                </span>
+                <span>{transactions.length} trade{transactions.length === 1 ? "" : "s"}</span>
               </div>
             </div>
             <button className="button button-secondary button-small" type="button" onClick={() => router.push("/accounts")}>
@@ -1063,7 +1070,7 @@ export default function InvestmentInstitutionDetailPage() {
           )}
         </section>
 
-        <section className="institution-detail-panel glass institution-detail-panel--danger">
+        <section className="institution-detail-panel glass">
           <div className="institution-detail-panel__head">
             <div>
               <p className="eyebrow">Delete institution</p>

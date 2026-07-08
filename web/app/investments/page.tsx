@@ -234,7 +234,16 @@ const extractInvestmentAssetNameFromTransaction = (transaction: InvestmentTransa
     return rawAssetName;
   }
 
+  const rawFundName = typeof rawPayload?.fundName === "string" ? rawPayload.fundName.trim() : "";
+  if (rawFundName) {
+    return rawFundName;
+  }
+
   const description = transaction.description?.trim() ?? "";
+  const trailingStatusMatch = description.match(/^(.+?)\s*-\s*(?:buy|sell)\s+order\s+completed$/i);
+  if (trailingStatusMatch?.[1]?.trim()) {
+    return trailingStatusMatch[1].trim();
+  }
   const descriptionMatch = description.match(/^(?:buy|sell|withdraw)\s*-\s*(.+?)(?:\s+\(|$)/i);
   if (descriptionMatch?.[1]?.trim()) {
     return descriptionMatch[1].trim();
