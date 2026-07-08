@@ -63,6 +63,27 @@ export type DetectedStatementMetadata = {
   confidence: number;
 };
 
+export type DeterministicParsedHolding = {
+  asset_name: string;
+  asset_symbol: string | null;
+  asset_type: string | null;
+  quantity: number | null;
+  unit_price: number | null;
+  cost_basis: number | null;
+  market_value: number | null;
+  current_value: number | null;
+  gain_loss_value: number | null;
+  gain_loss_percent: number | null;
+  currency: string | null;
+  status: string | null;
+  confidence_score: number;
+  parser_evidence: {
+    page: number | null;
+    source_text: string | null;
+    reason: string;
+  };
+};
+
 export type ImportParseContext = {
   institution?: string | null;
   accountName?: string | null;
@@ -1196,6 +1217,30 @@ const parseGenericScreenshotStatementMetadata = (text: string, fileName = ""): D
     ...metadata,
     confidence: Math.max(45, scoreMetadataConfidence(metadata)),
   };
+};
+
+const looksLikeGenericScreenshotText = (text: string) => {
+  const normalizedText = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const rawLines = splitStatementLines(text);
+  const normalizedLines = rawLines.map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean);
+  const screenshotSignalCount = [
+    /\b(?:available|current|total|outstanding)\s+balance\b/i.test(normalizedText),
+    /\btransaction history\b/i.test(normalizedText),
+    /\bpast transactions\b/i.test(normalizedText),
+    /\bopen orders\b/i.test(normalizedText),
+    /\baccount details\b/i.test(normalizedText),
+    /\bmy deposit accounts\b/i.test(normalizedText),
+    /\bdeposit accounts\b/i.test(normalizedText),
+    /\bview other accounts\b/i.test(normalizedText),
+    /\bavailable limit\b/i.test(normalizedText),
+    /\b(?:sent via|received via)\s+gcash\b/i.test(normalizedText),
+    /\b(?:total amount sent|total amount received)\b/i.test(normalizedText),
+  ].filter(Boolean).length;
+  const uiArtifactCount = normalizedLines.filter((line) => isLikelyScreenshotUiArtifactText(line)).length;
+  const dateLikeCount = normalizedLines.filter((line) => Boolean(parseDateValue(line) || isLikelyScreenshotDateFragment(line))).length;
+  const amountLikeCount = normalizedLines.filter((line) => /\b(?:PHP|USD|EUR|GBP|SGD|AED|AUD|JPY|HKD|CNY|THB|₱|\$)\s*[0-9]/i.test(line) || /\b[0-9][0-9,]*\.\d{2}\b/.test(line)).length;
+
+  return screenshotSignalCount >= 2 || (uiArtifactCount >= 2 && amountLikeCount >= 1) || (dateLikeCount >= 1 && amountLikeCount >= 2);
 };
 
 const buildGenericScreenshotSnapshotRows = (
@@ -9798,6 +9843,119 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
       confidence: Math.max(metadata.confidence, isKnownGfundsScreenshotFile(fileName) ? 95 : 88),
     },
     rows,
+  };
+};
+
+export const parseGfundsPortfolioSnapshotText = (text: string, fileName = "") => {
+  const metadata = gfundsScreenshotMetadata(text, fileName);
+  if (!metadata) {
+    return null;
+  }
+
+  const normalized = normalizeWhitespace(text);
+  const fundNameMatch =
+    normalized.match(/\b(ATRAM[\w\s&().-]+?Fund)\b/i) ??
+    normalized.match(/\b(Philippine\s+Stock\s+Index\s+Fund\s+\(Units\))\b/i);
+  const fundName = fundNameMatch?.[1]?.trim() ?? "GFunds Portfolio";
+  const amountMatch = normalized.match(/\bPHP\s*([0-9][0-9,]*\.\d{2})\b/i);
+  const portfolioValue = parseMoney(amountMatch?.[1] ?? null);
+  if (!portfolioValue) {
+    return null;
+  }
+
+  const holding: DeterministicParsedHolding = {
+    asset_name: fundName,
+    asset_symbol: null,
+    asset_type: "fund",
+    quantity: null,
+    unit_price: null,
+    cost_basis: null,
+    market_value: portfolioValue,
+    current_value: portfolioValue,
+    gain_loss_value: null,
+    gain_loss_percent: null,
+    currency: "PHP",
+    status: "open",
+    confidence_score: metadata.confidence ?? 80,
+    parser_evidence: {
+      page: 1,
+      source_text: fundName,
+      reason: "gfunds_portfolio_snapshot_detected",
+    },
+  };
+
+  return {
+    documentType: "portfolio" as const,
+    metadata: {
+      ...metadata,
+      accountName: fundName,
+      endingBalance: portfolioValue,
+      confidence: Math.max(metadata.confidence, 82),
+    },
+    holdings: [holding],
+  };
+};
+
+export const parseGfundsAccountDetailSnapshotText = (text: string, fileName = "") => {
+  const portfolioSnapshot = parseGfundsPortfolioSnapshotText(text, fileName);
+  if (portfolioSnapshot) {
+    return {
+      documentType: "account_detail" as const,
+      metadata: {
+        ...portfolioSnapshot.metadata,
+        accountType: "investment" as const,
+        confidence: Math.max(portfolioSnapshot.metadata.confidence, 84),
+      },
+      holdings: portfolioSnapshot.holdings,
+    };
+  }
+
+  const historySnapshot = parseGfundsTransactionHistoryImportText(text, fileName);
+  if (!historySnapshot) {
+    return null;
+  }
+
+  const topFundName =
+    historySnapshot.rows
+      .map((row) => normalizeWhitespace(String(row.accountName ?? row.description ?? row.merchantClean ?? "")))
+      .find(Boolean) ?? "GFunds";
+
+  const inferredValue =
+    historySnapshot.rows
+      .map((row) => parseMoney(row.amount ?? null))
+      .filter((value): value is number => value !== null)
+      .reduce((largest, value) => Math.max(largest, value), 0) || null;
+
+  const holding: DeterministicParsedHolding = {
+    asset_name: topFundName,
+    asset_symbol: null,
+    asset_type: "fund",
+    quantity: null,
+    unit_price: null,
+    cost_basis: null,
+    market_value: inferredValue,
+    current_value: inferredValue,
+    gain_loss_value: null,
+    gain_loss_percent: null,
+    currency: "PHP",
+    status: "open",
+    confidence_score: historySnapshot.metadata.confidence ?? 78,
+    parser_evidence: {
+      page: 1,
+      source_text: topFundName,
+      reason: "gfunds_account_detail_from_transaction_history",
+    },
+  };
+
+  return {
+    documentType: "account_detail" as const,
+    metadata: {
+      ...historySnapshot.metadata,
+      accountName: topFundName,
+      endingBalance: historySnapshot.metadata.endingBalance ?? inferredValue,
+      confidence: Math.max(historySnapshot.metadata.confidence, 78),
+    },
+    holdings: [holding],
   };
 };
 

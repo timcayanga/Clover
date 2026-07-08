@@ -833,6 +833,19 @@ const buildInstitutionScopedMerchantVariant = (institution: string | null | unde
   return `${scopedInstitution} ${scopedValue}`;
 };
 
+const hasExplicitTransferRailText = (value: string | null | undefined) => {
+  const normalized = normalizeWhitespace(String(value ?? ""));
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    /\b(?:transfer|instapay|pesonet|ibft|fund\s+transfer|bank\s+transfer|wallet\s+transfer|cash\s+in|cash\s+out)\b/i.test(normalized) ||
+    isStatementPaymentSettlementDescription(normalized) ||
+    isStandaloneCashPaymentDescription(normalized)
+  );
+};
+
 const buildMerchantClassificationCandidates = (merchantText: string, normalizedName?: string | null, institution?: string | null) => {
   const variants = new Set<string>();
   const addVariant = (value: string | null | undefined) => {
@@ -857,6 +870,66 @@ const buildMerchantClassificationCandidates = (merchantText: string, normalizedN
   }
 
   return [...variants];
+};
+
+const repairKnownMerchantCategory = (params: {
+  merchantText: string;
+  categoryText?: string | null;
+  currentCategoryName: string;
+  currentType: TransactionType;
+  institution?: string | null;
+}) => {
+  const normalizedCategory = normalizeWhitespace(params.currentCategoryName).toLowerCase();
+  if (normalizedCategory !== "other" && normalizedCategory !== "transfers") {
+    return null;
+  }
+
+  const candidates = buildMerchantClassificationCandidates(
+    params.merchantText,
+    summarizeMerchantText(params.merchantText, params.institution ?? null),
+    params.institution ?? null
+  );
+  const explicitTransferRail = hasExplicitTransferRailText(`${params.categoryText ?? ""} ${params.merchantText}`);
+  const institutionPrefix = normalizeWhitespace(String(params.institution ?? "")).trim().toLowerCase();
+
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizeWhitespace(candidate).trim();
+    const unscopedCandidate =
+      institutionPrefix && normalizedCandidate.toLowerCase().startsWith(`${institutionPrefix} `)
+        ? normalizedCandidate.slice(institutionPrefix.length + 1).trim()
+        : normalizedCandidate;
+    const hint = getSharedMerchantCategoryHint(unscopedCandidate);
+    if (!hint) {
+      continue;
+    }
+
+    if (hint === "Transfers") {
+      continue;
+    }
+
+    if (normalizedCategory === "transfers" && explicitTransferRail) {
+      continue;
+    }
+
+    return {
+      categoryName: hint,
+      preferredType:
+        hint === "Income"
+          ? "income"
+          : hint === "Cash & ATM"
+            ? "expense"
+            : params.currentType === "income" && hint !== "Transfers"
+              ? "expense"
+              : params.currentType === "transfer" && hint !== "Transfers"
+                ? "expense"
+                : params.currentType,
+      confidence: normalizedCategory === "other" ? 84 : 80,
+      reason: normalizedCategory === "other" ? "merchant-hint-repair-other" : "merchant-hint-repair-transfer",
+      normalizedName: summarizeMerchantText(unscopedCandidate, params.institution ?? null),
+    } as const;
+  }
+
+  return null;
 };
 
 const buildRowAmountProfile = (rows: ParsedImportRow[]): RowAmountProfile => {
@@ -1992,6 +2065,85 @@ export const loadBestStatementTemplateForInstitution = async (params: {
     }
 
   throw error;
+  }
+};
+
+export const loadScoredStatementTemplatesForInstitution = async (params: {
+  workspaceId: string;
+  institution?: string | null;
+  fileType?: string | null;
+  accountType?: ImportedAccountType | null;
+  statementFamilySignature?: string | null;
+  limit?: number;
+  allowCrossInstitutionFamilyMatch?: boolean;
+}) => {
+  const columns = await getCompatibleStatementTemplateColumns();
+  if (columns.length === 0) {
+    return [] as Array<{ template: StatementTemplateRow; score: number }>;
+  }
+
+  const institution = sanitizeBankNameLabel(params.institution ?? null);
+  const take = Math.max(1, Math.min(25, Math.round(params.limit ?? 8)));
+
+  try {
+    const templates = await prisma.statementTemplate.findMany({
+      where: {
+        workspaceId: params.workspaceId,
+        ...(params.fileType ? { fileType: params.fileType } : {}),
+        ...(institution && institution !== "Unknown"
+          ? params.allowCrossInstitutionFamilyMatch
+            ? {}
+            : { institution }
+          : {}),
+      },
+      orderBy: [{ successCount: "desc" }, { exampleCount: "desc" }, { updatedAt: "desc" }],
+      take: params.allowCrossInstitutionFamilyMatch ? Math.max(take * 4, 20) : Math.max(take * 2, 12),
+    });
+
+    return templates
+      .map((template) => {
+        const baseScore = scoreStatementTemplateCandidate({
+          template,
+          institution,
+          fileType: params.fileType ?? null,
+          accountType: params.accountType ?? null,
+          statementFamilySignature: params.statementFamilySignature ?? null,
+        });
+        const exactInstitutionMatch =
+          institution &&
+          template.institution &&
+          normalizeMerchantText(template.institution) === normalizeMerchantText(institution);
+        const parserConfig =
+          template.parserConfig && typeof template.parserConfig === "object" && !Array.isArray(template.parserConfig)
+            ? (template.parserConfig as Record<string, unknown>)
+            : null;
+        const templateFamilySignature = typeof parserConfig?.statementFamilySignature === "string" ? parserConfig.statementFamilySignature.trim() : null;
+        const familyMatch =
+          params.statementFamilySignature &&
+          templateFamilySignature &&
+          (params.statementFamilySignature === templateFamilySignature ||
+            params.statementFamilySignature.split("|").some((part) => part && templateFamilySignature.split("|").includes(part)));
+        const crossInstitutionPenalty =
+          exactInstitutionMatch || !institution || institution === "Unknown"
+            ? 0
+            : params.allowCrossInstitutionFamilyMatch && familyMatch
+              ? 10
+              : 35;
+
+        return {
+          template: template as StatementTemplateRow,
+          score: baseScore - crossInstitutionPenalty + (familyMatch ? 6 : 0),
+        };
+      })
+      .filter((entry) => entry.score >= (params.allowCrossInstitutionFamilyMatch ? 22 : 35))
+      .sort((left, right) => right.score - left.score)
+      .slice(0, take);
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return [] as Array<{ template: StatementTemplateRow; score: number }>;
+    }
+
+    throw error;
   }
 };
 
@@ -3794,6 +3946,133 @@ export const scoreStatementTemplateCandidate = (params: {
   return score;
 };
 
+type UnsupervisedLearningClusterSnapshot = {
+  key: string;
+  merchantSeed: string;
+  categoryName: string | null;
+  type: TransactionType;
+  count: number;
+  avgConfidence: number;
+  avgTeachability: number;
+};
+
+export const buildUnsupervisedLearningSnapshot = (
+  rows: ParsedImportRow[],
+  options: {
+    maxClusters?: number;
+    minConfidence?: number;
+    minTeachability?: number;
+  } = {}
+) => {
+  const maxClusters = Math.max(1, Math.min(50, Math.round(options.maxClusters ?? 12)));
+  const minConfidence = Math.max(0, Math.min(100, Math.round(options.minConfidence ?? 70)));
+  const minTeachability = Math.max(0, Math.min(100, Math.round(options.minTeachability ?? 55)));
+  const buckets = new Map<string, UnsupervisedLearningClusterSnapshot & { totalConfidence: number; totalTeachability: number }>();
+
+  for (const row of rows) {
+    const merchantSeed = summarizeMerchantText(String(row.merchantClean ?? row.merchantRaw ?? row.description ?? "").trim()) || "";
+    const confidence = typeof row.confidence === "number" && Number.isFinite(row.confidence) ? row.confidence : 0;
+    const teachability = assessParsedRowTeachability(row).score;
+    if (!merchantSeed || confidence < minConfidence || teachability < minTeachability) {
+      continue;
+    }
+
+    const categoryName = typeof row.categoryName === "string" && row.categoryName.trim() ? row.categoryName.trim() : null;
+    const type = (row.type ?? "expense") as TransactionType;
+    const key = `${normalizeMerchantText(merchantSeed)}|${normalizeMerchantText(categoryName ?? "")}|${type}`;
+    const existing = buckets.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.totalConfidence += confidence;
+      existing.totalTeachability += teachability;
+      existing.avgConfidence = existing.totalConfidence / existing.count;
+      existing.avgTeachability = existing.totalTeachability / existing.count;
+      continue;
+    }
+
+    buckets.set(key, {
+      key,
+      merchantSeed,
+      categoryName,
+      type,
+      count: 1,
+      totalConfidence: confidence,
+      totalTeachability: teachability,
+      avgConfidence: confidence,
+      avgTeachability: teachability,
+    });
+  }
+
+  const clusters = [...buckets.values()]
+    .sort((left, right) => right.count - left.count || right.avgConfidence - left.avgConfidence)
+    .slice(0, maxClusters)
+    .map(({ totalConfidence: _tc, totalTeachability: _tt, ...cluster }) => cluster);
+
+  return {
+    clusterCount: clusters.length,
+    minConfidence,
+    minTeachability,
+    clusters,
+  };
+};
+
+export const promoteUnsupervisedLearningClustersForWorkspace = async (params: {
+  workspaceId: string;
+}) => {
+  const templates = await prisma.statementTemplate.findMany({
+    where: { workspaceId: params.workspaceId },
+    orderBy: [{ updatedAt: "desc" }],
+    take: 25,
+  }).catch((error) => {
+    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return [] as StatementTemplateRow[];
+    }
+    throw error;
+  });
+
+  let candidateCount = 0;
+  for (const template of templates) {
+    const parserConfig =
+      template.parserConfig && typeof template.parserConfig === "object" && !Array.isArray(template.parserConfig)
+        ? (template.parserConfig as Record<string, unknown>)
+        : null;
+    const snapshot =
+      parserConfig?.unsupervisedLearning && typeof parserConfig.unsupervisedLearning === "object" && !Array.isArray(parserConfig.unsupervisedLearning)
+        ? (parserConfig.unsupervisedLearning as Record<string, unknown>)
+        : null;
+    const clusters = Array.isArray(snapshot?.clusters) ? snapshot.clusters : [];
+    candidateCount += clusters.length;
+  }
+
+  return {
+    audit: {
+      candidateCount,
+      promotedCount: 0,
+      suspendedCount: candidateCount,
+      reason: candidateCount > 0 ? "snapshot_only_requires_manual_promotion" : "no_candidates",
+    },
+  };
+};
+
+export const recordUnsupervisedLearningAuditForTemplate = async (params: {
+  workspaceId: string;
+  fingerprint: string;
+  importFileId?: string | null;
+  audit: {
+    candidateCount: number;
+    promotedCount: number;
+    suspendedCount: number;
+    reason?: string | null;
+  };
+}) => {
+  return {
+    workspaceId: params.workspaceId,
+    fingerprint: params.fingerprint,
+    importFileId: params.importFileId ?? null,
+    audit: params.audit,
+  };
+};
+
 export const recordTrainingSignal = async (params: {
   workspaceId: string;
   importFileId?: string | null;
@@ -4548,6 +4827,15 @@ export const enrichParsedRowsWithTraining = async (params: {
       categoryName,
       shouldKeepParserCategory ? row.type ?? "expense" : learned.preferredType ?? row.type ?? "expense"
     );
+    const repairedCategory = repairKnownMerchantCategory({
+      merchantText: merchantClean || classificationMerchantText,
+      categoryText,
+      currentCategoryName: categoryName,
+      currentType: nextType,
+      institution: rowWithInstitution.institution ?? null,
+    });
+    const resolvedCategoryName = repairedCategory?.categoryName ?? categoryName;
+    const resolvedType = repairedCategory?.preferredType ?? nextType;
     const rowConfidence = normalizeConfidenceScore(row.confidence);
     const rowParserConfidence = normalizeConfidenceScore(rowWithInstitution.parserConfidence);
     const rowCategoryConfidence = normalizeConfidenceScore(rowWithInstitution.categoryConfidence);
@@ -4567,6 +4855,7 @@ export const enrichParsedRowsWithTraining = async (params: {
           amountAnomalyPenalty
       )
     );
+    const repairedConfidence = repairedCategory ? Math.max(effectiveConfidence, repairedCategory.confidence) : effectiveConfidence;
     const anomalyScore = Math.max(0, rowAnomalies.score - amountAnomalyPenalty);
     const anomalyIssues = [...new Set([...rowAnomalies.issues, ...rowAmountAnomalies.issues])];
     const anomalyPenalty = anomalyScore < 55 ? Math.max(6, 55 - anomalyScore) : 0;
@@ -4588,15 +4877,15 @@ export const enrichParsedRowsWithTraining = async (params: {
       merchantClean: merchantClean || undefined,
       accountName: accountMatch?.rule.accountName ?? accountName ?? undefined,
       institution: rowWithInstitution.institution ?? accountMatch?.rule.institution ?? undefined,
-      categoryName,
-      confidence: effectiveConfidence,
-      categoryReason: learned.categoryReason,
+      categoryName: resolvedCategoryName,
+      confidence: repairedConfidence,
+      categoryReason: repairedCategory?.reason ?? learned.categoryReason,
       parserVersion: DATA_ENGINE_VERSION,
       reviewStatus: isRowLowConfidence({
-        effectiveConfidence,
-        categoryName,
-        categoryReason: learned.categoryReason,
-        rowType: nextType,
+        effectiveConfidence: repairedConfidence,
+        categoryName: resolvedCategoryName,
+        categoryReason: repairedCategory?.reason ?? learned.categoryReason,
+        rowType: resolvedType,
         teachabilityScore: rowTeachability.score,
         anomalyScore,
         anomalyIssues,
@@ -4604,18 +4893,18 @@ export const enrichParsedRowsWithTraining = async (params: {
         ? "pending_review"
         : "suggested",
       parserConfidence,
-      categoryConfidence,
+      categoryConfidence: Math.max(rowCategoryConfidence, repairedConfidence),
       accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.max(70, accountMatch.score))) : 0,
       duplicateConfidence: 0,
-      transferConfidence: nextType === "transfer" ? 100 : 0,
+      transferConfidence: resolvedType === "transfer" ? 100 : 0,
       rowShapeConfidence: shapeConfidence,
       rowTeachabilityConfidence: rowTeachability.score,
       rowAnomalyConfidence: anomalyScore,
       learnedRuleIdsApplied,
       normalizedPayload: {
         merchantClean: merchantClean || null,
-        categoryName,
-        type: nextType,
+        categoryName: resolvedCategoryName,
+        type: resolvedType,
         accountName: accountMatch?.rule.accountName ?? accountName ?? null,
         institution: row.institution ?? accountMatch?.rule.institution ?? null,
       } as Prisma.InputJsonValue,
@@ -4628,15 +4917,17 @@ export const enrichParsedRowsWithTraining = async (params: {
           categoryReason: shouldKeepParserCategory ? "parser-category-preserved" : learned.categoryReason,
           categorySource: learnedCategorySource,
           learnedCategoryName: learnedCategoryName || null,
+          repairedCategoryName: repairedCategory?.categoryName ?? null,
+          repairedCategoryReason: repairedCategory?.reason ?? null,
           merchantNameSource: learnedNameSource,
           learnedMerchantName: learnedNormalizedName || null,
           merchantNameReason: shouldKeepParserMerchantName ? "parser-merchant-preserved" : learned.categoryReason,
-          confidence: effectiveConfidence,
+          confidence: repairedConfidence,
           accountRuleKey: accountMatch?.rule.ruleKey ?? null,
           accountRuleConfidence: accountMatch ? Math.round(accountMatch.score) : null,
           statementConfidence,
           normalizedName: merchantClean || null,
-          preferredType: nextType,
+          preferredType: resolvedType,
           rowTeachability: {
             score: rowTeachability.score,
             issues: rowTeachability.issues,
@@ -4649,7 +4940,7 @@ export const enrichParsedRowsWithTraining = async (params: {
           },
         },
       },
-      type: nextType,
+      type: resolvedType,
     } satisfies EnrichedParsedImportRow;
   });
 };
