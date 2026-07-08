@@ -57,6 +57,16 @@ Maturity Rollover Principal Instruction
 Maturity 07 Oct 2026 Date
 Payout Acc 30008998394132 No`;
 
+const detailContinuationScreenshotText = `UNO Digital Bank
+Deposit # 100,000.00 Amount
+Interest Rate 6.00% per annum
+Tenure 12 Months
+Maturity # 106,000.00 Amount
+Maturity # 6000.0 Interest
+Maturity Rollover Principal Instruction
+Maturity 07 Oct 2026 Date
+Payout Acc 30008998394132 No`;
+
 const overviewMetadata = detectStatementMetadata(overviewScreenshotText, "IMG_1407.PNG");
 assert.equal(overviewMetadata?.institution, "GSave");
 assert.equal(overviewMetadata?.accountType, "bank");
@@ -123,5 +133,14 @@ assert.equal(detailRows[0]?.rawPayload?.maturityInterest, 6000);
 assert.equal(detailRows[0]?.rawPayload?.maturityDate, "2026-10-07");
 assert.equal(detailRows[0]?.rawPayload?.payoutAccountNumber, "30008998394132");
 assert.match(String(detailRows[0]?.rawPayload?.note ?? ""), /Interest rate 6\.00% per annum/i);
+
+const detailContinuationMetadata = detectStatementMetadata(detailContinuationScreenshotText, "IMG_1410.PNG");
+assert.equal(detailContinuationMetadata?.institution, "GSave");
+assert.equal(detailContinuationMetadata?.accountType, "investment");
+assert.equal(detailContinuationMetadata?.accountNumber, null);
+assert.equal(detailContinuationMetadata?.accountName, "GSave Time Deposit Details");
+assert.equal(detailContinuationMetadata?.openingBalance, 100000);
+assert.equal(detailContinuationMetadata?.endingBalance, 100000);
+assert.equal(detailContinuationMetadata?.endDate?.slice(0, 10), "2026-10-07");
 
 console.log("[PASS] GSave / UNO screenshots resolve to savings and time-deposit account snapshots.");

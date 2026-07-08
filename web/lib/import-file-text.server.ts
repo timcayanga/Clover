@@ -397,12 +397,10 @@ const getOcrWorker = async () => {
     return null;
   }
 
-  // Tesseract's WASM bundle is not reliably available in Vercel preview/runtime
-  // environments, so we skip it there and let the OpenAI fallback handle images.
-  if (process.env.VERCEL && process.env.CLOVER_ENABLE_TESSERACT_OCR !== "true") {
-    ocrWorkerUnavailable = true;
-    return null;
-  }
+  // Prefer attempting the local OCR worker even in Vercel so screenshot imports
+  // still have a deterministic read path when the remote image fallback is slow
+  // or unavailable. If the runtime cannot initialize Tesseract, we cache that
+  // failure below and continue with the remote fallback path.
 
   if (!ocrWorkerPromise) {
     ocrWorkerPromise = (async () => {
