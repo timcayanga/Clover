@@ -288,6 +288,9 @@ const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; icon: ReactNod
   },
 ];
 
+const getVisibleInvestmentTabs = (canUseProTabs: boolean) =>
+  INVESTMENT_TABS.filter((tab) => canUseProTabs || !tab.proOnly);
+
 const investmentsEmptyStateIllustration = "/illustrations/clover-investments-portfolio-3d.png";
 
 const normalizeInvestmentTab = (value: string | null | undefined): InvestmentTab => {
@@ -900,6 +903,7 @@ export default function InvestmentsPage() {
   );
   const canUseProTabs = planTier !== "free";
   const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "analysis") && !canUseProTabs);
+  const visibleInvestmentTabs = useMemo(() => getVisibleInvestmentTabs(canUseProTabs), [canUseProTabs]);
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
   const selectedInvestmentAsset = selectedInvestmentAssetId
     ? visibleInvestmentAccounts.find((account) => account.id === selectedInvestmentAssetId) ??
@@ -952,6 +956,12 @@ export default function InvestmentsPage() {
       window.removeEventListener("clover:open-investment-add", handleOpenAdd);
     };
   }, []);
+
+  useEffect(() => {
+    if (!canUseProTabs && (selectedTab === "market" || selectedTab === "analysis")) {
+      setSelectedTab("overview");
+    }
+  }, [canUseProTabs, selectedTab]);
 
   const beginEditingAccount = (account: Account) => {
     setEditingAccountId(account.id);
@@ -1226,11 +1236,11 @@ export default function InvestmentsPage() {
           className="investments-tabs"
           activeKey={selectedTab}
           onChange={(key) => setSelectedTab(key as InvestmentTab)}
-          tabs={INVESTMENT_TABS.map((tab) => ({
+          tabs={visibleInvestmentTabs.map((tab) => ({
             key: tab.key,
             label: tab.label,
             icon: tab.icon,
-            disabled: Boolean(tab.proOnly && !canUseProTabs),
+            disabled: false,
             badge: null,
             ariaLabel: tab.label,
           }))}
@@ -1259,41 +1269,39 @@ export default function InvestmentsPage() {
     >
       <section className="investments-mobile-header" aria-label="Investments mobile header">
         <div className="investments-mobile-header__bar">
-          <button
-            className="shell-back-button investments-mobile-header__back"
-            type="button"
-            aria-label="Back"
-            onClick={() => {
-              if (typeof window !== "undefined" && window.history.length > 1) {
-                router.back();
-                return;
-              }
+          <div className="investments-mobile-header__title-group">
+            <button
+              className="shell-back-button investments-mobile-header__back"
+              type="button"
+              aria-label="Back"
+              onClick={() => {
+                if (typeof window !== "undefined" && window.history.length > 1) {
+                  router.back();
+                  return;
+                }
 
-              router.push("/more");
-            }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="m14.5 6-6 6 6 6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
-            </svg>
-          </button>
-          <h1>Investments</h1>
-        </div>
-
-        <div className="investments-mobile-header__controls">
+                router.push("/more");
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="m14.5 6-6 6 6 6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
+              </svg>
+            </button>
+            <h1>Investments</h1>
+          </div>
           <AnimatedTabs
             className="investments-tabs investments-tabs--mobile"
             activeKey={selectedTab}
             onChange={(key) => setSelectedTab(key as InvestmentTab)}
-            tabs={INVESTMENT_TABS.map((tab) => ({
+            tabs={visibleInvestmentTabs.map((tab) => ({
               key: tab.key,
               label: tab.label,
               icon: tab.icon,
-              disabled: Boolean(tab.proOnly && !canUseProTabs),
+              disabled: false,
               badge: null,
               ariaLabel: tab.label,
             }))}
           />
-
           <div className="investments-mobile-header__actions">
             <CurrencySelector
               value={portfolioCurrencyFilter}
@@ -1303,7 +1311,7 @@ export default function InvestmentsPage() {
               allLabel="All currencies"
               ariaLabel="Select investment currency"
               className="investments-currency-filter investments-currency-filter--mobile"
-              buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip investments-mobile-icon-button investments-mobile-icon-button--currency"
+              buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip investments-mobile-icon-button investments-mobile-icon-button--currency investments-mobile-icon-button--compact"
               menuClassName="transactions-currency-filter__menu"
               optionClassName="transactions-currency-filter__option"
               compact
@@ -1312,7 +1320,7 @@ export default function InvestmentsPage() {
               portalMenu
             />
             <button
-              className="button button-primary button-small investments-page__add-button investments-mobile-icon-button investments-mobile-icon-button--primary"
+              className="button button-primary button-small investments-page__add-button investments-mobile-icon-button investments-mobile-icon-button--primary investments-mobile-icon-button--compact"
               type="button"
               onClick={() => setAddOpen(true)}
               aria-label="Add investment"

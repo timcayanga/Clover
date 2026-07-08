@@ -18181,7 +18181,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .investments-page__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 14px;
   flex-wrap: wrap;
@@ -18189,9 +18189,12 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .investments-page__header-copy {
-  display: grid;
-  gap: 4px;
-  max-width: 60ch;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: none;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .investments-page__header-copy h1 {
@@ -18248,6 +18251,20 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .investments-mobile-header {
   display: none;
+}
+
+.content--investments .topbar__title-wrap {
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 14px;
+}
+
+.content--investments .topbar__title-row {
+  flex-wrap: nowrap;
+}
+
+.content--investments .topbar__title-addon {
+  min-width: 0;
 }
 
 .investments-overview-metrics {
@@ -18511,23 +18528,31 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
   .investments-mobile-header {
     display: grid;
-    gap: 10px;
+    gap: 0;
     margin-bottom: 12px;
   }
 
   .investments-mobile-header__bar {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
   }
 
+  .investments-mobile-header__title-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
   .investments-mobile-header__bar h1 {
     margin: 0;
-    font-size: clamp(1.4rem, 6vw, 1.8rem);
+    font-size: clamp(1.1rem, 5vw, 1.35rem);
     font-weight: 700;
     letter-spacing: -0.05em;
     line-height: 1;
+    white-space: nowrap;
   }
 
   .investments-mobile-header__back {
@@ -18543,7 +18568,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 10px;
+    gap: 8px;
     flex: none;
   }
 
@@ -18562,6 +18587,14 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
     padding: 0 !important;
     justify-content: center !important;
     border-radius: 18px !important;
+  }
+
+  .investments-mobile-icon-button--compact {
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px;
+    min-height: 40px !important;
+    border-radius: 14px !important;
   }
 
   .investments-mobile-icon-button .investments-page__add-button-label,
@@ -18590,6 +18623,11 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
     width: 48px;
   }
 
+  .investments-currency-filter--mobile.investments-mobile-icon-button--compact,
+  .investments-currency-filter--mobile.investments-mobile-icon-button--compact .currency-selector__button {
+    width: 40px;
+  }
+
   .investments-market {
     --market-axis-width: 68px;
     padding: 14px;
@@ -18607,6 +18645,10 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   }
 
   .investments-page__header-actions {
+    display: none;
+  }
+
+  .content--investments .topbar__title-row h1 {
     display: none;
   }
 
