@@ -32103,7 +32103,7 @@ button.accounts-detail__transaction-head-cell {
   align-self: stretch;
   display: grid;
   gap: 0;
-  padding: 14px;
+  padding: 10px 14px 14px;
   min-height: 100%;
   border-radius: 28px;
   max-height: none;
@@ -32113,7 +32113,7 @@ button.accounts-detail__transaction-head-cell {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 10px 14px;
+  padding: 2px 10px 8px;
   min-width: 0;
 }
 
@@ -32148,12 +32148,8 @@ button.accounts-detail__transaction-head-cell {
 
 .settings-hub__menu-list {
   display: grid;
-  gap: 0;
-  padding: 4px;
-  border-radius: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(247, 249, 250, 0.72);
-  overflow: hidden;
+  gap: 2px;
+  padding: 0;
 }
 
 .settings-hub__menu-item {
@@ -32161,8 +32157,8 @@ button.accounts-detail__transaction-head-cell {
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 42px;
-  padding: 10px 12px;
+  min-height: 38px;
+  padding: 8px 12px;
   border-radius: 14px;
   border: 0;
   background: transparent;
