@@ -234,6 +234,15 @@ type InvestmentAllocationRow = InvestmentGroup & {
   share: number;
 };
 
+type InvestmentAnalysisSlice = {
+  key: string;
+  label: string;
+  value: number;
+  valueLabel: string;
+  detailLabel: string;
+  color: string;
+};
+
 type InvestmentSortKey = "value_desc" | "value_asc" | "name_asc" | "gain_desc" | "gain_asc" | "updated_desc";
 
 type InvestmentEditDraft = {
@@ -353,6 +362,77 @@ const INVESTMENT_SORT_OPTIONS: Array<{ key: InvestmentSortKey; label: string }> 
   { key: "gain_asc", label: "Gain / loss: low to high" },
   { key: "updated_desc", label: "Recently updated" },
 ];
+
+const INVESTMENT_ANALYSIS_COLORS = [
+  "#03a8c0",
+  "#0ea5e9",
+  "#22c55e",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ef4444",
+] as const;
+
+function InvestmentInsightDonut({
+  ariaLabel,
+  centerValue,
+  centerLabel,
+  slices,
+}: {
+  ariaLabel: string;
+  centerValue: string;
+  centerLabel: string;
+  slices: InvestmentAnalysisSlice[];
+}) {
+  const total = slices.reduce((sum, slice) => sum + slice.value, 0);
+  const radius = 82;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+
+  return (
+    <div className="report-donut">
+      <div className="report-donut__chart" role="img" aria-label={ariaLabel}>
+        <svg viewBox="0 0 240 240" aria-hidden="true">
+          <circle cx="120" cy="120" r={radius} className="report-donut__track" />
+          {total > 0
+            ? slices.map((slice) => {
+                const segmentLength = (slice.value / total) * circumference;
+                const segmentOffset = offset;
+                offset += segmentLength;
+                return (
+                  <circle
+                    key={slice.key}
+                    cx="120"
+                    cy="120"
+                    r={radius}
+                    className="report-donut__segment"
+                    stroke={slice.color}
+                    strokeDasharray={`${segmentLength} ${circumference}`}
+                    strokeDashoffset={-segmentOffset}
+                  />
+                );
+              })
+            : null}
+        </svg>
+        <div className="report-donut__center">
+          <strong>{centerValue}</strong>
+          <span>{centerLabel}</span>
+        </div>
+      </div>
+      <div className="report-donut__legend">
+        {slices.map((slice) => (
+          <div key={slice.key} className="report-donut__legend-item">
+            <span className="report-donut__swatch" style={{ background: slice.color }} />
+            <div className="report-donut__meta">
+              <strong>{slice.label}</strong>
+              <span>{slice.detailLabel}</span>
+              <span>{slice.valueLabel}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const normalizeInvestmentSearchText = (value: string) => value.trim().toLowerCase();
 
@@ -726,7 +806,51 @@ export default function InvestmentsPage() {
         .slice(0, 5),
     [accountPerformance]
   );
-  const topHoldingMaxValue = topHoldings[0]?.currentValue ?? 1;
+
+  const allocationAnalysisSlices = useMemo<InvestmentAnalysisSlice[]>(
+    () =>
+      portfolioAllocation.map((group, index) => ({
+        key: group.key,
+        label: group.label,
+        value: group.currentValue,
+        valueLabel: formatInvestmentAggregate(group.currentValue, group.accounts),
+        detailLabel: `${group.share > 0 ? percentFormatter.format(group.share) : "0%"} · ${group.accounts.length} account${group.accounts.length === 1 ? "" : "s"}`,
+        color: INVESTMENT_ANALYSIS_COLORS[index % INVESTMENT_ANALYSIS_COLORS.length],
+      })),
+    [portfolioAllocation]
+  );
+
+  const topHoldingAnalysisSlices = useMemo<InvestmentAnalysisSlice[]>(() => {
+    const slices = topHoldings.map((item, index) => ({
+      key: item.account.id,
+      label: item.account.name,
+      value: item.currentValue,
+      valueLabel: formatInvestmentAmount(item.currentValue, item.account.currency),
+      detailLabel: item.returnPercent === null
+        ? item.account.investmentSubtype
+          ? getInvestmentSubtypeLabel(item.account.investmentSubtype)
+          : "Unclassified"
+        : `${item.returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(item.returnPercent))} return`,
+      color: INVESTMENT_ANALYSIS_COLORS[index % INVESTMENT_ANALYSIS_COLORS.length],
+    }));
+
+    const topHoldingIds = new Set(topHoldings.map((item) => item.account.id));
+    const remainingAccounts = selectedCurrencyInvestmentAccounts.filter((account) => !topHoldingIds.has(account.id));
+    const remainingValue = remainingAccounts.reduce((sum, account) => sum + (parseNullableAmount(account.balance) ?? 0), 0);
+
+    if (remainingValue > 0.01) {
+      slices.push({
+        key: "__other_holdings__",
+        label: "Other holdings",
+        value: remainingValue,
+        valueLabel: formatInvestmentAggregate(remainingValue, remainingAccounts.length > 0 ? remainingAccounts : selectedCurrencyInvestmentAccounts),
+        detailLabel: `${remainingAccounts.length} holding${remainingAccounts.length === 1 ? "" : "s"}`,
+        color: INVESTMENT_ANALYSIS_COLORS[slices.length % INVESTMENT_ANALYSIS_COLORS.length],
+      });
+    }
+
+    return slices;
+  }, [selectedCurrencyInvestmentAccounts, topHoldings]);
 
   const bestGainHolding = useMemo(() => {
     return (
@@ -1659,12 +1783,55 @@ export default function InvestmentsPage() {
           <InvestmentMarketChart investmentAccounts={investmentAccounts} />
         ) : (
           <section className="investments-insights-grid">
+            <div className="investments-insights__stats investments-insights__stats--top">
+              <article className="accounts-overview-card glass">
+                <div className="investments-metric__label">
+                  <span>Largest position</span>
+                  <InfoTip label="The holding with the highest current value." />
+                </div>
+                <strong>{topHoldings[0] ? formatInvestmentAmount(topHoldings[0].currentValue, topHoldings[0].account.currency) : "—"}</strong>
+                <span className="accounts-overview-card__asset-name">
+                  {topHoldings[0]?.account.name ?? "No portfolio assets yet"}
+                </span>
+              </article>
+              <article className="accounts-overview-card glass">
+                <div className="investments-metric__label">
+                  <span>Best gain</span>
+                  <InfoTip label="The holding with the largest gain in absolute currency value." />
+                </div>
+                <strong>
+                  {bestGainHolding?.gainLoss === null || bestGainHolding?.gainLoss === undefined
+                    ? "—"
+                    : formatInvestmentAmount(bestGainHolding.gainLoss, bestGainHolding.account.currency)}
+                </strong>
+                <span>{bestGainHolding?.account.name ?? "No portfolio assets yet"}</span>
+              </article>
+              <article className="accounts-overview-card glass">
+                <div className="investments-metric__label">
+                  <span>Best return</span>
+                  <InfoTip label="The holding with the highest return percentage." />
+                </div>
+                <strong>{bestReturnHolding?.returnPercent === null || bestReturnHolding?.returnPercent === undefined ? "—" : percentFormatter.format(bestReturnHolding.returnPercent)}</strong>
+                <span>{bestReturnHolding?.account.name ?? "No portfolio assets yet"}</span>
+              </article>
+              <article className="accounts-overview-card glass">
+                <div className="investments-metric__label">
+                  <span>Worst gain</span>
+                  <InfoTip label="The holding with the largest loss in absolute currency value." />
+                </div>
+                <strong>
+                  {worstGainHolding?.gainLoss === null || worstGainHolding?.gainLoss === undefined
+                    ? "—"
+                    : formatInvestmentAmount(worstGainHolding.gainLoss, worstGainHolding.account.currency)}
+                </strong>
+                <span>{worstGainHolding?.account.name ?? "No portfolio assets yet"}</span>
+              </article>
+            </div>
             <article className="investments-allocation glass">
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
-                  <p className="eyebrow">Analysis</p>
                   <div className="investments-allocation__title-row">
-                    <h5>Allocation by subtype</h5>
+                    <h5>Allocation By Subtype</h5>
                     <InfoTip label="A broader view of concentration across the portfolio." />
                   </div>
                 </div>
@@ -1674,30 +1841,21 @@ export default function InvestmentsPage() {
                 </div>
               </div>
 
-              {portfolioAllocation.length > 0 ? (
-                <div className="investments-allocation__list">
-                  {portfolioAllocation.map((group) => (
-                    <div key={group.key} className="investments-allocation__row">
-                      <div className="investments-allocation__row-head">
-                        <div>
-                          <strong>{group.label}</strong>
-                          <span>{group.accounts.length} account{group.accounts.length === 1 ? "" : "s"}</span>
-                        </div>
-                        <div>
-                          <strong>{formatInvestmentAggregate(group.currentValue, group.accounts)}</strong>
-                          <span>{group.share > 0 ? percentFormatter.format(group.share) : "0%"}</span>
-                        </div>
-                      </div>
-                      <div className="investments-allocation__bar">
-                        <span style={{ width: `${Math.max(group.share * 100, 4)}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              {allocationAnalysisSlices.length > 0 ? (
+                <InvestmentInsightDonut
+                  ariaLabel="Allocation by subtype pie chart"
+                  centerValue={
+                    hasVisibleCurrencySelection
+                      ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
+                      : "—"
+                  }
+                  centerLabel="Visible value"
+                  slices={allocationAnalysisSlices}
+                />
               ) : (
                 <EmptyDataCta
                   className="empty-state--illustrated investments-empty-state--compact"
-                  eyebrow="Analysis"
+                  eyebrow=""
                   title="No allocation to show yet."
                   copy="Add an investment to see how your portfolio mix is split."
                   illustration={investmentsEmptyStateIllustration}
@@ -1721,57 +1879,28 @@ export default function InvestmentsPage() {
             <article className="investments-insights-panel glass">
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
-                  <p className="eyebrow">Analysis</p>
                   <div className="investments-allocation__title-row">
-                    <h5>Largest positions</h5>
+                    <h5>Largest Positions</h5>
                     <InfoTip label="The biggest holdings by current value." />
                   </div>
                 </div>
                 <div className="investments-allocation__summary">
-                  <span>Top 5</span>
+                  <span>Top holdings</span>
                   <strong>{topHoldings.length}</strong>
                 </div>
               </div>
 
-              {topHoldings.length > 0 ? (
-                <div className="investments-allocation__list">
-                  {topHoldings.map((item) => {
-                    const investmentAssetBrand = getInvestmentAssetBrand({
-                      symbol: item.account.investmentSymbol,
-                      name: item.account.name,
-                      subtype: item.account.investmentSubtype,
-                      currency: item.account.currency,
-                      institution: item.account.institution,
-                    });
-                    const returnPercent = getReturnPercent(item.currentValue, item.purchaseValue);
-                    return (
-                      <div key={item.account.id} className="investments-allocation__row">
-                        <div className="investments-allocation__row-head">
-                          <div className="investments-allocation__row-label">
-                            <AccountBrandMark accountBrand={investmentAssetBrand} label={investmentAssetBrand.label} />
-                            <div>
-                              <strong>{item.account.name}</strong>
-                              <span>{item.account.investmentSubtype ? getInvestmentSubtypeLabel(item.account.investmentSubtype) : "Unclassified"}</span>
-                            </div>
-                          </div>
-                          <div>
-                            <strong>{formatInvestmentAmount(item.currentValue, item.account.currency)}</strong>
-                            <span className={returnPercent === null ? "" : returnPercent >= 0 ? "is-positive" : "is-negative"}>
-                              {returnPercent === null ? "Return not set" : `${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="investments-allocation__bar">
-                          <span style={{ width: `${Math.max((item.currentValue / topHoldingMaxValue) * 100, 4)}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+              {topHoldingAnalysisSlices.length > 0 ? (
+                <InvestmentInsightDonut
+                  ariaLabel="Largest positions pie chart"
+                  centerValue={formatInvestmentAggregate(topHoldingAnalysisSlices.reduce((sum, slice) => sum + slice.value, 0), selectedCurrencyInvestmentAccounts)}
+                  centerLabel="Top positions"
+                  slices={topHoldingAnalysisSlices}
+                />
               ) : (
                 <EmptyDataCta
                   className="empty-state--illustrated investments-empty-state--compact"
-                  eyebrow="Portfolio"
+                  eyebrow=""
                   title="No portfolio assets yet."
                   copy="Add an investment to see your largest positions."
                   illustration={investmentsEmptyStateIllustration}
@@ -1791,66 +1920,6 @@ export default function InvestmentsPage() {
                 />
               )}
 
-              <div className="investments-insights__stats">
-                <article className="accounts-overview-card glass">
-                  <div className="investments-metric__label">
-                    <span>Largest position</span>
-                    <InfoTip label="The holding with the highest current value." />
-                  </div>
-                  <strong>{topHoldings[0] ? formatInvestmentAmount(topHoldings[0].currentValue, topHoldings[0].account.currency) : "—"}</strong>
-                  <span className="accounts-overview-card__asset-name">
-                    {topHoldings[0] ? (
-                      <>
-                        <AccountBrandMark
-                          accountBrand={getInvestmentAssetBrand({
-                            symbol: topHoldings[0].account.investmentSymbol,
-                            name: topHoldings[0].account.name,
-                            subtype: topHoldings[0].account.investmentSubtype,
-                            currency: topHoldings[0].account.currency,
-                            institution: topHoldings[0].account.institution,
-                          })}
-                          label={topHoldings[0].account.investmentSymbol ?? topHoldings[0].account.name}
-                        />
-                        {topHoldings[0].account.name}
-                      </>
-                    ) : (
-                      "No portfolio assets yet"
-                    )}
-                  </span>
-                </article>
-                <article className="accounts-overview-card glass">
-                  <div className="investments-metric__label">
-                    <span>Best gain</span>
-                    <InfoTip label="The holding with the largest gain in absolute currency value." />
-                  </div>
-                  <strong>
-                    {bestGainHolding?.gainLoss === null || bestGainHolding?.gainLoss === undefined
-                      ? "—"
-                      : formatInvestmentAmount(bestGainHolding.gainLoss, bestGainHolding.account.currency)}
-                  </strong>
-                  <span>{bestGainHolding?.account.name ?? "No portfolio assets yet"}</span>
-                </article>
-                <article className="accounts-overview-card glass">
-                  <div className="investments-metric__label">
-                    <span>Best return</span>
-                    <InfoTip label="The holding with the highest return percentage." />
-                  </div>
-                  <strong>{bestReturnHolding?.returnPercent === null || bestReturnHolding?.returnPercent === undefined ? "—" : percentFormatter.format(bestReturnHolding.returnPercent)}</strong>
-                  <span>{bestReturnHolding?.account.name ?? "No portfolio assets yet"}</span>
-                </article>
-                <article className="accounts-overview-card glass">
-                  <div className="investments-metric__label">
-                    <span>Worst gain</span>
-                    <InfoTip label="The holding with the largest loss in absolute currency value." />
-                  </div>
-                  <strong>
-                    {worstGainHolding?.gainLoss === null || worstGainHolding?.gainLoss === undefined
-                      ? "—"
-                      : formatInvestmentAmount(worstGainHolding.gainLoss, worstGainHolding.account.currency)}
-                  </strong>
-                  <span>{worstGainHolding?.account.name ?? "No portfolio assets yet"}</span>
-                </article>
-              </div>
             </article>
           </section>
         )}

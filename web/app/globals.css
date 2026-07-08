@@ -18784,7 +18784,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   }
 
   .investments-insights__stats {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .investments-allocation__summary {
@@ -19330,7 +19330,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .investments-insights-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -19346,8 +19346,12 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .investments-insights__stats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+}
+
+.investments-insights__stats--top {
+  grid-column: 1 / -1;
 }
 
 .investments-pro-gate {

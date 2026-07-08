@@ -106,17 +106,6 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
     setLogoIndex(0);
   }, [logoResetKey]);
 
-  useEffect(() => {
-    const sources = [currentLogoSrc, accountBrand.fallbackIconSrc].filter((source): source is string => Boolean(source));
-    for (const source of sources) {
-      const image = new Image();
-      image.loading = "eager";
-      image.fetchPriority = "high";
-      image.decoding = "async";
-      image.src = source;
-    }
-  }, [accountBrand.fallbackIconSrc, currentLogoSrc, logoResetKey]);
-
   return (
     <span
       className={`accounts-brand-mark${shouldUseLightFallback ? " is-light-fallback" : ""}`}
@@ -137,8 +126,8 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
             padding: accountBrand.logoPadding ?? undefined,
             boxSizing: accountBrand.logoPadding ? "border-box" : undefined,
           }}
-          loading="eager"
-          fetchPriority="high"
+          loading="lazy"
+          fetchPriority="auto"
           decoding="async"
           referrerPolicy="no-referrer"
           onError={() => {
@@ -155,7 +144,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
           src={accountBrand.fallbackIconSrc}
           alt=""
           aria-hidden="true"
-          loading="eager"
+          loading="lazy"
           decoding="async"
           onError={() => setFallbackFailed(true)}
         />
