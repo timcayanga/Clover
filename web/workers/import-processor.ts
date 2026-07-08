@@ -2899,6 +2899,7 @@ const applyJsonTrainingRowsToMerchantMemory = async (params: {
     await recordTrainingSignal({
       workspaceId: params.workspaceId,
       importFileId: params.importFileId,
+      institution: typeof row.institution === "string" ? row.institution : null,
       merchantText: rawMerchantText,
       normalizedName,
       categoryId: category.id,
@@ -11169,6 +11170,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         workspaceId: importFile.workspaceId,
         importFileId,
         transactionId: entry.transactionId,
+        institution: importFile.account?.institution ?? null,
         merchantText: entry.merchantText,
         categoryId: entry.categoryId,
         categoryName: entry.categoryName,
@@ -11212,6 +11214,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             workspaceId: importFile.workspaceId,
             importFileId,
             transactionId: `${importFileId}:backup:${index + 1}`,
+            institution: importFile.account?.institution ?? null,
             merchantText: signal.merchantText,
             normalizedName: signal.normalizedName,
             categoryId,

@@ -128,6 +128,7 @@ export type DataQaEvaluation = {
     transferCategoryRate: number;
     otherCategoryRate: number;
     lowConfidenceRate: number;
+    repairCandidateCount: number;
     hasStatementIdentity: boolean;
     hasStatementBalances: boolean;
     uiAccountsReady: boolean;
@@ -162,6 +163,50 @@ const countParseableDates = (rows: DataQaParsedRow[]) =>
 
 const countRowsWithValue = (rows: DataQaParsedRow[], predicate: (row: DataQaParsedRow) => boolean) =>
   rows.reduce((count, row) => (predicate(row) ? count + 1 : count), 0);
+
+const buildRepairCandidates = (rows: DataQaParsedRow[]) =>
+  rows
+    .map((row, index) => {
+      const category = normalizeKey(row.categoryName);
+      const merchantRaw = normalizeText(row.merchantRaw ?? row.description ?? "");
+      const merchantClean = normalizeText(row.merchantClean ?? "");
+      const confidence = typeof row.confidence === "number" ? row.confidence : 0;
+      const reasons: string[] = [];
+      let score = 0;
+
+      if (!category || category === "other") {
+        reasons.push("other_category");
+        score += 4;
+      }
+
+      if (category === "transfers") {
+        reasons.push("transfer_category");
+        score += 2;
+      }
+
+      if (!merchantClean || merchantClean.toLowerCase() === merchantRaw.toLowerCase()) {
+        reasons.push("merchant_not_normalized");
+        score += 2;
+      }
+
+      if (confidence < 85) {
+        reasons.push("low_confidence");
+        score += 2;
+      }
+
+      return {
+        rowIndex: index + 1,
+        merchantRaw,
+        merchantClean: merchantClean || null,
+        categoryName: normalizeText(row.categoryName) || null,
+        confidence,
+        reasons,
+        score,
+      };
+    })
+    .filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score || left.rowIndex - right.rowIndex)
+    .slice(0, 8);
 
 const summarizeFileSpeed = (params: { totalMs?: number; rowCount: number; fileType: string }) => {
   const totalMs = typeof params.totalMs === "number" && Number.isFinite(params.totalMs) ? Math.max(0, params.totalMs) : null;
@@ -275,6 +320,7 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
     rowCount,
     fileType: input.fileType,
   });
+  const repairCandidates = buildRepairCandidates(rows);
 
   const findings: DataQaFindingInput[] = [];
 
@@ -607,6 +653,7 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       transferCategoryRate,
       otherCategoryRate,
       lowConfidenceRate,
+      repairCandidateCount: repairCandidates.length,
       hasStatementIdentity,
       hasStatementBalances,
       uiAccountsReady,
@@ -615,6 +662,7 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       totalMs: speed.totalMs,
       msPerRow: speed.msPerRow,
     },
+    repairCandidates,
     findings: findings.map((finding) => ({
       code: finding.code,
       severity: finding.severity,
@@ -636,6 +684,7 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       transferCategoryRate,
       otherCategoryRate,
       lowConfidenceRate,
+      repairCandidateCount: repairCandidates.length,
       hasStatementIdentity,
       hasStatementBalances,
       uiAccountsReady,

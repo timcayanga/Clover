@@ -78,6 +78,12 @@ type MerchantRuleRow = {
   timesConfirmed: number;
 };
 
+type RowAmountProfile = {
+  medianAbsAmount: number | null;
+  p90AbsAmount: number | null;
+  maxAbsAmount: number | null;
+};
+
 type AccountRuleRow = {
   ruleKey: string;
   accountId: string | null;
@@ -817,7 +823,17 @@ export const buildMerchantPrototypeVariants = (merchantText: string, normalizedN
   return [...variants];
 };
 
-const buildMerchantClassificationCandidates = (merchantText: string, normalizedName?: string | null) => {
+const buildInstitutionScopedMerchantVariant = (institution: string | null | undefined, value: string | null | undefined) => {
+  const scopedInstitution = normalizeWhitespace(String(institution ?? "")).trim();
+  const scopedValue = normalizeWhitespace(String(value ?? "")).trim();
+  if (!scopedInstitution || !scopedValue) {
+    return null;
+  }
+
+  return `${scopedInstitution} ${scopedValue}`;
+};
+
+const buildMerchantClassificationCandidates = (merchantText: string, normalizedName?: string | null, institution?: string | null) => {
   const variants = new Set<string>();
   const addVariant = (value: string | null | undefined) => {
     const trimmed = normalizeWhitespace(String(value ?? "")).trim();
@@ -831,12 +847,52 @@ const buildMerchantClassificationCandidates = (merchantText: string, normalizedN
   addVariant(merchantText);
   addVariant(normalizedName);
   addVariant(summarizeMerchantText(merchantText));
+  addVariant(buildInstitutionScopedMerchantVariant(institution, merchantText));
+  addVariant(buildInstitutionScopedMerchantVariant(institution, normalizedName));
+  addVariant(buildInstitutionScopedMerchantVariant(institution, summarizeMerchantText(merchantText)));
 
   for (const variant of buildMerchantPrototypeVariants(merchantText, normalizedName)) {
     addVariant(variant);
+    addVariant(buildInstitutionScopedMerchantVariant(institution, variant));
   }
 
   return [...variants];
+};
+
+const buildRowAmountProfile = (rows: ParsedImportRow[]): RowAmountProfile => {
+  const amounts = rows
+    .map((row) => Number(row.amount ?? NaN))
+    .filter((value) => Number.isFinite(value))
+    .map((value) => Math.abs(value))
+    .filter((value) => value > 0)
+    .sort((left, right) => left - right);
+
+  if (amounts.length === 0) {
+    return {
+      medianAbsAmount: null,
+      p90AbsAmount: null,
+      maxAbsAmount: null,
+    };
+  }
+
+  const pickQuantile = (quantile: number) => amounts[Math.min(amounts.length - 1, Math.max(0, Math.round((amounts.length - 1) * quantile)))];
+
+  return {
+    medianAbsAmount: pickQuantile(0.5),
+    p90AbsAmount: pickQuantile(0.9),
+    maxAbsAmount: amounts.at(-1) ?? null,
+  };
+};
+
+const extractAmountLikeTokensFromText = (value: string | null | undefined) => {
+  const matches = normalizeWhitespace(String(value ?? "")).match(/(?:^|[^\d])(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})|\d+(?:\.\d{1,2}))(?!\d)/g) ?? [];
+  return matches
+    .map((match) => {
+      const cleaned = match.replace(/^[^\d]+/, "").trim();
+      return parseAmountValue(cleaned);
+    })
+    .filter((amount): amount is number => Number.isFinite(amount))
+    .map((amount) => Math.abs(amount));
 };
 
 export const estimateImportLearningConfidence = (params: {
@@ -1023,6 +1079,61 @@ export const assessParsedRowAnomalies = (row: ParsedImportRow) => {
     score,
     issues: [...issues],
     isAnomalous: score < 50 || issues.has("merchant_header_noise") || issues.has("merchant_placeholder"),
+  };
+};
+
+const assessParsedRowAmountAnomalies = (params: {
+  row: ParsedImportRow;
+  amountProfile?: RowAmountProfile | null;
+  contextText?: string | null;
+}) => {
+  const amount = Number(params.row.amount ?? NaN);
+  const issues = new Set<string>();
+  if (!Number.isFinite(amount)) {
+    return {
+      issues: [] as string[],
+      scorePenalty: 0,
+    };
+  }
+
+  const absoluteAmount = Math.abs(amount);
+  const normalizedAmountText = String(params.row.amount ?? "").replace(/[^\d.]/g, "");
+  const integerDigits = normalizedAmountText.split(".")[0]?.replace(/^0+/, "") ?? "";
+  if (absoluteAmount >= 1_000_000_000 || integerDigits.length >= 10) {
+    issues.add("amount_implausible_extreme");
+  }
+
+  const medianAbsAmount = params.amountProfile?.medianAbsAmount ?? null;
+  const p90AbsAmount = params.amountProfile?.p90AbsAmount ?? null;
+  const maxAbsAmount = params.amountProfile?.maxAbsAmount ?? null;
+  if (
+    absoluteAmount > 0 &&
+    medianAbsAmount !== null &&
+    p90AbsAmount !== null &&
+    maxAbsAmount !== null &&
+    maxAbsAmount > 0 &&
+    absoluteAmount > Math.max(1_000_000, medianAbsAmount * 500, p90AbsAmount * 60) &&
+    absoluteAmount >= maxAbsAmount * 0.95
+  ) {
+    issues.add("amount_outlier_vs_statement");
+  }
+
+  const amountTokens = extractAmountLikeTokensFromText(params.contextText ?? null);
+  if (amountTokens.length > 0) {
+    const strongestToken = Math.max(...amountTokens);
+    if (strongestToken > 0 && absoluteAmount > Math.max(10_000, strongestToken * 100)) {
+      issues.add("amount_text_mismatch");
+    }
+  }
+
+  const scorePenalty =
+    (issues.has("amount_implausible_extreme") ? 28 : 0) +
+    (issues.has("amount_outlier_vs_statement") ? 18 : 0) +
+    (issues.has("amount_text_mismatch") ? 16 : 0);
+
+  return {
+    issues: [...issues],
+    scorePenalty,
   };
 };
 
@@ -1253,6 +1364,7 @@ const pickCategoryAlignedNormalizedName = (params: {
   merchantCandidates: string[];
   type: TransactionType;
   fallbackName: string;
+  institution?: string | null;
 }) => {
   const rankedCandidates = [...new Set(params.merchantCandidates.map((value) => normalizeWhitespace(value).trim()).filter(Boolean))].sort((left, right) => {
     const tokenDelta = tokenizeMerchant(right).length - tokenizeMerchant(left).length;
@@ -1261,7 +1373,12 @@ const pickCategoryAlignedNormalizedName = (params: {
   const fallbackNormalized = normalizeMerchantText(params.fallbackName);
 
   for (const candidate of rankedCandidates) {
-    const summarized = summarizeMerchantText(candidate);
+    const institutionScopedPrefix = normalizeWhitespace(String(params.institution ?? "")).trim();
+    const normalizedCandidate =
+      institutionScopedPrefix && candidate.toLowerCase().startsWith(`${institutionScopedPrefix.toLowerCase()} `)
+        ? candidate.slice(institutionScopedPrefix.length + 1).trim()
+        : candidate;
+    const summarized = summarizeMerchantText(normalizedCandidate);
     const normalizedSummary = normalizeMerchantText(summarized);
     if (!normalizedSummary || GENERIC_MERCHANT_RAIL_KEYS.has(normalizedSummary)) {
       continue;
@@ -1275,7 +1392,12 @@ const pickCategoryAlignedNormalizedName = (params: {
 
   if (GENERIC_MERCHANT_RAIL_KEYS.has(fallbackNormalized)) {
     for (const candidate of rankedCandidates) {
-      const summarized = summarizeMerchantText(candidate);
+      const institutionScopedPrefix = normalizeWhitespace(String(params.institution ?? "")).trim();
+      const normalizedCandidate =
+        institutionScopedPrefix && candidate.toLowerCase().startsWith(`${institutionScopedPrefix.toLowerCase()} `)
+          ? candidate.slice(institutionScopedPrefix.length + 1).trim()
+          : candidate;
+      const summarized = summarizeMerchantText(normalizedCandidate);
       const normalizedSummary = normalizeMerchantText(summarized);
       if (normalizedSummary && !GENERIC_MERCHANT_RAIL_KEYS.has(normalizedSummary)) {
         return summarized;
@@ -3282,6 +3404,7 @@ const scoreMerchantRule = (tokens: string[], normalizedMerchantCandidates: Set<s
 export const classifyMerchant = (params: {
   merchantText: string;
   categoryText?: string | null;
+  institution?: string | null;
   type: TransactionType;
   categoryName?: string | null;
   merchantRules: MerchantRuleRow[];
@@ -3296,7 +3419,7 @@ export const classifyMerchant = (params: {
     return coerceTransactionTypeFromCategoryName(categoryName, fallback);
   };
   const normalizedSummary = summarizeMerchantText(params.merchantText);
-  const merchantCandidates = buildMerchantClassificationCandidates(params.merchantText, normalizedSummary);
+  const merchantCandidates = buildMerchantClassificationCandidates(params.merchantText, normalizedSummary, params.institution ?? null);
   const normalizedMerchantCandidates = new Set(merchantCandidates.map((value) => normalizeMerchantText(value)).filter(Boolean));
   const normalizedMerchant = merchantCandidates.map((value) => normalizeMerchantText(value)).find(Boolean) ?? normalizeMerchantText(params.merchantText);
   const categoryText = [params.categoryText, ...merchantCandidates].filter((value) => typeof value === "string" && value.trim()).join(" ");
@@ -3319,6 +3442,7 @@ export const classifyMerchant = (params: {
     merchantCandidates,
     type: params.type,
     fallbackName: rescuedHeuristic?.normalizedName || normalizedSummary,
+    institution: params.institution ?? null,
   });
   const negativeSignals = params.negativeSignals ?? [];
 
@@ -3676,6 +3800,7 @@ export const recordTrainingSignal = async (params: {
   transactionId?: string | null;
   merchantText: string;
   normalizedName?: string | null;
+  institution?: string | null;
   categoryId: string;
   categoryName?: string | null;
   type: TransactionType;
@@ -3782,6 +3907,19 @@ export const recordTrainingSignal = async (params: {
     });
 
     if (expandMerchantPrototypeMemory) {
+      const institutionScopedMerchantText = buildInstitutionScopedMerchantVariant(params.institution ?? null, params.merchantText);
+      if (institutionScopedMerchantText) {
+        await upsertMerchantRule({
+          workspaceId: params.workspaceId,
+          merchantText: institutionScopedMerchantText,
+          normalizedName: normalizedMerchantLabel || params.merchantText,
+          categoryId: params.categoryId,
+          categoryName: params.categoryName ?? category.name,
+          source: `${params.source}:institution`,
+          confidence: Math.max(70, (params.confidence ?? 100) - 5),
+        });
+      }
+
       const prototypeVariants = buildMerchantPrototypeVariants(params.merchantText, normalizedMerchantLabel);
       for (const [index, prototypeLabel] of prototypeVariants.entries()) {
         await upsertMerchantRule({
@@ -3793,6 +3931,19 @@ export const recordTrainingSignal = async (params: {
           source: `${params.source}:prototype${index > 0 ? `:${index + 1}` : ""}`,
           confidence: Math.max(60, (params.confidence ?? 100) - 10 - index * 4),
         });
+
+        const institutionScopedPrototype = buildInstitutionScopedMerchantVariant(params.institution ?? null, prototypeLabel);
+        if (institutionScopedPrototype) {
+          await upsertMerchantRule({
+            workspaceId: params.workspaceId,
+            merchantText: institutionScopedPrototype,
+            normalizedName: normalizedMerchantLabel || prototypeLabel,
+            categoryId: params.categoryId,
+            categoryName: params.categoryName ?? category.name,
+            source: `${params.source}:institution:prototype${index > 0 ? `:${index + 1}` : ""}`,
+            confidence: Math.max(60, (params.confidence ?? 100) - 12 - index * 4),
+          });
+        }
       }
     }
 
@@ -4228,6 +4379,7 @@ export const enrichParsedRowsWithTraining = async (params: {
   };
 
   const rowShapePenalty = scoreRowShapeLearningPenalty(rowShapeAssessment.score);
+  const rowAmountProfile = buildRowAmountProfile(params.rows);
 
   const isRowLowConfidence = (details: {
     effectiveConfidence: number;
@@ -4314,6 +4466,11 @@ export const enrichParsedRowsWithTraining = async (params: {
     const accountMatch = findBestAccountRule(row.accountName ?? null, rowWithInstitution.institution ?? null, accountRules);
     const rowTeachability = assessParsedRowTeachability(row);
     const rowAnomalies = assessParsedRowAnomalies(row);
+    const rowAmountAnomalies = assessParsedRowAmountAnomalies({
+      row,
+      amountProfile: rowAmountProfile,
+      contextText: categoryText,
+    });
     const learned = rowTeachability.score < 55
       ? {
           categoryName: row.categoryName && row.categoryName.trim().toLowerCase() !== "other" ? row.categoryName : null,
@@ -4328,6 +4485,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       : classifyMerchant({
           merchantText: classificationMerchantText,
           categoryText,
+          institution: rowWithInstitution.institution ?? null,
           type: row.type ?? "expense",
           categoryName: row.categoryName ?? null,
           merchantRules,
@@ -4398,22 +4556,27 @@ export const enrichParsedRowsWithTraining = async (params: {
       : 0;
     const shapeConfidence = Math.max(0, Math.min(100, rowShapeAssessment.score));
     const teachabilityPenalty = scoreRowShapeLearningPenalty(rowTeachability.score);
+    const amountAnomalyPenalty = rowAmountAnomalies.scorePenalty;
     const effectiveConfidence = Math.max(
       0,
       Math.min(
         100,
         Math.max(learningConfidence, deterministicParserConfidence, rowConfidence, rowCategoryConfidence, Math.round(shapeConfidence * 0.25)) -
           rowShapePenalty -
-          teachabilityPenalty
+          teachabilityPenalty -
+          amountAnomalyPenalty
       )
     );
-    const anomalyPenalty = rowAnomalies.score < 55 ? Math.max(6, 55 - rowAnomalies.score) : 0;
+    const anomalyScore = Math.max(0, rowAnomalies.score - amountAnomalyPenalty);
+    const anomalyIssues = [...new Set([...rowAnomalies.issues, ...rowAmountAnomalies.issues])];
+    const anomalyPenalty = anomalyScore < 55 ? Math.max(6, 55 - anomalyScore) : 0;
     const parserConfidence = Math.max(
       0,
       Math.max(rowParserConfidence, rowConfidence, statementConfidence, Math.round(shapeConfidence * 0.2)) -
         Math.floor(rowShapePenalty * 0.5) -
         Math.floor(teachabilityPenalty * 0.5) -
-        Math.floor(anomalyPenalty * 0.4)
+        Math.floor(anomalyPenalty * 0.4) -
+        Math.floor(amountAnomalyPenalty * 0.45)
     );
     const categoryConfidence = Math.max(rowCategoryConfidence, effectiveConfidence);
     const learnedRuleIdsApplied = [
@@ -4435,8 +4598,8 @@ export const enrichParsedRowsWithTraining = async (params: {
         categoryReason: learned.categoryReason,
         rowType: nextType,
         teachabilityScore: rowTeachability.score,
-        anomalyScore: rowAnomalies.score,
-        anomalyIssues: rowAnomalies.issues,
+        anomalyScore,
+        anomalyIssues,
       })
         ? "pending_review"
         : "suggested",
@@ -4447,7 +4610,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       transferConfidence: nextType === "transfer" ? 100 : 0,
       rowShapeConfidence: shapeConfidence,
       rowTeachabilityConfidence: rowTeachability.score,
-      rowAnomalyConfidence: rowAnomalies.score,
+      rowAnomalyConfidence: anomalyScore,
       learnedRuleIdsApplied,
       normalizedPayload: {
         merchantClean: merchantClean || null,
@@ -4477,6 +4640,12 @@ export const enrichParsedRowsWithTraining = async (params: {
           rowTeachability: {
             score: rowTeachability.score,
             issues: rowTeachability.issues,
+          },
+          rowAmountProfile,
+          rowAnomalies: {
+            score: anomalyScore,
+            issues: anomalyIssues,
+            amountIssues: rowAmountAnomalies.issues,
           },
         },
       },

@@ -1508,6 +1508,18 @@ const main = async () => {
     );
   }
 
+  const anomalyTinyAmount = assessParsedRowAnomalies({
+    date: "2025-02-01",
+    amount: "0.001",
+    merchantRaw: "Placeholder",
+    merchantClean: "Placeholder",
+    type: "expense",
+    categoryName: "Other",
+  });
+  if (!anomalyTinyAmount.issues.includes("amount_suspicious")) {
+    throw new Error(`expected tiny parsed amounts to be flagged as suspicious, got ${JSON.stringify(anomalyTinyAmount)}`);
+  }
+
   if (
     shouldExpandMerchantPrototypeMemory({
       confidence: 88,
@@ -1788,6 +1800,7 @@ const main = async () => {
     params: {
       merchantText: string;
       categoryText?: string | null;
+      institution?: string | null;
       type: "income" | "expense" | "transfer";
       categoryName?: string | null;
       merchantRules: Array<{
@@ -1819,6 +1832,7 @@ const main = async () => {
   ) => { categoryName: string | null; confidence: number; categoryReason: string | null; merchantKey: string; merchantTokens: string[]; normalizedName: string; preferredType: "income" | "expense" | "transfer" };
   const positiveClassification = classifyMerchant({
     merchantText: "Starbucks Coffee 1234",
+    institution: "BPI",
     type: "expense",
     categoryText: "Starbucks Coffee 1234",
     merchantRules: [
@@ -1837,6 +1851,7 @@ const main = async () => {
   });
   const negativeClassification = classifyMerchant({
     merchantText: "Starbucks Coffee 1234",
+    institution: "BPI",
     type: "expense",
     categoryText: "Starbucks Coffee 1234",
     merchantRules: [
@@ -2027,9 +2042,10 @@ const main = async () => {
 
   const guessCategoryFallback = dataEngine.guessCategoryFallback as (description: string, type: "income" | "expense" | "transfer") => string;
   const guessCategoryName = parser.guessCategoryName as (text: string, type: "income" | "expense" | "transfer") => string;
-  const classifyMerchant = dataEngine.classifyMerchant as (params: {
+  const classifyMerchantFallback = dataEngine.classifyMerchant as (params: {
     merchantText: string;
     categoryText?: string | null;
+    institution?: string | null;
     type: "income" | "expense" | "transfer";
     categoryName?: string | null;
     merchantRules: Array<{
@@ -2144,8 +2160,9 @@ const main = async () => {
     ["LINKEDIN PREMIUM SINGAPORE PTE LTD", "expense", "Bills & Utilities", "LinkedIn"],
   ];
   for (const [merchantText, type, expectedCategory, expectedName] of noisyUnseenMerchantExpectations) {
-    const result = classifyMerchant({
+    const result = classifyMerchantFallback({
       merchantText,
+      institution: "BPI",
       type,
       merchantRules: [],
       trainingSignals: [],
@@ -2157,6 +2174,20 @@ const main = async () => {
     if (result.normalizedName !== expectedName) {
       throw new Error(`expected classifyMerchant ${merchantText} to normalize to ${expectedName}, got ${result.normalizedName ?? "missing"}`);
     }
+  }
+  const institutionScopedRailResult = classifyMerchantFallback({
+    merchantText: "GRABPAY*DUNKIN PH",
+    categoryText: "GRABPAY*DUNKIN PH CARD PURCHASE",
+    institution: "BPI",
+    type: "expense",
+    merchantRules: [],
+    trainingSignals: [],
+    negativeSignals: [],
+  });
+  if (institutionScopedRailResult.normalizedName !== "Dunkin") {
+    throw new Error(
+      `expected institution-aware candidate expansion to preserve the downstream merchant instead of the payment rail, got ${institutionScopedRailResult.normalizedName ?? "missing"}`
+    );
   }
   const aubDisplayedCategory = getEffectiveTransactionCategoryName({
     categoryName: "Financial",

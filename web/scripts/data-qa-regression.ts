@@ -377,6 +377,7 @@ const main = async () => {
   assert.ok(good.score >= 70, "the healthy sample should score well");
   assert.ok(!good.findings.some((finding) => finding.code === "transactions.empty"), "the healthy sample should have rows");
   assert.ok(good.metrics.uiTransactionsReady, "the healthy sample should be transaction-ready");
+  assert.ok(good.metrics.repairCandidateCount <= 1, "the healthy sample should need little to no repair follow-up");
 
   const imageSample = evaluateDataQaRun(buildImageSample());
   assert.ok(imageSample.score >= 65, "the image statement sample should score reasonably well");
@@ -406,6 +407,7 @@ const main = async () => {
     unseenMerchantSample.findings.some((finding) => finding.code === "transactions.transfer_category_rate_high"),
     "the unseen-merchant sample should flag high Transfers-category drift"
   );
+  assert.ok(unseenMerchantSample.metrics.repairCandidateCount > 0, "the unseen-merchant sample should surface repair candidates");
 
   console.log("data-qa regression passed");
 };
