@@ -1689,7 +1689,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         normalizedFallbackFileIdentity.includes("bank statement") &&
         normalizedFallbackFileIdentity.includes("excel");
       const formExtractedTextMetadata = formExtractedText.trim()
-        ? detectStatementMetadataFromText(formExtractedText)
+        ? detectStatementMetadataFromText(formExtractedText, effectiveUploadFileName)
         : null;
       const shouldPreferSampleFallback =
         knownBpiMobileScreenshot
@@ -1961,7 +1961,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             pdfJsBaseUrl
           );
           extractedText = preflightText.text;
-          const detectedMetadata = detectStatementMetadataFromText(extractedText);
+          const detectedMetadata = detectStatementMetadataFromText(extractedText, effectiveFileName);
           const statementFingerprint = buildStatementFingerprint(extractedText, detectedMetadata, effectiveFileName, effectiveFileType || "application/octet-stream");
           const template = await loadStatementTemplate({
             workspaceId: String(importFile.workspaceId),
@@ -1979,7 +1979,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       if (!metadata && extractedText.trim()) {
-        const detectedMetadata = detectStatementMetadataFromText(extractedText);
+        const detectedMetadata = detectStatementMetadataFromText(extractedText, effectiveFileName);
         const statementFingerprint = buildStatementFingerprint(extractedText, detectedMetadata, effectiveFileName, effectiveFileType || "application/octet-stream");
         const template = await loadStatementTemplate({
           workspaceId: String(importFile.workspaceId),
@@ -2165,7 +2165,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             pdfJsBaseUrl
           );
           extractedText = preflightText.text;
-          const detectedMetadata = detectStatementMetadataFromText(extractedText);
+          const detectedMetadata = detectStatementMetadataFromText(extractedText, effectiveFileName);
           const statementFingerprint = buildStatementFingerprint(extractedText, detectedMetadata, effectiveFileName, effectiveFileType || "application/octet-stream");
           const template = await loadStatementTemplate({
             workspaceId: String(importFile.workspaceId),
