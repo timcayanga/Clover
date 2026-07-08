@@ -67,11 +67,18 @@ export type RecurringObligationType =
   | "general";
 
 const recurringKeywordPattern =
-  /\b(rent|internet|bill|utility|utilities|subscription|subscr(?:iption)?|monthly|electric|water|phone|insurance|mortgage|loan|repayment|amortization|dues|fee|netflix|spotify|youtube|icloud|google|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco)\b/i;
+  /\b(rent|internet|bill|billing|utility|utilities|subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|installment|statement\s+payment|payment\s+due|electric|water|phone|mobile\s+plan|broadband|wifi|insurance|mortgage|loan|repayment|amortization|tuition|fee|netflix|spotify|youtube|icloud|google|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|prime|apple\s+services?)\b/i;
 const recurringExclusionPattern =
   /\b(transfer|instapay|fund transfer|outward|inward|cash payment|bills payment|payment to card|card payment|atm withdrawal|cash advance|top up|cash in|incoming credit|refund|reversal)\b/i;
 const recurringNoiseTitlePattern =
   /^(transfer from|transfer to|interbank transfer|instapay ?fee|load purchase|in app purchase for mobile|atm withdrawal|withholding tax|interest applied|mobile load)/i;
+const recurringRescuePattern =
+  /\b(subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|rent|internet|broadband|wifi|phone|mobile\s+plan|electric|water|utility|utilities|insurance|mortgage|loan|repayment|amortization|installment|statement\s+payment|payment\s+due|tuition|netflix|spotify|youtube|icloud|google|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|apple\s+services?)\b/i;
+const recurringPositiveTransferPattern =
+  /\b(statement\s+payment|payment\s+due|loan|repayment|amortization|installment|insurance|premium|rent|internet|phone|electric|water|utility|utilities|subscription|membership|dues|netflix|spotify|youtube|icloud|google|openai|chatgpt|adobe|canva|linkedin|pldt|meralco|globe|smart|maynilad)\b/i;
+const recurringCreditLikeExclusionPattern =
+  /\b(salary|payroll|bonus|interest earned|interest applied|incoming credit|received money|cash deposit|deposit|refund|reversal|credit memo)\b/i;
+const recurringCategoryRescueSet = new Set(["bills & utilities", "insurance", "loans", "housing", "education", "subscriptions"]);
 
 const recurringMerchantAliases = [
   { pattern: /\bopenai\b.*\b(chatgpt|subscr(?:iption)?)\b|\bchatgpt\b/i, label: "OpenAI ChatGPT" },
@@ -146,6 +153,41 @@ const canonicalizeRecurringMerchant = (value: string) => {
     .replace(/\b(?:subscription|monthly|autopay|premium|membership|fee)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim() || buildRecurringMerchantFamilySignature(value);
+};
+
+const buildRecurringCandidateText = (transaction: Pick<RecurringSourceTransaction, "merchantRaw" | "merchantClean" | "description" | "category" | "account">) =>
+  [
+    transaction.merchantClean ?? "",
+    transaction.merchantRaw ?? "",
+    transaction.description ?? "",
+    transaction.category?.name ?? "",
+    transaction.account?.institution ?? "",
+    transaction.account?.name ?? "",
+  ]
+    .join(" ")
+    .trim();
+
+const isRecurringCandidateTransaction = (transaction: RecurringSourceTransaction) => {
+  const textBlob = buildRecurringCandidateText(transaction).toLowerCase();
+  const categoryName = transaction.category?.name?.trim().toLowerCase() ?? "";
+
+  if (transaction.type === "expense") {
+    return !recurringCreditLikeExclusionPattern.test(textBlob);
+  }
+
+  if (recurringCreditLikeExclusionPattern.test(textBlob)) {
+    return false;
+  }
+
+  const hasRecurringSignal =
+    recurringRescuePattern.test(textBlob) ||
+    recurringKeywordPattern.test(textBlob) ||
+    recurringMerchantAliases.some((alias) => alias.pattern.test(textBlob));
+  const hasRecurringCategory = recurringCategoryRescueSet.has(categoryName);
+  const looksExpenseLikeTransfer =
+    transaction.type === "transfer" && recurringPositiveTransferPattern.test(textBlob);
+
+  return hasRecurringSignal && (hasRecurringCategory || looksExpenseLikeTransfer || transaction.type !== "income");
 };
 
 const isDismissedRecurringPattern = (value: Prisma.JsonValue | null | undefined) =>
@@ -331,20 +373,20 @@ const buildPatternFromTransactions = (
   transactions: RecurringSourceTransaction[],
   scope: "account" | "workspace"
 ): DetectedRecurringPattern | null => {
-  const expenseTransactions = transactions
-    .filter((transaction) => transaction.type === "expense")
+  const candidateTransactions = transactions
+    .filter((transaction) => isRecurringCandidateTransaction(transaction))
     .sort((left, right) => left.date.getTime() - right.date.getTime());
-  if (expenseTransactions.length < 2) {
+  if (candidateTransactions.length < 2) {
     return null;
   }
 
-  const amounts = expenseTransactions.map((transaction) => toAmount(transaction.amount)).filter((amount) => amount > 0);
+  const amounts = candidateTransactions.map((transaction) => toAmount(transaction.amount)).filter((amount) => amount > 0);
   const typicalAmount = median(amounts);
   if (typicalAmount <= 0) {
     return null;
   }
 
-  const textBlob = expenseTransactions
+  const textBlob = candidateTransactions
     .map(
       (transaction) =>
         `${transaction.merchantClean ?? ""} ${transaction.merchantRaw} ${transaction.description ?? ""} ${transaction.category?.name ?? ""}`
@@ -352,10 +394,10 @@ const buildPatternFromTransactions = (
     .join(" ");
   const canonicalTitle =
     canonicalizeRecurringMerchant(
-      expenseTransactions
+      candidateTransactions
         .map((transaction) => transaction.merchantClean ?? transaction.merchantRaw)
-        .find((value) => Boolean(value && canonicalizeRecurringMerchant(value).length > 0)) ?? expenseTransactions[0]?.merchantRaw ?? ""
-    ) || normalizeRecurringMerchantKey(expenseTransactions[0]?.merchantRaw ?? "");
+        .find((value) => Boolean(value && canonicalizeRecurringMerchant(value).length > 0)) ?? candidateTransactions[0]?.merchantRaw ?? ""
+    ) || normalizeRecurringMerchantKey(candidateTransactions[0]?.merchantRaw ?? "");
   if (!canonicalTitle) {
     return null;
   }
@@ -366,7 +408,7 @@ const buildPatternFromTransactions = (
   const amountTolerance = Math.max(20, typicalAmount * 0.18);
   const stableAmountCount = amounts.filter((amount) => Math.abs(amount - typicalAmount) <= amountTolerance).length;
   const amountStability = stableAmountCount / Math.max(amounts.length, 1);
-  const categoryNames = new Set(expenseTransactions.map((transaction) => transaction.category?.name?.toLowerCase() ?? ""));
+  const categoryNames = new Set(candidateTransactions.map((transaction) => transaction.category?.name?.toLowerCase() ?? ""));
   const hasKeywordSignal = recurringKeywordPattern.test(textBlob) || categoryNames.has("bills & utilities");
   const hasVariableAmountSignal =
     variableAmountRecurringPattern.test(textBlob) ||
@@ -374,8 +416,8 @@ const buildPatternFromTransactions = (
     categoryNames.has("insurance") ||
     categoryNames.has("loans");
   const looksTransferLike = recurringExclusionPattern.test(textBlob);
-  const cadence = inferFrequency(expenseTransactions.map((transaction) => transaction.date));
-  const dateDays = expenseTransactions.map((transaction) => transaction.date.getDate());
+  const cadence = inferFrequency(candidateTransactions.map((transaction) => transaction.date));
+  const dateDays = candidateTransactions.map((transaction) => transaction.date.getDate());
   const expectedDayOfMonth = cadence.frequency === "monthly" || cadence.frequency === "quarterly" || cadence.frequency === "annual"
     ? Math.round(median(dateDays))
     : null;
@@ -406,18 +448,18 @@ const buildPatternFromTransactions = (
     hasKeywordSignal &&
     hasVariableAmountSignal &&
     ["monthly", "quarterly", "annual"].includes(cadence.frequency) &&
-    expenseTransactions.length >= 3 &&
+    candidateTransactions.length >= 3 &&
     amountStability >= 0.35
   ) {
     // Variable utilities and similar bills often fluctuate because of usage or FX conversion.
-  } else if (hasKeywordSignal && amountStability < 0.55 && expenseTransactions.length < 3) {
+  } else if (hasKeywordSignal && amountStability < 0.55 && candidateTransactions.length < 3) {
     return null;
   } else if (hasKeywordSignal && amountStability < 0.35) {
     return null;
   }
 
   const uniqueAccountKeys = new Set(
-    expenseTransactions.map((transaction) =>
+    candidateTransactions.map((transaction) =>
       [
         transaction.accountId ?? "",
         transaction.account?.institution ?? "",
@@ -430,8 +472,8 @@ const buildPatternFromTransactions = (
     return null;
   }
 
-  const first = expenseTransactions[0] as RecurringSourceTransaction;
-  const last = expenseTransactions[expenseTransactions.length - 1] as RecurringSourceTransaction;
+  const first = candidateTransactions[0] as RecurringSourceTransaction;
+  const last = candidateTransactions[candidateTransactions.length - 1] as RecurringSourceTransaction;
   const obligationType = classifyRecurringObligation({
     text: textBlob,
     categoryNames: Array.from(categoryNames).filter(Boolean),
@@ -467,7 +509,7 @@ const buildPatternFromTransactions = (
     96,
     Math.round(
       35 +
-        Math.min(expenseTransactions.length, 6) * 7 +
+        Math.min(candidateTransactions.length, 6) * 7 +
         cadence.cadenceConfidence * 0.25 +
         amountStability * 20 +
         (expectedDayOfMonth !== null ? Math.max(0, 8 - Math.min(dayVariance, 8)) : 0) +
@@ -495,7 +537,7 @@ const buildPatternFromTransactions = (
     lastSeenDate: last.date,
     nextExpectedDate,
     expectedDayOfMonth,
-    transactionCount: expenseTransactions.length,
+    transactionCount: candidateTransactions.length,
     confidence,
     reasonSummary,
     reasonTags,
@@ -505,7 +547,7 @@ const buildPatternFromTransactions = (
     rawPayload: {
       source: "recurring_detection",
       scope,
-      transactionIds: expenseTransactions.map((transaction) => transaction.id),
+      transactionIds: candidateTransactions.map((transaction) => transaction.id),
       amountStability,
       hasKeywordSignal,
       hasVariableAmountSignal,
@@ -530,7 +572,7 @@ export const detectRecurringPatterns = (transactions: RecurringSourceTransaction
   const workspaceGroups = new Map<string, RecurringSourceTransaction[]>();
 
   for (const transaction of transactions) {
-    if (transaction.type !== "expense") {
+    if (!isRecurringCandidateTransaction(transaction)) {
       continue;
     }
 
@@ -594,7 +636,6 @@ export const getRecurringSourceTransactions = async (workspaceId: string): Promi
             workspaceId,
             deletedAt: null,
             isExcluded: false,
-            type: "expense",
             date: {
               gte: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
             },
@@ -711,7 +752,7 @@ export const getRecurringSourceTransactions = async (workspaceId: string): Promi
 
   const deduped = new Map<string, RecurringSourceTransaction>();
   for (const transaction of combined) {
-    if (transaction.type !== "expense") {
+    if (!isRecurringCandidateTransaction(transaction)) {
       continue;
     }
 

@@ -46,6 +46,156 @@ const decompactMerchantText = (value: string) => {
   return next.replace(/\s+/g, " ").trim();
 };
 
+const PREFERRED_MERCHANT_TOKEN_CASE: Record<string, string> = {
+  adb: "ADB",
+  adobe: "Adobe",
+  ai: "AI",
+  amex: "Amex",
+  atm: "ATM",
+  aub: "AUB",
+  aws: "AWS",
+  bdo: "BDO",
+  bpi: "BPI",
+  canva: "Canva",
+  chatgpt: "ChatGPT",
+  cimb: "CIMB",
+  discordnitro: "Discord Nitro",
+  dunkindonuts: "Dunkin Donuts",
+  gcash: "GCash",
+  googleone: "Google One",
+  gotyme: "GoTyme",
+  grab: "Grab",
+  grabfood: "GrabFood",
+  hsbc: "HSBC",
+  ibft: "IBFT",
+  instapay: "InstaPay",
+  landbank: "LandBank",
+  linkedin: "LinkedIn",
+  maribank: "MariBank",
+  maya: "Maya",
+  metrobank: "Metrobank",
+  openai: "OpenAI",
+  paypal: "PayPal",
+  pesonet: "PESONet",
+  pldt: "PLDT",
+  pnb: "PNB",
+  pos: "POS",
+  psbank: "PSBank",
+  qris: "QRIS",
+  qrph: "QRPH",
+  qrp: "QRP",
+  qrcode: "QR Code",
+  rcbc: "RCBC",
+  sb: "SB",
+  shopee: "Shopee",
+  spotify: "Spotify",
+  ucpb: "UCPB",
+  unionbank: "UnionBank",
+  ub: "UB",
+  ubereats: "Uber Eats",
+  wise: "Wise",
+  youtube: "YouTube",
+};
+
+const PRESERVE_UPPERCASE_TOKENS = new Set([
+  "ATM",
+  "BDO",
+  "BPI",
+  "CIMB",
+  "HSBC",
+  "IBFT",
+  "OCR",
+  "OFX",
+  "PDF",
+  "PHP",
+  "PLDT",
+  "PNB",
+  "POS",
+  "PS",
+  "QR",
+  "RCBC",
+  "USD",
+  "VAT",
+]);
+
+const hasMostlyUppercaseMerchantText = (value: string) => {
+  const letters = value.match(/[A-Za-z]/g) ?? [];
+  if (letters.length < 4) {
+    return false;
+  }
+
+  const uppercaseCount = letters.filter((letter) => letter === letter.toUpperCase()).length;
+  return uppercaseCount / letters.length >= 0.72;
+};
+
+const titleCaseMerchantCore = (value: string): string => {
+  if (!value) {
+    return "";
+  }
+
+  if (/^\d+$/.test(value)) {
+    return value;
+  }
+
+  const compact = value.replace(/[^A-Za-z0-9]+/g, "").toLowerCase();
+  if (compact && PREFERRED_MERCHANT_TOKEN_CASE[compact]) {
+    return PREFERRED_MERCHANT_TOKEN_CASE[compact];
+  }
+
+  if (/[*\/_-]/.test(value)) {
+    return value
+      .split(/([*\/_-])/)
+      .map((part) => (/^[*\/_-]$/.test(part) ? part : titleCaseMerchantCore(part)))
+      .join("");
+  }
+
+  if (value.includes("'")) {
+    return value
+      .split("'")
+      .map((part) => titleCaseMerchantCore(part))
+      .join("'");
+  }
+
+  const upper = value.toUpperCase();
+  if (PRESERVE_UPPERCASE_TOKENS.has(upper)) {
+    return upper;
+  }
+
+  if (/^[A-Z]{2,5}\d*$/.test(upper) && !/^[A-Z]{4,}$/.test(upper)) {
+    return upper;
+  }
+
+  const lower = value.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+};
+
+const normalizeMerchantDisplayCase = (value: string) => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return "";
+  }
+
+  if (!hasMostlyUppercaseMerchantText(normalized)) {
+    return normalized;
+  }
+
+  return normalized
+    .split(" ")
+    .map((token) => {
+      const prefix = token.match(/^[^A-Za-z0-9]+/)?.[0] ?? "";
+      const suffix = token.match(/[^A-Za-z0-9]+$/)?.[0] ?? "";
+      const core = token.slice(prefix.length, token.length - suffix.length);
+      if (!core) {
+        return token;
+      }
+
+      return `${prefix}${titleCaseMerchantCore(core)}${suffix}`;
+    })
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
 const institutionKeyPatterns: Array<{ key: string; patterns: RegExp[] }> = [
   { key: "BDO", patterns: [/\b(BDO|BANCO DE ORO)\b/i] },
   { key: "BPI", patterns: [/\b(BANK OF THE PHILIPPINE ISLANDS|BPI)\b/i] },
@@ -1590,7 +1740,7 @@ export const humanizeMerchantText = (value: string) => {
     .replace(/\s+/g, " ")
     .trim();
 
-  return next;
+  return normalizeMerchantDisplayCase(next);
 };
 
 const genericSimplifierRules: SimplifierRule[] = [
