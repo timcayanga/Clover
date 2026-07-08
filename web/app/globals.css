@@ -18236,6 +18236,16 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 8px;
 }
 
+.investments-page__toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding-inline: 18px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
 .investments-page__add-button .button-icon {
   display: inline-flex;
   align-items: center;
@@ -18780,6 +18790,10 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
     padding: 14px;
   }
 
+  .investments-filters--portfolio {
+    padding: 0;
+  }
+
   .investments-filters input,
   .investments-filters select {
     min-width: 0;
@@ -18791,6 +18805,10 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   }
 
   .investments-filters__actions .button {
+    width: 100%;
+  }
+
+  .investments-filters__actions--portfolio .button {
     width: 100%;
   }
 
@@ -18895,6 +18913,18 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 6px;
 }
 
+.investments-filters--portfolio {
+  grid-template-columns: minmax(0, 1.8fr) repeat(2, minmax(180px, 1fr));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.investments-filters__search {
+  min-width: 0;
+}
+
 .investments-filters__actions {
   display: flex;
   align-items: flex-end;
@@ -18903,6 +18933,12 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   flex-wrap: wrap;
   color: var(--muted);
   font-size: 12px;
+}
+
+.investments-filters__actions--portfolio {
+  grid-column: 1 / -1;
+  align-items: center;
+  padding-top: 4px;
 }
 
 .accounts-account-card__head-actions {
@@ -19281,6 +19317,11 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   box-shadow: var(--shadow-soft);
 }
 
+.investments-portfolio-table__header {
+  display: grid;
+  gap: 14px;
+}
+
 .investments-portfolio-table__table {
   display: grid;
   gap: 6px;
@@ -19290,7 +19331,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .investments-portfolio-table__row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.5fr) minmax(120px, 1fr) minmax(90px, 0.8fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr);
+  grid-template-columns: minmax(220px, 1.8fr) minmax(120px, 1fr) minmax(90px, 0.8fr) minmax(110px, 0.9fr) minmax(140px, 1fr) minmax(140px, 1fr);
   gap: 10px;
   align-items: center;
   min-width: 760px;

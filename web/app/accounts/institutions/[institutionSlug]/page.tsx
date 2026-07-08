@@ -137,6 +137,47 @@ const parseNullableDateInput = (value: string) => {
 const getInstitutionDisplayName = (account: Account) =>
   account.institution?.trim() || account.name.trim() || "Investment institution";
 
+const normalizeInvestmentLabel = (value: string | null | undefined) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+const isGenericInvestmentAssetLabel = (name: string | null | undefined, institution: string | null | undefined) => {
+  const normalizedName = normalizeInvestmentLabel(name);
+  const normalizedInstitution = normalizeInvestmentLabel(institution);
+  if (!normalizedName) {
+    return true;
+  }
+
+  if (normalizedName === normalizedInstitution) {
+    return true;
+  }
+
+  return new Set(["gfunds investments", "gfunds", "atram investments", "atram"]).has(normalizedName);
+};
+
+const readTransactionAssetName = (transaction: Transaction) => {
+  const rawPayload =
+    transaction.rawPayload && typeof transaction.rawPayload === "object" && !Array.isArray(transaction.rawPayload)
+      ? (transaction.rawPayload as Record<string, unknown>)
+      : null;
+  const rawAssetName = typeof rawPayload?.assetName === "string" ? rawPayload.assetName.trim() : "";
+  if (rawAssetName) {
+    return rawAssetName;
+  }
+
+  const description = transaction.description?.trim() ?? "";
+  const descriptionMatch = description.match(/^(?:buy|sell|withdraw)\s*-\s*(.+?)(?:\s+\(|$)/i);
+  if (descriptionMatch?.[1]?.trim()) {
+    return descriptionMatch[1].trim();
+  }
+
+  const merchantText = transaction.merchantRaw?.trim() ?? "";
+  const merchantMatch = merchantText.match(/^(?:buy|sell|withdraw)\s+(.+)$/i);
+  return merchantMatch?.[1]?.trim() || null;
+};
+
 const buildAssetDraft = (account: Account): AssetDraft => ({
   name: account.name,
   investmentSubtype: account.investmentSubtype ?? "stock",
@@ -321,6 +362,7 @@ export default function InvestmentInstitutionDetailPage() {
           merchantRaw: current.merchantRaw,
           description: current.description,
         }));
+        syncWorkspaceCache(matchedAccounts, sortTransactionsDesc(matchedTransactions));
         setLoading(false);
       } catch (error) {
         if (cancelled) {
@@ -365,7 +407,9 @@ export default function InvestmentInstitutionDetailPage() {
       const matchedTransactions = cachedTransactions.filter((transaction) => scopedAccountIds.has(transaction.accountId));
 
       setAccounts(matchedAccounts);
-      setTransactions(sortTransactionsDesc(matchedTransactions));
+      setTransactions((current) =>
+        matchedTransactions.length > 0 || current.length === 0 ? sortTransactionsDesc(matchedTransactions) : current
+      );
       setLoading(false);
     };
 
@@ -407,6 +451,31 @@ export default function InvestmentInstitutionDetailPage() {
     () => accounts.slice().sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()),
     [accounts]
   );
+
+  const accountAssetNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const account of accounts) {
+      if (!isGenericInvestmentAssetLabel(account.name, account.institution)) {
+        map.set(account.id, account.name);
+        continue;
+      }
+
+      const matchingAssetNames = Array.from(
+        new Set(
+          transactions
+            .filter((transaction) => transaction.accountId === account.id)
+            .map(readTransactionAssetName)
+            .filter((value): value is string => Boolean(value))
+        )
+      );
+      if (matchingAssetNames.length === 1) {
+        map.set(account.id, matchingAssetNames[0]);
+      } else {
+        map.set(account.id, account.name);
+      }
+    }
+    return map;
+  }, [accounts, transactions]);
 
   const tradeNetFlow = useMemo(
     () =>
@@ -754,7 +823,7 @@ export default function InvestmentInstitutionDetailPage() {
                 <tbody>
                   {sortedAccounts.map((account) => (
                     <tr key={account.id}>
-                      <td>{account.name}</td>
+                      <td>{accountAssetNameMap.get(account.id) ?? account.name}</td>
                       <td>{getInvestmentSubtypeLabel(account.investmentSubtype)}</td>
                       <td>{account.investmentSymbol || "Not set"}</td>
                       <td>{account.investmentQuantity || account.investmentPrincipal || "Not set"}</td>
@@ -874,7 +943,7 @@ export default function InvestmentInstitutionDetailPage() {
                 >
                   {sortedAccounts.map((account) => (
                     <option key={account.id} value={account.id}>
-                      {account.name}
+                      {accountAssetNameMap.get(account.id) ?? account.name}
                     </option>
                   ))}
                 </select>
@@ -963,7 +1032,12 @@ export default function InvestmentInstitutionDetailPage() {
                   {transactions.map((transaction) => (
                     <tr key={transaction.id}>
                       <td>{formatTradeDate(transaction.date)}</td>
-                      <td>{accounts.find((account) => account.id === transaction.accountId)?.name ?? transaction.accountName}</td>
+                      <td>
+                        {readTransactionAssetName(transaction) ??
+                          accountAssetNameMap.get(transaction.accountId) ??
+                          accounts.find((account) => account.id === transaction.accountId)?.name ??
+                          transaction.accountName}
+                      </td>
                       <td>{transaction.merchantClean ?? transaction.merchantRaw}</td>
                       <td>{transaction.type}</td>
                       <td>{formatMoney(parseAmount(transaction.amount), transaction.currency)}</td>
