@@ -1777,6 +1777,7 @@ export function ImportFilesModal({
           balanceSources: [accountBalance],
           previewTransactions: summaryContext.previewTransactions,
           insightMetrics: insightSummary,
+          optimistic: false,
         });
         seedImportedWorkspaceCaches(workspaceId, summary);
         await Promise.resolve(onImported(summary));
@@ -1849,6 +1850,7 @@ export function ImportFilesModal({
           optimisticAccountId: resolvedAccountId.startsWith("optimistic-") ? summaryContext.optimisticAccountId ?? resolvedAccountId : null,
           balanceSources: [lastKnownAccountBalance],
           previewTransactions: summaryContext.previewTransactions,
+          optimistic: false,
         });
         seedImportedWorkspaceCaches(workspaceId, summary);
         await Promise.resolve(onImported(summary));
@@ -6901,7 +6903,7 @@ export function ImportFilesModal({
       visibilityHardStopTimerRef.current = null;
     }
 
-    const finishedEnough = blockedCount === 0 && errorCount === 0 && (importedCount > 0 || stagedCount > 0 || alreadyConfirmedCount === items.length);
+    const finishedEnough = blockedCount === 0 && errorCount === 0 && (importedCount > 0 || alreadyConfirmedCount === items.length);
 
     if (finishedEnough) {
       capturePostHogClientEventOnce(

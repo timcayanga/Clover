@@ -121,6 +121,17 @@ export const importSummaryHasVisibleRows = (summary: UploadInsightsSummary | nul
   return Math.max(rowsImported, previewRows) > 0 && Boolean(summary?.accountId);
 };
 
+const importSummaryIsOptimistic = (summary: UploadInsightsSummary | null | undefined) => {
+  if (!summary) {
+    return false;
+  }
+
+  const accountId = typeof summary.accountId === "string" ? summary.accountId.trim() : "";
+  const optimisticAccountId = typeof summary.optimisticAccountId === "string" ? summary.optimisticAccountId.trim() : "";
+
+  return Boolean(summary.optimistic || accountId.startsWith("optimistic-") || optimisticAccountId.startsWith("optimistic-"));
+};
+
 export const importSummaryHasAccountNumber = (summary: UploadInsightsSummary | null | undefined) => {
   if (typeof summary?.accountNumber === "string" && summary.accountNumber.replace(/\D/g, "").length >= 4) {
     return true;
@@ -216,7 +227,9 @@ export const hasVisibleImportData = (
 
   const localRows = Number(summary?.rowsImported ?? 0);
   const localPreviewRows = Array.isArray(summary?.previewTransactions) ? summary.previewTransactions.length : 0;
+  const summaryIsOptimistic = importSummaryIsOptimistic(summary);
   const localHasRows = Math.max(localRows, localPreviewRows) > 0 && Boolean(summary?.accountId);
+  const localHasSettledRows = localHasRows && !summaryIsOptimistic;
   const localHasAccountDetails =
     (Boolean(summary?.accountId) && Boolean(summary?.accountName || summary?.accountNumber || summary?.balance)) ||
     Boolean(
@@ -224,10 +237,17 @@ export const hasVisibleImportData = (
         (account) => Boolean(account.accountId) && Boolean(account.accountName || account.accountNumber || account.balance)
       )
     );
+  const localHasSettledAccountDetails = localHasAccountDetails && !summaryIsOptimistic;
   const itemHasRows = item.importedRows !== null && item.importedRows !== undefined && item.importedRows > 0 && Boolean(item.targetAccountId);
+  const importMode = inferImportModeForFile(item.file, item.importMode ?? "statement");
+  const isStatementImageImport = isImageImportFile(item.file) && importMode === "statement";
 
-  if (shouldRequireVisibleRowsForImportSummary(item.file.name, summary)) {
-    return itemHasRows || localHasRows;
+  if (importMode === "statement" && shouldRequireVisibleRowsForImportSummary(item.file.name, summary)) {
+    return itemHasRows || localHasSettledRows;
+  }
+
+  if (isStatementImageImport) {
+    return itemHasRows || localHasSettledRows || (item.confirmationState === "confirmed" && localHasSettledAccountDetails);
   }
 
   return itemHasRows || localHasRows || localHasAccountDetails;
