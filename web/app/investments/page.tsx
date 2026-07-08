@@ -1217,41 +1217,6 @@ export default function InvestmentsPage() {
           </section>
         ) : selectedTab === "overview" ? (
           <>
-            <section className="investments-allocation investments-allocation--overview glass">
-              {portfolioAllocation.length > 0 ? (
-                <div className="investments-allocation__list">
-                  {portfolioAllocation.map((group) => (
-                    <div key={group.key} className="investments-allocation__row">
-                      <div className="investments-allocation__row-head">
-                        <div>
-                          <strong>{group.label}</strong>
-                          <span>{group.accounts.length} account{group.accounts.length === 1 ? "" : "s"}</span>
-                        </div>
-                        <div>
-                          <strong>{formatInvestmentAggregate(group.currentValue, group.accounts)}</strong>
-                          <span>{group.share > 0 ? percentFormatter.format(group.share) : "0%"}</span>
-                        </div>
-                      </div>
-                      <div className="investments-allocation__bar">
-                        <span style={{ width: `${Math.max(group.share * 100, 4)}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyDataCta
-                  className="empty-state--illustrated investments-empty-state--compact"
-                  eyebrow=""
-                  title="Add investments to start tracking your portfolio"
-                  illustration={investmentsEmptyStateIllustration}
-                  illustrationAlt=""
-                  accountHref="/accounts"
-                  transactionHref="/transactions?manual=1"
-                  actions={renderAddInvestmentButton()}
-                />
-              )}
-
-            </section>
             <section className="investments-overview-metrics" aria-label="Portfolio totals">
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
                 <button className="accounts-overview-card__info" type="button" aria-label="How Current Value is calculated">
@@ -1286,6 +1251,68 @@ export default function InvestmentsPage() {
                     : "—"}
                 </span>
               </article>
+            </section>
+            <section className="investments-allocation investments-allocation--overview glass">
+              {portfolioAllocation.length > 0 ? (
+                <>
+                  <div className="investments-allocation__head">
+                    <div className="investments-allocation__head-title">
+                      <p className="eyebrow">Overview</p>
+                      <div className="investments-allocation__title-row">
+                        <h5>Portfolio mix</h5>
+                        <InfoTip label="This shows how the visible portfolio value is split across your investment subtypes." />
+                      </div>
+                    </div>
+                    <div className="investments-allocation__summary">
+                      <span>Visible holdings</span>
+                      <strong>{portfolioAllocation.reduce((sum, group) => sum + group.accounts.length, 0)} accounts</strong>
+                    </div>
+                  </div>
+                  <div className="investments-overview-mix">
+                    <div className="investments-overview-mix__bar" aria-label="Portfolio mix by subtype">
+                      {portfolioAllocation.map((group) => (
+                        <span
+                          key={group.key}
+                          className="investments-overview-mix__segment"
+                          style={{ width: `${Math.max(group.share * 100, 4)}%` }}
+                          title={`${group.label}: ${group.share > 0 ? percentFormatter.format(group.share) : "0%"} · ${formatInvestmentAggregate(group.currentValue, group.accounts)}`}
+                        />
+                      ))}
+                    </div>
+                    <p className="panel-muted investments-overview-mix__caption">
+                      Each segment shows how much of your current portfolio value sits in each investment subtype.
+                    </p>
+                  </div>
+                  <div className="investments-allocation__list investments-allocation__list--overview">
+                    {portfolioAllocation.map((group) => (
+                      <div key={group.key} className="investments-allocation__row">
+                        <div className="investments-allocation__row-head investments-allocation__row-head--overview">
+                          <div>
+                            <strong>{group.label}</strong>
+                            <span>{group.accounts.length} account{group.accounts.length === 1 ? "" : "s"}</span>
+                          </div>
+                          <div>
+                            <strong>{formatInvestmentAggregate(group.currentValue, group.accounts)}</strong>
+                            <span>{group.share > 0 ? percentFormatter.format(group.share) : "0%"}</span>
+                          </div>
+                        </div>
+                        <p className="panel-muted investments-allocation__description">{group.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <EmptyDataCta
+                  className="empty-state--illustrated investments-empty-state--compact"
+                  eyebrow=""
+                  title="Add investments to start tracking your portfolio"
+                  illustration={investmentsEmptyStateIllustration}
+                  illustrationAlt=""
+                  accountHref="/accounts"
+                  transactionHref="/transactions?manual=1"
+                  actions={renderAddInvestmentButton()}
+                />
+              )}
             </section>
           </>
         ) : selectedTab === "portfolio" ? (

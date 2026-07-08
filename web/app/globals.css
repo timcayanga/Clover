@@ -18254,7 +18254,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .investments-overview-metrics__card {
@@ -19054,8 +19054,8 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .investments-allocation--overview {
-  grid-template-rows: minmax(0, 1fr) auto;
-  min-height: max(560px, calc(100dvh - 148px));
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: clamp(320px, calc(100dvh - 320px), 430px);
 }
 
 .investments-allocation--overview .investments-empty-state--compact {
@@ -19107,9 +19107,23 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 12px;
 }
 
+.investments-allocation__list--overview {
+  align-content: start;
+}
+
 .investments-allocation__row {
   display: grid;
   gap: 8px;
+}
+
+.investments-allocation__list--overview .investments-allocation__row {
+  padding-top: 8px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.investments-allocation__list--overview .investments-allocation__row:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .investments-allocation__row-head {
@@ -19154,6 +19168,51 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .investments-allocation__row-head span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.investments-allocation__row-head--overview > div:last-child {
+  justify-items: end;
+  text-align: right;
+}
+
+.investments-allocation__description {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.investments-overview-mix {
+  display: grid;
+  gap: 10px;
+}
+
+.investments-overview-mix__bar {
+  display: flex;
+  align-items: stretch;
+  height: 22px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
+}
+
+.investments-overview-mix__segment {
+  min-width: 4px;
+  background: linear-gradient(90deg, rgba(3, 168, 192, 0.9), rgba(20, 184, 166, 0.86));
+}
+
+.investments-overview-mix__segment:nth-child(2n) {
+  background: linear-gradient(90deg, rgba(14, 165, 233, 0.9), rgba(3, 168, 192, 0.82));
+}
+
+.investments-overview-mix__segment:nth-child(3n) {
+  background: linear-gradient(90deg, rgba(45, 212, 191, 0.88), rgba(34, 197, 94, 0.8));
+}
+
+.investments-overview-mix__caption {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .investments-allocation__bar {
