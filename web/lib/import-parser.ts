@@ -845,6 +845,72 @@ const detectExplicitInstitutionShell = (text: string) => {
   return null;
 };
 
+const isAmbiguousInstitutionTextMatch = (institutionName: string) => ["Wise", "PayPal", "GCash", "GCrypto"].includes(institutionName);
+
+const detectInstitutionFromSignals = (
+  text: string,
+  options: {
+    fileName?: string | null;
+    headerLines?: string[];
+  } = {}
+) => {
+  const explicitShell = detectExplicitInstitutionShell(text);
+  if (explicitShell) {
+    return explicitShell;
+  }
+
+  const normalizedText = normalizeWhitespace(text);
+  if (!normalizedText) {
+    return null;
+  }
+
+  const lines = options.headerLines?.length ? options.headerLines : splitStatementLines(text).slice(0, 24);
+  const topHeaderText = lines.slice(0, 8).join("\n");
+  const headerText = lines.join("\n");
+  const compact = compactGenericSignalLine(normalizedText);
+  const fileInstitutionRaw = options.fileName ? sanitizeBankNameLabel(normalizeBankName(options.fileName)) : null;
+  const fileInstitution = fileInstitutionRaw && fileInstitutionRaw !== "Unknown" ? fileInstitutionRaw : null;
+  const scored = institutionPatterns
+    .map((institution) => {
+      let score = 0;
+      if (fileInstitution && normalizeBankName(fileInstitution) === normalizeBankName(institution.name)) {
+        score += 18;
+      }
+      if (institution.pattern.test(topHeaderText)) {
+        score += 18;
+      } else if (institution.pattern.test(headerText)) {
+        score += 12;
+      }
+      if (institution.pattern.test(normalizedText)) {
+        score += 5;
+      }
+      if (institution.pattern.test(compact)) {
+        score += 2;
+      }
+      if (isAmbiguousInstitutionTextMatch(institution.name) && score > 0 && score < 12) {
+        score -= 4;
+      }
+      return {
+        name: institution.name,
+        score,
+      };
+    })
+    .filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  const winner = scored[0];
+  if (!winner || winner.score < 5) {
+    return null;
+  }
+
+  const runnerUp = scored[1];
+  if (runnerUp && winner.score === runnerUp.score && fileInstitution) {
+    return normalizeBankName(fileInstitution);
+  }
+
+  return winner.name;
+};
+
 const normalizeCharacterSpacedGenericLine = (value: string) => {
   const collapsed = normalizeWhitespace(value).split(/\s+/).join("");
   if (!collapsed) {
@@ -1124,8 +1190,13 @@ const parseGenericScreenshotStatementMetadata = (text: string, fileName = ""): D
             line
           )
       ) ?? null;
-  const institutionFromLines = sanitizeBankNameLabel(detectInstitutionFromLines(normalizedLines.slice(0, 32)));
-  const institutionFromText = sanitizeBankNameLabel(detectInstitutionFromText(normalizedText));
+  const institutionFromLines = sanitizeBankNameLabel(
+    detectInstitutionFromSignals(normalizedText, {
+      headerLines: normalizedLines.slice(0, 32),
+      fileName,
+    })
+  );
+  const institutionFromText = sanitizeBankNameLabel(detectInstitutionFromSignals(normalizedText, { fileName }));
   const sanitizedInferredInstitutionLine = sanitizeBankNameLabel(inferredInstitutionLine);
   const sanitizedTitleLineFallback = sanitizeBankNameLabel(titleLineFallback);
   const investmentLikeTitleFallback =
@@ -1485,35 +1556,13 @@ const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
 ];
 
 const detectInstitutionFromText = (text: string) => {
-  const explicitShell = detectExplicitInstitutionShell(text);
-  if (explicitShell) {
-    return explicitShell;
-  }
-  const compact = compactGenericSignalLine(text);
-  for (const institution of institutionPatterns) {
-    if (institution.pattern.test(text) || institution.pattern.test(compact)) {
-      return institution.name;
-    }
-  }
-
-  return null;
+  return detectInstitutionFromSignals(text);
 };
 
 const detectInstitutionFromLines = (lines: string[]) => {
-  const headerLines = lines.slice(0, 24);
-  const explicitShell = detectExplicitInstitutionShell(headerLines.join("\n"));
-  if (explicitShell) {
-    return explicitShell;
-  }
-  for (const institution of institutionPatterns) {
-    for (const line of headerLines) {
-      if (institution.pattern.test(line)) {
-        return institution.name;
-      }
-    }
-  }
-
-  return null;
+  return detectInstitutionFromSignals(lines.join("\n"), {
+    headerLines: lines.slice(0, 24),
+  });
 };
 
 const detectAccountNumberFromText = (text: string) => {
@@ -19753,11 +19802,12 @@ const looksLikeWiseMobileScreenshotText = (text: string) => {
   );
   const hasWiseActivityLanguage = lines.some((line) => wiseMobileStatusPattern.test(line)) || /\bTo\s+PHP\b/i.test(text);
   const hasVisibleDate = lines.some((line) => wiseMobileDatePattern.test(line));
-  return amountCurrencies.size >= 1 && (uiScore >= 1 || hasWiseActivityLanguage || hasVisibleDate);
+  return amountCurrencies.size >= 1 && (uiScore >= 2 || (hasWiseActivityLanguage && hasVisibleDate) || (uiScore >= 1 && hasVisibleDate));
 };
 
 const parseWiseMobileScreenshotMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
-  if (!looksLikeWiseMobileScreenshotText(text) && !/\bWise\b/i.test(`${context.institution ?? ""} ${context.accountName ?? ""} ${text}`)) {
+  const explicitWiseContext = /\bWise\b/i.test(`${context.institution ?? ""} ${context.accountName ?? ""}`);
+  if (!looksLikeWiseMobileScreenshotText(text) && !explicitWiseContext) {
     return null;
   }
 
@@ -20373,7 +20423,7 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
   }
 
   const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-  const institution = sanitizeBankNameLabel(detectInstitutionFromText(normalized));
+  const institution = sanitizeBankNameLabel(detectInstitutionFromSignals(normalized, { fileName }));
   const accountNumber = detectAccountNumberFromText(normalized);
   const { startDate, endDate } = detectStatementDatesFromText(normalized);
   const { openingBalance, endingBalance } = detectBalanceFromText(normalized);

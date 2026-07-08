@@ -833,6 +833,52 @@ const buildInstitutionScopedMerchantVariant = (institution: string | null | unde
   return `${scopedInstitution} ${scopedValue}`;
 };
 
+const extractMerchantHintFragments = (value: string | null | undefined) => {
+  const normalized = normalizeWhitespace(String(value ?? ""));
+  if (!normalized) {
+    return [];
+  }
+
+  const stripped = normalized
+    .replace(
+      /\b(?:transfer|instapay|pesonet|fund|bank|wallet|payment|incoming|outgoing|interbank|send(?:ing)?|sent|receive(?:d)?|received|cash\s+in|cash\s+out|credit|debit|online|reference|ref|trace|approval|invoice|acct|account|from|to|via)\b/gi,
+      " "
+    )
+    .replace(/\b[A-Z]{1,4}\d{2,}\b/g, " ")
+    .replace(/\b\d[\dA-Z-]{3,}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!stripped) {
+    return [];
+  }
+
+  const tokens = stripped
+    .split(/\s+/)
+    .map((token) => token.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, ""))
+    .filter((token) => token.length >= 2)
+    .filter((token) => !/^(?:ph|php|txn|trf|db|cr|amt|bal|visa|mc|mstr|card)$/i.test(token));
+  if (tokens.length === 0) {
+    return [];
+  }
+
+  const fragments = new Set<string>();
+  const joined = tokens.join(" ");
+  if (joined.length >= 4) {
+    fragments.add(joined);
+  }
+
+  for (let size = Math.min(3, tokens.length); size >= 1; size -= 1) {
+    for (let index = 0; index <= tokens.length - size; index += 1) {
+      const fragment = tokens.slice(index, index + size).join(" ").trim();
+      if (fragment.length >= 4) {
+        fragments.add(fragment);
+      }
+    }
+  }
+
+  return [...fragments];
+};
+
 const hasExplicitTransferRailText = (value: string | null | undefined) => {
   const normalized = normalizeWhitespace(String(value ?? ""));
   if (!normalized) {
@@ -863,6 +909,18 @@ const buildMerchantClassificationCandidates = (merchantText: string, normalizedN
   addVariant(buildInstitutionScopedMerchantVariant(institution, merchantText));
   addVariant(buildInstitutionScopedMerchantVariant(institution, normalizedName));
   addVariant(buildInstitutionScopedMerchantVariant(institution, summarizeMerchantText(merchantText)));
+
+  for (const fragment of extractMerchantHintFragments(merchantText)) {
+    addVariant(fragment);
+    addVariant(summarizeMerchantText(fragment));
+    addVariant(buildInstitutionScopedMerchantVariant(institution, fragment));
+  }
+
+  for (const fragment of extractMerchantHintFragments(normalizedName ?? "")) {
+    addVariant(fragment);
+    addVariant(summarizeMerchantText(fragment));
+    addVariant(buildInstitutionScopedMerchantVariant(institution, fragment));
+  }
 
   for (const variant of buildMerchantPrototypeVariants(merchantText, normalizedName)) {
     addVariant(variant);
@@ -1175,6 +1233,9 @@ const assessParsedRowAmountAnomalies = (params: {
   if (absoluteAmount >= 1_000_000_000 || integerDigits.length >= 10) {
     issues.add("amount_implausible_extreme");
   }
+  if (integerDigits.length >= 12) {
+    issues.add("amount_digit_overflow");
+  }
 
   const medianAbsAmount = params.amountProfile?.medianAbsAmount ?? null;
   const p90AbsAmount = params.amountProfile?.p90AbsAmount ?? null;
@@ -1191,18 +1252,44 @@ const assessParsedRowAmountAnomalies = (params: {
     issues.add("amount_outlier_vs_statement");
   }
 
-  const amountTokens = extractAmountLikeTokensFromText(params.contextText ?? null);
+  const amountTokens = extractAmountLikeTokensFromText(
+    [
+      params.contextText ?? "",
+      params.row.merchantRaw ?? "",
+      params.row.merchantClean ?? "",
+      params.row.description ?? "",
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
   if (amountTokens.length > 0) {
     const strongestToken = Math.max(...amountTokens);
     if (strongestToken > 0 && absoluteAmount > Math.max(10_000, strongestToken * 100)) {
       issues.add("amount_text_mismatch");
     }
+    const hasCloseEvidenceToken = amountTokens.some((token) => Math.abs(token - absoluteAmount) <= Math.max(0.02, absoluteAmount * 0.02));
+    if (!hasCloseEvidenceToken && amountTokens.length >= 2 && absoluteAmount > Math.max(5_000, strongestToken * 20)) {
+      issues.add("amount_row_evidence_mismatch");
+    }
+  }
+
+  const contextText = normalizeWhitespace(
+    [params.row.merchantRaw ?? "", params.row.description ?? "", params.contextText ?? ""].filter(Boolean).join(" ")
+  );
+  if (
+    (issues.has("amount_implausible_extreme") || issues.has("amount_digit_overflow")) &&
+    /\b(?:ref(?:erence)?|trace|approval|invoice|acct|account|spotify|paypal|grab|purchase)\b/i.test(contextText)
+  ) {
+    issues.add("amount_reference_join_likely");
   }
 
   const scorePenalty =
-    (issues.has("amount_implausible_extreme") ? 28 : 0) +
+    (issues.has("amount_implausible_extreme") ? 36 : 0) +
+    (issues.has("amount_digit_overflow") ? 24 : 0) +
     (issues.has("amount_outlier_vs_statement") ? 18 : 0) +
-    (issues.has("amount_text_mismatch") ? 16 : 0);
+    (issues.has("amount_text_mismatch") ? 16 : 0) +
+    (issues.has("amount_row_evidence_mismatch") ? 20 : 0) +
+    (issues.has("amount_reference_join_likely") ? 22 : 0);
 
   return {
     issues: [...issues],
