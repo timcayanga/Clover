@@ -32160,6 +32160,11 @@ button.accounts-detail__transaction-head-cell {
   align-content: start;
   gap: 0;
   padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .settings-hub__menu-item {
@@ -34257,7 +34262,6 @@ html[data-theme="dark"] .sidebar-search-panel,
 html[data-theme="dark"] .sidebar-popover,
 html[data-theme="dark"] .sidebar-search-results__item,
 html[data-theme="dark"] .sidebar-nav__submenu,
-html[data-theme="dark"] .settings-hub__menu-list,
 html[data-theme="dark"] .settings-hub__panel,
 html[data-theme="dark"] .settings-profile-summary,
 html[data-theme="dark"] .settings-clerk-frame,
@@ -34272,6 +34276,12 @@ html[data-theme="dark"] .sidebar-footer,
 html[data-theme="dark"] .sidebar-profile {
   background-color: rgba(14, 23, 37, 0.86);
   border-color: rgba(148, 163, 184, 0.14);
+}
+
+html[data-theme="dark"] .settings-hub__menu-list {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 html[data-theme="dark"] .sidebar-icon-button {
