@@ -19664,13 +19664,15 @@ input.transaction-inline-edit--amount::placeholder {
   display: block;
   width: 100%;
   height: 100%;
+  aspect-ratio: 1 / 1;
   overflow: visible;
+  pointer-events: none;
 }
 
 .clover-loading-screen__leaf {
   transform-box: fill-box;
   transform-origin: center;
-  animation: clover-loading-screen-pulse 2.4s ease-in-out infinite;
+  animation: clover-loading-screen-pulse 2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
   will-change: transform, opacity, filter;
 }
 
@@ -19701,16 +19703,16 @@ input.transaction-inline-edit--amount::placeholder {
 
 @keyframes clover-loading-screen-pulse {
   0%,
-  18%,
+  32%,
   100% {
-    opacity: 0.82;
-    transform: scale(0.94);
-    filter: saturate(0.92);
+    opacity: 0.84;
+    transform: scale(0.965);
+    filter: saturate(0.95);
   }
 
-  9% {
+  16% {
     opacity: 1;
-    transform: scale(1.06);
+    transform: scale(1.055);
     filter: saturate(1.08);
   }
 }
@@ -19720,15 +19722,15 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .clover-loading-screen__leaf--2 {
-  animation-delay: 0.3s;
+  animation-delay: 0.25s;
 }
 
 .clover-loading-screen__leaf--3 {
-  animation-delay: 0.6s;
+  animation-delay: 0.5s;
 }
 
 .clover-loading-screen__leaf--4 {
-  animation-delay: 0.9s;
+  animation-delay: 0.75s;
 }
 
 .pricing-page .legal-page__inner {
