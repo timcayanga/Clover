@@ -12,8 +12,8 @@ import {
 } from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 
-const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v2";
-const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v1";
+const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v3";
+const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v2";
 const OPENAI_IMPORT_FAST_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_STRONG_MODEL_FALLBACK = "gpt-5.5";
 const OPENAI_IMPORT_PDF_MODEL_FALLBACK = "gpt-5.5";
@@ -414,6 +414,7 @@ type ImportMode = "statement" | "receipt" | "notes" | "portfolio" | "account_det
 
 type OpenAIDocumentFamily =
   | "wallet_screenshot"
+  | "investment_history"
   | "restaurant_receipt"
   | "tax_invoice"
   | "travel_ticket"
@@ -1543,6 +1544,8 @@ const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | undefined
     "If a screenshot shows both a merchant currency amount and the user's wallet/account currency amount, use the wallet/account currency amount as the canonical amount when it is clearly the debited account amount.",
     "If the screenshot uses a + prefix, Added, Received, Deposit, Cash In, or Refunded, treat it as inbound movement. Otherwise default to outbound movement unless the document clearly says otherwise.",
     "If a visible counterparty looks like a person instead of a merchant, prefer Transfers.",
+    "For crypto, fund, and investment screenshots, preserve visible asset names, symbols, quantities, order IDs, status labels, and wallet or trading-wallet references in notes or parser evidence instead of dropping them.",
+    "For crypto, fund, and investment screenshots, Buy, Subscribe, and Convert Out are outbound investment activity by default; Sell, Redeem, and Convert In are inbound investment activity by default; wallet funding, settlement transfers, and withdrawals between visible internal wallets or accounts are transfers unless the screen clearly shows external spending or income.",
     "Never copy filename fragments, page numbers, mobile status text, search bars, or filter chips into transaction names or account numbers.",
     "Return JSON only.",
     "Use the schema exactly as given.",
@@ -1566,6 +1569,7 @@ const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | undefined
             "Prioritize statement rows, account identity, period coverage, and ending balance.",
             "For screenshots, focus on the visible transaction list and ignore app chrome or overlapping rows from stitched captures.",
             "If OCR is partial, return only the rows supported by visible evidence instead of padding the list.",
+            "If the screenshot is an investment or crypto transaction history, preserve visible asset identity, quantity, order/reference IDs, and wallet or trading-wallet context while keeping transfers distinct from buys, sells, and redemptions.",
           ]
         : importMode === "portfolio"
           ? [
@@ -1606,6 +1610,10 @@ const inferOpenAIDocumentFamily = (params: {
   const combinedText = [params.fileName, params.text, params.detectedMetadata?.institution, params.detectedMetadata?.accountName]
     .filter(Boolean)
     .join("\n");
+  const looksLikeInvestmentHistory =
+    /gcrypto|gfunds|fund|portfolio|holdings|asset details|trading wallet|spot wallet|spot order|buy order|sell order|redeem|subscription|navpu|units|shares|market value|btc|eth|usdt|crypto/i.test(
+      combinedText,
+    );
 
   if (params.importMode === "receipt" || /sent via gcash|sent via maya|wallet transfer|express send|ref\.?\s*no/i.test(combinedText)) {
     if (/gcash|maya|wise|wallet/i.test(combinedText)) {
@@ -1623,10 +1631,16 @@ const inferOpenAIDocumentFamily = (params: {
   }
 
   if (params.importMode === "statement") {
+    if (looksLikeInvestmentHistory) {
+      return "investment_history" satisfies OpenAIDocumentFamily;
+    }
     return "bank_statement" satisfies OpenAIDocumentFamily;
   }
 
   if (params.importMode === "account_detail" || params.importMode === "portfolio") {
+    if (looksLikeInvestmentHistory) {
+      return "investment_history" satisfies OpenAIDocumentFamily;
+    }
     return "account_summary" satisfies OpenAIDocumentFamily;
   }
 
@@ -1664,6 +1678,7 @@ const inferOpenAIImportDifficulty = (params: {
     (isImageLike && metadataConfidence < 55) ||
     (params.importMode === "receipt" && weakText) ||
     (documentFamily === "wallet_screenshot" && weakText) ||
+    (documentFamily === "investment_history" && weakText) ||
     pageImagesCount >= 4
   ) {
     return "hard" satisfies OpenAIImportDifficulty;
@@ -1673,6 +1688,7 @@ const inferOpenAIImportDifficulty = (params: {
     looksLikeScreenshot ||
     weakText ||
     metadataConfidence < 75 ||
+    documentFamily === "investment_history" ||
     documentFamily === "restaurant_receipt" ||
     documentFamily === "tax_invoice" ||
     pageImagesCount >= 2
@@ -1690,6 +1706,12 @@ const buildOpenAIDocumentFamilyGuidance = (family: OpenAIDocumentFamily) => {
         "This is likely a wallet or payment-app screenshot.",
         "Prioritize recipient/sender name, phone, amount, transfer direction, reference number, timestamp, and wallet identity.",
         "Do not turn long screenshot text into the transaction title if a cleaner transfer label is supported by the evidence.",
+      ].join(" ");
+    case "investment_history":
+      return [
+        "This is likely a crypto, fund, or investment transaction-history or holdings screenshot.",
+        "Prioritize provider and account identity, asset names or symbols, order or reference IDs, status labels, quantity or units, cash amount, fees, timestamps, and wallet or trading-wallet context.",
+        "Do not invent balances or holdings when the visible screen only shows transaction rows, and do not collapse asset or order details into generic names when stronger evidence is visible.",
       ].join(" ");
     case "restaurant_receipt":
       return [
@@ -1828,6 +1850,7 @@ const buildOpenAIInputPayload = (params: {
       ? [
           "This input is an investment portfolio or holdings screen. Preserve the visible account identity and extract holdings, balances, symbols, and gain/loss details conservatively.",
           "Put each visible position into the holdings array with asset name, symbol, units, market value, current value, and any visible gain/loss fields.",
+          "For crypto or investment screenshots, preserve visible asset names or symbols, order IDs, units, settlement notes, and wallet or trading-wallet labels in notes or parser evidence.",
           "If the screen does not show true ledger transactions, keep the transaction array empty and do not invent spend rows.",
         ]
       : []),
@@ -1835,6 +1858,7 @@ const buildOpenAIInputPayload = (params: {
       ? [
           "This input is an account details or balance summary screen. Preserve the visible account identity, balance, and product details conservatively.",
           "If the screen shows investment positions or asset rows, put them into the holdings array instead of inventing transactions.",
+          "For crypto or investment screenshots, preserve visible asset names or symbols, order IDs, units, settlement notes, and wallet or trading-wallet labels in notes or parser evidence.",
           "If the screen does not show true ledger transactions, keep the transaction array empty and do not invent spend rows.",
         ]
       : []),
@@ -1850,6 +1874,7 @@ const buildOpenAIInputPayload = (params: {
           "Read the page images directly and extract the visible financial details for the selected document family.",
           "If the document is a statement, extract every transaction row from the visible statement pages and anchor the final balance from the last page footer when present.",
           "If the image is a Wise mobile transaction-history screenshot, treat it as a wallet statement even when no account number or ending balance is visible. For rows with two amounts, use the second/lower smaller-font account-currency amount as the transaction amount, even when it is numerically larger than the bold merchant-currency amount. Preserve the bold first merchant-currency amount as supporting evidence.",
+          "If the image is a crypto, fund, or investment transaction-history screenshot, preserve asset identity, quantity, order/reference IDs, status labels, and wallet or trading-wallet context. Do not invent holdings or balances when the screen only shows activity rows.",
           "If the document is a portfolio or account-detail page that shows holdings or positions, extract those into holdings instead of transaction rows.",
           "If the document is a receipt, portfolio screen, account detail screen, or notes screenshot, keep the transaction array empty unless the page clearly shows true ledger rows.",
           "Use the account number and balance shown in the page image, not any earlier summary-like number unless it is the final ending balance.",
@@ -1910,6 +1935,7 @@ const buildImageTranscriptionInputPayload = (params: {
     "- Include page markers like [PAGE 1], [PAGE 2], etc. when multiple images are provided.",
     "- If the image is clearly a receipt, portfolio screen, account-detail screen, notes screenshot, or transaction-history screenshot, say so in document_type.",
     "- Wise mobile transaction-history screenshots are statement-like wallet histories; preserve date groupings, merchant names, statuses such as Added/Refunded/Sent, plus signs, bold merchant-currency amounts, and smaller account-currency amounts.",
+    "- Crypto, fund, and investment screenshots are also statement-like when they show dated activity rows; preserve visible asset names, symbols, quantities, order IDs, status labels, wallet or trading-wallet labels, and cash amounts exactly as shown.",
     "- Keep the transcript compact but complete enough for the downstream parser to read it back into rows or receipt details.",
     "",
     ...(params.importMode === "receipt"
@@ -1935,6 +1961,7 @@ const buildImageTranscriptionInputPayload = (params: {
           "The source is a bank statement. If it spans multiple pages, continue across the pages instead of stopping after the first visible balance box.",
           "Capture every visible transaction row, the account number, and the final ending balance from the last page footer or summary line when present.",
           "For mobile wallet transaction-history screenshots such as Wise, capture visible rows even when the screen has no account number or final balance.",
+          "For crypto, fund, and investment transaction-history screenshots, capture visible rows even when the screen has no formal account number, and preserve asset names, symbols, order IDs, quantities, and status labels in the transcript.",
         ]
       : []),
     ...(params.fileDataBase64 && String(params.fileType ?? "").toLowerCase().includes("pdf")
@@ -2162,7 +2189,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       : pageImagesToSend.length > 0
         ? inferredDifficulty === "hard"
           ? [strongModel, imageModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
-          : inferredDocumentFamily === "wallet_screenshot"
+          : inferredDocumentFamily === "wallet_screenshot" || inferredDocumentFamily === "investment_history"
             ? [strongModel, imageModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
             : [model, imageModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
         : [model, textModel, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]

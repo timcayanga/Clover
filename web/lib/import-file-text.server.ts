@@ -181,8 +181,8 @@ type NormalizedImageBytes = {
   dataUrl: string;
 };
 
-type ImageNormalizationProfile = "generic" | "receipt" | "wallet_screenshot";
-type ReceiptOcrFamily = "generic" | "wallet_transfer" | "restaurant_receipt" | "invoice_receipt" | "paper_receipt";
+type ImageNormalizationProfile = "generic" | "receipt" | "wallet_screenshot" | "investment_screenshot";
+type ReceiptOcrFamily = "generic" | "wallet_transfer" | "investment_history" | "restaurant_receipt" | "invoice_receipt" | "paper_receipt";
 
 const IMPORT_FILE_TEXT_CACHE_LIMIT = 24;
 const importedFileTextCache = new Map<string, Promise<string>>();
@@ -468,7 +468,7 @@ const extractTextFromImageBufferWithOcrBestEffort = async (
 ) => {
   const profile = options?.profile ?? "generic";
   const pageSegModes =
-    profile === "wallet_screenshot"
+    profile === "wallet_screenshot" || profile === "investment_screenshot"
       ? ["11", "6"]
       : profile === "receipt"
         ? ["6", "4"]
@@ -488,6 +488,10 @@ const detectReceiptOcrFamilyFromText = (text: string, profile: ImageNormalizatio
 
   if (profile === "wallet_screenshot") {
     return "wallet_transfer";
+  }
+
+  if (profile === "investment_screenshot") {
+    return "investment_history";
   }
 
   if (
@@ -537,6 +541,8 @@ const shouldRetryImageOcrBestEffort = (params: {
       ? /\b(?:gcash|maya|wise|wallet|transfer|sent via|express send)\b/.test(lowerName)
         ? "wallet_screenshot"
         : "receipt"
+      : /\b(?:gcrypto|pdax|gfunds|atram|ryse|crypto|portfolio|holdings|fund|trading wallet|buy\s+order|sell\s+order)\b/.test(lowerName)
+        ? "investment_screenshot"
       : /\b(?:gcash|maya|wise|wallet|transfer|sent via|express send|screenshot|screen shot|screen_shot)\b/.test(lowerName)
         ? "wallet_screenshot"
         : "generic";
@@ -552,9 +558,29 @@ const shouldRetryImageOcrBestEffort = (params: {
   const hasCurrencyOrAmount = /(?:₱|PHP|\$|€|£|¥)|\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/.test(firstPassText);
   const hasReceiptKeywords = /\b(?:total|amount|subtotal|vat|tax|ref\.?\s*no|sales invoice|official receipt|sent via|cashier|guest|table|service charge)\b/i.test(firstPassText);
   const minCompactLength =
-    family === "wallet_transfer" ? 55 : family === "restaurant_receipt" ? 95 : family === "invoice_receipt" ? 110 : profile === "wallet_screenshot" ? 80 : 140;
+    family === "wallet_transfer"
+      ? 55
+      : family === "investment_history"
+        ? 70
+        : family === "restaurant_receipt"
+          ? 95
+          : family === "invoice_receipt"
+            ? 110
+            : profile === "wallet_screenshot"
+              ? 80
+              : 140;
   const minLineCount =
-    family === "wallet_transfer" ? 3 : family === "restaurant_receipt" ? 5 : family === "invoice_receipt" ? 6 : profile === "wallet_screenshot" ? 4 : 7;
+    family === "wallet_transfer"
+      ? 3
+      : family === "investment_history"
+        ? 4
+        : family === "restaurant_receipt"
+          ? 5
+          : family === "invoice_receipt"
+            ? 6
+            : profile === "wallet_screenshot"
+              ? 4
+              : 7;
   const looksStrongEnough =
     compact.length >= minCompactLength &&
     lineCount >= minLineCount &&
@@ -568,7 +594,7 @@ const buildReceiptAwareOcrCandidates = async (
   profile: ImageNormalizationProfile,
   family: ReceiptOcrFamily
 ) => {
-  if (profile === "generic") {
+  if (profile === "generic" || profile === "investment_screenshot") {
     return [] as Array<{ label: string; dataUrl: string }>;
   }
 
@@ -672,7 +698,17 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   const family = detectReceiptOcrFamilyFromText(firstPassText, profile);
   const candidates = await buildReceiptAwareOcrCandidates(params.normalizedBuffer, profile, family);
   const candidatePageSegMode =
-    family === "wallet_transfer" ? "11" : family === "restaurant_receipt" ? "6" : family === "invoice_receipt" ? "4" : profile === "wallet_screenshot" ? "11" : "6";
+    family === "wallet_transfer"
+      ? "11"
+      : family === "investment_history"
+        ? "11"
+        : family === "restaurant_receipt"
+          ? "6"
+          : family === "invoice_receipt"
+            ? "4"
+            : profile === "wallet_screenshot"
+              ? "11"
+              : "6";
 
   const candidateTexts = await Promise.all(
     candidates.map(async (candidate) => ({
@@ -1664,6 +1700,10 @@ const resolveImageNormalizationProfile = (params: {
     return "receipt";
   }
 
+  if (/\b(?:gcrypto|pdax|gfunds|atram|ryse|crypto|portfolio|holdings|fund|trading wallet|buy order|sell order)\b/.test(lowerName)) {
+    return "investment_screenshot";
+  }
+
   if (/\b(?:gcash|maya|wise|wallet|transfer|sent via|express send|screenshot|screen shot|screen_shot)\b/.test(lowerName)) {
     return "wallet_screenshot";
   }
@@ -1690,7 +1730,14 @@ const normalizeImportedImageBytes = async (
     const width = Number(metadata?.width ?? 0);
     const height = Number(metadata?.height ?? 0);
     const longestEdge = Math.max(width, height, 0);
-    const resizeLimit = profile === "wallet_screenshot" ? 1600 : profile === "receipt" ? 1800 : 2200;
+    const resizeLimit =
+      profile === "wallet_screenshot"
+        ? 1600
+        : profile === "investment_screenshot"
+          ? 1700
+          : profile === "receipt"
+            ? 1800
+            : 2200;
 
     if (longestEdge > resizeLimit) {
       image.resize({
@@ -1710,6 +1757,12 @@ const normalizeImportedImageBytes = async (
         .linear(1.08, -6)
         .sharpen({ sigma: 1.1, m1: 0.6, m2: 2.2 })
         .median(1);
+    } else if (profile === "investment_screenshot") {
+      image
+        .normalize()
+        .linear(1.06, -5)
+        .modulate({ saturation: 0.92, brightness: 1.02 })
+        .sharpen({ sigma: 1.0, m1: 0.8, m2: 2.4 });
     } else if (profile === "wallet_screenshot") {
       image
         .normalize()
