@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
+import { LandingCloverBloom } from "../components/landing-clover-bloom";
 import { LandingNav } from "../components/landing-nav";
+import { MarketingFooter } from "../components/marketing-footer";
 import { ScrollReveal } from "../components/scroll-reveal";
 import { resolvePublicAccountState } from "@/lib/public-account-state";
 
@@ -217,8 +219,9 @@ export default async function HomePage() {
         }
       />
 
-      <ScrollReveal as="section" className="landing-cta">
+      <ScrollReveal as="section" className="landing-cta" threshold={0.28} rootMargin="-10% 0px -10% 0px">
         <div className="landing-cta__inner">
+          <LandingCloverBloom />
           <div className="landing-cta__copy">
             <h2>Make money management feel simpler.</h2>
             <p>Import statements, track spending, and split bills with Clover.</p>
@@ -234,51 +237,7 @@ export default async function HomePage() {
         </div>
       </ScrollReveal>
 
-      <footer className="landing-footer landing-footer--expanded" aria-label="Site footer">
-        <div className="landing-footer__columns">
-          <div className="landing-footer__column">
-            <p className="landing-footer__heading">Features</p>
-            <Link href="/features#statement-import" prefetch={false}>
-              Data Import
-            </Link>
-            <Link href="/features#insights" prefetch={false}>
-              Insights
-            </Link>
-            <Link href="/features#split-bills" prefetch={false}>
-              Split Bills
-            </Link>
-            <Link href="/features#pro" prefetch={false}>
-              Pro
-            </Link>
-            <Link href="/features#trust" prefetch={false}>
-              Security
-            </Link>
-          </div>
-
-          <div className="landing-footer__column">
-            <p className="landing-footer__heading">Product</p>
-            <Link href="/pricing" prefetch={false}>
-              Pricing
-            </Link>
-            <Link href="/help" prefetch={false}>
-              Help
-            </Link>
-            <Link href="/contact-us" prefetch={false}>
-              Contact
-            </Link>
-          </div>
-
-          <div className="landing-footer__column">
-            <p className="landing-footer__heading">Legal</p>
-            <Link href="/privacy-policy" prefetch={false}>
-              Privacy Policy
-            </Link>
-            <Link href="/terms-of-service" prefetch={false}>
-              Terms of Service
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </main>
   );
 }
