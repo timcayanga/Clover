@@ -146,6 +146,78 @@ const structuredAssessment = assessImageStatementParse({
 assert.equal(structuredAssessment.shouldDiscardBeforeBackup, false, "Structured screenshot rows should not be discarded.");
 assert.equal(structuredAssessment.parseLooksUsable, true, "Structured screenshot rows should stay eligible for the fast path.");
 
+const sparseGsaveRows = [
+  {
+    merchantRaw: "CIMB snapshot",
+    description: "CIMB snapshot",
+    amount: "0.00",
+    date: "2000-01-01",
+    rawPayload: {
+      kind: "account_snapshot_marker",
+      source: "gsave_uno_screenshot",
+      accountName: "GSave CIMB 6972",
+    },
+  },
+] as Array<Record<string, unknown>>;
+
+const sparseGsaveAssessment = assessImageStatementParse({
+  rows: sparseGsaveRows,
+  metadata: {
+    institution: "GSave",
+    accountName: "GSave",
+    accountNumber: null,
+    confidence: 90,
+  },
+  fileName: "IMG_1407.PNG",
+  parsedRowsWithDates: 1,
+  parsedDateCoverage: 1,
+  parsedRowsHaveMultipleAccountNumbers: false,
+  suspiciousDateCoverage: false,
+  prefersVisionFallbackForInstitution: false,
+  sparseLocalRowsSuspicious: true,
+});
+
+assert.equal(
+  sparseGsaveAssessment.parseLooksUsable,
+  false,
+  "GSave overview screenshots that visibly imply multiple accounts should not stay on the fast path when only one snapshot row survived."
+);
+
+const sparseGsaveRoutingDecision = buildParserRoutingDecision({
+  fileType: "image/png",
+  imageImport: true,
+  importMode: "statement",
+  screenshotLikeFile: true,
+  screenshotArtifactCoverage: 0,
+  hasTemplateMemory: false,
+  trainedReceiptDetails: false,
+  canReuseCachedStatementParse: false,
+  hasReliableDeterministicStatementParse: false,
+  imageStatementParseLooksUsable: sparseGsaveAssessment.parseLooksUsable,
+  textForParse: "GSave My Accounts GSave ...6972 #UNOready ...4132",
+  parsedRowsLength: sparseGsaveRows.length,
+  hasKnownInstitution: true,
+  metadataConfidence: 90,
+  hasAccountNumber: false,
+  hasMultipleAccountNumbers: false,
+  genericParseLooksSuspicious: false,
+  gcashSuspiciouslySparse: true,
+  suspiciousDateCoverage: false,
+  prefersVisionFallbackForInstitution: false,
+  genericIdentityLooksWeak: false,
+  parsedDateCoverage: 1,
+});
+
+assert.equal(
+  sparseGsaveRoutingDecision.decision,
+  "backup_required",
+  `Sparse GSave overview screenshots should escalate to backup/transcript repair early. got=${sparseGsaveRoutingDecision.decision}`
+);
+assert.ok(
+  sparseGsaveRoutingDecision.reasons.includes("gcash_sparse_parse"),
+  `Expected sparse GSave overview screenshots to record gcash_sparse_parse. reasons=${JSON.stringify(sparseGsaveRoutingDecision.reasons)}`
+);
+
 assert.equal(
   shouldAttemptGenericScreenshotTranscriptRepair({
     likelyScreenshotStatement: true,

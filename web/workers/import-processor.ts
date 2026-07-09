@@ -22,6 +22,11 @@ import {
   screenshotEvidenceContainsUiArtifact,
 } from "@/lib/screenshot-artifact-filter";
 import {
+  gsaveScreenshotExpectsMultipleAccounts,
+  looksLikeGcashFamilyScreenshotText,
+  normalizeGcashFamilyScreenshotOcrText,
+} from "@/lib/gcash-family-screenshot";
+import {
   readImportedFileImageDataUrls,
   readImportedFileTextWithCacheInfo,
   readImportedPdfPageImages,
@@ -1791,18 +1796,21 @@ export const assessImageStatementParse = (params: {
   parsedRowsHaveMultipleAccountNumbers: boolean;
   suspiciousDateCoverage: boolean;
   prefersVisionFallbackForInstitution: boolean;
+  sparseLocalRowsSuspicious?: boolean;
 }) => {
   const suspiciousScreenshotRows = countSuspiciousScreenshotRows(params.rows, params.metadata, params.fileName);
   const suspiciousScreenshotCoverage = params.rows.length > 0 ? suspiciousScreenshotRows / params.rows.length : 0;
   const screenshotRowsLookStructurallyWeak = params.rows.length >= 3 && suspiciousScreenshotCoverage >= 0.4;
-  const parseLooksUsable = imageStatementRowsLookUsable(params.rows, params.metadata, {
-    parsedRowsWithDates: params.parsedRowsWithDates,
-    parsedDateCoverage: params.parsedDateCoverage,
-    parsedRowsHaveMultipleAccountNumbers: params.parsedRowsHaveMultipleAccountNumbers,
-    suspiciousDateCoverage: params.suspiciousDateCoverage,
-    prefersVisionFallbackForInstitution: params.prefersVisionFallbackForInstitution,
-    fileName: params.fileName,
-  });
+  const parseLooksUsable =
+    !params.sparseLocalRowsSuspicious &&
+    imageStatementRowsLookUsable(params.rows, params.metadata, {
+      parsedRowsWithDates: params.parsedRowsWithDates,
+      parsedDateCoverage: params.parsedDateCoverage,
+      parsedRowsHaveMultipleAccountNumbers: params.parsedRowsHaveMultipleAccountNumbers,
+      suspiciousDateCoverage: params.suspiciousDateCoverage,
+      prefersVisionFallbackForInstitution: params.prefersVisionFallbackForInstitution,
+      fileName: params.fileName,
+    });
 
   const hasStructuredScreenshotRows = params.rows.some((row) => {
     const rawPayload = row.rawPayload;
@@ -2093,30 +2101,12 @@ const readCheckpointParserRoutingDecision = (sourceMetadata: unknown): string | 
 };
 
 const normalizeStatementImageOcrText = (text: string) => {
-  const normalizeScreenshotFamilyTokens = (value: string) => {
-    let normalized = value;
-    const looksLikeGcashFamilyScreenshot =
-      /\b(?:gsave|gcash|uno\s+digital\s+bank|unoready|unoboost|gcrypto|gfunds|atram|pdax)\b/i.test(normalized);
-    if (looksLikeGcashFamilyScreenshot) {
-      normalized = normalized
-        .replace(/\bci\s*mb\b/gi, "CIMB")
-        .replace(/(?:#\s*)?uno\s*ready(?:@?g?cash|e?c?cash|ccash|eccash)?/gi, "#UNOready@GCash")
-        .replace(/(?:#\s*)?uno\s*boost(?:@?g?cash|e?c?cash|ccash|eccash)?/gi, "#UNOboost@GCash")
-        .replace(/##+/g, "#")
-        .replace(/(@GCash){2,}/gi, "@GCash")
-        .replace(/[£$](?=\d{1,3}(?:,\d{3})*(?:\.\d{2})?\b)/g, "₱");
-    }
-
-    return normalized;
-  };
-
-  const lines = text
+  const normalizedSourceText = looksLikeGcashFamilyScreenshotText(text)
+    ? normalizeGcashFamilyScreenshotOcrText(text)
+    : text;
+  const lines = normalizedSourceText
     .split(/\r?\n/)
-    .map((line) =>
-      normalizeScreenshotFamilyTokens(
-        line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim()
-      )
-    )
+    .map((line) => line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
   const isStatementUiNoiseLine = (line: string) => {
@@ -6811,6 +6801,17 @@ export const processImportFileText = async (
   const preliminaryGenericParseLooksSuspicious =
     (importFile.fileType === "application/pdf" || imageImport) &&
     (preliminaryLooksCharacterSpacedOcr || preliminaryGenericIdentityLooksWeak || (metadataForParse.confidence ?? 0) < 75);
+  const preliminaryGsaveImageStatement =
+    imageImport &&
+    importMode === "statement" &&
+    /gsave|unoready|unoboost|uno digital bank/i.test(
+      [metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName, textForParse].filter(Boolean).join(" ")
+    );
+  const preliminaryGsaveScreenshotSparseParse =
+    preliminaryGsaveImageStatement &&
+    gsaveScreenshotExpectsMultipleAccounts(textForParse) &&
+    parsedRows.length > 0 &&
+    parsedRows.length < 2;
   const preliminarySuspiciousDateCoverage =
     (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && preliminaryParsedRowsWithDates === 0
       ? true
@@ -6826,6 +6827,7 @@ export const processImportFileText = async (
           parsedRowsHaveMultipleAccountNumbers: preliminaryParsedRowsHaveMultipleAccountNumbers,
           suspiciousDateCoverage: preliminarySuspiciousDateCoverage,
           prefersVisionFallbackForInstitution: false,
+          sparseLocalRowsSuspicious: preliminaryGsaveScreenshotSparseParse,
         })
       : null;
   const preliminaryImageStatementParseLooksUsable = preliminaryImageStatementAssessment?.parseLooksUsable ?? false;
@@ -6847,7 +6849,7 @@ export const processImportFileText = async (
     hasAccountNumber: Boolean(metadataForParse.accountNumber),
     hasMultipleAccountNumbers: preliminaryParsedRowsHaveMultipleAccountNumbers,
     genericParseLooksSuspicious: preliminaryGenericParseLooksSuspicious,
-    gcashSuspiciouslySparse: false,
+    gcashSuspiciouslySparse: preliminaryGsaveScreenshotSparseParse,
     suspiciousDateCoverage: preliminarySuspiciousDateCoverage,
     prefersVisionFallbackForInstitution: false,
     genericIdentityLooksWeak: preliminaryGenericIdentityLooksWeak,
@@ -7024,13 +7026,12 @@ export const processImportFileText = async (
           (rawPayload as Record<string, unknown>).source === "bpi_mobile_screenshot"))
     );
   });
-  const isGsaveImageStatement =
-    imageImport &&
-    importMode === "statement" &&
-    /gsave|unoready|unoboost|uno digital bank/i.test(
-      [metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName].filter(Boolean).join(" ")
-    );
-  if (isGsaveImageStatement && parsedRows.length === 0 && pageImages?.length && !shouldPrioritizeBackupEarly) {
+  const shouldRepairGsaveTranscript =
+    isGsaveImageStatement &&
+    Boolean(pageImages?.length) &&
+    !shouldPrioritizeBackupEarly &&
+    (parsedRows.length === 0 || gsaveScreenshotSparseParse || !preliminaryImageStatementParseLooksUsable);
+  if (shouldRepairGsaveTranscript && pageImages?.length) {
     await updateImportFileCompat(importFileId, {
       status: "processing",
       processingPhase: "identifying_transactions",
@@ -7240,6 +7241,17 @@ export const processImportFileText = async (
     parsedRows.length >= 6 &&
     parsedDateCoverage >= 0.75 &&
     Boolean(metadataForParse.accountName || metadataForParse.accountNumber || metadataForParse.institution);
+  const isGsaveImageStatement =
+    imageImport &&
+    importMode === "statement" &&
+    /gsave|unoready|unoboost|uno digital bank/i.test(
+      [metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName, textForParse].filter(Boolean).join(" ")
+    );
+  const gsaveScreenshotSparseParse =
+    isGsaveImageStatement &&
+    gsaveScreenshotExpectsMultipleAccounts(textForParse) &&
+    parsedRows.length > 0 &&
+    parsedRows.length < 2;
   const gcashSuspiciouslySparse =
     metadataForParse.institution === "GCash" &&
     parsedRows.length > 0 &&
@@ -7287,6 +7299,7 @@ export const processImportFileText = async (
           parsedRowsHaveMultipleAccountNumbers,
           suspiciousDateCoverage,
           prefersVisionFallbackForInstitution,
+          sparseLocalRowsSuspicious: gsaveScreenshotSparseParse,
         })
       : null;
   const suspiciousScreenshotRows = imageStatementAssessment?.suspiciousScreenshotRows ?? 0;
@@ -7323,7 +7336,7 @@ export const processImportFileText = async (
     hasAccountNumber: Boolean(metadataForParse.accountNumber),
     hasMultipleAccountNumbers: parsedRowsHaveMultipleAccountNumbers,
     genericParseLooksSuspicious: genericParseLooksSuspicious || screenshotRowsLookStructurallyWeak,
-    gcashSuspiciouslySparse,
+    gcashSuspiciouslySparse: gcashSuspiciouslySparse || gsaveScreenshotSparseParse,
     suspiciousDateCoverage,
     prefersVisionFallbackForInstitution,
     genericIdentityLooksWeak,

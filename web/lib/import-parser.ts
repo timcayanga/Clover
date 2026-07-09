@@ -6,6 +6,7 @@ import {
   isLikelyScreenshotUiArtifactText,
   normalizeScreenshotArtifactText,
 } from "@/lib/screenshot-artifact-filter";
+import { normalizeGcashFamilyScreenshotOcrText } from "@/lib/gcash-family-screenshot";
 
 export type ImportedAccountType =
   | "bank"
@@ -9202,15 +9203,7 @@ const looksLikeGsaveUnoScreenshotText = (text: string) => {
   );
 };
 
-const normalizeGsaveUnoScreenshotText = (text: string) =>
-  text
-    .replace(/\u00a0/g, " ")
-    .replace(/\bci\s*mb\b/gi, "CIMB")
-    .replace(/(?:#\s*)?uno\s*ready(?:@?g?cash|e?c?cash|ccash|eccash)?/gi, "#UNOready@GCash")
-    .replace(/(?:#\s*)?uno\s*boost(?:@?g?cash|e?c?cash|ccash|eccash)?/gi, "#UNOboost@GCash")
-    .replace(/##+/g, "#")
-    .replace(/(@GCash){2,}/gi, "@GCash")
-    .replace(/[£$](?=\d{1,3}(?:,\d{3})*(?:\.\d{2})?\b)/g, "₱");
+const normalizeGsaveUnoScreenshotText = (text: string) => normalizeGcashFamilyScreenshotOcrText(text);
 
 const buildGsaveUnoAccountName = (productName: string, accountNumber?: string | null) => {
   const suffix = accountNumber?.slice(-4) ?? "";

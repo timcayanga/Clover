@@ -10,32 +10,33 @@ Clover is a personal finance app focused on statement import, transaction parsin
 4. `docs/bdo-parser-rules.md` when working on BDO imports
 5. `docs/unionbank-parser-rules.md` when working on UnionBank imports
 6. `docs/gcash-parser-rules.md` when working on GCash imports
-7. `docs/metrobank-parser-rules.md` when working on Metrobank imports
-8. `docs/citibank-parser-rules.md` when working on Citibank imports
-9. `docs/security-bank-parser-rules.md` when working on Security Bank imports
-10. `docs/maya-parser-rules.md` when working on Maya imports
-11. `docs/landbank-parser-rules.md` when working on LandBank imports
-12. `docs/wise-parser-rules.md` when working on Wise imports
-13. `docs/atram-parser-rules.md` when working on ATRAM imports
-14. `docs/uno-parser-rules.md` when working on UNO Digital Bank imports
-15. `docs/ab-capital-securities-parser-rules.md` when working on AB Capital Securities imports
-16. `docs/gcrypto-parser-rules.md` when working on GCrypto imports
-17. `docs/maribank-parser-rules.md` when working on MariBank imports
-18. `docs/psbank-parser-rules.md` when working on PS Bank imports
-19. `docs/chinabank-parser-rules.md` when working on China Bank imports
-20. `docs/hsbc-parser-rules.md` when working on HSBC imports
-21. `docs/eastwest-parser-rules.md` when working on EastWest imports
-22. `docs/gotyme-parser-rules.md` when working on GoTyme imports
-23. `docs/bank-of-commerce-parser-rules.md` when working on Bank of Commerce imports
-24. `docs/bank-of-china-parser-rules.md` when working on Bank of China imports
-25. `docs/aub-parser-rules.md` when working on AUB imports
-26. `docs/pnb-parser-rules.md` when working on PNB imports
-27. `docs/ucpb-parser-rules.md` when working on UCPB imports
-28. `docs/cimb-parser-rules.md` when working on CIMB imports
-29. `web/prisma/schema.prisma`
-30. `web/lib/import-parser.ts`
-31. `web/lib/data-engine.ts`
-32. `web/workers/import-processor.ts`
+7. `docs/gsave-parser-rules.md` when working on GSave imports
+8. `docs/metrobank-parser-rules.md` when working on Metrobank imports
+9. `docs/citibank-parser-rules.md` when working on Citibank imports
+10. `docs/security-bank-parser-rules.md` when working on Security Bank imports
+11. `docs/maya-parser-rules.md` when working on Maya imports
+12. `docs/landbank-parser-rules.md` when working on LandBank imports
+13. `docs/wise-parser-rules.md` when working on Wise imports
+14. `docs/atram-parser-rules.md` when working on ATRAM imports
+15. `docs/uno-parser-rules.md` when working on UNO Digital Bank imports
+16. `docs/ab-capital-securities-parser-rules.md` when working on AB Capital Securities imports
+17. `docs/gcrypto-parser-rules.md` when working on GCrypto imports
+18. `docs/maribank-parser-rules.md` when working on MariBank imports
+19. `docs/psbank-parser-rules.md` when working on PS Bank imports
+20. `docs/chinabank-parser-rules.md` when working on China Bank imports
+21. `docs/hsbc-parser-rules.md` when working on HSBC imports
+22. `docs/eastwest-parser-rules.md` when working on EastWest imports
+23. `docs/gotyme-parser-rules.md` when working on GoTyme imports
+24. `docs/bank-of-commerce-parser-rules.md` when working on Bank of Commerce imports
+25. `docs/bank-of-china-parser-rules.md` when working on Bank of China imports
+26. `docs/aub-parser-rules.md` when working on AUB imports
+27. `docs/pnb-parser-rules.md` when working on PNB imports
+28. `docs/ucpb-parser-rules.md` when working on UCPB imports
+29. `docs/cimb-parser-rules.md` when working on CIMB imports
+30. `web/prisma/schema.prisma`
+31. `web/lib/import-parser.ts`
+32. `web/lib/data-engine.ts`
+33. `web/workers/import-processor.ts`
 
 If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
 
