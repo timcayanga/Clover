@@ -9191,10 +9191,26 @@ const looksLikeGsaveUnoScreenshotText = (text: string) => {
     /\bUNO\s+Digital\s+Bank\b/i.test(normalized) ||
     /#UNOready@?GCash/i.test(normalized) ||
     /#UNOboost@?GCash/i.test(normalized) ||
+    /\bUNOready(?:e?c?cash|ccash|eccash)\b/i.test(normalized) ||
+    /\bUNOboost(?:e?c?cash|ccash|eccash)\b/i.test(normalized) ||
     (/\bGSave\b/i.test(normalized) && /\bRegular\s+Savings\s+Balance\b/i.test(normalized)) ||
-    (/\bTime\s+Deposit\s+Account\s+Details\b/i.test(normalized) && /\bMaturity\b/i.test(normalized))
+    (/\bTime\s+Deposit\s+Account\s+Details\b/i.test(normalized) && /\bMaturity\b/i.test(normalized)) ||
+    (/UNO\s+Digital\s+Bank/i.test(normalized) &&
+      /\bDeposit\s+(?:Amount|#\s*[0-9][0-9,]*\.\d{2}\s+Amount)\b/i.test(normalized) &&
+      /\bInterest\s+Rate\b/i.test(normalized) &&
+      /\bMaturity\b/i.test(normalized))
   );
 };
+
+const normalizeGsaveUnoScreenshotText = (text: string) =>
+  text
+    .replace(/\u00a0/g, " ")
+    .replace(/\bci\s*mb\b/gi, "CIMB")
+    .replace(/(?:#\s*)?uno\s*ready(?:@?g?cash|e?c?cash|ccash|eccash)?/gi, "#UNOready@GCash")
+    .replace(/(?:#\s*)?uno\s*boost(?:@?g?cash|e?c?cash|ccash|eccash)?/gi, "#UNOboost@GCash")
+    .replace(/##+/g, "#")
+    .replace(/(@GCash){2,}/gi, "@GCash")
+    .replace(/[£$](?=\d{1,3}(?:,\d{3})*(?:\.\d{2})?\b)/g, "₱");
 
 const buildGsaveUnoAccountName = (productName: string, accountNumber?: string | null) => {
   const suffix = accountNumber?.slice(-4) ?? "";
@@ -9282,7 +9298,7 @@ const extractGsaveOverviewAccounts = (lines: string[]) => {
       providerInstitution: "CIMB",
     },
     {
-      match: /^#?unoready$/i,
+      match: /^#?unoready(?:@gcash)?$/i,
       productName: "#UNOready",
       accountType: "bank",
       accountLabel: "#UNOready@GCash",
@@ -9309,7 +9325,8 @@ const extractGsaveOverviewAccounts = (lines: string[]) => {
     let accountNumber: string | null = null;
     let balance: number | null = null;
 
-    for (let offset = 1; offset <= 5 && index + offset < lines.length; offset += 1) {
+    const cardWindow: string[] = [];
+    for (let offset = 1; offset <= 8 && index + offset < lines.length; offset += 1) {
       const candidate = normalizeWhitespace(lines[index + offset] ?? "");
       if (!candidate) {
         continue;
@@ -9319,6 +9336,10 @@ const extractGsaveOverviewAccounts = (lines: string[]) => {
         break;
       }
 
+      cardWindow.push(candidate);
+    }
+
+    for (const candidate of cardWindow) {
       if (!accountNumber) {
         const accountNumberMatch =
           candidate.match(/\bAccount\s+No\.?[:;\s]*.*?(\d{4})(?!.*\d)/i) ??
@@ -9391,7 +9412,7 @@ const buildGsaveUnoSnapshotRow = (account: GsaveUnoSnapshotAccount, metadata: De
 });
 
 const gsaveUnoScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
-  const normalizedText = text.replace(/\u00a0/g, " ");
+  const normalizedText = normalizeGsaveUnoScreenshotText(text);
   if (!looksLikeGsaveUnoScreenshotText(normalizedText) && !/img_14(?:0[7-9]|1[0-4])\.png/i.test(fileName)) {
     return null;
   }
@@ -9483,7 +9504,7 @@ const parseGsaveUnoScreenshotImportText = (text: string, fileName: string) => {
     return null;
   }
 
-  const normalizedText = text.replace(/\u00a0/g, " ");
+  const normalizedText = normalizeGsaveUnoScreenshotText(text);
   const compact = normalizeWhitespace(normalizedText);
   const lines = normalizedText
     .split(/\r?\n/)

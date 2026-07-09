@@ -67,6 +67,53 @@ Maturity Rollover Principal Instruction
 Maturity 07 Oct 2026 Date
 Payout Acc 30008998394132 No`;
 
+const overviewNoisyOcrScreenshotText = `10:18 \\ all T
+GSave
+REGULAR SAVINGS BALANCE AS OF 10:18 AM
+£300,000.00
+Hub My Savings FAQ
+My Accounts
+GSave
+>| Account No.: ¥*¥*¥******¥%6972 >
+CiMB PHP 0.00
+#UNOready
+(Ue) Account No; ¥*¥*¥****%*¥%4132 >
+BA PHP 300,000.00
+Auto Deposit Need Help?`;
+
+const productListNoisyOcrScreenshotText = `10:18 N\\ oul =
+UNO Digital Bank
+SAVINGS ACCOUNTS
+#UNOready@GCash
+Account Number: XXXX4132
+$0.00
+Available Balance
+DEPOSIT ACCOUNTS
+unoboosteccash
+Account Number: XXXX1330
+$100,000.00
+Deposit Amount
+#UNOboost@GCash
+Account Number: XXXX2023
+$100,000.00
+Deposit Amount
+#unoboost@ccash
+Account Number: XXXX4217
+$100,000.00
+Deposit Amount`;
+
+const detailNoisyOcrScreenshotText = `10:19 N\\ all FT
+UNO Digital Bank
+Time Deposit Account Details
+Name TIMOTHY GUNTHER CAYANGA
+Product #UNOboost@GCash
+Detail Account 40001000551330 Number
+Deposit # 100,000.00 Amount
+Interest Rate 6.00% per annum
+Tenure 12 Months
+Maturity # 106,000.00 Amount
+Maturity # 6000.0 Interest`;
+
 const overviewMetadata = detectStatementMetadata(overviewScreenshotText, "IMG_1407.PNG");
 assert.equal(overviewMetadata?.institution, "GSave");
 assert.equal(overviewMetadata?.accountType, "bank");
@@ -93,6 +140,13 @@ assert.deepEqual(
   [0, 300000]
 );
 
+const overviewNoisyOcrRows = parseImportText(overviewNoisyOcrScreenshotText, "IMG_1407.PNG", "image/png", { institution: "GSave" });
+assert.equal(overviewNoisyOcrRows.length, 2, "Tesseract-style noisy GSave overview OCR should still create two hidden account snapshots.");
+assert.deepEqual(
+  overviewNoisyOcrRows.map((row) => row.accountName),
+  ["GSave CIMB 6972", "GSave #UNOready 4132"]
+);
+
 const listMetadata = detectStatementMetadata(productListScreenshotText, "IMG_1408.PNG");
 assert.equal(listMetadata?.institution, "GSave");
 assert.equal(listMetadata?.accountType, "investment");
@@ -114,6 +168,22 @@ assert.deepEqual(
   ["bank", "investment", "investment", "investment"]
 );
 
+const listNoisyMetadata = detectStatementMetadata(productListNoisyOcrScreenshotText, "IMG_1408.PNG");
+assert.equal(listNoisyMetadata?.institution, "GSave");
+assert.equal(listNoisyMetadata?.accountType, "investment");
+
+const listNoisyRows = parseImportText(productListNoisyOcrScreenshotText, "IMG_1408.PNG", "image/png", { institution: "GSave" });
+assert.equal(listNoisyRows.length, 4, "Tesseract-style noisy UNO list OCR should still expose one savings account and three time deposits.");
+assert.deepEqual(
+  listNoisyRows.map((row) => row.accountName),
+  [
+    "GSave #UNOready 4132",
+    "GSave #UNOboost 1330",
+    "GSave #UNOboost 2023",
+    "GSave #UNOboost 4217",
+  ]
+);
+
 const detailMetadata = detectStatementMetadata(detailScreenshotText, "IMG_1409.PNG");
 assert.equal(detailMetadata?.institution, "GSave");
 assert.equal(detailMetadata?.accountType, "investment");
@@ -133,6 +203,12 @@ assert.equal(detailRows[0]?.rawPayload?.maturityInterest, 6000);
 assert.equal(detailRows[0]?.rawPayload?.maturityDate, "2026-10-07");
 assert.equal(detailRows[0]?.rawPayload?.payoutAccountNumber, "30008998394132");
 assert.match(String(detailRows[0]?.rawPayload?.note ?? ""), /Interest rate 6\.00% per annum/i);
+
+const detailNoisyMetadata = detectStatementMetadata(detailNoisyOcrScreenshotText, "IMG_1409.PNG");
+assert.equal(detailNoisyMetadata?.institution, "GSave");
+assert.equal(detailNoisyMetadata?.accountType, "investment");
+assert.equal(detailNoisyMetadata?.accountNumber, "40001000551330");
+assert.equal(detailNoisyMetadata?.accountName, "GSave #UNOboost 1330");
 
 const detailContinuationMetadata = detectStatementMetadata(detailContinuationScreenshotText, "IMG_1410.PNG");
 assert.equal(detailContinuationMetadata?.institution, "GSave");

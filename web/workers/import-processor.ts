@@ -2093,9 +2093,30 @@ const readCheckpointParserRoutingDecision = (sourceMetadata: unknown): string | 
 };
 
 const normalizeStatementImageOcrText = (text: string) => {
+  const normalizeScreenshotFamilyTokens = (value: string) => {
+    let normalized = value;
+    const looksLikeGcashFamilyScreenshot =
+      /\b(?:gsave|gcash|uno\s+digital\s+bank|unoready|unoboost|gcrypto|gfunds|atram|pdax)\b/i.test(normalized);
+    if (looksLikeGcashFamilyScreenshot) {
+      normalized = normalized
+        .replace(/\bci\s*mb\b/gi, "CIMB")
+        .replace(/(?:#\s*)?uno\s*ready(?:@?g?cash|e?c?cash|ccash|eccash)?/gi, "#UNOready@GCash")
+        .replace(/(?:#\s*)?uno\s*boost(?:@?g?cash|e?c?cash|ccash|eccash)?/gi, "#UNOboost@GCash")
+        .replace(/##+/g, "#")
+        .replace(/(@GCash){2,}/gi, "@GCash")
+        .replace(/[£$](?=\d{1,3}(?:,\d{3})*(?:\.\d{2})?\b)/g, "₱");
+    }
+
+    return normalized;
+  };
+
   const lines = text
     .split(/\r?\n/)
-    .map((line) => line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
+    .map((line) =>
+      normalizeScreenshotFamilyTokens(
+        line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim()
+      )
+    )
     .filter(Boolean);
 
   const isStatementUiNoiseLine = (line: string) => {
