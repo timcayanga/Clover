@@ -28919,6 +28919,7 @@ button.accounts-detail__transaction-head-cell {
 
 .landing-nav__submenu-link--featured,
 .landing-nav__submenu-link--featured strong {
+  color: var(--accent);
   font-weight: 700;
 }
 
