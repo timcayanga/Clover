@@ -736,6 +736,58 @@ const HARDCODED_EXACT_MERCHANT_KEYS = new Set([
   "documentary stamp tax",
 ]);
 
+const MERCHANT_FAMILY_NOISE_TOKENS = new Set([
+  "account",
+  "accounts",
+  "advance",
+  "app",
+  "auth",
+  "bank",
+  "biller",
+  "billers",
+  "bill",
+  "billing",
+  "card",
+  "cash",
+  "credit",
+  "debit",
+  "descriptor",
+  "digital",
+  "dues",
+  "ecommerce",
+  "fee",
+  "foreign",
+  "fund",
+  "incoming",
+  "instapay",
+  "interest",
+  "international",
+  "membership",
+  "merchant",
+  "mobile",
+  "monthly",
+  "online",
+  "outgoing",
+  "payment",
+  "payments",
+  "pay",
+  "premium",
+  "purchase",
+  "purchases",
+  "recurring",
+  "reference",
+  "ref",
+  "services",
+  "service",
+  "statement",
+  "subscription",
+  "top",
+  "transfer",
+  "txn",
+  "utility",
+  "wallet",
+]);
+
 export const normalizeMerchantText = (value?: string | null) =>
   normalizeWhitespace(String(value ?? ""))
     .toLowerCase()
@@ -748,6 +800,27 @@ export const tokenizeMerchant = (value?: string | null) =>
     .split(" ")
     .map((token) => token.trim())
     .filter((token) => token.length > 1 && !COMMON_STOP_WORDS.has(token));
+
+export const buildMerchantFamilySignature = (value?: string | null) => {
+  const normalized = normalizeMerchantText(value);
+  if (!normalized) {
+    return "";
+  }
+
+  const tokens = normalized
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3)
+    .filter((token) => !MERCHANT_FAMILY_NOISE_TOKENS.has(token))
+    .filter((token) => !/^\d+$/.test(token))
+    .filter((token) => !/^(?:php|ref|txn|visa|mastercard|amex|bank|fund|wallet)$/.test(token));
+
+  if (tokens.length === 0) {
+    return normalized;
+  }
+
+  return tokens.slice(0, 3).join(" ");
+};
 
 export const buildMerchantPrototypeLabel = (merchantText: string, normalizedName?: string | null) => {
   const base = summarizeMerchantText(merchantText);
@@ -3624,6 +3697,12 @@ const scoreSignal = (tokens: string[], normalizedMerchantCandidates: Set<string>
     return 100 + signal.confidence;
   }
 
+  const candidateFamilies = new Set([...normalizedMerchantCandidates].map((candidate) => buildMerchantFamilySignature(candidate)).filter(Boolean));
+  const signalFamily = buildMerchantFamilySignature(signal.merchantKey);
+  if (signalFamily && candidateFamilies.has(signalFamily)) {
+    return 92 + signal.confidence * 0.7;
+  }
+
   const signalTokens = new Set(signal.merchantTokens);
   let overlap = 0;
 
@@ -3643,6 +3722,12 @@ const scoreSignal = (tokens: string[], normalizedMerchantCandidates: Set<string>
 const scoreMerchantRule = (tokens: string[], normalizedMerchantCandidates: Set<string>, rule: MerchantRuleRow) => {
   if (normalizedMerchantCandidates.has(rule.merchantKey)) {
     return 120 + rule.confidence;
+  }
+
+  const candidateFamilies = new Set([...normalizedMerchantCandidates].map((candidate) => buildMerchantFamilySignature(candidate)).filter(Boolean));
+  const ruleFamily = buildMerchantFamilySignature(rule.merchantPattern || rule.normalizedName || rule.merchantKey);
+  if (ruleFamily && candidateFamilies.has(ruleFamily)) {
+    return 108 + rule.confidence * 0.7 + rule.timesConfirmed * 1.5;
   }
 
   const ruleTokens = tokenizeMerchant(rule.merchantPattern || rule.normalizedName || rule.merchantKey);

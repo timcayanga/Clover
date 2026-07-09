@@ -17,9 +17,9 @@ const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
   {
     category: "Food & Dining",
     lower:
-      /spotify\s*\*?;?(?=.*paypal)|paypal.*spotify|netflix|youtube\s+premium|grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:\s+donuts?)?|krispy\s+kreme|jollibee|chowking|mang\s+inasal|burger\s+king|mcdonald'?s|starbucks|pickup\s+coffee|tim\s+hortons|shake\s+shack|subway|chili'?s|cara\s+mia|jarandjam|main\s+bar|ac\s+bar/,
+      /grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:\s+donuts?)?|krispy\s+kreme|jollibee|chowking|mang\s+inasal|burger\s+king|mcdonald'?s|starbucks|pickup\s+coffee|tim\s+hortons|shake\s+shack|subway|chili'?s|cara\s+mia|jarandjam|main\s+bar|ac\s+bar/,
     compact:
-      /paypal.*spotify|spotify.*paypal|netflix|youtubepremium|grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:donuts?)?|krispykreme|jollibee|chowking|manginasal|burgerking|mcdonalds|starbucks|pickupcoffee|timhortons|shakeshack|subway|chilis|caramia|jarandjam|mainbar|ackbar/,
+      /grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:donuts?)?|krispykreme|jollibee|chowking|manginasal|burgerking|mcdonalds|starbucks|pickupcoffee|timhortons|shakeshack|subway|chilis|caramia|jarandjam|mainbar|ackbar/,
   },
   {
     category: "Transport",
@@ -29,9 +29,9 @@ const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
   {
     category: "Bills & Utilities",
     lower:
-      /openai|chatgpt|apple\s+services?|icloud|google\s+one|google\s+workspace|youtube\s+premium|spotify|netflix|linkedin(?:\s+premium)?|adobe|canva|scribd|notion|airalo|globe|smart|pldt|meralco|maynilad/,
+      /paypal.*spotify|spotify.*paypal|paypal.*netflix|netflix.*paypal|paypal.*linkedin|linkedin.*paypal|openai|chatgpt|apple\s+services?|icloud|google\s+one|google\s+workspace|youtube\s+premium|spotify|netflix|linkedin(?:\s+premium)?|adobe|canva|scribd|notion|airalo|globe|smart|pldt|meralco|maynilad/,
     compact:
-      /openai|chatgpt|appleservices?|icloud|googleone|googleworkspace|youtubepremium|spotify|netflix|linkedin(?:premium)?|adobe|canva|scribd|notion|airalo|globe|smart|pldt|meralco|maynilad/,
+      /paypal.*spotify|spotify.*paypal|paypal.*netflix|netflix.*paypal|paypal.*linkedin|linkedin.*paypal|openai|chatgpt|appleservices?|icloud|googleone|googleworkspace|youtubepremium|spotify|netflix|linkedin(?:premium)?|adobe|canva|scribd|notion|airalo|globe|smart|pldt|meralco|maynilad/,
   },
   {
     category: "Shopping",

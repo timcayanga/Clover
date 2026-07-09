@@ -789,6 +789,33 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
       ].join("::")
     )
   );
+  const existingCommitmentFamilies = new Map<
+    string,
+    {
+      canonicalTitle: string;
+      accountId: string | null;
+      currency: string;
+    }
+  >();
+  for (const commitment of existingCommitments) {
+    const title = (commitment.counterparty ?? commitment.title ?? "").trim();
+    if (!title) {
+      continue;
+    }
+
+    const familyKey = [
+      commitment.accountId ?? "workspace",
+      (commitment.currency ?? "PHP").toUpperCase(),
+      buildRecurringMerchantFamilySignature(title),
+    ].join("::");
+    if (!familyKey.endsWith("::")) {
+      existingCommitmentFamilies.set(familyKey, {
+        canonicalTitle: title,
+        accountId: commitment.accountId ?? null,
+        currency: (commitment.currency ?? "PHP").toUpperCase(),
+      });
+    }
+  }
   const dismissedPatterns = await prisma.recurringPattern.findMany({
     where: {
       workspaceId,
@@ -835,14 +862,45 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
       .filter(Boolean)
   );
 
-  const patterns = detectedPatterns.filter((pattern) => {
+  const patterns = detectedPatterns
+    .map((pattern) => {
+      const familyKey = [
+        pattern.accountId ?? "workspace",
+        pattern.currency,
+        buildRecurringMerchantFamilySignature(pattern.canonicalTitle),
+      ].join("::");
+      const matchedCommitmentFamily = existingCommitmentFamilies.get(familyKey);
+      if (!matchedCommitmentFamily) {
+        return pattern;
+      }
+
+      const boostedConfidence = Math.min(99, Math.max(pattern.confidence, 90));
+      return {
+        ...pattern,
+        merchantClean: matchedCommitmentFamily.canonicalTitle,
+        canonicalTitle: matchedCommitmentFamily.canonicalTitle,
+        confidence: boostedConfidence,
+        reasonSummary: `${pattern.reasonSummary} · matched confirmed commitment family`,
+        reasonTags: [...new Set([...pattern.reasonTags, "confirmed family"])],
+        rawPayload: {
+          ...(pattern.rawPayload && typeof pattern.rawPayload === "object" && !Array.isArray(pattern.rawPayload)
+            ? (pattern.rawPayload as Record<string, unknown>)
+            : {}),
+          matchedCommitmentFamily: matchedCommitmentFamily.canonicalTitle,
+          confidenceBoostReason: "confirmed_commitment_family",
+        },
+      };
+    })
+    .filter((pattern) => {
     const key = [pattern.accountId ?? "workspace", pattern.currency, normalizeRecurringMerchantKey(pattern.canonicalTitle)].join("::");
+    const familyKey = [pattern.accountId ?? "workspace", pattern.currency, buildRecurringMerchantFamilySignature(pattern.canonicalTitle)].join("::");
     return (
       !existingCommitmentKeys.has(key) &&
+      !existingCommitmentFamilies.has(familyKey) &&
       !dismissedSuppressionKeys.has(pattern.suppressionKey) &&
       !dismissedFamilyKeys.has(buildRecurringMerchantFamilySignature(pattern.canonicalTitle))
     );
-  });
+    });
 
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw<Array<{ locked: string }>>`
