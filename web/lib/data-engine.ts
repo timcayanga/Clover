@@ -1364,13 +1364,13 @@ export const guessCategoryFallback = (description: string, type: TransactionType
     /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
   const hasForeignMerchantCurrencyContext =
     /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
+  const sharedCategoryHint = getSharedMerchantCategoryHint(description);
+  if (sharedCategoryHint) return sharedCategoryHint;
   if (isLikelyPersonTransferName(description)) return "Transfers";
   const override = getHardcodedCategoryOverride(description);
   if (override) return override;
   if (/deposit to gsave|withdraw from gsave|seamoney credit|maribank credit/.test(lower)) return "Financial";
   if (/google\s+play|googleplay/.test(lower) || /googleplay/.test(compact)) return "Entertainment";
-  const sharedCategoryHint = getSharedMerchantCategoryHint(description);
-  if (sharedCategoryHint) return sharedCategoryHint;
   if (/transfer|instapay|pesonet|wise to|to savings|to checking|wa\s+(?:cr|db)|et\s+(?:cr|db)\s+ibft|st\s+(?:cm|dm)\s+gen|mo\s+dm/.test(lower)) return "Transfers";
   if (/expressnet|megalink|withdrawal|atm\b|cash withdrawal|cash out|atmwdl|atm withdrawal|et\s+wdl/.test(lower)) return "Cash & ATM";
   if (/service\s*charge|servicecharge|service\s*fee|bank\s*charge|bankcharge|svchg|finance\s+charges?|late\s+payment\s+fee|annual\s+fee/.test(lower)) return "Financial";
@@ -1431,6 +1431,21 @@ const isExplicitTransferLikeDescription = (value: string | null | undefined) => 
     ) ||
     isLikelyPersonTransferName(lower)
   );
+};
+
+const isStrongNonTransferCategorySignal = (categoryName: string, variant: string) => {
+  const normalizedCategory = normalizeWhitespace(categoryName).trim();
+  if (!normalizedCategory || normalizedCategory === "Transfers" || normalizedCategory === "Other") {
+    return false;
+  }
+
+  const sharedHint = getSharedMerchantCategoryHint(variant);
+  if (!sharedHint || sharedHint !== normalizedCategory) {
+    return false;
+  }
+
+  const normalizedVariant = normalizeMerchantText(variant);
+  return normalizedVariant.length >= 5 && !GENERIC_MERCHANT_RAIL_KEYS.has(normalizedVariant);
 };
 
 const rescueHeuristicCategory = (params: {
@@ -1494,8 +1509,11 @@ const rescueHeuristicCategory = (params: {
     return null;
   }
 
+  const sourceVariant = categoryVariant.get(winnerCategory) ?? params.merchantText;
+  const strongNonTransferSignal = isStrongNonTransferCategorySignal(winnerCategory, sourceVariant);
+
   if (params.heuristicCategory === "Transfers") {
-    if (explicitTransferLike || winnerCategory === "Transfers" || winnerScore < 5) {
+    if ((explicitTransferLike && !strongNonTransferSignal) || winnerCategory === "Transfers" || winnerScore < (strongNonTransferSignal ? 4 : 5)) {
       return null;
     }
   } else if (params.heuristicCategory === "Other") {
@@ -1506,13 +1524,17 @@ const rescueHeuristicCategory = (params: {
     return null;
   }
 
-  const sourceVariant = categoryVariant.get(winnerCategory) ?? params.merchantText;
   const normalizedName = summarizeMerchantText(sourceVariant) || summarizeMerchantText(params.merchantText);
   return {
     categoryName: winnerCategory,
     normalizedName,
-    confidence: params.heuristicCategory === "Transfers" ? 72 : 68,
-    categoryReason: params.heuristicCategory === "Transfers" ? "heuristic-transfer-rescue" : "heuristic-other-rescue",
+    confidence: params.heuristicCategory === "Transfers" ? (strongNonTransferSignal ? 76 : 72) : 68,
+    categoryReason:
+      params.heuristicCategory === "Transfers"
+        ? strongNonTransferSignal
+          ? "heuristic-transfer-merchant-override"
+          : "heuristic-transfer-rescue"
+        : "heuristic-other-rescue",
     categorySource: "deterministic_rescue",
     variant: sourceVariant,
   };

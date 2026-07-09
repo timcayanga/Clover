@@ -9,6 +9,37 @@ const normalizeOcrCompactHint = (value: string) =>
     .replace(/1/g, "i")
     .replace(/5/g, "s");
 
+const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
+  category: string;
+  lower: RegExp;
+  compact?: RegExp;
+}> = [
+  {
+    category: "Food & Dining",
+    lower:
+      /spotify\s*\*?;?(?=.*paypal)|paypal.*spotify|netflix|youtube\s+premium|grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:\s+donuts?)?|krispy\s+kreme|jollibee|chowking|mang\s+inasal|burger\s+king|mcdonald'?s|starbucks|pickup\s+coffee|tim\s+hortons|shake\s+shack|subway|chili'?s|cara\s+mia|jarandjam|main\s+bar|ac\s+bar/,
+    compact:
+      /paypal.*spotify|spotify.*paypal|netflix|youtubepremium|grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:donuts?)?|krispykreme|jollibee|chowking|manginasal|burgerking|mcdonalds|starbucks|pickupcoffee|timhortons|shakeshack|subway|chilis|caramia|jarandjam|mainbar|ackbar/,
+  },
+  {
+    category: "Transport",
+    lower: /grabcar|grab\s+car|move\s+it|angkas|joyride|uber|taxi|trainpal|skybus|autopay\s+parking|opera\s+house\s+parking|mall\s+parking|shell|petron|caltex|seaoil/,
+    compact: /grabcar|moveit|angkas|joyride|uber|taxi|trainpal|skybus|autopayparking|operahouseparking|mallparking|shell|petron|caltex|seaoil/,
+  },
+  {
+    category: "Bills & Utilities",
+    lower:
+      /openai|chatgpt|apple\s+services?|icloud|google\s+one|google\s+workspace|youtube\s+premium|spotify|netflix|linkedin(?:\s+premium)?|adobe|canva|scribd|notion|airalo|globe|smart|pldt|meralco|maynilad/,
+    compact:
+      /openai|chatgpt|appleservices?|icloud|googleone|googleworkspace|youtubepremium|spotify|netflix|linkedin(?:premium)?|adobe|canva|scribd|notion|airalo|globe|smart|pldt|meralco|maynilad/,
+  },
+  {
+    category: "Shopping",
+    lower: /paypal|amazon|alibaba|lazada|shopee|uniqlo|zara|watsons|puregold|landers|snr|duty\s+free/,
+    compact: /paypal|amazon|alibaba|lazada|shopee|uniqlo|zara|watsons|puregold|landers|snr|dutyfree/,
+  },
+];
+
 const matchesCategoryHint = (value: string, patterns: { lower?: RegExp; compact?: RegExp }) => {
   const normalized = normalizeWhitespace(value);
   if (!normalized) {
@@ -22,6 +53,16 @@ const matchesCategoryHint = (value: string, patterns: { lower?: RegExp; compact?
     (patterns.lower && patterns.lower.test(lower)) ||
       (patterns.compact && (patterns.compact.test(compact) || patterns.compact.test(ocrCompact)))
   );
+};
+
+const getSpecificMerchantCategoryHint = (value: string) => {
+  for (const hint of SPECIFIC_MERCHANT_CATEGORY_HINTS) {
+    if (matchesCategoryHint(value, { lower: hint.lower, compact: hint.compact })) {
+      return hint.category;
+    }
+  }
+
+  return null;
 };
 
 export const isLikelyPersonTransferName = (value: string) => {
@@ -63,6 +104,11 @@ export const getSharedMerchantCategoryHint = (value: string): string | null => {
   const normalized = normalizeWhitespace(value);
   if (!normalized) {
     return null;
+  }
+
+  const specificHint = getSpecificMerchantCategoryHint(value);
+  if (specificHint) {
+    return specificHint;
   }
 
   if (isLikelyPersonTransferName(value)) {
@@ -107,15 +153,6 @@ export const getSharedMerchantCategoryHint = (value: string): string | null => {
     return "Travel & Lifestyle";
   }
 
-  if (
-    matchesCategoryHint(value, {
-      lower: /relay\b|amazon|alibaba|camera|paypal|viator(?:\.com)?|locker\s+hire|emmanuel\s+payments?|shop\b|store\b|mart\b|convenience|provisioning\s+service|visa\s+provisioning\s+service|apple\s+pay|google\s+pay|gift\s+shop|duty\s+free/,
-      compact: /relay|amazon|alibaba|camera|paypal|viator|lockerhire|emmanuelpayments?|shop|store|mart|convenience|provisioningservice|visaprovisioningservice|applepay|googlepay|giftshop|dutyfree|puregold|landers|snr|sandr|uniqlo|zara|h&m|watsons/,
-    })
-  ) {
-    return "Shopping";
-  }
-
   if (matchesCategoryHint(value, { lower: /books?\b|asia\s+books|college|school|tuition|academy/, compact: /books|asiabooks|college|school|tuition|academy/ })) {
     return "Education";
   }
@@ -129,6 +166,15 @@ export const getSharedMerchantCategoryHint = (value: string): string | null => {
     })
   ) {
     return "Bills & Utilities";
+  }
+
+  if (
+    matchesCategoryHint(value, {
+      lower: /relay\b|amazon|alibaba|camera|paypal|viator(?:\.com)?|locker\s+hire|emmanuel\s+payments?|shop\b|store\b|mart\b|convenience|provisioning\s+service|visa\s+provisioning\s+service|apple\s+pay|google\s+pay|gift\s+shop|duty\s+free/,
+      compact: /relay|amazon|alibaba|camera|paypal|viator|lockerhire|emmanuelpayments?|shop|store|mart|convenience|provisioningservice|visaprovisioningservice|applepay|googlepay|giftshop|dutyfree|puregold|landers|snr|sandr|uniqlo|zara|h&m|watsons/,
+    })
+  ) {
+    return "Shopping";
   }
 
   if (matchesCategoryHint(value, { lower: /citibank.*\bfin\b|bank.*\bfin\b|incoming\s+transfer|outgoing\s+transfer|fund\s+transfer/, compact: /citibank.*fin|bank.*fin|incomingtransfer|outgoingtransfer|fundtransfer/ })) {
