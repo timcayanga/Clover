@@ -28906,10 +28906,20 @@ button.accounts-detail__transaction-head-cell {
   border-radius: 12px;
   color: var(--muted);
   font-size: 14px;
+  font-weight: 400;
   transition:
     background 140ms ease,
     color 140ms ease,
     transform 140ms ease;
+}
+
+.landing-nav__submenu a strong {
+  font-weight: 400;
+}
+
+.landing-nav__submenu-link--featured,
+.landing-nav__submenu-link--featured strong {
+  font-weight: 700;
 }
 
 .landing-nav__submenu a:hover,
