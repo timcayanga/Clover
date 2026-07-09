@@ -649,7 +649,7 @@ export const helpSections: HelpSection[] = [
     slug: "accounts-workspaces",
     eyebrow: "Organization",
     title: "Accounts and workspaces",
-    summary: "Understand how Clover groups accounts, balances, and workspaces so the right data stays together.",
+    summary: "Understand how Clover groups accounts, balances, investments, and workspaces so the right data stays together.",
     icon: "wallet",
     accent: "sky",
     keywords: ["accounts", "workspace", "workspaces", "balance", "cash", "bank", "investment", "delete account", "home", "login"],
@@ -658,10 +658,12 @@ export const helpSections: HelpSection[] = [
       "how to add an account in Clover",
       "why balance looks wrong in Clover",
       "how to switch workspaces",
+      "how investments work in Clover",
     ],
     highlights: [
       "A workspace keeps one set of records together.",
       "Cash, bank, and investment accounts can sit side by side.",
+      "Balances and investment views stay tied to the right workspace.",
       "Removing an account should be intentional and traceable.",
     ],
     articles: [
@@ -759,6 +761,37 @@ export const helpSections: HelpSection[] = [
         ]
       ),
       createArticle(
+        "how-to-track-investments-in-clover",
+        "How to track investments in Clover",
+        "Keep holdings and longer-term money visible alongside your everyday finances.",
+        "Learn how investment tracking works in Clover and how it fits into your wider account picture.",
+        ["investments", "portfolio", "holdings", "investment accounts"],
+        [
+          "Open Investments or Accounts.",
+          "Add or review the investment account you want to track.",
+          "Check holdings, current value, and how the portfolio fits into the rest of your finances.",
+        ],
+        [
+          {
+            question: "Where do I track investments in Clover?",
+            answer:
+              "Use the Investments page for the portfolio view and Accounts when you want to see how investment accounts fit into the rest of your balance picture.",
+          },
+          {
+            question: "Why keep investments inside Clover?",
+            answer:
+              "Keeping investments alongside cash, cards, liabilities, and imported transactions helps you understand your finances as one connected system instead of splitting the story across separate tools.",
+          },
+        ],
+        [
+          {
+            label: "Open investments",
+            href: "/investments",
+            description: "Review holdings and portfolio visibility.",
+          },
+        ]
+      ),
+      createArticle(
         "how-to-delete-an-account-in-clover",
         "How to delete an account in Clover",
         "Remove an account only after you know it will not affect the records you need.",
@@ -822,6 +855,11 @@ export const helpSections: HelpSection[] = [
           "Use the workspace selector or the account context you are already in so you do not accidentally mix data from different finances.",
       },
       {
+        question: "Where do I track investments in Clover?",
+        answer:
+          "Use the Investments page for the portfolio view and Accounts when you want to see how investment accounts fit into the rest of your balance picture.",
+      },
+      {
         question: "Why am I sent back to the landing page when I open a protected page?",
         answer:
           "That usually means Clover does not see an active session yet. Log in first, then open Accounts, Transactions, Reports, or other protected pages from the signed-in app.",
@@ -832,6 +870,11 @@ export const helpSections: HelpSection[] = [
         label: "Open accounts",
         href: "/accounts",
         description: "See the current workspace accounts.",
+      },
+      {
+        label: "Open investments",
+        href: "/investments",
+        description: "Review the portfolio view and linked accounts.",
       },
       {
         label: "Open profile",
@@ -1003,21 +1046,21 @@ export const helpSections: HelpSection[] = [
   {
     slug: "reports-adviser-goals",
     eyebrow: "Analysis",
-    title: "Reports, Adviser guidance, and goals",
-    summary: "Use reports, Adviser guidance, goals, and investment views to understand what your numbers mean.",
+    title: "Insights, budgeting, and goals",
+    summary: "Use reports, Adviser guidance, budgets, and goals to understand what your numbers mean and what to do next.",
     icon: "play",
     accent: "gold",
-    keywords: ["reports", "adviser", "goals", "dashboard", "analysis", "trend", "summary", "investments", "awareness", "visibility"],
+    keywords: ["reports", "adviser", "budgets", "budgeting", "goals", "dashboard", "analysis", "trend", "summary", "awareness", "visibility"],
     searchPhrases: [
       "how to read Clover reports",
       "how to use Adviser in Clover",
+      "how budgeting works in Clover",
       "how to set a goal in Clover",
-      "where to find investment tracking",
     ],
     highlights: [
       "Reports show structured summaries and trends.",
       "Adviser points out patterns and changes.",
-      "Goals and investments turn the data into action.",
+      "Budgets and goals turn the data into action.",
     ],
     articles: [
       createArticle(
@@ -1083,6 +1126,37 @@ export const helpSections: HelpSection[] = [
         ]
       ),
       createArticle(
+        "how-to-use-budgets-in-clover",
+        "How to use budgets in Clover",
+        "Turn your imported history into practical guardrails you can actually follow.",
+        "Learn how budgeting works in Clover and how to use budgets to guide spending decisions.",
+        ["budgets", "budgeting", "spending caps", "limits"],
+        [
+          "Open Budgeting.",
+          "Review the suggested or current budget setup.",
+          "Track how spending is moving against each limit and adjust when the month changes.",
+        ],
+        [
+          {
+            question: "How does budgeting work in Clover?",
+            answer:
+              "Budgeting uses the financial history already inside Clover so your limits can reflect real activity instead of a blank template.",
+          },
+          {
+            question: "Why use budgets if I already have reports?",
+            answer:
+              "Reports tell you what happened. Budgets give you a forward-looking guardrail so you can react sooner, not only after the month is over.",
+          },
+        ],
+        [
+          {
+            label: "Open budgeting",
+            href: "/budgeting",
+            description: "Set or review your budgets.",
+          },
+        ]
+      ),
+      createArticle(
         "how-to-set-a-goal-in-clover",
         "How to set a goal in Clover",
         "Create a savings, debt, or milestone goal and keep it tied to the numbers that matter.",
@@ -1099,11 +1173,6 @@ export const helpSections: HelpSection[] = [
             question: "How do I set up a financial goal in Clover?",
             answer:
               "Open Goals, define the target you want to reach, and keep the goal tied to the numbers you actually want to measure.",
-          },
-          {
-            question: "Where do I track investments in Clover?",
-            answer:
-              "Use the Investments page to follow holdings and market changes without mixing them into everyday transaction review.",
           },
         ],
         [
@@ -1158,9 +1227,14 @@ export const helpSections: HelpSection[] = [
           "Reports are the formatted snapshots; Adviser is the guidance layer that highlights patterns or changes that deserve attention.",
       },
       {
-        question: "Where do I track goals and investments?",
+        question: "How does budgeting work in Clover?",
         answer:
-          "Use the Goals and Investments pages to follow progress and holdings without mixing them into everyday transaction review.",
+          "Budgeting uses the financial history already inside Clover so your limits can reflect real activity instead of a blank template.",
+      },
+      {
+        question: "Where do I track goals in Clover?",
+        answer:
+          "Use the Goals page to follow progress without losing sight of the reports, budgets, and Adviser signals affecting that goal.",
       },
       {
         question: "How do I read Clover reports?",
@@ -1185,6 +1259,11 @@ export const helpSections: HelpSection[] = [
         description: "Review summaries and trends.",
       },
       {
+        label: "Open budgeting",
+        href: "/budgeting",
+        description: "Set budgets from your real spending history.",
+      },
+      {
         label: "Open Adviser",
         href: "/adviser",
         description: "Check the patterns Clover noticed.",
@@ -1195,7 +1274,7 @@ export const helpSections: HelpSection[] = [
     slug: "billing-plan",
     eyebrow: "Billing",
     title: "Billing and plan",
-    summary: "Compare Free and Pro, understand limits, and manage billing from your account.",
+    summary: "Compare Free and Pro, understand limits, and manage Clover billing at PHP 99 monthly or PHP 999 annually.",
     icon: "pricing",
     accent: "violet",
     keywords: ["pricing", "plan", "billing", "free", "pro", "upgrade", "subscription", "refund", "limits", "investment tools"],
@@ -1208,6 +1287,7 @@ export const helpSections: HelpSection[] = [
     highlights: [
       "Free is useful for trying Clover and starting small.",
       "Pro gives you more room for accounts, uploads, analysis, and investing.",
+      "Monthly is PHP 99 and annual is PHP 999.",
       "Billing lives in Settings once you are signed in.",
     ],
     articles: [
@@ -1227,6 +1307,11 @@ export const helpSections: HelpSection[] = [
             question: "What is the difference between Free and Pro in Clover?",
             answer:
               "Free is best for trying the product or managing a smaller setup, while Pro unlocks more room for accounts, uploads, deeper analysis, and investment tools.",
+          },
+          {
+            question: "How much does Clover Pro cost?",
+            answer:
+              "Clover Pro is priced at PHP 99 monthly or PHP 999 annually.",
           },
           {
             question: "What is included in the Free plan?",
@@ -1346,6 +1431,11 @@ export const helpSections: HelpSection[] = [
         question: "What does Pro unlock?",
         answer:
           "Pro gives you more headroom for accounts, uploads, transactions, the deeper reports and goals features that benefit from a fuller data set, and investment tools for a more complete view of your finances.",
+      },
+      {
+        question: "How much does Clover Pro cost?",
+        answer:
+          "Clover Pro is priced at PHP 99 monthly or PHP 999 annually.",
       },
       {
         question: "Where do I manage billing?",
@@ -1809,6 +1899,102 @@ export const helpSections: HelpSection[] = [
 
 export const helpSectionMap = new Map(helpSections.map((section) => [section.slug, section] as const));
 
+const dedupeBy = <T,>(items: T[], getKey: (item: T) => string) => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = getKey(item);
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+};
+
+const mergeHelpSections = (
+  slug: string,
+  eyebrow: string,
+  title: string,
+  summary: string,
+  icon: HelpSection["icon"],
+  accent: HelpSection["accent"],
+  sectionSlugs: string[],
+  searchPhrases: string[],
+  highlights: string[]
+): HelpSection => {
+  const sections = sectionSlugs
+    .map((sectionSlug) => helpSectionMap.get(sectionSlug))
+    .filter((section): section is HelpSection => Boolean(section));
+
+  return {
+    slug,
+    eyebrow,
+    title,
+    summary,
+    icon,
+    accent,
+    keywords: dedupeBy(sections.flatMap((section) => section.keywords), (value) => value.toLowerCase()),
+    searchPhrases: dedupeBy([...searchPhrases, ...sections.flatMap((section) => section.searchPhrases)], (value) => value.toLowerCase()),
+    highlights: dedupeBy([...highlights, ...sections.flatMap((section) => section.highlights)], (value) => value.toLowerCase()),
+    articles: dedupeBy(sections.flatMap((section) => section.articles), (article) => article.slug),
+    questions: dedupeBy(sections.flatMap((section) => section.questions), (question) => question.question.toLowerCase()),
+    links: dedupeBy(sections.flatMap((section) => section.links), (link) => `${link.href}:${link.label}`),
+  };
+};
+
+export const publicHelpSections: HelpSection[] = [
+  mergeHelpSections(
+    "getting-started",
+    "Start here",
+    "Getting Started",
+    "Set up your account, upload your first files, and learn the quickest way to get useful results from Clover.",
+    "spark",
+    "teal",
+    ["getting-started", "troubleshooting"],
+    ["how to start using Clover", "what to upload first", "why Clover looks different after sign in"],
+    ["Set up your account and workspace.", "Upload your first file with confidence.", "Fix common first-run issues quickly."]
+  ),
+  mergeHelpSections(
+    "billing-and-accounts",
+    "Manage access",
+    "Billing and Accounts",
+    "Handle plans, payments, workspaces, and account access so Clover stays connected to the way you manage your finances.",
+    "wallet",
+    "sky",
+    ["accounts-workspaces", "billing-plan"],
+    ["how billing works in Clover", "how to manage my workspace", "how to update my plan"],
+    ["Manage your plan and payment details.", "Organize the right accounts and workspaces.", "Keep access clear when your setup changes."]
+  ),
+  mergeHelpSections(
+    "product-features",
+    "Use Clover",
+    "Product Features",
+    "Learn how Clover helps with uploads, transactions, reports, budgets, split bills, and the everyday parts of tracking money.",
+    "play",
+    "mint",
+    ["importing-reviewing", "transactions-categories", "split-bills", "reports-adviser-goals"],
+    ["how to upload statements", "how to track transactions", "how split bills work", "how to read Clover reports"],
+    ["Upload files and review the results.", "Keep transactions and categories clean.", "Use reports and split bills with less manual work."]
+  ),
+  mergeHelpSections(
+    "security",
+    "Stay protected",
+    "Security",
+    "Understand what happens to your files, how Clover protects your data, and who can access your account information.",
+    "shield",
+    "violet",
+    ["privacy-security-data"],
+    ["is my data safe in Clover", "what happens to uploaded files", "can others access my data"],
+    ["Know where your uploaded files go.", "Understand how Clover protects account data.", "See what access stays private to you."]
+  ),
+];
+
+export const publicHelpSectionMap = new Map(publicHelpSections.map((section) => [section.slug, section] as const));
+
+export const resolveHelpSection = (slug: string) => publicHelpSectionMap.get(slug) ?? helpSectionMap.get(slug) ?? null;
+
 export const getHelpArticleHref = (sectionSlug: string, articleSlug: string, returnTo?: string | null) => {
   const params = new URLSearchParams();
 
@@ -1846,6 +2032,12 @@ export const getHelpSectionImageSrc = (sectionSlug: HelpSection["slug"]) => {
   switch (sectionSlug) {
     case "getting-started":
       return "/help-icons/getting-started.png";
+    case "billing-and-accounts":
+      return "/help-icons/accounts-and-workspaces.png";
+    case "product-features":
+      return "/help-icons/reports-insights-goals.png";
+    case "security":
+      return "/help-icons/privacy-security-data.png";
     case "importing-reviewing":
       return "/help-icons/importing-and-reviewing.png";
     case "transactions-categories":
@@ -1866,10 +2058,10 @@ export const getHelpSectionImageSrc = (sectionSlug: HelpSection["slug"]) => {
 };
 
 export const findHelpSectionArticle = (sectionSlug: string, articleSlug: string) =>
-  helpSectionMap.get(sectionSlug)?.articles.find((article) => article.slug === articleSlug) ?? null;
+  resolveHelpSection(sectionSlug)?.articles.find((article) => article.slug === articleSlug) ?? null;
 
 export const getPopularHelpSearchPhrases = (limit = 8) =>
-  helpSections.flatMap((section) => section.searchPhrases).slice(0, limit);
+  publicHelpSections.flatMap((section) => section.searchPhrases).slice(0, limit);
 
 const normalizeHelpSearchQuery = (query: string) => query.trim().toLowerCase();
 
@@ -1904,7 +2096,7 @@ export const getHelpSearchResults = (query: string, limit = 6): HelpSearchResult
 
   const results: Array<HelpSearchResult & { score: number }> = [];
 
-  for (const section of helpSections) {
+  for (const section of publicHelpSections) {
     const sectionScore = Math.max(
       scoreHelpMatch(normalizedQuery, section.title),
       scoreHelpMatch(normalizedQuery, section.summary),
@@ -1970,7 +2162,7 @@ export const getHelpSearchResults = (query: string, limit = 6): HelpSearchResult
     .map(({ score: _score, ...result }) => result);
 };
 
-export const isHelpSection = (slug: string): slug is HelpSection["slug"] => helpSectionMap.has(slug);
+export const isHelpSection = (slug: string): slug is HelpSection["slug"] => Boolean(resolveHelpSection(slug));
 
 export const isHelpArticleSlug = (sectionSlug: string, articleSlug: string) =>
-  helpSectionMap.get(sectionSlug)?.articles.some((article) => article.slug === articleSlug) ?? false;
+  resolveHelpSection(sectionSlug)?.articles.some((article) => article.slug === articleSlug) ?? false;

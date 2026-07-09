@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { HelpSectionPage } from "@/components/help-section-page";
-import { helpSectionMap, isHelpSection } from "@/lib/help-center";
+import { isHelpSection, resolveHelpSection } from "@/lib/help-center";
 import { resolvePublicAccountState } from "@/lib/public-account-state";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ type HelpSectionPageProps = {
 
 export async function generateMetadata({ params }: HelpSectionPageProps): Promise<Metadata> {
   const resolvedParams = await params;
-  const section = helpSectionMap.get(resolvedParams.section);
+  const section = resolveHelpSection(resolvedParams.section);
 
   if (!section) {
     return {
@@ -49,7 +49,7 @@ export default async function HelpSectionRoute({ params, searchParams }: HelpSec
     notFound();
   }
 
-  const section = helpSectionMap.get(resolvedParams.section);
+  const section = resolveHelpSection(resolvedParams.section);
 
   if (!section) {
     notFound();

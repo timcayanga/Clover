@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { LandingNav } from "@/components/landing-nav";
-import { getHelpHomeHref, type HelpQuestion, type HelpSection } from "@/lib/help-center";
+import { MarketingFooter } from "@/components/marketing-footer";
+import { type HelpQuestion, type HelpSection } from "@/lib/help-center";
 import type { PublicAccountState } from "@/lib/public-account-state";
 
 type HelpSectionPageProps = {
@@ -33,14 +33,20 @@ function AccordionItem({ question }: { question: HelpQuestion }) {
   );
 }
 
-export function HelpSectionPage({ section, returnTo, accountState }: HelpSectionPageProps) {
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M10.5 4.5a6 6 0 1 0 0 12a6 6 0 0 0 0-12Zm0-1.5a7.5 7.5 0 1 1 4.73 13.32l4.22 4.21a.75.75 0 1 1-1.06 1.06l-4.21-4.22A7.5 7.5 0 0 1 10.5 3Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+export function HelpSectionPage({ section, returnTo: _returnTo, accountState }: HelpSectionPageProps) {
   const [query, setQuery] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const homeHref = getHelpHomeHref(returnTo);
-  const backHref = returnTo ?? homeHref;
-  const backLabel = returnTo ? "Back to account" : "Back to help";
   const normalizedQuery = query.trim().toLowerCase();
-  const quickPrompts = useMemo(() => section.searchPhrases.slice(0, 4), [section.searchPhrases]);
 
   const filteredQuestions = useMemo(() => {
     if (!normalizedQuery) {
@@ -70,49 +76,13 @@ export function HelpSectionPage({ section, returnTo, accountState }: HelpSection
 
         <LandingNav accountState={accountState} />
 
-        <div className="help-page__context-links" aria-label="Help context links">
-          <Link className="help-page__nav-link" href={backHref} prefetch={false}>
-            {backLabel}
-          </Link>
-          <Link className="help-page__nav-link" href={homeHref} prefetch={false}>
-            Help home
-          </Link>
-          <Link className="help-page__nav-link" href="/contact-us" prefetch={false}>
-            Contact us
-          </Link>
-        </div>
-
         <section className={`help-section-page__intro help-section-page__intro--${section.accent}`}>
           <div className="help-section-page__intro-copy">
-            <p className="eyebrow">{section.eyebrow}</p>
             <h1>{section.title}</h1>
             <p>{section.summary}</p>
-            <div className="help-section-page__intro-stats" aria-label="Section summary">
-              <span>{section.articles.length} article{section.articles.length === 1 ? "" : "s"}</span>
-              <span>{section.questions.length} questions</span>
-              <span>{section.searchPhrases.length} search prompts</span>
-            </div>
-          </div>
-
-          <div className="help-section-page__prompt-panel" aria-label="Popular searches">
-            <div className="help-section-page__prompt-panel-head">
-              <p className="help-section-page__prompt-label">Popular searches</p>
-              <p>Tap one to fill the search bar instantly.</p>
-            </div>
-
-            <div className="help-section-page__prompt-list">
-              {quickPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  className="help-section-page__prompt"
-                  type="button"
-                  onClick={() => {
-                    setQuery(prompt);
-                    searchInputRef.current?.focus();
-                  }}
-                >
-                  {prompt}
-                </button>
+            <div className="help-section-page__intro-points" aria-label="Section highlights">
+              {section.highlights.slice(0, 3).map((highlight) => (
+                <span key={highlight}>{highlight}</span>
               ))}
             </div>
           </div>
@@ -120,23 +90,18 @@ export function HelpSectionPage({ section, returnTo, accountState }: HelpSection
 
         <div className="help-section-page__search-area">
           <label className="help-search help-search--section" htmlFor="help-section-search">
+            <span className="help-search__icon">
+              <SearchIcon />
+            </span>
             <span className="sr-only">Search within this help section</span>
             <input
-              ref={searchInputRef}
               id="help-section-search"
               type="search"
-              placeholder={`Search ${section.title.toLowerCase()}`}
+              placeholder="Search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
-
-          <div className="help-section-page__search-meta" aria-live="polite">
-            <span>
-              Showing {filteredQuestions.length} of {section.questions.length} questions
-            </span>
-            {normalizedQuery ? <span>Results update as you type.</span> : <span>Start with a prompt or type your own.</span>}
-          </div>
         </div>
 
         <section className="help-section-faq" aria-label="Questions and answers">
@@ -155,19 +120,7 @@ export function HelpSectionPage({ section, returnTo, accountState }: HelpSection
         </section>
       </div>
 
-      <footer className="landing-footer" aria-label="Legal links">
-        <nav className="landing-footer__nav" aria-label="Legal">
-          <Link href="/contact-us" prefetch={false}>
-            Contact Us
-          </Link>
-          <Link href="/privacy-policy" prefetch={false}>
-            Privacy Policy
-          </Link>
-          <Link href="/terms-of-service" prefetch={false}>
-            Terms of Service
-          </Link>
-        </nav>
-      </footer>
+      <MarketingFooter />
     </main>
   );
 }

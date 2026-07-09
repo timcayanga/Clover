@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { HelpArticlePage } from "@/components/help-article-page";
-import { findHelpSectionArticle, helpSectionMap, isHelpArticleSlug, isHelpSection } from "@/lib/help-center";
+import { findHelpSectionArticle, isHelpArticleSlug, isHelpSection, resolveHelpSection } from "@/lib/help-center";
 import { resolvePublicAccountState } from "@/lib/public-account-state";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ type HelpArticlePageProps = {
 
 export async function generateMetadata({ params }: HelpArticlePageProps): Promise<Metadata> {
   const resolvedParams = await params;
-  const section = helpSectionMap.get(resolvedParams.section);
+  const section = resolveHelpSection(resolvedParams.section);
   const article = findHelpSectionArticle(resolvedParams.section, resolvedParams.article);
 
   if (!section || !article) {
@@ -53,7 +53,7 @@ export default async function HelpArticleRoute({ params, searchParams }: HelpArt
     notFound();
   }
 
-  const section = helpSectionMap.get(resolvedParams.section);
+  const section = resolveHelpSection(resolvedParams.section);
   const article = findHelpSectionArticle(resolvedParams.section, resolvedParams.article);
 
   if (!section || !article) {

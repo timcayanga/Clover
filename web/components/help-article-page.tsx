@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LandingNav } from "@/components/landing-nav";
-import { getHelpHomeHref, getHelpSectionHref, type HelpArticle, type HelpSection } from "@/lib/help-center";
+import { MarketingFooter } from "@/components/marketing-footer";
+import { type HelpArticle, type HelpSection } from "@/lib/help-center";
 import type { PublicAccountState } from "@/lib/public-account-state";
 
 type HelpArticlePageProps = {
@@ -25,11 +26,7 @@ function ArticleVisual({ section, article }: { section: HelpSection; article: He
   );
 }
 
-export function HelpArticlePage({ section, article, returnTo, accountState }: HelpArticlePageProps) {
-  const homeHref = getHelpHomeHref(returnTo);
-  const sectionHref = getHelpSectionHref(section.slug, returnTo);
-  const backHref = returnTo ?? sectionHref;
-  const backLabel = returnTo ? "Back to account" : "Back to section";
+export function HelpArticlePage({ section, article, returnTo: _returnTo, accountState }: HelpArticlePageProps) {
   const articleSchema = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -49,34 +46,11 @@ export function HelpArticlePage({ section, article, returnTo, accountState }: He
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
         <LandingNav accountState={accountState} />
 
-        <div className="help-page__context-links" aria-label="Help context links">
-          <Link className="help-page__nav-link" href={backHref} prefetch={false}>
-            {backLabel}
-          </Link>
-          <Link className="help-page__nav-link" href={sectionHref} prefetch={false}>
-            Back to section
-          </Link>
-          <Link className="help-page__nav-link" href={homeHref} prefetch={false}>
-            Help home
-          </Link>
-          <Link className="help-page__nav-link" href="/contact-us" prefetch={false}>
-            Contact us
-          </Link>
-        </div>
-
         <section className="help-article-hero glass">
           <div className="help-article-hero__copy">
             <p className="eyebrow">{section.eyebrow}</p>
             <h1>{article.title}</h1>
             <p>{article.summary}</p>
-            <div className="help-article-hero__actions">
-              <Link className="button button-primary button-pill" href={backHref} prefetch={false}>
-                {backLabel}
-              </Link>
-              <Link className="button button-secondary button-pill" href={sectionHref} prefetch={false}>
-                Back to section
-              </Link>
-            </div>
           </div>
 
           <ArticleVisual section={section} article={article} />
@@ -143,19 +117,7 @@ export function HelpArticlePage({ section, article, returnTo, accountState }: He
         </section>
       </div>
 
-      <footer className="landing-footer" aria-label="Legal links">
-        <nav className="landing-footer__nav" aria-label="Legal">
-          <Link href="/contact-us" prefetch={false}>
-            Contact Us
-          </Link>
-          <Link href="/privacy-policy" prefetch={false}>
-            Privacy Policy
-          </Link>
-          <Link href="/terms-of-service" prefetch={false}>
-            Terms of Service
-          </Link>
-        </nav>
-      </footer>
+      <MarketingFooter />
     </main>
   );
 }

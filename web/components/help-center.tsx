@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { getHelpSectionHref, getHelpSectionImageSrc, helpSections, type HelpSection } from "@/lib/help-center";
-import { PublicAccountActions } from "@/components/public-account-actions";
+import { LandingNav } from "@/components/landing-nav";
+import { MarketingFooter } from "@/components/marketing-footer";
+import { getHelpSectionHref, getHelpSectionImageSrc, publicHelpSections, type HelpSection } from "@/lib/help-center";
 import type { PublicAccountState } from "@/lib/public-account-state";
 
 type HelpCenterProps = {
@@ -38,6 +39,17 @@ function matchesQuery(section: HelpSection, query: string) {
   return haystack.includes(query);
 }
 
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M10.5 4.5a6 6 0 1 0 0 12a6 6 0 0 0 0-12Zm0-1.5a7.5 7.5 0 1 1 4.73 13.32l4.22 4.21a.75.75 0 1 1-1.06 1.06l-4.21-4.22A7.5 7.5 0 0 1 10.5 3Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
   const [query, setQuery] = useState("");
 
@@ -45,61 +57,26 @@ export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
 
   const filteredSections = useMemo(() => {
     if (!normalizedQuery) {
-      return helpSections;
+      return publicHelpSections;
     }
 
-    return helpSections.filter((section) => matchesQuery(section, normalizedQuery));
+    return publicHelpSections.filter((section) => matchesQuery(section, normalizedQuery));
   }, [normalizedQuery]);
 
-  const heroBackHref = returnTo ?? "/";
   return (
     <main className="help-page">
       <div className="help-page__inner">
-        <nav className="help-page__nav" aria-label="Help page navigation">
-          <Link className="help-page__back-button" href={heroBackHref} aria-label="Go back" prefetch={false}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m15 6-6 6 6 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-            </svg>
-          </Link>
-          <Link className="landing-brand" href={heroBackHref} aria-label="Clover home" prefetch={false}>
-            <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
-            <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" loading="eager" fetchPriority="high" />
-          </Link>
-          <PublicAccountActions accountState={accountState} />
-        </nav>
-
-        <section className="help-hero help-hero--simple glass" aria-labelledby="help-center-title">
-          <div className="help-hero__copy">
-            <p className="eyebrow">Help Center</p>
-            <h1 id="help-center-title">Find the answer that moves you forward.</h1>
-            <p className="help-hero__lede">
-              Get help with statements, receipts, screenshots, split bills, reports, billing, privacy, and the most common Clover troubleshooting
-              steps.
-            </p>
-            <div className="help-hero__actions help-hero__actions--simple">
-              <Link className="button button-primary button-pill" href={getHelpSectionHref("getting-started", returnTo)} prefetch={false}>
-                Getting started
-              </Link>
-              <Link className="button button-secondary button-pill" href={getHelpSectionHref("importing-reviewing", returnTo)} prefetch={false}>
-                Imports
-              </Link>
-              <Link className="button button-secondary button-pill" href={getHelpSectionHref("split-bills", returnTo)} prefetch={false}>
-                Split bills
-              </Link>
-            </div>
-          </div>
-          <div className="help-hero__note">
-            Search for a topic or jump into a section to find step-by-step answers, related links, and support that matches the way Clover works
-            today.
-          </div>
-        </section>
+        <LandingNav accountState={accountState} />
 
         <label className="help-search help-search--hero" htmlFor="help-search">
+          <span className="help-search__icon">
+            <SearchIcon />
+          </span>
           <span className="sr-only">Search help</span>
           <input
             id="help-search"
             type="search"
-            placeholder="Search Clover help"
+            placeholder="Search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -116,18 +93,17 @@ export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
                 loading="lazy"
                 decoding="async"
               />
-              <h3>{section.title}</h3>
+              <div className="help-card__content">
+                <p className="help-card__eyebrow">{section.eyebrow}</p>
+                <h3>{section.title}</h3>
+                <p>{section.summary}</p>
+              </div>
             </Link>
           ))}
         </section>
-
-        <div className="help-page__footer-cta">
-          <Link className="help-page__contact-link button button-secondary button-small" href="/contact-us" prefetch={false}>
-            Contact us
-          </Link>
-        </div>
-
       </div>
+
+      <MarketingFooter />
     </main>
   );
 }
