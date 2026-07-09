@@ -41,7 +41,7 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     heroEyebrow: "Track finances",
     heroTitle: "Bring months of finances into one place.",
     heroCopy:
-      "Step 1: Upload the records and accounts you already have. Step 2: Start tracking from real history instead of a blank page.",
+      "Upload the records and accounts you already have, and Clover helps you start from real history instead of a blank page.",
     heroPlaceholder: "Placeholder for a Track Finances overview image",
     accent: "teal",
     sections: [
@@ -50,8 +50,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         eyebrow: "File uploads",
         title: "Start with the records you already have.",
         body: [
-          "Step 1: Upload statements, receipts, screenshots, or exports.",
-          "Step 2: Clover turns them into usable data so you do not have to type everything by hand.",
+          "Upload statements, receipts, screenshots, or exports instead of building everything manually.",
+          "Clover turns them into usable data so you can start seeing results faster.",
         ],
         placeholder: "Placeholder for file upload image",
       },
@@ -60,8 +60,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         eyebrow: "Transactions",
         title: "Review your transactions faster.",
         body: [
-          "Step 1: Review categories, merchant names, and transaction details in one place.",
-          "Step 2: Fix what matters and keep the final result under your control.",
+          "Review categories, merchant names, and transaction details in one place.",
+          "Fix what matters and keep the final result under your control.",
         ],
         placeholder: "Placeholder for transactions review image",
       },
@@ -70,8 +70,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         eyebrow: "Accounts and visibility",
         title: "Keep your accounts and repeating activity clear.",
         body: [
-          "Step 1: Organize accounts, spot repeating bills, and keep investments visible.",
-          "Step 2: See what is fixed, what changed, and what needs attention next from one account view.",
+          "Organize accounts, spot repeating bills, and keep investments visible without jumping between tools.",
+          "That makes it easier to see what is fixed, what changed, and what needs attention next from one account view.",
         ],
         placeholder: "Placeholder for accounts, recurring activity, and investments image",
       },
@@ -85,7 +85,7 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     heroEyebrow: "Gain insights",
     heroTitle: "See what your money is telling you.",
     heroCopy:
-      "Step 1: Turn your data into reports and insights. Step 2: See patterns faster and decide what to do next.",
+      "Turn your data into reports and insights so you can see patterns faster and decide what to do next.",
     heroPlaceholder: "Placeholder for a Gain Insights overview image",
     accent: "gold",
     sections: [
@@ -94,8 +94,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         eyebrow: "Reports",
         title: "See where your money goes.",
         body: [
-          "Step 1: Open reports by category, merchant, account, or time.",
-          "Step 2: See what changed and where most of your money is going.",
+          "Open reports by category, merchant, account, or time whenever you want a clearer breakdown.",
+          "You can quickly see what changed and where most of your money is going.",
         ],
         placeholder: "Placeholder for reports image",
       },
@@ -104,8 +104,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         eyebrow: "Adviser",
         title: "Catch issues earlier.",
         body: [
-          "Step 1: Let Adviser surface spending spikes, repeating costs, and unusual changes.",
-          "Step 2: Focus on what needs attention without digging through everything yourself.",
+          "Adviser can surface spending spikes, repeating costs, and unusual changes that deserve a closer look.",
+          "Instead of digging through everything yourself, you can focus on what needs attention first.",
         ],
         placeholder: "Placeholder for Adviser image",
       },
@@ -114,8 +114,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         eyebrow: "Progress",
         title: "Turn insights into your next step.",
         body: [
-          "Step 1: Use what you learn to adjust spending, budgets, savings, or investing.",
-          "Step 2: Keep moving with a clearer picture of your account.",
+          "Use what you learn to adjust spending, budgets, savings, or investing.",
+          "The point is not just to look at data, but to keep moving with a clearer picture of your account.",
         ],
         placeholder: "Placeholder for progress and next-step image",
       },
@@ -129,7 +129,7 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     heroEyebrow: "Split bills",
     heroTitle: "Share expenses without the hassle.",
     heroCopy:
-      "Step 1: Add a shared expense. Step 2: Split it clearly and keep track of what is still unpaid.",
+      "Add a shared expense, split it clearly, and keep track of what is still unpaid without chasing people manually.",
     heroPlaceholder: "Placeholder for Split Bills image",
     accent: "mint",
     sections: [],
@@ -142,7 +142,7 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     heroEyebrow: "Budgeting",
     heroTitle: "Create budgets that match real life.",
     heroCopy:
-      "Step 1: Use your real spending history to set better limits. Step 2: Watch progress and stay closer to your goals.",
+      "Use your real spending history to set better limits, watch progress, and stay closer to your goals.",
     heroPlaceholder: "Placeholder for Budgeting image",
     accent: "sky",
     sections: [],
@@ -155,7 +155,7 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     heroEyebrow: "Clover Pro",
     heroTitle: "Get more when your finances need more.",
     heroCopy:
-      "Step 1: Unlock more room and deeper reporting. Step 2: Add investment tools when you need a fuller account.",
+      "Pro gives you more room, deeper reporting, and investment tools when you need a fuller account.",
     heroPlaceholder: "Placeholder for a Pro overview image",
     accent: "violet",
     featured: true,
@@ -165,8 +165,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         eyebrow: "Advanced reporting",
         title: "See more detail when you need it.",
         body: [
-          "Step 1: Compare time periods and trends in more detail.",
-          "Step 2: Make decisions with a fuller picture of your finances.",
+          "Compare time periods and trends in more detail when basic tracking is no longer enough.",
+          "That gives you a fuller picture when you need to make bigger financial decisions.",
         ],
         placeholder: "Placeholder for advanced reporting image",
       },
@@ -175,8 +175,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         eyebrow: "Higher limits",
         title: "Keep more of your financial history in Clover.",
         body: [
-          "Step 1: Add more uploads, more accounts, and more history.",
-          "Step 2: Keep using the same account without running into limits too quickly.",
+          "Add more uploads, more accounts, and more history as your finances grow.",
+          "You can keep using the same account without running into limits too quickly.",
         ],
         placeholder: "Placeholder for higher limits image",
       },
@@ -185,8 +185,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         eyebrow: "Investment tools",
         title: "Keep investing in the same place.",
         body: [
-          "Step 1: Add investment tools to the rest of your finances.",
-          "Step 2: See spending and long-term money in the same account.",
+          "Add investment tools alongside the rest of your finances instead of splitting everything across separate apps.",
+          "That makes it easier to see spending and long-term money in the same account.",
         ],
         placeholder: "Placeholder for investment tools image",
       },
@@ -200,10 +200,51 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     heroEyebrow: "Security",
     heroTitle: "Keep your data safe and secure.",
     heroCopy:
-      "Step 1: Keep account access protected. Step 2: Keep imported data reviewable and important changes easy to trace.",
+      "Clover is built to protect account access, keep uploaded data reviewable, and give you confidence that your information stays private.",
     heroPlaceholder: "Placeholder for Security image",
     accent: "coral",
-    sections: [],
+    sections: [
+      {
+        id: "uploaded-files",
+        eyebrow: "Uploaded files",
+        title: "What happens to the files you upload?",
+        body: [
+          "When you upload a statement, receipt, or screenshot, Clover uses it to extract the financial details you need for tracking.",
+          "The original file stays tied to your import so you can review where the data came from when you need it.",
+        ],
+        placeholder: "Placeholder for uploaded files security image",
+      },
+      {
+        id: "data-safety",
+        eyebrow: "Data safety",
+        title: "Your data stays private to your account.",
+        body: [
+          "Your financial data is meant for your account and your review, not for other users to browse or access.",
+          "That means the information you upload stays connected to your own Clover account unless you explicitly share something through a product feature.",
+        ],
+        placeholder: "Placeholder for private account access image",
+      },
+      {
+        id: "protection",
+        eyebrow: "Protection",
+        title: "Security is built into how Clover handles your data.",
+        body: [
+          "Clover is designed to protect account access, preserve the link between uploaded files and imported data, and make important changes easier to trace.",
+          "That helps keep your information secure while also making it easier for you to review and verify what Clover is showing you.",
+        ],
+        placeholder: "Placeholder for security protections image",
+      },
+      {
+        id: "access-control",
+        eyebrow: "Access control",
+        title: "Can other people access your data?",
+        body: [
+          "Other people should not be able to access your financial data just by using Clover.",
+          "Your information stays tied to your own account, and shared access only happens when a specific Clover feature is built for sharing, like split bills.",
+        ],
+        placeholder: "Placeholder for account access control image",
+      },
+    ],
   },
 ];
 
