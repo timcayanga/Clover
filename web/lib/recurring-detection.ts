@@ -67,15 +67,15 @@ export type RecurringObligationType =
   | "general";
 
 const recurringKeywordPattern =
-  /\b(rent|internet|bill|billing|utility|utilities|subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|installment|statement\s+payment|payment\s+due|electric|water|phone|mobile\s+plan|broadband|wifi|insurance|mortgage|loan|repayment|amortization|tuition|gym|fitness|fee|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|prime|apple\s+services?)\b/i;
+  /\b(rent|internet|bill|billing|utility|utilities|subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|installment|statement\s+payment|payment\s+due|electric|water|phone|mobile\s+plan|broadband|wifi|insurance|mortgage|loan|repayment|amortization|tuition|gym|fitness|fee|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|prime|apple\s+services?|figma|zoom|dropbox|airalo|slack)\b/i;
 const recurringExclusionPattern =
   /\b(transfer|instapay|fund transfer|outward|inward|cash payment|bills payment|payment to card|card payment|atm withdrawal|cash advance|top up|cash in|incoming credit|refund|reversal)\b/i;
 const recurringNoiseTitlePattern =
   /^(transfer from|transfer to|interbank transfer|instapay ?fee|load purchase|in app purchase for mobile|atm withdrawal|withholding tax|interest applied|mobile load)/i;
 const recurringRescuePattern =
-  /\b(subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|rent|internet|broadband|wifi|phone|mobile\s+plan|electric|water|utility|utilities|insurance|mortgage|loan|repayment|amortization|installment|statement\s+payment|payment\s+due|tuition|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|apple\s+services?)\b/i;
+  /\b(subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|rent|internet|broadband|wifi|phone|mobile\s+plan|electric|water|utility|utilities|insurance|mortgage|loan|repayment|amortization|installment|statement\s+payment|payment\s+due|tuition|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|apple\s+services?|figma|zoom|dropbox|airalo|slack)\b/i;
 const recurringPositiveTransferPattern =
-  /\b(statement\s+payment|payment\s+due|loan|repayment|amortization|installment|insurance|premium|rent|internet|phone|electric|water|utility|utilities|subscription|membership|dues|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|canva|linkedin|pldt|meralco|globe|smart|maynilad)\b/i;
+  /\b(statement\s+payment|payment\s+due|loan|repayment|amortization|installment|insurance|premium|rent|internet|phone|electric|water|utility|utilities|subscription|membership|dues|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|canva|linkedin|pldt|meralco|globe|smart|maynilad|figma|zoom|dropbox|airalo|slack)\b/i;
 const recurringCreditLikeExclusionPattern =
   /\b(salary|payroll|bonus|interest earned|interest applied|interest credited|incoming credit|received money|cash deposit|deposit|refund|reversal|credit memo)\b/i;
 const recurringCategoryRescueSet = new Set(["bills & utilities", "insurance", "loans", "housing", "education", "subscriptions", "health & wellness"]);
@@ -92,6 +92,11 @@ const recurringMerchantAliases = [
   { pattern: /\bgoogle\b.*\b(one|storage|workspace|subscription)?\b/i, label: "Google" },
   { pattern: /\badobe\b/i, label: "Adobe" },
   { pattern: /\bcanva\b/i, label: "Canva" },
+  { pattern: /\bfigma\b/i, label: "Figma" },
+  { pattern: /\bzoom\b/i, label: "Zoom" },
+  { pattern: /\bdropbox\b/i, label: "Dropbox" },
+  { pattern: /\bairalo\b/i, label: "Airalo" },
+  { pattern: /\bslack\b/i, label: "Slack" },
   { pattern: /\bnotion\b/i, label: "Notion" },
   { pattern: /\bscribd\b/i, label: "Scribd" },
   { pattern: /\blinkedin\b/i, label: "LinkedIn" },
@@ -289,7 +294,7 @@ export const classifyRecurringObligation = (params: {
   const normalizedText = params.text.toLowerCase();
   const categories = new Set((params.categoryNames ?? []).map((value) => value.toLowerCase()));
 
-  if (/\b(netflix|spotify|youtube|disney|prime|apple music|icloud|google one|chatgpt|canva|adobe|scribd|linkedin|notion|subscription|subscr|gym|fitness)\b/.test(normalizedText)) {
+  if (/\b(netflix|spotify|youtube|disney|prime|apple music|icloud|google one|chatgpt|canva|adobe|scribd|linkedin|notion|figma|zoom|dropbox|airalo|slack|subscription|subscr|gym|fitness)\b/.test(normalizedText)) {
     return "subscription";
   }
 

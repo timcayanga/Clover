@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { DATA_ENGINE_VERSION } from "@/lib/data-engine";
 import { parseDateValue } from "@/lib/import-parser";
+import { getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
 
 export type DataQaSource = "import_processing" | "import_confirmation" | "local_training" | "replay" | "manual";
 
@@ -127,6 +128,8 @@ export type DataQaEvaluation = {
     categoryFallbackRate: number;
     transferCategoryRate: number;
     otherCategoryRate: number;
+    suspiciousTransferRate: number;
+    recoverableOtherRate: number;
     lowConfidenceRate: number;
     repairCandidateCount: number;
     hasStatementIdentity: boolean;
@@ -170,6 +173,7 @@ const buildRepairCandidates = (rows: DataQaParsedRow[]) =>
       const category = normalizeKey(row.categoryName);
       const merchantRaw = normalizeText(row.merchantRaw ?? row.description ?? "");
       const merchantClean = normalizeText(row.merchantClean ?? "");
+      const merchantHint = getStrongMerchantCategoryHint(merchantClean || merchantRaw);
       const confidence = typeof row.confidence === "number" ? row.confidence : 0;
       const reasons: string[] = [];
       let score = 0;
@@ -182,6 +186,16 @@ const buildRepairCandidates = (rows: DataQaParsedRow[]) =>
       if (category === "transfers") {
         reasons.push("transfer_category");
         score += 2;
+      }
+
+      if ((category === "other" || !category) && merchantHint) {
+        reasons.push("recoverable_other");
+        score += 3;
+      }
+
+      if (category === "transfers" && merchantHint && normalizeKey(merchantHint) !== "transfers") {
+        reasons.push("transfer_overreach");
+        score += 3;
       }
 
       if (!merchantClean || merchantClean.toLowerCase() === merchantRaw.toLowerCase()) {
@@ -199,6 +213,7 @@ const buildRepairCandidates = (rows: DataQaParsedRow[]) =>
         merchantRaw,
         merchantClean: merchantClean || null,
         categoryName: normalizeText(row.categoryName) || null,
+        merchantHint: merchantHint ?? null,
         confidence,
         reasons,
         score,
@@ -292,6 +307,27 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
     : 0;
   const otherCategoryRate = rowCount > 0
     ? countRowsWithValue(rows, (row) => normalizeKey(row.categoryName) === "other") / rowCount
+    : 0;
+  const suspiciousTransferRate = rowCount > 0
+    ? countRowsWithValue(rows, (row) => {
+        if (normalizeKey(row.categoryName) !== "transfers") {
+          return false;
+        }
+
+        const merchantText = normalizeText(row.merchantClean ?? row.merchantRaw ?? row.description ?? "");
+        const merchantHint = getStrongMerchantCategoryHint(merchantText);
+        return Boolean(merchantHint && normalizeKey(merchantHint) !== "transfers");
+      }) / rowCount
+    : 0;
+  const recoverableOtherRate = rowCount > 0
+    ? countRowsWithValue(rows, (row) => {
+        if (normalizeKey(row.categoryName) !== "other") {
+          return false;
+        }
+
+        const merchantText = normalizeText(row.merchantClean ?? row.merchantRaw ?? row.description ?? "");
+        return Boolean(getStrongMerchantCategoryHint(merchantText));
+      }) / rowCount
     : 0;
   const lowConfidenceRate = rowCount > 0
     ? countRowsWithValue(rows, (row) => (typeof row.confidence === "number" ? row.confidence < 85 : true)) / rowCount
@@ -475,6 +511,22 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
     });
   }
 
+  if (recoverableOtherRate > 0.05) {
+    findings.push({
+      code: "transactions.recoverable_other_rows",
+      severity: rowCount >= 5 ? "warning" : "info",
+      field: "categoryName",
+      message: "Some rows landed in Other even though their merchant text contains a strong category hint.",
+      observedValue: { recoverableOtherRate },
+      expectedValue: { maxRecoverableOtherRate: 0.05 },
+      suggestion: "Run the merchant-hint rescue before finalizing Other so obvious brands like Grab, Dunkin, or LinkedIn do not fall through.",
+      confidence: 84,
+      metadata: {
+        source: input.source,
+      },
+    });
+  }
+
   if (transferCategoryRate > 0.5) {
     findings.push({
       code: "transactions.transfer_category_rate_high",
@@ -485,6 +537,22 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       expectedValue: { maxTransferCategoryRate: 0.5 },
       suggestion: "Check whether transfer heuristics are swallowing merchant-coded purchases, subscriptions, and transportation rows on unseen files.",
       confidence: 76,
+      metadata: {
+        source: input.source,
+      },
+    });
+  }
+
+  if (suspiciousTransferRate > 0.05) {
+    findings.push({
+      code: "transactions.transfer_overreach",
+      severity: rowCount >= 5 ? "warning" : "info",
+      field: "categoryName",
+      message: "Some rows were categorized as Transfers even though their merchant text points to a stronger non-transfer category.",
+      observedValue: { suspiciousTransferRate },
+      expectedValue: { maxSuspiciousTransferRate: 0.05 },
+      suggestion: "Require stronger transfer evidence before overriding specific merchant hints, especially on unseen all-caps merchant names.",
+      confidence: 85,
       metadata: {
         source: input.source,
       },
@@ -652,6 +720,8 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       categoryFallbackRate,
       transferCategoryRate,
       otherCategoryRate,
+      suspiciousTransferRate,
+      recoverableOtherRate,
       lowConfidenceRate,
       repairCandidateCount: repairCandidates.length,
       hasStatementIdentity,
@@ -683,6 +753,8 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       categoryFallbackRate,
       transferCategoryRate,
       otherCategoryRate,
+      suspiciousTransferRate,
+      recoverableOtherRate,
       lowConfidenceRate,
       repairCandidateCount: repairCandidates.length,
       hasStatementIdentity,

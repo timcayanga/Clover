@@ -15,7 +15,12 @@ import {
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
-import { getSharedMerchantCategoryHint, isLikelyPersonTransferName } from "@/lib/merchant-category-hints";
+import {
+  getSharedMerchantCategoryHint,
+  getStrongMerchantCategoryHint,
+  isLikelyPersonTransferName,
+  shouldTreatAsTransferDescription,
+} from "@/lib/merchant-category-hints";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
@@ -515,8 +520,13 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
   const hasForeignMerchantCurrencyContext =
     /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
+  const strongHint = getStrongMerchantCategoryHint(merchantText);
 
-  if (isLikelyPersonTransferName(merchantText)) {
+  if (strongHint) {
+    return strongHint;
+  }
+
+  if (shouldTreatAsTransferDescription(merchantText)) {
     return "Transfers";
   }
 
@@ -1437,9 +1447,11 @@ export const guessCategoryFallback = (description: string, type: TransactionType
     /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
   const hasForeignMerchantCurrencyContext =
     /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
+  const strongHint = getStrongMerchantCategoryHint(description);
+  if (strongHint) return strongHint;
   const sharedCategoryHint = getSharedMerchantCategoryHint(description);
   if (sharedCategoryHint) return sharedCategoryHint;
-  if (isLikelyPersonTransferName(description)) return "Transfers";
+  if (shouldTreatAsTransferDescription(description)) return "Transfers";
   const override = getHardcodedCategoryOverride(description);
   if (override) return override;
   if (/deposit to gsave|withdraw from gsave|seamoney credit|maribank credit/.test(lower)) return "Financial";
@@ -1493,6 +1505,10 @@ const GENERIC_MERCHANT_RAIL_KEYS = new Set(["paypal", "grab", "grabpay", "gcash"
 const isGenericCategoryName = (value: string | null | undefined) => GENERIC_CATEGORY_NAMES.has(String(value ?? "").trim().toLowerCase());
 
 const isExplicitTransferLikeDescription = (value: string | null | undefined) => {
+  if (getStrongMerchantCategoryHint(String(value ?? ""))) {
+    return false;
+  }
+
   const lower = normalizeWhitespace(String(value ?? "")).toLowerCase();
   const compact = lower.replace(/\s+/g, "");
   return (
@@ -1502,7 +1518,7 @@ const isExplicitTransferLikeDescription = (value: string | null | undefined) => 
     /incominginterbanktransfer|outgoinginterbanktransfer|incomingtransfer|outgoingtransfer|fundtransfer|wallettransfer|banktransfer|gcashcashin|cashin/.test(
       compact
     ) ||
-    isLikelyPersonTransferName(lower)
+    shouldTreatAsTransferDescription(lower)
   );
 };
 

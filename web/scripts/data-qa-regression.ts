@@ -162,6 +162,58 @@ const buildUnseenMerchantSample = (): DataQaRunInput => ({
   },
 });
 
+const buildTransferOverreachSample = (): DataQaRunInput => ({
+  workspaceId: "workspace-test",
+  importFileId: "import-transfer-overreach",
+  source: "local_training",
+  fileName: "new-credit-card.pdf",
+  fileType: "application/pdf",
+  parserVersion: "v2",
+  parsedRows: [
+    {
+      date: "2026-03-02",
+      amount: "-480.00",
+      merchantRaw: "GRABCAR PH",
+      merchantClean: "GRABCAR PH",
+      categoryName: "Transfers",
+      type: "expense",
+      confidence: 79,
+    },
+    {
+      date: "2026-03-03",
+      amount: "-220.00",
+      merchantRaw: "DUNKIN DONUTS BGC",
+      merchantClean: "DUNKIN DONUTS BGC",
+      categoryName: "Other",
+      type: "expense",
+      confidence: 78,
+    },
+    {
+      date: "2026-03-04",
+      amount: "-399.00",
+      merchantRaw: "PAYPAL * LINKEDIN PREMIUM",
+      merchantClean: "PAYPAL * LINKEDIN PREMIUM",
+      categoryName: "Transfers",
+      type: "expense",
+      confidence: 77,
+    },
+  ],
+  metadata: {
+    institution: "BPI",
+    accountNumber: "4444333322221111",
+    accountName: "BPI 1111",
+    accountType: "credit_card",
+    startDate: "2026-03-01",
+    endDate: "2026-03-31",
+    confidence: 88,
+  },
+  timings: {
+    totalMs: 1400,
+    parsingMs: 900,
+    usedDeterministicParser: true,
+  },
+});
+
 const buildImageSample = (): DataQaRunInput => ({
   workspaceId: "workspace-test",
   importFileId: "import-image-statement",
@@ -408,6 +460,16 @@ const main = async () => {
     "the unseen-merchant sample should flag high Transfers-category drift"
   );
   assert.ok(unseenMerchantSample.metrics.repairCandidateCount > 0, "the unseen-merchant sample should surface repair candidates");
+
+  const transferOverreachSample = evaluateDataQaRun(buildTransferOverreachSample());
+  assert.ok(
+    transferOverreachSample.findings.some((finding) => finding.code === "transactions.transfer_overreach"),
+    "the transfer-overreach sample should flag transfer heuristics swallowing strong merchant hints"
+  );
+  assert.ok(
+    transferOverreachSample.findings.some((finding) => finding.code === "transactions.recoverable_other_rows"),
+    "the transfer-overreach sample should flag Other rows that are recoverable from merchant hints"
+  );
 
   console.log("data-qa regression passed");
 };

@@ -55,11 +55,90 @@ const matchesCategoryHint = (value: string, patterns: { lower?: RegExp; compact?
   );
 };
 
+const matchesTransferContext = (value: string) =>
+  matchesCategoryHint(value, {
+    lower:
+      /\b(transfer|instapay|pesonet|fund\s+transfer|wallet\s+transfer|bank\s+transfer|incoming\s+transfer|outgoing\s+transfer|incoming\s+interbank\s+transfer|outgoing\s+interbank\s+transfer|remittance|send\s+money|cash\s+in|cash\s+out|statement\s+payment|payment\s*-\s*thank\s+you|card\s+payment|payment\s+to\s+card|credit\s+to\s+cash|edl\/?mbpay)\b/,
+    compact:
+      /transfer|instapay|pesonet|fundtransfer|wallettransfer|banktransfer|incomingtransfer|outgoingtransfer|incominginterbanktransfer|outgoinginterbanktransfer|remittance|sendmoney|cashin|cashout|statementpayment|paymentthankyou|cardpayment|paymenttocard|credittocash|edlmbpay/,
+  });
+
 const getSpecificMerchantCategoryHint = (value: string) => {
   for (const hint of SPECIFIC_MERCHANT_CATEGORY_HINTS) {
     if (matchesCategoryHint(value, { lower: hint.lower, compact: hint.compact })) {
       return hint.category;
     }
+  }
+
+  return null;
+};
+
+export const getStrongMerchantCategoryHint = (value: string): string | null => {
+  const specificHint = getSpecificMerchantCategoryHint(value);
+  if (specificHint && specificHint !== "Transfers" && specificHint !== "Other") {
+    return specificHint;
+  }
+
+  if (
+    matchesCategoryHint(value, {
+      lower:
+        /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|apollo\s+bay\s+seafood|wootea|liberty\s+oil\s+convenience|iga\s+supermarkets?|caretaker'?s\s+cottage|lee'?s\s+dumplings|samyan\s+mitrtown|jacks\s+of\s+bath|vesper|black\s+cabin\s+bar|coco\s+group|coco\s+dewata|nat'?s\s+rustic|moonlit\s+sanctuary|bakery|bistro|kitchen|ramen|noodle|tea\s+house|burger|pizza|steak|grill|canteen|eatery|food\s+court|brunch|breakfast|lunch|dinner|dunkin(?:\s+donuts?)?|krispy\s+kreme|jollibee|chowking|mang\s+inasal|burger\s+king|foodpanda|grabfood|ubereats?|doordash|pickaroo|starbucks|pickup\s+coffee|tim\s+hortons|shake\s+shack|wendy'?s|subway|chili'?s|cara\s+mia|jarandjam|main\s+bar|ac\s+bar/,
+      compact:
+        /pedrothegrocer|grocery|supermarket|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|7eleven|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|apollobayseafood|wootea|libertyoilconvenience|igasupermarkets?|caretakerscottage|leesdumplings|samyanmitrtown|jacksofbath|vesper|blackcabinbar|cocogroup|cocodewata|natsrustic|moonlitsanctuary|bakery|bistro|kitchen|ramen|noodle|teahouse|burger|pizza|steak|grill|canteen|eatery|foodcourt|brunch|breakfast|lunch|dinner|dunkin(?:donuts?)?|krispykreme|jollibee|chowking|manginasal|burgerking|foodpanda|grabfood|ubereats?|doordash|pickaroo|starbucks|pickupcoffee|timhortons|shakeshack|wendys|subway|chilis|caramia|jarandjam|mainbar|ackbar/,
+    })
+  ) {
+    return "Food & Dining";
+  }
+
+  if (
+    matchesCategoryHint(value, {
+      lower: /transport\s+for\s+nsw|skybus|parking|airport|rail|trainpal|hk\s+airport|liberty\s+oil|fuel|petrol|gas\s+station|autopay\s+parking|toll|expressway|opera\s+house\s+parking|mall\s+parking|grab(?:\s+car)?|grabcar|move\s+it|angkas|joyride|taxi|uber|bus|train|mrt|lrt|ride/,
+      compact: /transportfornsw|skybus|parking|airport|rail|trainpal|hkairport|libertyoil|fuel|petrol|gasstation|autopayparking|toll|expressway|operahouseparking|mallparking|grab|grabcar|moveit|angkas|joyride|taxi|uber|bus|train|mrt|lrt|ride|shell|petron|caltex|seaoil/,
+    })
+  ) {
+    return "Transport";
+  }
+
+  if (
+    matchesCategoryHint(value, {
+      lower: /sydney\s+opera\s+house|ticket\s+sales|htg\s+ticket\s+sales|theatre|theater|museum|gallery|cinema|concert|show|festival|playhouse|exhibit/,
+      compact: /sydneyoperahouse|ticketsales|htgticketsales|theatre|theater|museum|gallery|cinema|concert|show|festival|playhouse|exhibit/,
+    })
+  ) {
+    return "Entertainment";
+  }
+
+  if (
+    matchesCategoryHint(value, {
+      lower: /sydney\s+harbour\s+gifts?|melbourne\s+souvenir|u\s+neek\s+souvenirs?|great\s+ocean\s+road|great\s+ocean\s+road\s+choc|tourism|news\s+travels?|sanctuary|parks?\s+victoria|travel|travels|holiday|harbour|souvenir|souvenirs|tour|tours|visitor|visit(?:or|ors)?\s+centre|gift\s+shop/,
+      compact: /sydneyharbourgifts?|melbournesouvenir|uneeksouvenirs?|greatoceanroad|greatoceanroadchoc|tourism|newstravels?|sanctuary|parksvictoria|travel|travels|holiday|harbour|souvenir|souvenirs|tour|tours|visitor|visitorscentre|giftshop/,
+    })
+  ) {
+    return "Travel & Lifestyle";
+  }
+
+  if (matchesCategoryHint(value, { lower: /books?\b|asia\s+books|college|school|tuition|academy/, compact: /books|asiabooks|college|school|tuition|academy/ })) {
+    return "Education";
+  }
+
+  if (
+    matchesCategoryHint(value, {
+      lower:
+        /bill|utilities|electric|water|internet|phone|subscription|subscriptions|openai|chatgpt|netflix|spotify|linkedin|adobe|canva|icloud|google\s+one|youtube\s+premium|airalo|globe|smart|pldt|meralco|maynilad|openai\s+api|apple\s+services/,
+      compact:
+        /bill|utilities|electric|water|internet|phone|subscription|subscriptions|openai|chatgpt|netflix|spotify|linkedin|adobe|canva|icloud|googleone|youtubepremium|airalo|globe|smart|pldt|meralco|maynilad|appleservices/,
+    })
+  ) {
+    return "Bills & Utilities";
+  }
+
+  if (
+    matchesCategoryHint(value, {
+      lower: /relay\b|amazon|alibaba|camera|paypal|viator(?:\.com)?|locker\s+hire|emmanuel\s+payments?|shop\b|store\b|mart\b|convenience|provisioning\s+service|visa\s+provisioning\s+service|apple\s+pay|google\s+pay|gift\s+shop|duty\s+free/,
+      compact: /relay|amazon|alibaba|camera|paypal|viator|lockerhire|emmanuelpayments?|shop|store|mart|convenience|provisioningservice|visaprovisioningservice|applepay|googlepay|giftshop|dutyfree|puregold|landers|snr|sandr|uniqlo|zara|h&m|watsons/,
+    })
+  ) {
+    return "Shopping";
   }
 
   return null;
@@ -100,6 +179,14 @@ export const isLikelyPersonTransferName = (value: string) => {
   return tokens.length === 1 && /^[A-Z]{4,}$/.test(tokens[0] ?? "");
 };
 
+export const shouldTreatAsTransferDescription = (value: string) => {
+  if (getStrongMerchantCategoryHint(value)) {
+    return false;
+  }
+
+  return isLikelyPersonTransferName(value) || matchesTransferContext(value);
+};
+
 export const getSharedMerchantCategoryHint = (value: string): string | null => {
   const normalized = normalizeWhitespace(value);
   if (!normalized) {
@@ -111,7 +198,7 @@ export const getSharedMerchantCategoryHint = (value: string): string | null => {
     return specificHint;
   }
 
-  if (isLikelyPersonTransferName(value)) {
+  if (shouldTreatAsTransferDescription(value)) {
     return "Transfers";
   }
 
