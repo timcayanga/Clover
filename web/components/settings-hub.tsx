@@ -341,7 +341,8 @@ const writeStoredAccountIdentity = (identity: SettingsAccountIdentityCache) => {
 };
 
 function SettingsIcon({ src }: { src: string }) {
-  return <img aria-hidden="true" src={src} alt="" className="settings-hub__menu-icon" />;
+  const nextSrc = src.includes("notifications.png") ? `${src}?v=20260709` : src;
+  return <img aria-hidden="true" src={nextSrc} alt="" className="settings-hub__menu-icon" />;
 }
 
 const sectionCopy: Record<

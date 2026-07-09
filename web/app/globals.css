@@ -29967,6 +29967,9 @@ button.accounts-detail__transaction-head-cell {
   gap: 4px;
   width: 100%;
   height: 100%;
+  aspect-ratio: 1 / 1;
+  align-items: center;
+  justify-items: center;
   overflow: visible;
 }
 
@@ -30014,6 +30017,7 @@ button.accounts-detail__transaction-head-cell {
   display: block;
   width: 100%;
   height: 100%;
+  object-fit: contain;
   transform-origin: center;
   animation: clover-loading-screen-pulse 1.6s ease-in-out infinite;
   will-change: transform, opacity, filter;
