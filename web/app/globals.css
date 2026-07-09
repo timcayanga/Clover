@@ -28758,10 +28758,18 @@ button.accounts-detail__transaction-head-cell {
 
 .landing-nav__desktop {
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 18px;
   width: 100%;
+}
+
+.landing-nav__menus {
+  display: inline-flex;
+  align-items: center;
+  justify-self: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .landing-nav__desktop-actions {
@@ -37855,16 +37863,17 @@ body[data-split-bill-modal-open="true"] .app-shell {
 }
 
 .landing-footer--expanded {
+  --landing-footer-gradient: linear-gradient(135deg, rgba(3, 168, 192, 0.98), rgba(2, 137, 160, 0.98));
   display: flex;
   align-items: flex-start;
   justify-content: center;
   position: relative;
   width: 100vw;
-  min-height: max(260px, calc(100dvh - 620px));
+  min-height: max(180px, calc(100dvh - 700px));
   margin: auto 0 0 calc(50% - 50vw);
-  padding: 40px 0 max(140px, env(safe-area-inset-bottom));
+  padding: 28px 0 max(76px, env(safe-area-inset-bottom));
   border-radius: 0;
-  background: linear-gradient(135deg, rgba(3, 168, 192, 0.98), rgba(2, 137, 160, 0.98));
+  background: var(--landing-footer-gradient);
   color: white;
   box-shadow: none;
   box-sizing: border-box;
@@ -37877,14 +37886,14 @@ body[data-split-bill-modal-open="true"] .app-shell {
   top: 100%;
   left: 0;
   width: 100%;
-  height: max(160px, env(safe-area-inset-bottom));
-  background: linear-gradient(135deg, rgba(3, 168, 192, 0.98), rgba(2, 137, 160, 0.98));
+  height: max(88px, env(safe-area-inset-bottom));
+  background: var(--landing-footer-gradient);
 }
 
 .landing-footer__columns {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  gap: 16px;
   width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
   padding: 0 16px;
@@ -38028,12 +38037,12 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .landing-footer--expanded {
-    min-height: max(280px, calc(100dvh - 540px));
-    padding: 32px 16px max(120px, env(safe-area-inset-bottom));
+    min-height: max(170px, calc(100dvh - 620px));
+    padding: 24px 16px max(68px, env(safe-area-inset-bottom));
   }
 
   .landing-footer--expanded::after {
-    height: max(120px, env(safe-area-inset-bottom));
+    height: max(76px, env(safe-area-inset-bottom));
   }
 
   .landing-footer__columns {
