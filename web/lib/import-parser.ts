@@ -9867,11 +9867,175 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
     /^\d{1,2}:\d{2}$/i.test(line) ||
     /^PHP$/i.test(line);
   const statusPattern = /^(Buy|Sell)\s+Order\s+Completed$/i;
+  const gfundsDateTokenPattern = `${monthNamePattern}\\s+\\d{1,2}(?:,\\s*|\\s+)\\d{4}`;
+  const statusWithDatePattern = new RegExp(`^(Buy|Sell)\\s+Order\\s+Completed\\s+(${gfundsDateTokenPattern})$`, "i");
   const amountPattern = /^([+-])\s*PHP\s*([0-9][0-9,]*\.\d{2})$/i;
-  const datePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4}$`, "i");
+  const datePattern = new RegExp(`^${gfundsDateTokenPattern}$`, "i");
+  const dateWithAmountPattern = new RegExp(
+    `^(${gfundsDateTokenPattern})\\s+([+-])\\s*PHP\\s*([0-9][0-9,]*\\.\\d{2})$`,
+    "i",
+  );
+  const fundWithAmountPattern = /^(.+?Fund)\s+([+-])\s*PHP\s*([0-9][0-9,]*\.\d{2})$/i;
+  const collapsedFundRowPattern = new RegExp(
+    `^(.+?Fund)\\s+(Buy|Sell)\\s+Order\\s+Completed\\s+(${gfundsDateTokenPattern})\\s+([+-])\\s*PHP\\s*([0-9][0-9,]*\\.\\d{2})$`,
+    "i",
+  );
 
   const rows: ParsedImportRow[] = [];
   const seen = new Set<string>();
+  const isCollapsedOrAmountBearingLine = (line: string) =>
+    collapsedFundRowPattern.test(line) ||
+    fundWithAmountPattern.test(line) ||
+    statusWithDatePattern.test(line) ||
+    dateWithAmountPattern.test(line) ||
+    amountPattern.test(line);
+  const pushRow = (params: {
+    fundName: string;
+    status: "Buy Order Completed" | "Sell Order Completed";
+    transactionDate: string;
+    sign: "+" | "-";
+    amountNumber: number;
+    sourceRowIndex: number;
+    confidence?: number;
+    parserConfidence?: number;
+    line: string;
+    dateText: string;
+    amountText: string;
+  }) => {
+    const type: TransactionType = params.status === "Sell Order Completed" ? "income" : "expense";
+    const dedupeKey = [
+      params.fundName.toLowerCase(),
+      params.status.toLowerCase(),
+      params.transactionDate,
+      params.sign,
+      params.amountNumber.toFixed(2),
+    ].join("|");
+    if (seen.has(dedupeKey)) {
+      return;
+    }
+    seen.add(dedupeKey);
+
+    rows.push({
+      date: params.transactionDate,
+      amount: params.amountNumber.toFixed(2),
+      merchantRaw: params.status,
+      merchantClean: params.status,
+      description: `${params.fundName} - ${params.status}`,
+      categoryName: "Investments",
+      accountName: params.fundName,
+      institution: "GFunds",
+      type,
+      confidence: params.confidence ?? (isKnownGfundsScreenshotFile(fileName) ? 95 : 86),
+      parserConfidence: params.parserConfidence ?? (isKnownGfundsScreenshotFile(fileName) ? 93 : 84),
+      categoryConfidence: 96,
+      rawPayload: {
+        bank: "GFunds",
+        providerInstitution: "ATRAM",
+        kind: "gfunds_transaction_screenshot",
+        source: "gfunds_transaction_screenshot",
+        sourceRowIndex: params.sourceRowIndex,
+        fundName: params.fundName,
+        orderStatus: params.status,
+        signedAmountText: `${params.sign}PHP ${params.amountNumber.toFixed(2)}`,
+        amountSign: params.sign,
+        line: params.line,
+        dateText: params.dateText,
+        amountText: params.amountText,
+      },
+    });
+  };
+
+  for (const line of lines) {
+    const collapsedMatch = line.match(collapsedFundRowPattern);
+    if (!collapsedMatch) {
+      continue;
+    }
+
+    const fundName = normalizeWhitespace(collapsedMatch[1] ?? "");
+    const action = /^Sell/i.test(collapsedMatch[2] ?? "") ? "Sell Order Completed" : "Buy Order Completed";
+    const dateText = normalizeWhitespace(collapsedMatch[3] ?? "");
+    const sign = (collapsedMatch[4] ?? "") as "+" | "-";
+    const amountNumber = parseMoney(collapsedMatch[5] ?? null);
+    const transactionDate = parseDateValue(dateText)?.toISOString().slice(0, 10) ?? null;
+    if (!fundName || !transactionDate || !amountNumber || !sign) {
+      continue;
+    }
+
+    pushRow({
+      fundName,
+      status: action,
+      transactionDate,
+      sign,
+      amountNumber,
+      sourceRowIndex: lines.indexOf(line),
+      line,
+      dateText,
+      amountText: `${sign}PHP ${amountNumber.toFixed(2)}`,
+    });
+  }
+
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const fundAmountMatch = lines[index]?.match(fundWithAmountPattern);
+    const statusWithDateMatch = lines[index + 1]?.match(statusWithDatePattern);
+    if (!fundAmountMatch || !statusWithDateMatch) {
+      continue;
+    }
+
+    const fundName = normalizeWhitespace(fundAmountMatch[1] ?? "");
+    const sign = (fundAmountMatch[2] ?? "") as "+" | "-";
+    const amountNumber = parseMoney(fundAmountMatch[3] ?? null);
+    const action = /^Sell/i.test(statusWithDateMatch[1] ?? "") ? "Sell Order Completed" : "Buy Order Completed";
+    const dateText = normalizeWhitespace(statusWithDateMatch[2] ?? "");
+    const transactionDate = parseDateValue(dateText)?.toISOString().slice(0, 10) ?? null;
+    if (!fundName || !transactionDate || !amountNumber || !sign) {
+      continue;
+    }
+
+    pushRow({
+      fundName,
+      status: action,
+      transactionDate,
+      sign,
+      amountNumber,
+      sourceRowIndex: index + 1,
+      line: `${lines[index]} ${lines[index + 1]}`.trim(),
+      dateText,
+      amountText: `${sign}PHP ${amountNumber.toFixed(2)}`,
+    });
+  }
+
+  for (let index = 0; index < lines.length - 2; index += 1) {
+    const fundName = normalizeWhitespace(lines[index] ?? "");
+    const statusWithDateMatch = lines[index + 1]?.match(statusWithDatePattern);
+    const amountMatch = lines[index + 2]?.match(amountPattern);
+    if (!fundName || !statusWithDateMatch || !amountMatch) {
+      continue;
+    }
+    if (isStructuralLine(fundName) || isCollapsedOrAmountBearingLine(fundName) || statusPattern.test(fundName) || datePattern.test(fundName)) {
+      continue;
+    }
+
+    const action = /^Sell/i.test(statusWithDateMatch[1] ?? "") ? "Sell Order Completed" : "Buy Order Completed";
+    const dateText = normalizeWhitespace(statusWithDateMatch[2] ?? "");
+    const sign = (amountMatch[1] ?? "") as "+" | "-";
+    const amountNumber = parseMoney(amountMatch[2] ?? null);
+    const transactionDate = parseDateValue(dateText)?.toISOString().slice(0, 10) ?? null;
+    if (!transactionDate || !amountNumber || !sign) {
+      continue;
+    }
+
+    pushRow({
+      fundName,
+      status: action,
+      transactionDate,
+      sign,
+      amountNumber,
+      sourceRowIndex: index + 1,
+      line: `${lines[index]} ${lines[index + 1]} ${lines[index + 2]}`.trim(),
+      dateText,
+      amountText: lines[index + 2] ?? `${sign}PHP ${amountNumber.toFixed(2)}`,
+    });
+  }
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
@@ -9881,18 +10045,20 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
 
     const amountLine = lines[index + 2] ?? "";
     const dateLine = lines[index + 1] ?? "";
-    if (!datePattern.test(dateLine) || !amountPattern.test(amountLine)) {
+    const dateWithAmountMatch = dateLine.match(dateWithAmountPattern);
+    const hasSeparateDateAndAmount = datePattern.test(dateLine) && amountPattern.test(amountLine);
+    if (!dateWithAmountMatch && !hasSeparateDateAndAmount) {
       continue;
     }
 
-    const amountMatch = amountLine.match(amountPattern);
-    const sign = amountMatch?.[1] ?? null;
-    const amountNumber = parseMoney(amountMatch?.[2] ?? null);
+    const parsedDateText = normalizeWhitespace(dateWithAmountMatch?.[1] ?? dateLine);
+    const sign = dateWithAmountMatch?.[2] ?? amountLine.match(amountPattern)?.[1] ?? null;
+    const amountNumber = parseMoney(dateWithAmountMatch?.[3] ?? amountLine.match(amountPattern)?.[2] ?? null);
     if (!sign || amountNumber === null) {
       continue;
     }
 
-    const transactionDate = parseDateValue(dateLine)?.toISOString().slice(0, 10) ?? null;
+    const transactionDate = parseDateValue(parsedDateText)?.toISOString().slice(0, 10) ?? null;
     if (!transactionDate) {
       continue;
     }
@@ -9900,7 +10066,13 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
     const fundNameParts: string[] = [];
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
       const candidate = lines[cursor] ?? "";
-      if (!candidate || isStructuralLine(candidate) || statusPattern.test(candidate) || datePattern.test(candidate) || amountPattern.test(candidate)) {
+      if (
+        !candidate ||
+        isStructuralLine(candidate) ||
+        statusPattern.test(candidate) ||
+        datePattern.test(candidate) ||
+        isCollapsedOrAmountBearingLine(candidate)
+      ) {
         break;
       }
       fundNameParts.unshift(candidate);
@@ -9915,45 +10087,34 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
     }
 
     const status = /^Sell/i.test(line) ? "Sell Order Completed" : "Buy Order Completed";
-    const type: TransactionType = status === "Sell Order Completed" ? "income" : "expense";
-    const dedupeKey = [fundName.toLowerCase(), status.toLowerCase(), transactionDate, sign, amountNumber.toFixed(2)].join("|");
-    if (seen.has(dedupeKey)) {
-      continue;
-    }
-    seen.add(dedupeKey);
-
-    rows.push({
-      date: transactionDate,
-      amount: amountNumber.toFixed(2),
-      merchantRaw: status,
-      merchantClean: status,
-      description: `${fundName} - ${status}`,
-      categoryName: "Investments",
-      accountName: fundName,
-      institution: "GFunds",
-      type,
-      confidence: isKnownGfundsScreenshotFile(fileName) ? 95 : 86,
-      parserConfidence: isKnownGfundsScreenshotFile(fileName) ? 93 : 84,
-      categoryConfidence: 96,
-      rawPayload: {
-        bank: "GFunds",
-        providerInstitution: "ATRAM",
-        kind: "gfunds_transaction_screenshot",
-        source: "gfunds_transaction_screenshot",
-        fundName,
-        orderStatus: status,
-        signedAmountText: `${sign}PHP ${amountNumber.toFixed(2)}`,
-        amountSign: sign,
-        line,
-        dateText: dateLine,
-        amountText: amountLine,
-      },
+    pushRow({
+      fundName,
+      status,
+      transactionDate,
+      sign: sign as "+" | "-",
+      amountNumber,
+      sourceRowIndex: index,
+      line,
+      dateText: parsedDateText,
+      amountText: dateWithAmountMatch ? `${sign}PHP ${amountNumber.toFixed(2)}` : amountLine,
     });
   }
 
   if (rows.length === 0) {
     return null;
   }
+
+  rows.sort((left, right) => {
+    const leftIndex =
+      typeof (left.rawPayload as Record<string, unknown> | null | undefined)?.sourceRowIndex === "number"
+        ? Number((left.rawPayload as Record<string, unknown>).sourceRowIndex)
+        : Number.MAX_SAFE_INTEGER;
+    const rightIndex =
+      typeof (right.rawPayload as Record<string, unknown> | null | undefined)?.sourceRowIndex === "number"
+        ? Number((right.rawPayload as Record<string, unknown>).sourceRowIndex)
+        : Number.MAX_SAFE_INTEGER;
+    return leftIndex - rightIndex;
+  });
 
   const sortedDates = rows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort();
   return {
