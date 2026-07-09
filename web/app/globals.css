@@ -37720,8 +37720,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
   grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.88fr);
   gap: 32px;
   align-items: center;
-  min-height: auto;
-  padding: 28px 0 18px;
+  min-height: max(720px, calc(100svh - 88px));
+  padding: 28px 0 132px;
 }
 
 .landing-page .landing-hero__copy {
@@ -37851,7 +37851,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   box-shadow: none;
   border-radius: 0;
   min-height: auto;
-  padding-block: 72px 36px;
+  padding-block: 92px 176px;
 }
 
 .landing-page .landing-cta__inner {
@@ -37944,6 +37944,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .landing-page .landing-hero {
     gap: 18px;
+    min-height: auto;
   }
 
   .landing-footer__columns {
@@ -37967,6 +37968,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   .landing-page .landing-hero {
     gap: 12px;
     padding: 18px 0 8px;
+    min-height: auto;
   }
 
   .landing-page .landing-hero__copy {
@@ -38034,7 +38036,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .landing-page .landing-cta {
-    padding: 22px 0 6px;
+    padding: 40px 0 108px;
     min-height: auto;
   }
 
