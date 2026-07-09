@@ -218,6 +218,140 @@ assert.ok(
   `Expected sparse GSave overview screenshots to record gcash_sparse_parse. reasons=${JSON.stringify(sparseGsaveRoutingDecision.reasons)}`
 );
 
+const sparseGfundsRows = [
+  {
+    merchantRaw: "Sell Order Completed",
+    description: "ATRAM Peso Money Market Fund - Sell Order Completed",
+    amount: "26804.31",
+    date: "2025-04-22",
+    rawPayload: {
+      kind: "gfunds_transaction_screenshot",
+      source: "gfunds_transaction_screenshot",
+    },
+  },
+] as Array<Record<string, unknown>>;
+
+const sparseGfundsAssessment = assessImageStatementParse({
+  rows: sparseGfundsRows,
+  metadata: {
+    institution: "GFunds",
+    accountName: "GFunds",
+    accountNumber: null,
+    confidence: 88,
+  },
+  fileName: "IMG_1415.PNG",
+  parsedRowsWithDates: 1,
+  parsedDateCoverage: 1,
+  parsedRowsHaveMultipleAccountNumbers: false,
+  suspiciousDateCoverage: false,
+  prefersVisionFallbackForInstitution: false,
+  sparseLocalRowsSuspicious: true,
+});
+
+assert.equal(
+  sparseGfundsAssessment.parseLooksUsable,
+  false,
+  "GFunds transaction-history screenshots should escalate when only a small fraction of visible orders were recovered."
+);
+
+const sparseGfundsRoutingDecision = buildParserRoutingDecision({
+  fileType: "image/png",
+  imageImport: true,
+  importMode: "statement",
+  screenshotLikeFile: true,
+  screenshotArtifactCoverage: 0,
+  hasTemplateMemory: false,
+  trainedReceiptDetails: false,
+  canReuseCachedStatementParse: false,
+  hasReliableDeterministicStatementParse: false,
+  imageStatementParseLooksUsable: sparseGfundsAssessment.parseLooksUsable,
+  textForParse: "Transaction History ATRAM Peso Money Market Fund Sell Order Completed April 22, 2025 -PHP 26,804.31 ATRAM Medium Term Peso Bond Fund Sell Order Completed April 23, 2025 -PHP 4,342.40",
+  parsedRowsLength: sparseGfundsRows.length,
+  hasKnownInstitution: true,
+  metadataConfidence: 88,
+  hasAccountNumber: false,
+  hasMultipleAccountNumbers: false,
+  genericParseLooksSuspicious: false,
+  gcashSuspiciouslySparse: true,
+  suspiciousDateCoverage: false,
+  prefersVisionFallbackForInstitution: false,
+  genericIdentityLooksWeak: false,
+  parsedDateCoverage: 1,
+});
+
+assert.equal(
+  sparseGfundsRoutingDecision.decision,
+  "backup_required",
+  `Sparse GFunds screenshot parses should escalate early. got=${sparseGfundsRoutingDecision.decision}`
+);
+
+const sparseGcryptoRows = [
+  {
+    merchantRaw: "Sell",
+    description: "Sell - Solana (4.4838)",
+    amount: "14591.50",
+    date: "2023-11-20",
+    rawPayload: {
+      kind: "gcrypto_transaction_screenshot",
+      source: "gcrypto_transaction_screenshot",
+    },
+  },
+] as Array<Record<string, unknown>>;
+
+const sparseGcryptoAssessment = assessImageStatementParse({
+  rows: sparseGcryptoRows,
+  metadata: {
+    institution: "GCrypto",
+    accountName: "GCrypto",
+    accountNumber: null,
+    confidence: 89,
+  },
+  fileName: "IMG_1427.PNG",
+  parsedRowsWithDates: 1,
+  parsedDateCoverage: 1,
+  parsedRowsHaveMultipleAccountNumbers: false,
+  suspiciousDateCoverage: false,
+  prefersVisionFallbackForInstitution: false,
+  sparseLocalRowsSuspicious: true,
+});
+
+assert.equal(
+  sparseGcryptoAssessment.parseLooksUsable,
+  false,
+  "GCrypto transaction-history screenshots should escalate when only a small fraction of visible rows were recovered."
+);
+
+const sparseGcryptoRoutingDecision = buildParserRoutingDecision({
+  fileType: "image/png",
+  imageImport: true,
+  importMode: "statement",
+  screenshotLikeFile: true,
+  screenshotArtifactCoverage: 0,
+  hasTemplateMemory: false,
+  trainedReceiptDetails: false,
+  canReuseCachedStatementParse: false,
+  hasReliableDeterministicStatementParse: false,
+  imageStatementParseLooksUsable: sparseGcryptoAssessment.parseLooksUsable,
+  textForParse: "GCrypto Transaction History Past Transactions Nov 20, 2023 Withdraw 12:24 PM Successful Trading Wallet - PHP 33,791.22 Sell 12:24 PM Successful Stellar 227.5 PHP 1,489.48 Sell 12:23 PM Successful The Graph 411.25 PHP 3,055.73 Sell 12:23 PM Successful Solana 4.4838 PHP 14,591.50",
+  parsedRowsLength: sparseGcryptoRows.length,
+  hasKnownInstitution: true,
+  metadataConfidence: 89,
+  hasAccountNumber: false,
+  hasMultipleAccountNumbers: false,
+  genericParseLooksSuspicious: false,
+  gcashSuspiciouslySparse: true,
+  suspiciousDateCoverage: false,
+  prefersVisionFallbackForInstitution: false,
+  genericIdentityLooksWeak: false,
+  parsedDateCoverage: 1,
+});
+
+assert.equal(
+  sparseGcryptoRoutingDecision.decision,
+  "backup_required",
+  `Sparse GCrypto screenshot parses should escalate early. got=${sparseGcryptoRoutingDecision.decision}`
+);
+
 assert.equal(
   shouldAttemptGenericScreenshotTranscriptRepair({
     likelyScreenshotStatement: true,

@@ -22,6 +22,8 @@ import {
   screenshotEvidenceContainsUiArtifact,
 } from "@/lib/screenshot-artifact-filter";
 import {
+  classifyGcashFamilyScreenshotScreen,
+  estimateGcashFamilyScreenshotVisibleEntries,
   gsaveScreenshotExpectsMultipleAccounts,
   looksLikeGcashFamilyScreenshotText,
   normalizeGcashFamilyScreenshotOcrText,
@@ -6807,11 +6809,26 @@ export const processImportFileText = async (
     /gsave|unoready|unoboost|uno digital bank/i.test(
       [metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName, textForParse].filter(Boolean).join(" ")
     );
+  const preliminaryGcashFamilyScreenType =
+    imageImport && importMode === "statement" ? classifyGcashFamilyScreenshotScreen(textForParse) : "unknown";
+  const preliminaryGcashFamilyVisibleEntries =
+    imageImport && importMode === "statement" ? estimateGcashFamilyScreenshotVisibleEntries(textForParse) : 0;
   const preliminaryGsaveScreenshotSparseParse =
     preliminaryGsaveImageStatement &&
     gsaveScreenshotExpectsMultipleAccounts(textForParse) &&
     parsedRows.length > 0 &&
     parsedRows.length < 2;
+  const preliminaryGcashFamilySparseParse =
+    imageImport &&
+    importMode === "statement" &&
+    preliminaryGcashFamilyVisibleEntries >= 2 &&
+    parsedRows.length > 0 &&
+    parsedRows.length < preliminaryGcashFamilyVisibleEntries &&
+    (
+      preliminaryGcashFamilyScreenType === "gsave_overview" ||
+      preliminaryGcashFamilyScreenType === "gsave_account_list" ||
+      parsedRows.length <= Math.max(1, Math.floor(preliminaryGcashFamilyVisibleEntries * 0.5))
+    );
   const preliminarySuspiciousDateCoverage =
     (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && preliminaryParsedRowsWithDates === 0
       ? true
@@ -6827,7 +6844,7 @@ export const processImportFileText = async (
           parsedRowsHaveMultipleAccountNumbers: preliminaryParsedRowsHaveMultipleAccountNumbers,
           suspiciousDateCoverage: preliminarySuspiciousDateCoverage,
           prefersVisionFallbackForInstitution: false,
-          sparseLocalRowsSuspicious: preliminaryGsaveScreenshotSparseParse,
+          sparseLocalRowsSuspicious: preliminaryGsaveScreenshotSparseParse || preliminaryGcashFamilySparseParse,
         })
       : null;
   const preliminaryImageStatementParseLooksUsable = preliminaryImageStatementAssessment?.parseLooksUsable ?? false;
@@ -6849,7 +6866,7 @@ export const processImportFileText = async (
     hasAccountNumber: Boolean(metadataForParse.accountNumber),
     hasMultipleAccountNumbers: preliminaryParsedRowsHaveMultipleAccountNumbers,
     genericParseLooksSuspicious: preliminaryGenericParseLooksSuspicious,
-    gcashSuspiciouslySparse: preliminaryGsaveScreenshotSparseParse,
+    gcashSuspiciouslySparse: preliminaryGsaveScreenshotSparseParse || preliminaryGcashFamilySparseParse,
     suspiciousDateCoverage: preliminarySuspiciousDateCoverage,
     prefersVisionFallbackForInstitution: false,
     genericIdentityLooksWeak: preliminaryGenericIdentityLooksWeak,
@@ -7247,11 +7264,26 @@ export const processImportFileText = async (
     /gsave|unoready|unoboost|uno digital bank/i.test(
       [metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName, textForParse].filter(Boolean).join(" ")
     );
+  const gcashFamilyScreenType =
+    imageImport && importMode === "statement" ? classifyGcashFamilyScreenshotScreen(textForParse) : "unknown";
+  const gcashFamilyVisibleEntries =
+    imageImport && importMode === "statement" ? estimateGcashFamilyScreenshotVisibleEntries(textForParse) : 0;
   const gsaveScreenshotSparseParse =
     isGsaveImageStatement &&
     gsaveScreenshotExpectsMultipleAccounts(textForParse) &&
     parsedRows.length > 0 &&
     parsedRows.length < 2;
+  const gcashFamilySparseParse =
+    imageImport &&
+    importMode === "statement" &&
+    gcashFamilyVisibleEntries >= 2 &&
+    parsedRows.length > 0 &&
+    parsedRows.length < gcashFamilyVisibleEntries &&
+    (
+      gcashFamilyScreenType === "gsave_overview" ||
+      gcashFamilyScreenType === "gsave_account_list" ||
+      parsedRows.length <= Math.max(1, Math.floor(gcashFamilyVisibleEntries * 0.5))
+    );
   const gcashSuspiciouslySparse =
     metadataForParse.institution === "GCash" &&
     parsedRows.length > 0 &&
@@ -7299,7 +7331,7 @@ export const processImportFileText = async (
           parsedRowsHaveMultipleAccountNumbers,
           suspiciousDateCoverage,
           prefersVisionFallbackForInstitution,
-          sparseLocalRowsSuspicious: gsaveScreenshotSparseParse,
+          sparseLocalRowsSuspicious: gsaveScreenshotSparseParse || gcashFamilySparseParse,
         })
       : null;
   const suspiciousScreenshotRows = imageStatementAssessment?.suspiciousScreenshotRows ?? 0;
@@ -7336,7 +7368,7 @@ export const processImportFileText = async (
     hasAccountNumber: Boolean(metadataForParse.accountNumber),
     hasMultipleAccountNumbers: parsedRowsHaveMultipleAccountNumbers,
     genericParseLooksSuspicious: genericParseLooksSuspicious || screenshotRowsLookStructurallyWeak,
-    gcashSuspiciouslySparse: gcashSuspiciouslySparse || gsaveScreenshotSparseParse,
+    gcashSuspiciouslySparse: gcashSuspiciouslySparse || gsaveScreenshotSparseParse || gcashFamilySparseParse,
     suspiciousDateCoverage,
     prefersVisionFallbackForInstitution,
     genericIdentityLooksWeak,

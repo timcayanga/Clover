@@ -21,6 +21,11 @@ This document captures the GCash parsing rules learned from the training bundles
   - `GFunds` for mutual funds like ATRAM
   - `GStocks` for brokered stock holdings like AB Capital Securities
   - `GCrypto` for crypto holdings
+- GCash-family screenshot routing should classify the visible screen type before committing to the local parser path:
+  - multi-account overview / account-list screens
+  - transaction-history screens
+  - account-detail / snapshot screens
+- If a GCash-family screenshot visibly implies multiple cards or multiple transaction-history rows but the local parser only recovers a small subset of those visible entries, treat the parse as incomplete and escalate to transcript repair or backup parsing immediately instead of waiting for UI-level symptoms.
 - Use `period_start` and `period_end` when the statement does not provide a single statement date.
 - Preserve transaction time in the normalized date field when available.
 - Only mark wallet movement as the `Transfer` type when Clover can match the other side to another user-owned account in the same workspace.

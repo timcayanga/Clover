@@ -9791,12 +9791,70 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
   }
 
   const effectiveText = text.trim() ? text : buildKnownGfundsScreenshotParserText(fileName) ?? "";
-  const lines = effectiveText
+  const rawLines = effectiveText
     .replace(/\u00a0/g, " ")
     .replace(/\u2212/g, "-")
     .split(/\r?\n/)
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
+  const combinedStatusDatePattern = new RegExp(
+    `^(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})$`,
+    "i"
+  );
+  const combinedDateAmountPattern = new RegExp(
+    `^(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})\\s+([+-])\\s*PHP\\s*([0-9][0-9,]*\\.\\d{2})$`,
+    "i"
+  );
+  const fundWithInlineAmountPattern = /^(.*?(?:ATRAM[\w\s&().-]+?Fund|Philippine Stock Index Fund \(Units\)))\s+([+-])\s*PHP\s*([0-9][0-9,]*\.\d{2})$/i;
+  const fullyCollapsedPattern = new RegExp(
+    `^(.*?(?:ATRAM[\\w\\s&().-]+?Fund|Philippine Stock Index Fund \\(Units\\)))\\s+(Buy|Sell)\\s+Order\\s+Completed\\s+(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})\\s+([+-])\\s*PHP\\s*([0-9][0-9,]*\\.\\d{2})$`,
+    "i"
+  );
+  const lines: string[] = [];
+  for (let index = 0; index < rawLines.length; index += 1) {
+    const line = rawLines[index] ?? "";
+    const fullyCollapsedMatch = line.match(fullyCollapsedPattern);
+    if (fullyCollapsedMatch) {
+      const [, fundName, action, dateText, sign, amountText] = fullyCollapsedMatch;
+      lines.push(normalizeWhitespace(fundName));
+      lines.push(`${action} Order Completed`);
+      lines.push(normalizeWhitespace(dateText));
+      lines.push(`${sign}PHP ${amountText}`);
+      continue;
+    }
+
+    const fundInlineMatch = line.match(fundWithInlineAmountPattern);
+    const nextLine = rawLines[index + 1] ?? "";
+    const statusDateMatch = nextLine.match(combinedStatusDatePattern);
+    if (fundInlineMatch && statusDateMatch) {
+      const [, fundName, sign, amountText] = fundInlineMatch;
+      const [, action, dateText] = statusDateMatch;
+      lines.push(normalizeWhitespace(fundName));
+      lines.push(`${action} Order Completed`);
+      lines.push(normalizeWhitespace(dateText));
+      lines.push(`${sign}PHP ${amountText}`);
+      index += 1;
+      continue;
+    }
+
+    const splitStatusDateMatch = line.match(combinedStatusDatePattern);
+    if (splitStatusDateMatch) {
+      const [, action, dateText] = splitStatusDateMatch;
+      lines.push(`${action} Order Completed`);
+      lines.push(normalizeWhitespace(dateText));
+      continue;
+    }
+
+    const splitDateAmountMatch = line.match(combinedDateAmountPattern);
+    if (splitDateAmountMatch) {
+      const [, dateText, sign, amountText] = splitDateAmountMatch;
+      lines.push(normalizeWhitespace(dateText));
+      lines.push(`${sign}PHP ${amountText}`);
+      continue;
+    }
+
+    lines.push(line);
+  }
 
   const isStructuralLine = (line: string) =>
     /^Transaction History$/i.test(line) ||
@@ -9810,7 +9868,7 @@ const parseGfundsTransactionHistoryImportText = (text: string, fileName: string)
     /^PHP$/i.test(line);
   const statusPattern = /^(Buy|Sell)\s+Order\s+Completed$/i;
   const amountPattern = /^([+-])\s*PHP\s*([0-9][0-9,]*\.\d{2})$/i;
-  const datePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
+  const datePattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4}$`, "i");
 
   const rows: ParsedImportRow[] = [];
   const seen = new Set<string>();
