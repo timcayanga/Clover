@@ -1488,7 +1488,7 @@ export function SettingsHub({
   return (
     <section className={`settings-hub${mode === "panel" ? " settings-hub--panel-only" : mode === "menu" ? " settings-hub--menu-only" : ""}`}>
       {mode !== "panel" ? (
-        <aside className="settings-hub__menu glass">
+        <aside className="settings-hub__menu glass" aria-label="Settings sections">
           <Link className="settings-hub__brand" href="/dashboard" aria-label="Go to dashboard">
             <img className="settings-hub__brand-mark" src="/clover-mark.svg" alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
             <div className="settings-hub__brand-copy">
@@ -1496,40 +1496,38 @@ export function SettingsHub({
               <span>{activeProfile?.name ?? workspaceName}</span>
             </div>
           </Link>
-          <div className="settings-hub__menu-list" role="list" aria-label="Settings sections">
-            {(Object.keys(sectionCopy) as SettingsSectionKey[]).map((sectionKey) => {
-              const section = sectionCopy[sectionKey];
-              const isActive = activeSection === sectionKey;
+          {(Object.keys(sectionCopy) as SettingsSectionKey[]).map((sectionKey) => {
+            const section = sectionCopy[sectionKey];
+            const isActive = activeSection === sectionKey;
 
-              if (mode === "full") {
-                return (
-                  <button
-                    key={sectionKey}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    className={`settings-hub__menu-item${isActive ? " is-active" : ""}`}
-                    onClick={() => setActiveSection(sectionKey)}
-                  >
-                    {section.icon}
-                    <strong>{section.title}</strong>
-                  </button>
-                );
-              }
-
+            if (mode === "full") {
               return (
-                <Link
+                <button
                   key={sectionKey}
-                  href={`/settings/${sectionKey}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
                   className={`settings-hub__menu-item${isActive ? " is-active" : ""}`}
-                  aria-current={isActive ? "page" : undefined}
+                  onClick={() => setActiveSection(sectionKey)}
                 >
                   {section.icon}
                   <strong>{section.title}</strong>
-                </Link>
+                </button>
               );
-            })}
-          </div>
+            }
+
+            return (
+              <Link
+                key={sectionKey}
+                href={`/settings/${sectionKey}`}
+                className={`settings-hub__menu-item${isActive ? " is-active" : ""}`}
+                aria-current={isActive ? "page" : undefined}
+              >
+                {section.icon}
+                <strong>{section.title}</strong>
+              </Link>
+            );
+          })}
         </aside>
       ) : null}
 

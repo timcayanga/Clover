@@ -32155,18 +32155,6 @@ button.accounts-detail__transaction-head-cell {
   white-space: nowrap;
 }
 
-.settings-hub__menu-list {
-  display: grid;
-  align-content: start;
-  gap: 0;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  overflow: visible;
-}
-
 .settings-hub__menu-item {
   display: flex;
   align-items: center;
@@ -34276,12 +34264,6 @@ html[data-theme="dark"] .sidebar-footer,
 html[data-theme="dark"] .sidebar-profile {
   background-color: rgba(14, 23, 37, 0.86);
   border-color: rgba(148, 163, 184, 0.14);
-}
-
-html[data-theme="dark"] .settings-hub__menu-list {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
 }
 
 html[data-theme="dark"] .sidebar-icon-button {
