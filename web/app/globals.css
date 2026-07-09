@@ -28888,13 +28888,11 @@ button.accounts-detail__transaction-head-cell {
   min-width: 196px;
   padding: 10px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(247, 249, 250, 0.7));
-  box-shadow:
-    0 18px 36px rgba(15, 23, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid rgba(224, 232, 238, 0.92);
+  background: #ffffff;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   z-index: 40;
 }
 
@@ -31552,13 +31550,11 @@ button.accounts-detail__transaction-head-cell {
     overflow: auto;
     padding: 14px;
     border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.45);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(247, 249, 250, 0.74));
-    box-shadow:
-      0 18px 40px rgba(15, 23, 42, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(22px);
-    -webkit-backdrop-filter: blur(22px);
+    border: 1px solid rgba(224, 232, 238, 0.92);
+    background: #ffffff;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.1);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .landing-nav__mobile-menu-group {

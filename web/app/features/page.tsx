@@ -24,7 +24,7 @@ export default async function FeaturesPage() {
           <h1>Pick the money problem you want Clover to solve first.</h1>
           <p className="features-page__lede">
             Clover is organized around real needs: getting your data in faster, understanding it better, handling shared expenses, building
-            practical budgets, and growing into a fuller financial system over time.
+            practical budgets, and growing into a fuller financial account over time.
           </p>
           <div className="features-page__actions">
             <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
@@ -75,7 +75,7 @@ export default async function FeaturesPage() {
         <div className="landing-cta__inner">
           <div className="landing-cta__copy">
             <p className="eyebrow">Start where the pain is</p>
-            <h2>Pick the workflow you need first and build from there.</h2>
+            <h2>Pick the part you need first and build from there.</h2>
             <p>
               Most people begin with imports and transaction cleanup, then grow into insights, budgets, shared bills, and Pro once Clover has more
               of the full picture.
