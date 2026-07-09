@@ -331,6 +331,10 @@ export const deriveStatementFallbackAccountName = (
   }
 
   if (accountType === "investment") {
+    if (/^gcrypto$/i.test(normalizedInstitution)) {
+      return "GCrypto";
+    }
+
     return `${normalizedInstitution} Investments`;
   }
 
@@ -370,21 +374,44 @@ const readParsedRowString = (row: ParsedImportRow, key: string) => {
   return typeof payloadValue === "string" && payloadValue.trim() ? payloadValue.trim() : null;
 };
 
-export const resolveStatementIdentityFromParsedRows = (rows: ParsedImportRow[]) => {
+export const resolveStatementIdentityFromParsedRows = (
+  rows: ParsedImportRow[],
+  options: { fileName?: string | null } = {}
+) => {
+  const screenshotIdentity = resolveMobileWalletIdentityFromParsedRows(rows);
+
   for (const row of rows) {
     const accountName = readParsedRowString(row, "accountName");
     const institution = readParsedRowString(row, "institution");
     const accountNumber = readParsedRowString(row, "accountNumber");
-    if (accountName || institution || accountNumber) {
+    const rawAccountType = readParsedRowString(row, "accountType");
+    const accountType =
+      rawAccountType === "bank" ||
+      rawAccountType === "wallet" ||
+      rawAccountType === "credit_card" ||
+      rawAccountType === "cash" ||
+      rawAccountType === "investment" ||
+      rawAccountType === "other"
+        ? rawAccountType
+        : screenshotIdentity?.accountType ?? null;
+    const genericScreenshotName = accountName ? isGenericMobileScreenshotFileName(accountName) : false;
+    const shouldPreferScreenshotIdentity =
+      genericScreenshotName ||
+      ((!accountName || !institution) &&
+        isGenericMobileScreenshotFileName(options.fileName ?? "") &&
+        Boolean(screenshotIdentity?.accountName || screenshotIdentity?.institution || screenshotIdentity?.accountType));
+
+    if (accountName || institution || accountNumber || accountType) {
       return {
-        accountName,
-        institution,
+        accountName: shouldPreferScreenshotIdentity ? screenshotIdentity?.accountName ?? accountName : accountName,
+        institution: shouldPreferScreenshotIdentity ? screenshotIdentity?.institution ?? institution : institution,
         accountNumber,
+        accountType,
       };
     }
   }
 
-  return null;
+  return screenshotIdentity;
 };
 
 export const countDistinctStatementAccountsFromParsedRows = (rows: ParsedImportRow[]) => {
@@ -439,6 +466,15 @@ export const resolveMobileWalletIdentityFromParsedRows = (rows: ParsedImportRow[
       return {
         accountName: "GFunds Investments",
         institution: "GFunds",
+        accountType: "investment",
+        accountNumber: null,
+      };
+    }
+
+    if (/(gcrypto|pdax)/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
+      return {
+        accountName: "GCrypto",
+        institution: "GCrypto",
         accountType: "investment",
         accountNumber: null,
       };

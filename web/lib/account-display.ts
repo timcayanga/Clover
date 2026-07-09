@@ -161,8 +161,9 @@ export const getAccountCardName = (account: AccountDisplayInput) => {
 
   if (account.type === "investment") {
     const trimmedName = normalizeWhitespace(account.name ?? "");
-    if (trimmedName) {
-      return trimmedName;
+    const safeInvestmentName = isGenericScreenshotLikeName(trimmedName) ? "" : trimmedName;
+    if (safeInvestmentName) {
+      return safeInvestmentName;
     }
 
     return normalizeWhitespace(account.institution ?? "") || "Investment";

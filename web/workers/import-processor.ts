@@ -5317,6 +5317,15 @@ const getMobileScreenshotPayloadKind = (rawPayload: Prisma.JsonValue | null | un
   if (/bpi/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
     return "bpi";
   }
+  if (/gcrypto|pdax/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
+    return "gcrypto";
+  }
+  if (/gfunds|atram|ryse/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
+    return "gfunds";
+  }
+  if (/generic_investment_action_screenshot/i.test(identityText)) {
+    return "generic-investment";
+  }
 
   return null;
 };
@@ -5332,6 +5341,7 @@ const mobileScreenshotOverlapPayloadMatchers: Array<{ path: "kind" | "source"; e
   { path: "kind", equals: "gcrypto_mobile_screenshot_transaction" },
   { path: "kind", equals: "gcrypto_transaction_screenshot" },
   { path: "kind", equals: "gfunds_transaction_screenshot" },
+  { path: "kind", equals: "generic_investment_action_screenshot_transaction" },
   { path: "source", equals: "gcash_mobile_screenshot" },
   { path: "source", equals: "maya_mobile_screenshot" },
   { path: "source", equals: "wise_mobile_screenshot" },
@@ -5341,6 +5351,7 @@ const mobileScreenshotOverlapPayloadMatchers: Array<{ path: "kind" | "source"; e
   { path: "source", equals: "gcrypto_mobile_screenshot" },
   { path: "source", equals: "gcrypto_transaction_screenshot" },
   { path: "source", equals: "gfunds_transaction_screenshot" },
+  { path: "source", equals: "generic_investment_action_screenshot" },
 ];
 
 const getMobileScreenshotWalletIdentity = (rawPayload: Prisma.JsonValue | null | undefined) => {

@@ -703,6 +703,15 @@ const getMobileScreenshotPayloadKind = (entry: CachedRecord | ImportedWorkspaceT
   if (/bpi/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
     return "bpi";
   }
+  if (/gcrypto|pdax/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
+    return "gcrypto";
+  }
+  if (/gfunds|atram|ryse/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
+    return "gfunds";
+  }
+  if (/generic_investment_action_screenshot/i.test(identityText)) {
+    return "generic-investment";
+  }
 
   return null;
 };

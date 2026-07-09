@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
 import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
-import { formatUploadAccountDisplayName } from "@/lib/account-display";
+import { formatUploadAccountDisplayName, getAccountCardName } from "@/lib/account-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import {
   deriveStatementFallbackAccountName,
@@ -165,7 +165,7 @@ assert.ok(
 assert.ok(
   allRows.every((row) => {
     const payload = row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : null;
-    return payload?.source === "gfunds_mobile_screenshot" && payload?.kind === "gfunds_mobile_screenshot";
+    return payload?.source === "gfunds_transaction_screenshot" && payload?.kind === "gfunds_transaction_screenshot";
   }),
   "GFunds rows should identify themselves as mobile screenshot imports for overlap collapse."
 );
@@ -301,6 +301,18 @@ assert.equal(
   formatUploadAccountDisplayName("ATRAM Global Technology Feeder Fund", "ATRAM", null, "investment"),
   "ATRAM Global Technology Feeder Fund",
   "Investment upload display names should preserve the visible fund name instead of collapsing to the institution brand."
+);
+
+assert.equal(
+  getAccountCardName({
+    name: "IMG_1415.PNG",
+    institution: "GFunds",
+    accountNumber: null,
+    type: "investment",
+    source: "upload",
+  }),
+  "GFunds",
+  "Investment account cards should prefer the institution over IMG_* screenshot filenames."
 );
 
 console.log("[PASS] GFunds screenshot parser surfaces investment accounts and visible transaction rows.");

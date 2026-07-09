@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
+import { getAccountCardName } from "@/lib/account-display";
+import {
+  deriveStatementFallbackAccountName,
+  resolveMobileWalletIdentityFromParsedRows,
+  resolveStatementIdentityFromParsedRows,
+} from "@/lib/import-statement-identity";
 
 const samples = [
   {
@@ -133,5 +139,49 @@ const withdrawRows = Array.from(uniqueRows.values()).filter((row) => row.descrip
 assert.ok(buyRows.length > 0 && buyRows.every((row) => row.type === "expense" && row.categoryName === "Investments"), "GCrypto buys should map to investment expenses.");
 assert.ok(sellRows.length > 0 && sellRows.every((row) => row.type === "income" && row.categoryName === "Investments"), "GCrypto sells should map to investment income.");
 assert.ok(withdrawRows.length === 1 && withdrawRows[0]?.type === "income" && withdrawRows[0]?.categoryName === "Transfers", "GCrypto withdrawals should map to transfer-like income.");
+
+const screenshotIdentity = resolveMobileWalletIdentityFromParsedRows(allRows as Array<Record<string, unknown>>);
+assert.deepEqual(
+  screenshotIdentity,
+  {
+    accountName: "GCrypto",
+    institution: "GCrypto",
+    accountType: "investment",
+    accountNumber: null,
+  },
+  "GCrypto screenshot rows should resolve to the canonical investment screenshot identity."
+);
+
+const parsedRowIdentity = resolveStatementIdentityFromParsedRows(allRows as Array<Record<string, unknown>>, {
+  fileName: "IMG_1429.PNG",
+});
+assert.deepEqual(
+  parsedRowIdentity,
+  {
+    accountName: "GCrypto",
+    institution: "GCrypto",
+    accountNumber: null,
+    accountType: "investment",
+  },
+  "GCrypto parsed rows should keep the canonical screenshot identity during account inference."
+);
+
+assert.equal(
+  deriveStatementFallbackAccountName("IMG_1429.PNG", "GCrypto", null, "investment"),
+  "GCrypto",
+  "Generic GCrypto screenshots should fall back to the canonical product name instead of a filename-derived label."
+);
+
+assert.equal(
+  getAccountCardName({
+    name: "IMG_1429.PNG",
+    institution: "GCrypto",
+    accountNumber: null,
+    type: "investment",
+    source: "upload",
+  }),
+  "GCrypto",
+  "Investment account cards should not surface IMG_* filenames when the institution is known."
+);
 
 console.log("[PASS] GCrypto screenshot parser surfaces one investment account and deduped visible transaction rows.");
