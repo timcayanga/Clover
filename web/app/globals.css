@@ -28920,7 +28920,7 @@ button.accounts-detail__transaction-head-cell {
 .landing-nav__submenu-link--featured,
 .landing-nav__submenu-link--featured strong {
   color: var(--accent);
-  font-weight: 700;
+  font-weight: 700 !important;
 }
 
 .landing-nav__submenu a:hover,
