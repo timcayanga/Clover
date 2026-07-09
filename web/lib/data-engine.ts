@@ -3763,6 +3763,21 @@ const scoreMerchantRule = (tokens: string[], normalizedMerchantCandidates: Set<s
   return overlap * 20 + rule.confidence * 0.75 + rule.timesConfirmed;
 };
 
+const hasFamilyMatch = (normalizedMerchantCandidates: Set<string>, ...values: Array<string | null | undefined>) => {
+  const candidateFamilies = new Set(
+    [...normalizedMerchantCandidates].map((candidate) => buildMerchantFamilySignature(candidate)).filter(Boolean)
+  );
+
+  for (const value of values) {
+    const family = buildMerchantFamilySignature(value);
+    if (family && candidateFamilies.has(family)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 export const classifyMerchant = (params: {
   merchantText: string;
   categoryText?: string | null;
@@ -3859,13 +3874,20 @@ export const classifyMerchant = (params: {
   if (bestRule && bestRuleScore >= 20) {
     const learnedCategory = bestRule.categoryName ?? finalHeuristicCategory;
     const exact = normalizedMerchantCandidates.has(bestRule.merchantKey);
+    const familyMatch = !exact && hasFamilyMatch(
+      normalizedMerchantCandidates,
+      bestRule.merchantPattern,
+      bestRule.normalizedName,
+      bestRule.merchantKey
+    );
     const learnedType = params.trainingSignals.find((signal) => normalizedMerchantCandidates.has(signal.merchantKey))?.type ?? params.type;
     const rawConfidence = Math.max(0, bestRuleScore) - Math.min(bestRuleScore * 0.75, negativePenalty * (exact ? 0.9 : 0.65));
-    const adjustedConfidence = Math.max(20, Math.round(Math.min(negativePenalty > 0 ? (exact ? 85 : 88) : 99, rawConfidence)));
+    const confidenceCap = familyMatch ? (negativePenalty > 0 ? 79 : 84) : negativePenalty > 0 ? (exact ? 85 : 88) : 99;
+    const adjustedConfidence = Math.max(20, Math.round(Math.min(confidenceCap, rawConfidence)));
     return {
       categoryName: learnedCategory,
       confidence: adjustedConfidence,
-      categoryReason: exact ? "rule-exact" : "rule-pattern",
+      categoryReason: exact ? "rule-exact" : familyMatch ? "rule-family" : "rule-pattern",
       categorySource: bestRule.source,
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
@@ -3885,13 +3907,15 @@ export const classifyMerchant = (params: {
   if (bestSignal && bestScore >= 18) {
     const learnedCategory = bestSignal.categoryName ?? finalHeuristicCategory;
     const exact = normalizedMerchantCandidates.has(bestSignal.merchantKey);
+    const familyMatch = !exact && hasFamilyMatch(normalizedMerchantCandidates, bestSignal.merchantKey, bestSignal.categoryName);
     const rawConfidence = Math.max(68, bestScore) - Math.min(bestScore * 0.6, negativePenalty * 0.45);
-    const confidence = Math.max(20, Math.round(Math.min(negativePenalty > 0 ? 80 : 99, rawConfidence)));
+    const confidenceCap = familyMatch ? (negativePenalty > 0 ? 76 : 82) : negativePenalty > 0 ? 80 : 99;
+    const confidence = Math.max(20, Math.round(Math.min(confidenceCap, rawConfidence)));
 
     return {
       categoryName: learnedCategory,
       confidence,
-      categoryReason: exact ? "learned-exact" : "learned-pattern",
+      categoryReason: exact ? "learned-exact" : familyMatch ? "learned-family" : "learned-pattern",
       categorySource: bestSignal.source,
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,

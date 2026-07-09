@@ -470,6 +470,14 @@ const main = async () => {
     transferOverreachSample.findings.some((finding) => finding.code === "transactions.recoverable_other_rows"),
     "the transfer-overreach sample should flag Other rows that are recoverable from merchant hints"
   );
+  assert.ok(
+    (transferOverreachSample.metrics.suspiciousTransferRate ?? 0) > 0,
+    "the transfer-overreach sample should measure suspicious transfer usage"
+  );
+  assert.ok(
+    (transferOverreachSample.metrics.recoverableOtherRate ?? 0) > 0,
+    "the transfer-overreach sample should measure recoverable Other rows"
+  );
 
   console.log("data-qa regression passed");
 };

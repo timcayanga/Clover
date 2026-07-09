@@ -47,6 +47,8 @@ export type AdminDataQaFileItem = {
   totalDurationMs: number | null;
   rowCount: number | null;
   msPerRow: number | null;
+  suspiciousTransferRate: number | null;
+  recoverableOtherRate: number | null;
   latestRunAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -100,13 +102,15 @@ const parseJsonNumber = (value: unknown) => {
 
 const parseFeedbackMetrics = (value: Prisma.JsonValue | null | undefined) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { rowCount: null, msPerRow: null };
+    return { rowCount: null, msPerRow: null, suspiciousTransferRate: null, recoverableOtherRate: null };
   }
 
   const record = value as Record<string, unknown>;
   return {
     rowCount: parseJsonNumber(record.rowCount),
     msPerRow: parseJsonNumber(record.msPerRow),
+    suspiciousTransferRate: parseJsonNumber(record.suspiciousTransferRate),
+    recoverableOtherRate: parseJsonNumber(record.recoverableOtherRate),
   };
 };
 
@@ -469,6 +473,8 @@ export async function getAdminDataQaRuns(filters: AdminDataQaFilters = {}): Prom
         totalDurationMs: latestRun?.totalDurationMs ?? null,
         rowCount: metrics.rowCount,
         msPerRow: metrics.msPerRow,
+        suspiciousTransferRate: metrics.suspiciousTransferRate,
+        recoverableOtherRate: metrics.recoverableOtherRate,
         latestRunAt: latestRunAt ? latestRunAt.toISOString() : null,
         createdAt: latestRun?.createdAt?.toISOString() ?? importFile?.createdAt.toISOString() ?? new Date().toISOString(),
         updatedAt: latestRun?.updatedAt?.toISOString() ?? importFile?.updatedAt.toISOString() ?? new Date().toISOString(),
@@ -522,6 +528,8 @@ export async function getAdminDataQaRuns(filters: AdminDataQaFilters = {}): Prom
         totalDurationMs: latestRun?.totalDurationMs ?? null,
         rowCount: metrics.rowCount,
         msPerRow: metrics.msPerRow,
+        suspiciousTransferRate: metrics.suspiciousTransferRate,
+        recoverableOtherRate: metrics.recoverableOtherRate,
         latestRunAt: latestRunAt ? latestRunAt.toISOString() : null,
         createdAt: latestRun?.createdAt?.toISOString() ?? importFile?.createdAt.toISOString() ?? new Date().toISOString(),
         updatedAt: latestRun?.updatedAt?.toISOString() ?? importFile?.updatedAt.toISOString() ?? new Date().toISOString(),

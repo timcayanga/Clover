@@ -67,15 +67,15 @@ export type RecurringObligationType =
   | "general";
 
 const recurringKeywordPattern =
-  /\b(rent|internet|bill|billing|utility|utilities|subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|installment|statement\s+payment|payment\s+due|electric|water|phone|mobile\s+plan|broadband|wifi|insurance|mortgage|loan|repayment|amortization|tuition|gym|fitness|fee|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|prime|apple\s+services?|figma|zoom|dropbox|airalo|slack)\b/i;
+  /\b(rent|lease|landlord|internet|bill|billing|utility|utilities|subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|installment|statement\s+payment|payment\s+due|electric|water|phone|mobile\s+plan|broadband|wifi|insurance|mortgage|loan|repayment|amortization|tuition|school\s+fee|gym|fitness|fee|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|prime|apple\s+services?|figma|zoom|dropbox|airalo|slack|autosweep|easytrip|beep\s+card|parking\s+subscription)\b/i;
 const recurringExclusionPattern =
   /\b(transfer|instapay|fund transfer|outward|inward|cash payment|bills payment|payment to card|card payment|atm withdrawal|cash advance|top up|cash in|incoming credit|refund|reversal)\b/i;
 const recurringNoiseTitlePattern =
   /^(transfer from|transfer to|interbank transfer|instapay ?fee|load purchase|in app purchase for mobile|atm withdrawal|withholding tax|interest applied|mobile load)/i;
 const recurringRescuePattern =
-  /\b(subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|rent|internet|broadband|wifi|phone|mobile\s+plan|electric|water|utility|utilities|insurance|mortgage|loan|repayment|amortization|installment|statement\s+payment|payment\s+due|tuition|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|apple\s+services?|figma|zoom|dropbox|airalo|slack)\b/i;
+  /\b(subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|rent|lease|internet|broadband|wifi|phone|mobile\s+plan|electric|water|utility|utilities|insurance|mortgage|loan|repayment|amortization|installment|statement\s+payment|payment\s+due|tuition|school\s+fee|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|apple\s+services?|figma|zoom|dropbox|airalo|slack|autosweep|easytrip|beep\s+card|parking\s+subscription)\b/i;
 const recurringPositiveTransferPattern =
-  /\b(statement\s+payment|payment\s+due|loan|repayment|amortization|installment|insurance|premium|rent|internet|phone|electric|water|utility|utilities|subscription|membership|dues|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|canva|linkedin|pldt|meralco|globe|smart|maynilad|figma|zoom|dropbox|airalo|slack)\b/i;
+  /\b(statement\s+payment|payment\s+due|loan|repayment|amortization|installment|insurance|premium|rent|lease|internet|phone|electric|water|utility|utilities|subscription|membership|dues|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|canva|linkedin|pldt|meralco|globe|smart|maynilad|figma|zoom|dropbox|airalo|slack|tuition|school\s+fee|autosweep|easytrip|beep\s+card|parking\s+subscription)\b/i;
 const recurringCreditLikeExclusionPattern =
   /\b(salary|payroll|bonus|interest earned|interest applied|interest credited|incoming credit|received money|cash deposit|deposit|refund|reversal|credit memo)\b/i;
 const recurringCategoryRescueSet = new Set(["bills & utilities", "insurance", "loans", "housing", "education", "subscriptions", "health & wellness"]);
@@ -106,6 +106,11 @@ const recurringMerchantAliases = [
   { pattern: /\bglobe\b/i, label: "Globe" },
   { pattern: /\bsmart\b/i, label: "Smart" },
   { pattern: /\bgrab\b.*\b(unlimited|subscription|plus)\b/i, label: "Grab" },
+  { pattern: /\bautosweep\b/i, label: "Autosweep" },
+  { pattern: /\beasytrip\b/i, label: "Easytrip" },
+  { pattern: /\bbeep\b.*\b(card|reload|load)\b|\bbeep\s+card\b/i, label: "Beep Card" },
+  { pattern: /\b(?:rent|lease)\b/i, label: "Rent" },
+  { pattern: /\b(?:tuition|school\s+fee|school\s+payment)\b/i, label: "Tuition" },
   { pattern: /\b(anytime\s+fitness|fitness\s+first|gold'?s\s+gym|classpass|gym\s+membership)\b/i, label: "Gym Membership" },
   { pattern: /\bamazon web services\b|\baws\b/i, label: "Amazon Web Services" },
 ];
@@ -113,7 +118,7 @@ const recurringMerchantAliases = [
 const recurringFamilyNoisePattern =
   /\b(?:subscription|subscr(?:iption)?|recurring|monthly|autopay|premium|membership|member|plan|service|services|merchant|purchase|ecommerce|online|intl|international|foreign|debit|credit|visa|mastercard|pos|approval|reference|ref|auth|descriptor|statement|biller|billers?)\b/g;
 const variableAmountRecurringPattern =
-  /\b(rent|internet|bill|utility|utilities|electric|water|phone|insurance|mortgage|loan|repayment|amortization|dues|tuition|globe|smart|pldt|meralco|maynilad)\b/i;
+  /\b(rent|lease|internet|bill|utility|utilities|electric|water|phone|insurance|mortgage|loan|repayment|amortization|dues|tuition|school\s+fee|globe|smart|pldt|meralco|maynilad|autosweep|easytrip|beep\s+card)\b/i;
 
 export const normalizeRecurringMerchantKey = (value: string) =>
   value
@@ -315,7 +320,7 @@ export const classifyRecurringObligation = (params: {
   }
 
   if (
-    /\b(internet|phone|electric|water|utility|utilities|pldt|globe|smart|meralco|broadband|postpaid)\b/.test(normalizedText) ||
+    /\b(internet|phone|electric|water|utility|utilities|pldt|globe|smart|meralco|broadband|postpaid|autosweep|easytrip|beep\s+card|parking\s+subscription)\b/.test(normalizedText) ||
     categories.has("bills & utilities")
   ) {
     return "utility";

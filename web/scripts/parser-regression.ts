@@ -1882,6 +1882,35 @@ const main = async () => {
     );
   }
 
+  const familyClassification = classifyMerchant({
+    merchantText: "PAYPAL*SPOTIFY*P 402 EBB",
+    institution: "BPI",
+    type: "expense",
+    categoryText: "PAYPAL*SPOTIFY*P 402 EBB",
+    merchantRules: [
+      {
+        merchantKey: "spotify",
+        merchantPattern: "Spotify Premium",
+        normalizedName: "Spotify",
+        categoryId: null,
+        categoryName: "Bills & Utilities",
+        source: "manual",
+        confidence: 95,
+        timesConfirmed: 5,
+      },
+    ],
+    trainingSignals: [],
+  });
+  if (
+    familyClassification.categoryName !== "Bills & Utilities" ||
+    familyClassification.categoryReason !== "rule-family" ||
+    familyClassification.confidence > 84
+  ) {
+    throw new Error(
+      `expected family classification to stay helpful but capped, got ${JSON.stringify(familyClassification)}`
+    );
+  }
+
   const rcbcCreditPath = join(root, "Samples/RCBC/728919236-Acfroga47rrwerw7v8xwjcyqjxnpvi1hv5climj2qkpdzsqlabwmr51pzid4mt-Ao-Swizece4lt1ycaubzsilpqnzohhyzqxuv2cfbldosfajyekhfijmkceso8yzz1vgjmwntbprxb5ribspge-G.pdf");
   const rcbcCreditBytes = await readFile(rcbcCreditPath);
   const rcbcCreditText = await readUploadedFileText({

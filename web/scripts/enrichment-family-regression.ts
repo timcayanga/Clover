@@ -153,6 +153,57 @@ const runRecurringChecks = () => {
 
   const spotifyPattern = merchantVariantPatterns.find((pattern) => pattern.canonicalTitle === "Spotify");
   assert(spotifyPattern?.frequency === "monthly", "Expected noisy Spotify variants to collapse into a monthly recurring pattern");
+
+  const tuitionPatterns = detectRecurringPatterns([
+    {
+      id: "t1",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-01-05"),
+      amount: 15000,
+      currency: "PHP",
+      type: "transfer",
+      merchantRaw: "SCHOOL FEE PAYMENT",
+      merchantClean: null,
+      description: "SCHOOL FEE PAYMENT",
+      category: { name: "Education" },
+      account: { id: "a", name: "BPI 1234", institution: "BPI" },
+      importFile: null,
+    },
+    {
+      id: "t2",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-02-05"),
+      amount: 15000,
+      currency: "PHP",
+      type: "transfer",
+      merchantRaw: "TUITION PAYMENT",
+      merchantClean: null,
+      description: "TUITION PAYMENT",
+      category: { name: "Education" },
+      account: { id: "a", name: "BPI 1234", institution: "BPI" },
+      importFile: null,
+    },
+    {
+      id: "t3",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-03-05"),
+      amount: 15000,
+      currency: "PHP",
+      type: "transfer",
+      merchantRaw: "SCHOOL PAYMENT",
+      merchantClean: null,
+      description: "SCHOOL PAYMENT",
+      category: { name: "Education" },
+      account: { id: "a", name: "BPI 1234", institution: "BPI" },
+      importFile: null,
+    },
+  ]);
+
+  const tuitionPattern = tuitionPatterns.find((pattern) => pattern.canonicalTitle === "Tuition");
+  assert(tuitionPattern?.frequency === "monthly", "Expected tuition-like transfer rows to become monthly recurring candidates");
 };
 
 const main = () => {
