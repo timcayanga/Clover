@@ -37863,17 +37863,17 @@ body[data-split-bill-modal-open="true"] .app-shell {
 }
 
 .landing-footer--expanded {
-  --landing-footer-gradient: linear-gradient(135deg, rgba(3, 168, 192, 0.98), rgba(2, 137, 160, 0.98));
+  --landing-footer-fill: #17a9c4;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   position: relative;
   width: 100vw;
-  min-height: max(180px, calc(100dvh - 700px));
+  min-height: max(136px, calc(100dvh - 760px));
   margin: auto 0 0 calc(50% - 50vw);
-  padding: 28px 0 max(76px, env(safe-area-inset-bottom));
+  padding: 22px 0 max(44px, env(safe-area-inset-bottom));
   border-radius: 0;
-  background: var(--landing-footer-gradient);
+  background: var(--landing-footer-fill);
   color: white;
   box-shadow: none;
   box-sizing: border-box;
@@ -37886,23 +37886,25 @@ body[data-split-bill-modal-open="true"] .app-shell {
   top: 100%;
   left: 0;
   width: 100%;
-  height: max(88px, env(safe-area-inset-bottom));
-  background: var(--landing-footer-gradient);
+  height: max(48px, env(safe-area-inset-bottom));
+  background: var(--landing-footer-fill);
 }
 
 .landing-footer__columns {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  width: min(1120px, calc(100% - 32px));
+  grid-template-columns: minmax(220px, 1.1fr) minmax(180px, 0.9fr) minmax(220px, 1fr);
+  gap: 24px;
+  align-items: start;
+  justify-content: space-between;
+  width: min(980px, calc(100% - 48px));
   margin: 0 auto;
-  padding: 0 16px;
+  padding: 0 12px;
   box-sizing: border-box;
 }
 
 .landing-footer__column {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   align-content: start;
 }
 
@@ -38037,17 +38039,17 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .landing-footer--expanded {
-    min-height: max(170px, calc(100dvh - 620px));
-    padding: 24px 16px max(68px, env(safe-area-inset-bottom));
+    min-height: max(132px, calc(100dvh - 660px));
+    padding: 20px 16px max(40px, env(safe-area-inset-bottom));
   }
 
   .landing-footer--expanded::after {
-    height: max(76px, env(safe-area-inset-bottom));
+    height: max(44px, env(safe-area-inset-bottom));
   }
 
   .landing-footer__columns {
     grid-template-columns: 1fr 1fr;
-    gap: 16px 12px;
+    gap: 14px 18px;
   }
 
   .landing-footer__heading {
