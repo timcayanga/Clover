@@ -28188,6 +28188,7 @@ button.accounts-detail__transaction-head-cell {
   cursor: pointer;
   font: inherit;
   color: var(--muted);
+  font-weight: 400;
   transition:
     color 160ms ease,
     background 160ms ease;
@@ -28234,6 +28235,7 @@ button.accounts-detail__transaction-head-cell {
   border-radius: 16px;
   color: var(--muted);
   font-size: 14px;
+  font-weight: 400;
   line-height: 1.2;
   transition:
     background 140ms ease,
@@ -28244,6 +28246,7 @@ button.accounts-detail__transaction-head-cell {
 .landing-nav__submenu-link strong {
   color: inherit;
   font-size: 14px;
+  font-weight: inherit;
   line-height: 1.2;
 }
 
@@ -28260,7 +28263,6 @@ button.accounts-detail__transaction-head-cell {
 
 .landing-nav__submenu-link--featured {
   color: #6d4bc2;
-  font-weight: 700;
 }
 
 .landing-nav__submenu-link--featured strong {
@@ -28274,7 +28276,7 @@ button.accounts-detail__transaction-head-cell {
   padding: 0 10px;
   border-radius: 999px;
   color: var(--muted);
-  font-weight: 500;
+  font-weight: 400;
   transition:
     color 160ms ease,
     background 160ms ease;
@@ -28288,7 +28290,6 @@ button.accounts-detail__transaction-head-cell {
 
 .landing-nav__link[aria-current="page"] {
   color: var(--text);
-  font-weight: 600;
   background: rgba(3, 168, 192, 0.08);
 }
 
@@ -31275,7 +31276,7 @@ button.accounts-detail__transaction-head-cell {
     text-transform: uppercase;
     letter-spacing: 0.14em;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 400;
   }
 
   .landing-nav__mobile-home-link,
@@ -31289,6 +31290,7 @@ button.accounts-detail__transaction-head-cell {
     background: rgba(255, 255, 255, 0.76);
     color: var(--text);
     font-size: 14px;
+    font-weight: 400;
     transition: background 140ms ease, transform 140ms ease;
   }
 
@@ -31298,6 +31300,7 @@ button.accounts-detail__transaction-head-cell {
 
   .landing-nav__mobile-menu-link strong {
     font-size: 14px;
+    font-weight: inherit;
     line-height: 1.2;
   }
 
@@ -37614,7 +37617,6 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
 .landing-footer__link--featured {
   color: #d9c8ff;
-  font-weight: 700;
 }
 
 .landing-footer__heading {
@@ -37623,7 +37625,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   font-size: 12px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .landing-footer--expanded a {

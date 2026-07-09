@@ -241,7 +241,12 @@ export const LEGAL_LINKS: PublicNavLink[] = [
 ];
 
 export const FEATURE_LINKS: PublicNavLink[] = [
-  ...FEATURE_PAGES.map((page) => ({
+  ...[...FEATURE_PAGES]
+    .sort((left, right) => {
+      const order = ["track-finances", "gain-insights", "split-bills", "budgeting", "security", "pro"];
+      return order.indexOf(left.slug) - order.indexOf(right.slug);
+    })
+    .map((page) => ({
     label: page.navLabel,
     href: `/features/${page.slug}`,
     description: page.overview,
