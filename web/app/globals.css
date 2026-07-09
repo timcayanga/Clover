@@ -29607,6 +29607,36 @@ button.accounts-detail__transaction-head-cell {
   padding-top: 28px;
 }
 
+.feature-detail-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.feature-detail-page__inner {
+  display: grid;
+  gap: 0;
+  flex: 1 0 auto;
+}
+
+.feature-detail-page .landing-footer--expanded {
+  margin-top: auto;
+}
+
+.feature-detail-page--single .feature-detail-page__inner {
+  min-height: max(760px, calc(100dvh - 220px));
+  align-content: center;
+  padding: 64px 0 220px;
+}
+
+.feature-detail-page--single .feature-detail-page__section {
+  min-height: auto;
+  padding: 24px 0 0;
+}
+
+.feature-detail-page--single .landing-feature__copy {
+  gap: 18px;
+}
+
 .legal-page {
   min-height: 100dvh;
   padding: 32px 0 56px;
@@ -37960,6 +37990,16 @@ body[data-split-bill-modal-open="true"] .app-shell {
 }
 
 @media (max-width: 720px) {
+  .feature-detail-page--single .feature-detail-page__inner {
+    min-height: auto;
+    align-content: start;
+    padding: 28px 0 140px;
+  }
+
+  .feature-detail-page--single .feature-detail-page__section {
+    padding-top: 12px;
+  }
+
   .landing-page {
     width: min(100%, calc(100% - 16px));
     padding-top: 10px;

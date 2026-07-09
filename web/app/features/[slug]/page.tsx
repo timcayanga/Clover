@@ -67,8 +67,10 @@ export default async function FeatureDetailPage({ params }: FeatureDetailPagePro
     })),
   ];
 
+  const pageClassName = `landing-page feature-detail-page ${page.sections.length === 0 ? "feature-detail-page--single" : "feature-detail-page--multi"}`.trim();
+
   return (
-    <main className="landing-page feature-detail-page">
+    <main className={pageClassName}>
       <LandingNav accountState={accountState} />
 
       <div className="feature-detail-page__inner">
