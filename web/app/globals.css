@@ -28187,6 +28187,8 @@ button.accounts-detail__transaction-head-cell {
   border-radius: 999px;
   cursor: pointer;
   font: inherit;
+  font-size: 14px;
+  line-height: 1.2;
   color: var(--muted);
   font-weight: 400;
   transition:
@@ -28276,6 +28278,8 @@ button.accounts-detail__transaction-head-cell {
   padding: 0 10px;
   border-radius: 999px;
   color: var(--muted);
+  font-size: 14px;
+  line-height: 1.2;
   font-weight: 400;
   transition:
     color 160ms ease,
@@ -37592,15 +37596,18 @@ body[data-split-bill-modal-open="true"] .app-shell {
 }
 
 .landing-footer--expanded {
-  display: grid;
-  justify-items: stretch;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
   width: 100vw;
+  min-height: max(260px, calc(100dvh - 620px));
   margin: auto 0 0 calc(50% - 50vw);
-  padding: 40px 0 max(72px, env(safe-area-inset-bottom));
+  padding: 40px 0 max(112px, env(safe-area-inset-bottom));
   border-radius: 0;
   background: linear-gradient(135deg, rgba(3, 168, 192, 0.98), rgba(2, 137, 160, 0.98));
   color: white;
   box-shadow: none;
+  box-sizing: border-box;
 }
 
 .landing-footer__columns {
@@ -37769,7 +37776,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .landing-footer--expanded {
-    padding: 32px 16px max(56px, env(safe-area-inset-bottom));
+    min-height: max(280px, calc(100dvh - 540px));
+    padding: 32px 16px max(88px, env(safe-area-inset-bottom));
   }
 
   .landing-footer__columns {
