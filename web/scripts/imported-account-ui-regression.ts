@@ -322,6 +322,48 @@ const main = () => {
     "Best-match resolution should attach the masked GSave #UNOboost upload account to the correct full-number UNO time deposit."
   );
 
+  assert.equal(
+    matchesImportedAccountIdentity(
+      {
+        name: "BPI Platinum Rewards 9012",
+        institution: "BPI",
+        accountNumber: "1234-5678-9012",
+        type: "credit_card",
+        currency: "PHP",
+      },
+      {
+        name: "BPI 9012",
+        institution: "Bank of the Philippine Islands",
+        accountNumber: "9012",
+        type: "bank",
+        currency: "PHP",
+      }
+    ),
+    true,
+    "Untrained same-card uploads should reconcile full, formatted card numbers against suffix-only statement identities."
+  );
+
+  assert.equal(
+    matchesImportedAccountIdentity(
+      {
+        name: "BPI Platinum Rewards 9012",
+        institution: "BPI",
+        accountNumber: "1234-5678-9012",
+        type: "credit_card",
+        currency: "PHP",
+      },
+      {
+        name: "BPI 3488",
+        institution: "Bank of the Philippine Islands",
+        accountNumber: "3488",
+        type: "bank",
+        currency: "PHP",
+      }
+    ),
+    false,
+    "Untrained card matching must not collapse different visible card suffixes from the same institution."
+  );
+
   const optimisticImportedTransactions: TestTransaction[] = [
     {
       id: "optimistic-1",

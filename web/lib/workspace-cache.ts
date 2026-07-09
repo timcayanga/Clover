@@ -216,6 +216,10 @@ const looksLikeImportedFileLabel = (value?: string | null) => {
 const canonicalImportedInstitutionKey = (value?: string | null) =>
   normalizeImportedAccountInstitutionKey(value)
     .replace(/\bunion\s*bank(?:\s+of\s+the\s+philippines)?\b/g, "unionbank")
+    .replace(/\bbank\s+of\s+the\s+philippine\s+islands\b/g, "bpi")
+    .replace(/\bbdo\s+unibank(?:\s+inc\.?)?\b/g, "bdo")
+    .replace(/\brizal\s+commercial\s+banking\s+corp(?:oration)?\b/g, "rcbc")
+    .replace(/\bsecurity\s+bank\s+corp(?:oration)?\b/g, "security bank")
     .replace(/\bchina\s+bank\b/g, "chinabank")
     .replace(/\bmetro\s+bank\b/g, "metrobank")
     .replace(/\bphilippine\s+national\s+bank\b/g, "pnb");
@@ -225,6 +229,56 @@ const hasImportedAccountNumber = (value?: unknown) => Boolean(extractLastFourDig
 const readImportedAccountText = (account: CachedRecord | ImportedAccountIdentityLike, key: "name" | "institution" | "accountNumber" | "source") => {
   const value = account[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
+};
+
+const normalizeImportedAccountTypeFamily = (value?: string | null) => {
+  const normalized = normalizeWhitespace(String(value ?? "")).toLowerCase();
+  if (normalized === "credit_card" || normalized === "line_of_credit" || normalized === "prepaid") {
+    return "card";
+  }
+
+  return normalized;
+};
+
+const importedAccountTypesAreCompatible = (leftType?: string | null, rightType?: string | null) => {
+  const left = normalizeWhitespace(String(leftType ?? "")).toLowerCase();
+  const right = normalizeWhitespace(String(rightType ?? "")).toLowerCase();
+  if (!left || !right) {
+    return false;
+  }
+
+  if (left === right) {
+    return true;
+  }
+
+  const leftFamily = normalizeImportedAccountTypeFamily(left);
+  const rightFamily = normalizeImportedAccountTypeFamily(right);
+  if (leftFamily === rightFamily) {
+    return true;
+  }
+
+  // Untrained statements sometimes classify card/debit-card files as bank accounts.
+  // Only allow this relaxed match when stronger identity signals, such as institution
+  // and account-number suffix, are present.
+  const cardOrBankFamilies = new Set(["bank", "card"]);
+  return cardOrBankFamilies.has(leftFamily) && cardOrBankFamilies.has(rightFamily);
+};
+
+const importedAccountNumbersShareSuffix = (leftDigits: string, rightDigits: string) => {
+  if (!leftDigits || !rightDigits) {
+    return false;
+  }
+
+  if (leftDigits === rightDigits) {
+    return true;
+  }
+
+  const shortestLength = Math.min(leftDigits.length, rightDigits.length);
+  if (shortestLength < 4) {
+    return false;
+  }
+
+  return leftDigits.endsWith(rightDigits) || rightDigits.endsWith(leftDigits);
 };
 
 const isGenericImportedUploadAccount = (account: CachedRecord | ImportedAccountIdentityLike) => {
@@ -318,7 +372,7 @@ const pruneOrphanImportedAccountPlaceholders = <T extends CachedRecord>(accounts
 export const pruneImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) =>
   pruneOrphanImportedAccountPlaceholders(pruneGenericImportedAccountPlaceholders(accounts));
 
-const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, right: ImportedAccountIdentityLike) => {
+export const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, right: ImportedAccountIdentityLike) => {
   const leftInstitution = canonicalImportedInstitutionKey(left.institution);
   const rightInstitution = canonicalImportedInstitutionKey(right.institution);
   const leftType = normalizeWhitespace(String(left.type ?? "")).toLowerCase();
@@ -327,6 +381,8 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
   const rightAccountDigits = String(right.accountNumber ?? "").replace(/\D/g, "");
   const hasExactAccountNumberMatch = Boolean(leftAccountDigits && rightAccountDigits && leftAccountDigits === rightAccountDigits);
   const hasConflictingExplicitAccountNumbers = Boolean(leftAccountDigits && rightAccountDigits && leftAccountDigits !== rightAccountDigits);
+  const accountTypesAreCompatible = importedAccountTypesAreCompatible(leftType, rightType);
+  const accountNumbersShareSuffix = importedAccountNumbersShareSuffix(leftAccountDigits, rightAccountDigits);
   const leftStem = normalizeImportedAccountNameStem(left.name ?? left.institution ?? null);
   const rightStem = normalizeImportedAccountNameStem(right.name ?? right.institution ?? null);
   const canTreatMaskedImportedAccountNumbersAsRelated =
@@ -334,22 +390,26 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
     leftInstitution &&
     rightInstitution &&
     leftInstitution === rightInstitution &&
-    leftType &&
-    rightType &&
-    leftType === rightType &&
+    accountTypesAreCompatible &&
     leftStem &&
     rightStem &&
     leftStem === rightStem &&
-    (leftAccountDigits.length <= 4 || rightAccountDigits.length <= 4) &&
-    (leftAccountDigits.endsWith(rightAccountDigits) || rightAccountDigits.endsWith(leftAccountDigits));
+    accountNumbersShareSuffix;
+  const canTreatSameInstitutionSuffixAsRelated =
+    hasConflictingExplicitAccountNumbers &&
+    leftInstitution &&
+    rightInstitution &&
+    leftInstitution === rightInstitution &&
+    accountTypesAreCompatible &&
+    accountNumbersShareSuffix &&
+    Math.min(leftAccountDigits.length, rightAccountDigits.length) <= 6;
   const canTreatConflictingAccountNumbersAsRelated =
     canTreatMaskedImportedAccountNumbersAsRelated ||
+    canTreatSameInstitutionSuffixAsRelated ||
     (hasConflictingExplicitAccountNumbers &&
       leftInstitution === "unionbank" &&
       rightInstitution === "unionbank" &&
-      leftType &&
-      rightType &&
-      leftType === rightType &&
+      accountTypesAreCompatible &&
       (leftAccountDigits.length <= 4 || rightAccountDigits.length <= 4) &&
       (leftAccountDigits.endsWith(rightAccountDigits) || rightAccountDigits.endsWith(leftAccountDigits)));
   if (hasConflictingExplicitAccountNumbers && !canTreatConflictingAccountNumbersAsRelated) {
@@ -368,20 +428,18 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
     return 100;
   }
 
-  if (!leftInstitution || !rightInstitution || leftInstitution !== rightInstitution || !leftType || leftType !== rightType) {
+  if (!leftInstitution || !rightInstitution || leftInstitution !== rightInstitution || !accountTypesAreCompatible) {
     const leftLastFour = extractLastFourDigits(left.accountNumber ?? left.name);
     const rightLastFour = extractLastFourDigits(right.accountNumber ?? right.name);
     const leftExplicitLastFour = extractLastFourDigits(left.accountNumber);
     const rightExplicitLastFour = extractLastFourDigits(right.accountNumber);
-    if (hasExactAccountNumberMatch && leftType && rightType && leftType === rightType) {
+    if (hasExactAccountNumberMatch && accountTypesAreCompatible) {
       return 99;
     }
     const institutionMismatchIsFileNoise = looksLikeImportedFileLabel(left.institution) || looksLikeImportedFileLabel(right.institution);
     if (
       institutionMismatchIsFileNoise &&
-      leftType &&
-      rightType &&
-      leftType === rightType &&
+      accountTypesAreCompatible &&
       leftExplicitLastFour &&
       rightExplicitLastFour &&
       leftLastFour === rightLastFour
@@ -396,7 +454,7 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
   const rightLastFour = extractLastFourDigits(right.accountNumber ?? right.name);
   const leftExplicitLastFour = extractLastFourDigits(left.accountNumber);
   const rightExplicitLastFour = extractLastFourDigits(right.accountNumber);
-  if (hasExactAccountNumberMatch && leftType && rightType && leftType === rightType) {
+  if (hasExactAccountNumberMatch && accountTypesAreCompatible) {
     return 99;
   }
   if ((leftExplicitLastFour && !rightExplicitLastFour) || (!leftExplicitLastFour && rightExplicitLastFour)) {
@@ -406,7 +464,7 @@ const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, ri
     return 0;
   }
   if (leftLastFour && rightLastFour && leftLastFour === rightLastFour) {
-    return 95;
+    return accountTypesAreCompatible ? 95 : 0;
   }
   if (leftLastFour && rightLastFour && leftLastFour !== rightLastFour) {
     const leftDigits = String(left.accountNumber ?? "").replace(/\D/g, "");

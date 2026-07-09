@@ -4201,15 +4201,12 @@ const collapseDuplicateUploadedAccountsForAccount = async <
     return account;
   }
 
-  const canonicalInstitutionKey = (value: string | null | undefined) =>
-    normalizeImportedAccountKey(value, value, null, null)
-      .replace(/\bphilippine\s+national\s+bank\b/g, "pnb");
+  const accountCurrency = (account as { currency?: string | null }).currency ?? null;
   const duplicateCandidates = await prisma.account.findMany({
     where: {
       workspaceId,
-      type: account.type,
       source: "upload",
-      ...(accountNumber ? { accountNumber } : { accountNumber: null }),
+      ...(accountCurrency ? { currency: accountCurrency } : {}),
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: {
@@ -4228,7 +4225,13 @@ const collapseDuplicateUploadedAccountsForAccount = async <
   });
   const duplicates = duplicateCandidates.filter((candidate) => {
     if (accountNumber) {
-      return canonicalInstitutionKey(candidate.institution) === canonicalInstitutionKey(institution);
+      return matchesImportedAccountIdentity(candidate, {
+        name: account.name,
+        institution,
+        accountNumber,
+        type: account.type,
+        currency: accountCurrency,
+      });
     }
 
     return matchesImportedAccountIdentity(candidate, {
@@ -4236,7 +4239,7 @@ const collapseDuplicateUploadedAccountsForAccount = async <
       institution,
       accountNumber: null,
       type: account.type,
-      currency: (account as { currency?: string | null }).currency ?? null,
+      currency: accountCurrency,
     });
   });
 

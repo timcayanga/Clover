@@ -41,6 +41,10 @@ export const canonicalImportedInstitutionKey = (value?: string | null) =>
     .replace(/\s+\d{4}$/, "")
     .trim()
     .replace(/\bunion\s*bank(?:\s+of\s+the\s+philippines)?\b/g, "unionbank")
+    .replace(/\bbank\s+of\s+the\s+philippine\s+islands\b/g, "bpi")
+    .replace(/\bbdo\s+unibank(?:\s+inc\.?)?\b/g, "bdo")
+    .replace(/\brizal\s+commercial\s+banking\s+corp(?:oration)?\b/g, "rcbc")
+    .replace(/\bsecurity\s+bank\s+corp(?:oration)?\b/g, "security bank")
     .replace(/\bchina\s+bank\b/g, "chinabank")
     .replace(/\bmetro\s+bank\b/g, "metrobank")
     .replace(/\bphilippine\s+national\s+bank\b/g, "pnb");
