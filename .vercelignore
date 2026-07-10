@@ -5,6 +5,8 @@ web/.next
 web/.vercel
 web/.env.local
 .env.local
+pnpm-lock.yaml
+pnpm-workspace.yaml
 tmp
 *.log
 
