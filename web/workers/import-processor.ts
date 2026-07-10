@@ -6665,7 +6665,7 @@ export const processImportFileText = async (
     Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) &&
     Boolean(textCacheInfo?.cacheRecord?.metadata);
 
-  if (imageImport && !trainedReceiptDetails && !canReuseCachedStatementParse) {
+  if (imageImport && !trainedReceiptDetails && !canReuseCachedStatementParse && !text.trim()) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
