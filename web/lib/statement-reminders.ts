@@ -3,6 +3,7 @@ import { hasCompatibleTable } from "@/lib/data-engine";
 
 const CREDIT_CARD_REMINDER_INSTITUTIONS = new Set(["BPI", "AUB", "RCBC"]);
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const REMINDER_RECENCY_WINDOW_DAYS = 450;
 
 export type StatementReminder = {
   checkpointId: string;
@@ -16,6 +17,8 @@ export type StatementReminder = {
   totalAmountDue: number;
   sourceFileName: string | null;
   daysUntilDue: number;
+  dueDayOfMonth: number | null;
+  detectionSource: "explicit" | "inferred_history" | "projected";
 };
 
 type ReminderCheckpoint = {
@@ -66,6 +69,11 @@ const parseAmountValue = (value: unknown) => {
 };
 
 const parseReminderDate = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
   if (typeof value !== "string" || !value.trim()) {
     return null;
   }
@@ -83,6 +91,16 @@ const addMonths = (date: Date, months: number) => {
   next.setMonth(next.getMonth() + months, 1);
   const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
   next.setDate(Math.min(day, lastDay));
+  return next;
+};
+
+const rollDateForwardMonthly = (date: Date, minTimestamp: number) => {
+  let next = toUtcMidday(date);
+  let guard = 0;
+  while (next.getTime() <= minTimestamp && guard < 240) {
+    next = toUtcMidday(addMonths(next, 1));
+    guard += 1;
+  }
   return next;
 };
 
@@ -104,6 +122,15 @@ const readExplicitPaymentDueDate = (sourceMetadata: Record<string, unknown> | nu
     sourceMetadata?.payment_due_date,
     sourceMetadata?.nextPaymentDueDate,
     sourceMetadata?.next_due_date,
+    sourceMetadata?.due,
+    sourceMetadata?.paymentDue,
+    sourceMetadata?.payment_due,
+    sourceMetadata?.paymentDueOn,
+    sourceMetadata?.payment_due_on,
+    sourceMetadata?.dueOn,
+    sourceMetadata?.due_on,
+    sourceMetadata?.amountDueDate,
+    sourceMetadata?.amount_due_date,
   ];
 
   for (const candidate of candidates) {
@@ -119,6 +146,26 @@ const readExplicitPaymentDueDate = (sourceMetadata: Record<string, unknown> | nu
       ? sourceMetadata?.endDate ?? checkpoint.statementEndDate?.toISOString() ?? null
       : null;
   return parseReminderDate(fallbackValue);
+};
+
+const readExplicitDueDay = (sourceMetadata: Record<string, unknown> | null) => {
+  const candidates = [
+    sourceMetadata?.dueDayOfMonth,
+    sourceMetadata?.due_day_of_month,
+    sourceMetadata?.paymentDueDay,
+    sourceMetadata?.payment_due_day,
+    sourceMetadata?.dueDay,
+    sourceMetadata?.due_day,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = Number(candidate);
+    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 31) {
+      return Math.round(parsed);
+    }
+  }
+
+  return null;
 };
 
 const inferDueDateFromHistory = (
@@ -170,6 +217,29 @@ const inferCreditCardCheckpoint = (checkpoint: ReminderCheckpoint, sourceMetadat
   return /\b(visa|mastercard|amex|jcb|bankard|credit\s*card|platinum|world|black)\b/.test(text);
 };
 
+const buildReminderFingerprint = (reminder: StatementReminder) =>
+  [
+    normalizeWhitespace(reminder.institution ?? "unknown").toLowerCase(),
+    reminder.currency ?? "PHP",
+    reminder.dueDayOfMonth ?? 0,
+    Math.round(reminder.totalAmountDue * 100),
+    reminder.statementEndDate ? reminder.statementEndDate.slice(0, 10) : "no-statement-end",
+  ].join("::");
+
+const scoreReminderSpecificity = (reminder: StatementReminder) => {
+  let score = 0;
+  if (reminder.accountId) {
+    score += 6;
+  }
+  if (/\d{4}/.test(reminder.accountName)) {
+    score += 4;
+  }
+  if (reminder.sourceFileName?.toLowerCase().endsWith(".pdf")) {
+    score += 2;
+  }
+  return score;
+};
+
 export const getUpcomingStatementReminders = async (workspaceId: string): Promise<StatementReminder[]> => {
   if (!(await hasCompatibleTable("AccountStatementCheckpoint"))) {
     return [];
@@ -207,6 +277,7 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
   })) as ReminderCheckpoint[];
 
   const now = Date.now();
+  const recencyCutoff = now - REMINDER_RECENCY_WINDOW_DAYS * DAY_IN_MS;
   const remindersByAccountKey = new Map<string, StatementReminder>();
   const knownDueDaysByAccountKey = new Map<string, number[]>();
   const knownLagDaysByAccountKey = new Map<string, number[]>();
@@ -223,11 +294,16 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
       institution
     );
     const explicitDueDate = readExplicitPaymentDueDate(sourceMetadata, checkpoint);
-    if (!explicitDueDate) {
+    const explicitDueDay = readExplicitDueDay(sourceMetadata);
+    if (!explicitDueDate && !explicitDueDay) {
       continue;
     }
-    knownDueDaysByAccountKey.set(accountKey, [...(knownDueDaysByAccountKey.get(accountKey) ?? []), explicitDueDate.getUTCDate()]);
-    if (checkpoint.statementEndDate) {
+    if (explicitDueDate) {
+      knownDueDaysByAccountKey.set(accountKey, [...(knownDueDaysByAccountKey.get(accountKey) ?? []), explicitDueDate.getUTCDate()]);
+    } else if (explicitDueDay) {
+      knownDueDaysByAccountKey.set(accountKey, [...(knownDueDaysByAccountKey.get(accountKey) ?? []), explicitDueDay]);
+    }
+    if (checkpoint.statementEndDate && explicitDueDate) {
       const lagDays = Math.round((toUtcMidday(explicitDueDate).getTime() - toUtcMidday(checkpoint.statementEndDate).getTime()) / DAY_IN_MS);
       if (lagDays > 0 && lagDays <= 45) {
         knownLagDaysByAccountKey.set(accountKey, [...(knownLagDaysByAccountKey.get(accountKey) ?? []), lagDays]);
@@ -239,6 +315,10 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
     const sourceMetadata = extractSourceMetadata(checkpoint);
     const institution = typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : checkpoint.account?.institution ?? null;
     if (!inferCreditCardCheckpoint(checkpoint, sourceMetadata)) {
+      continue;
+    }
+    const referenceTimestamp = checkpoint.statementEndDate?.getTime() ?? checkpoint.createdAt.getTime();
+    if (referenceTimestamp < recencyCutoff) {
       continue;
     }
 
@@ -258,16 +338,24 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
       checkpoint.account?.name ?? (typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : accountName),
       institution
     );
-    const paymentDueDate =
-      readExplicitPaymentDueDate(sourceMetadata, checkpoint) ??
+    const explicitPaymentDueDate = readExplicitPaymentDueDate(sourceMetadata, checkpoint);
+    const rawPaymentDueDate =
+      explicitPaymentDueDate ??
       inferDueDateFromHistory(
         checkpoint.statementEndDate,
         knownDueDaysByAccountKey.get(accountKey) ?? [],
         knownLagDaysByAccountKey.get(accountKey) ?? []
       );
-    if (!paymentDueDate || paymentDueDate.getTime() <= now) {
+    if (!rawPaymentDueDate) {
       continue;
     }
+    const paymentDueDate = rollDateForwardMonthly(rawPaymentDueDate, now - DAY_IN_MS);
+    const detectionSource =
+      rawPaymentDueDate.getTime() <= now - DAY_IN_MS
+        ? "projected"
+        : explicitPaymentDueDate
+          ? "explicit"
+          : "inferred_history";
     const existing = remindersByAccountKey.get(accountKey);
 
     if (existing) {
@@ -291,10 +379,21 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
       totalAmountDue,
       sourceFileName: checkpoint.importFile?.fileName ?? null,
       daysUntilDue: Math.ceil((paymentDueDate.getTime() - now) / DAY_IN_MS),
+      dueDayOfMonth: paymentDueDate.getUTCDate(),
+      detectionSource,
     });
   }
 
-  return Array.from(remindersByAccountKey.values()).sort(
+  const dedupedByFingerprint = new Map<string, StatementReminder>();
+  for (const reminder of remindersByAccountKey.values()) {
+    const fingerprint = buildReminderFingerprint(reminder);
+    const existing = dedupedByFingerprint.get(fingerprint);
+    if (!existing || scoreReminderSpecificity(reminder) > scoreReminderSpecificity(existing)) {
+      dedupedByFingerprint.set(fingerprint, reminder);
+    }
+  }
+
+  return Array.from(dedupedByFingerprint.values()).sort(
     (a, b) => new Date(a.paymentDueDate).getTime() - new Date(b.paymentDueDate).getTime() || b.totalAmountDue - a.totalAmountDue
   );
 };

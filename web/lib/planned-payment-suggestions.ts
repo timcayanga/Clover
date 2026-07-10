@@ -64,9 +64,12 @@ type ConfirmedRecurringMemory = {
 };
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
-const INSTALLMENT_SIGNAL = /\b(installment|amortization|credit-?to-?cash|sip balance|balance summary)\b/i;
+const INSTALLMENT_SIGNAL =
+  /\b(installment|amortization|credit-?to-?cash|balance conversion|balance summary|sip balance|sip|paylite|easy\s*installment|easy\s*pay)\b|\b\d{1,2}\s*(?:\/|of)\s*\d{1,2}\s*(?:installments?|payments?)\b/i;
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+const ordinalDay = (value: number) =>
+  `${value}${value % 10 === 1 && value % 100 !== 11 ? "st" : value % 10 === 2 && value % 100 !== 12 ? "nd" : value % 10 === 3 && value % 100 !== 13 ? "rd" : "th"}`;
 
 const normalizeKey = (value: string | null | undefined) =>
   normalizeWhitespace(value ?? "")
@@ -79,6 +82,9 @@ const parseAmount = (value: unknown) => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? Math.abs(parsed) : 0;
 };
+
+const countDistinctMonths = (dates: Date[]) =>
+  new Set(dates.map((date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`)).size;
 
 export const getRecurringConfidenceTier = (confidence: number): "high" | "medium" | "low" => {
   if (confidence >= 85) {
@@ -219,6 +225,23 @@ const buildReminderSuggestions = (reminders: StatementReminder[], existingCheckp
     }
     const key = `statement_reminder::${reminder.checkpointId}`;
 
+    const dueDayLabel =
+      reminder.dueDayOfMonth === null
+        ? null
+        : `Usually around the ${ordinalDay(reminder.dueDayOfMonth)}`;
+    const sourceLabel =
+      reminder.detectionSource === "projected"
+        ? "Projected statement due date"
+        : reminder.detectionSource === "inferred_history"
+          ? "Inferred statement due date"
+          : "Statement due date";
+    const reasonSummary =
+      reminder.detectionSource === "projected"
+        ? "Projected from past uploaded statements and your usual monthly due date."
+        : reminder.detectionSource === "inferred_history"
+          ? "Inferred from your statement history and due-date timing."
+          : "Detected directly from an uploaded statement due date.";
+
     suggestions.push({
       id: key,
       sourceKind: "statement_reminder",
@@ -236,12 +259,21 @@ const buildReminderSuggestions = (reminders: StatementReminder[], existingCheckp
         reminder.statementStartDate || reminder.statementEndDate
           ? `Statement ${reminder.statementStartDate ?? "start"} to ${reminder.statementEndDate ?? "end"}; due from ${reminder.sourceFileName ?? "uploaded statement"}.`
           : `Due from ${reminder.sourceFileName ?? "uploaded statement"}.`,
-      sourceLabel: "Statement due date",
-      sourceDetail: `Due ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(dueDate)}`,
-      reasonSummary: "Detected from an uploaded statement due date.",
-      reasonTags: ["statement due date", "uploaded file"],
-      confidenceTier: getRecurringConfidenceTier(92),
-      confidence: 92,
+      sourceLabel,
+      sourceDetail: [
+        `Due ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(dueDate)}`,
+        dueDayLabel,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      reasonSummary,
+      reasonTags: [
+        "statement due date",
+        "uploaded file",
+        ...(reminder.detectionSource === "projected" ? ["projected"] : reminder.detectionSource === "inferred_history" ? ["history inferred"] : []),
+      ],
+      confidenceTier: getRecurringConfidenceTier(reminder.detectionSource === "explicit" ? 92 : reminder.detectionSource === "projected" ? 88 : 84),
+      confidence: reminder.detectionSource === "explicit" ? 92 : reminder.detectionSource === "projected" ? 88 : 84,
       sourceFileName: reminder.sourceFileName,
     });
 
@@ -277,7 +309,8 @@ const buildInstallmentSuggestions = (
       continue;
     }
 
-    const merchantKey = normalizeKey(transaction.merchantClean ?? transaction.merchantRaw ?? transaction.description ?? "installment");
+    const merchantLabel = transaction.merchantClean ?? transaction.merchantRaw ?? transaction.description ?? "installment";
+    const merchantKey = buildRecurringMerchantFamilySignature(merchantLabel) || normalizeKey(merchantLabel);
     if (!merchantKey) {
       continue;
     }
@@ -295,6 +328,7 @@ const buildInstallmentSuggestions = (
 
     const first = group[0] as PlannedPaymentTransactionLike;
     const last = group[group.length - 1] as PlannedPaymentTransactionLike;
+    const distinctMonthCount = countDistinctMonths(group.map((transaction) => transaction.date));
     const title = (first.merchantClean ?? first.merchantRaw ?? first.description ?? "Installment").trim();
     const amount = group.reduce((sum, transaction) => sum + parseAmount(transaction.amount), 0) / group.length;
     const reminder =
@@ -303,11 +337,29 @@ const buildInstallmentSuggestions = (
       null;
     const dueDate = reminder ? new Date(reminder.paymentDueDate) : addMonths(last.date, 1);
     const installmentTerms = extractInstallmentTerms(getTransactionText(first));
+    const hasStrongInstallmentSignal = Boolean(installmentTerms) || group.some((transaction) => /\b\d{1,2}\s*(?:\/|of)\s*\d{1,2}\b/i.test(getTransactionText(transaction)));
     const key = `installment::${groupKey}`;
 
-    if (existingCommitmentKeys.has(key)) {
+    if (existingCommitmentKeys.has(key) || (!hasStrongInstallmentSignal && distinctMonthCount < 2)) {
       continue;
     }
+
+    const currentInstallmentMatch = getTransactionText(last).match(/\b(\d{1,2})\s*(?:\/|of)\s*(\d{1,2})\s*(?:installments?|payments?)\b/i);
+    const currentInstallmentNumber =
+      currentInstallmentMatch?.[1] && Number.isFinite(Number(currentInstallmentMatch[1])) ? Number(currentInstallmentMatch[1]) : null;
+    const resolvedInstallmentTerms =
+      installmentTerms ??
+      (currentInstallmentMatch?.[2] && Number.isFinite(Number(currentInstallmentMatch[2])) ? Number(currentInstallmentMatch[2]) : null);
+    const remainingInstallments =
+      resolvedInstallmentTerms && currentInstallmentNumber ? Math.max(resolvedInstallmentTerms - currentInstallmentNumber, 0) : null;
+    const confidence = Math.min(
+      95,
+      62 +
+        Math.min(group.length, 4) * 7 +
+        Math.min(distinctMonthCount, 3) * 5 +
+        (resolvedInstallmentTerms ? 10 : 0) +
+        (reminder ? 4 : 0)
+    );
 
     suggestions.push({
       id: key,
@@ -321,9 +373,12 @@ const buildInstallmentSuggestions = (
       accountId: first.accountId,
       accountName: first.account.name,
       statementCheckpointId: reminder?.checkpointId ?? null,
-      installmentTerms: installmentTerms ? `${installmentTerms} month${installmentTerms === 1 ? "" : "s"}` : null,
+      installmentTerms: resolvedInstallmentTerms ? `${resolvedInstallmentTerms} month${resolvedInstallmentTerms === 1 ? "" : "s"}` : null,
       notes: [
-        `Detected from ${group.length} installment transaction${group.length === 1 ? "" : "s"}.`,
+        `Detected from ${group.length} installment transaction${group.length === 1 ? "" : "s"} across ${distinctMonthCount} month${distinctMonthCount === 1 ? "" : "s"}.`,
+        currentInstallmentNumber && resolvedInstallmentTerms
+          ? `Looks like payment ${currentInstallmentNumber} of ${resolvedInstallmentTerms}${remainingInstallments !== null ? ` with ${remainingInstallments} remaining` : ""}.`
+          : null,
         reminder?.sourceFileName ? `Linked to ${reminder.sourceFileName}.` : null,
       ]
         .filter(Boolean)
@@ -332,10 +387,12 @@ const buildInstallmentSuggestions = (
       sourceDetail: reminder
         ? `Due ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(dueDate)}`
         : `Last seen ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(last.date)}`,
-      reasonSummary: installmentTerms ? `Installment terms suggest ${installmentTerms} payments.` : "Repeated installment-style charges were detected.",
-      reasonTags: installmentTerms ? ["installment terms", "repeated charge"] : ["installment signal", "repeated charge"],
-      confidenceTier: getRecurringConfidenceTier(Math.min(94, 66 + Math.min(group.length, 3) * 8 + (installmentTerms ? 8 : 0))),
-      confidence: Math.min(94, 66 + Math.min(group.length, 3) * 8 + (installmentTerms ? 8 : 0)),
+      reasonSummary: resolvedInstallmentTerms
+        ? `Installment terms suggest ${resolvedInstallmentTerms} payments and Clover found matching charges across multiple months.`
+        : "Repeated installment-style charges were detected across recent statements.",
+      reasonTags: resolvedInstallmentTerms ? ["installment terms", "repeated charge", "multi-month"] : ["installment signal", "repeated charge", "multi-month"],
+      confidenceTier: getRecurringConfidenceTier(confidence),
+      confidence,
       sourceFileName: readTransactionImportFileName(first),
     });
   }
@@ -373,7 +430,7 @@ const buildRecurringTransactionSuggestions = (
     const amountRange = formatAmountRange(pattern.minimumAmount ?? null, pattern.maximumAmount ?? null, pattern.currency);
     const scheduleDetail =
       pattern.expectedDayOfMonth && ["monthly", "quarterly", "annual"].includes(pattern.frequency)
-        ? `${pattern.frequency} around the ${pattern.expectedDayOfMonth}${pattern.expectedDayOfMonth === 1 ? "st" : pattern.expectedDayOfMonth === 2 ? "nd" : pattern.expectedDayOfMonth === 3 ? "rd" : "th"}`
+        ? `${pattern.frequency} around the ${ordinalDay(pattern.expectedDayOfMonth)}`
         : pattern.frequency;
     const normalizedTitle = normalizeKey(title);
     const confirmedMatches = [
@@ -431,6 +488,19 @@ const buildRecurringTransactionSuggestions = (
   }
 
   return suggestions;
+};
+
+const getSuggestionKindPriority = (suggestion: PlannedPaymentSuggestion) => {
+  switch (suggestion.sourceKind) {
+    case "statement_reminder":
+      return 0;
+    case "installment":
+      return 1;
+    case "recurring_transaction":
+      return 2;
+    default:
+      return 3;
+  }
 };
 
 export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
@@ -544,7 +614,12 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
   );
   const existingInstallmentKeys = new Set(
     existingCommitments.map((commitment) =>
-      `installment::${[commitment.accountId ?? "workspace", normalizeKey(`${commitment.counterparty ?? commitment.title}`)].join("::")}`
+      `installment::${[
+        commitment.accountId ?? "workspace",
+        (commitment.currency ?? "PHP").toUpperCase(),
+        buildRecurringMerchantFamilySignature(`${commitment.counterparty ?? commitment.title}`) ||
+          normalizeKey(`${commitment.counterparty ?? commitment.title}`),
+      ].join("::")}`
     )
   );
   const existingRecurringTransactionKeys = new Set(
@@ -624,10 +699,17 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
     confirmedRecurringMemoryByFamily
   );
 
-  return [...reminderSuggestions, ...installmentSuggestions, ...recurringTransactionSuggestions].sort(
-    (left, right) =>
-      new Date(left.dueDate ?? 0).getTime() - new Date(right.dueDate ?? 0).getTime() ||
+  return [...reminderSuggestions, ...installmentSuggestions, ...recurringTransactionSuggestions].sort((left, right) => {
+    const leftDueDate = new Date(left.dueDate ?? 0).getTime();
+    const rightDueDate = new Date(right.dueDate ?? 0).getTime();
+    const leftPriority = getSuggestionKindPriority(left);
+    const rightPriority = getSuggestionKindPriority(right);
+
+    return (
+      leftDueDate - rightDueDate ||
+      leftPriority - rightPriority ||
       right.confidence - left.confidence ||
       left.title.localeCompare(right.title)
-  );
+    );
+  });
 };
