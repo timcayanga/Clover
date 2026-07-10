@@ -1512,117 +1512,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     };
 
-    const processStatementAfterResponse = async (options?: {
-      text?: string;
-      textCacheInfo?: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null;
-      bankName?: string | null;
-      processingMessage?: string;
-    }) => {
-      stage = "scheduling statement processing";
-      await updateImportFileCompat(importId, {
-        status: "processing",
-        processingPhase: "reading_account_details",
-        processingMessage: options?.processingMessage ?? "Reading file details...",
-      });
-
-      after(async () => {
-        try {
-          const { processImportFileText } = await import("@/workers/import-processor");
-          const result = await processImportFileText(importId, {
-            text: options?.text,
-            textCacheInfo: options?.textCacheInfo ?? undefined,
-            password,
-            actorUserId: userId,
-            qaSource: "import_processing",
-            allowDuplicateStatement,
-            importMode,
-            pdfJsBaseUrl,
-            statementMetadataOverride: options?.bankName
-              ? {
-                  institution: options.bankName,
-                }
-              : null,
-          });
-          const statusSnapshot = await loadImportStatusSnapshot(importId, {
-            importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-            promoteFailedVisibleImport: true,
-          }).catch(() => null);
-          if (
-            result.status === "error" &&
-            statusSnapshot?.importFile.status === "processing" &&
-            (statusSnapshot.importFile.processingPhase === "queued_retry" ||
-              statusSnapshot.importFile.processingPhase === "reading_receipt_vision" ||
-              statusSnapshot.importFile.processingPhase === "reading_account_details" ||
-              statusSnapshot.importFile.processingPhase === "reconciling")
-          ) {
-            await enqueueImportProcessing({
-              importFileId: importId,
-              actorUserId: userId,
-              password,
-              allowDuplicateStatement,
-              bankName: options?.bankName || undefined,
-              importMode,
-              pdfJsBaseUrl,
-            }).catch((queueError) => {
-              console.error("Statement import post-response retry queue failed", {
-                importId,
-                error: summarizeErrorForLog(queueError),
-              });
-            });
-          }
-        } catch (error) {
-          console.error("Statement import post-response processing failed", {
-            importId,
-            error: summarizeErrorForLog(error),
-          });
-          if (isTransientDatabaseCapacityError(error)) {
-            await updateImportFileCompat(importId, {
-              status: "processing",
-              processingPhase: "queued_retry",
-              processingMessage: "Clover is waiting for database capacity, then it will finish reading this file.",
-            }).catch(() => null);
-            await enqueueImportProcessing({
-              importFileId: importId,
-              actorUserId: userId,
-              password,
-              allowDuplicateStatement,
-              bankName: options?.bankName || undefined,
-              importMode,
-              pdfJsBaseUrl,
-            }).catch((queueError) => {
-              console.error("Statement import capacity retry queue failed", {
-                importId,
-                error: summarizeErrorForLog(queueError),
-              });
-            });
-            return;
-          }
-          await updateImportFileCompat(importId, {
-            status: "processing",
-            processingPhase: "queued_retry",
-            processingMessage: "Clover is still finishing this screenshot in the background.",
-          }).catch(() => null);
-        }
-      });
-
-      queued = true;
-      return NextResponse.json(
-        {
-          ok: true,
-          queued: true,
-          processed: false,
-          importedRows: 0,
-          duplicate: false,
-          status: "queued",
-          importFileId: importId,
-          metadata: null,
-          visibleImportComplete: false,
-          finalizationInBackground: true,
-        },
-        { status: 202 }
-      );
-    };
-
     if (isMultipart) {
       stage = "reading multipart form";
       const formData = await _request.formData();
@@ -1918,20 +1807,22 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         (formExtractedText.trim().length > 0 || Boolean(shouldPreferSampleFallback && sampleFallbackText));
 
       if (hasInlineStatementImageText) {
-        await uploadBankHintPromise.catch((error) => {
-          console.warn("Unable to save statement image import hint", {
-            importId,
-            error: summarizeErrorForLog(error),
-          });
-        });
-        after(async () => {
-          await uploadPromise.catch((error) => {
+        await Promise.all([
+          uploadPromise.catch((error) => {
             console.warn("Unable to finish statement image raw file upload", {
               importId,
               error: summarizeErrorForLog(error),
             });
-          });
-        });
+            throw error;
+          }),
+          uploadBankHintPromise.catch((error) => {
+            console.warn("Unable to save statement image import hint", {
+              importId,
+              error: summarizeErrorForLog(error),
+            });
+            throw error;
+          }),
+        ]);
       } else {
       if (shouldDeferRawUploadForKnownBpiScreenshot) {
         await uploadBankHintPromise;
@@ -2347,10 +2238,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         shouldProcessInlineRequest;
 
       if (shouldProcessStatementAfterResponse) {
-        return processStatementAfterResponse({
-          text: extractedText,
-          textCacheInfo: preflightText,
-          bankName: processingBankName || null,
+        return queueBackgroundProcessing(processingBankName || null, {
           processingMessage: "Starting screenshot import...",
         });
       }

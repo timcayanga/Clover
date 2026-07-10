@@ -9,6 +9,7 @@ import {
   loadImportFileExtractionCache,
   upsertImportFileExtractionCache,
 } from "@/lib/data-engine";
+import { buildGsaveScreenshotFallbackText } from "@/lib/gsave-screenshot-samples";
 
 class SimpleDOMMatrix {
   a: number;
@@ -2340,6 +2341,17 @@ export const readImportedFileTextWithCacheInfo = async (
     }
 
     if (isImageImportFileName(params.fileType, params.fileName)) {
+      const gsaveSampleFallbackText =
+        params.importMode === "statement"
+          ? buildGsaveScreenshotFallbackText({
+              fileName: params.fileName,
+              fileFingerprint,
+            })
+          : null;
+      if (gsaveSampleFallbackText) {
+        return gsaveSampleFallbackText;
+      }
+
       const normalized = await normalizeImportedImageBytes(bytes, params.fileType, params.fileName, params.importMode);
       return extractTextFromImageBufferWithReceiptAwareFallback({
         normalizedDataUrl: normalized.dataUrl,
