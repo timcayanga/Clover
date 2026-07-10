@@ -126,6 +126,8 @@ export const normalizeRecurringMerchantKey = (value: string) =>
   value
     .trim()
     .toLowerCase()
+    .replace(/^\d{1,2}\s*:\s*\d{2}\s*/g, " ")
+    .replace(/\b(?:bills?\s+payment(?:\s+to)?|payment\s+to|pay(?:ment)?\s+for|one\s+click)\b/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\bsubscr(?:iption)?\b/g, " subscription ")
     .replace(/\b\d{4,}\b/g, " ")
@@ -165,6 +167,7 @@ const canonicalizeRecurringMerchant = (value: string) => {
 
   return normalized
     .replace(/\b(?:subscription|monthly|autopay|premium|membership|fee)\b/g, " ")
+    .replace(/\b(?:postpaid|telecom|utilities?)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim() || buildRecurringMerchantFamilySignature(value);
 };

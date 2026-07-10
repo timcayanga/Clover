@@ -768,7 +768,11 @@ export function CommitmentsPanel({
                       ))}
                     </div>
                   ) : null}
-                  {suggestion.reasonSummary ? <p className="panel-muted">{suggestion.reasonSummary}</p> : null}
+                  {suggestion.reasonSummary ? (
+                    <p className="panel-muted">
+                      <strong style={{ color: "var(--foreground)" }}>Why Clover suggested this:</strong> {suggestion.reasonSummary}
+                    </p>
+                  ) : null}
                   {suggestion.notes ? <p className="panel-muted">{suggestion.notes}</p> : null}
                 </div>
                 <div className="notification-item__time" style={{ minWidth: 170, display: "grid", gap: 8 }}>
@@ -819,7 +823,11 @@ export function CommitmentsPanel({
                       ))}
                     </div>
                   ) : null}
-                  {pattern.reasonSummary ? <p className="panel-muted">{pattern.reasonSummary}</p> : null}
+                  {pattern.reasonSummary ? (
+                    <p className="panel-muted">
+                      <strong style={{ color: "var(--foreground)" }}>Why Clover suggested this:</strong> {pattern.reasonSummary}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="notification-item__time" style={{ minWidth: 170, display: "grid", gap: 8 }}>
                   <button
@@ -871,7 +879,7 @@ export function CommitmentsPanel({
                 </p>
                 {reviewingSuggestion.reasonSummary ? (
                   <p className="panel-muted" style={{ margin: "6px 0 0" }}>
-                    {reviewingSuggestion.reasonSummary}
+                    <strong style={{ color: "var(--foreground)" }}>Why Clover suggested this:</strong> {reviewingSuggestion.reasonSummary}
                   </p>
                 ) : null}
                 {reviewingSuggestion.reasonTags.length > 0 ? (

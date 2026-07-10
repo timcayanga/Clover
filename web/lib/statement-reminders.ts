@@ -50,6 +50,37 @@ const normalizeAccountKey = (accountName?: string | null, institution?: string |
     .replace(/\s+/g, " ")
     .trim();
 
+const extractLastFourDigits = (value: string) => {
+  const matches = value.match(/\b(\d{4})\b/g);
+  if (!matches || matches.length === 0) {
+    return null;
+  }
+  return matches[matches.length - 1]?.replace(/\D/g, "") ?? null;
+};
+
+const buildReminderAccountIdentity = (params: {
+  accountName?: string | null;
+  institution?: string | null;
+  sourceFileName?: string | null;
+}) => {
+  const normalizedInstitution = normalizeWhitespace(params.institution ?? "").toLowerCase();
+  const combinedText = normalizeWhitespace([params.accountName, params.sourceFileName].filter(Boolean).join(" "));
+  const lastFourDigits = extractLastFourDigits(combinedText);
+  if (lastFourDigits) {
+    return `${normalizedInstitution}::${lastFourDigits}`;
+  }
+
+  const normalizedText = combinedText
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const productHint =
+    normalizedText.match(/\b(?:easy credit|credit card|visa|mastercard|bankard|platinum|world|black|postpaid|loan|savings)\b/g)?.join(" ") ?? "";
+
+  return `${normalizedInstitution}::${productHint || normalizedText}`;
+};
+
 const parseAmountValue = (value: unknown) => {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -289,10 +320,11 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
       typeof sourceMetadata?.accountName === "string" && sourceMetadata.accountName.trim()
         ? sourceMetadata.accountName.trim()
         : checkpoint.account?.name ?? checkpoint.importFile?.fileName ?? "Credit card";
-    const accountKey = normalizeAccountKey(
-      checkpoint.account?.name ?? (typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : accountName),
-      institution
-    );
+    const accountKey = buildReminderAccountIdentity({
+      accountName: checkpoint.account?.name ?? (typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : accountName),
+      institution,
+      sourceFileName: checkpoint.importFile?.fileName ?? null,
+    });
     const explicitDueDate = readExplicitPaymentDueDate(sourceMetadata, checkpoint);
     const explicitDueDay = readExplicitDueDay(sourceMetadata);
     if (!explicitDueDate && !explicitDueDay) {
@@ -334,10 +366,11 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
       typeof sourceMetadata?.accountName === "string" && sourceMetadata.accountName.trim()
         ? sourceMetadata.accountName.trim()
         : checkpoint.account?.name ?? checkpoint.importFile?.fileName ?? "Credit card";
-    const accountKey = normalizeAccountKey(
-      checkpoint.account?.name ?? (typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : accountName),
-      institution
-    );
+    const accountKey = buildReminderAccountIdentity({
+      accountName: checkpoint.account?.name ?? (typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : accountName),
+      institution,
+      sourceFileName: checkpoint.importFile?.fileName ?? null,
+    });
     const explicitPaymentDueDate = readExplicitPaymentDueDate(sourceMetadata, checkpoint);
     const rawPaymentDueDate =
       explicitPaymentDueDate ??
