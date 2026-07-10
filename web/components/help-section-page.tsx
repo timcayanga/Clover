@@ -114,11 +114,10 @@ export function HelpSectionPage({ section, returnTo: _returnTo, accountState }: 
   };
 
   return (
-    <main className="help-page">
-      <div className="help-page__inner help-section-page__inner">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
-
-        <LandingNav accountState={accountState} />
+    <main className="landing-page help-page">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
+      <LandingNav accountState={accountState} />
+      <div className="help-page__content help-section-page__inner">
 
         <section className={`help-section-page__intro help-section-page__intro--${section.accent}`}>
           <div className="help-section-page__intro-copy">
@@ -175,7 +174,6 @@ export function HelpSectionPage({ section, returnTo: _returnTo, accountState }: 
           )}
         </section>
       </div>
-
       <MarketingFooter />
     </main>
   );

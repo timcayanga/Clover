@@ -30256,9 +30256,7 @@ button.accounts-detail__transaction-head-cell {
   padding: 0 0 56px;
 }
 
-.help-page__inner {
-  width: min(1120px, calc(100% - 28px));
-  margin: 0 auto;
+.help-page__content {
   display: grid;
   gap: 20px;
   flex: 1 0 auto;
@@ -30503,8 +30501,8 @@ button.accounts-detail__transaction-head-cell {
 .help-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 36px;
-  padding: 8px 0 168px;
+  gap: 40px;
+  padding: 14px 0 190px;
 }
 
 .help-card {
@@ -30512,9 +30510,9 @@ button.accounts-detail__transaction-head-cell {
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 34px;
-  min-height: 480px;
-  padding: 44px;
+  gap: 38px;
+  min-height: 540px;
+  padding: 52px;
   border-radius: 42px;
   border: 0;
   text-decoration: none;
@@ -30564,8 +30562,8 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .help-card__image {
-  width: min(100%, 320px);
-  height: 320px;
+  width: min(100%, 380px);
+  height: 380px;
   flex: 0 0 auto;
   object-fit: contain;
   filter: drop-shadow(0 24px 34px rgba(15, 23, 42, 0.22));
@@ -30579,8 +30577,8 @@ button.accounts-detail__transaction-head-cell {
 
 .help-card h3 {
   margin: 0;
-  max-width: 8ch;
-  font-size: clamp(2.8rem, 3.2vw, 3.8rem);
+  max-width: 8.5ch;
+  font-size: clamp(3rem, 3.45vw, 4.15rem);
   line-height: 1;
   letter-spacing: -0.05em;
   color: #ffffff;
@@ -34079,15 +34077,14 @@ html[data-helper-text="hidden"] .settings-helper {
     padding: 0 0 40px;
   }
 
-  .help-page__inner {
-    width: min(100%, calc(100% - 16px));
+  .help-page__content {
     gap: 16px;
   }
 
   .help-grid {
     grid-template-columns: 1fr;
-    gap: 22px;
-    padding: 6px 0 140px;
+    gap: 24px;
+    padding: 10px 0 150px;
   }
 
   .help-search-results__list,
@@ -34097,14 +34094,14 @@ html[data-helper-text="hidden"] .settings-helper {
   }
 
   .help-card {
-    min-height: 400px;
-    padding: 30px;
-    gap: 26px;
+    min-height: 440px;
+    padding: 34px 28px;
+    gap: 30px;
   }
 
   .help-card__image {
-    width: min(100%, 260px);
-    height: 260px;
+    width: min(100%, 300px);
+    height: 300px;
   }
 
   .help-search--hero input {

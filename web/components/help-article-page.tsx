@@ -41,10 +41,10 @@ export function HelpArticlePage({ section, article, returnTo: _returnTo, account
   };
 
   return (
-    <main className="help-page">
-      <div className="help-page__inner">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
-        <LandingNav accountState={accountState} />
+    <main className="landing-page help-page">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
+      <LandingNav accountState={accountState} />
+      <div className="help-page__content">
 
         <section className="help-article-hero glass">
           <div className="help-article-hero__copy">
@@ -116,7 +116,6 @@ export function HelpArticlePage({ section, article, returnTo: _returnTo, account
           </div>
         </section>
       </div>
-
       <MarketingFooter />
     </main>
   );

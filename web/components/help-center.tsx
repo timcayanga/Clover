@@ -53,10 +53,9 @@ export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
   }, [normalizedQuery]);
 
   return (
-    <main className="help-page">
-      <div className="help-page__inner">
-        <LandingNav accountState={accountState} />
-
+    <main className="landing-page help-page">
+      <LandingNav accountState={accountState} />
+      <div className="help-page__content">
         <label className="help-search help-search--hero" htmlFor="help-search">
           <span className="sr-only">Search help</span>
           <input
@@ -86,7 +85,6 @@ export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
           ))}
         </section>
       </div>
-
       <MarketingFooter />
     </main>
   );
