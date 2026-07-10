@@ -6607,7 +6607,7 @@ export const processImportFileText = async (
     fileType === "application/pdf" &&
     /landbank|land bank|eastwest|chinabank|china bank/i.test(fileName);
 
-  if (!shouldPreferDirectImageStatementVision && !trainedReceiptDetails && !noisyPdfBankByFileName && (imageImport || !text)) {
+  if (!shouldPreferDirectImageStatementVision && !trainedReceiptDetails && !noisyPdfBankByFileName && !text) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
@@ -7115,10 +7115,10 @@ export const processImportFileText = async (
     );
   });
   const shouldRepairGsaveTranscript =
-    isGsaveImageStatement &&
+    preliminaryGsaveImageStatement &&
     Boolean(pageImages?.length) &&
     !shouldPrioritizeBackupEarly &&
-    (parsedRows.length === 0 || gsaveScreenshotSparseParse || !preliminaryImageStatementParseLooksUsable);
+    (parsedRows.length === 0 || preliminaryGsaveScreenshotSparseParse || !preliminaryImageStatementParseLooksUsable);
   if (shouldRepairGsaveTranscript && pageImages?.length) {
     await updateImportFileCompat(importFileId, {
       status: "processing",
@@ -10501,10 +10501,18 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   reconciledAccountBalance = mobileWalletScreenshotImport
     ? null
     : statementEndingBalance ?? latestExplicitStatementBalance ?? fallbackReconciledBalance;
+  const candidateVisibleTransactionsCount = parsedRows.filter((row) => {
+    if (!row.rawPayload || typeof row.rawPayload !== "object" || Array.isArray(row.rawPayload)) {
+      return true;
+    }
+
+    const kind = (row.rawPayload as Record<string, unknown>).kind;
+    return kind !== "opening_balance" && kind !== "account_snapshot_marker";
+  }).length;
   if (
     shouldRunDestructiveMultiAccountCleanup({
       multiAccountImport,
-      visibleTransactionsCount: confirmationResult.confirmedTransactionsCount ?? 0,
+      visibleTransactionsCount: candidateVisibleTransactionsCount,
       parsedRows,
     })
   ) {
