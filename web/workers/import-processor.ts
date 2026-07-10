@@ -11301,10 +11301,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           institution: { in: resolvedInstitutionsForCleanup },
           id: { notIn: resolvedAccountIdsForCleanup },
           transactions: { none: {} },
-          OR: [
-            { accountNumber: null },
-            { accountNumber: { notIn: Array.from(resolvedAccountNumbersForCleanup) } },
-          ],
+          accountNumber: null,
         },
       }).catch((error) => {
         console.warn("[import-account-match] unable to delete empty stale multi-account placeholders", {
