@@ -661,10 +661,32 @@ const getNetWorthTone = (value: number) => {
 const getInvestmentInstitutionName = (account: Account) =>
   account.institution?.trim() || account.name.trim() || "Investment institution";
 
-const buildInvestmentInstitutionCards = (accounts: Account[]) => {
+const shouldKeepSeparateInvestmentCard = (account: Account) => {
+  if (account.source !== "upload") {
+    return false;
+  }
+
+  if (!isFixedIncomeInvestmentSubtype(account.investmentSubtype)) {
+    return false;
+  }
+
+  if (!account.accountNumber?.trim()) {
+    return false;
+  }
+
+  return /\bgsave\b/i.test(`${account.institution ?? ""} ${account.name}`);
+};
+
+const buildInvestmentInstitutionCards = (accounts: Account[]): Array<Account | InvestmentInstitutionCard> => {
   const groups = new Map<string, InvestmentInstitutionCard>();
+  const separateCards: Account[] = [];
 
   for (const account of accounts) {
+    if (shouldKeepSeparateInvestmentCard(account)) {
+      separateCards.push(account);
+      continue;
+    }
+
     const institution = getInvestmentInstitutionName(account);
     const currency = formatCurrencyCode(account.currency);
     const key = `${institution.toLowerCase()}::${currency}`;
@@ -686,7 +708,7 @@ const buildInvestmentInstitutionCards = (accounts: Account[]) => {
     });
   }
 
-  return Array.from(groups.values()).sort(
+  return [...separateCards, ...Array.from(groups.values())].sort(
     (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
   );
 };

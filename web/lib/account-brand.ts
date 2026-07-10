@@ -952,13 +952,35 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
 
 export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
   const rawBrandText = [params.institution, params.name].filter(Boolean).join(" ");
-  const isGSaveBackedCimbAccount = /\bgsave\b/i.test(rawBrandText) || (/\bcimb\b/i.test(rawBrandText) && /\bgcash\b/i.test(rawBrandText));
+  const isGSaveBackedUnoAccount =
+    /\bgsave\b/i.test(rawBrandText) &&
+    /\b(?:uno|unoready|unoboost)\b/i.test(rawBrandText);
+  const isGSaveBackedCimbAccount =
+    (/\bgsave\b/i.test(rawBrandText) && /\bcimb\b/i.test(rawBrandText)) ||
+    (/\bcimb\b/i.test(rawBrandText) && /\bgcash\b/i.test(rawBrandText));
+
+  if (isGSaveBackedUnoAccount) {
+    const unoBrand = BANK_BRANDS.find((entry) => entry.brand.label === "Uno Bank")?.brand;
+    if (unoBrand) {
+      return unoBrand;
+    }
+  }
 
   if (isGSaveBackedCimbAccount) {
     const cimbBrand = BANK_BRANDS.find((entry) => entry.brand.label === "CIMB")?.brand;
     if (cimbBrand) {
       return cimbBrand;
     }
+  }
+
+  if (/\bgsave\b/i.test(rawBrandText)) {
+    return makeBrand({
+      label: "GSave",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: bankIcon,
+      accent: "#1479E7",
+      background: "linear-gradient(135deg, rgba(20, 121, 231, 0.18), rgba(20, 121, 231, 0.06))",
+    });
   }
 
   if (/\bgcash\b/i.test(rawBrandText)) {
