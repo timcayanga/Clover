@@ -4662,6 +4662,8 @@ export function ImportFilesModal({
       const lowerFileName = item.file.name.toLowerCase();
       const knownBpiScreenshot = itemImportMode === "statement" && isKnownBpiMobileScreenshotFile(item.file.name);
       const inferredBankName = normalizeBankName(item.file.name);
+      const shouldSendFileNameBankHint =
+        !/\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(lowerFileName);
       const shouldSkipLocalStatementPreparse =
         itemImportMode === "statement" &&
         (lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv")) &&
@@ -4699,7 +4701,12 @@ export function ImportFilesModal({
           fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
           password: item.password.trim() || undefined,
           importMode: itemImportMode,
-          bankName: inferredBankName !== "Unknown" ? inferredBankName : knownBpiScreenshot ? "BPI" : undefined,
+          bankName:
+            inferredBankName !== "Unknown" && shouldSendFileNameBankHint
+              ? inferredBankName
+              : knownBpiScreenshot
+                ? "BPI"
+                : undefined,
           extractedText: extractedTextForUpload,
         },
         (progress) => {

@@ -112,6 +112,15 @@ const upsertUploadBankHint = async (params: {
   });
 };
 
+const looksLikeGenericCameraFileName = (value?: string | null) => {
+  const fileName = value?.split(/[\\/]/).at(-1)?.trim() ?? "";
+  if (!fileName) {
+    return false;
+  }
+
+  return /^(?:img|dsc|pxl|image|screenshot)[-_ ]?\d+\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(fileName);
+};
+
 const detectLimitError = (message: string | null | undefined) => {
   if (!message) {
     return null;
@@ -1532,9 +1541,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       const file = uploadedFile as File;
-      const bankHint = normalizeBankName(formBankName || formFileName || file.name || "");
       const effectiveUploadFileName = file.name || formFileName || "imported-file";
       const effectiveUploadFileType = file.type || formFileType || "";
+      const imageUploadFile = isImageUploadFile(effectiveUploadFileName, effectiveUploadFileType);
+      const sanitizedFormBankName =
+        imageUploadFile && looksLikeGenericCameraFileName(formBankName) ? "" : formBankName;
+      const bankHint = normalizeBankName(
+        sanitizedFormBankName || (imageUploadFile ? "" : formFileName || file.name || "")
+      );
       if (isTrainedReceiptFileName(effectiveUploadFileName)) {
         importMode = "receipt";
       }
@@ -1548,9 +1562,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         isPdfUpload(effectiveUploadFileName, effectiveUploadFileType) &&
         isKnownUnionBankSampleStatementFile(effectiveUploadFileName, bankHint);
       const knownBpiMobileScreenshot =
-        isImageUploadFile(effectiveUploadFileName, effectiveUploadFileType) && isKnownBpiMobileScreenshotFile(effectiveUploadFileName);
+        imageUploadFile && isKnownBpiMobileScreenshotFile(effectiveUploadFileName);
       const effectiveBankName =
-        formBankName ||
+        sanitizedFormBankName ||
         (knownUnionBankSampleStatement
           ? "UnionBank"
           : knownBpiMobileScreenshot
