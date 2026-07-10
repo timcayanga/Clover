@@ -2196,6 +2196,8 @@ const main = async () => {
     ["GRAB PHILIPPINES REF 8841 CARD XX9737", "expense", "Transport", "Grab"],
     ["DUNKIN DONUTS PH STORE 0143 CARD PURCHASE", "expense", "Food & Dining", "Dunkin"],
     ["LINKEDIN PREMIUM SINGAPORE PTE LTD", "expense", "Bills & Utilities", "LinkedIn"],
+    ["STARBUCKS STORE 0143 CARD PURCHASE", "expense", "Food & Dining", "Starbucks"],
+    ["PAYPAL SINGAPORE PTE LTD", "expense", "Shopping", "PayPal"],
   ];
   for (const [merchantText, type, expectedCategory, expectedName] of noisyUnseenMerchantExpectations) {
     const result = classifyMerchantFallback({

@@ -871,6 +871,24 @@ const splitMerchantPrototypeSegments = (value: string) =>
     .filter((part) => part.length >= 3)
     .filter((part) => !/^(?:bank|statement|payment|transfer|cash|atm|credit|debit)$/i.test(part));
 
+const stripStatementMerchantFragmentNoise = (value: string) =>
+  normalizeWhitespace(value)
+    .replace(
+      /\b(?:ref(?:erence)?|trace|approval|auth(?:orization)?|txn|transaction|terminal|rrn|arn|invoice|descriptor)\s*[:#-]?\s*[A-Z0-9*X-]+(?:\s+[A-Z0-9*X-]+)*$/gi,
+      ""
+    )
+    .replace(/\b(?:card|acct|account)\s*(?:no\.?|number|ending|ending\s+in|ending\s+with)?\s*[:#-]?\s*(?:xx|x{2,}|\*{2,})?[A-Z0-9-]*\d{2,4}$/gi, "")
+    .replace(/\b(?:visa|master\s*card|mastercard|amex|jcb)\s*(?:xx|x{2,}|\*{2,})?\d{2,4}$/gi, "")
+    .replace(/\b(?:store|branch|terminal|outlet|location|merchant)\s*[:#-]?\s*[A-Z0-9-]{2,}$/gi, "")
+    .replace(/\b(?:card|pos|online|retail|e-?commerce)\s+purchase$/gi, "")
+    .replace(/\b(?:purchase|payment|transaction)\s+(?:approved|posted|complete|completed)$/gi, "")
+    .replace(/\b(?:ph|phl|philippines|sg|singapore|hk|hong\s+kong|au|australia)\s+(?:pte\.?\s*ltd\.?|inc\.?|corp\.?|corporation|co\.?|company|limited|ltd\.?|llc)$/gi, "")
+    .replace(/\b(?:pte\.?\s*ltd\.?|inc\.?|corp\.?|corporation|co\.?|company|limited|ltd\.?|llc)$/gi, "")
+    .replace(/\b(?:store|branch|terminal|outlet)\s+\d{2,}\b/gi, "")
+    .replace(/\b\d{4,}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
 export const buildMerchantPrototypeVariants = (merchantText: string, normalizedName?: string | null) => {
   const variants = new Set<string>();
   const addVariant = (value: string | null | undefined) => {
@@ -922,7 +940,7 @@ const extractMerchantHintFragments = (value: string | null | undefined) => {
     return [];
   }
 
-  const stripped = normalized
+  const stripped = stripStatementMerchantFragmentNoise(normalized)
     .replace(
       /\b(?:transfer|instapay|pesonet|fund|bank|wallet|payment|incoming|outgoing|interbank|send(?:ing)?|sent|receive(?:d)?|received|cash\s+in|cash\s+out|credit|debit|online|reference|ref|trace|approval|invoice|acct|account|from|to|via)\b/gi,
       " "
@@ -939,7 +957,7 @@ const extractMerchantHintFragments = (value: string | null | undefined) => {
     .split(/\s+/)
     .map((token) => token.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, ""))
     .filter((token) => token.length >= 2)
-    .filter((token) => !/^(?:ph|php|txn|trf|db|cr|amt|bal|visa|mc|mstr|card)$/i.test(token));
+    .filter((token) => !/^(?:ph|php|txn|trf|db|cr|amt|bal|visa|mc|mstr|card|philippines|singapore|hongkong|hong|kong|australia)$/i.test(token));
   if (tokens.length === 0) {
     return [];
   }
@@ -989,9 +1007,12 @@ const buildMerchantClassificationCandidates = (merchantText: string, normalizedN
   addVariant(merchantText);
   addVariant(normalizedName);
   addVariant(summarizeMerchantText(merchantText));
+  addVariant(stripStatementMerchantFragmentNoise(merchantText));
+  addVariant(stripStatementMerchantFragmentNoise(normalizedName ?? ""));
   addVariant(buildInstitutionScopedMerchantVariant(institution, merchantText));
   addVariant(buildInstitutionScopedMerchantVariant(institution, normalizedName));
   addVariant(buildInstitutionScopedMerchantVariant(institution, summarizeMerchantText(merchantText)));
+  addVariant(buildInstitutionScopedMerchantVariant(institution, stripStatementMerchantFragmentNoise(merchantText)));
 
   for (const fragment of extractMerchantHintFragments(merchantText)) {
     addVariant(fragment);
