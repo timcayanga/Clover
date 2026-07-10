@@ -209,6 +209,26 @@ const inferStructuredDocumentImportModeFromParsedRows = (
   return requestedMode;
 };
 
+const isSnapshotOnlyParsedRow = (row: { rawPayload?: unknown }) => {
+  const rawPayload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  return rawPayload?.kind === "account_snapshot_marker" || rawPayload?.kind === "opening_balance";
+};
+
+export const shouldRunDestructiveMultiAccountCleanup = (params: {
+  multiAccountImport: boolean;
+  visibleTransactionsCount: number;
+  parsedRows: Array<{ rawPayload?: unknown }>;
+}) => {
+  if (!params.multiAccountImport || params.visibleTransactionsCount > 0) {
+    return params.multiAccountImport;
+  }
+
+  return !params.parsedRows.every((row) => isSnapshotOnlyParsedRow(row));
+};
+
 type TransferAccountLookup = {
   id: string;
   name: string;
@@ -10477,7 +10497,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   reconciledAccountBalance = mobileWalletScreenshotImport
     ? null
     : statementEndingBalance ?? latestExplicitStatementBalance ?? fallbackReconciledBalance;
-  if (multiAccountImport) {
+  if (
+    shouldRunDestructiveMultiAccountCleanup({
+      multiAccountImport,
+      visibleTransactionsCount: confirmationResult.confirmedTransactionsCount ?? 0,
+      parsedRows,
+    })
+  ) {
     for (const group of parsedAccountGroups) {
       const groupAccount = accountByGroupKey.get(group.key);
       if (!groupAccount) {
