@@ -67,17 +67,19 @@ export type RecurringObligationType =
   | "general";
 
 const recurringKeywordPattern =
-  /\b(rent|lease|landlord|internet|bill|billing|utility|utilities|subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|installment|statement\s+payment|payment\s+due|electric|water|phone|mobile\s+plan|broadband|wifi|insurance|mortgage|loan|repayment|amortization|tuition|school\s+fee|gym|fitness|fee|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|prime|apple\s+services?|figma|zoom|dropbox|airalo|slack|autosweep|easytrip|beep\s+card|parking\s+subscription)\b/i;
+  /\b(rent|lease|landlord|internet|bill|billing|utility|utilities|subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|installment|statement\s+payment|payment\s+due|electric|water|phone|mobile\s+plan|broadband|wifi|insurance|mortgage|loan|repayment|amortization|tuition|school\s+fee|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|prime|apple\s+services?|figma|zoom|dropbox|airalo|slack|autosweep|easytrip|beep\s+card|parking\s+subscription)\b/i;
 const recurringExclusionPattern =
-  /\b(transfer|instapay|fund transfer|outward|inward|cash payment|bills payment|payment to card|card payment|atm withdrawal|cash advance|top up|cash in|incoming credit|refund|reversal)\b/i;
+  /\b(transfer|instapay|instapay dr|fund transfer|outward|inward|cash payment|bills payment|payment to card|card payment|atm withdrawal|cash advance|top up|cash in|incoming credit|received gcash|gcash received|load purchase|refund|reversal)\b/i;
 const recurringNoiseTitlePattern =
-  /^(transfer from|transfer to|interbank transfer|instapay ?fee|load purchase|in app purchase for mobile|atm withdrawal|withholding tax|interest applied|mobile load)/i;
+  /^(transfer from|transfer to|interbank transfer|instapay ?fee|instapay dr|load purchase|paymaya load purchase|maya load purchase|gcash received|received gcash|in app purchase for mobile|atm withdrawal|withholding tax|interest applied|mobile load|service fee|fee|invno)/i;
+const recurringCanonicalNoisePattern =
+  /\b(load purchase|paymaya load|maya load|gcash received|received gcash|instapay dr|service fee|point of sale|^fee$|invno)\b/i;
 const recurringRescuePattern =
   /\b(subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|rent|lease|internet|broadband|wifi|phone|mobile\s+plan|electric|water|utility|utilities|insurance|mortgage|loan|repayment|amortization|installment|statement\s+payment|payment\s+due|tuition|school\s+fee|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|apple\s+services?|figma|zoom|dropbox|airalo|slack|autosweep|easytrip|beep\s+card|parking\s+subscription)\b/i;
 const recurringPositiveTransferPattern =
   /\b(statement\s+payment|payment\s+due|loan|repayment|amortization|installment|insurance|premium|rent|lease|internet|phone|electric|water|utility|utilities|subscription|membership|dues|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|canva|linkedin|pldt|meralco|globe|smart|maynilad|figma|zoom|dropbox|airalo|slack|tuition|school\s+fee|autosweep|easytrip|beep\s+card|parking\s+subscription)\b/i;
 const recurringCreditLikeExclusionPattern =
-  /\b(salary|payroll|bonus|interest earned|interest applied|interest credited|incoming credit|received money|cash deposit|deposit|refund|reversal|credit memo)\b/i;
+  /\b(salary|payroll|bonus|interest earned|interest applied|interest credited|incoming credit|received money|cash deposit|deposit|received gcash|gcash received|refund|reversal|credit memo)\b/i;
 const recurringCategoryRescueSet = new Set(["bills & utilities", "insurance", "loans", "housing", "education", "subscriptions", "health & wellness"]);
 
 const recurringMerchantAliases = [
@@ -87,7 +89,7 @@ const recurringMerchantAliases = [
   { pattern: /\bdisney\b.*\bplus\b|\bdisney\+\b/i, label: "Disney+" },
   { pattern: /\bprime\b.*\b(video|membership)\b|\bamazon\b.*\bprime\b/i, label: "Amazon Prime" },
   { pattern: /\bapple\b.*\bmusic\b/i, label: "Apple Music" },
-  { pattern: /\byoutube\b.*\b(premium|music|subscription)?\b/i, label: "YouTube" },
+  { pattern: /\b(?:youtube|yt)\b.*\b(premium|prem|music|subscription)?\b|\byt\s+prem\b/i, label: "YouTube" },
   { pattern: /\bapple\b.*\b(icloud|itunes|bill|services?)\b|\bicloud\b/i, label: "Apple / iCloud" },
   { pattern: /\bgoogle\b.*\b(one|storage|workspace|subscription)?\b/i, label: "Google" },
   { pattern: /\badobe\b/i, label: "Adobe" },
@@ -116,7 +118,7 @@ const recurringMerchantAliases = [
 ];
 
 const recurringFamilyNoisePattern =
-  /\b(?:subscription|subscr(?:iption)?|recurring|monthly|autopay|premium|membership|member|plan|service|services|merchant|purchase|ecommerce|online|intl|international|foreign|debit|credit|visa|mastercard|pos|approval|reference|ref|auth|descriptor|statement|biller|billers?)\b/g;
+  /\b(?:subscription|subscr(?:iption)?|recurring|monthly|autopay|premium|membership|member|plan|service|services|merchant|purchase|ecommerce|online|intl|international|foreign|debit|credit|visa|mastercard|pos|approval|reference|ref|auth|descriptor|statement|biller|billers?|invno)\b/g;
 const variableAmountRecurringPattern =
   /\b(rent|lease|internet|bill|utility|utilities|electric|water|phone|insurance|mortgage|loan|repayment|amortization|dues|tuition|school\s+fee|globe|smart|pldt|meralco|maynilad|autosweep|easytrip|beep\s+card)\b/i;
 
@@ -184,7 +186,15 @@ const isRecurringCandidateTransaction = (transaction: RecurringSourceTransaction
   const categoryName = transaction.category?.name?.trim().toLowerCase() ?? "";
 
   if (transaction.type === "expense") {
-    return !recurringCreditLikeExclusionPattern.test(textBlob);
+    if (recurringCreditLikeExclusionPattern.test(textBlob)) {
+      return false;
+    }
+
+    if (recurringExclusionPattern.test(textBlob) && !recurringPositiveTransferPattern.test(textBlob)) {
+      return false;
+    }
+
+    return true;
   }
 
   if (recurringCreditLikeExclusionPattern.test(textBlob)) {
@@ -237,6 +247,8 @@ const daysBetween = (left: Date, right: Date) => Math.round(Math.abs(right.getTi
 
 const monthDiff = (left: Date, right: Date) =>
   (right.getFullYear() - left.getFullYear()) * 12 + right.getMonth() - left.getMonth();
+
+const getMonthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 
 const addMonths = (date: Date, months: number) => {
   const next = new Date(date);
@@ -337,6 +349,67 @@ export const makeRecurringSuppressionKey = (params: {
   [params.accountId ?? "workspace", (params.currency ?? "PHP").trim().toUpperCase() || "PHP", normalizeRecurringMerchantKey(params.title ?? "")]
     .join("::");
 
+const scoreRecurringLabelCandidate = (value: string) => {
+  const normalized = normalizeRecurringMerchantKey(value);
+  if (!normalized) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  let score = normalized.split(" ").filter(Boolean).length;
+
+  if (recurringNoiseTitlePattern.test(normalized)) {
+    score -= 6;
+  }
+  if (recurringExclusionPattern.test(normalized)) {
+    score -= 4;
+  }
+  if (recurringMerchantAliases.some((alias) => alias.pattern.test(normalized))) {
+    score += 8;
+  }
+  if (recurringKeywordPattern.test(normalized) || recurringRescuePattern.test(normalized)) {
+    score += 4;
+  }
+  if (recurringPositiveTransferPattern.test(normalized)) {
+    score += 2;
+  }
+  if (/\d{4,}/.test(value)) {
+    score -= 1;
+  }
+  if (/^\d{1,2}[-/: ]\d{1,2}/.test(value) || value.replace(/\D/g, "").length >= 8) {
+    score -= 3;
+  }
+
+  return score;
+};
+
+const selectPreferredRecurringLabel = (transaction: Pick<RecurringSourceTransaction, "merchantRaw" | "merchantClean" | "description">) => {
+  const candidates = [transaction.merchantClean, transaction.merchantRaw, transaction.description]
+    .map((value) => (value ?? "").trim())
+    .filter(Boolean);
+
+  if (candidates.length === 0) {
+    return "";
+  }
+
+  return candidates
+    .map((value) => ({ value, score: scoreRecurringLabelCandidate(value) }))
+    .sort((left, right) => right.score - left.score || right.value.length - left.value.length)[0]?.value ?? candidates[0] ?? "";
+};
+
+const buildRecurringGroupingKey = (value: string) => {
+  const normalized = normalizeRecurringMerchantKey(value);
+  if (!normalized) {
+    return "";
+  }
+
+  const alias = recurringMerchantAliases.find((candidate) => candidate.pattern.test(normalized));
+  if (alias) {
+    return alias.label.toLowerCase();
+  }
+
+  return buildRecurringMerchantFamilySignature(value) || canonicalizeRecurringMerchant(value) || normalized;
+};
+
 const inferFrequency = (dates: Date[]): { frequency: CommitmentRecurrence | null; nextExpectedDate: Date | null; cadenceConfidence: number } => {
   const sortedDates = [...dates].sort((left, right) => left.getTime() - right.getTime());
   if (sortedDates.length < 2) {
@@ -346,17 +419,35 @@ const inferFrequency = (dates: Date[]): { frequency: CommitmentRecurrence | null
   const intervals = sortedDates.slice(1).map((date, index) => daysBetween(sortedDates[index] as Date, date));
   const typicalInterval = median(intervals);
   const lastSeenDate = sortedDates[sortedDates.length - 1] as Date;
-  const sameDayOfMonthCount = sortedDates.filter((date) => Math.abs(date.getDate() - lastSeenDate.getDate()) <= 5).length;
-  const monthGaps = sortedDates.slice(1).map((date, index) => monthDiff(sortedDates[index] as Date, date));
+  const monthlyAnchorDay = Math.round(median(sortedDates.map((date) => date.getDate())));
+  const monthlyRepresentativeDates = Array.from(
+    sortedDates.reduce((groups, date) => {
+      const key = getMonthKey(date);
+      groups.set(key, [...(groups.get(key) ?? []), date]);
+      return groups;
+    }, new Map<string, Date[]>()).values()
+  )
+    .map((monthDates) =>
+      [...monthDates].sort(
+        (left, right) =>
+          Math.abs(left.getDate() - monthlyAnchorDay) - Math.abs(right.getDate() - monthlyAnchorDay) ||
+          left.getTime() - right.getTime()
+      )[0] as Date
+    )
+    .sort((left, right) => left.getTime() - right.getTime());
+  const sameDayOfMonthCount = monthlyRepresentativeDates.filter((date) => Math.abs(date.getDate() - monthlyAnchorDay) <= 5).length;
+  const monthGaps = monthlyRepresentativeDates.slice(1).map((date, index) => monthDiff(monthlyRepresentativeDates[index] as Date, date));
   const positiveMonthGaps = monthGaps.filter((gap) => gap > 0);
   const looksMonthlyAcrossGaps =
     positiveMonthGaps.length > 0 &&
-    sameDayOfMonthCount >= Math.min(2, sortedDates.length) &&
-    positiveMonthGaps.every((gap) => gap >= 1 && gap <= 4);
+    sameDayOfMonthCount >= Math.min(2, monthlyRepresentativeDates.length) &&
+    positiveMonthGaps.every((gap) => gap >= 1 && gap <= 2);
   const looksAnnualAcrossGaps =
     positiveMonthGaps.length > 0 &&
-    sameDayOfMonthCount >= Math.min(2, sortedDates.length) &&
+    sameDayOfMonthCount >= Math.min(2, monthlyRepresentativeDates.length) &&
     positiveMonthGaps.every((gap) => gap >= 10 && gap <= 14);
+  const representativeIntervals = monthlyRepresentativeDates.slice(1).map((date, index) => daysBetween(monthlyRepresentativeDates[index] as Date, date));
+  const representativeTypicalInterval = median(representativeIntervals);
 
   if (typicalInterval >= 6 && typicalInterval <= 8) {
     return { frequency: "weekly", nextExpectedDate: addDays(lastSeenDate, 7), cadenceConfidence: 84 };
@@ -366,7 +457,7 @@ const inferFrequency = (dates: Date[]): { frequency: CommitmentRecurrence | null
     return { frequency: "biweekly", nextExpectedDate: addDays(lastSeenDate, 14), cadenceConfidence: 82 };
   }
 
-  if ((typicalInterval >= 25 && typicalInterval <= 35) || looksMonthlyAcrossGaps) {
+  if ((typicalInterval >= 25 && typicalInterval <= 35) || (representativeTypicalInterval >= 25 && representativeTypicalInterval <= 35) || looksMonthlyAcrossGaps) {
     return { frequency: "monthly", nextExpectedDate: addMonths(lastSeenDate, 1), cadenceConfidence: looksMonthlyAcrossGaps ? 78 : 86 };
   }
 
@@ -392,6 +483,11 @@ const buildPatternFromTransactions = (
     return null;
   }
 
+  const distinctMonthCount = new Set(candidateTransactions.map((transaction) => getMonthKey(transaction.date))).size;
+  if (distinctMonthCount < 2) {
+    return null;
+  }
+
   const amounts = candidateTransactions.map((transaction) => toAmount(transaction.amount)).filter((amount) => amount > 0);
   const typicalAmount = median(amounts);
   if (typicalAmount <= 0) {
@@ -404,24 +500,23 @@ const buildPatternFromTransactions = (
         `${transaction.merchantClean ?? ""} ${transaction.merchantRaw} ${transaction.description ?? ""} ${transaction.category?.name ?? ""}`
     )
     .join(" ");
+  const categoryNames = new Set(candidateTransactions.map((transaction) => transaction.category?.name?.toLowerCase() ?? ""));
+  const hasKeywordSignal = recurringKeywordPattern.test(textBlob) || categoryNames.has("bills & utilities");
+  const amountTolerance = Math.max(20, typicalAmount * (hasKeywordSignal ? 0.28 : 0.18));
+  const stableAmountCount = amounts.filter((amount) => Math.abs(amount - typicalAmount) <= amountTolerance).length;
+  const amountStability = stableAmountCount / Math.max(amounts.length, 1);
+  const preferredMerchantLabels = candidateTransactions.map((transaction) => selectPreferredRecurringLabel(transaction)).filter(Boolean);
   const canonicalTitle =
     canonicalizeRecurringMerchant(
-      candidateTransactions
-        .map((transaction) => transaction.merchantClean ?? transaction.merchantRaw)
+      preferredMerchantLabels
         .find((value) => Boolean(value && canonicalizeRecurringMerchant(value).length > 0)) ?? candidateTransactions[0]?.merchantRaw ?? ""
     ) || normalizeRecurringMerchantKey(candidateTransactions[0]?.merchantRaw ?? "");
   if (!canonicalTitle) {
     return null;
   }
-  if (recurringNoiseTitlePattern.test(canonicalTitle)) {
+  if (recurringNoiseTitlePattern.test(canonicalTitle) || recurringCanonicalNoisePattern.test(canonicalTitle)) {
     return null;
   }
-
-  const amountTolerance = Math.max(20, typicalAmount * 0.18);
-  const stableAmountCount = amounts.filter((amount) => Math.abs(amount - typicalAmount) <= amountTolerance).length;
-  const amountStability = stableAmountCount / Math.max(amounts.length, 1);
-  const categoryNames = new Set(candidateTransactions.map((transaction) => transaction.category?.name?.toLowerCase() ?? ""));
-  const hasKeywordSignal = recurringKeywordPattern.test(textBlob) || categoryNames.has("bills & utilities");
   const hasVariableAmountSignal =
     variableAmountRecurringPattern.test(textBlob) ||
     categoryNames.has("bills & utilities") ||
@@ -435,6 +530,11 @@ const buildPatternFromTransactions = (
     : null;
   const dayVariance =
     expectedDayOfMonth === null ? 0 : average(dateDays.map((day) => Math.abs(day - expectedDayOfMonth)));
+  const hasMonthlyAnchorSignal =
+    distinctMonthCount >= 2 &&
+    expectedDayOfMonth !== null &&
+    ["monthly", "quarterly", "annual"].includes(cadence.frequency ?? "") &&
+    dayVariance <= 5.5;
 
   if (!cadence.frequency || !cadence.nextExpectedDate) {
     return null;
@@ -448,11 +548,11 @@ const buildPatternFromTransactions = (
     return null;
   }
 
-  if (!hasKeywordSignal && amountStability < 0.85) {
+  if (!hasKeywordSignal && amountStability < 0.85 && !hasMonthlyAnchorSignal) {
     return null;
   }
 
-  if (!hasKeywordSignal && amountStability < 0.65 && expenseTransactions.length < 3) {
+  if (!hasKeywordSignal && amountStability < 0.65 && candidateTransactions.length < 3 && distinctMonthCount < 3) {
     return null;
   }
 
@@ -460,7 +560,7 @@ const buildPatternFromTransactions = (
     hasKeywordSignal &&
     hasVariableAmountSignal &&
     ["monthly", "quarterly", "annual"].includes(cadence.frequency) &&
-    candidateTransactions.length >= 3 &&
+    distinctMonthCount >= 2 &&
     amountStability >= 0.35
   ) {
     // Variable utilities and similar bills often fluctuate because of usage or FX conversion.
@@ -561,6 +661,7 @@ const buildPatternFromTransactions = (
       scope,
       transactionIds: candidateTransactions.map((transaction) => transaction.id),
       amountStability,
+      distinctMonthCount,
       hasKeywordSignal,
       hasVariableAmountSignal,
       looksTransferLike,
@@ -588,10 +689,8 @@ export const detectRecurringPatterns = (transactions: RecurringSourceTransaction
       continue;
     }
 
-    const merchantKey =
-      canonicalizeRecurringMerchant(transaction.merchantClean ?? transaction.merchantRaw) ||
-      buildRecurringMerchantFamilySignature(transaction.merchantClean ?? transaction.merchantRaw) ||
-      normalizeRecurringMerchantKey(transaction.merchantClean ?? transaction.merchantRaw);
+    const preferredMerchantLabel = selectPreferredRecurringLabel(transaction);
+    const merchantKey = buildRecurringGroupingKey(preferredMerchantLabel);
     if (!merchantKey) {
       continue;
     }
@@ -916,6 +1015,60 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
     await tx.$queryRaw<Array<{ locked: string }>>`
       SELECT pg_advisory_xact_lock(hashtextextended(${`recurring-pattern-sync:${workspaceId}`}, 0))::text AS locked
     `;
+
+    const existingPatterns = await tx.recurringPattern.findMany({
+      where: { workspaceId },
+      select: {
+        id: true,
+        accountId: true,
+        currency: true,
+        merchantClean: true,
+        merchantRaw: true,
+        rawPayload: true,
+      },
+    });
+
+    const activeSuppressionKeys = new Set(patterns.map((pattern) => pattern.suppressionKey));
+    const activeFamilyKeys = new Set(
+      patterns.map((pattern) => [pattern.accountId ?? "workspace", pattern.currency, buildRecurringMerchantFamilySignature(pattern.canonicalTitle)].join("::"))
+    );
+    const stalePatternIds = existingPatterns
+      .filter((pattern) => {
+        if (isDismissedRecurringPattern(pattern.rawPayload)) {
+          return false;
+        }
+
+        const payload =
+          pattern.rawPayload && typeof pattern.rawPayload === "object" && !Array.isArray(pattern.rawPayload)
+            ? (pattern.rawPayload as Record<string, unknown>)
+            : null;
+        const suppressionKey =
+          typeof payload?.suppressionKey === "string"
+            ? payload.suppressionKey
+            : makeRecurringSuppressionKey({
+                accountId: pattern.accountId,
+                currency: pattern.currency,
+                title: pattern.merchantClean ?? pattern.merchantRaw,
+              });
+        const familyKey = [
+          pattern.accountId ?? "workspace",
+          pattern.currency,
+          buildRecurringMerchantFamilySignature(pattern.merchantClean ?? pattern.merchantRaw ?? ""),
+        ].join("::");
+
+        return !activeSuppressionKeys.has(suppressionKey) && !activeFamilyKeys.has(familyKey);
+      })
+      .map((pattern) => pattern.id);
+
+    if (stalePatternIds.length > 0) {
+      await tx.recurringPattern.deleteMany({
+        where: {
+          id: {
+            in: stalePatternIds,
+          },
+        },
+      });
+    }
 
     for (const pattern of patterns) {
       const existingPattern = await tx.recurringPattern.findFirst({

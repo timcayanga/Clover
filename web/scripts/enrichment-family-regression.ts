@@ -204,6 +204,113 @@ const runRecurringChecks = () => {
 
   const tuitionPattern = tuitionPatterns.find((pattern) => pattern.canonicalTitle === "Tuition");
   assert(tuitionPattern?.frequency === "monthly", "Expected tuition-like transfer rows to become monthly recurring candidates");
+
+  const fxSubscriptionPatterns = detectRecurringPatterns([
+    {
+      id: "fx1",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-01-02"),
+      amount: 249,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "GOOGLE*YT PREM 6501",
+      merchantClean: null,
+      description: "GOOGLE*YT PREM 6501",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "RCBC Gold", institution: "RCBC" },
+      importFile: null,
+    },
+    {
+      id: "fx2",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-02-01"),
+      amount: 254.5,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "GOOGLE*YT PREM 9321",
+      merchantClean: null,
+      description: "GOOGLE*YT PREM 9321",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "RCBC Gold", institution: "RCBC" },
+      importFile: null,
+    },
+  ]);
+
+  const youtubePattern = fxSubscriptionPatterns.find((pattern) => pattern.canonicalTitle === "YouTube");
+  assert(youtubePattern?.frequency === "monthly", "Expected FX-shifted subscription charges across two months to become recurring");
+
+  const monthEndBillPatterns = detectRecurringPatterns([
+    {
+      id: "m1",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-01-30"),
+      amount: 2207,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "Bills Payment to PLDT",
+      merchantClean: "PLDT",
+      description: "Bills Payment to PLDT",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "BPI 1234", institution: "BPI" },
+      importFile: null,
+    },
+    {
+      id: "m2",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-02-28"),
+      amount: 2210.25,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "Bills Payment to PLDT",
+      merchantClean: "PLDT",
+      description: "Bills Payment to PLDT",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "BPI 1234", institution: "BPI" },
+      importFile: null,
+    },
+  ]);
+
+  const pldtPattern = monthEndBillPatterns.find((pattern) => pattern.canonicalTitle === "PLDT");
+  assert(pldtPattern?.frequency === "monthly", "Expected month-end bills with shorter-month drift to stay monthly");
+
+  const transferLikePatterns = detectRecurringPatterns([
+    {
+      id: "x1",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-01-12"),
+      amount: 1499,
+      currency: "PHP",
+      type: "transfer",
+      merchantRaw: "Transfer from 09071104069",
+      merchantClean: "Transfer from 09071104069",
+      description: "Transfer from 09071104069",
+      category: { name: "Transfers" },
+      account: { id: "a", name: "GCash", institution: "GCash" },
+      importFile: null,
+    },
+    {
+      id: "x2",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-02-12"),
+      amount: 1499,
+      currency: "PHP",
+      type: "transfer",
+      merchantRaw: "Transfer from 09071104069",
+      merchantClean: "Transfer from 09071104069",
+      description: "Transfer from 09071104069",
+      category: { name: "Transfers" },
+      account: { id: "a", name: "GCash", institution: "GCash" },
+      importFile: null,
+    },
+  ]);
+
+  assert(transferLikePatterns.length === 0, "Expected generic transfer patterns to stay out of recurring suggestions");
 };
 
 const main = () => {
