@@ -226,7 +226,6 @@ const buildReminderSuggestions = (reminders: StatementReminder[], existingCheckp
       continue;
     }
     const key = `statement_reminder::${reminder.checkpointId}`;
-
     const dueDayLabel =
       reminder.dueDayOfMonth === null
         ? null
@@ -415,6 +414,9 @@ const buildRecurringTransactionSuggestions = (
 
   for (const pattern of patterns) {
     const title = (pattern.canonicalTitle || pattern.merchantClean || pattern.merchantRaw).trim();
+    if (!title || GENERIC_RECURRING_TITLE_PATTERN.test(title)) {
+      continue;
+    }
     const key = `recurring_transaction::${[
       pattern.accountId ?? "workspace",
       pattern.currency,

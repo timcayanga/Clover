@@ -190,8 +190,13 @@ const readExplicitDueDay = (sourceMetadata: Record<string, unknown> | null) => {
   ];
 
   for (const candidate of candidates) {
-    const parsed = Number(candidate);
-    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 31) {
+    const parsed =
+      typeof candidate === "number"
+        ? candidate
+        : typeof candidate === "string"
+          ? Number(candidate.replace(/[^0-9]/g, ""))
+          : null;
+    if (parsed && Number.isFinite(parsed) && parsed >= 1 && parsed <= 31) {
       return Math.round(parsed);
     }
   }

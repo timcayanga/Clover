@@ -128,6 +128,7 @@ export const normalizeRecurringMerchantKey = (value: string) =>
     .toLowerCase()
     .replace(/^\d{1,2}\s*:\s*\d{2}\s*/g, " ")
     .replace(/\b(?:bills?\s+payment(?:\s+to)?|payment\s+to|pay(?:ment)?\s+for|one\s+click)\b/g, " ")
+    .replace(/\b(?:ref(?:erence)?|auth(?:orization)?|approval|trace|trace\s*no|txn|rrn|stan|invoice|order)\s*[:#-]?\s*[a-z0-9-]+\b/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\bsubscr(?:iption)?\b/g, " subscription ")
     .replace(/\b\d{4,}\b/g, " ")

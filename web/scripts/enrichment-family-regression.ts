@@ -226,6 +226,42 @@ const runRecurringChecks = () => {
   const tuitionPattern = tuitionPatterns.find((pattern) => pattern.canonicalTitle === "Tuition");
   assert(tuitionPattern?.frequency === "monthly", "Expected tuition-like transfer rows to become monthly recurring candidates");
 
+  const smartPostpaidPatterns = detectRecurringPatterns([
+    {
+      id: "sp1",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-01-02"),
+      amount: 999,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "08:55 BILLS PAYMENT TO SMART POSTPAID REF# 99182",
+      merchantClean: null,
+      description: "08:55 BILLS PAYMENT TO SMART POSTPAID REF# 99182",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "RCBC 1014", institution: "RCBC" },
+      importFile: null,
+    },
+    {
+      id: "sp2",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-02-03"),
+      amount: 1017.43,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "09:02 PAYMENT TO SMART POSTPAID AUTH 12888",
+      merchantClean: null,
+      description: "09:02 PAYMENT TO SMART POSTPAID AUTH 12888",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "RCBC 1014", institution: "RCBC" },
+      importFile: null,
+    },
+  ]);
+
+  const smartPattern = smartPostpaidPatterns.find((pattern) => pattern.canonicalTitle === "Smart");
+  assert(smartPattern?.frequency === "monthly", "Expected Smart postpaid bill payments with timestamps and refs to collapse into one monthly pattern");
+
   const fxSubscriptionPatterns = detectRecurringPatterns([
     {
       id: "fx1",

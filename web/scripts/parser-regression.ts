@@ -1192,6 +1192,15 @@ const main = async () => {
   if (summarizeMerchantText("PAYPAL SINGAPORE PTE LTD", "BPI") !== "PayPal") {
     throw new Error("expected SOA merchant normalization to collapse legal-entity suffixes for PayPal");
   }
+  if (summarizeMerchantText("PAYPAL*SPOTIFY*P 402 EBB", "BPI") !== "Spotify") {
+    throw new Error("expected SOA merchant normalization to prefer Spotify over the PayPal wrapper");
+  }
+  if (summarizeMerchantText("PAYPAL LINKEDIN SINGAPORE PTE LTD", "BPI") !== "LinkedIn") {
+    throw new Error("expected SOA merchant normalization to prefer LinkedIn over the PayPal wrapper");
+  }
+  if (summarizeMerchantText("GRABPAY*DUNKIN PH CARD PURCHASE", "BPI") !== "Dunkin") {
+    throw new Error("expected SOA merchant normalization to prefer Dunkin over the GrabPay wrapper");
+  }
   console.log("[PASS] BDO classification | transfer-like rows, withdrawals, and interest spelling classified correctly");
 
   const mayaSamplesDir = join(root, "Samples/Maya");
@@ -2198,6 +2207,9 @@ const main = async () => {
     ["LINKEDIN PREMIUM SINGAPORE PTE LTD", "expense", "Bills & Utilities", "LinkedIn"],
     ["STARBUCKS STORE 0143 CARD PURCHASE", "expense", "Food & Dining", "Starbucks"],
     ["PAYPAL SINGAPORE PTE LTD", "expense", "Shopping", "PayPal"],
+    ["PAYPAL*SPOTIFY*P 402 EBB", "expense", "Bills & Utilities", "Spotify"],
+    ["PAYPAL LINKEDIN SINGAPORE PTE LTD", "expense", "Bills & Utilities", "LinkedIn"],
+    ["GRABPAY*DUNKIN PH CARD PURCHASE", "expense", "Food & Dining", "Dunkin"],
   ];
   for (const [merchantText, type, expectedCategory, expectedName] of noisyUnseenMerchantExpectations) {
     const result = classifyMerchantFallback({

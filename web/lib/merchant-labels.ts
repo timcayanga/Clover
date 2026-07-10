@@ -1896,6 +1896,32 @@ const stripTrailingStatementNoise = (value: string) => {
     .trim();
 };
 
+const GENERIC_PAYMENT_RAIL_REPLACEMENTS = new Set(["PayPal", "Grab", "GCash", "Maya", "Apple Pay", "Google Pay"]);
+
+const ruleMatchesMerchantText = (rule: SimplifierRule, normalized: string, compact: string) => {
+  const anyMatch = rule.patterns?.some((pattern) => pattern.test(normalized) || pattern.test(compact)) ?? false;
+  const allMatch = rule.allPatterns?.every((pattern) => pattern.test(normalized) || pattern.test(compact)) ?? true;
+  return anyMatch && allMatch;
+};
+
+const selectNestedMerchantReplacement = (normalized: string, compact: string) => {
+  const matches = genericSimplifierRules
+    .filter((rule) => ruleMatchesMerchantText(rule, normalized, compact))
+    .map((rule) => rule.replacement);
+  if (matches.length < 2) {
+    return null;
+  }
+
+  const uniqueMatches = [...new Set(matches)];
+  const matchedGenericRails = uniqueMatches.filter((replacement) => GENERIC_PAYMENT_RAIL_REPLACEMENTS.has(replacement));
+  if (matchedGenericRails.length === 0) {
+    return null;
+  }
+
+  const specificMatch = uniqueMatches.find((replacement) => !GENERIC_PAYMENT_RAIL_REPLACEMENTS.has(replacement));
+  return specificMatch ?? null;
+};
+
 export const simplifyMerchantText = (value: string, institution?: string | null) => {
   const simplified = applySimplifierRules(value, institution);
   return simplified ? humanizeMerchantText(simplified) : "";
@@ -1985,10 +2011,13 @@ export const summarizeMerchantText = (value: string, institution?: string | null
     return "Transfer to Other Bank";
   }
 
+  const nestedMerchantReplacement = selectNestedMerchantReplacement(simplified, compact);
+  if (nestedMerchantReplacement) {
+    return nestedMerchantReplacement;
+  }
+
   for (const rule of genericSimplifierRules) {
-    const anyMatch = rule.patterns?.some((pattern) => pattern.test(simplified) || pattern.test(compact)) ?? false;
-    const allMatch = rule.allPatterns?.every((pattern) => pattern.test(simplified) || pattern.test(compact)) ?? true;
-    if (anyMatch && allMatch) {
+    if (ruleMatchesMerchantText(rule, simplified, compact)) {
       return rule.replacement;
     }
   }
