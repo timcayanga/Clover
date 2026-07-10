@@ -39,17 +39,6 @@ function matchesQuery(section: HelpSection, query: string) {
   return haystack.includes(query);
 }
 
-function SearchIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M10.5 4.5a6 6 0 1 0 0 12a6 6 0 0 0 0-12Zm0-1.5a7.5 7.5 0 1 1 4.73 13.32l4.22 4.21a.75.75 0 1 1-1.06 1.06l-4.21-4.22A7.5 7.5 0 0 1 10.5 3Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
 export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
   const [query, setQuery] = useState("");
 
@@ -69,8 +58,8 @@ export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
         <LandingNav accountState={accountState} />
 
         <label className="help-search help-search--hero" htmlFor="help-search">
-          <span className="help-search__icon">
-            <SearchIcon />
+          <span className="help-search__emoji" aria-hidden="true">
+            🔍
           </span>
           <span className="sr-only">Search help</span>
           <input
@@ -94,9 +83,7 @@ export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
                 decoding="async"
               />
               <div className="help-card__content">
-                <p className="help-card__eyebrow">{section.eyebrow}</p>
                 <h3>{section.title}</h3>
-                <p>{section.summary}</p>
               </div>
             </Link>
           ))}
