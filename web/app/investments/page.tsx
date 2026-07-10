@@ -380,6 +380,8 @@ type InvestmentAnalysisSlice = {
   color: string;
 };
 
+type InvestmentAssetMixSlice = InvestmentAnalysisSlice;
+
 type InvestmentSortKey = "value_desc" | "value_asc" | "name_asc" | "gain_desc" | "gain_asc" | "updated_desc";
 
 type InvestmentEditDraft = {
@@ -628,6 +630,7 @@ export default function InvestmentsPage() {
   const [investmentSubtypeFilter, setInvestmentSubtypeFilter] = useState<InvestmentSubtype | "all">("all");
   const [investmentSortKey, setInvestmentSortKey] = useState<InvestmentSortKey>("value_desc");
   const [portfolioCurrencyFilter, setPortfolioCurrencyFilter] = useState("all");
+  const [selectedOverviewMixKey, setSelectedOverviewMixKey] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [selectedInvestmentAssetId, setSelectedInvestmentAssetId] = useState<string | null>(urlSearchParams.get("asset"));
   const [isSaving, setIsSaving] = useState(false);
@@ -1030,6 +1033,19 @@ export default function InvestmentsPage() {
       .sort((left, right) => right.currentValue - left.currentValue);
   }, [investmentGroups]);
 
+  useEffect(() => {
+    if (portfolioAllocation.length === 0) {
+      if (selectedOverviewMixKey !== "") {
+        setSelectedOverviewMixKey("");
+      }
+      return;
+    }
+
+    if (!selectedOverviewMixKey || !portfolioAllocation.some((group) => group.key === selectedOverviewMixKey)) {
+      setSelectedOverviewMixKey(portfolioAllocation[0]?.key ?? "");
+    }
+  }, [portfolioAllocation, selectedOverviewMixKey]);
+
   const accountPerformance = useMemo(
     () =>
       selectedCurrencyInvestmentAccounts.map((account) => {
@@ -1070,6 +1086,50 @@ export default function InvestmentsPage() {
       })),
     [portfolioAllocation]
   );
+
+  const selectedOverviewMixGroup = useMemo(
+    () => portfolioAllocation.find((group) => group.key === selectedOverviewMixKey) ?? portfolioAllocation[0] ?? null,
+    [portfolioAllocation, selectedOverviewMixKey]
+  );
+
+  const overviewAssetMixSlices = useMemo<InvestmentAssetMixSlice[]>(() => {
+    if (!selectedOverviewMixGroup) {
+      return [];
+    }
+
+    const sortedAccounts = selectedOverviewMixGroup.accounts
+      .map((account) => ({
+        account,
+        value: parseNullableAmount(account.balance) ?? 0,
+      }))
+      .filter((item) => item.value > 0)
+      .sort((left, right) => right.value - left.value || left.account.name.localeCompare(right.account.name));
+
+    const primaryAccounts = sortedAccounts.slice(0, 6);
+    const slices = primaryAccounts.map((item, index) => ({
+      key: item.account.id,
+      label: item.account.name,
+      value: item.value,
+      valueLabel: formatInvestmentAmount(item.value, item.account.currency),
+      detailLabel: item.account.institution ?? (item.account.investmentSubtype ? getInvestmentSubtypeLabel(item.account.investmentSubtype) : "Unclassified"),
+      color: INVESTMENT_ANALYSIS_COLORS[index % INVESTMENT_ANALYSIS_COLORS.length],
+    }));
+
+    const remainingAccounts = sortedAccounts.slice(6);
+    const remainingValue = remainingAccounts.reduce((sum, item) => sum + item.value, 0);
+    if (remainingValue > 0.01) {
+      slices.push({
+        key: `${selectedOverviewMixGroup.key}__other_assets__`,
+        label: "Other assets",
+        value: remainingValue,
+        valueLabel: formatInvestmentAggregate(remainingValue, selectedOverviewMixGroup.accounts),
+        detailLabel: `${remainingAccounts.length} asset${remainingAccounts.length === 1 ? "" : "s"}`,
+        color: INVESTMENT_ANALYSIS_COLORS[slices.length % INVESTMENT_ANALYSIS_COLORS.length],
+      });
+    }
+
+    return slices;
+  }, [selectedOverviewMixGroup]);
 
   const topHoldingAnalysisSlices = useMemo<InvestmentAnalysisSlice[]>(() => {
     const slices = topHoldings.map((item, index) => ({
@@ -1637,10 +1697,9 @@ export default function InvestmentsPage() {
                 <>
                   <div className="investments-allocation__head">
                     <div className="investments-allocation__head-title">
-                      <p className="eyebrow">Overview</p>
                       <div className="investments-allocation__title-row">
-                        <h5>Portfolio mix</h5>
-                        <InfoTip label="This shows how the visible portfolio value is split across your investment subtypes." />
+                        <h5>Portfolio Mix</h5>
+                        <InfoTip label="This shows how the visible portfolio value is split across investment types and the assets inside each type." />
                       </div>
                     </div>
                     <div className="investments-allocation__summary">
@@ -1648,24 +1707,59 @@ export default function InvestmentsPage() {
                       <strong>{portfolioAllocation.reduce((sum, group) => sum + group.accounts.length, 0)} accounts</strong>
                     </div>
                   </div>
-                  <div className="investments-overview-mix">
-                    <div className="investments-overview-mix__bar" aria-label="Portfolio mix by subtype">
-                      {portfolioAllocation.map((group) => (
-                        <span
-                          key={group.key}
-                          className="investments-overview-mix__segment"
-                          style={{ width: `${Math.max(group.share * 100, 4)}%` }}
-                          title={`${group.label}: ${group.share > 0 ? percentFormatter.format(group.share) : "0%"} · ${formatInvestmentAggregate(group.currentValue, group.accounts)}`}
+                  <div className="investments-overview-mix-grid">
+                    <article className="investments-overview-mix-panel">
+                      <div className="investments-overview-mix-panel__head">
+                        <div className="investments-allocation__title-row">
+                          <h6>By Investment Type</h6>
+                        </div>
+                      </div>
+                      <InvestmentInsightDonut
+                        ariaLabel="Portfolio mix by investment type pie chart"
+                        centerValue={hasVisibleCurrencySelection ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts) : "—"}
+                        centerLabel="Visible value"
+                        slices={allocationAnalysisSlices}
+                      />
+                    </article>
+                    <article className="investments-overview-mix-panel">
+                      <div className="investments-overview-mix-panel__head">
+                        <div className="investments-allocation__title-row">
+                          <h6>Assets in Type</h6>
+                        </div>
+                        <label className="investments-overview-mix-panel__filter">
+                          <span>Type</span>
+                          <select value={selectedOverviewMixGroup?.key ?? ""} onChange={(event) => setSelectedOverviewMixKey(event.target.value)}>
+                            {portfolioAllocation.map((group) => (
+                              <option key={group.key} value={group.key}>
+                                {group.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      {selectedOverviewMixGroup && overviewAssetMixSlices.length > 0 ? (
+                        <InvestmentInsightDonut
+                          ariaLabel={`Assets in ${selectedOverviewMixGroup.label} pie chart`}
+                          centerValue={formatInvestmentAggregate(selectedOverviewMixGroup.currentValue, selectedOverviewMixGroup.accounts)}
+                          centerLabel={selectedOverviewMixGroup.label}
+                          slices={overviewAssetMixSlices}
                         />
-                      ))}
-                    </div>
-                    <p className="panel-muted investments-overview-mix__caption">
-                      Each segment shows how much of your current portfolio value sits in each investment subtype.
-                    </p>
+                      ) : (
+                        <div className="investments-portfolio-table__empty investments-overview-mix-panel__empty">
+                          <strong>No assets to show for this type yet.</strong>
+                          <p>Add balances to these holdings to see the asset mix.</p>
+                        </div>
+                      )}
+                    </article>
                   </div>
                   <div className="investments-allocation__list investments-allocation__list--overview">
                     {portfolioAllocation.map((group) => (
-                      <div key={group.key} className="investments-allocation__row">
+                      <button
+                        key={group.key}
+                        type="button"
+                        className={`investments-allocation__row investments-allocation__row-button${selectedOverviewMixGroup?.key === group.key ? " is-selected" : ""}`}
+                        onClick={() => setSelectedOverviewMixKey(group.key)}
+                      >
                         <div className="investments-allocation__row-head investments-allocation__row-head--overview">
                           <div>
                             <strong>{group.label}</strong>
@@ -1677,7 +1771,7 @@ export default function InvestmentsPage() {
                           </div>
                         </div>
                         <p className="panel-muted investments-allocation__description">{group.description}</p>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </>
