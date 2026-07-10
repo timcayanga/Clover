@@ -398,45 +398,6 @@ export function CommitmentsPanel({
         return commitmentTitle.includes(patternName) || patternName.includes(commitment.title.trim().toLowerCase());
       })
   );
-  const suggestionInsights = useMemo(() => {
-    const dueSoonCount = plannedPaymentSuggestions.filter((suggestion) => {
-      const daysUntil = getDaysUntilDate(suggestion.dueDate);
-      return daysUntil !== null && daysUntil >= 0 && daysUntil <= 7;
-    }).length;
-    const statementCount = plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind === "statement_reminder").length;
-    const installmentCount = plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind === "installment").length;
-    const recurringTransactionCount = plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind === "recurring_transaction").length;
-
-    return [
-      {
-        label: "Due in 7 days",
-        value: dueSoonCount,
-        note: dueSoonCount > 0 ? "Needs attention soon" : "Nothing urgent yet",
-        tone: "var(--warn)",
-      },
-      {
-        label: "Statement dates",
-        value: statementCount,
-        note: statementCount > 0 ? "Detected from uploaded statements" : "No due dates detected yet",
-        tone: "var(--accent)",
-      },
-      {
-        label: "Installments",
-        value: installmentCount,
-        note: installmentCount > 0 ? "Possible installment plans found" : "No installment patterns yet",
-        tone: "var(--good)",
-      },
-      {
-        label: "Recurring signals",
-        value: recurringTransactionCount + suggestedRecurringPatterns.length,
-        note:
-          recurringTransactionCount + suggestedRecurringPatterns.length > 0
-            ? "Subscriptions and bills Clover can help track"
-            : "Upload more history to unlock suggestions",
-        tone: "var(--foreground)",
-      },
-    ];
-  }, [plannedPaymentSuggestions, suggestedRecurringPatterns.length]);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === accountId) ?? null,
@@ -748,28 +709,6 @@ export function CommitmentsPanel({
 
   return (
     <section style={{ display: "grid", gap: 24 }}>
-      <div className="commitments-summary-grid">
-        {suggestionInsights.map((insight) => (
-          <article
-            key={insight.label}
-            className="panel"
-            style={{
-              display: "grid",
-              gap: 10,
-              padding: 18,
-              border: "1px solid rgba(148, 163, 184, 0.18)",
-              background: "rgba(255, 255, 255, 0.78)",
-            }}
-          >
-            <p className="notification-item__tone" style={{ color: insight.tone }}>
-              {insight.label}
-            </p>
-            <strong style={{ fontSize: 28, letterSpacing: "-0.03em" }}>{insight.value}</strong>
-            <span style={{ color: "var(--muted-foreground)" }}>{insight.note}</span>
-          </article>
-        ))}
-      </div>
-
       <div className="commitments-summary-grid">
         {groupedCommitments.map((group) => {
           const isSelected = selectedKind === group.kind;
