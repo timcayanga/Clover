@@ -1547,8 +1547,25 @@ export const guessCategoryFallback = (description: string, type: TransactionType
 
 const GENERIC_CATEGORY_NAMES = new Set(["other", "transfers"]);
 const GENERIC_MERCHANT_RAIL_KEYS = new Set(["paypal", "grab", "grabpay", "gcash", "maya", "visa", "mastercard", "amex"]);
+const GENERIC_NORMALIZED_MERCHANT_PATTERNS = [
+  /^(?:grabpay|gcash|maya|visa|mastercard|amex)$/,
+  /^(?:bank|fund|wallet)\s+transfer$/,
+  /^(?:incoming|outgoing)(?:\s+interbank)?\s+transfer$/,
+  /^(?:interbank|merchant)\s+payment$/,
+  /^(?:card|statement)\s+payment$/,
+  /^(?:instapay|pesonet)(?:\s+send)?$/,
+  /^(?:cash\s+in|cash\s+out)$/,
+];
 
 const isGenericCategoryName = (value: string | null | undefined) => GENERIC_CATEGORY_NAMES.has(String(value ?? "").trim().toLowerCase());
+const isGenericNormalizedMerchantLabel = (value: string | null | undefined) => {
+  const normalized = normalizeMerchantText(value);
+  if (!normalized) {
+    return false;
+  }
+
+  return GENERIC_NORMALIZED_MERCHANT_PATTERNS.some((pattern) => pattern.test(normalized));
+};
 
 const isExplicitTransferLikeDescription = (value: string | null | undefined) => {
   if (getStrongMerchantCategoryHint(String(value ?? ""))) {
@@ -1697,7 +1714,7 @@ const pickCategoryAlignedNormalizedName = (params: {
         : candidate;
     const summarized = summarizeMerchantText(normalizedCandidate);
     const normalizedSummary = normalizeMerchantText(summarized);
-    if (!normalizedSummary || GENERIC_MERCHANT_RAIL_KEYS.has(normalizedSummary)) {
+    if (!normalizedSummary || isGenericNormalizedMerchantLabel(normalizedSummary)) {
       continue;
     }
 
@@ -1707,7 +1724,7 @@ const pickCategoryAlignedNormalizedName = (params: {
     }
   }
 
-  if (GENERIC_MERCHANT_RAIL_KEYS.has(fallbackNormalized)) {
+  if (isGenericNormalizedMerchantLabel(fallbackNormalized)) {
     for (const candidate of rankedCandidates) {
       const institutionScopedPrefix = normalizeWhitespace(String(params.institution ?? "")).trim();
       const normalizedCandidate =
@@ -1716,7 +1733,7 @@ const pickCategoryAlignedNormalizedName = (params: {
           : candidate;
       const summarized = summarizeMerchantText(normalizedCandidate);
       const normalizedSummary = normalizeMerchantText(summarized);
-      if (normalizedSummary && !GENERIC_MERCHANT_RAIL_KEYS.has(normalizedSummary)) {
+      if (normalizedSummary && !isGenericNormalizedMerchantLabel(normalizedSummary)) {
         return summarized;
       }
     }

@@ -2210,6 +2210,10 @@ const main = async () => {
     ["PAYPAL*SPOTIFY*P 402 EBB", "expense", "Bills & Utilities", "Spotify"],
     ["PAYPAL LINKEDIN SINGAPORE PTE LTD", "expense", "Bills & Utilities", "LinkedIn"],
     ["GRABPAY*DUNKIN PH CARD PURCHASE", "expense", "Food & Dining", "Dunkin"],
+    ["ONLINE FUND TRANSFER GRABCAR PH", "expense", "Transport", "Grab"],
+    ["BANK TRANSFER DUNKIN DONUTS BGC", "expense", "Food & Dining", "Dunkin"],
+    ["OUTGOING TRANSFER PAYPAL LINKEDIN PREMIUM", "expense", "Bills & Utilities", "LinkedIn"],
+    ["BANK TRANSFER AMAZON MARKETPLACE", "expense", "Shopping", "Amazon"],
   ];
   for (const [merchantText, type, expectedCategory, expectedName] of noisyUnseenMerchantExpectations) {
     const result = classifyMerchantFallback({
