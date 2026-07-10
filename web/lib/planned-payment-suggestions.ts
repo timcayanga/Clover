@@ -66,6 +66,8 @@ type ConfirmedRecurringMemory = {
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const INSTALLMENT_SIGNAL =
   /\b(installment|amortization|credit-?to-?cash|balance conversion|balance summary|sip balance|sip|paylite|easy\s*installment|easy\s*pay)\b|\b\d{1,2}\s*(?:\/|of)\s*\d{1,2}\s*(?:installments?|payments?)\b/i;
+const GENERIC_RECURRING_TITLE_PATTERN =
+  /^(payment|repayment|subscription|service|bill|utilities|loan payment|statement payment|installment|dues|fee)$/i;
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 const ordinalDay = (value: number) =>
@@ -445,10 +447,19 @@ const buildRecurringTransactionSuggestions = (
       ) ?? confirmedMatches[0] ?? null;
     const hasConfirmedMatch = Boolean(confirmedMatch);
     const dueDate = selectRememberedDueDate(pattern.nextExpectedDate, confirmedMatch);
+    const daysUntilDue = Math.round((dueDate.getTime() - Date.now()) / DAY_IN_MS);
     const suggestionType = describeRecurringSuggestionType(title, pattern.reasonTags);
     const reasonTags = suggestionType.tag && !pattern.reasonTags.includes(suggestionType.tag)
       ? [suggestionType.tag, ...pattern.reasonTags]
       : pattern.reasonTags;
+
+    if (GENERIC_RECURRING_TITLE_PATTERN.test(title) && !hasConfirmedMatch) {
+      continue;
+    }
+
+    if (pattern.frequency === "annual" && daysUntilDue > 180) {
+      continue;
+    }
 
     const confidence = Math.min(98, pattern.confidence + (hasConfirmedMatch ? 6 : 0));
     suggestions.push({

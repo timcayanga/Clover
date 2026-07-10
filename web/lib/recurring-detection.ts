@@ -265,6 +265,38 @@ const addDays = (date: Date, days: number) => {
   return next;
 };
 
+const pickMonthlyRepresentativeTransactions = (transactions: RecurringSourceTransaction[]) => {
+  const grouped = transactions.reduce((map, transaction) => {
+    const key = getMonthKey(transaction.date);
+    map.set(key, [...(map.get(key) ?? []), transaction]);
+    return map;
+  }, new Map<string, RecurringSourceTransaction[]>());
+
+  const amounts = transactions.map((transaction) => toAmount(transaction.amount)).filter((amount) => amount > 0);
+  const typicalAmount = median(amounts);
+  const anchorDay = Math.round(median(transactions.map((transaction) => transaction.date.getDate())));
+
+  return Array.from(grouped.values())
+    .map((monthTransactions) =>
+      [...monthTransactions].sort((left, right) => {
+        const leftAmountDistance = Math.abs(toAmount(left.amount) - typicalAmount);
+        const rightAmountDistance = Math.abs(toAmount(right.amount) - typicalAmount);
+        if (leftAmountDistance !== rightAmountDistance) {
+          return leftAmountDistance - rightAmountDistance;
+        }
+
+        const leftDayDistance = Math.abs(left.date.getDate() - anchorDay);
+        const rightDayDistance = Math.abs(right.date.getDate() - anchorDay);
+        if (leftDayDistance !== rightDayDistance) {
+          return leftDayDistance - rightDayDistance;
+        }
+
+        return left.date.getTime() - right.date.getTime();
+      })[0] as RecurringSourceTransaction
+    )
+    .sort((left, right) => left.date.getTime() - right.date.getTime());
+};
+
 const rollPatternDateForward = (
   candidateDate: Date,
   recurrence: CommitmentRecurrence,
@@ -410,7 +442,12 @@ const buildRecurringGroupingKey = (value: string) => {
   return buildRecurringMerchantFamilySignature(value) || canonicalizeRecurringMerchant(value) || normalized;
 };
 
-const inferFrequency = (dates: Date[]): { frequency: CommitmentRecurrence | null; nextExpectedDate: Date | null; cadenceConfidence: number } => {
+const inferFrequency = (
+  dates: Date[],
+  options?: {
+    allowUtilityMonthlyBias?: boolean;
+  }
+): { frequency: CommitmentRecurrence | null; nextExpectedDate: Date | null; cadenceConfidence: number } => {
   const sortedDates = [...dates].sort((left, right) => left.getTime() - right.getTime());
   if (sortedDates.length < 2) {
     return { frequency: null, nextExpectedDate: null, cadenceConfidence: 0 };
@@ -438,27 +475,43 @@ const inferFrequency = (dates: Date[]): { frequency: CommitmentRecurrence | null
   const sameDayOfMonthCount = monthlyRepresentativeDates.filter((date) => Math.abs(date.getDate() - monthlyAnchorDay) <= 5).length;
   const monthGaps = monthlyRepresentativeDates.slice(1).map((date, index) => monthDiff(monthlyRepresentativeDates[index] as Date, date));
   const positiveMonthGaps = monthGaps.filter((gap) => gap > 0);
+  const representativeIntervals = monthlyRepresentativeDates.slice(1).map((date, index) => daysBetween(monthlyRepresentativeDates[index] as Date, date));
+  const representativeTypicalInterval = median(representativeIntervals);
   const looksMonthlyAcrossGaps =
     positiveMonthGaps.length > 0 &&
     sameDayOfMonthCount >= Math.min(2, monthlyRepresentativeDates.length) &&
     positiveMonthGaps.every((gap) => gap >= 1 && gap <= 2);
+  const looksUtilityMonthlyAcrossMonths =
+    Boolean(options?.allowUtilityMonthlyBias) &&
+    monthlyRepresentativeDates.length >= 2 &&
+    positiveMonthGaps.length === monthlyRepresentativeDates.length - 1 &&
+    positiveMonthGaps.every((gap) => gap === 1) &&
+    representativeTypicalInterval >= 10 &&
+    representativeTypicalInterval <= 45;
   const looksAnnualAcrossGaps =
     positiveMonthGaps.length > 0 &&
     sameDayOfMonthCount >= Math.min(2, monthlyRepresentativeDates.length) &&
     positiveMonthGaps.every((gap) => gap >= 10 && gap <= 14);
-  const representativeIntervals = monthlyRepresentativeDates.slice(1).map((date, index) => daysBetween(monthlyRepresentativeDates[index] as Date, date));
-  const representativeTypicalInterval = median(representativeIntervals);
 
   if (typicalInterval >= 6 && typicalInterval <= 8) {
     return { frequency: "weekly", nextExpectedDate: addDays(lastSeenDate, 7), cadenceConfidence: 84 };
   }
 
-  if (typicalInterval >= 12 && typicalInterval <= 16) {
-    return { frequency: "biweekly", nextExpectedDate: addDays(lastSeenDate, 14), cadenceConfidence: 82 };
+  if (
+    (typicalInterval >= 25 && typicalInterval <= 35) ||
+    (representativeTypicalInterval >= 25 && representativeTypicalInterval <= 35) ||
+    looksMonthlyAcrossGaps ||
+    looksUtilityMonthlyAcrossMonths
+  ) {
+    return {
+      frequency: "monthly",
+      nextExpectedDate: addMonths(lastSeenDate, 1),
+      cadenceConfidence: looksMonthlyAcrossGaps ? 78 : looksUtilityMonthlyAcrossMonths ? 74 : 86,
+    };
   }
 
-  if ((typicalInterval >= 25 && typicalInterval <= 35) || (representativeTypicalInterval >= 25 && representativeTypicalInterval <= 35) || looksMonthlyAcrossGaps) {
-    return { frequency: "monthly", nextExpectedDate: addMonths(lastSeenDate, 1), cadenceConfidence: looksMonthlyAcrossGaps ? 78 : 86 };
+  if (typicalInterval >= 12 && typicalInterval <= 16) {
+    return { frequency: "biweekly", nextExpectedDate: addDays(lastSeenDate, 14), cadenceConfidence: 82 };
   }
 
   if (typicalInterval >= 80 && typicalInterval <= 100) {
@@ -487,6 +540,8 @@ const buildPatternFromTransactions = (
   if (distinctMonthCount < 2) {
     return null;
   }
+  const representativeTransactions =
+    candidateTransactions.length > distinctMonthCount ? pickMonthlyRepresentativeTransactions(candidateTransactions) : candidateTransactions;
 
   const amounts = candidateTransactions.map((transaction) => toAmount(transaction.amount)).filter((amount) => amount > 0);
   const typicalAmount = median(amounts);
@@ -523,8 +578,14 @@ const buildPatternFromTransactions = (
     categoryNames.has("insurance") ||
     categoryNames.has("loans");
   const looksTransferLike = recurringExclusionPattern.test(textBlob);
-  const cadence = inferFrequency(candidateTransactions.map((transaction) => transaction.date));
-  const dateDays = candidateTransactions.map((transaction) => transaction.date.getDate());
+  const obligationType = classifyRecurringObligation({
+    text: textBlob,
+    categoryNames: Array.from(categoryNames).filter(Boolean),
+  });
+  const cadence = inferFrequency(representativeTransactions.map((transaction) => transaction.date), {
+    allowUtilityMonthlyBias: ["utility", "statement_payment", "loan", "insurance"].includes(obligationType),
+  });
+  const dateDays = representativeTransactions.map((transaction) => transaction.date.getDate());
   const expectedDayOfMonth = cadence.frequency === "monthly" || cadence.frequency === "quarterly" || cadence.frequency === "annual"
     ? Math.round(median(dateDays))
     : null;
@@ -535,6 +596,11 @@ const buildPatternFromTransactions = (
     expectedDayOfMonth !== null &&
     ["monthly", "quarterly", "annual"].includes(cadence.frequency ?? "") &&
     dayVariance <= 5.5;
+  const allowsHighVarianceRecurringBill =
+    hasKeywordSignal &&
+    ["utility", "statement_payment", "loan", "insurance"].includes(obligationType) &&
+    ["monthly", "quarterly", "annual"].includes(cadence.frequency ?? "") &&
+    distinctMonthCount >= 2;
 
   if (!cadence.frequency || !cadence.nextExpectedDate) {
     return null;
@@ -561,10 +627,10 @@ const buildPatternFromTransactions = (
     hasVariableAmountSignal &&
     ["monthly", "quarterly", "annual"].includes(cadence.frequency) &&
     distinctMonthCount >= 2 &&
-    amountStability >= 0.35
+    (amountStability >= 0.35 || allowsHighVarianceRecurringBill)
   ) {
     // Variable utilities and similar bills often fluctuate because of usage or FX conversion.
-  } else if (hasKeywordSignal && amountStability < 0.55 && candidateTransactions.length < 3) {
+  } else if (hasKeywordSignal && amountStability < 0.55 && candidateTransactions.length < 3 && !allowsHighVarianceRecurringBill) {
     return null;
   } else if (hasKeywordSignal && amountStability < 0.35) {
     return null;
@@ -586,10 +652,6 @@ const buildPatternFromTransactions = (
 
   const first = candidateTransactions[0] as RecurringSourceTransaction;
   const last = candidateTransactions[candidateTransactions.length - 1] as RecurringSourceTransaction;
-  const obligationType = classifyRecurringObligation({
-    text: textBlob,
-    categoryNames: Array.from(categoryNames).filter(Boolean),
-  });
   const nextExpectedDate = rollPatternDateForward(cadence.nextExpectedDate, cadence.frequency, expectedDayOfMonth);
   const reasonSummary = [
     cadence.frequency ? `${cadence.frequency} cadence` : null,
@@ -622,6 +684,7 @@ const buildPatternFromTransactions = (
     Math.round(
       35 +
         Math.min(candidateTransactions.length, 6) * 7 +
+        Math.min(distinctMonthCount, 4) * 3 +
         cadence.cadenceConfidence * 0.25 +
         amountStability * 20 +
         (expectedDayOfMonth !== null ? Math.max(0, 8 - Math.min(dayVariance, 8)) : 0) +

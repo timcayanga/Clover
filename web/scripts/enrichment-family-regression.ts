@@ -277,6 +277,93 @@ const runRecurringChecks = () => {
   const pldtPattern = monthEndBillPatterns.find((pattern) => pattern.canonicalTitle === "PLDT");
   assert(pldtPattern?.frequency === "monthly", "Expected month-end bills with shorter-month drift to stay monthly");
 
+  const utilityCrossMonthPatterns = detectRecurringPatterns([
+    {
+      id: "u1",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-03-20"),
+      amount: 6621.8,
+      currency: "PHP",
+      type: "transfer",
+      merchantRaw: "BILLS PAYMENT - MERALCO",
+      merchantClean: null,
+      description: "BILLS PAYMENT - MERALCO",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "BPI 1234", institution: "BPI" },
+      importFile: null,
+    },
+    {
+      id: "u2",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-04-02"),
+      amount: 2488.69,
+      currency: "PHP",
+      type: "transfer",
+      merchantRaw: "Payment to Meralco",
+      merchantClean: null,
+      description: "Payment to Meralco",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "BPI 1234", institution: "BPI" },
+      importFile: null,
+    },
+  ]);
+
+  const meralcoMonthlyPattern = utilityCrossMonthPatterns.find((pattern) => pattern.canonicalTitle === "Meralco");
+  assert(meralcoMonthlyPattern?.frequency === "monthly", "Expected utility payments repeated across calendar months to bias monthly over biweekly");
+
+  const duplicateWithinMonthPatterns = detectRecurringPatterns([
+    {
+      id: "d1",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-01-10"),
+      amount: 399,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "NETFLIX SUBSCRIPTION",
+      merchantClean: "Netflix",
+      description: "NETFLIX SUBSCRIPTION",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "RCBC Gold", institution: "RCBC" },
+      importFile: null,
+    },
+    {
+      id: "d2",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-01-24"),
+      amount: 404.5,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "NETFLIX SUBSCRIPTION",
+      merchantClean: "Netflix",
+      description: "NETFLIX SUBSCRIPTION",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "RCBC Gold", institution: "RCBC" },
+      importFile: null,
+    },
+    {
+      id: "d3",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-02-11"),
+      amount: 401,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "NETFLIX SUBSCRIPTION",
+      merchantClean: "Netflix",
+      description: "NETFLIX SUBSCRIPTION",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "RCBC Gold", institution: "RCBC" },
+      importFile: null,
+    },
+  ]);
+
+  const duplicateMonthlyPattern = duplicateWithinMonthPatterns.find((pattern) => pattern.canonicalTitle === "Netflix");
+  assert(duplicateMonthlyPattern?.frequency === "monthly", "Expected duplicate charges within a month to still resolve to a monthly subscription pattern");
+
   const transferLikePatterns = detectRecurringPatterns([
     {
       id: "x1",
