@@ -821,7 +821,6 @@ export default function InvestmentInstitutionDetailPage() {
                   <tr>
                     <th>Asset</th>
                     <th>Subtype</th>
-                    <th>Reference</th>
                     <th>Units / principal</th>
                     <th>Value</th>
                     <th>Actions</th>
@@ -832,7 +831,6 @@ export default function InvestmentInstitutionDetailPage() {
                     <tr key={account.id}>
                       <td>{accountAssetNameMap.get(account.id) ?? account.name}</td>
                       <td>{getInvestmentSubtypeLabel(account.investmentSubtype)}</td>
-                      <td>{account.investmentSymbol || "Not set"}</td>
                       <td>{account.investmentQuantity || account.investmentPrincipal || "Not set"}</td>
                       <td>{formatMoney(Math.abs(parseAmount(account.balance)), account.currency)}</td>
                       <td className="institution-assets-table__actions">
