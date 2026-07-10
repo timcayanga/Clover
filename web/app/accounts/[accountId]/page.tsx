@@ -81,6 +81,7 @@ import {
   getInvestmentFieldConfigs,
   canTrackInvestmentDividends,
   canTrackInvestmentPurchaseHistory,
+  getInvestmentPurchaseSummaryLabel,
   getInvestmentSubtypeLabel,
   type InvestmentSubtype,
   isFixedIncomeInvestmentSubtype,
@@ -4063,7 +4064,7 @@ function AccountDetailPageContent() {
                 type="button"
                 onClick={() => focusInvestmentEditField(isFixedIncomeInvestmentSubtype(investmentSubtype) ? "investmentPrincipal" : "investmentCostBasis")}
               >
-                <div className="panel-muted">Purchase value / principal</div>
+                <div className="panel-muted">{getInvestmentPurchaseSummaryLabel(investmentSubtype)}</div>
                 <strong>{investmentPurchaseValue === null ? "Not set" : formatAccountAmount(investmentPurchaseValue, account.currency)}</strong>
               </button>
               <button className="status-card accounts-detail__investment-field" type="button" onClick={() => focusInvestmentEditField("dividendAmount")}>

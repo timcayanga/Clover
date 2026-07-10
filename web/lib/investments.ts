@@ -75,13 +75,34 @@ export const getInvestmentSubtypeDescription = (value: string | null | undefined
     case "crypto":
       return "Track units, purchase value, and current value.";
     case "bond":
-    case "time_deposit":
       return "Track principal, dates, rates, and maturity value.";
+    case "time_deposit":
+      return "Track deposit amount, dates, rates, and maturity value.";
     case "other":
       return "Track the most important values for this holding.";
     default:
       return "Choose the details that best fit this investment.";
   }
+};
+
+export const getInvestmentPrincipalLabel = (subtype: string | null | undefined) => {
+  if (subtype === "time_deposit") {
+    return "Deposit amount";
+  }
+
+  return "Principal";
+};
+
+export const getInvestmentPurchaseSummaryLabel = (subtype: string | null | undefined) => {
+  if (subtype === "time_deposit") {
+    return "Deposit amount";
+  }
+
+  if (isFixedIncomeInvestmentSubtype(subtype)) {
+    return "Principal";
+  }
+
+  return "Purchase value";
 };
 
 export const getInvestmentFieldConfigs = (subtype: string | null | undefined): InvestmentFieldConfig[] => {
@@ -109,7 +130,7 @@ export const getInvestmentFieldConfigs = (subtype: string | null | undefined): I
 
   if (isFixedIncomeInvestmentSubtype(subtype)) {
     return [
-      { key: "investmentPrincipal", label: "Principal", placeholder: "0.00", inputMode: "decimal" },
+      { key: "investmentPrincipal", label: getInvestmentPrincipalLabel(subtype), placeholder: "0.00", inputMode: "decimal" },
       { key: "investmentStartDate", label: "Start date", placeholder: "", type: "date" },
       { key: "investmentMaturityDate", label: "Maturity date", placeholder: "", type: "date" },
       { key: "investmentInterestRate", label: "Interest rate (%)", placeholder: "0.00", inputMode: "decimal" },

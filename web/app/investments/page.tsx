@@ -33,6 +33,7 @@ import {
   canTrackInvestmentDividends,
   canTrackInvestmentPurchaseHistory,
   getInvestmentFieldConfigs,
+  getInvestmentPurchaseSummaryLabel,
   getInvestmentSubtypeDescription,
   getInvestmentSubtypeLabel,
   INVESTMENT_SUBTYPES,
@@ -286,6 +287,13 @@ const getInvestmentHighlights = (account: Account) => {
   }
 
   if (isFixedIncomeInvestmentSubtype(subtype)) {
+    if (subtype === "time_deposit") {
+      return [
+        account.investmentInterestRate ? `Rate ${account.investmentInterestRate}%` : "Rate not set",
+        account.investmentMaturityDate ? `Maturity ${formatDate(account.investmentMaturityDate)}` : "Maturity date not set",
+      ];
+    }
+
     return [
       account.investmentPrincipal ? `Principal ${formatInvestmentAmount(parseAmount(account.investmentPrincipal), account.currency)}` : "Principal not set",
       account.investmentMaturityDate ? `Maturity ${formatDate(account.investmentMaturityDate)}` : "Maturity date not set",
@@ -328,11 +336,39 @@ type PortfolioDisplayRow = {
   institution: string | null;
   subtype: InvestmentSubtype | null;
   symbol: string | null;
-  quantity: string | null;
+  detail: string | null;
   currentValue: number | null;
   purchaseValue: number | null;
   gainLoss: number | null;
   currency: string;
+};
+
+const getInvestmentTableDetail = (account: Account, subtype: InvestmentSubtype | null) => {
+  if (isMarketInvestmentSubtype(subtype)) {
+    return account.investmentQuantity;
+  }
+
+  if (subtype === "time_deposit") {
+    if (account.investmentMaturityDate) {
+      return `Matures ${formatDate(account.investmentMaturityDate)}`;
+    }
+    if (account.investmentInterestRate) {
+      return `${account.investmentInterestRate}% rate`;
+    }
+    return null;
+  }
+
+  if (subtype === "bond") {
+    if (account.investmentInterestRate) {
+      return `${account.investmentInterestRate}% rate`;
+    }
+    if (account.investmentMaturityDate) {
+      return `Matures ${formatDate(account.investmentMaturityDate)}`;
+    }
+    return account.investmentPrincipal ? formatInvestmentAmount(parseAmount(account.investmentPrincipal), account.currency) : null;
+  }
+
+  return account.investmentSymbol;
 };
 
 type InvestmentAnalysisSlice = {
@@ -821,17 +857,18 @@ export default function InvestmentsPage() {
 
       if (!isGeneric || distinctAssetNames.length <= 1) {
         const preferredAssetName = distinctAssetNames[0] ?? account.name;
+        const subtype = account.investmentSubtype ?? inferInvestmentSubtypeFromAssetName(preferredAssetName);
         rows.push({
           key: account.id,
           assetId: account.id,
           name: preferredAssetName,
           institution: account.institution,
-          subtype: account.investmentSubtype ?? inferInvestmentSubtypeFromAssetName(preferredAssetName),
+          subtype,
           symbol:
             account.investmentSymbol && normalizeInvestmentLabel(account.investmentSymbol) !== normalizeInvestmentLabel(account.currency)
               ? account.investmentSymbol
               : null,
-          quantity: account.investmentQuantity,
+          detail: getInvestmentTableDetail(account, subtype),
           currentValue,
           purchaseValue,
           gainLoss,
@@ -848,7 +885,7 @@ export default function InvestmentsPage() {
           institution: account.institution,
           subtype: inferInvestmentSubtypeFromAssetName(assetName) ?? account.investmentSubtype,
           symbol: null,
-          quantity: null,
+          detail: null,
           currentValue: null,
           purchaseValue: null,
           gainLoss: null,
@@ -1728,7 +1765,7 @@ export default function InvestmentsPage() {
                     <span role="columnheader">Asset</span>
                     <span role="columnheader">Type</span>
                     <span role="columnheader">Symbol</span>
-                    <span role="columnheader">Units</span>
+                    <span role="columnheader">Key detail</span>
                     <span role="columnheader">Current value</span>
                     <span role="columnheader">Gain / loss</span>
                   </div>
@@ -1758,7 +1795,7 @@ export default function InvestmentsPage() {
                           {row.symbol ?? ""}
                         </div>
                         <div className="investments-portfolio-table__cell">
-                          {row.quantity ?? ""}
+                          {row.detail ?? ""}
                         </div>
                         <div className="investments-portfolio-table__cell">
                           {row.currentValue === null ? "" : formatInvestmentAmount(row.currentValue, row.currency)}
@@ -1988,7 +2025,7 @@ export default function InvestmentsPage() {
                       )
                     }
                   >
-                    <span>{isFixedIncomeInvestmentSubtype(editingDraft.investmentSubtype) ? "Principal" : "Purchase value"}</span>
+                    <span>{getInvestmentPurchaseSummaryLabel(editingDraft.investmentSubtype)}</span>
                     <strong>
                       {selectedInvestmentPurchaseValue === null
                         ? "Not set"

@@ -12,6 +12,7 @@ import {
   getInvestmentFieldConfigs,
   getInvestmentSubtypeLabel,
   INVESTMENT_SUBTYPES,
+  isMarketInvestmentSubtype,
   type InvestmentSubtype,
 } from "@/lib/investments";
 import {
@@ -136,6 +137,34 @@ const parseNullableDateInput = (value: string) => {
 
 const getInstitutionDisplayName = (account: Account) =>
   account.institution?.trim() || account.name.trim() || "Investment institution";
+
+const getInstitutionAssetDetail = (account: Account) => {
+  if (isMarketInvestmentSubtype(account.investmentSubtype)) {
+    return account.investmentQuantity || "Not set";
+  }
+
+  if (account.investmentSubtype === "time_deposit") {
+    if (account.investmentMaturityDate) {
+      return `Matures ${formatTradeDate(account.investmentMaturityDate)}`;
+    }
+    if (account.investmentInterestRate) {
+      return `${account.investmentInterestRate}% rate`;
+    }
+    return "Not set";
+  }
+
+  if (account.investmentSubtype === "bond") {
+    if (account.investmentInterestRate) {
+      return `${account.investmentInterestRate}% rate`;
+    }
+    if (account.investmentMaturityDate) {
+      return `Matures ${formatTradeDate(account.investmentMaturityDate)}`;
+    }
+    return account.investmentPrincipal || "Not set";
+  }
+
+  return account.investmentSymbol || "Not set";
+};
 
 const normalizeInvestmentLabel = (value: string | null | undefined) =>
   String(value ?? "")
@@ -821,7 +850,7 @@ export default function InvestmentInstitutionDetailPage() {
                   <tr>
                     <th>Asset</th>
                     <th>Subtype</th>
-                    <th>Units / principal</th>
+                    <th>Key detail</th>
                     <th>Value</th>
                     <th>Actions</th>
                   </tr>
@@ -831,7 +860,7 @@ export default function InvestmentInstitutionDetailPage() {
                     <tr key={account.id}>
                       <td>{accountAssetNameMap.get(account.id) ?? account.name}</td>
                       <td>{getInvestmentSubtypeLabel(account.investmentSubtype)}</td>
-                      <td>{account.investmentQuantity || account.investmentPrincipal || "Not set"}</td>
+                      <td>{getInstitutionAssetDetail(account)}</td>
                       <td>{formatMoney(Math.abs(parseAmount(account.balance)), account.currency)}</td>
                       <td className="institution-assets-table__actions">
                         <button className="button button-secondary button-small" type="button" onClick={() => openAssetEditor(account)}>
