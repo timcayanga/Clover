@@ -114,6 +114,17 @@ Tenure 12 Months
 Maturity # 106,000.00 Amount
 Maturity # 6000.0 Interest`;
 
+const detail2023ScreenshotText = `UNO Digital Bank
+Time Deposit Account Details
+Name TIMOTHY GUNTHER CAYANGA
+Product #UNOboost@GCash
+Account 40007384712023 Number
+Deposit # 100,000.00 Amount
+Interest Rate 5.75% per annum
+Tenure 12 Months
+Maturity # 105,750.00 Amount
+Maturity # 5750.0 Interest`;
+
 const overviewMetadata = detectStatementMetadata(overviewScreenshotText, "IMG_1407.PNG");
 assert.equal(overviewMetadata?.institution, "GSave");
 assert.equal(overviewMetadata?.accountType, "bank");
@@ -218,5 +229,21 @@ assert.equal(detailContinuationMetadata?.accountName, "GSave Time Deposit Detail
 assert.equal(detailContinuationMetadata?.openingBalance, 100000);
 assert.equal(detailContinuationMetadata?.endingBalance, 100000);
 assert.equal(detailContinuationMetadata?.endDate?.slice(0, 10), "2026-10-07");
+
+const detail2023Metadata = detectStatementMetadata(detail2023ScreenshotText, "IMG_1411.PNG");
+assert.equal(detail2023Metadata?.institution, "GSave");
+assert.equal(detail2023Metadata?.accountType, "investment");
+assert.equal(detail2023Metadata?.accountNumber, "40007384712023");
+assert.equal(detail2023Metadata?.accountName, "GSave #UNOboost 2023");
+assert.equal(detail2023Metadata?.openingBalance, 100000);
+assert.equal(detail2023Metadata?.endingBalance, 100000);
+
+const detail2023Rows = parseImportText(detail2023ScreenshotText, "IMG_1411.PNG", "image/png", { institution: "GSave" });
+assert.equal(detail2023Rows.length, 1, "UNO detail screenshot for account 2023 should stay a single snapshot row.");
+assert.equal(detail2023Rows[0]?.accountName, "GSave #UNOboost 2023");
+assert.equal(detail2023Rows[0]?.accountNumber, "40007384712023");
+assert.equal(detail2023Rows[0]?.rawPayload?.depositAmount, 100000);
+assert.equal(detail2023Rows[0]?.rawPayload?.maturityAmount, 105750);
+assert.equal(detail2023Rows[0]?.rawPayload?.maturityInterest, 5750);
 
 console.log("[PASS] GSave / UNO screenshots resolve to savings and time-deposit account snapshots.");

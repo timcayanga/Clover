@@ -38,6 +38,7 @@ import type { Prisma } from "@prisma/client";
 import { makeImportFileBytesFingerprint } from "@/lib/import-file-text.server";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
+import { buildGsaveScreenshotFallbackText } from "@/lib/gsave-screenshot-samples";
 import {
   buildReceiptInstitutionAccountDraft,
   resolveReceiptAccountHintToAccount,
@@ -1671,6 +1672,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const sampleFallbackText =
         buildBpiMobileScreenshotFallbackText(effectiveFileName) ||
         buildGfundsScreenshotFallbackText({
+          fileName: effectiveFileName,
+          fileFingerprint,
+        }) ||
+        buildGsaveScreenshotFallbackText({
           fileName: effectiveFileName,
           fileFingerprint,
         }) ||
