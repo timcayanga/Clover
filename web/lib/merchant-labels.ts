@@ -1793,8 +1793,40 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "Grab",
   },
   {
+    patterns: [/\bstarbucks?\b/i],
+    replacement: "Starbucks",
+  },
+  {
+    patterns: [/\bmcdonald'?s?\b/i, /\bmcdonalds\b/i],
+    replacement: "McDonald's",
+  },
+  {
+    patterns: [/\bjollibee\b/i],
+    replacement: "Jollibee",
+  },
+  {
     patterns: [/\bdunkin(?:\s+donuts?)?\b/i, /\bdunkindonuts?\b/i],
     replacement: "Dunkin",
+  },
+  {
+    patterns: [/\bshopee\b/i],
+    replacement: "Shopee",
+  },
+  {
+    patterns: [/\blazada\b/i],
+    replacement: "Lazada",
+  },
+  {
+    patterns: [/\bamazon\b/i],
+    replacement: "Amazon",
+  },
+  {
+    patterns: [/\bpaypal\b/i],
+    replacement: "PayPal",
+  },
+  {
+    patterns: [/\bwatsons?\b/i],
+    replacement: "Watsons",
   },
   {
     patterns: [/\blinkedin(?:\s+premium)?\b/i, /\blinkedinpremium\b/i],
@@ -1820,6 +1852,14 @@ const genericSimplifierRules: SimplifierRule[] = [
     patterns: [/\bgoogle\s+one\b/i, /\bgoogleone\b/i],
     replacement: "Google One",
   },
+  {
+    patterns: [/\bapple\s+services?\b/i, /\bappleservices?\b/i],
+    replacement: "Apple Services",
+  },
+  {
+    patterns: [/\byoutube\s+premium\b/i, /\byoutubepremium\b/i],
+    replacement: "YouTube Premium",
+  },
 ];
 
 const stripLeadingStatementNoise = (value: string) => {
@@ -1844,9 +1884,14 @@ const stripTrailingStatementNoise = (value: string) => {
 
   return normalized
     .replace(/\s+\d[\d,]*\.\d{1,2}$/u, "")
+    .replace(/\s+(?:card|pos|online|retail|e-?commerce)\s+purchase$/iu, "")
+    .replace(/\s+(?:purchase|payment|transaction)\s+(?:approved|posted|complete|completed)$/iu, "")
+    .replace(/\s+(?:store|branch|terminal|outlet|location|merchant)\s*[:#-]?\s*[A-Z0-9-]{2,}$/iu, "")
     .replace(/\s+(?:ref(?:erence)?|trace|approval|auth(?:orization)?|txn|transaction|terminal|rrn|arn)\s*[:#-]?\s*[A-Z0-9*X-]+(?:\s+[A-Z0-9*X-]+)*$/iu, "")
     .replace(/\s+(?:card|acct|account)\s*(?:no\.?|number|ending|ending\s+in|ending\s+with)?\s*[:#-]?\s*(?:xx|x{2,}|\*{2,})?[A-Z0-9-]*\d{2,4}$/iu, "")
     .replace(/\s+(?:visa|master\s*card|mastercard|amex|jcb)\s*(?:xx|x{2,}|\*{2,})?\d{2,4}$/iu, "")
+    .replace(/\s+(?:ph|phl|philippines|sg|singapore|hk|hong\s+kong|au|australia)\s+(?:pte\.?\s*ltd\.?|inc\.?|corp\.?|corporation|co\.?|company|limited|ltd\.?|llc)$/iu, "")
+    .replace(/\s+(?:pte\.?\s*ltd\.?|inc\.?|corp\.?|corporation|co\.?|company|limited|ltd\.?|llc)$/iu, "")
     .replace(/\s+/g, " ")
     .trim();
 };

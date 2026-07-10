@@ -1186,6 +1186,12 @@ const main = async () => {
   if (summarizeMerchantText("GRAB PHILIPPINES REF 8841 CARD XX9737", "BPI") !== "Grab") {
     throw new Error("expected noisy SOA merchants to strip trailing card and reference noise before normalization");
   }
+  if (summarizeMerchantText("STARBUCKS STORE 0143 CARD PURCHASE", "BPI") !== "Starbucks") {
+    throw new Error("expected SOA merchant normalization to trim trailing store and purchase noise for Starbucks");
+  }
+  if (summarizeMerchantText("PAYPAL SINGAPORE PTE LTD", "BPI") !== "PayPal") {
+    throw new Error("expected SOA merchant normalization to collapse legal-entity suffixes for PayPal");
+  }
   console.log("[PASS] BDO classification | transfer-like rows, withdrawals, and interest spelling classified correctly");
 
   const mayaSamplesDir = join(root, "Samples/Maya");
