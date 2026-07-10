@@ -1849,12 +1849,36 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "Robinsons Supermarket",
   },
   {
+    patterns: [/\bsavemore\b/i],
+    replacement: "Savemore",
+  },
+  {
+    patterns: [/\bshopwise\b/i],
+    replacement: "Shopwise",
+  },
+  {
+    patterns: [/\bwaltermart\b/i],
+    replacement: "Waltermart",
+  },
+  {
+    patterns: [/\blawson\b/i],
+    replacement: "Lawson",
+  },
+  {
     patterns: [/\bthe\s+marketplace\b/i, /\bthemarketplace\b/i],
     replacement: "The Marketplace",
   },
   {
     patterns: [/\bsm\s+store\b/i, /\bsmstore\b/i],
     replacement: "SM Store",
+  },
+  {
+    patterns: [/\bsm\s+hypermarket\b/i, /\bsmhypermarket\b/i],
+    replacement: "SM Hypermarket",
+  },
+  {
+    patterns: [/\bsm\s+supermarket\b/i, /\bsmsupermarket\b/i],
+    replacement: "SM Supermarket",
   },
   {
     patterns: [/\bshopee\b/i],
@@ -1879,6 +1903,22 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\bmercury\s+drug\b/i, /\bmercurydrug\b/i],
     replacement: "Mercury Drug",
+  },
+  {
+    patterns: [/\bsouthstar\b/i],
+    replacement: "Southstar Drug",
+  },
+  {
+    patterns: [/\brose\s+pharmacy\b/i, /\brosepharmacy\b/i],
+    replacement: "Rose Pharmacy",
+  },
+  {
+    patterns: [/\bgenerika\b/i],
+    replacement: "Generika",
+  },
+  {
+    patterns: [/\bthe\s+generics\b/i, /\bthegenerics\b/i],
+    replacement: "The Generics Pharmacy",
   },
   {
     patterns: [/\blinkedin(?:\s+premium)?\b/i, /\blinkedinpremium\b/i],
@@ -1939,6 +1979,46 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\bmary\s+grace\b/i, /\bmarygrace\b/i],
     replacement: "Mary Grace",
+  },
+  {
+    patterns: [/\bshakey'?s\b/i, /\bshakeys\b/i],
+    replacement: "Shakey's",
+  },
+  {
+    patterns: [/\byellow\s+cab\b/i, /\byellowcab\b/i],
+    replacement: "Yellow Cab",
+  },
+  {
+    patterns: [/\bmax'?s\b/i, /\bmaxs\b/i],
+    replacement: "Max's",
+  },
+  {
+    patterns: [/\bpanda\s+express\b/i, /\bpandaexpress\b/i],
+    replacement: "Panda Express",
+  },
+  {
+    patterns: [/\bcibo\b/i],
+    replacement: "Cibo",
+  },
+  {
+    patterns: [/\bnono'?s\b/i, /\bnonos\b/i],
+    replacement: "Nono's",
+  },
+  {
+    patterns: [/\bfrankie'?s\b/i, /\bfrankies\b/i],
+    replacement: "Frankie's",
+  },
+  {
+    patterns: [/\bbotejyu\b/i],
+    replacement: "Botejyu",
+  },
+  {
+    patterns: [/\btuan\s+tuan\b/i, /\btuantuan\b/i],
+    replacement: "Tuan Tuan",
+  },
+  {
+    patterns: [/\bsunnies\s+cafe\b/i, /\bsunniescafe\b/i],
+    replacement: "Sunnies Cafe",
   },
   {
     patterns: [/\bwildflour\b/i],
@@ -2025,6 +2105,10 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "Fully Booked",
   },
   {
+    patterns: [/\brustan'?s\b/i, /\brustans\b/i],
+    replacement: "Rustan's",
+  },
+  {
     patterns: [/\bpower\s+mac\b/i, /\bpowermac\b/i],
     replacement: "Power Mac Center",
   },
@@ -2063,6 +2147,14 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\bcotton\s+on\b/i, /\bcottonon\b/i],
     replacement: "Cotton On",
+  },
+  {
+    patterns: [/\btoy\s+kingdom\b/i, /\btoykingdom\b/i],
+    replacement: "Toy Kingdom",
+  },
+  {
+    patterns: [/\boctagon\b/i],
+    replacement: "Octagon",
   },
   {
     patterns: [/(?:^|\s)%?\s*arabica\b/i],
