@@ -30253,17 +30253,43 @@ button.accounts-detail__transaction-head-cell {
   min-height: 100dvh;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 0 56px;
+  padding: 0;
+  width: 100%;
+}
+
+.help-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 10%, rgba(3, 168, 192, 0.09), transparent 24%),
+    radial-gradient(circle at 88% 12%, rgba(110, 231, 183, 0.08), transparent 22%),
+    radial-gradient(circle at 50% 110%, rgba(9, 30, 42, 0.05), transparent 22%);
+  z-index: -1;
+}
+
+.help-page__frame {
+  width: min(1120px, calc(100% - 28px));
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  padding: 0;
 }
 
 .help-page__content {
   display: grid;
   gap: 20px;
   flex: 1 0 auto;
+  padding: 0 0 56px;
 }
 
 .help-page .landing-nav {
-  margin-bottom: 0;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin-bottom: 6px;
 }
 
 .help-page__nav {
@@ -34074,11 +34100,12 @@ html[data-helper-text="hidden"] .settings-helper {
 
 @media (max-width: 760px) {
   .help-page {
-    padding: 0 0 40px;
+    padding: 0;
   }
 
   .help-page__content {
     gap: 16px;
+    padding: 0 0 40px;
   }
 
   .help-grid {

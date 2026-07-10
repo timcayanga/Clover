@@ -53,37 +53,39 @@ export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
   }, [normalizedQuery]);
 
   return (
-    <main className="landing-page help-page">
-      <LandingNav accountState={accountState} />
-      <div className="help-page__content">
-        <label className="help-search help-search--hero" htmlFor="help-search">
-          <span className="sr-only">Search help</span>
-          <input
-            id="help-search"
-            type="search"
-            placeholder="Search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
+    <main className="help-page">
+      <div className="help-page__frame">
+        <LandingNav accountState={accountState} />
+        <div className="help-page__content">
+          <label className="help-search help-search--hero" htmlFor="help-search">
+            <span className="sr-only">Search help</span>
+            <input
+              id="help-search"
+              type="search"
+              placeholder="Search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
 
-        <section className="help-grid" aria-label="Help topics">
-          {filteredSections.map((section) => (
-            <Link key={section.slug} className={`help-card help-card--${section.accent} glass`} href={getHelpSectionHref(section.slug, returnTo)} prefetch={false}>
-              <img
-                className="help-card__image"
-                src={getHelpSectionImageSrc(section.slug)}
-                alt=""
-                aria-hidden="true"
-                loading="lazy"
-                decoding="async"
-              />
-              <div className="help-card__content">
-                <h3>{section.title}</h3>
-              </div>
-            </Link>
-          ))}
-        </section>
+          <section className="help-grid" aria-label="Help topics">
+            {filteredSections.map((section) => (
+              <Link key={section.slug} className={`help-card help-card--${section.accent} glass`} href={getHelpSectionHref(section.slug, returnTo)} prefetch={false}>
+                <img
+                  className="help-card__image"
+                  src={getHelpSectionImageSrc(section.slug)}
+                  alt=""
+                  aria-hidden="true"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div className="help-card__content">
+                  <h3>{section.title}</h3>
+                </div>
+              </Link>
+            ))}
+          </section>
+        </div>
       </div>
       <MarketingFooter />
     </main>

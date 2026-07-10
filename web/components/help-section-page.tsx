@@ -114,65 +114,67 @@ export function HelpSectionPage({ section, returnTo: _returnTo, accountState }: 
   };
 
   return (
-    <main className="landing-page help-page">
+    <main className="help-page">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
-      <LandingNav accountState={accountState} />
-      <div className="help-page__content help-section-page__inner">
+      <div className="help-page__frame">
+        <LandingNav accountState={accountState} />
+        <div className="help-page__content help-section-page__inner">
 
-        <section className={`help-section-page__intro help-section-page__intro--${section.accent}`}>
-          <div className="help-section-page__intro-copy">
-            <h1>{section.title}</h1>
-            <p>{section.summary}</p>
-            <div className="help-section-page__intro-points" aria-label="Section highlights">
-              {section.highlights.slice(0, 3).map((highlight) => (
-                <span key={highlight}>{highlight}</span>
-              ))}
+          <section className={`help-section-page__intro help-section-page__intro--${section.accent}`}>
+            <div className="help-section-page__intro-copy">
+              <h1>{section.title}</h1>
+              <p>{section.summary}</p>
+              <div className="help-section-page__intro-points" aria-label="Section highlights">
+                {section.highlights.slice(0, 3).map((highlight) => (
+                  <span key={highlight}>{highlight}</span>
+                ))}
+              </div>
             </div>
+          </section>
+
+          <div className="help-section-page__search-area">
+            <label className="help-search help-search--section" htmlFor="help-section-search">
+              <span className="help-search__icon">
+                <SearchIcon />
+              </span>
+              <span className="sr-only">Search within this help section</span>
+              <input
+                id="help-section-search"
+                type="search"
+                placeholder="Search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
           </div>
-        </section>
 
-        <div className="help-section-page__search-area">
-          <label className="help-search help-search--section" htmlFor="help-section-search">
-            <span className="help-search__icon">
-              <SearchIcon />
-            </span>
-            <span className="sr-only">Search within this help section</span>
-            <input
-              id="help-section-search"
-              type="search"
-              placeholder="Search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
+          <section className="help-section-faq" aria-label="Questions and answers">
+            {filteredQuestions.length > 0 ? (
+              <div className="help-section-page__groups">
+                {groupedQuestions.map((group) => (
+                  <section key={group.key} className={`help-topic help-topic--${section.accent}`}>
+                    <div className="help-topic__intro">
+                      <p className="help-topic__eyebrow">{section.eyebrow}</p>
+                      <h2>{group.title}</h2>
+                      <p>{group.summary}</p>
+                    </div>
+
+                    <div className="help-accordion">
+                      {group.questions.map((question) => (
+                        <AccordionItem key={question.question} question={question} />
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : (
+              <div className="help-empty glass">
+                <h3>No matches yet.</h3>
+                <p>Try a broader search term from this section.</p>
+              </div>
+            )}
+          </section>
         </div>
-
-        <section className="help-section-faq" aria-label="Questions and answers">
-          {filteredQuestions.length > 0 ? (
-            <div className="help-section-page__groups">
-              {groupedQuestions.map((group) => (
-                <section key={group.key} className={`help-topic help-topic--${section.accent}`}>
-                  <div className="help-topic__intro">
-                    <p className="help-topic__eyebrow">{section.eyebrow}</p>
-                    <h2>{group.title}</h2>
-                    <p>{group.summary}</p>
-                  </div>
-
-                  <div className="help-accordion">
-                    {group.questions.map((question) => (
-                      <AccordionItem key={question.question} question={question} />
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          ) : (
-            <div className="help-empty glass">
-              <h3>No matches yet.</h3>
-              <p>Try a broader search term from this section.</p>
-            </div>
-          )}
-        </section>
       </div>
       <MarketingFooter />
     </main>
