@@ -30767,6 +30767,99 @@ button.accounts-detail__transaction-head-cell {
   display: block;
 }
 
+.help-section-page__groups {
+  display: grid;
+  gap: 22px;
+}
+
+.help-topic {
+  --help-topic-soft: rgba(3, 168, 192, 0.1);
+  --help-topic-strong: rgba(104, 220, 177, 0.14);
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr);
+  gap: 22px;
+  align-items: start;
+  padding: 28px;
+  border-radius: 34px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background:
+    radial-gradient(circle at top left, var(--help-topic-soft), transparent 30%),
+    radial-gradient(circle at bottom right, var(--help-topic-strong), transparent 24%),
+    rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow);
+}
+
+.help-topic--teal {
+  --help-topic-soft: rgba(3, 168, 192, 0.14);
+  --help-topic-strong: rgba(70, 200, 211, 0.16);
+}
+
+.help-topic--mint {
+  --help-topic-soft: rgba(14, 165, 168, 0.14);
+  --help-topic-strong: rgba(104, 220, 177, 0.16);
+}
+
+.help-topic--gold {
+  --help-topic-soft: rgba(15, 159, 169, 0.14);
+  --help-topic-strong: rgba(135, 225, 209, 0.16);
+}
+
+.help-topic--sky {
+  --help-topic-soft: rgba(29, 155, 240, 0.14);
+  --help-topic-strong: rgba(107, 207, 242, 0.16);
+}
+
+.help-topic--coral {
+  --help-topic-soft: rgba(16, 182, 165, 0.14);
+  --help-topic-strong: rgba(143, 231, 203, 0.16);
+}
+
+.help-topic--violet {
+  --help-topic-soft: rgba(8, 145, 178, 0.14);
+  --help-topic-strong: rgba(99, 208, 245, 0.18);
+}
+
+.help-topic--lime {
+  --help-topic-soft: rgba(15, 155, 142, 0.14);
+  --help-topic-strong: rgba(122, 225, 186, 0.16);
+}
+
+.help-topic--rose {
+  --help-topic-soft: rgba(14, 158, 174, 0.14);
+  --help-topic-strong: rgba(101, 209, 225, 0.18);
+}
+
+.help-topic__intro {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  position: sticky;
+  top: 104px;
+}
+
+.help-topic__eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.76rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.help-topic__intro h2 {
+  margin: 0;
+  font-size: clamp(1.9rem, 2.6vw, 2.8rem);
+  line-height: 0.98;
+  letter-spacing: -0.06em;
+  max-width: 10ch;
+}
+
+.help-topic__intro p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+  max-width: 28ch;
+}
+
 .help-accordion {
   display: grid;
   gap: 0;
@@ -30780,7 +30873,7 @@ button.accounts-detail__transaction-head-cell {
   overflow: hidden;
   border-radius: 0;
   border: 0;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .help-accordion-item + .help-accordion-item {
@@ -30803,9 +30896,9 @@ button.accounts-detail__transaction-head-cell {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 18px 20px;
+  padding: 20px 22px;
   font-family: var(--font-heading);
-  font-size: 1.02rem;
+  font-size: 1.04rem;
   line-height: 1.35;
   letter-spacing: -0.03em;
   color: var(--text);
@@ -30820,17 +30913,18 @@ button.accounts-detail__transaction-head-cell {
 .help-accordion-item__summary::after {
   content: "+";
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(3, 168, 192, 0.18);
   color: var(--accent);
-  font-size: 1rem;
+  font-size: 1.05rem;
+  font-weight: 700;
   line-height: 1;
-  background: rgba(3, 168, 192, 0.06);
+  background: linear-gradient(135deg, rgba(3, 168, 192, 0.12), rgba(104, 220, 177, 0.12));
 }
 
 .help-accordion-item[open] .help-accordion-item__summary::after {
@@ -30838,7 +30932,7 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .help-accordion-item__body {
-  padding: 0 20px 18px;
+  padding: 0 22px 22px;
   border-top: 1px solid rgba(3, 168, 192, 0.08);
 }
 
@@ -34045,6 +34139,21 @@ html[data-helper-text="hidden"] .settings-helper {
 
   .help-section-page__intro-copy {
     gap: 14px;
+  }
+
+  .help-topic {
+    grid-template-columns: 1fr;
+    padding: 22px;
+    gap: 18px;
+  }
+
+  .help-topic__intro {
+    position: static;
+  }
+
+  .help-topic__intro h2,
+  .help-topic__intro p {
+    max-width: none;
   }
 
   .contact-page {

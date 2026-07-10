@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { LandingNav } from "@/components/landing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
-import { type HelpQuestion, type HelpSection } from "@/lib/help-center";
+import { type HelpArticle, type HelpQuestion, type HelpSection } from "@/lib/help-center";
 import type { PublicAccountState } from "@/lib/public-account-state";
 
 type HelpSectionPageProps = {
@@ -18,6 +18,14 @@ function matchesQuestion(question: HelpQuestion, query: string) {
   }
 
   return `${question.question} ${question.answer}`.toLowerCase().includes(query);
+}
+
+function matchesGroup(article: HelpArticle, query: string) {
+  if (!query) {
+    return true;
+  }
+
+  return `${article.title} ${article.summary} ${article.steps.join(" ")} ${article.keywords.join(" ")}`.toLowerCase().includes(query);
 }
 
 function AccordionItem({ question }: { question: HelpQuestion }) {
@@ -48,13 +56,49 @@ export function HelpSectionPage({ section, returnTo: _returnTo, accountState }: 
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
 
-  const filteredQuestions = useMemo(() => {
-    if (!normalizedQuery) {
-      return section.questions;
+  const groupedQuestions = useMemo(() => {
+    const articleGroups = section.articles
+      .map((article) => {
+        const questionMatches = article.questions.filter((question) => matchesQuestion(question, normalizedQuery));
+        const groupMatches = matchesGroup(article, normalizedQuery);
+        const visibleQuestions = normalizedQuery ? (groupMatches ? article.questions : questionMatches) : article.questions;
+
+        if (visibleQuestions.length === 0) {
+          return null;
+        }
+
+        return {
+          key: article.slug,
+          title: article.title,
+          summary: article.summary,
+          questions: visibleQuestions,
+        };
+      })
+      .filter((group): group is NonNullable<typeof group> => Boolean(group));
+
+    const usedQuestions = new Set(articleGroups.flatMap((group) => group.questions.map((question) => question.question)));
+
+    const extraQuestions = section.questions.filter((question) => {
+      if (usedQuestions.has(question.question)) {
+        return false;
+      }
+
+      return matchesQuestion(question, normalizedQuery);
+    });
+
+    if (extraQuestions.length > 0) {
+      articleGroups.push({
+        key: `${section.slug}-more`,
+        title: "More answers",
+        summary: "Extra questions that come up often when people are working through this part of Clover.",
+        questions: extraQuestions,
+      });
     }
 
-    return section.questions.filter((question) => matchesQuestion(question, normalizedQuery));
-  }, [normalizedQuery, section.questions]);
+    return articleGroups;
+  }, [normalizedQuery, section]);
+
+  const filteredQuestions = groupedQuestions.flatMap((group) => group.questions);
 
   const faqSchema = {
     "@context": "https://schema.org",
@@ -106,9 +150,21 @@ export function HelpSectionPage({ section, returnTo: _returnTo, accountState }: 
 
         <section className="help-section-faq" aria-label="Questions and answers">
           {filteredQuestions.length > 0 ? (
-            <div className="help-accordion">
-              {filteredQuestions.map((question) => (
-                <AccordionItem key={question.question} question={question} />
+            <div className="help-section-page__groups">
+              {groupedQuestions.map((group) => (
+                <section key={group.key} className={`help-topic help-topic--${section.accent}`}>
+                  <div className="help-topic__intro">
+                    <p className="help-topic__eyebrow">{section.eyebrow}</p>
+                    <h2>{group.title}</h2>
+                    <p>{group.summary}</p>
+                  </div>
+
+                  <div className="help-accordion">
+                    {group.questions.map((question) => (
+                      <AccordionItem key={question.question} question={question} />
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
           ) : (
