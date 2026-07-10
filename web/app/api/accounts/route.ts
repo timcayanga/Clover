@@ -246,6 +246,64 @@ const importedAccountIdentityKey = (institution?: string | null, accountNumber?:
   return normalizedAccountNumber ? `${canonicalImportInstitutionKey(institution)}:${normalizedAccountNumber}` : null;
 };
 
+const importAccountNumbersMayMatch = (left?: string | null, right?: string | null, requireExactMatch = false) => {
+  const leftDigits = normalizeImportAccountNumber(left);
+  const rightDigits = normalizeImportAccountNumber(right);
+  if (!leftDigits || !rightDigits) {
+    return false;
+  }
+
+  if (leftDigits === rightDigits) {
+    return true;
+  }
+
+  if (requireExactMatch) {
+    return false;
+  }
+
+  return leftDigits.slice(-4) === rightDigits.slice(-4);
+};
+
+const findPublishedSummaryForAccount = (
+  account: {
+    id: string;
+    name?: string | null;
+    institution?: string | null;
+    accountNumber?: string | null;
+    type?: string | null;
+    currency?: string | null;
+  },
+  summaries: Array<Record<string, unknown>>
+) => {
+  const accountKey = buildCurrencyScopedAccountIdentityKey({
+    name: account.name ?? null,
+    institution: account.institution ?? null,
+    accountNumber: account.accountNumber ?? null,
+    type: account.type ?? null,
+    currency: account.currency ?? null,
+  });
+  const accountNumber = normalizeImportAccountNumber(account.accountNumber ?? null);
+
+  return (
+    summaries.find((summary) => String(summary.accountId ?? "").trim() === account.id) ??
+    summaries.find((summary) => {
+      const summaryKey = buildCurrencyScopedAccountIdentityKey({
+        name: typeof summary.accountName === "string" ? summary.accountName : null,
+        institution: typeof summary.institution === "string" ? summary.institution : null,
+        accountNumber: typeof summary.accountNumber === "string" ? summary.accountNumber : null,
+        type: typeof summary.accountType === "string" ? summary.accountType : null,
+        currency: typeof summary.currency === "string" ? summary.currency : null,
+      });
+      const summaryNumber = typeof summary.accountNumber === "string" ? normalizeImportAccountNumber(summary.accountNumber) : null;
+      return (
+        (accountKey !== "" && summaryKey === accountKey) ||
+        importAccountNumbersMayMatch(accountNumber, summaryNumber)
+      );
+    }) ??
+    null
+  );
+};
+
 const readImportedJsonNumber = (value: unknown): number | null => {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : null;
@@ -1083,9 +1141,10 @@ export async function GET(request: Request) {
         typeof latestCheckpoint.sourceMetadata === "object" &&
         !Array.isArray(latestCheckpoint.sourceMetadata) &&
         Array.isArray((latestCheckpoint.sourceMetadata as Record<string, unknown>).publishedAccountSummaries)
-          ? (
+          ? findPublishedSummaryForAccount(
+              account,
               (latestCheckpoint.sourceMetadata as Record<string, unknown>).publishedAccountSummaries as Array<Record<string, unknown>>
-            ).find((summary) => String(summary.accountId ?? "").trim() === account.id) ?? null
+            )
           : null;
       const checkpointAccountName =
         checkpointPublishedSummary && typeof checkpointPublishedSummary.accountName === "string"

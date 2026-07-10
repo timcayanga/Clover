@@ -255,6 +255,46 @@ const accountNumbersMayMatch = (left?: string | null, right?: string | null, req
   return leftLastFour.length === 4 && rightLastFour.length === 4 && leftLastFour === rightLastFour;
 };
 
+const findPublishedSummaryForAccount = (
+  account: {
+    id: string;
+    name?: string | null;
+    institution?: string | null;
+    accountNumber?: string | null;
+    type?: string | null;
+    currency?: string | null;
+  },
+  summaries: Array<Record<string, unknown>>
+) => {
+  const accountKey = buildCurrencyScopedAccountKey({
+    name: account.name ?? null,
+    institution: account.institution ?? null,
+    accountNumber: account.accountNumber ?? null,
+    type: account.type ?? null,
+    currency: account.currency ?? null,
+  });
+  const accountNumber = account.accountNumber ?? null;
+
+  return (
+    summaries.find((summary) => String(summary.accountId ?? "").trim() === account.id) ??
+    summaries.find((summary) => {
+      const summaryKey = buildCurrencyScopedAccountKey({
+        name: typeof summary.accountName === "string" ? summary.accountName : null,
+        institution: typeof summary.institution === "string" ? summary.institution : null,
+        accountNumber: typeof summary.accountNumber === "string" ? summary.accountNumber : null,
+        type: typeof summary.accountType === "string" ? summary.accountType : null,
+        currency: typeof summary.currency === "string" ? summary.currency : null,
+      });
+      const summaryNumber = typeof summary.accountNumber === "string" ? summary.accountNumber : null;
+      return (
+        (accountKey !== "" && summaryKey === accountKey) ||
+        accountNumbersMayMatch(accountNumber, summaryNumber)
+      );
+    }) ??
+    null
+  );
+};
+
 export async function GET(_request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
     const userId = await resolveAccountRouteUserId();
@@ -349,9 +389,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
       typeof latestCheckpoint.sourceMetadata === "object" &&
       !Array.isArray(latestCheckpoint.sourceMetadata) &&
       Array.isArray((latestCheckpoint.sourceMetadata as Record<string, unknown>).publishedAccountSummaries)
-        ? (
+        ? findPublishedSummaryForAccount(
+            account,
             (latestCheckpoint.sourceMetadata as Record<string, unknown>).publishedAccountSummaries as Array<Record<string, unknown>>
-          ).find((summary) => String(summary.accountId ?? "").trim() === account.id) ?? null
+          )
         : null;
     const latestCheckpointAccountNumber =
       latestCheckpointPublishedSummary && typeof latestCheckpointPublishedSummary.accountNumber === "string"
