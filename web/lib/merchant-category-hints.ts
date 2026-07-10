@@ -17,9 +17,9 @@ const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
   {
     category: "Food & Dining",
     lower:
-      /grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:\s+donuts?)?|krispy\s+kreme|jollibee|chowking|mang\s+inasal|burger\s+king|mcdonald'?s|starbucks|pickup\s+coffee|tim\s+hortons|shake\s+shack|subway|chili'?s|cara\s+mia|jarandjam|main\s+bar|ac\s+bar|dairy\s+queen|\bdq\b|hapag|harlan\s*\+?\s*holden|matcha\s+bar|elephant\s+grounds|mo\s+cookies|nikkei|yardstick|your\s+local|brunch\s+bureau|breakfast\s+at\s+antonio'?s|royce|bok\s+korean\s+fried\s+chicken|din\s+tai\s+fung|arabica|ralph'?s\s+wines|mary\s+grace|wildflour|mendokoro|ramen\s+nagi|manam|conti'?s|coffee\s+bean|cbtl|seattle'?s\s+best|army\s+navy|mister\s+donut|kfc|popeyes|shakey'?s|yellow\s+cab|max'?s|panda\s+express|cibo|nono'?s|frankie'?s|botejyu|tuan\s+tuan|sunnies\s+cafe/,
+      /grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:\s+donuts?)?|krispy\s+kreme|jollibee|chowking|mang\s+inasal|burger\s+king|mcdonald'?s|starbucks|pickup\s+coffee|tim\s+hortons|shake\s+shack|subway|chili'?s|cara\s+mia|jarandjam|main\s+bar|ac\s+bar|dairy\s+queen|\bdq\b|hapag|harlan\s*\+?\s*holden|matcha\s+bar|elephant\s+grounds|mo\s+cookies|nikkei|yardstick|your\s+local|brunch\s+bureau|breakfast\s+at\s+antonio'?s|royce|bok\s+korean\s+fried\s+chicken|din\s+tai\s+fung|arabica|ralph'?s\s+wines|mary\s+grace|wildflour|mendokoro|ramen\s+nagi|manam|conti'?s|coffee\s+bean|cbtl|seattle'?s\s+best|army\s+navy|mister\s+donut|kfc|popeyes|shakey'?s|yellow\s+cab|max'?s|panda\s+express|cibo|nono'?s|frankie'?s|botejyu|tuan\s+tuan|sunnies\s+cafe|bonchon|kenny\s+rogers|yoshinoya|marugame|kuya\s+j|mesa|samgyupsalamat|tim\s+ho\s+wan|gong\s+cha|chatime|koomi|macao\s+imperial|tiger\s+sugar|coco\s+fresh/,
     compact:
-      /grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:donuts?)?|krispykreme|jollibee|chowking|manginasal|burgerking|mcdonalds|starbucks|pickupcoffee|timhortons|shakeshack|subway|chilis|caramia|jarandjam|mainbar|ackbar|dairyqueen|\bdq\b|hapag|harlanholden|matchabar|elephantgrounds|mocookies|nikkei|yardstick|yourlocal|brunchbureau|breakfastatantonios|royce|bokkoreanfriedchicken|dintaifung|arabica|ralphswines|marygrace|wildflour|mendokoro|ramennagi|manam|contis|coffeebean|cbtl|seattlesbest|armynavy|misterdonut|kfc|popeyes|shakeys|yellowcab|maxs|pandaexpress|cibo|nonos|frankies|botejyu|tuantuan|sunniescafe/,
+      /grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:donuts?)?|krispykreme|jollibee|chowking|manginasal|burgerking|mcdonalds|starbucks|pickupcoffee|timhortons|shakeshack|subway|chilis|caramia|jarandjam|mainbar|ackbar|dairyqueen|\bdq\b|hapag|harlanholden|matchabar|elephantgrounds|mocookies|nikkei|yardstick|yourlocal|brunchbureau|breakfastatantonios|royce|bokkoreanfriedchicken|dintaifung|arabica|ralphswines|marygrace|wildflour|mendokoro|ramennagi|manam|contis|coffeebean|cbtl|seattlesbest|armynavy|misterdonut|kfc|popeyes|shakeys|yellowcab|maxs|pandaexpress|cibo|nonos|frankies|botejyu|tuantuan|sunniescafe|bonchon|kennyrogers|yoshinoya|marugame|kuyaj|mesa|samgyupsalamat|timhowan|gongcha|chatime|koomi|macaoimperial|tigersugar|cocofresh/,
   },
   {
     category: "Transport",
@@ -124,7 +124,7 @@ export const getStrongMerchantCategoryHint = (value: string): string | null => {
     return "Education";
   }
 
-  if (matchesCategoryHint(value, { lower: /bruno'?s?\s+barbers?|the\s+spa|wheyl\s+nutrition|mercury\s+drug|anytime\s+fitness|clinic|hospital|pharmacy|healthy\s+options|southstar|rose\s+pharmacy|generika|the\s+generics/, compact: /brunosbarbers?|thespa|wheylnutrition|mercurydrug|anytimefitness|clinic|hospital|pharmacy|healthyoptions|southstar|rosepharmacy|generika|thegenerics/ })) {
+  if (matchesCategoryHint(value, { lower: /bruno'?s?\s+barbers?|the\s+spa|wheyl\s+nutrition|mercury\s+drug|anytime\s+fitness|clinic|hospital|pharmacy|healthy\s+options|southstar|rose\s+pharmacy|generika|the\s+generics|hi-?precision|st\.?\s*luke'?s|medical\s+city|vision\s+express/, compact: /brunosbarbers?|thespa|wheylnutrition|mercurydrug|anytimefitness|clinic|hospital|pharmacy|healthyoptions|southstar|rosepharmacy|generika|thegenerics|hiprecision|stlukes|medicalcity|visionexpress/ })) {
     return "Health & Wellness";
   }
 
@@ -149,6 +149,9 @@ export const getStrongMerchantCategoryHint = (value: string): string | null => {
   }
 
   if (matchesCategoryHint(value, { lower: /timezone|mystery\s+manila/, compact: /timezone|mysterymanila/ })) {
+    return "Entertainment";
+  }
+  if (matchesCategoryHint(value, { lower: /kidzoona|tom'?s\s+world|world\s+of\s+fun|quantum/, compact: /kidzoona|tomsworld|worldoffun|quantum/ })) {
     return "Entertainment";
   }
 

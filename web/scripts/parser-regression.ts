@@ -1222,6 +1222,12 @@ const main = async () => {
   if (summarizeMerchantText("SHAKEYS PIZZA", "BPI") !== "Shakey's") {
     throw new Error("expected SOA merchant normalization to preserve Shakey's");
   }
+  if (summarizeMerchantText("HI-PRECISION DIAGNOSTIC", "BPI") !== "Hi-Precision") {
+    throw new Error("expected SOA merchant normalization to preserve Hi-Precision");
+  }
+  if (summarizeMerchantText("KIDZOONA BGC", "BPI") !== "Kidzoona") {
+    throw new Error("expected SOA merchant normalization to preserve Kidzoona");
+  }
   console.log("[PASS] BDO classification | transfer-like rows, withdrawals, and interest spelling classified correctly");
 
   const mayaSamplesDir = join(root, "Samples/Maya");
@@ -2194,6 +2200,8 @@ const main = async () => {
     ["Savemore", "expense", "Shopping"],
     ["Shakey's", "expense", "Food & Dining"],
     ["Toy Kingdom", "expense", "Shopping"],
+    ["Hi-Precision", "expense", "Health & Wellness"],
+    ["Kidzoona", "expense", "Entertainment"],
   ];
   for (const [description, type, expectedCategory] of enrichmentFallbackExpectations) {
     const actualCategory = guessCategoryFallback(description, type);
@@ -2293,6 +2301,27 @@ const main = async () => {
     ["RUSTAN'S", "expense", "Shopping"],
     ["TOY KINGDOM", "expense", "Shopping"],
     ["OCTAGON", "expense", "Shopping"],
+    ["HI-PRECISION", "expense", "Health & Wellness"],
+    ["ST LUKES", "expense", "Health & Wellness"],
+    ["MEDICAL CITY", "expense", "Health & Wellness"],
+    ["VISION EXPRESS", "expense", "Health & Wellness"],
+    ["BONCHON", "expense", "Food & Dining"],
+    ["KENNY ROGERS", "expense", "Food & Dining"],
+    ["YOSHINOYA", "expense", "Food & Dining"],
+    ["MARUGAME", "expense", "Food & Dining"],
+    ["KUYA J", "expense", "Food & Dining"],
+    ["SAMGYUPSALAMAT", "expense", "Food & Dining"],
+    ["TIM HO WAN", "expense", "Food & Dining"],
+    ["GONG CHA", "expense", "Food & Dining"],
+    ["CHATIME", "expense", "Food & Dining"],
+    ["KOOMI", "expense", "Food & Dining"],
+    ["MACAO IMPERIAL", "expense", "Food & Dining"],
+    ["TIGER SUGAR", "expense", "Food & Dining"],
+    ["COCO FRESH", "expense", "Food & Dining"],
+    ["KIDZOONA", "expense", "Entertainment"],
+    ["TOM'S WORLD", "expense", "Entertainment"],
+    ["WORLD OF FUN", "expense", "Entertainment"],
+    ["QUANTUM", "expense", "Entertainment"],
   ];
   for (const [description, type, expectedCategory] of categoryGuessExpectations) {
     const actualCategory = guessCategoryName(description, type);
@@ -2327,6 +2356,9 @@ const main = async () => {
     ["SHAKEYS PIZZA BGC", "expense", "Food & Dining", "Shakey's"],
     ["SAVEMORE MARKET BGC", "expense", "Shopping", "Savemore"],
     ["TOY KINGDOM BGC", "expense", "Shopping", "Toy Kingdom"],
+    ["HI-PRECISION DIAGNOSTIC", "expense", "Health & Wellness", "Hi-Precision"],
+    ["BONCHON BGC", "expense", "Food & Dining", "Bonchon"],
+    ["KIDZOONA BGC", "expense", "Entertainment", "Kidzoona"],
   ];
   for (const [merchantText, type, expectedCategory, expectedName] of noisyUnseenMerchantExpectations) {
     const result = classifyMerchantFallback({

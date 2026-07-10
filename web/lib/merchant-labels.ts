@@ -1921,6 +1921,22 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "The Generics Pharmacy",
   },
   {
+    patterns: [/\bhi-?precision\b/i, /\bhiprecision\b/i],
+    replacement: "Hi-Precision",
+  },
+  {
+    patterns: [/\bst\.?\s*luke'?s\b/i, /\bstlukes\b/i],
+    replacement: "St. Luke's",
+  },
+  {
+    patterns: [/\bmedical\s+city\b/i, /\bmedicalcity\b/i],
+    replacement: "The Medical City",
+  },
+  {
+    patterns: [/\bvision\s+express\b/i, /\bvisionexpress\b/i],
+    replacement: "Vision Express",
+  },
+  {
     patterns: [/\blinkedin(?:\s+premium)?\b/i, /\blinkedinpremium\b/i],
     replacement: "LinkedIn",
   },
@@ -1979,6 +1995,62 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\bmary\s+grace\b/i, /\bmarygrace\b/i],
     replacement: "Mary Grace",
+  },
+  {
+    patterns: [/\bbonchon\b/i],
+    replacement: "Bonchon",
+  },
+  {
+    patterns: [/\bkenny\s+rogers\b/i, /\bkennyrogers\b/i],
+    replacement: "Kenny Rogers",
+  },
+  {
+    patterns: [/\byoshinoya\b/i],
+    replacement: "Yoshinoya",
+  },
+  {
+    patterns: [/\bmarugame\b/i],
+    replacement: "Marugame Udon",
+  },
+  {
+    patterns: [/\bkuya\s+j\b/i, /\bkuyaj\b/i],
+    replacement: "Kuya J",
+  },
+  {
+    patterns: [/\bmesa\b/i],
+    replacement: "Mesa",
+  },
+  {
+    patterns: [/\bsamgyupsalamat\b/i],
+    replacement: "Samgyupsalamat",
+  },
+  {
+    patterns: [/\btim\s+ho\s+wan\b/i, /\btimhowan\b/i],
+    replacement: "Tim Ho Wan",
+  },
+  {
+    patterns: [/\bgong\s+cha\b/i, /\bgongcha\b/i],
+    replacement: "Gong Cha",
+  },
+  {
+    patterns: [/\bchatime\b/i],
+    replacement: "Chatime",
+  },
+  {
+    patterns: [/\bkoomi\b/i],
+    replacement: "Koomi",
+  },
+  {
+    patterns: [/\bmacao\s+imperial\b/i, /\bmacaoimperial\b/i],
+    replacement: "Macao Imperial",
+  },
+  {
+    patterns: [/\btiger\s+sugar\b/i, /\btigersugar\b/i],
+    replacement: "Tiger Sugar",
+  },
+  {
+    patterns: [/\bcoco\s+fresh\b/i, /\bcocofresh\b/i],
+    replacement: "CoCo Fresh",
   },
   {
     patterns: [/\bshakey'?s\b/i, /\bshakeys\b/i],
@@ -2155,6 +2227,22 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\boctagon\b/i],
     replacement: "Octagon",
+  },
+  {
+    patterns: [/\bkidzoona\b/i],
+    replacement: "Kidzoona",
+  },
+  {
+    patterns: [/\btom'?s\s+world\b/i, /\btomsworld\b/i],
+    replacement: "Tom's World",
+  },
+  {
+    patterns: [/\bworld\s+of\s+fun\b/i, /\bworldoffun\b/i],
+    replacement: "World of Fun",
+  },
+  {
+    patterns: [/\bquantum\b/i],
+    replacement: "Quantum",
   },
   {
     patterns: [/(?:^|\s)%?\s*arabica\b/i],
