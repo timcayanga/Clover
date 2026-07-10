@@ -30257,11 +30257,15 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .help-page__inner {
-  width: min(100%, 1120px);
+  width: min(1120px, calc(100% - 28px));
   margin: 0 auto;
   display: grid;
-  gap: 32px;
+  gap: 20px;
   flex: 1 0 auto;
+}
+
+.help-page .landing-nav {
+  margin-bottom: 0;
 }
 
 .help-page__nav {
@@ -30378,7 +30382,7 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .help-search--hero {
-  width: min(100%, 760px);
+  width: min(100%, 860px);
   margin: 0 auto;
 }
 
@@ -30499,8 +30503,8 @@ button.accounts-detail__transaction-head-cell {
 .help-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 28px;
-  padding-bottom: 112px;
+  gap: 36px;
+  padding: 8px 0 168px;
 }
 
 .help-card {
@@ -30508,17 +30512,17 @@ button.accounts-detail__transaction-head-cell {
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 28px;
-  min-height: 400px;
-  padding: 36px;
-  border-radius: 38px;
+  gap: 34px;
+  min-height: 480px;
+  padding: 44px;
+  border-radius: 42px;
   border: 0;
   text-decoration: none;
   color: #ffffff;
   transition:
     transform 180ms ease,
     box-shadow 180ms ease;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 24px 56px rgba(15, 23, 42, 0.14);
 }
 
 .help-card--teal {
@@ -30560,11 +30564,11 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .help-card__image {
-  width: min(100%, 260px);
-  height: 260px;
+  width: min(100%, 320px);
+  height: 320px;
   flex: 0 0 auto;
   object-fit: contain;
-  filter: drop-shadow(0 18px 30px rgba(15, 23, 42, 0.2));
+  filter: drop-shadow(0 24px 34px rgba(15, 23, 42, 0.22));
 }
 
 .help-card__content {
@@ -30575,8 +30579,8 @@ button.accounts-detail__transaction-head-cell {
 
 .help-card h3 {
   margin: 0;
-  max-width: 9ch;
-  font-size: clamp(2.35rem, 2.8vw, 3.2rem);
+  max-width: 8ch;
+  font-size: clamp(2.8rem, 3.2vw, 3.8rem);
   line-height: 1;
   letter-spacing: -0.05em;
   color: #ffffff;
@@ -34075,8 +34079,15 @@ html[data-helper-text="hidden"] .settings-helper {
     padding: 0 0 40px;
   }
 
+  .help-page__inner {
+    width: min(100%, calc(100% - 16px));
+    gap: 16px;
+  }
+
   .help-grid {
     grid-template-columns: 1fr;
+    gap: 22px;
+    padding: 6px 0 140px;
   }
 
   .help-search-results__list,
@@ -34086,14 +34097,14 @@ html[data-helper-text="hidden"] .settings-helper {
   }
 
   .help-card {
-    min-height: 340px;
-    padding: 26px;
-    gap: 22px;
+    min-height: 400px;
+    padding: 30px;
+    gap: 26px;
   }
 
   .help-card__image {
-    width: min(100%, 210px);
-    height: 210px;
+    width: min(100%, 260px);
+    height: 260px;
   }
 
   .help-search--hero input {
