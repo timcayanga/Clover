@@ -1078,7 +1078,19 @@ export async function GET(request: Request) {
     };
     const accountsWithCheckpointBackfill = visibleAccounts.map((account) => {
       const latestCheckpoint = latestCheckpointForAccount(account);
+      const checkpointPublishedSummary =
+        latestCheckpoint?.sourceMetadata &&
+        typeof latestCheckpoint.sourceMetadata === "object" &&
+        !Array.isArray(latestCheckpoint.sourceMetadata) &&
+        Array.isArray((latestCheckpoint.sourceMetadata as Record<string, unknown>).publishedAccountSummaries)
+          ? (
+              (latestCheckpoint.sourceMetadata as Record<string, unknown>).publishedAccountSummaries as Array<Record<string, unknown>>
+            ).find((summary) => String(summary.accountId ?? "").trim() === account.id) ?? null
+          : null;
       const checkpointAccountName =
+        checkpointPublishedSummary && typeof checkpointPublishedSummary.accountName === "string"
+          ? String(checkpointPublishedSummary.accountName).trim()
+          :
         latestCheckpoint?.sourceMetadata &&
         typeof latestCheckpoint.sourceMetadata === "object" &&
         !Array.isArray(latestCheckpoint.sourceMetadata) &&
@@ -1093,6 +1105,9 @@ export async function GET(request: Request) {
           ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).uploadBankHint).trim()
           : null;
       const checkpointInstitution =
+        checkpointPublishedSummary && typeof checkpointPublishedSummary.institution === "string"
+          ? String(checkpointPublishedSummary.institution).trim()
+          :
         latestCheckpoint?.sourceMetadata &&
         typeof latestCheckpoint.sourceMetadata === "object" &&
         !Array.isArray(latestCheckpoint.sourceMetadata) &&
@@ -1100,6 +1115,9 @@ export async function GET(request: Request) {
           ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).institution).trim()
           : null;
       const checkpointAccountNumber =
+        checkpointPublishedSummary && typeof checkpointPublishedSummary.accountNumber === "string"
+          ? String(checkpointPublishedSummary.accountNumber).trim()
+          :
         latestCheckpoint?.sourceMetadata &&
         typeof latestCheckpoint.sourceMetadata === "object" &&
         !Array.isArray(latestCheckpoint.sourceMetadata) &&
@@ -1107,6 +1125,9 @@ export async function GET(request: Request) {
           ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber).trim()
           : null;
       const checkpointBalance =
+        checkpointPublishedSummary && typeof checkpointPublishedSummary.balance === "string"
+          ? checkpointPublishedSummary.balance
+          :
         latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
           ? latestCheckpoint.endingBalance.toString()
           : null;
