@@ -1788,7 +1788,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           forceInlineProcessing,
         });
 
-      const hasInlineStatementImageText = isStatementImageUpload && formExtractedText.trim().length > 0;
+      const hasInlineStatementImageText =
+        isStatementImageUpload &&
+        (formExtractedText.trim().length > 0 || Boolean(shouldPreferSampleFallback && sampleFallbackText));
 
       if (hasInlineStatementImageText) {
         await uploadBankHintPromise.catch((error) => {
