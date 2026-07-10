@@ -1217,6 +1217,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       textCacheInfo?: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null;
       bankName?: string | null;
       progressMessage?: string;
+      skipVisualBackupParser?: boolean;
     }) => {
       stage = "processing statement text";
       await updateImportFileCompat(importId, {
@@ -1235,6 +1236,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         allowDuplicateStatement,
         importMode,
         pdfJsBaseUrl,
+        skipVisualBackupParser: options?.skipVisualBackupParser,
         statementMetadataOverride: options?.bankName
           ? {
               institution: options.bankName,
@@ -2235,6 +2237,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const shouldProcessStatementAfterResponse =
         isStatementImageUpload &&
         !forceInlineProcessing &&
+        !(shouldPreferSampleFallback && Boolean(sampleFallbackText)) &&
         shouldProcessInlineRequest;
 
       if (shouldProcessStatementAfterResponse) {
@@ -2261,6 +2264,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           allowDuplicateStatement,
           importMode,
           pdfJsBaseUrl,
+          skipVisualBackupParser: shouldPreferSampleFallback && Boolean(sampleFallbackText),
           statementMetadataOverride: processingBankName
             ? {
                 institution: processingBankName,

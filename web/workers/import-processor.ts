@@ -6362,6 +6362,7 @@ export const processImportFileText = async (
     qaSource?: DataQaSource;
     allowDuplicateStatement?: boolean;
     autoRerunAttempt?: number;
+    skipVisualBackupParser?: boolean;
     statementMetadataOverride?: Partial<{
       institution: string | null;
       accountNumber: string | null;
@@ -6381,6 +6382,7 @@ export const processImportFileText = async (
   const startedAt = Date.now();
   const autoRerunAttempt = Number(options.autoRerunAttempt ?? 0);
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
+  const skipVisualBackupParser = Boolean(options.skipVisualBackupParser);
   const importFile = await fetchImportFileCompat(importFileId);
   const emitImportProcessingEvent = (
     event: "import_processing_started" | "import_processing_completed" | "import_processing_stalled",
@@ -6942,8 +6944,9 @@ export const processImportFileText = async (
     historicalRoutingHint,
   });
   const shouldPrioritizeBackupEarly =
-    preliminaryParserRoutingDecision.decision === "backup_required" ||
-    preliminaryParserRoutingDecision.decision === "backup_preferred";
+    !skipVisualBackupParser &&
+    (preliminaryParserRoutingDecision.decision === "backup_required" ||
+      preliminaryParserRoutingDecision.decision === "backup_preferred");
   const preliminaryWiseImageStatement =
     imageImport &&
     importMode === "statement" &&
@@ -7529,7 +7532,8 @@ export const processImportFileText = async (
   }
   let openAiParsed: Awaited<ReturnType<typeof parseImportTextWithOpenAIFallback>> | null = null;
   let openAiMetadata: typeof metadataForParse | null = null;
-  const shouldRunOpenAiFallback = !canUseFastImageParse || shouldForceBackupForSuspiciousParse || shouldUseVisionFallback;
+  const shouldRunOpenAiFallback =
+    !skipVisualBackupParser && (!canUseFastImageParse || shouldForceBackupForSuspiciousParse || shouldUseVisionFallback);
   const shouldRaceBackupAgainstLocal =
     importMode === "statement" &&
     parserRoutingDecision.decision === "backup_preferred" &&
