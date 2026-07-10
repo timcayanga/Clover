@@ -1845,6 +1845,18 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "Uncle John's",
   },
   {
+    patterns: [/\brobinsons\s+supermarket\b/i, /\brobinsonssupermarket\b/i],
+    replacement: "Robinsons Supermarket",
+  },
+  {
+    patterns: [/\bthe\s+marketplace\b/i, /\bthemarketplace\b/i],
+    replacement: "The Marketplace",
+  },
+  {
+    patterns: [/\bsm\s+store\b/i, /\bsmstore\b/i],
+    replacement: "SM Store",
+  },
+  {
     patterns: [/\bshopee\b/i],
     replacement: "Shopee",
   },
@@ -1865,12 +1877,24 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "Watsons",
   },
   {
+    patterns: [/\bmercury\s+drug\b/i, /\bmercurydrug\b/i],
+    replacement: "Mercury Drug",
+  },
+  {
     patterns: [/\blinkedin(?:\s+premium)?\b/i, /\blinkedinpremium\b/i],
     replacement: "LinkedIn",
   },
   {
     patterns: [/\bwheyl\s+nutrition\b/i, /\bwheylnutrition\b/i],
     replacement: "Wheyl Nutrition",
+  },
+  {
+    patterns: [/\bhealthy\s+options\b/i, /\bhealthyoptions\b/i],
+    replacement: "Healthy Options",
+  },
+  {
+    patterns: [/\banytime\s+fitness\b/i, /\banytimefitness\b/i],
+    replacement: "Anytime Fitness",
   },
   {
     patterns: [/\bfoodpanda(?:\s+ph)?\b/i, /\bfoodpandaph\b/i],
@@ -1913,6 +1937,54 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "Nikkei",
   },
   {
+    patterns: [/\bmary\s+grace\b/i, /\bmarygrace\b/i],
+    replacement: "Mary Grace",
+  },
+  {
+    patterns: [/\bwildflour\b/i],
+    replacement: "Wildflour",
+  },
+  {
+    patterns: [/\bmendokoro\b/i],
+    replacement: "Mendokoro",
+  },
+  {
+    patterns: [/\bramen\s+nagi\b/i, /\bramennagi\b/i],
+    replacement: "Ramen Nagi",
+  },
+  {
+    patterns: [/\bmanam\b/i],
+    replacement: "Manam",
+  },
+  {
+    patterns: [/\bconti'?s\b/i, /\bcontis\b/i],
+    replacement: "Conti's",
+  },
+  {
+    patterns: [/\bcoffee\s+bean\b/i, /\bcbtl\b/i, /\bcoffeebean\b/i],
+    replacement: "Coffee Bean & Tea Leaf",
+  },
+  {
+    patterns: [/\bseattle'?s\s+best\b/i, /\bseattlesbest\b/i],
+    replacement: "Seattle's Best",
+  },
+  {
+    patterns: [/\barmy\s+navy\b/i, /\barmynavy\b/i],
+    replacement: "Army Navy",
+  },
+  {
+    patterns: [/\bmister\s+donut\b/i, /\bmisterdonut\b/i],
+    replacement: "Mister Donut",
+  },
+  {
+    patterns: [/\bkfc\b/i],
+    replacement: "KFC",
+  },
+  {
+    patterns: [/\bpopeyes\b/i],
+    replacement: "Popeyes",
+  },
+  {
     patterns: [/\byardstick\b/i],
     replacement: "Yardstick",
   },
@@ -1947,6 +2019,50 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\bn(?:ational)?\s*b(?:ook)?\s*s(?:tore)?\b/i, /\bnbs\b/i, /\bnational\s+book\s+store\b/i, /\bnationalbookstore\b/i],
     replacement: "National Book Store",
+  },
+  {
+    patterns: [/\bfully\s+booked\b/i, /\bfullybooked\b/i],
+    replacement: "Fully Booked",
+  },
+  {
+    patterns: [/\bpower\s+mac\b/i, /\bpowermac\b/i],
+    replacement: "Power Mac Center",
+  },
+  {
+    patterns: [/\bbeyond\s+the\s+box\b/i, /\bbeyondthebox\b/i],
+    replacement: "Beyond the Box",
+  },
+  {
+    patterns: [/\babenson\b/i],
+    replacement: "Abenson",
+  },
+  {
+    patterns: [/\bace\s+hardware\b/i, /\bacehardware\b/i],
+    replacement: "Ace Hardware",
+  },
+  {
+    patterns: [/\btrue\s+value\b/i, /\btruevalue\b/i],
+    replacement: "True Value",
+  },
+  {
+    patterns: [/\bbench\b/i],
+    replacement: "Bench",
+  },
+  {
+    patterns: [/\bpenshoppe\b/i],
+    replacement: "Penshoppe",
+  },
+  {
+    patterns: [/\bminiso\b/i],
+    replacement: "Miniso",
+  },
+  {
+    patterns: [/\bmuji\b/i],
+    replacement: "Muji",
+  },
+  {
+    patterns: [/\bcotton\s+on\b/i, /\bcottonon\b/i],
+    replacement: "Cotton On",
   },
   {
     patterns: [/(?:^|\s)%?\s*arabica\b/i],
