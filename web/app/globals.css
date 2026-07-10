@@ -30253,7 +30253,7 @@ button.accounts-detail__transaction-head-cell {
   min-height: 100dvh;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 32px 0 56px;
+  padding: 0 0 56px;
 }
 
 .help-page__inner {
@@ -34087,7 +34087,7 @@ html[data-helper-text="hidden"] .settings-helper {
 
 @media (max-width: 760px) {
   .help-page {
-    padding: 22px 0 40px;
+    padding: 0 0 40px;
   }
 
   .help-grid {
