@@ -11195,21 +11195,62 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         )
       ).catch(() => [])
     );
-    const resolvedAccountBalanceById = new Map(
+    const resolvedAccountSummaryById = new Map(
       accountSummaries
-        .map((summary) => [summary.accountId, summary.balance] as const)
-        .filter((entry): entry is readonly [string, string] => Boolean(entry[0] && entry[1]))
+        .map((summary) => {
+          if (!summary.accountId) {
+            return null;
+          }
+
+          return [
+            summary.accountId,
+            {
+              balance: summary.balance,
+              accountName: summary.accountName,
+              institution: summary.institution,
+              accountNumber: summary.accountNumber,
+              accountType: summary.accountType,
+            },
+          ] as const;
+        })
+        .filter(
+          (
+            entry
+          ): entry is readonly [
+            string,
+            {
+              balance?: string | null;
+              accountName?: string | null;
+              institution?: string | null;
+              accountNumber?: string | null;
+              accountType?: AccountType | null;
+            },
+          ] => Boolean(entry)
+        )
     );
     const resolvedInstitutionsForCleanup = Array.from(
       new Set(resolvedAccounts.map((entry) => entry.institution).filter((institution): institution is string => Boolean(institution?.trim())))
     );
     await Promise.allSettled(
-      Array.from(resolvedAccountBalanceById.entries()).map(([accountId, balance]) =>
-        prisma.account.update({
+      Array.from(resolvedAccountSummaryById.entries()).map(([accountId, summary]) => {
+        const displayName = formatUploadAccountDisplayName(
+          summary.accountName ?? summary.institution ?? null,
+          summary.institution ?? null,
+          summary.accountNumber ?? null,
+          summary.accountType ?? null
+        );
+
+        return prisma.account.update({
           where: { id: accountId },
-          data: { balance },
-        })
-      )
+          data: {
+            ...(summary.balance ? { balance: summary.balance } : {}),
+            ...(displayName ? { name: displayName } : {}),
+            ...(summary.institution ? { institution: summary.institution } : {}),
+            ...(summary.accountNumber ? { accountNumber: summary.accountNumber } : {}),
+            ...(summary.accountType ? { type: summary.accountType } : {}),
+          },
+        });
+      })
     );
     if (resolvedAccountIdsForCleanup.length > 0 && resolvedInstitutionsForCleanup.length > 0) {
       const staleStatementTransactionWhere = {
