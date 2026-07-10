@@ -111,6 +111,14 @@ export const formatUploadAccountDisplayName = (
   }
 
   if (
+    safeInstitution === "GSave" &&
+    safeName &&
+    /^GSave\b/i.test(safeName)
+  ) {
+    return normalizeWhitespace(safeName);
+  }
+
+  if (
     type === "investment" &&
     safeName &&
     (!safeInstitution || normalizeWhitespace(safeName).toLowerCase() !== normalizeWhitespace(safeInstitution).toLowerCase())

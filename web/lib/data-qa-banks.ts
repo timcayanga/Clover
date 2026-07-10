@@ -131,7 +131,7 @@ const BANK_ALIAS_MAP = new Map<string, string>(
     ["maya savings", "Maya"],
     ["gcash", "GCash"],
     ["cimb", "CIMB"],
-    ["gsave", "CIMB"],
+    ["gsave", "GSave"],
     ["ps bank", "PSBank"],
     ["psbank", "PSBank"],
     ["gotyme", "GoTyme"],

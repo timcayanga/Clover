@@ -4269,7 +4269,7 @@ const collapseDuplicateUploadedAccountsForAccount = async <
 
     return right.id.localeCompare(left.id);
   });
-  const canonical = sortedDuplicates[0];
+  const canonical = sortedDuplicates.find((entry) => entry.id === account.id) ?? sortedDuplicates[0];
   const canonicalBalance =
     sortedDuplicates.find((entry) => entry.balance !== null && entry.balance !== undefined)?.balance?.toString() ?? null;
   const duplicateIds = sortedDuplicates.map((entry) => entry.id).filter((id) => id !== canonical.id);
