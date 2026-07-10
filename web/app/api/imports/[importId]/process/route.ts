@@ -2107,7 +2107,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         !knownBpiMobileScreenshot &&
         !canReuseCachedParseSnapshot &&
         preflightParserRoute.route === "backup_openai" &&
-        (isStatementImageUpload || isPdfUpload(effectiveFileName, effectiveFileType));
+        !isStatementImageUpload &&
+        isPdfUpload(effectiveFileName, effectiveFileType);
 
       if (shouldQueueBackupRouteImmediately) {
         return queueBackgroundProcessing(processingBankName || null, {
