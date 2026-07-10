@@ -812,7 +812,19 @@ export const tokenizeMerchant = (value?: string | null) =>
     .filter((token) => token.length > 1 && !COMMON_STOP_WORDS.has(token));
 
 export const buildMerchantFamilySignature = (value?: string | null) => {
-  const normalized = normalizeMerchantText(value);
+  const normalized = normalizeMerchantText(
+    normalizeWhitespace(String(value ?? ""))
+      .replace(/\b(?:ref(?:erence)?|trace|approval|auth(?:orization)?|txn|transaction|terminal|rrn|arn|invoice|descriptor)\s*[:#-]?\s*[A-Z0-9*X-]+(?:\s+[A-Z0-9*X-]+)*$/gi, "")
+      .replace(/\b(?:card|acct|account)\s*(?:no\.?|number|ending|ending\s+in|ending\s+with)?\s*[:#-]?\s*(?:xx|x{2,}|\*{2,})?[A-Z0-9-]*\d{2,4}$/gi, "")
+      .replace(/\b(?:visa|master\s*card|mastercard|amex|jcb)\s*(?:xx|x{2,}|\*{2,})?\d{2,4}$/gi, "")
+      .replace(/\b(?:store|branch|terminal|outlet|location|merchant)\s*[:#-]?\s*[A-Z0-9-]{2,}$/gi, "")
+      .replace(/\b(?:store|branch|terminal|outlet)\s+\d{2,}\b/gi, "")
+      .replace(/\b(?:card|pos|online|retail|e-?commerce)\s+purchase$/gi, "")
+      .replace(/\b(?:purchase|payment|transaction)\s+(?:approved|posted|complete|completed)$/gi, "")
+      .replace(/\b(?:pte\.?\s*ltd\.?|inc\.?|corp\.?|corporation|co\.?|company|limited|ltd\.?|llc)$/gi, "")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
   if (!normalized) {
     return "";
   }
@@ -830,6 +842,19 @@ export const buildMerchantFamilySignature = (value?: string | null) => {
   }
 
   return tokens.slice(0, 3).join(" ");
+};
+
+const shouldPersistMerchantFamilySignature = (value?: string | null) => {
+  const signature = buildMerchantFamilySignature(value);
+  if (!signature || signature.length < 5) {
+    return false;
+  }
+
+  if (/^(?:payment|transfer|deposit|withdrawal|cash|bank|online|service|subscription)$/.test(signature)) {
+    return false;
+  }
+
+  return tokenizeMerchant(signature).length >= 1;
 };
 
 export const buildMerchantPrototypeLabel = (merchantText: string, normalizedName?: string | null) => {
@@ -4476,6 +4501,32 @@ export const recordTrainingSignal = async (params: {
             categoryName: params.categoryName ?? category.name,
             source: `${params.source}:institution:prototype${index > 0 ? `:${index + 1}` : ""}`,
             confidence: Math.max(60, (params.confidence ?? 100) - 12 - index * 4),
+          });
+        }
+      }
+
+      const merchantFamilySignature = buildMerchantFamilySignature(params.merchantText);
+      if (shouldPersistMerchantFamilySignature(merchantFamilySignature)) {
+        await upsertMerchantRule({
+          workspaceId: params.workspaceId,
+          merchantText: merchantFamilySignature,
+          normalizedName: normalizedMerchantLabel || merchantFamilySignature,
+          categoryId: params.categoryId,
+          categoryName: params.categoryName ?? category.name,
+          source: `${params.source}:family`,
+          confidence: Math.max(62, (params.confidence ?? 100) - 14),
+        });
+
+        const institutionScopedFamily = buildInstitutionScopedMerchantVariant(params.institution ?? null, merchantFamilySignature);
+        if (institutionScopedFamily) {
+          await upsertMerchantRule({
+            workspaceId: params.workspaceId,
+            merchantText: institutionScopedFamily,
+            normalizedName: normalizedMerchantLabel || merchantFamilySignature,
+            categoryId: params.categoryId,
+            categoryName: params.categoryName ?? category.name,
+            source: `${params.source}:institution:family`,
+            confidence: Math.max(60, (params.confidence ?? 100) - 16),
           });
         }
       }

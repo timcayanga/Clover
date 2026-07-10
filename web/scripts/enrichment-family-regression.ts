@@ -44,9 +44,30 @@ const runMerchantFamilyChecks = () => {
     trainingSignals: [],
   });
 
+  const starbucksFamilyRule = {
+    merchantKey: buildMerchantFamilySignature("STARBUCKS STORE 0143 CARD PURCHASE"),
+    merchantPattern: null,
+    normalizedName: "Starbucks",
+    categoryId: "cat-food",
+    categoryName: "Food & Dining",
+    source: "manual_recategorization:family",
+    confidence: 92,
+    timesConfirmed: 3,
+  };
+
+  const starbucksVariant = classifyMerchant({
+    merchantText: "STARBUCKS STORE 2210 CARD PURCHASE",
+    type: "expense",
+    merchantRules: [starbucksFamilyRule],
+    trainingSignals: [],
+  });
+
   assert(spotifyVariant.categoryName === "Bills & Utilities", "Expected Spotify PayPal variant to inherit Bills & Utilities");
   assert(linkedInVariant.categoryName === "Bills & Utilities", "Expected LinkedIn PayPal variant to inherit Bills & Utilities");
+  assert(starbucksVariant.categoryName === "Food & Dining", "Expected family-signature rule to rescue noisy Starbucks SOA variants");
+  assert(starbucksVariant.normalizedName === "Starbucks", "Expected family-signature rule to preserve the clean Starbucks merchant label");
   assert(buildMerchantFamilySignature("PAYPAL*SPOTIFY*P 402 EBB") === "spotify ebb" || buildMerchantFamilySignature("PAYPAL*SPOTIFY*P 402 EBB").includes("spotify"), "Expected Spotify family signature to keep spotify core");
+  assert(buildMerchantFamilySignature("STARBUCKS STORE 0143 CARD PURCHASE") === "starbucks", "Expected SOA family signature to collapse store and purchase noise down to Starbucks");
   assert(guessCategoryFallback("DUNKIN DONUTS BGC", "expense") === "Food & Dining", "Expected obvious all-caps food merchant to avoid generic Transfers/Other");
   assert(guessCategoryFallback("GRABCAR PH", "expense") === "Transport", "Expected Grab transport merchant to avoid generic Transfers/Other");
 };
