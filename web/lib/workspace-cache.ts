@@ -458,6 +458,26 @@ export const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityL
     return 99;
   }
   if ((leftExplicitLastFour && !rightExplicitLastFour) || (!leftExplicitLastFour && rightExplicitLastFour)) {
+    if (
+      leftStem &&
+      rightStem &&
+      leftStem === rightStem &&
+      accountTypesAreCompatible
+    ) {
+      return 91;
+    }
+
+    const leftIsGenericUploadPlaceholder =
+      isGenericImportedUploadAccount(left) ||
+      (normalizeImportedAccountInstitutionKey(left.name) === leftInstitution && !leftLastFour);
+    const rightIsGenericUploadPlaceholder =
+      isGenericImportedUploadAccount(right) ||
+      (normalizeImportedAccountInstitutionKey(right.name) === rightInstitution && !rightLastFour);
+
+    if (accountTypesAreCompatible && (leftIsGenericUploadPlaceholder || rightIsGenericUploadPlaceholder)) {
+      return 74;
+    }
+
     return 0;
   }
   if ((leftLastFour && !rightLastFour) || (!leftLastFour && rightLastFour)) {

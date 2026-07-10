@@ -223,6 +223,29 @@ const main = () => {
   assert.equal(
     matchesImportedAccountIdentity(
       {
+        name: "BPI",
+        institution: "BPI",
+        accountNumber: null,
+        type: "credit_card",
+        currency: "PHP",
+        source: "upload",
+      },
+      {
+        name: "BPI Platinum Rewards",
+        institution: "Bank of the Philippine Islands",
+        accountNumber: "4000123412349012",
+        type: "credit_card",
+        currency: "PHP",
+        source: "upload",
+      }
+    ),
+    true,
+    "Generic uploaded card placeholders should reconcile to the same explicit card when institution and card family match."
+  );
+
+  assert.equal(
+    matchesImportedAccountIdentity(
+      {
         name: "GSave #UNOboost 1330",
         institution: "GSave",
         accountNumber: "1330",

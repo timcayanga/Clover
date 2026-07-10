@@ -1842,7 +1842,13 @@ const stripTrailingStatementNoise = (value: string) => {
     return "";
   }
 
-  return normalized.replace(/\s+\d[\d,]*\.\d{1,2}$/u, "").trim();
+  return normalized
+    .replace(/\s+\d[\d,]*\.\d{1,2}$/u, "")
+    .replace(/\s+(?:ref(?:erence)?|trace|approval|auth(?:orization)?|txn|transaction|terminal|rrn|arn)\s*[:#-]?\s*[A-Z0-9*X-]+(?:\s+[A-Z0-9*X-]+)*$/iu, "")
+    .replace(/\s+(?:card|acct|account)\s*(?:no\.?|number|ending|ending\s+in|ending\s+with)?\s*[:#-]?\s*(?:xx|x{2,}|\*{2,})?[A-Z0-9-]*\d{2,4}$/iu, "")
+    .replace(/\s+(?:visa|master\s*card|mastercard|amex|jcb)\s*(?:xx|x{2,}|\*{2,})?\d{2,4}$/iu, "")
+    .replace(/\s+/g, " ")
+    .trim();
 };
 
 export const simplifyMerchantText = (value: string, institution?: string | null) => {

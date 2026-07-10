@@ -1183,6 +1183,9 @@ const main = async () => {
   if (summarizeMerchantText("Intrest Credited", "BDO") !== "Interest Credited") {
     throw new Error("expected BDO interest spelling normalization to correct Intrest Credited");
   }
+  if (summarizeMerchantText("GRAB PHILIPPINES REF 8841 CARD XX9737", "BPI") !== "Grab") {
+    throw new Error("expected noisy SOA merchants to strip trailing card and reference noise before normalization");
+  }
   console.log("[PASS] BDO classification | transfer-like rows, withdrawals, and interest spelling classified correctly");
 
   const mayaSamplesDir = join(root, "Samples/Maya");

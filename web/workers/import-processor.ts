@@ -15,6 +15,7 @@ import {
   parseImportTextGenericOnly,
   type ParsedImportRow,
 } from "@/lib/import-parser";
+import { summarizeMerchantText } from "@/lib/merchant-labels";
 import {
   isLikelyScreenshotDateFragment,
   isLikelyScreenshotUiArtifactText,
@@ -4943,8 +4944,48 @@ const resolveConfirmationAccount = async (params: {
         accountNumber: inferredAccountNumber,
         type: accountIdentityType,
       });
+  const existingSameInstitutionSingleCardCandidate =
+    hasInferredAccountNumber ||
+    isWiseWalletImport ||
+    !inferredInstitution ||
+    !["credit_card", "line_of_credit", "prepaid"].includes(accountIdentityType)
+      ? null
+      : (() => {
+          const compatibleCandidates = workspaceAccounts
+            .filter((account) => account.source === "upload")
+            .filter((account) => normalizeBankName(account.institution ?? account.name ?? null) === normalizeBankName(inferredInstitution))
+            .filter((account) => {
+              const accountType = String(account.type ?? "").toLowerCase();
+              return (
+                accountType === "credit_card" ||
+                accountType === "line_of_credit" ||
+                accountType === "prepaid"
+              );
+            })
+            .sort(sortImportedAccountsByFreshness);
+
+          return compatibleCandidates.length === 1 ? compatibleCandidates[0] : null;
+        })();
   if (existingByIdentity) {
     const updatedAccount = await updateAccountIdentity(existingByIdentity, {
+      name: inferredAccountName,
+      institution: inferredInstitution,
+      accountNumber: inferredAccountNumber,
+      type: accountIdentityType,
+      source: "upload",
+      currency: inferredCurrency,
+      balance: inferredBalance,
+      clearBalance: Boolean(mobileScreenshotWalletIdentity),
+      creditLimit: inferredCreditLimit,
+      ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
+    });
+
+    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
+  }
+
+  if (existingSameInstitutionSingleCardCandidate) {
+    const updatedAccount = await updateAccountIdentity(existingSameInstitutionSingleCardCandidate, {
       name: inferredAccountName,
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
@@ -5720,8 +5761,13 @@ const strengthenEnrichmentRowForAttempt = (
   ]
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
     .join(" ");
+  const normalizedMerchantFallback = merchantText
+    ? summarizeMerchantText(merchantText, row.institution ?? parsedRow?.institution ?? null)
+    : "";
   const fallbackType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
-  const guessedCategory = merchantText ? guessCategoryName(merchantText, fallbackType) : "Other";
+  const guessedCategory = merchantText
+    ? guessCategoryName([normalizedMerchantFallback, merchantText].filter(Boolean).join(" "), fallbackType)
+    : "Other";
   const rowCategory = typeof row.categoryName === "string" && row.categoryName.trim() ? row.categoryName.trim() : "";
   const shouldUseGuessedCategory =
     guessedCategory &&
@@ -5742,6 +5788,8 @@ const strengthenEnrichmentRowForAttempt = (
       ? row.merchantClean.trim()
       : typeof parsedRow?.merchantClean === "string" && parsedRow.merchantClean.trim()
         ? parsedRow.merchantClean.trim()
+        : normalizedMerchantFallback
+          ? normalizedMerchantFallback
         : typeof row.merchantRaw === "string" && row.merchantRaw.trim()
           ? row.merchantRaw.trim()
           : row.merchantClean;
