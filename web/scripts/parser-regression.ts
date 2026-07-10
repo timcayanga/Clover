@@ -1201,6 +1201,15 @@ const main = async () => {
   if (summarizeMerchantText("GRABPAY*DUNKIN PH CARD PURCHASE", "BPI") !== "Dunkin") {
     throw new Error("expected SOA merchant normalization to prefer Dunkin over the GrabPay wrapper");
   }
+  if (summarizeMerchantText("15-PPASS MEMBER FEE", "BPI") !== "Priority Pass") {
+    throw new Error("expected SOA merchant normalization to decode 15-PPASS as Priority Pass");
+  }
+  if (summarizeMerchantText("ROBINSONS EASYMART STORE 221", "BPI") !== "Robinsons Easymart") {
+    throw new Error("expected SOA merchant normalization to preserve Robinsons Easymart");
+  }
+  if (summarizeMerchantText("BRUNOS BARBERS", "BPI") !== "Brunos Barbers") {
+    throw new Error("expected SOA merchant normalization to preserve Brunos Barbers");
+  }
   console.log("[PASS] BDO classification | transfer-like rows, withdrawals, and interest spelling classified correctly");
 
   const mayaSamplesDir = join(root, "Samples/Maya");
@@ -2159,6 +2168,11 @@ const main = async () => {
     ["Grab Philippines", "expense", "Transport"],
     ["Dunkin Donuts", "expense", "Food & Dining"],
     ["LinkedIn Premium", "expense", "Bills & Utilities"],
+    ["DQ Dairy Queen", "expense", "Food & Dining"],
+    ["Robinsons Easymart", "expense", "Shopping"],
+    ["Brunos Barbers", "expense", "Health & Wellness"],
+    ["Timezone", "expense", "Entertainment"],
+    ["Priority Pass", "expense", "Travel & Lifestyle"],
   ];
   for (const [description, type, expectedCategory] of enrichmentFallbackExpectations) {
     const actualCategory = guessCategoryFallback(description, type);
@@ -2194,6 +2208,29 @@ const main = async () => {
     ["Grab Philippines", "expense", "Transport"],
     ["DUNKIN DONUTS PH", "expense", "Food & Dining"],
     ["LINKEDIN PREMIUM", "expense", "Bills & Utilities"],
+    ["HAPAG", "expense", "Food & Dining"],
+    ["HARLAN HOLDEN", "expense", "Food & Dining"],
+    ["MATCHA BAR", "expense", "Food & Dining"],
+    ["ELEPHANT GROUNDS", "expense", "Food & Dining"],
+    ["MO COOKIES", "expense", "Food & Dining"],
+    ["BRUNOS BARBERS", "expense", "Health & Wellness"],
+    ["ROBINSONS EASYMART", "expense", "Shopping"],
+    ["UNCLE JOHNS", "expense", "Shopping"],
+    ["WHEYL NUTRITION", "expense", "Health & Wellness"],
+    ["TIMEZONE", "expense", "Entertainment"],
+    ["THE SPA", "expense", "Health & Wellness"],
+    ["NIKKEI", "expense", "Food & Dining"],
+    ["YARDSTICK", "expense", "Food & Dining"],
+    ["YOUR LOCAL", "expense", "Food & Dining"],
+    ["BRUNCH BUREAU", "expense", "Food & Dining"],
+    ["BREAKFAST AT ANTONIO'S", "expense", "Food & Dining"],
+    ["ROYCE", "expense", "Food & Dining"],
+    ["BOK KOREAN FRIED CHICKEN", "expense", "Food & Dining"],
+    ["MYSTERY MANILA", "expense", "Entertainment"],
+    ["RALPH'S WINES", "expense", "Food & Dining"],
+    ["NBS NATIONAL BOOK STORE", "expense", "Education"],
+    ["ARABICA", "expense", "Food & Dining"],
+    ["15-PPASS", "expense", "Travel & Lifestyle"],
   ];
   for (const [description, type, expectedCategory] of categoryGuessExpectations) {
     const actualCategory = guessCategoryName(description, type);
@@ -2214,6 +2251,12 @@ const main = async () => {
     ["BANK TRANSFER DUNKIN DONUTS BGC", "expense", "Food & Dining", "Dunkin"],
     ["OUTGOING TRANSFER PAYPAL LINKEDIN PREMIUM", "expense", "Bills & Utilities", "LinkedIn"],
     ["BANK TRANSFER AMAZON MARKETPLACE", "expense", "Shopping", "Amazon"],
+    ["DQ DAIRY QUEEN BGC", "expense", "Food & Dining", "Dairy Queen"],
+    ["ROBINSONS EASYMART STORE 221", "expense", "Shopping", "Robinsons Easymart"],
+    ["BRUNOS BARBERS", "expense", "Health & Wellness", "Brunos Barbers"],
+    ["TIMEZONE AYALA MALLS", "expense", "Entertainment", "Timezone"],
+    ["15-PPASS MEMBER FEE", "expense", "Travel & Lifestyle", "Priority Pass"],
+    ["NBS NATIONAL BOOK STORE", "expense", "Education", "National Book Store"],
   ];
   for (const [merchantText, type, expectedCategory, expectedName] of noisyUnseenMerchantExpectations) {
     const result = classifyMerchantFallback({

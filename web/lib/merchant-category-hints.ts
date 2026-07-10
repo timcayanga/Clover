@@ -17,9 +17,9 @@ const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
   {
     category: "Food & Dining",
     lower:
-      /grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:\s+donuts?)?|krispy\s+kreme|jollibee|chowking|mang\s+inasal|burger\s+king|mcdonald'?s|starbucks|pickup\s+coffee|tim\s+hortons|shake\s+shack|subway|chili'?s|cara\s+mia|jarandjam|main\s+bar|ac\s+bar/,
+      /grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:\s+donuts?)?|krispy\s+kreme|jollibee|chowking|mang\s+inasal|burger\s+king|mcdonald'?s|starbucks|pickup\s+coffee|tim\s+hortons|shake\s+shack|subway|chili'?s|cara\s+mia|jarandjam|main\s+bar|ac\s+bar|dairy\s+queen|\bdq\b|hapag|harlan\s*\+?\s*holden|matcha\s+bar|elephant\s+grounds|mo\s+cookies|nikkei|yardstick|your\s+local|brunch\s+bureau|breakfast\s+at\s+antonio'?s|royce|bok\s+korean\s+fried\s+chicken|din\s+tai\s+fung|arabica|ralph'?s\s+wines/,
     compact:
-      /grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:donuts?)?|krispykreme|jollibee|chowking|manginasal|burgerking|mcdonalds|starbucks|pickupcoffee|timhortons|shakeshack|subway|chilis|caramia|jarandjam|mainbar|ackbar/,
+      /grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:donuts?)?|krispykreme|jollibee|chowking|manginasal|burgerking|mcdonalds|starbucks|pickupcoffee|timhortons|shakeshack|subway|chilis|caramia|jarandjam|mainbar|ackbar|dairyqueen|\bdq\b|hapag|harlanholden|matchabar|elephantgrounds|mocookies|nikkei|yardstick|yourlocal|brunchbureau|breakfastatantonios|royce|bokkoreanfriedchicken|dintaifung|arabica|ralphswines/,
   },
   {
     category: "Transport",
@@ -35,8 +35,8 @@ const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
   },
   {
     category: "Shopping",
-    lower: /paypal|amazon|alibaba|lazada|shopee|uniqlo|zara|watsons|puregold|landers|snr|duty\s+free/,
-    compact: /paypal|amazon|alibaba|lazada|shopee|uniqlo|zara|watsons|puregold|landers|snr|dutyfree/,
+    lower: /paypal|amazon|alibaba|lazada|shopee|uniqlo|zara|watsons|puregold|landers|snr|duty\s+free|robinsons\s+easymart|uncle\s+john'?s|7-?eleven/,
+    compact: /paypal|amazon|alibaba|lazada|shopee|uniqlo|zara|watsons|puregold|landers|snr|dutyfree|robinsonseasymart|unclejohns|7eleven/,
   },
 ];
 
@@ -82,9 +82,9 @@ export const getStrongMerchantCategoryHint = (value: string): string | null => {
   if (
     matchesCategoryHint(value, {
       lower:
-        /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|apollo\s+bay\s+seafood|wootea|liberty\s+oil\s+convenience|iga\s+supermarkets?|caretaker'?s\s+cottage|lee'?s\s+dumplings|samyan\s+mitrtown|jacks\s+of\s+bath|vesper|black\s+cabin\s+bar|coco\s+group|coco\s+dewata|nat'?s\s+rustic|moonlit\s+sanctuary|bakery|bistro|kitchen|ramen|noodle|tea\s+house|burger|pizza|steak|grill|canteen|eatery|food\s+court|brunch|breakfast|lunch|dinner|dunkin(?:\s+donuts?)?|krispy\s+kreme|jollibee|chowking|mang\s+inasal|burger\s+king|foodpanda|grabfood|ubereats?|doordash|pickaroo|starbucks|pickup\s+coffee|tim\s+hortons|shake\s+shack|wendy'?s|subway|chili'?s|cara\s+mia|jarandjam|main\s+bar|ac\s+bar/,
+        /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|apollo\s+bay\s+seafood|wootea|liberty\s+oil\s+convenience|iga\s+supermarkets?|caretaker'?s\s+cottage|lee'?s\s+dumplings|samyan\s+mitrtown|jacks\s+of\s+bath|vesper|black\s+cabin\s+bar|coco\s+group|coco\s+dewata|nat'?s\s+rustic|moonlit\s+sanctuary|bakery|bistro|kitchen|ramen|noodle|tea\s+house|burger|pizza|steak|grill|canteen|eatery|food\s+court|brunch|breakfast|lunch|dinner|dunkin(?:\s+donuts?)?|krispy\s+kreme|jollibee|chowking|mang\s+inasal|burger\s+king|foodpanda|grabfood|ubereats?|doordash|pickaroo|starbucks|pickup\s+coffee|tim\s+hortons|shake\s+shack|wendy'?s|subway|chili'?s|cara\s+mia|jarandjam|main\s+bar|ac\s+bar|dairy\s+queen|\bdq\b|hapag|harlan\s*\+?\s*holden|matcha\s+bar|elephant\s+grounds|mo\s+cookies|nikkei|yardstick|your\s+local|brunch\s+bureau|breakfast\s+at\s+antonio'?s|royce|bok\s+korean\s+fried\s+chicken|din\s+tai\s+fung|arabica|ralph'?s\s+wines/,
       compact:
-        /pedrothegrocer|grocery|supermarket|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|7eleven|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|apollobayseafood|wootea|libertyoilconvenience|igasupermarkets?|caretakerscottage|leesdumplings|samyanmitrtown|jacksofbath|vesper|blackcabinbar|cocogroup|cocodewata|natsrustic|moonlitsanctuary|bakery|bistro|kitchen|ramen|noodle|teahouse|burger|pizza|steak|grill|canteen|eatery|foodcourt|brunch|breakfast|lunch|dinner|dunkin(?:donuts?)?|krispykreme|jollibee|chowking|manginasal|burgerking|foodpanda|grabfood|ubereats?|doordash|pickaroo|starbucks|pickupcoffee|timhortons|shakeshack|wendys|subway|chilis|caramia|jarandjam|mainbar|ackbar/,
+        /pedrothegrocer|grocery|supermarket|mcdonalds|milksha|gogyo|gokan|goken|savoryproject|barleone|fourfrogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|minimart|7eleven|dondondonki|proudmary|byrdi|sevenseeds|amiri|tobysestate|vacationcafe|nirvanarestaurant|waterfrontminimart|apollobayseafood|wootea|libertyoilconvenience|igasupermarkets?|caretakerscottage|leesdumplings|samyanmitrtown|jacksofbath|vesper|blackcabinbar|cocogroup|cocodewata|natsrustic|moonlitsanctuary|bakery|bistro|kitchen|ramen|noodle|teahouse|burger|pizza|steak|grill|canteen|eatery|foodcourt|brunch|breakfast|lunch|dinner|dunkin(?:donuts?)?|krispykreme|jollibee|chowking|manginasal|burgerking|foodpanda|grabfood|ubereats?|doordash|pickaroo|starbucks|pickupcoffee|timhortons|shakeshack|wendys|subway|chilis|caramia|jarandjam|mainbar|ackbar|dairyqueen|\bdq\b|hapag|harlanholden|matchabar|elephantgrounds|mocookies|nikkei|yardstick|yourlocal|brunchbureau|breakfastatantonios|royce|bokkoreanfriedchicken|dintaifung|arabica|ralphswines/,
     })
   ) {
     return "Food & Dining";
@@ -120,6 +120,13 @@ export const getStrongMerchantCategoryHint = (value: string): string | null => {
   if (matchesCategoryHint(value, { lower: /books?\b|asia\s+books|college|school|tuition|academy/, compact: /books|asiabooks|college|school|tuition|academy/ })) {
     return "Education";
   }
+  if (matchesCategoryHint(value, { lower: /nbs|national\s+book\s+store/, compact: /nbs|nationalbookstore/ })) {
+    return "Education";
+  }
+
+  if (matchesCategoryHint(value, { lower: /bruno'?s?\s+barbers?|the\s+spa|wheyl\s+nutrition/, compact: /brunosbarbers?|thespa|wheylnutrition/ })) {
+    return "Health & Wellness";
+  }
 
   if (
     matchesCategoryHint(value, {
@@ -134,11 +141,19 @@ export const getStrongMerchantCategoryHint = (value: string): string | null => {
 
   if (
     matchesCategoryHint(value, {
-      lower: /relay\b|amazon|alibaba|camera|paypal|viator(?:\.com)?|locker\s+hire|emmanuel\s+payments?|shop\b|store\b|mart\b|convenience|provisioning\s+service|visa\s+provisioning\s+service|apple\s+pay|google\s+pay|gift\s+shop|duty\s+free/,
-      compact: /relay|amazon|alibaba|camera|paypal|viator|lockerhire|emmanuelpayments?|shop|store|mart|convenience|provisioningservice|visaprovisioningservice|applepay|googlepay|giftshop|dutyfree|puregold|landers|snr|sandr|uniqlo|zara|h&m|watsons/,
+      lower: /relay\b|amazon|alibaba|camera|paypal|viator(?:\.com)?|locker\s+hire|emmanuel\s+payments?|shop\b|store\b|mart\b|convenience|provisioning\s+service|visa\s+provisioning\s+service|apple\s+pay|google\s+pay|gift\s+shop|duty\s+free|robinsons\s+easymart|uncle\s+john'?s|7-?eleven/,
+      compact: /relay|amazon|alibaba|camera|paypal|viator|lockerhire|emmanuelpayments?|shop|store|mart|convenience|provisioningservice|visaprovisioningservice|applepay|googlepay|giftshop|dutyfree|puregold|landers|snr|sandr|uniqlo|zara|h&m|watsons|robinsonseasymart|unclejohns|7eleven/,
     })
   ) {
     return "Shopping";
+  }
+
+  if (matchesCategoryHint(value, { lower: /timezone|mystery\s+manila/, compact: /timezone|mysterymanila/ })) {
+    return "Entertainment";
+  }
+
+  if (matchesCategoryHint(value, { lower: /priority\s+pass|15-?ppass/, compact: /prioritypass|15ppass|ppass/ })) {
+    return "Travel & Lifestyle";
   }
 
   return null;

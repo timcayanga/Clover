@@ -1797,6 +1797,10 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "Starbucks",
   },
   {
+    patterns: [/\bdq\s+dairy\s+queen\b/i, /\bdairy\s+queen\b/i],
+    replacement: "Dairy Queen",
+  },
+  {
     patterns: [/\bmcdonald'?s?\b/i, /\bmcdonalds\b/i],
     replacement: "McDonald's",
   },
@@ -1807,6 +1811,38 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\bdunkin(?:\s+donuts?)?\b/i, /\bdunkindonuts?\b/i],
     replacement: "Dunkin",
+  },
+  {
+    patterns: [/\bhapag\b/i],
+    replacement: "Hapag",
+  },
+  {
+    patterns: [/\bharlan\s*\+?\s*holden\b/i, /\bharlanholden\b/i],
+    replacement: "Harlan Holden",
+  },
+  {
+    patterns: [/\bmatcha\s+bar\b/i, /\bmatchabar\b/i],
+    replacement: "Matcha Bar",
+  },
+  {
+    patterns: [/\belephant\s+grounds\b/i, /\belephantgrounds\b/i],
+    replacement: "Elephant Grounds",
+  },
+  {
+    patterns: [/\bmo\s+cookies\b/i, /\bmocookies\b/i],
+    replacement: "MO Cookies",
+  },
+  {
+    patterns: [/\bbruno'?s?\s+barbers?\b/i, /\bbrunosbarbers?\b/i],
+    replacement: "Brunos Barbers",
+  },
+  {
+    patterns: [/\brobinsons\s+easymart\b/i, /\brobinsonseasymart\b/i],
+    replacement: "Robinsons Easymart",
+  },
+  {
+    patterns: [/\buncle\s+john'?s\b/i, /\bunclejohns\b/i],
+    replacement: "Uncle John's",
   },
   {
     patterns: [/\bshopee\b/i],
@@ -1831,6 +1867,10 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\blinkedin(?:\s+premium)?\b/i, /\blinkedinpremium\b/i],
     replacement: "LinkedIn",
+  },
+  {
+    patterns: [/\bwheyl\s+nutrition\b/i, /\bwheylnutrition\b/i],
+    replacement: "Wheyl Nutrition",
   },
   {
     patterns: [/\bfoodpanda(?:\s+ph)?\b/i, /\bfoodpandaph\b/i],
@@ -1859,6 +1899,62 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\byoutube\s+premium\b/i, /\byoutubepremium\b/i],
     replacement: "YouTube Premium",
+  },
+  {
+    patterns: [/\btimezone\b/i],
+    replacement: "Timezone",
+  },
+  {
+    patterns: [/\bthe\s+spa\b/i],
+    replacement: "The Spa",
+  },
+  {
+    patterns: [/\bnikkei\b/i],
+    replacement: "Nikkei",
+  },
+  {
+    patterns: [/\byardstick\b/i],
+    replacement: "Yardstick",
+  },
+  {
+    patterns: [/\byour\s+local\b/i, /\byourlocal\b/i],
+    replacement: "Your Local",
+  },
+  {
+    patterns: [/\bbrunch\s+bureau\b/i, /\bbrunchbureau\b/i],
+    replacement: "Brunch Bureau",
+  },
+  {
+    patterns: [/\bbreakfast\s+at\s+antonio'?s\b/i, /\bbreakfastatantonios\b/i],
+    replacement: "Breakfast at Antonio's",
+  },
+  {
+    patterns: [/\broyce\b/i],
+    replacement: "Royce",
+  },
+  {
+    patterns: [/\bbok\s+korean\s+fried\s+chicken\b/i, /\bbokkoreanfriedchicken\b/i],
+    replacement: "BOK Korean Fried Chicken",
+  },
+  {
+    patterns: [/\bmystery\s+manila\b/i, /\bmysterymanila\b/i],
+    replacement: "Mystery Manila",
+  },
+  {
+    patterns: [/\bralph'?s\s+wines\b/i, /\bralphswines\b/i],
+    replacement: "Ralph's Wines",
+  },
+  {
+    patterns: [/\bn(?:ational)?\s*b(?:ook)?\s*s(?:tore)?\b/i, /\bnbs\b/i, /\bnational\s+book\s+store\b/i, /\bnationalbookstore\b/i],
+    replacement: "National Book Store",
+  },
+  {
+    patterns: [/(?:^|\s)%?\s*arabica\b/i],
+    replacement: "Arabica",
+  },
+  {
+    patterns: [/\bpriority\s+pass\b/i, /\b15-?ppass\b/i, /\bppass\b/i],
+    replacement: "Priority Pass",
   },
 ];
 
