@@ -58,9 +58,6 @@ export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
         <LandingNav accountState={accountState} />
 
         <label className="help-search help-search--hero" htmlFor="help-search">
-          <span className="help-search__emoji" aria-hidden="true">
-            🔍
-          </span>
           <span className="sr-only">Search help</span>
           <input
             id="help-search"
