@@ -409,6 +409,7 @@ export function CommitmentsPanel({
   );
   const formCopy = commitmentFormCopy[kind];
   const hasSavedCommitments = commitments.length > 0;
+  const hasSuggestionContent = plannedPaymentSuggestions.length > 0 || suggestedRecurringPatterns.length > 0;
   const openRecurringAdd = () => {
     window.dispatchEvent(new Event("clover:open-recurring-add"));
   };
@@ -1068,13 +1069,17 @@ export function CommitmentsPanel({
         </div>
       ) : null}
 
-      {hasSavedCommitments ? (
+      {hasSavedCommitments || hasSuggestionContent ? (
         <article className="panel commitments-detail-panel" ref={detailPanelRef}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div>
               <p className="eyebrow">{commitmentKindLabels[selectedKind]}</p>
               <h3 style={{ margin: 0 }}>
-                {selectedItems.length > 0 ? `${selectedItems.length} item${selectedItems.length === 1 ? "" : "s"}` : "Nothing saved yet"}
+                {selectedItems.length > 0
+                  ? `${selectedItems.length} item${selectedItems.length === 1 ? "" : "s"}`
+                  : hasSuggestionContent
+                    ? "Suggestions ready"
+                    : "Nothing saved yet"}
               </h3>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1134,7 +1139,9 @@ export function CommitmentsPanel({
             </div>
           ) : (
             <p className="panel-muted" style={{ margin: 0 }}>
-              Saved {commitmentKindLabels[selectedKind].toLowerCase()}s will appear here once you add one.
+              {hasSuggestionContent
+                ? "Suggested recurring transactions are ready above. Review and add them to start tracking them here."
+                : `Saved ${commitmentKindLabels[selectedKind].toLowerCase()}s will appear here once you add one.`}
             </p>
           )}
         </article>
