@@ -1,5 +1,6 @@
 import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
+import { getSharedMerchantCategoryHint, getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import {
   isLikelyScreenshotDateFragment,
@@ -173,6 +174,10 @@ const isLikelyPersonToPersonMerchant = (value?: string | null) => {
 export const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
+  const strongHint = getStrongMerchantCategoryHint(text);
+  if (strongHint) return strongHint;
+  const sharedHint = getSharedMerchantCategoryHint(text);
+  if (sharedHint) return sharedHint;
   if (
     (type === "transfer" || /\b(?:sent|received|transfer|payments?|pay(?:ment)?\s+to|pay(?:ment)?\s+from)\b/.test(lower)) &&
     isLikelyPersonToPersonMerchant(text)

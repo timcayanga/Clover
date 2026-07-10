@@ -1228,6 +1228,12 @@ const main = async () => {
   if (summarizeMerchantText("KIDZOONA BGC", "BPI") !== "Kidzoona") {
     throw new Error("expected SOA merchant normalization to preserve Kidzoona");
   }
+  if (summarizeMerchantText("BO'S COFFEE BGC", "BPI") !== "Bo's Coffee") {
+    throw new Error("expected SOA merchant normalization to preserve Bo's Coffee");
+  }
+  if (summarizeMerchantText("LANDERS ARCOVIA", "BPI") !== "Landers") {
+    throw new Error("expected SOA merchant normalization to preserve Landers");
+  }
   console.log("[PASS] BDO classification | transfer-like rows, withdrawals, and interest spelling classified correctly");
 
   const mayaSamplesDir = join(root, "Samples/Maya");
@@ -2322,6 +2328,23 @@ const main = async () => {
     ["TOM'S WORLD", "expense", "Entertainment"],
     ["WORLD OF FUN", "expense", "Entertainment"],
     ["QUANTUM", "expense", "Entertainment"],
+    ["BO'S COFFEE", "expense", "Food & Dining"],
+    ["COFFEE PROJECT", "expense", "Food & Dining"],
+    ["TOBY'S ESTATE", "expense", "Food & Dining"],
+    ["BUT FIRST, COFFEE", "expense", "Food & Dining"],
+    ["HAPPY LEMON", "expense", "Food & Dining"],
+    ["AUNTIE ANNE'S", "expense", "Food & Dining"],
+    ["LLAO LLAO", "expense", "Food & Dining"],
+    ["OOMA", "expense", "Food & Dining"],
+    ["MANGO TREE", "expense", "Food & Dining"],
+    ["ITALIANNI'S", "expense", "Food & Dining"],
+    ["TGI FRIDAYS", "expense", "Food & Dining"],
+    ["LANDERS", "expense", "Shopping"],
+    ["S&R", "expense", "Shopping"],
+    ["UNIQLO", "expense", "Shopping"],
+    ["ZARA", "expense", "Shopping"],
+    ["H&M", "expense", "Shopping"],
+    ["BELO", "expense", "Health & Wellness"],
   ];
   for (const [description, type, expectedCategory] of categoryGuessExpectations) {
     const actualCategory = guessCategoryName(description, type);
@@ -2359,6 +2382,9 @@ const main = async () => {
     ["HI-PRECISION DIAGNOSTIC", "expense", "Health & Wellness", "Hi-Precision"],
     ["BONCHON BGC", "expense", "Food & Dining", "Bonchon"],
     ["KIDZOONA BGC", "expense", "Entertainment", "Kidzoona"],
+    ["BO'S COFFEE BGC", "expense", "Food & Dining", "Bo's Coffee"],
+    ["LANDERS ARCOVIA", "expense", "Shopping", "Landers"],
+    ["BELO MEDICAL GROUP BGC", "expense", "Health & Wellness", "Belo Medical Group"],
   ];
   for (const [merchantText, type, expectedCategory, expectedName] of noisyUnseenMerchantExpectations) {
     const result = classifyMerchantFallback({

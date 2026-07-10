@@ -1937,6 +1937,10 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "Vision Express",
   },
   {
+    patterns: [/\bbelo(?:\s+medical\s+group)?\b/i, /\bbelomedicalgroup\b/i],
+    replacement: "Belo Medical Group",
+  },
+  {
     patterns: [/\blinkedin(?:\s+premium)?\b/i, /\blinkedinpremium\b/i],
     replacement: "LinkedIn",
   },
@@ -2051,6 +2055,50 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\bcoco\s+fresh\b/i, /\bcocofresh\b/i],
     replacement: "CoCo Fresh",
+  },
+  {
+    patterns: [/\bbo'?s\s+coffee\b/i, /\bboscoffee\b/i],
+    replacement: "Bo's Coffee",
+  },
+  {
+    patterns: [/\bcoffee\s+project\b/i, /\bcoffeeproject\b/i],
+    replacement: "Coffee Project",
+  },
+  {
+    patterns: [/\btoby'?s\s+estate\b/i, /\btobysestate\b/i],
+    replacement: "Toby's Estate",
+  },
+  {
+    patterns: [/\bbut\s+first,\s*coffee\b/i, /\bbutfirstcoffee\b/i],
+    replacement: "But First, Coffee",
+  },
+  {
+    patterns: [/\bhappy\s+lemon\b/i, /\bhappylemon\b/i],
+    replacement: "Happy Lemon",
+  },
+  {
+    patterns: [/\bauntie\s+anne'?s\b/i, /\bauntieannes\b/i],
+    replacement: "Auntie Anne's",
+  },
+  {
+    patterns: [/\bllao\s*llao\b/i, /\bllaollao\b/i],
+    replacement: "llaollao",
+  },
+  {
+    patterns: [/\booma\b/i],
+    replacement: "Ooma",
+  },
+  {
+    patterns: [/\bmango\s+tree\b/i, /\bmangotree\b/i],
+    replacement: "Mango Tree",
+  },
+  {
+    patterns: [/\bitalianni'?s\b/i, /\bitaliannis\b/i],
+    replacement: "Italianni's",
+  },
+  {
+    patterns: [/\btgi\s*friday'?s\b/i, /\btgifridays\b/i],
+    replacement: "TGI Fridays",
   },
   {
     patterns: [/\bshakey'?s\b/i, /\bshakeys\b/i],
@@ -2179,6 +2227,26 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\brustan'?s\b/i, /\brustans\b/i],
     replacement: "Rustan's",
+  },
+  {
+    patterns: [/\blanders\b/i],
+    replacement: "Landers",
+  },
+  {
+    patterns: [/\bs\s*&\s*r\b/i, /\bsnr\b/i],
+    replacement: "S&R",
+  },
+  {
+    patterns: [/\buniqlo\b/i],
+    replacement: "Uniqlo",
+  },
+  {
+    patterns: [/\bzara\b/i],
+    replacement: "Zara",
+  },
+  {
+    patterns: [/\bh\s*&\s*m\b/i, /\bhm\b/i],
+    replacement: "H&M",
   },
   {
     patterns: [/\bpower\s+mac\b/i, /\bpowermac\b/i],
