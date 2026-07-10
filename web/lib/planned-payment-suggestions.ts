@@ -193,6 +193,15 @@ const readTransactionImportFileName = (transaction: PlannedPaymentTransactionLik
   return typeof fileName === "string" && fileName.trim() ? fileName.trim() : null;
 };
 
+const readPatternMetric = (payload: unknown, key: string) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+};
+
 const describeRecurringSuggestionType = (title: string, reasonTags: string[]) => {
   const obligationType = classifyRecurringObligation({
     text: [title, ...reasonTags].join(" "),
@@ -450,6 +459,8 @@ const buildRecurringTransactionSuggestions = (
     const hasConfirmedMatch = Boolean(confirmedMatch);
     const dueDate = selectRememberedDueDate(pattern.nextExpectedDate, confirmedMatch);
     const daysUntilDue = Math.round((dueDate.getTime() - Date.now()) / DAY_IN_MS);
+    const distinctMonthCount = readPatternMetric(pattern.rawPayload, "distinctMonthCount");
+    const accountCount = readPatternMetric(pattern.rawPayload, "accountCount");
     const suggestionType = describeRecurringSuggestionType(title, pattern.reasonTags);
     const reasonTags = suggestionType.tag && !pattern.reasonTags.includes(suggestionType.tag)
       ? [suggestionType.tag, ...pattern.reasonTags]
@@ -474,11 +485,12 @@ const buildRecurringTransactionSuggestions = (
       dueDate: dueDate.toISOString(),
       recurrence: confirmedMatch?.recurrence ?? pattern.frequency,
       accountId: pattern.accountId,
-      accountName: pattern.account?.name ?? null,
+      accountName: pattern.account?.name ?? (accountCount && accountCount > 1 ? "Multiple accounts" : null),
       statementCheckpointId: null,
       installmentTerms: null,
       notes: [
         `Detected from ${pattern.transactionCount} similar transaction${pattern.transactionCount === 1 ? "" : "s"} across recent uploads.`,
+        distinctMonthCount && distinctMonthCount > 1 ? `Seen across ${distinctMonthCount} months.` : null,
         amountRange ? `Usually ${amountRange}.` : null,
         dueDate ? `Next expected around ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(dueDate)}.` : null,
       ]
@@ -487,6 +499,8 @@ const buildRecurringTransactionSuggestions = (
       sourceLabel: suggestionType.sourceLabel,
       sourceDetail: [
         scheduleDetail ? `Looks ${scheduleDetail}` : null,
+        distinctMonthCount && distinctMonthCount > 1 ? `Seen in ${distinctMonthCount} months` : null,
+        accountCount && accountCount > 1 ? `Across ${accountCount} accounts` : null,
         hasConfirmedMatch ? "matched your saved recurring item" : null,
         `Seen through ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(pattern.lastSeenDate)}`,
       ]

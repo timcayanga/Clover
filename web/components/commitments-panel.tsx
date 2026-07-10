@@ -129,6 +129,19 @@ const formatDate = (value: string | null) => {
   return Number.isNaN(parsed.getTime()) ? value : dateFormatter.format(parsed);
 };
 
+const getDaysUntilDate = (value: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return Math.ceil((parsed.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+};
+
 const toDateInputValue = (value: string | null) => {
   if (!value) {
     return "";
@@ -385,6 +398,45 @@ export function CommitmentsPanel({
         return commitmentTitle.includes(patternName) || patternName.includes(commitment.title.trim().toLowerCase());
       })
   );
+  const suggestionInsights = useMemo(() => {
+    const dueSoonCount = plannedPaymentSuggestions.filter((suggestion) => {
+      const daysUntil = getDaysUntilDate(suggestion.dueDate);
+      return daysUntil !== null && daysUntil >= 0 && daysUntil <= 7;
+    }).length;
+    const statementCount = plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind === "statement_reminder").length;
+    const installmentCount = plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind === "installment").length;
+    const recurringTransactionCount = plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind === "recurring_transaction").length;
+
+    return [
+      {
+        label: "Due in 7 days",
+        value: dueSoonCount,
+        note: dueSoonCount > 0 ? "Needs attention soon" : "Nothing urgent yet",
+        tone: "var(--warn)",
+      },
+      {
+        label: "Statement dates",
+        value: statementCount,
+        note: statementCount > 0 ? "Detected from uploaded statements" : "No due dates detected yet",
+        tone: "var(--accent)",
+      },
+      {
+        label: "Installments",
+        value: installmentCount,
+        note: installmentCount > 0 ? "Possible installment plans found" : "No installment patterns yet",
+        tone: "var(--good)",
+      },
+      {
+        label: "Recurring signals",
+        value: recurringTransactionCount + suggestedRecurringPatterns.length,
+        note:
+          recurringTransactionCount + suggestedRecurringPatterns.length > 0
+            ? "Subscriptions and bills Clover can help track"
+            : "Upload more history to unlock suggestions",
+        tone: "var(--foreground)",
+      },
+    ];
+  }, [plannedPaymentSuggestions, suggestedRecurringPatterns.length]);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === accountId) ?? null,
@@ -697,6 +749,28 @@ export function CommitmentsPanel({
   return (
     <section style={{ display: "grid", gap: 24 }}>
       <div className="commitments-summary-grid">
+        {suggestionInsights.map((insight) => (
+          <article
+            key={insight.label}
+            className="panel"
+            style={{
+              display: "grid",
+              gap: 10,
+              padding: 18,
+              border: "1px solid rgba(148, 163, 184, 0.18)",
+              background: "rgba(255, 255, 255, 0.78)",
+            }}
+          >
+            <p className="notification-item__tone" style={{ color: insight.tone }}>
+              {insight.label}
+            </p>
+            <strong style={{ fontSize: 28, letterSpacing: "-0.03em" }}>{insight.value}</strong>
+            <span style={{ color: "var(--muted-foreground)" }}>{insight.note}</span>
+          </article>
+        ))}
+      </div>
+
+      <div className="commitments-summary-grid">
         {groupedCommitments.map((group) => {
           const isSelected = selectedKind === group.kind;
 
@@ -759,6 +833,20 @@ export function CommitmentsPanel({
                     {suggestion.sourceDetail ? ` · ${suggestion.sourceDetail}` : ""}
                     {suggestion.sourceFileName ? ` · ${suggestion.sourceFileName}` : ""}
                   </p>
+                  {(() => {
+                    const daysUntil = getDaysUntilDate(suggestion.dueDate);
+                    if (daysUntil === null || daysUntil < 0 || daysUntil > 7) {
+                      return null;
+                    }
+
+                    return (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ ...reasonBadgeStyle, color: "var(--warn)", borderColor: "rgba(245, 158, 11, 0.18)", background: "rgba(245, 158, 11, 0.10)" }}>
+                          {daysUntil === 0 ? "Due today" : daysUntil === 1 ? "Due tomorrow" : `Due in ${daysUntil} days`}
+                        </span>
+                      </div>
+                    );
+                  })()}
                   {suggestion.reasonTags.length > 0 ? (
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {suggestion.reasonTags.map((tag) => (
