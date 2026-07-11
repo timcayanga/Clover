@@ -2433,6 +2433,10 @@ export const summarizeMerchantText = (value: string, institution?: string | null
     return "GCash Cash In";
   }
 
+  if (/open\s*ai|chat\s*gpt/i.test(rawLower) || compact.includes("openaichatgptsubscription")) {
+    return "OpenAI ChatGPT Subscription";
+  }
+
   if (institution === "Metrobank") {
     if (/interbank\s+fund\s+transfer\s+credit\s+received\s+from\s+other\s+bank/i.test(rawLower)) {
       return "Incoming Interbank Transfer";
