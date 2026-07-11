@@ -2020,7 +2020,7 @@ function AccountsPageContent() {
   }, [loadWorkspaceData, selectedWorkspaceId, shouldHydrateWorkspaceSnapshot]);
 
   useEffect(() => {
-    if (!selectedWorkspaceId || accountsLoading) {
+    if (!selectedWorkspaceId || accountsLoading || accountsLoadFailed) {
       return;
     }
 
@@ -2031,7 +2031,7 @@ function AccountsPageContent() {
       statementCheckpoints,
     });
     markWorkspaceHydrated(selectedWorkspaceId, updatedAt);
-  }, [accounts, accountRules, accountsLoading, selectedWorkspaceId, statementCheckpoints, transactions]);
+  }, [accounts, accountRules, accountsLoadFailed, accountsLoading, selectedWorkspaceId, statementCheckpoints, transactions]);
 
   useEffect(() => {
     let cancelled = false;
