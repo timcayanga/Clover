@@ -362,6 +362,26 @@ const readCheckpointDateTime = (value: Date | string | null | undefined) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
+const readCheckpointFreshnessTime = (checkpoint: {
+  createdAt: Date;
+  statementEndDate?: Date | string | null;
+  sourceMetadata?: Prisma.JsonValue | null;
+}) => {
+  const sourceMetadata =
+    checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+      ? (checkpoint.sourceMetadata as Record<string, unknown>)
+      : null;
+  const importMode = typeof sourceMetadata?.importMode === "string" ? sourceMetadata.importMode.trim() : null;
+  if (importMode && importMode !== "statement") {
+    return checkpoint.createdAt.getTime();
+  }
+
+  return Math.max(
+    readCheckpointDateTime(checkpoint.statementEndDate),
+    checkpoint.createdAt.getTime()
+  );
+};
+
 const isCimbParsedAccountRepairRow = (row: {
   institution: string | null;
   accountName: string | null;
@@ -904,17 +924,11 @@ export async function GET(request: Request) {
                 ? sourceMetadata.accountCurrency
                 : null,
         });
-        const checkpointTime = Math.max(
-          checkpoint.statementEndDate?.getTime() ?? 0,
-          checkpoint.createdAt.getTime()
-        );
+        const checkpointTime = readCheckpointFreshnessTime(checkpoint);
         if (checkpointKey) {
           const currentByKey = latestByAccountKey.get(checkpointKey);
           const currentTimeByKey = currentByKey
-            ? Math.max(
-                currentByKey.statementEndDate?.getTime() ?? 0,
-                currentByKey.createdAt.getTime()
-              )
+            ? readCheckpointFreshnessTime(currentByKey)
             : -1;
 
           if (!currentByKey || checkpointTime >= currentTimeByKey) {
@@ -925,10 +939,7 @@ export async function GET(request: Request) {
         if (checkpoint.accountId) {
           const current = latestByAccountId.get(checkpoint.accountId);
           const currentTime = current
-            ? Math.max(
-                current.statementEndDate?.getTime() ?? 0,
-                current.createdAt.getTime()
-              )
+            ? readCheckpointFreshnessTime(current)
             : -1;
 
           if (!current || checkpointTime >= currentTime) {
@@ -1127,10 +1138,7 @@ export async function GET(request: Request) {
           continue;
         }
 
-        const checkpointTime = Math.max(
-          readCheckpointDateTime(checkpoint.statementEndDate),
-          readCheckpointDateTime(checkpoint.createdAt)
-        );
+        const checkpointTime = readCheckpointFreshnessTime(checkpoint);
 
         if (checkpointTime >= latestTime) {
           latestCheckpoint = checkpoint;

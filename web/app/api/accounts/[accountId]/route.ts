@@ -259,6 +259,26 @@ const accountNumbersMayMatch = (left?: string | null, right?: string | null, req
   return leftIsSuffixOnly && rightIsSuffixOnly && leftDigits === rightDigits;
 };
 
+const readCheckpointFreshnessTime = (checkpoint: {
+  createdAt: Date;
+  statementEndDate?: Date | null;
+  sourceMetadata?: unknown;
+}) => {
+  const sourceMetadata =
+    checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+      ? (checkpoint.sourceMetadata as Record<string, unknown>)
+      : null;
+  const importMode = typeof sourceMetadata?.importMode === "string" ? sourceMetadata.importMode.trim() : null;
+  if (importMode && importMode !== "statement") {
+    return checkpoint.createdAt.getTime();
+  }
+
+  return Math.max(
+    checkpoint.statementEndDate?.getTime() ?? 0,
+    checkpoint.createdAt.getTime()
+  );
+};
+
 const findPublishedSummaryForAccount = (
   account: {
     id: string;
@@ -369,10 +389,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
           continue;
         }
 
-        const checkpointTime = Math.max(
-          checkpoint.statementEndDate?.getTime() ?? 0,
-          checkpoint.createdAt.getTime()
-        );
+        const checkpointTime = readCheckpointFreshnessTime(checkpoint);
         if (checkpointTime >= latestTime) {
           latestTime = checkpointTime;
           latestCheckpoint = checkpoint;
