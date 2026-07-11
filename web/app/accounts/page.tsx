@@ -951,9 +951,29 @@ const accountNumbersMayMatch = (
     return false;
   }
 
-  const leftLastFour = leftDigits.slice(-4);
-  const rightLastFour = rightDigits.slice(-4);
-  return leftLastFour.length === 4 && rightLastFour.length === 4 && leftLastFour === rightLastFour;
+  const leftIsSuffixOnly = leftDigits.length === 4;
+  const rightIsSuffixOnly = rightDigits.length === 4;
+  if (leftIsSuffixOnly !== rightIsSuffixOnly) {
+    return false;
+  }
+
+  return leftIsSuffixOnly && rightIsSuffixOnly && leftDigits === rightDigits;
+};
+
+const getCheckpointFreshnessTime = (checkpoint: StatementCheckpoint) => {
+  const sourceMetadata =
+    checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+      ? (checkpoint.sourceMetadata as Record<string, unknown>)
+      : null;
+  const importMode = typeof sourceMetadata?.importMode === "string" ? sourceMetadata.importMode.trim() : null;
+  if (importMode && importMode !== "statement") {
+    return new Date(checkpoint.createdAt).getTime();
+  }
+
+  return Math.max(
+    checkpoint.statementEndDate ? new Date(checkpoint.statementEndDate).getTime() : 0,
+    new Date(checkpoint.createdAt).getTime()
+  );
 };
 
 const mergeStatementCheckpoints = (current: StatementCheckpoint[], next: StatementCheckpoint[]) => {
@@ -1025,10 +1045,7 @@ const getLatestCheckpointForAccount = (
       continue;
     }
 
-    const checkpointTime = Math.max(
-      checkpoint.statementEndDate ? new Date(checkpoint.statementEndDate).getTime() : 0,
-      new Date(checkpoint.createdAt).getTime()
-    );
+    const checkpointTime = getCheckpointFreshnessTime(checkpoint);
 
     if (checkpointTime >= latestTime) {
       latestCheckpoint = checkpoint;
@@ -2133,19 +2150,11 @@ function AccountsPageContent() {
     const checkpointsByAccountKey = new Map<string, StatementCheckpoint>();
 
     for (const checkpoint of statementCheckpoints) {
-      const checkpointTime = Math.max(
-        checkpoint.statementEndDate ? new Date(checkpoint.statementEndDate).getTime() : 0,
-        new Date(checkpoint.createdAt).getTime()
-      );
+    const checkpointTime = getCheckpointFreshnessTime(checkpoint);
 
       if (checkpoint.accountId) {
         const current = checkpointsByAccountId.get(checkpoint.accountId);
-        const currentTime = current
-          ? Math.max(
-              current.statementEndDate ? new Date(current.statementEndDate).getTime() : 0,
-              new Date(current.createdAt).getTime()
-            )
-          : -1;
+      const currentTime = current ? getCheckpointFreshnessTime(current) : -1;
 
         if (!current || checkpointTime >= currentTime) {
           checkpointsByAccountId.set(checkpoint.accountId, checkpoint);
@@ -2155,12 +2164,7 @@ function AccountsPageContent() {
       const checkpointKey = getCheckpointIdentityKey(checkpoint);
       if (checkpointKey) {
         const current = checkpointsByAccountKey.get(checkpointKey);
-        const currentTime = current
-          ? Math.max(
-              current.statementEndDate ? new Date(current.statementEndDate).getTime() : 0,
-              new Date(current.createdAt).getTime()
-            )
-          : -1;
+      const currentTime = current ? getCheckpointFreshnessTime(current) : -1;
 
         if (!current || checkpointTime >= currentTime) {
           checkpointsByAccountKey.set(checkpointKey, checkpoint);
