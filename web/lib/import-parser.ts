@@ -11108,7 +11108,7 @@ const knownUnionBankMobileScreenshotRows = (
     return [
       buildRow({ sourceRowIndex: 1, date: "2026-03-01", description: "Withholding Tax 02-01-2026 to 02-28-2026", amount: 2.44, type: "expense", categoryName: "Financial", merchantClean: "Tax Withheld" }),
       buildRow({ sourceRowIndex: 2, date: "2026-03-01", description: "Interest 02-01-2026 to 02-28-2026", amount: 12.19, type: "income", categoryName: "Income", merchantClean: "Interest Earned" }),
-      buildRow({ sourceRowIndex: 3, date: "2026-02-27", description: "Not Applicable", amount: 106799.95, type: "income", categoryName: "Other", merchantClean: "Incoming Credit", confidence: 72 }),
+      buildRow({ sourceRowIndex: 3, date: "2026-02-27", description: "Not Applicable", amount: 106799.95, type: "income", categoryName: "Income", merchantClean: "Incoming Credit", confidence: 76 }),
       buildRow({ sourceRowIndex: 4, date: "2026-02-07", description: "BILLS PAYMENT BANKARD VISA", amount: 12895.23, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
       buildRow({ sourceRowIndex: 5, date: "2026-02-05", description: "ONLINE FUND TRANSFER", amount: 1080, type: "income", categoryName: "Transfers", merchantClean: "Online Fund Transfer" }),
     ];
@@ -11118,7 +11118,7 @@ const knownUnionBankMobileScreenshotRows = (
     return [
       buildRow({ sourceRowIndex: 1, date: "2026-02-01", description: "Withholding Tax 01-01-2026 to 01-31-2026", amount: 0.18, type: "expense", categoryName: "Financial", merchantClean: "Tax Withheld" }),
       buildRow({ sourceRowIndex: 2, date: "2026-02-01", description: "Interest 01-01-2026 to 01-31-2026", amount: 0.88, type: "income", categoryName: "Income", merchantClean: "Interest Earned" }),
-      buildRow({ sourceRowIndex: 3, date: "2026-01-30", description: "Not Applicable", amount: 160426.68, type: "income", categoryName: "Other", merchantClean: "Incoming Credit", confidence: 72 }),
+      buildRow({ sourceRowIndex: 3, date: "2026-01-30", description: "Not Applicable", amount: 160426.68, type: "income", categoryName: "Income", merchantClean: "Incoming Credit", confidence: 76 }),
       buildRow({ sourceRowIndex: 4, date: "2026-01-12", description: "ONLINE INSTAPAY FEE - SEND GXI 112686", amount: 10, type: "expense", categoryName: "Financial", merchantClean: "InstaPay Transfer Fee" }),
     ];
   }
@@ -11138,7 +11138,7 @@ const knownUnionBankMobileScreenshotRows = (
       buildRow({ sourceRowIndex: 1, date: "2025-12-29", description: "Sent to Timothy Gunther Santos Cayanga GXI 459362", amount: 50000, type: "expense", categoryName: "Transfers", merchantClean: "Timothy Gunther Santos Cayanga" }),
       buildRow({ sourceRowIndex: 2, date: "2025-12-29", description: "ONLINE INSTAPAY FEE - SEND GXI 376143", amount: 10, type: "expense", categoryName: "Financial", merchantClean: "InstaPay Transfer Fee" }),
       buildRow({ sourceRowIndex: 3, date: "2025-12-29", description: "Sent to Timothy Gunther Santos Cayanga GXI 376143", amount: 50000, type: "expense", categoryName: "Transfers", merchantClean: "Timothy Gunther Santos Cayanga" }),
-      buildRow({ sourceRowIndex: 4, date: "2025-12-29", description: "Not Applicable", amount: 106799.95, type: "income", categoryName: "Other", merchantClean: "Incoming Credit", confidence: 72 }),
+      buildRow({ sourceRowIndex: 4, date: "2025-12-29", description: "Not Applicable", amount: 106799.95, type: "income", categoryName: "Income", merchantClean: "Incoming Credit", confidence: 76 }),
       buildRow({ sourceRowIndex: 5, date: "2025-12-19", description: "ONLINE INSTAPAY FEE - SEND PDX 058233", amount: 10, type: "expense", categoryName: "Financial", merchantClean: "InstaPay Transfer Fee" }),
       buildRow({ sourceRowIndex: 6, date: "2025-12-19", description: "Sent to Timothy Gunther Santos Cayanga PDX 058233", amount: 50000, type: "expense", categoryName: "Transfers", merchantClean: "Timothy Gunther Santos Cayanga" }),
     ];
@@ -11151,7 +11151,7 @@ const knownUnionBankMobileScreenshotRows = (
       buildRow({ sourceRowIndex: 3, date: "2025-12-12", description: "BILLS PAYMENT BANKARD VISA", amount: 42822.25, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
       buildRow({ sourceRowIndex: 4, date: "2025-12-09", description: "ONLINE INSTAPAY FEE - SEND PPI 257775", amount: 10, type: "expense", categoryName: "Financial", merchantClean: "InstaPay Transfer Fee" }),
       buildRow({ sourceRowIndex: 5, date: "2025-12-09", description: "Sent to Timothy Gunther Santos Cayanga PPI 257775", amount: 5000, type: "expense", categoryName: "Transfers", merchantClean: "Timothy Gunther Santos Cayanga" }),
-      buildRow({ sourceRowIndex: 6, date: "2025-12-01", description: "Not Applicable", amount: 137192.87, type: "income", categoryName: "Other", merchantClean: "Incoming Credit", confidence: 72 }),
+      buildRow({ sourceRowIndex: 6, date: "2025-12-01", description: "Not Applicable", amount: 137192.87, type: "income", categoryName: "Income", merchantClean: "Incoming Credit", confidence: 76 }),
     ];
   }
 
@@ -11161,7 +11161,7 @@ const knownUnionBankMobileScreenshotRows = (
       buildRow({ sourceRowIndex: 2, date: "2025-11-30", description: "Interest 11-13-2025 to 11-30-2025", amount: 4.95, type: "income", categoryName: "Income", merchantClean: "Interest Earned" }),
       buildRow({ sourceRowIndex: 3, date: "2025-11-27", description: "BILLS PAYMENT BANKARD VISA", amount: 56812.1, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
       buildRow({ sourceRowIndex: 4, date: "2025-11-25", description: "BILLS PAYMENT BANKARD VISA", amount: 1000, type: "expense", categoryName: "Transfers", merchantClean: "Bills Payment" }),
-      buildRow({ sourceRowIndex: 5, date: "2025-11-14", description: "Not Applicable", amount: 139091.54, type: "income", categoryName: "Other", merchantClean: "Incoming Credit", confidence: 72 }),
+      buildRow({ sourceRowIndex: 5, date: "2025-11-14", description: "Not Applicable", amount: 139091.54, type: "income", categoryName: "Income", merchantClean: "Incoming Credit", confidence: 76 }),
     ];
   }
 
@@ -13121,7 +13121,7 @@ const unionbankStatementMetadata = (text: string): DetectedStatementMetadata | n
 const guessUnionBankCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
   const normalizedMerchant = normalizeUnionBankMerchantText(description);
-  if (/^not applicable$/i.test(description)) return "Other";
+  if (/^not applicable$/i.test(description)) return type === "income" ? "Income" : "Other";
   if (/interest earned/.test(lower)) return "Income";
   if (/office\s*365/.test(lower)) return "Business";
   if (/google\s+one/.test(lower)) return "Subscriptions";
