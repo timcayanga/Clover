@@ -1642,10 +1642,43 @@ function AccountsPageContent() {
           setAccountsHydrationPending(false);
         }
       } else {
+        const cachedWorkspace = getCachedWorkspaceHydration(workspaceId);
+        const cachedDeletedAccountIds = new Set(getDeletedWorkspaceAccountIds(workspaceId));
+        const cachedDeletingAccountIds = new Set(getDeletingWorkspaceAccountIds(workspaceId));
+        const cachedAccounts = ((cachedWorkspace?.accounts as Account[] | undefined) ?? []).filter(
+          (account) => !cachedDeletedAccountIds.has(account.id) && !cachedDeletingAccountIds.has(account.id)
+        );
+        const cachedTransactions = ((cachedWorkspace?.transactions as Transaction[] | undefined) ?? []).filter(
+          (transaction) =>
+            !cachedDeletedAccountIds.has(transaction.accountId) && !cachedDeletingAccountIds.has(transaction.accountId)
+        );
+        const cachedCheckpoints = ((cachedWorkspace?.statementCheckpoints as StatementCheckpoint[] | undefined) ?? []).filter(
+          (checkpoint) =>
+            !checkpoint.accountId ||
+            (!cachedDeletedAccountIds.has(checkpoint.accountId) && !cachedDeletingAccountIds.has(checkpoint.accountId))
+        );
+        const cachedRules = (cachedWorkspace?.accountRules as AccountRule[] | undefined) ?? [];
+        const hasCachedWorkspaceSnapshot =
+          cachedAccounts.length > 0 || cachedTransactions.length > 0 || cachedCheckpoints.length > 0 || cachedRules.length > 0;
+
         if (!options?.silent) {
-          if (hasResilientFallbackEvidence()) {
+          if (hasCachedWorkspaceSnapshot) {
+            deletedAccountIdsRef.current = cachedDeletedAccountIds;
+            deletingAccountIdsRef.current = cachedDeletingAccountIds;
+            setDeletingAccountIds(Array.from(cachedDeletingAccountIds));
+            setAccounts(cachedAccounts);
+            setTransactions(cachedTransactions);
+            setStatementCheckpoints(cachedCheckpoints);
+            setAccountRules(cachedRules);
             setMessage("");
             setAccountsLoadFailed(false);
+            setAccountsHydrationPending(false);
+            setHasInitialWorkspaceDataLoaded(true);
+          } else if (hasResilientFallbackEvidence()) {
+            setMessage("");
+            setAccountsLoadFailed(false);
+            setAccountsHydrationPending(false);
+            setHasInitialWorkspaceDataLoaded(true);
             window.setTimeout(() => {
               void loadWorkspaceData(workspaceId, { silent: true, awaitHydration: true });
             }, WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS);
