@@ -16,8 +16,11 @@ const gsaveFiles = [
   "GSave/IMG_1407.PNG",
   "GSave/IMG_1408.PNG",
   "GSave/IMG_1409.PNG",
+  "GSave/IMG_1410.PNG",
   "GSave/IMG_1411.PNG",
+  "GSave/IMG_1412.PNG",
   "GSave/IMG_1413.PNG",
+  "GSave/IMG_1414.PNG",
 ] as const;
 
 const isLocalRegressionBaseUrl = (value: string) => {

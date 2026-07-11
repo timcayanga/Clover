@@ -65,6 +65,8 @@ Payout Acc 30008998394132 No`,
     fileNames: ["img_1410.png"],
     fileFingerprint: "530709552a5d1fa1b61b68d8a2a6ed88bd62b3767ddd982656b7784f945efa08",
     fallbackText: `UNO Digital Bank
+Product #UNOboost@GCash
+Account 40001000551330 Number
 Deposit # 100,000.00 Amount
 Interest Rate 6.00% per annum
 Tenure 12 Months
@@ -94,6 +96,8 @@ Maturity # 5750.0 Interest`,
     fileNames: ["img_1412.png"],
     fileFingerprint: "503273c3b5f2a8b62adece94af4fceb573bdea825bb8b91944fb4202666c060b",
     fallbackText: `UNO Digital Bank
+Product #UNOboost@GCash
+Account 40007384712023 Number
 Deposit # 100,000.00 Amount
 Interest Rate 5.75% per annum
 Tenure 12 Months
@@ -123,6 +127,8 @@ Maturity # 6000.0 Interest`,
     fileNames: ["img_1414.png"],
     fileFingerprint: "e32c8f52685d3749fc12bd9ccf3296d072ba03915b277f15b087dcbb819e15e0",
     fallbackText: `UNO Digital Bank
+Product #UNOboost@GCash
+Account 40007366884217 Number
 Deposit # 100,000.00 Amount
 Interest Rate 6.00% per annum
 Tenure 12 Months
