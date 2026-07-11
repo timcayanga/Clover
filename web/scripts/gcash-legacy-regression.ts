@@ -113,6 +113,59 @@ const main = async () => {
     assert.ok(noisy, "Expected a noisy legacy row.");
     assert.equal(noisy?.merchantClean, "GCash Transaction");
 
+    const mergedRecordText = `
+GCash Transaction History
+Date and Time Description Reference No. Debit Credit Balance
+STARTING BALANCE 0.00
+2025-10-07 12:38 Payment to AB Capital 0000901934295 49982.00 125408.52 2025-10-07 12:53 Payment to Unobank 0000898106071 99989.97 25418.55
+2025-11-11 10:23 Sent GCash to PDAX with account ending in 9926 3034553753788 215.00 21472.06 2025-11-11 05:12 Transfer from 09173009926 to 09176801134 3034553753000 500.00 21972.06
+ENDING BALANCE 0.00
+`.trim();
+
+    const mergedImportFile = await prisma.importFile.create({
+      data: {
+        workspaceId,
+        fileName: "gcash-merged-record-regression.pdf",
+        fileType: "application/pdf",
+        storageKey: `qa/gcash-merged/${Date.now()}.pdf`,
+        status: "processing",
+      },
+    });
+
+    const mergedResult = await processImportFileText(mergedImportFile.id, {
+      text: mergedRecordText,
+      actorUserId: user.clerkUserId,
+      qaSource: "import_processing",
+      allowDuplicateStatement: false,
+      importMode: "statement",
+    });
+
+    assert.equal(mergedResult.status, "done", "Expected the merged GCash import to finish.");
+    assert.equal(mergedResult.imported, 4, `Expected 4 parsed rows from merged GCash records, got ${mergedResult.imported}.`);
+
+    const mergedTransactions = await prisma.transaction.findMany({
+      where: {
+        importFileId: mergedImportFile.id,
+        deletedAt: null,
+      },
+      select: {
+        merchantClean: true,
+        type: true,
+        category: { select: { name: true } },
+      },
+      orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+    });
+
+    assert.deepEqual(
+      mergedTransactions.map((entry) => entry.merchantClean),
+      ["AB Capital", "UNO Digital Bank", "PDAX", "Incoming Transfer"],
+      `Expected merged GCash rows to split cleanly, got ${JSON.stringify(mergedTransactions)}`
+    );
+    assert.equal(mergedTransactions[0]?.category?.name, "Financial");
+    assert.equal(mergedTransactions[1]?.category?.name, "Financial");
+    assert.equal(mergedTransactions[2]?.category?.name, "Financial");
+    assert.equal(mergedTransactions[3]?.category?.name, "Transfers");
+
     const conflictingAccountText = `
 GCash Transaction History
 Wallet Number 09164013313

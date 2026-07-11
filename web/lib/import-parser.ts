@@ -5325,6 +5325,113 @@ const parseRcbcTransactionLine = (
   } satisfies ParsedImportRow;
 };
 
+const parseRcbcOcrTransactionSegment = (
+  segment: string,
+  state: {
+    accountName: string;
+    cardNumber: string | null;
+    institution: string | null;
+  }
+) => {
+  const normalized = normalizeWhitespace(segment.replace(/[|¦]/g, " "));
+  const match = normalized.match(/^(\d{2}\/\d{2}\/\d{2})\s+(\d{2}\/\d{2}\/\d{2})\s+(.+)$/);
+  if (!match) {
+    return null;
+  }
+
+  const saleDate = parseDateValue(match[1]);
+  const postDate = parseDateValue(match[2]);
+  if (!saleDate) {
+    return null;
+  }
+
+  const body = normalizeWhitespace(match[3]);
+  const amountMatch = body.match(/([0-9][0-9,]*\.\d{2}-?)/);
+  if (!amountMatch?.[1]) {
+    return null;
+  }
+
+  const amountText = amountMatch[1];
+  const amount = parseMoney(amountText);
+  if (amount === null) {
+    return null;
+  }
+
+  const description = normalizeWhitespace(
+    body
+      .slice(0, amountMatch.index ?? body.length)
+      .replace(/[|¦]+/g, " ")
+      .replace(/\s+/g, " ")
+  );
+  if (!description) {
+    return null;
+  }
+
+  const type: TransactionType = isStatementPaymentSettlementDescription(description)
+    ? "transfer"
+    : /refund|reversal|credit memo/i.test(description)
+      ? "income"
+      : "expense";
+
+  return {
+    date: saleDate.toISOString().slice(0, 10),
+    amount: Math.abs(amount).toFixed(2),
+    merchantRaw: humanizeMerchantText(description),
+    merchantClean: summarizeMerchantText(description, state.institution),
+    description,
+    categoryName: guessRcbcCategoryName(description, type),
+    accountName: state.accountName,
+    institution: state.institution ?? undefined,
+    type,
+    rawPayload: {
+      bank: "RCBC",
+      cardNumber: state.cardNumber,
+      saleDate: saleDate.toISOString().slice(0, 10),
+      postDate: postDate ? postDate.toISOString().slice(0, 10) : null,
+      amountText,
+      line: normalized,
+      notes: "OCR segment fallback",
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseRcbcOcrTransactionSegments = (
+  value: string,
+  state: {
+    accountName: string;
+    cardNumber: string | null;
+    institution: string | null;
+  }
+) => {
+  const normalized = normalizeWhitespace(value.replace(/\u00a0/g, " "));
+  if (!normalized) {
+    return [] as ParsedImportRow[];
+  }
+
+  const markerIndexes = Array.from(normalized.matchAll(/\b\d{2}\/\d{2}\/\d{2}\s+\d{2}\/\d{2}\/\d{2}\b/g))
+    .map((match) => match.index)
+    .filter((index): index is number => typeof index === "number")
+    .sort((left, right) => left - right);
+
+  if (markerIndexes.length === 0) {
+    return [] as ParsedImportRow[];
+  }
+
+  const rows: ParsedImportRow[] = [];
+
+  for (let index = 0; index < markerIndexes.length; index += 1) {
+    const start = markerIndexes[index];
+    const end = markerIndexes[index + 1] ?? normalized.length;
+    const segment = normalizeWhitespace(normalized.slice(start, end));
+    const parsed = parseRcbcOcrTransactionSegment(segment, state);
+    if (parsed) {
+      rows.push(parsed);
+    }
+  }
+
+  return rows;
+};
+
 const parseRcbcImportText = (text: string) => {
   const normalizedText = text.replace(/\u00a0/g, " ");
   const metadata = rcbcStatementMetadata(normalizedText);
@@ -5349,9 +5456,10 @@ const parseRcbcImportText = (text: string) => {
   ].filter((index) => index >= 0);
 
   const endIndex = endIndexCandidates.length > 0 ? Math.min(...endIndexCandidates) : lines.length;
+  const transactionLines = lines.slice(headerIndex + 1, endIndex);
   const rows: ParsedImportRow[] = [];
 
-  for (const line of lines.slice(headerIndex + 1, endIndex)) {
+  for (const line of transactionLines) {
     if (
       !line ||
       /IMPORTANT REMINDERS/i.test(line) ||
@@ -5375,10 +5483,21 @@ const parseRcbcImportText = (text: string) => {
     }
   }
 
+  if (rows.length <= 2) {
+    const fallbackRows = parseRcbcOcrTransactionSegments(transactionLines.join(" "), {
+      accountName: metadata.accountName ?? "RCBC",
+      cardNumber: metadata.accountNumber,
+      institution: metadata.institution ?? "RCBC",
+    });
+
+    if (fallbackRows.length > rows.length) {
+      rows.length = 0;
+      rows.push(...fallbackRows);
+    }
+  }
+
   if (!rows.some((row) => /cash payment/i.test(String(row.description ?? row.merchantRaw ?? "")))) {
-    const cashPaymentLine = lines
-      .slice(headerIndex + 1, endIndex)
-      .find((line) => /cash\s+payment/i.test(line) && /\d{1,2}\/\d{1,2}\/\d{2,4}/.test(line));
+    const cashPaymentLine = transactionLines.find((line) => /cash\s+payment/i.test(line) && /\d{1,2}\/\d{1,2}\/\d{2,4}/.test(line));
     if (cashPaymentLine) {
       const cashPaymentMatch =
         cashPaymentLine.match(/^(\d{2}\/\d{2}\/\d{2})\s+(\d{2}\/\d{2}\/\d{2})\s+CASH PAYMENT\s+([0-9][0-9,]*\.\d{2}-?)$/i) ??
@@ -11535,6 +11654,10 @@ const normalizeGcashMerchant = (description: string) => {
     return "GCash Transaction";
   }
 
+  if (/^account ending in\s+\d{4,}\b/i.test(trimmed)) {
+    return "GCash Transaction";
+  }
+
   const billsPaymentMatch = trimmed.match(/^Bills Payment to\s+(.+)$/i);
   if (billsPaymentMatch?.[1]) {
     return `Bills Payment to ${normalizeWhitespace(billsPaymentMatch[1])}`;
@@ -11552,12 +11675,25 @@ const normalizeGcashMerchant = (description: string) => {
 
   const transferMatch = trimmed.match(/^Transfer from\s+\d+\s+to\s+\d+/i);
   if (transferMatch) {
-    return "GCash Transfer";
+    return "Incoming Transfer";
+  }
+
+  const outgoingTransferMatch = trimmed.match(/^Transfer to\s+\d+\s+from\s+\d+/i);
+  if (outgoingTransferMatch) {
+    return "Outgoing Transfer";
   }
 
   const paymentMatch = trimmed.match(/^Payment to\s+(.+)$/i);
   if (paymentMatch?.[1]) {
     return `Payment to ${normalizeWhitespace(paymentMatch[1])}`;
+  }
+
+  if (/\binvno:\s*\d{8}\s+pdax/i.test(trimmed) || /\bpdaxphm/i.test(trimmed)) {
+    return "PDAX";
+  }
+
+  if (/\band\s+invno:\s*\d{8}\s+ubphphmmxxxb/i.test(trimmed) || /\bubphphmmxxxb/i.test(trimmed)) {
+    return "Transfer from UnionBank";
   }
 
   const gsaveDepositMatch = trimmed.match(/^Deposit to GSave Account(?: with Reference No\.)?/i);
@@ -11630,7 +11766,7 @@ const splitGcashRecordFragments = (value: string) => {
 
   const markerIndexes = new Set<number>();
 
-  for (const match of normalized.matchAll(/\b\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+[AP]M\b/gi)) {
+  for (const match of normalized.matchAll(/\b\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?(?:\s+[AP]M)?\b/gi)) {
     if (typeof match.index === "number") {
       markerIndexes.add(match.index);
     }
@@ -11671,6 +11807,40 @@ const splitGcashRecordFragments = (value: string) => {
   return fragments;
 };
 
+const splitGcashMergedRecord = (value: string) => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return [];
+  }
+
+  const markerIndexes = Array.from(normalized.matchAll(/\b\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?(?:\s+[AP]M)?\b/gi))
+    .map((match) => match.index)
+    .filter((index): index is number => typeof index === "number" && index > 0)
+    .sort((left, right) => left - right);
+
+  if (markerIndexes.length === 0) {
+    return [normalized];
+  }
+
+  const fragments: string[] = [];
+  let start = 0;
+
+  for (const markerIndex of markerIndexes) {
+    const fragment = normalizeWhitespace(normalized.slice(start, markerIndex));
+    if (fragment) {
+      fragments.push(fragment);
+    }
+    start = markerIndex;
+  }
+
+  const tail = normalizeWhitespace(normalized.slice(start));
+  if (tail) {
+    fragments.push(tail);
+  }
+
+  return fragments;
+};
+
 const looksLikeGcashRecordTail = (value: string) =>
   /^\d{12,}\s+\d[\d,]*\.\d{2}\s+\d[\d,]*\.\d{2}$/.test(normalizeWhitespace(value));
 
@@ -11680,16 +11850,30 @@ const guessGcashCategoryName = (description: string, type: TransactionType) => {
     return "Financial";
   }
 
+  if (/^(?:gcash received|received gcash(?: from)?|received money)\b/i.test(description)) {
+    return "Transfers";
+  }
+
+  const merchantHint = getStrongMerchantCategoryHint(merchant) ?? getSharedMerchantCategoryHint(merchant);
+
+  if (merchantHint && merchantHint !== "Transfers" && merchantHint !== "Other") {
+    return merchantHint;
+  }
+
+  if (/^(?:sent gcash to|payment to)\s+.*(?:pdax|ab capital|unobank|uno\s*bank|securities|exchange)\b/i.test(description)) {
+    return "Financial";
+  }
+
+  if (/\bubphphmmxxxb\b/i.test(description) || /transfer from unionbank/i.test(merchant)) {
+    return "Transfers";
+  }
+
   if (/^payment to\b/i.test(description)) {
-    return "Shopping";
+    return merchantHint ?? guessCategoryName(merchant, type);
   }
 
   if (/^buy load\b/i.test(description)) {
     return "Bills & Utilities";
-  }
-
-  if (/^(?:gcash received|received gcash(?: from)?|received money)\b/i.test(description)) {
-    return "Transfers";
   }
 
   if (/^(?:sent gcash to|send money|cash out)\b/i.test(description) && type === "expense") {
@@ -11701,7 +11885,7 @@ const guessGcashCategoryName = (description: string, type: TransactionType) => {
   }
 
   if (type === "transfer") {
-    return "Transfers";
+    return merchantHint ?? "Transfers";
   }
 
   return guessCategoryName(merchant, type);
@@ -11838,8 +12022,10 @@ const parseGcashImportText = (text: string) => {
       if (current.length > 0) {
         records.push(current.join(" "));
         current = [];
-        pendingPrefix = [];
+      } else if (pendingPrefix.length > 0) {
+        records.push(pendingPrefix.join(" "));
       }
+      pendingPrefix = [];
       continue;
     }
     if (/^Total Debit(?:\s+[0-9,]+\.\d{2})?$/i.test(line)) {
@@ -11920,9 +12106,13 @@ const parseGcashImportText = (text: string) => {
 
   if (current.length > 0) {
     records.push(current.join(" "));
+  } else if (pendingPrefix.length > 0) {
+    records.push(pendingPrefix.join(" "));
   }
 
-  const rows = records
+  const normalizedRecords = records.flatMap((record) => splitGcashMergedRecord(record));
+
+  const rows = normalizedRecords
     .map((record) => parseGcashTransactionRecord(record, metadata.institution))
     .filter(Boolean) as ParsedImportRow[];
 

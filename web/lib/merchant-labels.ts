@@ -75,6 +75,7 @@ const PREFERRED_MERCHANT_TOKEN_CASE: Record<string, string> = {
   maya: "Maya",
   metrobank: "Metrobank",
   openai: "OpenAI",
+  pdax: "PDAX",
   paypal: "PayPal",
   pesonet: "PESONet",
   pldt: "PLDT",
@@ -485,6 +486,38 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "EastWest Bank",
     },
     {
+      patterns: [/payment\s+to\s+ab\s+capital/i],
+      replacement: "AB Capital",
+    },
+    {
+      patterns: [/payment\s+to\s+unobank/i, /payment\s+to\s+uno\s+bank/i],
+      replacement: "UNO Digital Bank",
+    },
+    {
+      patterns: [/payment\s+to\s+globe\s+telecom(?:\s+one\s+click)?/i],
+      replacement: "Globe Telecom",
+    },
+    {
+      patterns: [/payment\s+to\s+dotr\s+mrt\s*3\s+qr/i, /payment\s+to\s+dotr\s+mrt3\s+qr/i],
+      replacement: "MRT-3",
+    },
+    {
+      patterns: [/payment\s+to\s+sm\s+parking/i],
+      replacement: "SM Parking",
+    },
+    {
+      patterns: [/payment\s+to\s+greenbelt/i],
+      replacement: "Greenbelt",
+    },
+    {
+      patterns: [/payment\s+to\s+pickup\s+coffee/i],
+      replacement: "Pickup Coffee",
+    },
+    {
+      patterns: [/sent\s+gcash\s+to\s+pdax/i, /payment\s+to\s+philippine\s+digital\s+asset\s+exchang/i],
+      replacement: "PDAX",
+    },
+    {
       patterns: [/payment\s+to\s+apple\s+services/i],
       replacement: "Apple",
     },
@@ -555,6 +588,10 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     {
       patterns: [/received\s+gcash\s+from\s+bti\s+payments/i],
       replacement: "Transfer from BTI Payments",
+    },
+    {
+      patterns: [/\bubphphmmxxxb\b/i],
+      replacement: "Transfer from UnionBank",
     },
     {
       patterns: [/received\s+gcash\s+from\s+pj\s+lhuillier/i],
@@ -764,6 +801,58 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     },
   ],
   RCBC: [
+    {
+      patterns: [/15-?ppass/i],
+      replacement: "Priority Pass",
+    },
+    {
+      patterns: [/klook\s+flickk?et/i],
+      replacement: "Klook",
+    },
+    {
+      patterns: [/wholesome\s+table/i],
+      replacement: "Wholesome Table",
+    },
+    {
+      patterns: [/linkedinprea/i, /linkedin(?:\s+premium)?/i],
+      replacement: "LinkedIn Premium",
+    },
+    {
+      patterns: [/alila\s+villas\s+uluwatu/i],
+      replacement: "Alila Villas Uluwatu",
+    },
+    {
+      patterns: [/revolver\s+espresso/i],
+      replacement: "Revolver Espresso",
+    },
+    {
+      patterns: [/home\s+affairs\s*-\s*online/i],
+      replacement: "Home Affairs Online",
+    },
+    {
+      patterns: [/jetstar\s+air/i],
+      replacement: "Jetstar",
+    },
+    {
+      patterns: [/wong\s+place/i],
+      replacement: "Wong Place",
+    },
+    {
+      patterns: [/\bjco\b.*glorietta/i, /\bj\.?\s*co\b/i],
+      replacement: "J.CO Donuts",
+    },
+    {
+      patterns: [/coffee\s+academics/i],
+      replacement: "The Coffee Academics",
+    },
+    {
+      patterns: [/toby\s+s\s+estate\s+coffe?e?r?/i],
+      replacement: "Toby's Estate",
+    },
+    {
+      patterns: [/bacolod\s+chicken\s+inasal/i],
+      replacement: "Bacolod Chicken Inasal",
+    },
     {
       patterns: [/\bthe\s+sm\s+store\b.*\bsm\s+fairview\b/i, /\bsm\s+fairview\b/i],
       replacement: "SM Store - SM Fairview",
