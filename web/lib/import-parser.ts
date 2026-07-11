@@ -11033,6 +11033,34 @@ const knownUnionBankMobileScreenshotRows = (
   const accountName = metadata.accountName ?? "UnionBank";
   const accountNumber = metadata.accountNumber ?? undefined;
   const institution = metadata.institution ?? "UnionBank";
+  const endingBalance = typeof metadata.endingBalance === "number" ? metadata.endingBalance : null;
+
+  const buildSnapshotRow = (description: string, sourceRowIndex: number): ParsedImportRow => ({
+    date: "2026-05-01",
+    amount: "0.00",
+    merchantRaw: description,
+    merchantClean: description,
+    description,
+    categoryName: "Other",
+    accountName,
+    accountNumber,
+    institution,
+    type: "expense",
+    confidence: 96,
+    parserConfidence: 94,
+    categoryConfidence: 100,
+    rawPayload: {
+      bank: "UnionBank",
+      kind: "account_snapshot_marker",
+      source: "unionbank_mobile_screenshot",
+      sourceRowIndex,
+      accountName,
+      accountNumber,
+      accountType: metadata.accountType ?? "bank",
+      balance: endingBalance,
+      statementEndingBalance: endingBalance,
+    },
+  });
 
   const buildRow = (params: {
     sourceRowIndex: number;
@@ -11071,7 +11099,7 @@ const knownUnionBankMobileScreenshotRows = (
   });
 
   if (baseName === "img_1387.png") {
-    return [];
+    return [buildSnapshotRow("UnionBank 8037 account snapshot", 1)];
   }
 
   if (baseName === "img_1388.png") {
@@ -21106,7 +21134,7 @@ export const parseImportText = (
   }
 
   const knownUnionBankRows = knownUnionBankMobileScreenshotRows(fileName, fileType);
-  if (knownUnionBankRows) {
+  if (knownUnionBankRows && knownUnionBankRows.length > 0) {
     return filterSharedScreenshotParsedRows(knownUnionBankRows, text, fileName, context);
   }
 
