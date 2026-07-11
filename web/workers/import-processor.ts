@@ -4272,6 +4272,24 @@ const collapseDuplicateUploadedAccountsForAccount = async <
   const canonical = sortedDuplicates.find((entry) => entry.id === account.id) ?? sortedDuplicates[0];
   const canonicalBalance =
     sortedDuplicates.find((entry) => entry.balance !== null && entry.balance !== undefined)?.balance?.toString() ?? null;
+  const canonicalIdentityUpdates: Record<string, unknown> = {};
+  if (account.id !== canonical.id) {
+    if (account.name.trim() && account.name !== canonical.name) {
+      canonicalIdentityUpdates.name = account.name.trim();
+    }
+    if ((account.institution ?? null) !== (canonical.institution ?? null)) {
+      canonicalIdentityUpdates.institution = account.institution ?? null;
+    }
+    if ((account.accountNumber ?? null) !== (canonical.accountNumber ?? null)) {
+      canonicalIdentityUpdates.accountNumber = account.accountNumber ?? null;
+    }
+    if (account.type !== canonical.type) {
+      canonicalIdentityUpdates.type = account.type;
+    }
+    if ((accountCurrency ?? null) !== (canonical.currency ?? null)) {
+      canonicalIdentityUpdates.currency = accountCurrency ?? null;
+    }
+  }
   const duplicateIds = sortedDuplicates.map((entry) => entry.id).filter((id) => id !== canonical.id);
   if (duplicateIds.length === 0) {
     return account;
@@ -4279,10 +4297,16 @@ const collapseDuplicateUploadedAccountsForAccount = async <
 
   try {
     await prisma.$transaction(async (tx) => {
-      if (canonicalBalance !== null && canonical.balance?.toString() !== canonicalBalance) {
+      if (
+        Object.keys(canonicalIdentityUpdates).length > 0 ||
+        (canonicalBalance !== null && canonical.balance?.toString() !== canonicalBalance)
+      ) {
         await tx.account.update({
           where: { id: canonical.id },
-          data: { balance: canonicalBalance },
+          data: {
+            ...canonicalIdentityUpdates,
+            ...(canonicalBalance !== null && canonical.balance?.toString() !== canonicalBalance ? { balance: canonicalBalance } : {}),
+          },
         });
       }
       await tx.transaction.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
