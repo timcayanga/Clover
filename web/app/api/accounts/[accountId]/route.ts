@@ -260,8 +260,8 @@ const accountNumbersMayMatch = (left?: string | null, right?: string | null, req
 };
 
 const readCheckpointFreshnessTime = (checkpoint: {
-  createdAt: Date;
-  statementEndDate?: Date | null;
+  createdAt: Date | string;
+  statementEndDate?: Date | string | null;
   sourceMetadata?: unknown;
 }) => {
   const sourceMetadata =
@@ -270,12 +270,12 @@ const readCheckpointFreshnessTime = (checkpoint: {
       : null;
   const importMode = typeof sourceMetadata?.importMode === "string" ? sourceMetadata.importMode.trim() : null;
   if (importMode && importMode !== "statement") {
-    return checkpoint.createdAt.getTime();
+    return new Date(checkpoint.createdAt).getTime();
   }
 
   return Math.max(
-    checkpoint.statementEndDate?.getTime() ?? 0,
-    checkpoint.createdAt.getTime()
+    checkpoint.statementEndDate ? new Date(checkpoint.statementEndDate).getTime() : 0,
+    new Date(checkpoint.createdAt).getTime()
   );
 };
 

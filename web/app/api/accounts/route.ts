@@ -363,7 +363,7 @@ const readCheckpointDateTime = (value: Date | string | null | undefined) => {
 };
 
 const readCheckpointFreshnessTime = (checkpoint: {
-  createdAt: Date;
+  createdAt: Date | string;
   statementEndDate?: Date | string | null;
   sourceMetadata?: Prisma.JsonValue | null;
 }) => {
@@ -373,12 +373,12 @@ const readCheckpointFreshnessTime = (checkpoint: {
       : null;
   const importMode = typeof sourceMetadata?.importMode === "string" ? sourceMetadata.importMode.trim() : null;
   if (importMode && importMode !== "statement") {
-    return checkpoint.createdAt.getTime();
+    return readCheckpointDateTime(checkpoint.createdAt);
   }
 
   return Math.max(
     readCheckpointDateTime(checkpoint.statementEndDate),
-    checkpoint.createdAt.getTime()
+    readCheckpointDateTime(checkpoint.createdAt)
   );
 };
 
