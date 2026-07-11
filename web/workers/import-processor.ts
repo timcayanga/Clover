@@ -8262,6 +8262,8 @@ export const processImportFileText = async (
   if (duplicateImportFileId && !options.allowDuplicateStatement && !shouldRepairMultiAccountDuplicate) {
     await updateImportFileCompat(importFileId, {
       status: "done",
+      processingPhase: "complete",
+      processingMessage: "Clover found that this statement was already imported and skipped it.",
     });
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }

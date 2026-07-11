@@ -1813,6 +1813,14 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "Dunkin",
   },
   {
+    patterns: [/\bpanco\s+cafe\b/i, /\bpancocafe\b/i],
+    replacement: "Panco Cafe",
+  },
+  {
+    patterns: [/\bkoi(?:\s+the)?\b/i, /\bkoithe\b/i],
+    replacement: "KOI",
+  },
+  {
     patterns: [/\bhapag\b/i],
     replacement: "Hapag",
   },
@@ -1949,6 +1957,10 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "Wheyl Nutrition",
   },
   {
+    patterns: [/\bpyx\*?\s*wheyl\s+nutrit(?:ion)?\b/i, /\bpyxwheylnutrit(?:ion)?\b/i],
+    replacement: "Wheyl Nutrition",
+  },
+  {
     patterns: [/\bhealthy\s+options\b/i, /\bhealthyoptions\b/i],
     replacement: "Healthy Options",
   },
@@ -1987,6 +1999,10 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\btimezone\b/i],
     replacement: "Timezone",
+  },
+  {
+    patterns: [/\bthe\s+fat\s+seed(?:\s+cafe)?\b/i, /\bthefatseed(?:cafe)?\b/i],
+    replacement: "The Fat Seed Cafe",
   },
   {
     patterns: [/\bthe\s+spa\b/i],
@@ -2219,6 +2235,10 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\bn(?:ational)?\s*b(?:ook)?\s*s(?:tore)?\b/i, /\bnbs\b/i, /\bnational\s+book\s+store\b/i, /\bnationalbookstore\b/i],
     replacement: "National Book Store",
+  },
+  {
+    patterns: [/\b7-?eleven(?:-st)?\b/i, /\b7elevenst\b/i, /\b7eleven\b/i],
+    replacement: "7-Eleven",
   },
   {
     patterns: [/\bfully\s+booked\b/i, /\bfullybooked\b/i],

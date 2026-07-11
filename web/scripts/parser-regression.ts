@@ -1234,6 +1234,21 @@ const main = async () => {
   if (summarizeMerchantText("LANDERS ARCOVIA", "BPI") !== "Landers") {
     throw new Error("expected SOA merchant normalization to preserve Landers");
   }
+  if (summarizeMerchantText("PANCO CAFE BGC TAGUIG PH", "RCBC") !== "Panco Cafe") {
+    throw new Error("expected SOA merchant normalization to preserve Panco Cafe");
+  }
+  if (summarizeMerchantText("KOI BONIFACIO HIGH STREE TAGUIG PH", "RCBC") !== "KOI") {
+    throw new Error("expected SOA merchant normalization to preserve KOI");
+  }
+  if (summarizeMerchantText("PYX*WHEYL NUTRIT PASAY CITY PH", "RCBC") !== "Wheyl Nutrition") {
+    throw new Error("expected SOA merchant normalization to preserve Wheyl Nutrition");
+  }
+  if (summarizeMerchantText("7-ELEVEN-ST 2192 BRY SAN ANTONPH", "RCBC") !== "7-Eleven") {
+    throw new Error("expected SOA merchant normalization to preserve 7-Eleven");
+  }
+  if (summarizeMerchantText("THE FAT SEED CAFE & RO MUNTINLUPA PH", "RCBC") !== "The Fat Seed Cafe") {
+    throw new Error("expected SOA merchant normalization to preserve The Fat Seed Cafe");
+  }
   console.log("[PASS] BDO classification | transfer-like rows, withdrawals, and interest spelling classified correctly");
 
   const mayaSamplesDir = join(root, "Samples/Maya");
@@ -2385,6 +2400,11 @@ const main = async () => {
     ["BO'S COFFEE BGC", "expense", "Food & Dining", "Bo's Coffee"],
     ["LANDERS ARCOVIA", "expense", "Shopping", "Landers"],
     ["BELO MEDICAL GROUP BGC", "expense", "Health & Wellness", "Belo Medical Group"],
+    ["PANCO CAFE BGC TAGUIG PH", "expense", "Food & Dining", "Panco Cafe"],
+    ["KOI BONIFACIO HIGH STREE TAGUIG PH", "expense", "Food & Dining", "KOI"],
+    ["PYX*WHEYL NUTRIT PASAY CITY PH", "expense", "Health & Wellness", "Wheyl Nutrition"],
+    ["7-ELEVEN-ST 2192 BRY SAN ANTONPH", "expense", "Shopping", "7-Eleven"],
+    ["THE FAT SEED CAFE & RO MUNTINLUPA PH", "expense", "Food & Dining", "The Fat Seed Cafe"],
   ];
   for (const [merchantText, type, expectedCategory, expectedName] of noisyUnseenMerchantExpectations) {
     const result = classifyMerchantFallback({
