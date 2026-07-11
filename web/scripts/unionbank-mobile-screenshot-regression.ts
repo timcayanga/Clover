@@ -113,6 +113,17 @@ const main = async () => {
   assert.ok(
     combinedRows.some(
       (row) =>
+        row.date === "2026-02-27" &&
+        row.amount === "106799.95" &&
+        row.type === "income" &&
+        row.merchantClean === "Salary Credit"
+    ),
+    "UnionBank screenshots should normalize recurring Not Applicable income rows as Salary Credit."
+  );
+
+  assert.ok(
+    combinedRows.some(
+      (row) =>
         row.date === "2025-12-12" &&
         row.amount === "42822.25" &&
         row.type === "expense" &&
