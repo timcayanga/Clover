@@ -250,9 +250,13 @@ const accountNumbersMayMatch = (left?: string | null, right?: string | null, req
     return false;
   }
 
-  const leftLastFour = leftDigits.slice(-4);
-  const rightLastFour = rightDigits.slice(-4);
-  return leftLastFour.length === 4 && rightLastFour.length === 4 && leftLastFour === rightLastFour;
+  const leftIsSuffixOnly = leftDigits.length === 4;
+  const rightIsSuffixOnly = rightDigits.length === 4;
+  if (leftIsSuffixOnly !== rightIsSuffixOnly) {
+    return false;
+  }
+
+  return leftIsSuffixOnly && rightIsSuffixOnly && leftDigits === rightDigits;
 };
 
 const findPublishedSummaryForAccount = (

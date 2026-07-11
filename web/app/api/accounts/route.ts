@@ -261,7 +261,13 @@ const importAccountNumbersMayMatch = (left?: string | null, right?: string | nul
     return false;
   }
 
-  return leftDigits.slice(-4) === rightDigits.slice(-4);
+  const leftIsSuffixOnly = leftDigits.length === 4;
+  const rightIsSuffixOnly = rightDigits.length === 4;
+  if (leftIsSuffixOnly !== rightIsSuffixOnly) {
+    return false;
+  }
+
+  return leftIsSuffixOnly && rightIsSuffixOnly && leftDigits === rightDigits;
 };
 
 const findPublishedSummaryForAccount = (
