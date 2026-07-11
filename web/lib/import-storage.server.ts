@@ -1,11 +1,22 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { getEnv } from "@/lib/env";
-import { getLocalImportObjectPath, getR2Client } from "@/lib/s3";
+import { getLegacyLocalImportObjectPath, getLocalImportObjectPath, getR2Client } from "@/lib/s3";
 
 export const downloadImportObject = async (storageKey: string) => {
   if (process.env.NODE_ENV !== "production") {
-    return new Uint8Array(await readFile(getLocalImportObjectPath(storageKey)));
+    const localPath = getLocalImportObjectPath(storageKey);
+    if (existsSync(localPath)) {
+      return new Uint8Array(await readFile(localPath));
+    }
+
+    const legacyPath = getLegacyLocalImportObjectPath(storageKey);
+    if (existsSync(legacyPath)) {
+      return new Uint8Array(await readFile(legacyPath));
+    }
+
+    throw new Error(`Unable to read imported file from local storage: ${storageKey}`);
   }
 
   const env = getEnv();

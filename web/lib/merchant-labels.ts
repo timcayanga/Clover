@@ -1821,6 +1821,10 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "KOI",
   },
   {
+    patterns: [/\bsimply\s+gourmet\b/i, /\bsimplygourmet\b/i],
+    replacement: "Simply Gourmet",
+  },
+  {
     patterns: [/\bhapag\b/i],
     replacement: "Hapag",
   },
@@ -2003,6 +2007,10 @@ const genericSimplifierRules: SimplifierRule[] = [
   {
     patterns: [/\bthe\s+fat\s+seed(?:\s+cafe)?\b/i, /\bthefatseed(?:cafe)?\b/i],
     replacement: "The Fat Seed Cafe",
+  },
+  {
+    patterns: [/\bnomad\s+express\b/i, /\bnomadexpress\b/i],
+    replacement: "Nomad Express",
   },
   {
     patterns: [/\bthe\s+spa\b/i],

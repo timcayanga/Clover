@@ -1249,6 +1249,12 @@ const main = async () => {
   if (summarizeMerchantText("THE FAT SEED CAFE & RO MUNTINLUPA PH", "RCBC") !== "The Fat Seed Cafe") {
     throw new Error("expected SOA merchant normalization to preserve The Fat Seed Cafe");
   }
+  if (summarizeMerchantText("NOMAD EXPRESS T 1 SOUTH W LAPU LAPU PH", "RCBC") !== "Nomad Express") {
+    throw new Error("expected SOA merchant normalization to preserve Nomad Express");
+  }
+  if (summarizeMerchantText("SIMPLY GOURMET FOOD GREE MAKATI CITY PH", "RCBC") !== "Simply Gourmet") {
+    throw new Error("expected SOA merchant normalization to preserve Simply Gourmet");
+  }
   console.log("[PASS] BDO classification | transfer-like rows, withdrawals, and interest spelling classified correctly");
 
   const mayaSamplesDir = join(root, "Samples/Maya");
@@ -2405,6 +2411,8 @@ const main = async () => {
     ["PYX*WHEYL NUTRIT PASAY CITY PH", "expense", "Health & Wellness", "Wheyl Nutrition"],
     ["7-ELEVEN-ST 2192 BRY SAN ANTONPH", "expense", "Shopping", "7-Eleven"],
     ["THE FAT SEED CAFE & RO MUNTINLUPA PH", "expense", "Food & Dining", "The Fat Seed Cafe"],
+    ["NOMAD EXPRESS T 1 SOUTH W LAPU LAPU PH", "expense", "Travel & Lifestyle", "Nomad Express"],
+    ["SIMPLY GOURMET FOOD GREE MAKATI CITY PH", "expense", "Food & Dining", "Simply Gourmet"],
   ];
   for (const [merchantText, type, expectedCategory, expectedName] of noisyUnseenMerchantExpectations) {
     const result = classifyMerchantFallback({

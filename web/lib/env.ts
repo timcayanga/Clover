@@ -31,6 +31,7 @@ const envSchema = z.object({
   ADMIN_USER_IDS: z.string().min(1).optional(),
   STAGING_BASIC_AUTH_USERNAME: z.string().min(1).optional(),
   STAGING_BASIC_AUTH_PASSWORD: z.string().min(1).optional(),
+  CLOVER_IMPORT_STORAGE_DIR: z.string().min(1).optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

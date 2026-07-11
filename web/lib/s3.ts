@@ -7,13 +7,24 @@ import { getEnv } from "./env";
 
 let client: S3Client | null = null;
 
-const localImportStorageRoot = join(tmpdir(), "clover-import-objects");
+const getLocalImportStorageRoot = () => {
+  const configuredRoot = process.env.CLOVER_IMPORT_STORAGE_DIR?.trim();
+  if (configuredRoot) {
+    return configuredRoot;
+  }
+
+  return join(process.cwd(), ".cache", "clover-import-objects");
+};
+
+const getLegacyLocalImportStorageRoot = () => join(tmpdir(), "clover-import-objects");
 
 const isLocalImportStorageFallback = () => process.env.NODE_ENV !== "production";
 
 const sanitizeStorageKey = (key: string) => key.replace(/[^a-zA-Z0-9._-]/g, "_");
 
-export const getLocalImportObjectPath = (key: string) => join(localImportStorageRoot, sanitizeStorageKey(key));
+export const getLocalImportObjectPath = (key: string) => join(getLocalImportStorageRoot(), sanitizeStorageKey(key));
+
+export const getLegacyLocalImportObjectPath = (key: string) => join(getLegacyLocalImportStorageRoot(), sanitizeStorageKey(key));
 
 export const getR2Client = () => {
   if (isLocalImportStorageFallback()) {
