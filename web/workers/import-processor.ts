@@ -7482,16 +7482,23 @@ export const processImportFileText = async (
   }
   const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
   const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
+  const suppressReceiptPreviewForGsaveStatement =
+    imageImport &&
+    importMode === "statement" &&
+    /gsave|#unoready|#unoboost|uno digital bank|cimb/i.test(
+      [metadataForParse.institution, metadataForParse.accountName, fileName, textForParse].filter(Boolean).join(" ")
+    );
   const receiptPreviewLooksLikeReceipt =
     Boolean(
-      receiptPreview &&
+      !suppressReceiptPreviewForGsaveStatement &&
+        receiptPreview &&
         receiptPreview.confidence >= 80 &&
         (
           (receiptPreview.items.length > 0 && receiptPreview.total !== null && receiptPreview.billDate) ||
           (receiptPreview.total !== null && (receiptPreview.receiptAccountMatch || receiptPreview.paymentMethod))
         )
     );
-  const receiptPreviewIsUsable = isReceiptPreviewUsable(receiptPreview);
+  const receiptPreviewIsUsable = !suppressReceiptPreviewForGsaveStatement && isReceiptPreviewUsable(receiptPreview);
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
     hasReliableDeterministicStatementParse ||
