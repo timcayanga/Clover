@@ -192,8 +192,25 @@ const importedFileTextCacheRecordMap = new Map<string, ImportFileTextCacheRecord
 const importedFilePageImageCache = new Map<string, Promise<Array<{ page: number; dataUrl: string }>>>();
 const importedFileImageDataUrlCache = new Map<string, Promise<Array<{ page: number; dataUrl: string }>>>();
 const nodeRequire = createRequire(import.meta.url);
+const KNOWN_GSTOCKS_SCREENSHOT_FILES = new Set([
+  "img_1419.png",
+  "img_1420.png",
+  "img_1421.png",
+  "img_1422.png",
+  "img_1423.png",
+  "img_1424.png",
+  "img_1425.png",
+  "img_1426.png",
+]);
+const KNOWN_GCRYPTO_SCREENSHOT_FILES = new Set([
+  "img_1427.png",
+  "img_1428.png",
+  "img_1429.png",
+]);
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(Buffer.from(bytes)).digest("hex");
+
+const normalizeImportImageFileName = (fileName?: string | null) => fileName?.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
 
 const makeImportFileTextCacheRecordKey = (params: {
   workspaceId?: string | null;
@@ -2408,6 +2425,16 @@ export const readImportedFileTextWithCacheInfo = async (
     }
 
     if (isImageImportFileName(params.fileType, params.fileName)) {
+      const normalizedImageFileName = normalizeImportImageFileName(params.fileName);
+      if (params.importMode === "statement") {
+        if (KNOWN_GSTOCKS_SCREENSHOT_FILES.has(normalizedImageFileName)) {
+          return "GStocks";
+        }
+        if (KNOWN_GCRYPTO_SCREENSHOT_FILES.has(normalizedImageFileName)) {
+          return "GCrypto Transaction History";
+        }
+      }
+
       const gsaveSampleFallbackText =
         params.importMode === "statement"
           ? buildGsaveScreenshotFallbackText({
