@@ -122,6 +122,12 @@ export type ReceiptPreviewResult = {
   confidence: number;
 };
 
+export type ReceiptPreviewQualityAssessment = {
+  score: number;
+  issues: string[];
+  reliableForFastPath: boolean;
+};
+
 export type SplitBillParticipantSummary = {
   id: string;
   name: string;
@@ -431,12 +437,12 @@ const parseBillDateFromText = (text: string) => {
 };
 
 const isSummaryLine = (line: string) =>
-  /^[+\-*•]?\s*(subtotal|sub total|tax|vat|service charge|discount|tip|tips?|round\s*off|rounding|amount due|balance due|grand total|total)\b/i.test(
+  /^[+\-*•]?\s*(subtotal|sub total|tax|vat|vatable|vat exempt|vat sales|service charge|discount|tip|tips?|round\s*off|rounding|amount due|balance due|grand total|bill total|total|total no of items|items purchased)\b/i.test(
     line
   );
 
 const isNoiseLine = (line: string) =>
-  /^(thank you|powered by|receipt|order|invoice|official receipt|or no\.?|cashier|store copy|customer copy|page \d+|paid with|paid via|payment method|tendered with|charged to|refund|void|voided|reversal)/i.test(
+  /^(thank you|powered by|receipt|order|invoice|official receipt|or no\.?|cashier|store copy|customer copy|page \d+|paid with|paid via|payment method|tendered with|charged to|refund|void|voided|reversal|customer|tin|company|signature)/i.test(
     line
   );
 
@@ -657,7 +663,7 @@ const mergeFragmentLines = (lines: string[]) => {
 
 const parseAmountFromLine = (line: string) => {
   const compact = normalizeWhitespace(line);
-  const matches = Array.from(compact.matchAll(/-?\(?[\d,.]+(?:\.\d{1,2})?\)?/g));
+  const matches = Array.from(compact.matchAll(/-?\(?[\d,.-]+\)?/g));
   if (matches.length === 0) {
     return null;
   }
@@ -666,8 +672,8 @@ const parseAmountFromLine = (line: string) => {
     [...matches]
       .reverse()
       .map((match) => match[0] ?? null)
-      .find((token) => token !== null && (/\.\d{1,2}$/.test(token) || /^\d{3,}$/.test(token))) ?? null;
-  return parseAmountValue(amountToken);
+      .find((token) => token !== null && (/(?:\.\d{1,2}|-\d{2})$/.test(token) || /^\d{3,}$/.test(token))) ?? null;
+  return parseReceiptAmountToken(amountToken);
 };
 
 const isLikelyReceiptBodyLine = (line: string) => {
@@ -765,7 +771,7 @@ const appendReceiptModifier = (description: string, modifier: string) => {
 
 const findReceiptTableBounds = (lines: string[]) => {
   const startIndex = lines.findIndex((line) =>
-    /(?:^\s*qty\s+description\b|^\s*vat\s+item\(s\)\b|^\s*item\(s\)\b)/i.test(normalizeWhitespace(line))
+    /(?:^\s*qty\s+description\b|^\s*qty\s+product\b|^\s*vat\s+item\(s\)\b|^\s*item\(s\)\b)/i.test(normalizeWhitespace(line))
   );
 
   if (startIndex < 0) {
@@ -857,6 +863,18 @@ const parseReceiptAmountToken = (token: string | null | undefined) => {
   const trimmed = normalizeWhitespace(token).replace(/,/g, "");
   if (!trimmed) {
     return null;
+  }
+
+  const repairedThousandsAndDecimal = trimmed.match(/^(?<whole>\d{1,3})[.](?<thousands>\d{3})[.](?<cents>\d{2})$/);
+  if (repairedThousandsAndDecimal?.groups) {
+    return parseAmountValue(
+      `${repairedThousandsAndDecimal.groups.whole}${repairedThousandsAndDecimal.groups.thousands}.${repairedThousandsAndDecimal.groups.cents}`
+    );
+  }
+
+  const repairedHyphenDecimal = trimmed.match(/^(?<whole>\d{1,6})-(?<cents>\d{2})$/);
+  if (repairedHyphenDecimal?.groups) {
+    return parseAmountValue(`${repairedHyphenDecimal.groups.whole}.${repairedHyphenDecimal.groups.cents}`);
   }
 
   if (/\.\d{1,2}$/.test(trimmed)) {
@@ -1027,7 +1045,7 @@ const repairReceiptItemsWithSubtotal = (items: ReceiptPreviewItem[], subtotal: n
   return correctedItems;
 };
 
-const inferReceiptSubtotalFromFooter = (lines: string[]) => {
+const inferReceiptSubtotalFromFooter = (lines: string[], itemTotal: number | null = null) => {
   const footerAmounts: number[] = [];
   let footerStarted = false;
 
@@ -1061,11 +1079,26 @@ const inferReceiptSubtotalFromFooter = (lines: string[]) => {
   }
 
   if (footerAmounts.length < 2) {
-    return null;
+    return itemTotal !== null && Number.isFinite(itemTotal) && itemTotal > 0 ? itemTotal : null;
   }
 
   const subtotal = footerAmounts.reduce((sum, amount) => sum + amount, 0);
-  return Number.isFinite(subtotal) && subtotal > 0 ? subtotal : null;
+  if (!Number.isFinite(subtotal) || subtotal <= 0) {
+    return itemTotal !== null && Number.isFinite(itemTotal) && itemTotal > 0 ? itemTotal : null;
+  }
+
+  if (itemTotal !== null && Number.isFinite(itemTotal) && itemTotal > 0) {
+    const inflatedFooterSubtotal = subtotal > itemTotal * 1.6;
+    const footerLooksReasonable = Math.abs(subtotal - itemTotal) <= Math.max(5, itemTotal * 0.35);
+    if (inflatedFooterSubtotal) {
+      return itemTotal;
+    }
+    if (footerLooksReasonable) {
+      return subtotal;
+    }
+  }
+
+  return subtotal;
 };
 
 const extractReceiptItemFromLine = (line: string, pendingDescription?: string | null) => {
@@ -1638,6 +1671,154 @@ const extractReceiptField = (text: string, patterns: RegExp[]) => {
   return null;
 };
 
+const isSuspiciousReceiptMerchantName = (value: string | null | undefined) => {
+  const normalized = normalizeWhitespace(value ?? "");
+  if (!normalized) {
+    return true;
+  }
+
+  if (
+    /^(?:table|qty|product|invoice|cashier|server|guest|bill\s+no|ref[:#]?|pax|vat|amount due|bill total|total)\b/i.test(normalized)
+  ) {
+    return true;
+  }
+
+  if ((normalized.match(/[~_=|]{2,}|[^\w\s:.,'&()/+-]{3,}/g) ?? []).length > 0) {
+    return true;
+  }
+
+  const alphaCount = (normalized.match(/[A-Za-z]/g) ?? []).length;
+  const compactLength = normalized.replace(/\s+/g, "").length;
+  if (alphaCount < 4 || compactLength === 0) {
+    return true;
+  }
+
+  return alphaCount / compactLength < 0.55;
+};
+
+const isSuspiciousReceiptItemDescription = (description: string) => {
+  const normalized = normalizeWhitespace(description);
+  if (!normalized) {
+    return true;
+  }
+
+  if (
+    isSummaryLine(normalized) ||
+    isNoiseLine(normalized) ||
+    /\b(?:vatable|vat exempt|vat sales|bill total|amount due|items purchased|product\(s\) purchased|customer|signature|company|tin)\b/i.test(
+      normalized
+    )
+  ) {
+    return true;
+  }
+
+  if (/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/.test(normalized)) {
+    return true;
+  }
+
+  const alphaCount = (normalized.match(/[A-Za-z]/g) ?? []).length;
+  const compactLength = normalized.replace(/\s+/g, "").length;
+  if (alphaCount < 3 || compactLength === 0) {
+    return true;
+  }
+
+  return alphaCount / compactLength < 0.45;
+};
+
+export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): ReceiptPreviewQualityAssessment => {
+  const issues: string[] = [];
+  let score = 0;
+  let severeIssue = false;
+  const merchantLooksReliable = Boolean(preview.merchantName) && !isSuspiciousReceiptMerchantName(preview.merchantName);
+  const hasIdentityBackstop = merchantLooksReliable || Boolean(preview.receiptAccountMatch || preview.paymentMethod);
+
+  if (merchantLooksReliable) {
+    score += 2;
+  } else {
+    issues.push("merchant looks noisy");
+    score -= 2;
+  }
+
+  if (preview.billDate) {
+    score += 1;
+  } else {
+    issues.push("date missing");
+  }
+
+  const total = parseAmountValue(preview.total);
+  const subtotal = parseAmountValue(preview.subtotal);
+  const tax = parseAmountValue(preview.tax) ?? 0;
+  const serviceCharge = parseAmountValue(preview.serviceCharge) ?? 0;
+  const tip = parseAmountValue(preview.tip) ?? 0;
+  const rounding = parseAmountValue(preview.rounding) ?? 0;
+  const discount = parseAmountValue(preview.discount) ?? 0;
+  const itemAmounts = preview.items
+    .map((item) => parseAmountValue(item.amount))
+    .filter((value): value is number => value !== null && Number.isFinite(value) && value > 0);
+  const itemTotal = itemAmounts.reduce((sum, amount) => sum + amount, 0);
+  const suspiciousItemCount = preview.items.filter((item) => isSuspiciousReceiptItemDescription(item.description)).length;
+  const cleanItemCount = Math.max(0, preview.items.length - suspiciousItemCount);
+  const maxItemAmount = itemAmounts.length > 0 ? Math.max(...itemAmounts) : null;
+
+  if (total !== null) {
+    score += 2;
+  } else {
+    issues.push("total missing");
+  }
+
+  if (preview.items.length > 0) {
+    score += cleanItemCount > 0 ? 2 : 0;
+  }
+
+  if (suspiciousItemCount > 0) {
+    issues.push(`suspicious line items: ${suspiciousItemCount}`);
+    score -= suspiciousItemCount >= Math.max(2, cleanItemCount) ? 3 : 1;
+  }
+
+  if (subtotal !== null) {
+    score += 1;
+  }
+
+  if (
+    subtotal !== null &&
+    total !== null &&
+    Math.abs(subtotal + tax + serviceCharge + tip + rounding - discount - total) <= Math.max(1, total * 0.03)
+  ) {
+    score += 2;
+  } else if (subtotal !== null && total !== null) {
+    issues.push("summary does not reconcile");
+    score -= 2;
+  }
+
+  if (cleanItemCount > 0 && total !== null && Math.abs(itemTotal - total) <= Math.max(1, total * 0.08)) {
+    score += 2;
+  }
+
+  if (cleanItemCount > 0 && subtotal !== null && Math.abs(itemTotal - subtotal) <= Math.max(1, subtotal * 0.08)) {
+    score += 2;
+  }
+
+  if (total !== null && subtotal !== null && total + Math.max(1, total * 0.05) < subtotal) {
+    issues.push("total is smaller than subtotal");
+    score -= 4;
+    severeIssue = true;
+  }
+
+  if (total !== null && maxItemAmount !== null && maxItemAmount > total * 1.2) {
+    issues.push("line item exceeds total");
+    score -= 4;
+    severeIssue = true;
+  }
+
+  const reliableForFastPath = total !== null && score >= 6 && hasIdentityBackstop && !severeIssue && issues.length <= 1;
+
+  return {
+    score,
+    issues,
+    reliableForFastPath,
+  };
+};
+
 export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const normalized = receiptText.replace(/\u00a0/g, " ");
   const { lines, fragmentJoins } = mergeFragmentLines(
@@ -1667,24 +1848,47 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const tipLine = lines.find((line) => /^[+\-*•]?\s*tip\b/i.test(line));
   const roundingLine = lines.find((line) => /^[+\-*•]?\s*(round\s*off|rounding)\b/i.test(line));
   const discountLine = lines.find((line) => /^[+\-*•]?\s*discount\b/i.test(line));
-  const totalLine = [...lines].reverse().find((line) => /^[+\-*•]?\s*(amount due|grand total|total)\b/i.test(line));
-  const subtotal = subtotalLine ? parseAmountFromLine(subtotalLine) : inferReceiptSubtotalFromFooter(lines);
-  const serviceCharge = serviceChargeLine ? parseAmountFromLine(serviceChargeLine) : null;
+  const tableItems = extractReceiptTableItems(lines, detectedMerchantName);
+  const rawItems = tableItems.length > 0 ? tableItems : itemCandidatesFromText(lines, detectedMerchantName);
+  const rawItemTotal = rawItems.reduce((sum, item) => sum + (parseAmountValue(item.amount) ?? 0), 0);
+  const totalLine = [...lines].reverse().find((line) => /^[+\-*•]?\s*(amount due|grand total|bill total|total)\b/i.test(line));
+  let subtotal =
+    subtotalLine
+      ? parseAmountFromLine(subtotalLine)
+      : rawItemTotal > 0
+        ? inferReceiptSubtotalFromFooter(lines, rawItemTotal)
+        : inferReceiptSubtotalFromFooter(lines);
+  let serviceCharge = serviceChargeLine ? parseAmountFromLine(serviceChargeLine) : null;
   const tax = taxLine ? parseAmountFromLine(taxLine) : null;
   const tip = tipLine ? parseAmountFromLine(tipLine) : null;
   const rounding = roundingLine ? parseAmountFromLine(roundingLine) : null;
   const discount = discountLine ? parseAmountFromLine(discountLine) : null;
-  const tableItems = extractReceiptTableItems(lines, detectedMerchantName);
-  const items = repairReceiptItemsWithSubtotal(
-    tableItems.length > 0 ? tableItems : itemCandidatesFromText(lines, detectedMerchantName),
-    subtotal
-  );
-  const total =
+  let total =
     totalLine && parseAmountFromLine(totalLine) !== null
       ? parseAmountFromLine(totalLine)
       : subtotal !== null
         ? subtotal + (serviceCharge ?? 0) + (tax ?? 0) + (tip ?? 0) + (rounding ?? 0) - (discount ?? 0)
-        : items.reduce((sum, item) => sum + (parseAmountValue(item.amount) ?? 0), 0) || null;
+        : rawItemTotal || null;
+  if (subtotal === null && rawItemTotal > 0) {
+    subtotal = rawItemTotal;
+  }
+  if (
+    serviceCharge === null &&
+    serviceChargeLine &&
+    subtotal !== null &&
+    total !== null
+  ) {
+    const inferredServiceCharge = Number((total - subtotal - (tax ?? 0) - (tip ?? 0) - (rounding ?? 0) + (discount ?? 0)).toFixed(2));
+    if (Number.isFinite(inferredServiceCharge) && inferredServiceCharge > 0 && inferredServiceCharge <= Math.max(500, total * 0.35)) {
+      serviceCharge = inferredServiceCharge;
+    }
+  }
+  total =
+    total ??
+    (subtotal !== null
+      ? subtotal + (serviceCharge ?? 0) + (tax ?? 0) + (tip ?? 0) + (rounding ?? 0) - (discount ?? 0)
+      : rawItemTotal || null);
+  const items = repairReceiptItemsWithSubtotal(rawItems, subtotal);
   const { allocations, participants } = splitAllocationsFromText(lines, currency, total !== null ? total.toFixed(2) : null);
   const receiptAccountMatch =
     detectReceiptAccountMatchFromText(normalized) ??
@@ -1758,6 +1962,33 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
     (discount !== null ? 2 : 0);
   const splitSignalBonus = allocations.length > 0 ? 10 + Math.min(8, participants.length * 2) : 0;
 
+  const provisionalPreview = {
+    receiptText: normalized.trim(),
+    receiptType,
+    merchantName,
+    billDate,
+    documentNumber,
+    invoiceNumber,
+    bookingReference,
+    currency,
+    currencyMentions,
+    currencyWarning,
+    paymentMethod,
+    receiptPayerName,
+    subtotal: subtotal !== null ? subtotal.toFixed(2) : null,
+    serviceCharge: serviceCharge !== null ? serviceCharge.toFixed(2) : null,
+    tax: tax !== null ? tax.toFixed(2) : null,
+    tip: tip !== null ? tip.toFixed(2) : null,
+    rounding: rounding !== null ? rounding.toFixed(2) : null,
+    discount: discount !== null ? discount.toFixed(2) : null,
+    total: total !== null ? total.toFixed(2) : null,
+    items,
+    participants,
+    splitAllocations: allocations,
+    receiptAccountMatch,
+    confidence: 0,
+  } satisfies ReceiptPreviewResult;
+  const qualityAssessment = assessReceiptPreviewQuality(provisionalPreview);
   const confidence = Math.max(
     35,
     Math.min(
@@ -1782,34 +2013,14 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
         (summaryReconciles ? 10 : 0) +
         (splitReconciles ? 12 : 0) +
         (receiptAccountMatch ? 4 : 0) -
-        (currencyWarning ? 6 : 0)
+        (currencyWarning ? 6 : 0) -
+        Math.max(0, qualityAssessment.issues.length - 1) * 8 -
+        Math.max(0, 4 - qualityAssessment.score) * 5
     )
   );
 
   return {
-    receiptText: normalized.trim(),
-    receiptType,
-    merchantName,
-    billDate,
-    documentNumber,
-    invoiceNumber,
-    bookingReference,
-    currency,
-    currencyMentions,
-    currencyWarning,
-    paymentMethod,
-    receiptPayerName,
-    subtotal: subtotal !== null ? subtotal.toFixed(2) : null,
-    serviceCharge: serviceCharge !== null ? serviceCharge.toFixed(2) : null,
-    tax: tax !== null ? tax.toFixed(2) : null,
-    tip: tip !== null ? tip.toFixed(2) : null,
-    rounding: rounding !== null ? rounding.toFixed(2) : null,
-    discount: discount !== null ? discount.toFixed(2) : null,
-    total: total !== null ? total.toFixed(2) : null,
-    items,
-    participants,
-    splitAllocations: allocations,
-    receiptAccountMatch,
+    ...provisionalPreview,
     confidence,
   };
 };

@@ -36,7 +36,7 @@ import {
   normalizeInstitutionCurrency,
   parseImportText,
 } from "@/lib/import-parser";
-import { parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
+import { assessReceiptPreviewQuality, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import {
   buildReceiptOptimisticSummary,
@@ -3710,7 +3710,8 @@ export function ImportFilesModal({
       }
       if (itemImportMode === "receipt") {
         const receiptPreview = parseReceiptText(text);
-        if (!receiptPreview.billDate || !receiptPreview.total) {
+        const receiptPreviewQuality = assessReceiptPreviewQuality(receiptPreview);
+        if (!receiptPreview.billDate || !receiptPreview.total || !receiptPreviewQuality.reliableForFastPath) {
           return;
         }
 

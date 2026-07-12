@@ -38,7 +38,7 @@ import {
 import { downloadImportObject } from "@/lib/import-storage.server";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
-import { parseReceiptText } from "@/lib/split-bill";
+import { assessReceiptPreviewQuality, parseReceiptText } from "@/lib/split-bill";
 import {
   DATA_ENGINE_VERSION,
   applyDataQaReviewLearning,
@@ -1544,17 +1544,8 @@ const isReceiptPreviewUsable = (preview: ReturnType<typeof parseReceiptText> | n
   if (!preview) {
     return false;
   }
-
-  const hasIdentitySignal = Boolean(preview.merchantName || preview.receiptAccountMatch || preview.paymentMethod);
-  const hasStructuredSignal = Boolean(
-    preview.total !== null ||
-      preview.billDate ||
-      preview.items.length > 0 ||
-      preview.splitAllocations.length > 0 ||
-      preview.receiptAccountMatch
-  );
-
-  return hasIdentitySignal && hasStructuredSignal && preview.confidence >= 55;
+  const quality = assessReceiptPreviewQuality(preview);
+  return quality.reliableForFastPath && preview.confidence >= 55;
 };
 
 type TrainedReceiptFixture = {

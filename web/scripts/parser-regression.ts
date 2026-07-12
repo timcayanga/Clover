@@ -869,6 +869,11 @@ const main = async () => {
     receiptAccountMatch: { accountName: string | null; accountLast4: string | null; confidence: number; reason: string | null } | null;
     confidence: number;
   };
+  const assessReceiptPreviewQuality = splitBillModule.assessReceiptPreviewQuality as (preview: ReturnType<typeof parseReceiptText>) => {
+    score: number;
+    issues: string[];
+    reliableForFastPath: boolean;
+  };
   const resolveReceiptAccountHintToAccount = receiptAccountResolutionModule.resolveReceiptAccountHintToAccount as (
     hint: {
       accountName: string | null;
@@ -3630,6 +3635,61 @@ const main = async () => {
     throw new Error(
       `expected Jarandjam receipt parse to resolve merchant, currency, subtotal, service charge, total, and 8 items, got merchant=${jarandjamReceiptPreview.merchantName ?? "null"} currency=${jarandjamReceiptPreview.currency ?? "null"} subtotal=${jarandjamReceiptPreview.subtotal ?? "null"} serviceCharge=${jarandjamReceiptPreview.serviceCharge ?? "null"} total=${jarandjamReceiptPreview.total ?? "null"} items=${jarandjamReceiptPreview.items.length}`
     );
+  }
+
+  const noisyReceiptPreview = parseReceiptText([
+    "4",
+    "-    SE               -    RE eC",
+    "cll",
+    "TABLE M0: TO             —-—           ~~          ee",
+    "REF: 3                                               4                 3    :",
+    "PAX #: 1             BILL NO.: 1             i    = oz",
+    "Qty Product         ET               {    Sos     A",
+    "TAKE-OUT                               3",
+    "1    CLASSIC BURRITOS - A   290.00                   =e   =",
+    "MEXICAN RICE                                os    Ee    —",
+    "MEXICAN SAUCE 30ML                          3   E         gp",
+    "1 ELOTE               85.00          :                  :",
+    "1    1 POUNDER BURRITOS - 590.00                           i",
+    "MEXICAN RICE                                               3",
+    "MEXICAN SAUCE 30ML                          |",
+    "1 QUARTER ROAST CHICKE 380.00              )       3",
+    "CILANTRO GARLIC RIC                         )              %",
+    "GARLIC MASHED POTAT                          {                y",
+    "1 AL PASTOR - BURRITO ~~ 225.00               :      :       i!",
+    "CILANTRO GARLIC RIC                          5                k",
+    "TOTAL          1.570.00            3",
+    "SERVICE CHARGE Th 98-19        ;",
+    "AMOUNT DUE /1 L666 1S)        S     ERE",
+    "__ 5 PRODUCT(S) PURCHASED -=  /         3      eT}",
+    "3       s",
+    "11/22/2024  12:35     Ji                          a        =",
+    "VATable               1,401.19         BSS)",
+    "12% VAT                             168.21                5        em",
+    "VAT Exempt                    0.00            3    re",
+    "Ei                  2%     i",
+    "Bill Total                 1,668.13           i       :",
+    "$k                                  Es",
+    "=  %",
+    "Customer: ese Se",
+    "TIN: gE es  Ek",
+    "Company: EERIE eae   RE",
+    "Signature: pEeEh ae  LE",
+  ].join("\n"));
+  const noisyReceiptQuality = assessReceiptPreviewQuality(noisyReceiptPreview);
+  if (
+    noisyReceiptPreview.billDate !== "2024-11-22T00:00:00.000Z" ||
+    noisyReceiptPreview.subtotal !== "1570.00" ||
+    noisyReceiptPreview.serviceCharge !== "98.19" ||
+    noisyReceiptPreview.total !== "1668.13" ||
+    noisyReceiptPreview.items.length !== 5
+  ) {
+    throw new Error(
+      `expected noisy OCR receipt to recover the visible summary and 5 purchased items, got date=${noisyReceiptPreview.billDate ?? "null"} subtotal=${noisyReceiptPreview.subtotal ?? "null"} serviceCharge=${noisyReceiptPreview.serviceCharge ?? "null"} total=${noisyReceiptPreview.total ?? "null"} items=${noisyReceiptPreview.items.length}`
+    );
+  }
+  if (noisyReceiptQuality.reliableForFastPath) {
+    throw new Error("expected noisy OCR receipt to stay off the fast local receipt path");
   }
 
   const weightedSummarySettlement = splitBillModule.buildSplitBillSettlement({
