@@ -28,8 +28,8 @@ const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
   },
   {
     category: "Travel & Lifestyle",
-    lower: /nomad\s+express|priority\s+pass|airport|terminal\s+1|terminal\s+2|south\s+wing|klook|alila\s+villas\s+uluwatu|home\s+affairs/,
-    compact: /nomadexpress|prioritypass|airport|terminal1|terminal2|southwing|klook|alilavillasuluwatu|homeaffairs/,
+    lower: /nomad\s+express|priority\s+pass|airport|terminal\s+1|terminal\s+2|south\s+wing|klook|alila\s+villas\s+uluwatu|home\s+affairs|agoda|qantas|jetstar|cebu\s+air|cebuair|airbnb|centara|aero\s+dili/,
+    compact: /nomadexpress|prioritypass|airport|terminal1|terminal2|southwing|klook|alilavillasuluwatu|homeaffairs|agoda|qantas|jetstar|cebuair|airbnb|centara|aerodili/,
   },
   {
     category: "Bills & Utilities",
@@ -162,6 +162,18 @@ export const getStrongMerchantCategoryHint = (value: string): string | null => {
 
   if (matchesCategoryHint(value, { lower: /priority\s+pass|15-?ppass/, compact: /prioritypass|15ppass|ppass/ })) {
     return "Travel & Lifestyle";
+  }
+
+  if (matchesCategoryHint(value, { lower: /agoda|qantas|jetstar|cebu\s+air|cebuair|airbnb|centara|aero\s+dili/, compact: /agoda|qantas|jetstar|cebuair|airbnb|centara|aerodili/ })) {
+    return "Travel & Lifestyle";
+  }
+
+  if (matchesCategoryHint(value, { lower: /massage\s+group|spa\b/, compact: /massagegroup|spa/ })) {
+    return "Health & Wellness";
+  }
+
+  if (matchesCategoryHint(value, { lower: /(?:^|\b)sent to\s+[a-z]/, compact: /sentto[a-z]/ })) {
+    return "Transfers";
   }
 
   return null;

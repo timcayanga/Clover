@@ -2610,6 +2610,11 @@ export const summarizeMerchantText = (value: string, institution?: string | null
   }
 
   if (institution === "UnionBank" || institution === "UnionBank of the Philippines") {
+    const sentToMatch = simplified.match(/^(?:ub\s*\d+\s+)?sent to\s+(.+?)(?:\s+(?:ppi|pdx|gxi|wse)\s+\d+)?$/i);
+    if (sentToMatch?.[1]) {
+      return stripTrailingStatementNoise(stripLeadingStatementNoise(sentToMatch[1])) || simplified;
+    }
+
     const outwardFastPaymentsMatch = simplified.match(/^outward fast payments?\s+(.+)$/i);
     if (outwardFastPaymentsMatch?.[1]) {
       return stripTrailingStatementNoise(stripLeadingStatementNoise(outwardFastPaymentsMatch[1])) || simplified;

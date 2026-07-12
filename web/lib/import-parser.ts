@@ -178,6 +178,13 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (strongHint) return strongHint;
   const sharedHint = getSharedMerchantCategoryHint(text);
   if (sharedHint) return sharedHint;
+  const summarizedMerchant = summarizeMerchantText(text);
+  if (summarizedMerchant && normalizeWhitespace(summarizedMerchant).toLowerCase() !== normalizeWhitespace(text).toLowerCase()) {
+    const summarizedStrongHint = getStrongMerchantCategoryHint(summarizedMerchant);
+    if (summarizedStrongHint) return summarizedStrongHint;
+    const summarizedSharedHint = getSharedMerchantCategoryHint(summarizedMerchant);
+    if (summarizedSharedHint) return summarizedSharedHint;
+  }
   if (
     (type === "transfer" || /\b(?:sent|received|transfer|payments?|pay(?:ment)?\s+to|pay(?:ment)?\s+from)\b/.test(lower)) &&
     isLikelyPersonToPersonMerchant(text)
@@ -5312,6 +5319,7 @@ const parseRcbcTransactionLine = (
     description,
     categoryName,
     accountName: state.accountName,
+    accountNumber: state.cardNumber ?? undefined,
     institution: state.institution ?? undefined,
     type,
     rawPayload: {
@@ -5381,6 +5389,7 @@ const parseRcbcOcrTransactionSegment = (
     description,
     categoryName: guessRcbcCategoryName(description, type),
     accountName: state.accountName,
+    accountNumber: state.cardNumber ?? undefined,
     institution: state.institution ?? undefined,
     type,
     rawPayload: {
@@ -5522,6 +5531,7 @@ const parseRcbcImportText = (text: string) => {
               description,
               categoryName: guessRcbcCategoryName(description, type),
               accountName: metadata.accountName ?? "RCBC",
+              accountNumber: metadata.accountNumber ?? undefined,
               institution: metadata.institution ?? undefined,
               type,
               rawPayload: {
@@ -19450,10 +19460,16 @@ const parseGenericCreditCardText = (
         description: "Finance Charge",
         categoryName: "Financial",
         accountName: metadata.accountName ?? metadata.institution ?? "Account",
+        accountNumber: metadata.accountNumber ?? undefined,
         institution: metadata.institution ?? undefined,
         type: "expense",
         confidence: 86,
-        rawPayload: { bank: metadata.institution ?? "Unknown", kind: "generic_credit_card_transaction", line: trimmedLine },
+        rawPayload: {
+          bank: metadata.institution ?? "Unknown",
+          kind: "generic_credit_card_transaction",
+          line: trimmedLine,
+          accountNumber: metadata.accountNumber ?? undefined,
+        },
       });
       if (containsTerminalSection) {
         break;
@@ -19491,10 +19507,16 @@ const parseGenericCreditCardText = (
       description,
       categoryName,
       accountName: metadata.accountName ?? metadata.institution ?? "Account",
+      accountNumber: metadata.accountNumber ?? undefined,
       institution: metadata.institution ?? undefined,
       type,
       confidence: 86,
-      rawPayload: { bank: metadata.institution ?? "Unknown", kind: "generic_credit_card_transaction", line: trimmedLine },
+      rawPayload: {
+        bank: metadata.institution ?? "Unknown",
+        kind: "generic_credit_card_transaction",
+        line: trimmedLine,
+        accountNumber: metadata.accountNumber ?? undefined,
+      },
     });
 
     if (containsTerminalSection) {

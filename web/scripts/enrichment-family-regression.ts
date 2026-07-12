@@ -82,6 +82,23 @@ const runMerchantFamilyChecks = () => {
   );
   assert(summarizeMerchantText("15PPASSMEMBERFEE", "BPI") === "Priority Pass", "Expected compact Priority Pass variants to normalize cleanly");
   assert(summarizeMerchantText("MLBB1000DIBONUS", "UnionBank") === "MLBB Top Up", "Expected compact MLBB variants to normalize cleanly");
+  assert(
+    summarizeMerchantText("UB 1500927 Sent to Timothy Gunther Santos Cayanga PPI 257775", "UnionBank of the Philippines") ===
+      "Timothy Gunther Santos Cayanga",
+    "Expected UnionBank sent-to rows to normalize to the payee name"
+  );
+  assert(
+    guessCategoryFallback("UB 1500927 Sent to Timothy Gunther Santos Cayanga PPI 257775", "expense") === "Transfers",
+    "Expected UnionBank sent-to rows to classify as Transfers"
+  );
+  assert(
+    guessCategoryFallback("AGODA.COM ID DMK-DPS BERLIN DE", "expense") === "Travel & Lifestyle",
+    "Expected Agoda rows to classify as travel"
+  );
+  assert(
+    guessCategoryFallback("QANTAS AIR 081237681400 612-96913464 US", "expense") === "Travel & Lifestyle",
+    "Expected Qantas rows to classify as travel"
+  );
 };
 
 const runRecurringChecks = () => {
