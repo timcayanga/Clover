@@ -1897,6 +1897,26 @@ const looksLikeReceiptSettlementSummary = (text: string) => {
   );
 };
 
+const looksLikeNonReceiptCapture = (text: string) => {
+  const normalized = normalizeWhitespace(text).toLowerCase();
+
+  if (
+    /\b(?:monthly totals?|rent\s*=|groceries\s*=|shopping\s*=|subscription\s*=|dining\s*=|gas\s*=)\b/.test(normalized) &&
+    !/\b(?:official receipt|receipt|invoice|amount due|bill total|subtotal|service charge|vat)\b/.test(normalized)
+  ) {
+    return true;
+  }
+
+  if (
+    /\b(?:always ask for a receipt|ask for a receipt|bir rules on receipts?)\b/.test(normalized) &&
+    !/\b(?:subtotal|amount due|bill total|official receipt no|trans(?:action)? no)\b/.test(normalized)
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
 export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): ReceiptPreviewQualityAssessment => {
   const issues: string[] = [];
   let score = 0;
@@ -1985,6 +2005,12 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
 
   if (looksLikeReceiptSettlementSummary(receiptText)) {
     issues.push("looks like a settlement summary, not a receipt");
+    score -= 8;
+    severeIssue = true;
+  }
+
+  if (looksLikeNonReceiptCapture(receiptText)) {
+    issues.push("looks like a note, poster, or screenshot instead of a receipt");
     score -= 8;
     severeIssue = true;
   }

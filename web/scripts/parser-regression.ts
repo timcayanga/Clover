@@ -3742,6 +3742,30 @@ const main = async () => {
     throw new Error(`expected settlement summary screen to stay off receipt fast path, got ${JSON.stringify(settlementSummaryQuality)}`);
   }
 
+  const monthlyTotalsPreview = parseReceiptText([
+    "Monthly totals:",
+    "Rent = 1450",
+    "Groceries = 380",
+    "Gas = 292",
+    "Subscription = 47",
+    "Dining = 165",
+    "Shopping = 210",
+  ].join("\n"));
+  const monthlyTotalsQuality = assessReceiptPreviewQuality(monthlyTotalsPreview);
+  if (monthlyTotalsQuality.reliableForFastPath) {
+    throw new Error(`expected notes-style monthly totals screenshot to stay off receipt fast path, got ${JSON.stringify(monthlyTotalsQuality)}`);
+  }
+
+  const receiptPosterPreview = parseReceiptText([
+    "Always ask for a receipt",
+    "Know your rights as a customer",
+    "Keep your official receipt for returns and warranty",
+  ].join("\n"));
+  const receiptPosterQuality = assessReceiptPreviewQuality(receiptPosterPreview);
+  if (receiptPosterQuality.reliableForFastPath) {
+    throw new Error(`expected receipt poster image to stay off receipt fast path, got ${JSON.stringify(receiptPosterQuality)}`);
+  }
+
   const implausibleLargeTotalPreview = parseReceiptText([
     "IKKORYU FUKUOKA RAMEN",
     "Trans No.:24614",
