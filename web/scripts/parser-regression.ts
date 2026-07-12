@@ -3636,6 +3636,10 @@ const main = async () => {
       `expected Jarandjam receipt parse to resolve merchant, currency, subtotal, service charge, total, and 8 items, got merchant=${jarandjamReceiptPreview.merchantName ?? "null"} currency=${jarandjamReceiptPreview.currency ?? "null"} subtotal=${jarandjamReceiptPreview.subtotal ?? "null"} serviceCharge=${jarandjamReceiptPreview.serviceCharge ?? "null"} total=${jarandjamReceiptPreview.total ?? "null"} items=${jarandjamReceiptPreview.items.length}`
     );
   }
+  const jarandjamReceiptQuality = assessReceiptPreviewQuality(jarandjamReceiptPreview);
+  if (!jarandjamReceiptQuality.reliableForFastPath) {
+    throw new Error(`expected trained-style receipt to remain eligible for fast path, got ${JSON.stringify(jarandjamReceiptQuality)}`);
+  }
 
   const noisyReceiptPreview = parseReceiptText([
     "4",

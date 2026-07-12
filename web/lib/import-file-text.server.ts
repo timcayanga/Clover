@@ -10,6 +10,7 @@ import {
   upsertImportFileExtractionCache,
 } from "@/lib/data-engine";
 import { buildGsaveScreenshotFallbackText } from "@/lib/gsave-screenshot-samples";
+import { assessReceiptPreviewQuality, parseReceiptText } from "@/lib/split-bill";
 
 class SimpleDOMMatrix {
   a: number;
@@ -524,6 +525,68 @@ const detectReceiptOcrFamilyFromText = (text: string, profile: ImageNormalizatio
   return profile === "receipt" ? "paper_receipt" : "generic";
 };
 
+const scoreReceiptTextCandidate = (text: string, profile: ImageNormalizationProfile) => {
+  const normalized = String(text ?? "").trim();
+  if (!normalized) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const preview = parseReceiptText(normalized);
+  const quality = assessReceiptPreviewQuality(preview);
+  const compactLength = normalized.replace(/\s+/g, " ").trim().length;
+  const lineCount = normalized.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).length;
+  const suspiciousIssueCount = quality.issues.filter((issue) =>
+    /merchant looks noisy|suspicious line items|summary does not reconcile|total is smaller than subtotal|line item exceeds total/i.test(issue)
+  ).length;
+  let score = 0;
+
+  score += quality.score * 6;
+  score += preview.billDate ? 8 : 0;
+  score += preview.total ? 12 : 0;
+  score += preview.subtotal ? 5 : 0;
+  score += preview.serviceCharge ? 4 : 0;
+  score += preview.tax ? 3 : 0;
+  score += Math.min(24, preview.items.length * 4);
+  score += preview.receiptAccountMatch ? 5 : 0;
+  score += preview.paymentMethod ? 4 : 0;
+  score += compactLength >= 120 ? 4 : compactLength >= 60 ? 2 : 0;
+  score += lineCount >= 6 ? 3 : lineCount >= 3 ? 1 : 0;
+
+  if (quality.reliableForFastPath) {
+    score += 10;
+  }
+
+  if (profile === "wallet_screenshot" && preview.receiptType === "wallet_transfer") {
+    score += 12;
+  }
+
+  score -= suspiciousIssueCount * 10;
+  return score;
+};
+
+const pickBestReceiptTextCandidate = (
+  candidates: Array<{ text: string; label: string }>,
+  profile: ImageNormalizationProfile
+) => {
+  const scoredCandidates = candidates
+    .map((candidate) => {
+      const text = candidate.text.trim();
+      if (!text) {
+        return null;
+      }
+
+      return {
+        ...candidate,
+        text,
+        score: scoreReceiptTextCandidate(text, profile),
+      };
+    })
+    .filter((candidate): candidate is { text: string; label: string; score: number } => Boolean(candidate))
+    .sort((a, b) => b.score - a.score || b.text.length - a.text.length);
+
+  return scoredCandidates[0]?.text ?? "";
+};
+
 const shouldRetryImageOcrBestEffort = (params: {
   firstPassText: string;
   fileType?: string | null;
@@ -721,10 +784,14 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     }))
   );
 
-  const bestText = pickBestStatementTextCandidate([
+  const allCandidates = [
     { text: firstPassText, label: "ocr-psm-6" },
     ...candidateTexts,
-  ]);
+  ];
+  const bestText =
+    profile === "receipt" || profile === "wallet_screenshot"
+      ? pickBestReceiptTextCandidate(allCandidates, profile)
+      : pickBestStatementTextCandidate(allCandidates);
 
   if (bestText.trim()) {
     return bestText;
