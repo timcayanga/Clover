@@ -395,11 +395,29 @@ const detectCurrencyMentionsFromText = (text: string) => {
 const looksLikePhilippineReceiptContext = (text: string) =>
   /\b(VAT SALES|SERVICE CHARGE|TEMPORARY BILL|CITY OF MAKATI|NCR|PHILIPPINE|PHILIPPINES)\b/i.test(text);
 
+const normalizeReceiptYear = (year: number) => {
+  if (!Number.isFinite(year) || year <= 0) {
+    return null;
+  }
+
+  if (year < 100) {
+    return 2000 + year;
+  }
+
+  const currentYear = new Date().getUTCFullYear();
+  if (year > currentYear + 1) {
+    return 2000 + (year % 100);
+  }
+
+  return year;
+};
+
 const parseBillDateFromText = (text: string) => {
   const datePatterns = [
     /\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/,
     /\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b/,
     /\b([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})\b/,
+    /\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{2,4})\b/,
   ];
 
   for (const pattern of datePatterns) {
@@ -409,25 +427,29 @@ const parseBillDateFromText = (text: string) => {
     }
 
     if (match[1].length === 4) {
-      const year = Number(match[1]);
+      const year = normalizeReceiptYear(Number(match[1]));
       const month = Number(match[2]) - 1;
       const day = Number(match[3]);
-      const parsed = new Date(Date.UTC(year, month, day));
-      if (!Number.isNaN(parsed.getTime())) {
+      const parsed = year === null ? null : new Date(Date.UTC(year, month, day));
+      if (parsed && !Number.isNaN(parsed.getTime())) {
         return parsed.toISOString();
       }
-    } else if (/^[A-Za-z]/.test(match[1])) {
-      const monthIndex = monthIndexByAbbr[match[1].slice(0, 3).toUpperCase()];
-      const parsed = monthIndex === undefined ? null : new Date(Date.UTC(Number(match[3]), monthIndex, Number(match[2])));
+    } else if (/^[A-Za-z]/.test(match[1]) || /^[A-Za-z]/.test(match[2])) {
+      const monthToken = /^[A-Za-z]/.test(match[1]) ? match[1] : match[2];
+      const dayToken = /^[A-Za-z]/.test(match[1]) ? match[2] : match[1];
+      const monthIndex = monthIndexByAbbr[monthToken.slice(0, 3).toUpperCase()];
+      const year = normalizeReceiptYear(Number(match[3]));
+      const parsed = monthIndex === undefined || year === null ? null : new Date(Date.UTC(year, monthIndex, Number(dayToken)));
       if (parsed && !Number.isNaN(parsed.getTime())) {
         return parsed.toISOString();
       }
     } else {
       const first = Number(match[1]);
       const second = Number(match[2]);
-      const year = match[3].length === 2 ? Number(`20${match[3]}`) : Number(match[3]);
-      const parsed = new Date(Date.UTC(year, first > 12 ? second - 1 : first - 1, first > 12 ? first : second));
-      if (!Number.isNaN(parsed.getTime())) {
+      const year = normalizeReceiptYear(Number(match[3]));
+      const parsed =
+        year === null ? null : new Date(Date.UTC(year, first > 12 ? second - 1 : first - 1, first > 12 ? first : second));
+      if (parsed && !Number.isNaN(parsed.getTime())) {
         return parsed.toISOString();
       }
     }
@@ -437,7 +459,7 @@ const parseBillDateFromText = (text: string) => {
 };
 
 const isSummaryLine = (line: string) =>
-  /^[+\-*•]?\s*(?:\d+%\s*)?(subtotal|sub total|tax|vat|vatable|vat exempt|vat sales|service charge|servicecharge|discount|tip|tips?|round\s*off|rounding|amount due|balance due|grand total|bill total|bill amount|gross amount|net total|total|total no of items|items purchased)\b/i.test(
+  /^[+\-*•]?\s*(?:\d+%\s*)?(subtotal|sub total|tax|vat|vatable|vatable amount|ustable amount|vat exempt|vat sales|service charge|servicecharge|discount|tip|tips?|round\s*off|rounding|amount due|balance due|grand total|bill total|bill amount|gross amount|ross amount|net total|change|cash|tender(?:ed)?|total|total no of items|items purchased)\b/i.test(
     line
   );
 
@@ -452,7 +474,12 @@ const isReceiptDateLine = (line: string) =>
   /\b\d{2,4}\b/.test(line);
 
 const isReceiptAdministrativeLine = (line: string) =>
-  /\b(?:trans(?:action)?\s*no|permit\s*no|serial\s*no|or\s*no|invoice\s*no|guest\s*count|cust(?:omer)?\s*count|cashier|server|tin\b|bir\b|accre\.?\s*no|table\s*no|print\s*cnt|terminal|branch|poblacion|makati city|quezon city)\b/i.test(
+  /\b(?:trans(?:action)?\s*no|trans\s*no|permit\s*no|serial\s*n[bo0]|or\s*no|invoice\s*no|guest\s*count|cust(?:omer)?\s*count|cashier|server|tin\b|bir\b|accre\.?\s*no|table\s*no|print\s*cnt|terminal|branch|poblacion|makati city|quezon city|this serves as an official receipt)\b/i.test(
+    line
+  );
+
+const isReceiptFooterValueLine = (line: string) =>
+  /\b(?:gross amount|ross amount|bill amount|amount due|grand total|bill total|vatable amount|ustable amount|vatable|vat exempt|vat zero|vat sales|cash\b|chan[zg]e\b|thank you|official receipt|trans(?:action)?\s*no|serial\s*n[bo0]|permit\s*no|\d{2,3}\s+va[tr]\b)\b/i.test(
     line
   );
 
@@ -922,7 +949,9 @@ const detectReceiptMerchantNameFromLines = (lines: string[]) => {
 };
 
 const sanitizeReceiptMerchantName = (value: string) => {
-  const normalized = cleanReceiptDescription(value).replace(/^[^A-Za-z0-9]+/, "");
+  const normalized = cleanReceiptDescription(value)
+    .replace(/^[^A-Za-z0-9]+/, "")
+    .replace(/^(?:by|branch|store)\s*[:\-]\s*/i, "");
   if (!normalized) {
     return null;
   }
@@ -1294,7 +1323,7 @@ const itemCandidatesFromText = (lines: string[], merchantName?: string | null) =
       continue;
     }
 
-    if (isSummaryLine(line) || isNoiseLine(line) || isReceiptAdministrativeLine(line)) {
+    if (isSummaryLine(line) || isNoiseLine(line) || isReceiptAdministrativeLine(line) || isReceiptFooterValueLine(line)) {
       pendingDescription = null;
       continue;
     }
@@ -1354,6 +1383,32 @@ const itemCandidatesFromText = (lines: string[], merchantName?: string | null) =
 
   return candidates;
 };
+
+const pruneSuspiciousReceiptItems = (items: ReceiptPreviewItem[]) =>
+  items.filter((item) => {
+    const description = normalizeWhitespace(item.description);
+    const amount = parseAmountValue(item.amount) ?? 0;
+    const alphaCount = (description.match(/[A-Za-z]/g) ?? []).length;
+    if (!description) {
+      return false;
+    }
+
+    if (isReceiptFooterValueLine(description)) {
+      return false;
+    }
+
+    if (
+      isSuspiciousReceiptItemDescription(description) &&
+      (amount >= 5000 ||
+        item.wrapped ||
+        alphaCount < 6 ||
+        /\b(?:serial|trans(?:action)?|cashier|official receipt|thank you|chan[zg]e|cash\b|vatable|gross amount|bill amount)\b/i.test(description))
+    ) {
+      return false;
+    }
+
+    return true;
+  });
 
 const splitReceiptAllocationFromLine = (line: string, currency: string): ReceiptPreviewSplitAllocation | null => {
   const normalized = normalizeWhitespace(line);
@@ -1961,28 +2016,33 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
       lines.find((line) => line.length > 2 && !isSummaryLine(line) && !isNoiseLine(line) && parseAmountFromLine(line) === null) ??
       null;
 
-  const subtotalLine = lines.find((line) => /^[+\-*•]?\s*sub\s*total\b/i.test(line));
+  const subtotalLine = [...lines].reverse().find((line) =>
+    /^[+\-*•]?\s*(?:sub\s*total|vatable amount|ustable amount|gross amount|ross amount)\b/i.test(line)
+  );
   const serviceChargeLine = lines.find((line) => /\bcharge\b/i.test(line) && parseSummaryAmountFromLine(line) !== null);
-  const taxLine = lines.find((line) => /^[+\-*•]?\s*(tax|vat)\b/i.test(line));
+  const taxLine = [...lines].reverse().find(
+    (line) => /^[+\-*•]?\s*(tax|vat|\d{2,3}\s*va[tr])\b/i.test(line) && !/\b(?:exempt|zero|sales|sale|vatable|ustable)\b/i.test(line)
+  );
   const tipLine = lines.find((line) => /^[+\-*•]?\s*tip\b/i.test(line));
   const roundingLine = lines.find((line) => /^[+\-*•]?\s*(round\s*off|rounding)\b/i.test(line));
   const discountLine = lines.find((line) => /^[+\-*•]?\s*discount\b/i.test(line));
   const tableItems = extractReceiptTableItems(lines, detectedMerchantName);
   const rawItems = tableItems.length > 0 ? tableItems : itemCandidatesFromText(lines, detectedMerchantName);
-  const rawItemTotal = rawItems.reduce((sum, item) => sum + (parseAmountValue(item.amount) ?? 0), 0);
+  const filteredItems = pruneSuspiciousReceiptItems(rawItems);
+  const rawItemTotal = filteredItems.reduce((sum, item) => sum + (parseAmountValue(item.amount) ?? 0), 0);
   const totalLine = [...lines].reverse().find((line) =>
     /^[+\-*•]?\s*(amount due|grand total|bill total|bill amount|gross amount|net total|total)\b/i.test(line)
   );
   let subtotal =
     subtotalLine
-      ? parseSummaryAmountFromLine(subtotalLine, { keywordPattern: /^[+\-*•]?\s*sub\s*total\b/i })
+      ? parseSummaryAmountFromLine(subtotalLine, { keywordPattern: /^[+\-*•]?\s*(?:sub\s*total|vatable amount|ustable amount|gross amount|ross amount)\b/i })
       : rawItemTotal > 0
         ? inferReceiptSubtotalFromFooter(lines, rawItemTotal)
         : inferReceiptSubtotalFromFooter(lines);
   let serviceCharge = serviceChargeLine
     ? parseSummaryAmountFromLine(serviceChargeLine, { keywordPattern: /\b(?:service\s*charge|servicecharge|charge)\b/i })
     : null;
-  const tax = taxLine ? parseSummaryAmountFromLine(taxLine, { keywordPattern: /^[+\-*•]?\s*(tax|vat)\b/i }) : null;
+  const tax = taxLine ? parseSummaryAmountFromLine(taxLine, { keywordPattern: /^[+\-*•]?\s*(tax|vat|\d{2,3}\s*va[tr])\b/i }) : null;
   const tip = tipLine ? parseSummaryAmountFromLine(tipLine, { keywordPattern: /^[+\-*•]?\s*tip\b/i }) : null;
   const rounding = roundingLine ? parseSummaryAmountFromLine(roundingLine, { keywordPattern: /^[+\-*•]?\s*(round\s*off|rounding)\b/i }) : null;
   const discount = discountLine ? parseSummaryAmountFromLine(discountLine, { keywordPattern: /^[+\-*•]?\s*discount\b/i }) : null;
@@ -2011,7 +2071,7 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
     (subtotal !== null
       ? subtotal + (serviceCharge ?? 0) + (tax ?? 0) + (tip ?? 0) + (rounding ?? 0) - (discount ?? 0)
       : rawItemTotal || null);
-  const items = repairReceiptItemsWithSubtotal(rawItems, subtotal);
+  const items = repairReceiptItemsWithSubtotal(filteredItems, subtotal);
   const { allocations, participants } = splitAllocationsFromText(lines, currency, total !== null ? total.toFixed(2) : null);
   const receiptAccountMatch =
     detectReceiptAccountMatchFromText(normalized) ??

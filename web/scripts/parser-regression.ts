@@ -3758,6 +3758,54 @@ const main = async () => {
     );
   }
 
+  const officialReceiptOcrPreview = parseReceiptText([
+    "CONT Hoe",
+    "BY: COCOHAUS CIRCLE Co.",
+    "© Buezon City Circle Elliptical",
+    "Road Malaya fueron City",
+    "BIR Accre. No.t 048-005037570-600031      :",
+    "TIN: 007-710-784~00008F",
+    "SERIAL NB.: FC20111226-049",
+    "       - HIN: 11025509    :",
+    ":    FERHIT HO.: 1201-039-117647-000        :",
+    "Table Not 04      Fay:      2",
+    "-          DINE IN",
+    "Buce Juice, Blass    = 3    40,00",
+    "Suman                  i    55.00",
+    "Coco Dloy               i     85.00",
+    "Pancit Buco Res          i    105.00",
+    "Lainz per order       1 95.00",
+    "aadbgRpic Rige. 0  Rr. or",
+    "Total dty    oo    :        8",
+    "ross Amount        :          430.00",
+    "Ustable Amount      383.92    -",
+    "-VAT-Exemet Sales   = 0.00",
+    "VAT Zero- Rate Sale      0.00",
+    "122 Var              46.08     :",
+    "Bill Amount           430.00",
+    "Cash       2   3  500.00 3",
+    "ed                             =     \\",
+    ":           Chanze     =. 10.00",
+    "THANK YOU! COME AGAIN!",
+    "",
+    "This serves as an Official Receipt",
+    "05/18/2612 19:49:38 O.K. No: 0000601103",
+    "Torn:       001 Trans No 0000001132",
+    "Cashier: JOVELYNE Bill Ho: 001324",
+  ].join("\n"));
+  if (
+    officialReceiptOcrPreview.merchantName !== "COCOHAUS CIRCLE Co" ||
+    officialReceiptOcrPreview.billDate !== "2012-05-18T00:00:00.000Z" ||
+    officialReceiptOcrPreview.subtotal !== "383.92" ||
+    officialReceiptOcrPreview.tax !== "46.08" ||
+    officialReceiptOcrPreview.total !== "430.00" ||
+    officialReceiptOcrPreview.items.length !== 4
+  ) {
+    throw new Error(
+      `expected official-receipt OCR cleanup to recover merchant/date/summary without footer items, got merchant=${officialReceiptOcrPreview.merchantName ?? "null"} date=${officialReceiptOcrPreview.billDate ?? "null"} subtotal=${officialReceiptOcrPreview.subtotal ?? "null"} tax=${officialReceiptOcrPreview.tax ?? "null"} total=${officialReceiptOcrPreview.total ?? "null"} items=${officialReceiptOcrPreview.items.length}`
+    );
+  }
+
   const weightedSummarySettlement = splitBillModule.buildSplitBillSettlement({
     participants: [
       { id: "alice", name: "Alice" },
