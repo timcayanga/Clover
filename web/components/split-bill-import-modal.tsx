@@ -126,13 +126,21 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
 
   const saveReceiptBill = async (preview: ReceiptPreviewResult, fileToSave: File) => {
     const draft = splitBillDraftFromReceiptPreview(preview);
+    const participantIdMap = new Map<string, string>();
     const participants =
       draft.participants
         .filter((participant) => participant.name.trim())
-        .map((participant) => ({
-          id: participant.id ?? createId(),
-          name: participant.name.trim(),
-        })) || [];
+        .map((participant) => {
+          const nextId = createId();
+          if (participant.id) {
+            participantIdMap.set(participant.id, nextId);
+          }
+
+          return {
+            id: nextId,
+            name: participant.name.trim(),
+          };
+        }) || [];
 
     if (participants.length === 0) {
       participants.push({
@@ -146,18 +154,26 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
     const items = draft.items
       .filter((item) => item.description.trim() || item.amount.trim())
       .map((item) => ({
-        id: item.id ?? createId(),
+        id: createId(),
         description: item.description.trim(),
         amount: item.amount,
-        participantIds: item.participantIds.filter((participantId) => participantIds.has(participantId)),
+        participantIds: item.participantIds
+          .map((participantId) => participantIdMap.get(participantId) ?? participantId)
+          .filter((participantId) => participantIds.has(participantId)),
         splitMethod: item.splitMethod ?? "equal",
-        allocations: item.allocations ?? [],
+        allocations:
+          item.allocations?.map((allocation) => ({
+            ...allocation,
+            participantId: participantIdMap.get(allocation.participantId) ?? allocation.participantId,
+          })) ?? [],
       }));
     const payments = draft.payments
       .filter((payment) => payment.amount.trim())
       .map((payment) => ({
-        id: payment.id ?? createId(),
-        participantId: participantIds.has(payment.participantId) ? payment.participantId : fallbackParticipantId,
+        id: createId(),
+        participantId: participantIds.has(participantIdMap.get(payment.participantId) ?? "")
+          ? (participantIdMap.get(payment.participantId) as string)
+          : fallbackParticipantId,
         amount: payment.amount,
         note: payment.note ?? null,
       }));

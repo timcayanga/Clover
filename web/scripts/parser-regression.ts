@@ -3212,6 +3212,22 @@ const main = async () => {
     throw new Error("expected mixed currency warning to persist in split-bill raw payload");
   }
 
+  const noisyMerchantDraft = splitBillDraftFromReceiptPreview({
+    ...mixedCurrencyPreview,
+    merchantName: "PRE RE Se",
+    total: "1668.13",
+    subtotal: "1570.00",
+    items: [
+      { description: "Classic Burrito", amount: "290.00" },
+      { description: "Elote", amount: "85.00" },
+    ],
+  });
+  if (noisyMerchantDraft.title !== "Receipt split" || noisyMerchantDraft.merchantName !== "") {
+    throw new Error(
+      `expected noisy merchant names to stay out of saved draft titles, got title=${noisyMerchantDraft.title} merchant=${noisyMerchantDraft.merchantName ?? "null"}`
+    );
+  }
+
   const payerReceiptPreview = parseReceiptText([
     "THE BAKERY",
     "Paid by Alice",
@@ -3840,7 +3856,7 @@ const main = async () => {
     );
   }
 
-  const ramenOfficialReceiptPreview = parseReceiptText([
+  const ramenOfficialReceiptAddressPreview = parseReceiptText([
     "7 é                IKKORYU FUKUOKA RAMEN               FR",
     "y          Level 3 L316-L317 Century Mall          jose",
     "113        Kalayaan Ave., Cor, Salamanca        Hts",
@@ -3899,18 +3915,18 @@ const main = async () => {
     "UAT Exempt Sales          0.00",
     "12% UAT               102.86",
   ].join("\n"));
-  const ramenOfficialReceiptQuality = assessReceiptPreviewQuality(ramenOfficialReceiptPreview);
+  const ramenOfficialReceiptAddressQuality = assessReceiptPreviewQuality(ramenOfficialReceiptAddressPreview);
   if (
-    ramenOfficialReceiptPreview.merchantName !== "IKKORYU FUKUOKA RAMEN FR" ||
-    ramenOfficialReceiptPreview.billDate !== "2015-12-02T00:00:00.000Z" ||
-    ramenOfficialReceiptPreview.subtotal !== "960.00" ||
-    ramenOfficialReceiptPreview.serviceCharge !== "96.00" ||
-    ramenOfficialReceiptPreview.total !== "1056.00" ||
-    ramenOfficialReceiptPreview.items.length !== 5 ||
-    !ramenOfficialReceiptQuality.reliableForFastPath
+    ramenOfficialReceiptAddressPreview.merchantName !== "IKKORYU FUKUOKA RAMEN FR" ||
+    ramenOfficialReceiptAddressPreview.billDate !== "2015-12-02T00:00:00.000Z" ||
+    ramenOfficialReceiptAddressPreview.subtotal !== "960.00" ||
+    ramenOfficialReceiptAddressPreview.serviceCharge !== "96.00" ||
+    ramenOfficialReceiptAddressPreview.total !== "1056.00" ||
+    ramenOfficialReceiptAddressPreview.items.length !== 5 ||
+    !ramenOfficialReceiptAddressQuality.reliableForFastPath
   ) {
     throw new Error(
-      `expected ramen official receipt OCR to drop address noise and preserve fast path, got merchant=${ramenOfficialReceiptPreview.merchantName ?? "null"} date=${ramenOfficialReceiptPreview.billDate ?? "null"} subtotal=${ramenOfficialReceiptPreview.subtotal ?? "null"} serviceCharge=${ramenOfficialReceiptPreview.serviceCharge ?? "null"} total=${ramenOfficialReceiptPreview.total ?? "null"} items=${ramenOfficialReceiptPreview.items.length} quality=${JSON.stringify(ramenOfficialReceiptQuality)}`
+      `expected ramen official receipt OCR to drop address noise and preserve fast path, got merchant=${ramenOfficialReceiptAddressPreview.merchantName ?? "null"} date=${ramenOfficialReceiptAddressPreview.billDate ?? "null"} subtotal=${ramenOfficialReceiptAddressPreview.subtotal ?? "null"} serviceCharge=${ramenOfficialReceiptAddressPreview.serviceCharge ?? "null"} total=${ramenOfficialReceiptAddressPreview.total ?? "null"} items=${ramenOfficialReceiptAddressPreview.items.length} quality=${JSON.stringify(ramenOfficialReceiptAddressQuality)}`
     );
   }
 

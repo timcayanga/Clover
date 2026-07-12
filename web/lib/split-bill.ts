@@ -2568,6 +2568,7 @@ export const mergeSplitBillItemSplitMetadata = (
 };
 
 export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult): SplitBillDraft => {
+  const usableMerchantName = !isSuspiciousReceiptMerchantName(preview.merchantName) ? preview.merchantName : null;
   const total = preview.total ?? "";
   const receiptParticipants =
     preview.participants.length > 0
@@ -2643,8 +2644,8 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
         : [];
   return {
     ...createBlankSplitBillDraft(),
-    title: preview.merchantName ? `${preview.merchantName} receipt` : "Receipt split",
-    merchantName: preview.merchantName ?? "",
+    title: usableMerchantName ? `${usableMerchantName} receipt` : "Receipt split",
+    merchantName: usableMerchantName ?? "",
     billDate: preview.billDate ? preview.billDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
     currency: preview.currency,
     sourceType: "receipt",
