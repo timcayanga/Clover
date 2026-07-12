@@ -1315,23 +1315,56 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     const queueBackgroundProcessing = async (bankName?: string | null, options?: { processingMessage?: string | null }) => {
       stage = "scheduling background processing";
       try {
-        if (localDev) {
-          await ensureImportProcessingWorker();
-        }
         await updateImportFileCompat(importId, {
           status: "processing",
           processingPhase: "queued_retry",
           processingMessage: options?.processingMessage ?? "Queued for background processing...",
         });
-        await enqueueImportProcessing({
-          importFileId: importId,
-          actorUserId: userId,
-          password,
-          allowDuplicateStatement,
-          bankName: bankName || undefined,
-          importMode,
-          pdfJsBaseUrl,
-        });
+        if (localDev) {
+          await ensureImportProcessingWorker();
+          await enqueueImportProcessing({
+            importFileId: importId,
+            actorUserId: userId,
+            password,
+            allowDuplicateStatement,
+            bankName: bankName || undefined,
+            importMode,
+            pdfJsBaseUrl,
+          });
+        } else {
+          after(async () => {
+            try {
+              const { processImportFileText } = await import("@/workers/import-processor");
+              await updateImportFileCompat(importId, {
+                status: "processing",
+                processingPhase: "reading_account_details",
+                processingMessage: options?.processingMessage ?? "Starting screenshot import...",
+              }).catch(() => null);
+              await processImportFileText(importId, {
+                password,
+                actorUserId: userId,
+                qaSource: "import_processing",
+                allowDuplicateStatement,
+                importMode,
+                pdfJsBaseUrl,
+                statementMetadataOverride: bankName
+                  ? {
+                      institution: bankName,
+                    }
+                  : null,
+              });
+            } catch (error) {
+              console.error("Deferred background import failed", { importId, error: summarizeErrorForLog(error) });
+              await updateImportFileCompat(importId, {
+                status: "processing",
+                processingPhase: "queued_retry",
+                processingMessage:
+                  options?.processingMessage ??
+                  "Clover is retrying the background reader for this file.",
+              }).catch(() => null);
+            }
+          });
+        }
       } catch (error) {
         console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
         await updateImportFileCompat(importId, {
@@ -1388,21 +1421,41 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           await uploadPromise;
           if (localDev) {
             await ensureImportProcessingWorker();
+            await updateImportFileCompat(importId, {
+              status: "processing",
+              processingPhase: "queued_retry",
+              processingMessage: options?.processingMessage ?? "Starting screenshot import...",
+            });
+            await enqueueImportProcessing({
+              importFileId: importId,
+              actorUserId: userId,
+              password,
+              allowDuplicateStatement,
+              bankName: bankName || undefined,
+              importMode,
+              pdfJsBaseUrl,
+            });
+          } else {
+            const { processImportFileText } = await import("@/workers/import-processor");
+            await updateImportFileCompat(importId, {
+              status: "processing",
+              processingPhase: "reading_account_details",
+              processingMessage: options?.processingMessage ?? "Starting screenshot import...",
+            }).catch(() => null);
+            await processImportFileText(importId, {
+              password,
+              actorUserId: userId,
+              qaSource: "import_processing",
+              allowDuplicateStatement,
+              importMode,
+              pdfJsBaseUrl,
+              statementMetadataOverride: bankName
+                ? {
+                    institution: bankName,
+                  }
+                : null,
+            });
           }
-          await updateImportFileCompat(importId, {
-            status: "processing",
-            processingPhase: "queued_retry",
-            processingMessage: options?.processingMessage ?? "Starting screenshot import...",
-          });
-          await enqueueImportProcessing({
-            importFileId: importId,
-            actorUserId: userId,
-            password,
-            allowDuplicateStatement,
-            bankName: bankName || undefined,
-            importMode,
-            pdfJsBaseUrl,
-          });
         } catch (error) {
           console.error("Deferred upload import queue failed", { importId, error: summarizeErrorForLog(error) });
           await updateImportFileCompat(importId, {
