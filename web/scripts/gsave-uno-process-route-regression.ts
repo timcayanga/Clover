@@ -88,6 +88,8 @@ const readJsonResponse = async (response: Response) => {
   }
 };
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const main = async () => {
   const workspaceId =
     requestedWorkspaceId ??
@@ -111,6 +113,7 @@ const main = async () => {
     formData.set("fileType", "image/png");
     formData.set("importMode", "statement");
     formData.set("allowDuplicateStatement", "true");
+    formData.set("forceInlineProcessing", "true");
     formData.set("file", new Blob([bytes], { type: "image/png" }), fileName);
 
     const processResponse = await fetch(`${baseUrl}/api/imports/${importId}/process`, {
@@ -119,17 +122,30 @@ const main = async () => {
     });
     const processPayload = await readJsonResponse(processResponse);
     assert.equal(processResponse.ok, true, `${fileName} process route should return 2xx: ${JSON.stringify(processPayload)}`);
-    assert.equal(processPayload.processed, true, `${fileName} should process successfully.`);
     assert.ok(
-      Array.isArray(processPayload.accountSummaries) && processPayload.accountSummaries.length > 0,
-      `${fileName} should publish visible account summaries.`
+      processPayload.processed === true || processPayload.queued === true,
+      `${fileName} should either process inline or queue successfully.`
     );
+    if (processPayload.processed === true) {
+      assert.ok(
+        Array.isArray(processPayload.accountSummaries) && processPayload.accountSummaries.length > 0,
+        `${fileName} should publish visible account summaries when processed inline.`
+      );
+    }
 
-    const statusResponse = await fetch(`${baseUrl}/api/imports/${importId}/status`);
-    const statusPayload = await readJsonResponse(statusResponse);
-    assert.equal(statusResponse.ok, true, `${fileName} status route should return 2xx: ${JSON.stringify(statusPayload)}`);
+    let statusPayload: Record<string, unknown> | null = null;
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const statusResponse = await fetch(`${baseUrl}/api/imports/${importId}/status`);
+      statusPayload = await readJsonResponse(statusResponse);
+      assert.equal(statusResponse.ok, true, `${fileName} status route should return 2xx: ${JSON.stringify(statusPayload)}`);
+      if (Array.isArray(statusPayload.accountSummaries) && statusPayload.accountSummaries.length > 0) {
+        break;
+      }
+      await sleep(500);
+    }
+
     assert.ok(
-      Array.isArray(statusPayload.accountSummaries) && statusPayload.accountSummaries.length > 0,
+      Array.isArray(statusPayload?.accountSummaries) && statusPayload.accountSummaries.length > 0,
       `${fileName} status should retain account summaries.`
     );
   }

@@ -1777,10 +1777,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const isImageUpload = isImageUploadFile(effectiveFileName, effectiveFileType);
       const trainedReceiptFixture = getTrainedReceiptFixture(effectiveFileName) ?? getTrainedReceiptFixture(formFileName);
       const isStatementImageUpload = isImageUpload && (!importMode || importMode === "statement");
-      const shouldLikelyQueueStatementImageAfterUpload =
-        isStatementImageUpload &&
-        !formExtractedText.trim() &&
-        !(shouldPreferSampleFallback && Boolean(sampleFallbackText));
+      const hasClientExtractedStatementImageText = isStatementImageUpload && formExtractedText.trim().length > 0;
+      const shouldQueueStatementImageAfterUpload = isStatementImageUpload && !forceInlineProcessing && !hasClientExtractedStatementImageText;
       const shouldDeferRawUploadForKnownBpiScreenshot =
         knownBpiMobileScreenshot && isStatementImageUpload && Boolean(sampleFallbackText);
       const shouldQueueDocumentUpload = !isStatementImageUpload && (isImageUpload || Boolean(importMode && importMode !== "statement"));
@@ -1865,9 +1863,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           forceInlineProcessing,
         });
 
-      const hasInlineStatementImageText =
-        isStatementImageUpload &&
-        (formExtractedText.trim().length > 0 || Boolean(shouldPreferSampleFallback && sampleFallbackText));
+      const hasInlineStatementImageText = hasClientExtractedStatementImageText;
 
       if (hasInlineStatementImageText) {
         await Promise.all([
@@ -1887,7 +1883,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           }),
         ]);
       } else {
-        if (shouldDeferRawUploadForKnownBpiScreenshot || shouldLikelyQueueStatementImageAfterUpload) {
+        if (shouldDeferRawUploadForKnownBpiScreenshot || shouldQueueStatementImageAfterUpload) {
           await uploadBankHintPromise;
           if (shouldDeferRawUploadForKnownBpiScreenshot) {
             after(async () => {
@@ -2297,22 +2293,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         (shouldProcessInline || forceInlineProcessing || Boolean(cachedDocTextInfo)) &&
         (!shouldQueueDocumentUpload || Boolean(cachedDocTextInfo));
 
-      const shouldProcessStatementAfterResponse =
-        isStatementImageUpload &&
-        !forceInlineProcessing &&
-        !(shouldPreferSampleFallback && Boolean(sampleFallbackText)) &&
-        shouldProcessInlineRequest;
+      const shouldProcessStatementAfterResponse = shouldQueueStatementImageAfterUpload;
 
       if (shouldProcessStatementAfterResponse) {
-        if (shouldLikelyQueueStatementImageAfterUpload) {
-          return queueBackgroundProcessingAfterUpload(uploadPromise, processingBankName || null, {
-            processingMessage: "Starting screenshot import...",
-            queueWaitMessage: "Finishing the screenshot upload before Clover starts the import...",
-          });
-        }
-
-        return queueBackgroundProcessing(processingBankName || null, {
+        return queueBackgroundProcessingAfterUpload(uploadPromise, processingBankName || null, {
           processingMessage: "Starting screenshot import...",
+          queueWaitMessage: "Finishing the screenshot upload before Clover starts the import...",
         });
       }
 
