@@ -2,8 +2,10 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import {
+  assessReceiptPreviewQuality,
   mergeSplitBillItemSplitMetadata,
   mergeSplitBillReceiptSummary,
   splitBillDraftFromReceiptPreview,
@@ -20,6 +22,7 @@ type SplitBillImportModalProps = {
 
 const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const RECEIPT_PREVIEW_STORAGE_KEY = "split-bill:receipt-preview";
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
   const payload = (await response.json()) as T & { error?: string };
@@ -49,6 +52,7 @@ const validateFile = (file: File | null) => {
 const createId = () => globalThis.crypto?.randomUUID?.() ?? `receipt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }: SplitBillImportModalProps) {
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const photoLibraryInputRef = useRef<HTMLInputElement>(null);
@@ -223,6 +227,19 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
     return result.bill;
   };
 
+  const openReceiptEditor = (preview: ReceiptPreviewResult, fileToSave: File) => {
+    sessionStorage.setItem(
+      RECEIPT_PREVIEW_STORAGE_KEY,
+      JSON.stringify({
+        preview,
+        fileName: fileToSave.name,
+        fileType: fileToSave.type,
+      })
+    );
+    onClose();
+    router.push("/split-bill/new");
+  };
+
   const handleUpload = async () => {
     const validationError = validateFile(file);
     if (validationError) {
@@ -244,6 +261,13 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
         body: formData,
       });
       const payload = await readJsonResponse<{ preview: ReceiptPreviewResult }>(response);
+      const quality = assessReceiptPreviewQuality(payload.preview);
+
+      if (!quality.reliableForFastPath) {
+        setMessage("Opening the bill editor so you can review Clover's draft...");
+        openReceiptEditor(payload.preview, selectedFile);
+        return;
+      }
 
       setMessage("Saving your split bill...");
       const savedBill = await saveReceiptBill(payload.preview, selectedFile);
