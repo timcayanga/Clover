@@ -235,6 +235,15 @@ export const guessStatementIdentity = (fileName: string) => {
     };
   }
 
+  if (/(gstocks|ab capital|investatrade)/i.test(lowerName)) {
+    return {
+      accountName: "GStocks",
+      institution: "GStocks",
+      accountNumber: null,
+      accountType: "investment" as const,
+    };
+  }
+
   return null;
 };
 
@@ -475,6 +484,15 @@ export const resolveMobileWalletIdentityFromParsedRows = (rows: ParsedImportRow[
       return {
         accountName: "GCrypto",
         institution: "GCrypto",
+        accountType: "investment",
+        accountNumber: null,
+      };
+    }
+
+    if (/(gstocks|ab capital|investatrade)/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
+      return {
+        accountName: "GStocks",
+        institution: "GStocks",
         accountType: "investment",
         accountNumber: null,
       };

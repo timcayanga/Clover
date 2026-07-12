@@ -4538,35 +4538,69 @@ const resolveConfirmationAccount = async (params: {
               [payload.providerProduct, payload.accountLabel, payload.note].filter(Boolean).join(" ")
             ))
       ) ?? null;
-    if (!timeDepositPayload) {
-      return null;
+    if (timeDepositPayload) {
+      const principal =
+        typeof timeDepositPayload.depositAmount === "number" && Number.isFinite(timeDepositPayload.depositAmount)
+          ? timeDepositPayload.depositAmount
+          : typeof params.statementMetadata?.openingBalance === "number" && Number.isFinite(params.statementMetadata.openingBalance)
+            ? params.statementMetadata.openingBalance
+            : typeof params.statementMetadata?.endingBalance === "number" && Number.isFinite(params.statementMetadata.endingBalance)
+              ? params.statementMetadata.endingBalance
+              : null;
+      const maturityValue =
+        typeof timeDepositPayload.maturityAmount === "number" && Number.isFinite(timeDepositPayload.maturityAmount)
+          ? timeDepositPayload.maturityAmount
+          : null;
+      const interestRateText = typeof timeDepositPayload.interestRate === "string" ? timeDepositPayload.interestRate : null;
+      const parsedInterestRate = interestRateText ? Number.parseFloat(interestRateText.replace(/[^0-9.]/g, "")) : Number.NaN;
+      const maturityDate =
+        normalizeImportedInvestmentDate(timeDepositPayload.maturityDate) ??
+        null;
+
+      return {
+        investmentSubtype: "time_deposit" as const,
+        investmentPrincipal: principal,
+        investmentInterestRate: Number.isFinite(parsedInterestRate) ? parsedInterestRate : null,
+        investmentMaturityValue: maturityValue,
+        investmentMaturityDate: maturityDate,
+      };
     }
 
-    const principal =
-      typeof timeDepositPayload.depositAmount === "number" && Number.isFinite(timeDepositPayload.depositAmount)
-        ? timeDepositPayload.depositAmount
-        : typeof params.statementMetadata?.openingBalance === "number" && Number.isFinite(params.statementMetadata.openingBalance)
-          ? params.statementMetadata.openingBalance
-          : typeof params.statementMetadata?.endingBalance === "number" && Number.isFinite(params.statementMetadata.endingBalance)
-            ? params.statementMetadata.endingBalance
-            : null;
-    const maturityValue =
-      typeof timeDepositPayload.maturityAmount === "number" && Number.isFinite(timeDepositPayload.maturityAmount)
-        ? timeDepositPayload.maturityAmount
-        : null;
-    const interestRateText = typeof timeDepositPayload.interestRate === "string" ? timeDepositPayload.interestRate : null;
-    const parsedInterestRate = interestRateText ? Number.parseFloat(interestRateText.replace(/[^0-9.]/g, "")) : Number.NaN;
-    const maturityDate =
-      normalizeImportedInvestmentDate(timeDepositPayload.maturityDate) ??
-      null;
+    const marketInvestmentPayload =
+      payloads.find(
+        (payload) =>
+          payload.accountType === "investment" &&
+          (typeof payload.investmentSubtype === "string" ||
+            typeof payload.investmentSymbol === "string" ||
+            typeof payload.quantity === "number" ||
+            typeof payload.totalCost === "number")
+      ) ?? null;
+    if (marketInvestmentPayload) {
+      return {
+        investmentSubtype:
+          typeof marketInvestmentPayload.investmentSubtype === "string" && marketInvestmentPayload.investmentSubtype.trim()
+            ? marketInvestmentPayload.investmentSubtype.trim()
+            : "stock",
+        investmentSymbol:
+          typeof marketInvestmentPayload.investmentSymbol === "string" && marketInvestmentPayload.investmentSymbol.trim()
+            ? marketInvestmentPayload.investmentSymbol.trim()
+            : null,
+        investmentQuantity:
+          typeof marketInvestmentPayload.quantity === "number" && Number.isFinite(marketInvestmentPayload.quantity)
+            ? marketInvestmentPayload.quantity
+            : null,
+        investmentCostBasis:
+          typeof marketInvestmentPayload.totalCost === "number" && Number.isFinite(marketInvestmentPayload.totalCost)
+            ? marketInvestmentPayload.totalCost
+            : null,
+        investmentPrincipal: null,
+        investmentInterestRate: null,
+        investmentMaturityValue: null,
+        investmentMaturityDate: null,
+      };
+    }
 
-    return {
-      investmentSubtype: "time_deposit" as const,
-      investmentPrincipal: principal,
-      investmentInterestRate: Number.isFinite(parsedInterestRate) ? parsedInterestRate : null,
-      investmentMaturityValue: maturityValue,
-      investmentMaturityDate: maturityDate,
-    };
+    return null;
   };
   const importedInvestmentDetails = readImportedInvestmentDetails();
   const updateAccountIdentity = async (
@@ -4593,6 +4627,9 @@ const resolveConfirmationAccount = async (params: {
       clearBalance?: boolean;
       creditLimit?: number | null;
       investmentSubtype?: string | null;
+      investmentSymbol?: string | null;
+      investmentQuantity?: number | null;
+      investmentCostBasis?: number | null;
       investmentPrincipal?: number | null;
       investmentInterestRate?: number | null;
       investmentMaturityValue?: number | null;
@@ -4663,6 +4700,15 @@ const resolveConfirmationAccount = async (params: {
     if (next.type === "investment") {
       if (typeof next.investmentSubtype === "string" && next.investmentSubtype.trim()) {
         data.investmentSubtype = next.investmentSubtype.trim();
+      }
+      if (typeof next.investmentSymbol === "string" && next.investmentSymbol.trim()) {
+        data.investmentSymbol = next.investmentSymbol.trim();
+      }
+      if (typeof next.investmentQuantity === "number" && Number.isFinite(next.investmentQuantity)) {
+        data.investmentQuantity = next.investmentQuantity.toString();
+      }
+      if (typeof next.investmentCostBasis === "number" && Number.isFinite(next.investmentCostBasis)) {
+        data.investmentCostBasis = next.investmentCostBasis.toString();
       }
       if (typeof next.investmentPrincipal === "number" && Number.isFinite(next.investmentPrincipal)) {
         data.investmentPrincipal = next.investmentPrincipal.toString();
@@ -5091,6 +5137,15 @@ const resolveConfirmationAccount = async (params: {
         ...(accountIdentityType === "investment" && importedInvestmentDetails
           ? {
               investmentSubtype: importedInvestmentDetails.investmentSubtype,
+              ...(typeof importedInvestmentDetails.investmentSymbol === "string" && importedInvestmentDetails.investmentSymbol.trim()
+                ? { investmentSymbol: importedInvestmentDetails.investmentSymbol.trim() }
+                : {}),
+              ...(typeof importedInvestmentDetails.investmentQuantity === "number" && Number.isFinite(importedInvestmentDetails.investmentQuantity)
+                ? { investmentQuantity: importedInvestmentDetails.investmentQuantity.toString() }
+                : {}),
+              ...(typeof importedInvestmentDetails.investmentCostBasis === "number" && Number.isFinite(importedInvestmentDetails.investmentCostBasis)
+                ? { investmentCostBasis: importedInvestmentDetails.investmentCostBasis.toString() }
+                : {}),
               ...(typeof importedInvestmentDetails.investmentPrincipal === "number" && Number.isFinite(importedInvestmentDetails.investmentPrincipal)
                 ? { investmentPrincipal: importedInvestmentDetails.investmentPrincipal.toString() }
                 : {}),
@@ -10522,9 +10577,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               ]
         : [],
       });
-  reconciledAccountBalance = mobileWalletScreenshotImport
-    ? null
-    : statementEndingBalance ?? latestExplicitStatementBalance ?? fallbackReconciledBalance;
   const candidateVisibleTransactionsCount = parsedRows.filter((row) => {
     if (!row.rawPayload || typeof row.rawPayload !== "object" || Array.isArray(row.rawPayload)) {
       return true;
@@ -10533,6 +10585,17 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const kind = (row.rawPayload as Record<string, unknown>).kind;
     return kind !== "opening_balance" && kind !== "account_snapshot_marker";
   }).length;
+  const snapshotOnlySingleGroupBalance =
+    candidateVisibleTransactionsCount === 0 &&
+    parsedAccountGroups.length === 1 &&
+    parsedRows.every((row) => isSnapshotOnlyParsedRow(row))
+      ? getImportAccountBalanceFromParsedRows(parsedAccountGroups[0]?.rows as EnrichedParsedImportRow[])
+      : null;
+  reconciledAccountBalance = mobileWalletScreenshotImport
+    ? null
+    : snapshotOnlySingleGroupBalance !== null
+      ? snapshotOnlySingleGroupBalance.toString()
+      : statementEndingBalance ?? latestExplicitStatementBalance ?? fallbackReconciledBalance;
   if (
     shouldRunDestructiveMultiAccountCleanup({
       multiAccountImport,
@@ -11364,6 +11427,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           workspaceId: String(importFile.workspaceId),
           source: "upload",
           institution: { in: resolvedInstitutionsForCleanup },
+          type: { not: "investment" },
           id: { notIn: resolvedAccountIdsForCleanup },
           transactions: { none: {} },
           accountNumber: null,

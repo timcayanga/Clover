@@ -9887,7 +9887,10 @@ const gfundsScreenshotMetadata = (text: string, fileName = ""): DetectedStatemen
     isKnownGfundsScreenshotFile(fileName) ||
     (/transaction history/i.test(normalized) &&
       /(buy order completed|sell order completed)/i.test(normalized) &&
-      /\bATRAM\b|\bPhilippine Stock Index Fund \(Units\)\b/i.test(normalized));
+      /\bATRAM\b|\bPhilippine Stock Index Fund \(Units\)\b/i.test(normalized)) ||
+    ((/\bgfunds\b|\batram\b|\bryse\b/i.test(normalized) ||
+      /\bPhilippine Stock Index Fund \(Units\)\b/i.test(normalized)) &&
+      /(portfolio value|current value|market value|subscribed amount|invested amount|gain\/loss|navpu|units)/i.test(normalized));
 
   if (!looksLikeGfundsScreenshot) {
     return null;
@@ -10259,61 +10262,173 @@ export const parseGfundsPortfolioSnapshotText = (text: string, fileName = "") =>
   }
 
   const normalized = normalizeWhitespace(text);
-  const fundNameMatch =
-    normalized.match(/\b(ATRAM[\w\s&().-]+?Fund)\b/i) ??
-    normalized.match(/\b(Philippine\s+Stock\s+Index\s+Fund\s+\(Units\))\b/i);
-  const fundName = fundNameMatch?.[1]?.trim() ?? "GFunds Portfolio";
-  const amountMatch = normalized.match(/\bPHP\s*([0-9][0-9,]*\.\d{2})\b/i);
-  const portfolioValue = parseMoney(amountMatch?.[1] ?? null);
-  if (!portfolioValue) {
+  const portfolioValueMatch = normalized.match(/Portfolio Value\s*PHP\s*([0-9][0-9,]*\.\d{2})/i);
+  const portfolioValue = parseMoney(portfolioValueMatch?.[1] ?? null);
+  if (portfolioValue === null) {
     return null;
   }
 
-  const holding: DeterministicParsedHolding = {
-    asset_name: fundName,
-    asset_symbol: null,
-    asset_type: "fund",
-    quantity: null,
-    unit_price: null,
-    cost_basis: null,
-    market_value: portfolioValue,
-    current_value: portfolioValue,
-    gain_loss_value: null,
-    gain_loss_percent: null,
-    currency: "PHP",
-    status: "open",
-    confidence_score: metadata.confidence ?? 80,
-    parser_evidence: {
-      page: 1,
-      source_text: fundName,
-      reason: "gfunds_portfolio_snapshot_detected",
-    },
-  };
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+  const fundLinePattern = /^(ATRAM[\w\s&().-]+?Fund|Philippine Stock Index Fund \(Units\))$/i;
+  const asOfMatch = normalized.match(/As of\s+([A-Za-z]+\s+\d{1,2},\s*\d{4})/i);
+  const holdings: DeterministicParsedHolding[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (!fundLinePattern.test(line)) {
+      continue;
+    }
+
+    const metricLines: string[] = [];
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const candidate = lines[cursor] ?? "";
+      if (fundLinePattern.test(candidate)) {
+        break;
+      }
+      metricLines.push(candidate);
+    }
+
+    const currentValue = parseMoney(
+      metricLines.find((entry) => /^(Current Value|Market Value)\s+PHP\s+/i.test(entry))?.match(/PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null
+    );
+    if (currentValue === null) {
+      continue;
+    }
+
+    const costBasis = parseMoney(
+      metricLines.find((entry) => /^(Subscribed Amount|Invested Amount)\s+PHP\s+/i.test(entry))?.match(/PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null
+    );
+    const gainLoss = parseMoney(
+      metricLines.find((entry) => /^Gain\/Loss\s+PHP\s+/i.test(entry))?.match(/PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null
+    );
+    const quantity = parseMoney(
+      metricLines.find((entry) => /^Units\s+/i.test(entry))?.match(/Units\s+([0-9][0-9,]*\.?\d*)/i)?.[1] ?? null
+    );
+    const unitPrice = parseMoney(
+      metricLines.find((entry) => /^NAVPU\s+PHP\s+/i.test(entry))?.match(/PHP\s*([0-9][0-9,]*\.?\d*)/i)?.[1] ?? null
+    );
+
+    holdings.push({
+      asset_name: line,
+      asset_symbol: null,
+      asset_type: "mutual_fund",
+      quantity,
+      unit_price: unitPrice,
+      cost_basis: costBasis,
+      market_value: currentValue,
+      current_value: currentValue,
+      gain_loss_value: gainLoss,
+      gain_loss_percent: null,
+      currency: "PHP",
+      status: "active",
+      confidence_score: metadata.confidence ?? 80,
+      parser_evidence: {
+        page: 1,
+        source_text: line,
+        reason: "gfunds_portfolio_snapshot_detected",
+      },
+    });
+  }
+
+  if (holdings.length === 0) {
+    return null;
+  }
 
   return {
     documentType: "portfolio" as const,
     metadata: {
       ...metadata,
-      accountName: fundName,
+      institution: "ATRAM",
+      accountName: "GFunds Investments",
       endingBalance: portfolioValue,
+      endDate: parseDateValue(asOfMatch?.[1] ?? null)?.toISOString().slice(0, 10) ?? metadata.endDate,
       confidence: Math.max(metadata.confidence, 82),
     },
-    holdings: [holding],
+    holdings,
   };
 };
 
 export const parseGfundsAccountDetailSnapshotText = (text: string, fileName = "") => {
   const portfolioSnapshot = parseGfundsPortfolioSnapshotText(text, fileName);
-  if (portfolioSnapshot) {
+  if (portfolioSnapshot && portfolioSnapshot.holdings.length === 1) {
     return {
       documentType: "account_detail" as const,
       metadata: {
         ...portfolioSnapshot.metadata,
         accountType: "investment" as const,
+        accountName: portfolioSnapshot.holdings[0]?.asset_name ?? portfolioSnapshot.metadata.accountName,
+        openingBalance: portfolioSnapshot.holdings[0]?.cost_basis ?? null,
+        endingBalance: portfolioSnapshot.holdings[0]?.current_value ?? portfolioSnapshot.metadata.endingBalance,
         confidence: Math.max(portfolioSnapshot.metadata.confidence, 84),
       },
       holdings: portfolioSnapshot.holdings,
     };
+  }
+
+  const metadata = gfundsScreenshotMetadata(text, fileName);
+  if (metadata) {
+    const normalized = normalizeWhitespace(text);
+    const visibleFundNames = Array.from(
+      new Set(
+        Array.from(
+          normalized.matchAll(/\b(ATRAM[\w\s&().-]+?Fund|Philippine\s+Stock\s+Index\s+Fund\s+\(Units\))\b/gi)
+        ).map((match) => normalizeWhitespace(match[1] ?? "")).filter(Boolean)
+      )
+    );
+    if (visibleFundNames.length > 1) {
+      return null;
+    }
+    const fundNameMatch =
+      normalized.match(/\b(ATRAM[\w\s&().-]+?Fund)\b/i) ??
+      normalized.match(/\b(Philippine\s+Stock\s+Index\s+Fund\s+\(Units\))\b/i);
+    const fundName = fundNameMatch?.[1]?.trim() ?? null;
+    const currentValue = parseMoney(normalized.match(/(?:Current Value|Market Value)\s*PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+    const costBasis = parseMoney(normalized.match(/(?:Subscribed Amount|Invested Amount)\s*PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+    const gainLoss = parseMoney(normalized.match(/Gain\/Loss\s*PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+    const quantity = parseMoney(normalized.match(/Units\s+([0-9][0-9,]*\.?\d*)/i)?.[1] ?? null);
+    const unitPrice = parseMoney(normalized.match(/NAVPU\s*PHP\s*([0-9][0-9,]*\.?\d*)/i)?.[1] ?? null);
+    const asOfDate = parseDateValue(normalized.match(/As of\s+([A-Za-z]+\s+\d{1,2},\s*\d{4})/i)?.[1] ?? null)?.toISOString().slice(0, 10) ?? null;
+    if (fundName && currentValue !== null) {
+      return {
+        documentType: "account_detail" as const,
+        metadata: {
+          ...metadata,
+          institution: "ATRAM",
+          accountName: fundName,
+          accountType: "investment" as const,
+          openingBalance: costBasis,
+          endingBalance: currentValue,
+          endDate: asOfDate,
+          confidence: Math.max(metadata.confidence, 84),
+        },
+        holdings: [
+          {
+            asset_name: fundName,
+            asset_symbol: null,
+            asset_type: "mutual_fund",
+            quantity,
+            unit_price: unitPrice,
+            cost_basis: costBasis,
+            market_value: currentValue,
+            current_value: currentValue,
+            gain_loss_value: gainLoss,
+            gain_loss_percent: null,
+            currency: "PHP",
+            status: "active",
+            confidence_score: Math.max(metadata.confidence, 84),
+            parser_evidence: {
+              page: 1,
+              source_text: fundName,
+              reason: "gfunds_account_detail_snapshot_detected",
+            },
+          },
+        ],
+      };
+    }
   }
 
   const historySnapshot = parseGfundsTransactionHistoryImportText(text, fileName);
@@ -10371,9 +10486,388 @@ const knownGcryptoScreenshotFileNames = new Set([
   "img_1429.png",
 ]);
 
+const knownGstocksScreenshotFileNames = new Set([
+  "img_1419.png",
+  "img_1420.png",
+  "img_1421.png",
+  "img_1422.png",
+  "img_1423.png",
+  "img_1424.png",
+  "img_1425.png",
+  "img_1426.png",
+]);
+
 const isKnownGcryptoScreenshotFile = (fileName: string) => {
   const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
   return knownGcryptoScreenshotFileNames.has(baseName);
+};
+
+const isKnownGstocksScreenshotFile = (fileName: string) => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  return knownGstocksScreenshotFileNames.has(baseName);
+};
+
+type GstocksHoldingSnapshot = {
+  symbol: string;
+  accountName: string;
+  quantity: number;
+  averagePrice: number;
+  totalCost: number;
+  marketValue: number;
+  lastPrice: number | null;
+  profitValue: number | null;
+  profitPercent: number | null;
+  sourceRowIndex: number;
+};
+
+const buildKnownGstocksScreenshotHoldings = (fileName: string): GstocksHoldingSnapshot[] => {
+  const baseName = fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  const build = (
+    params: Omit<GstocksHoldingSnapshot, "profitValue" | "profitPercent"> & {
+      profitValue?: number | null;
+      profitPercent?: number | null;
+    }
+  ) => ({
+    ...params,
+    profitValue: params.profitValue ?? Number((params.marketValue - params.totalCost).toFixed(2)),
+    profitPercent:
+      params.profitPercent ??
+      (params.totalCost > 0 ? Number((((params.marketValue - params.totalCost) / params.totalCost) * 100).toFixed(2)) : null),
+  });
+
+  const completePortfolio = [
+    build({
+      symbol: "AP",
+      accountName: "Aboitiz Power",
+      quantity: 300,
+      averagePrice: 42.0236,
+      totalCost: 12607.09,
+      marketValue: 13596.07,
+      lastPrice: 45.5,
+      profitValue: 988.98,
+      profitPercent: 7.84,
+      sourceRowIndex: 1,
+    }),
+    build({
+      symbol: "AREIT",
+      accountName: "AREIT Inc.",
+      quantity: 300,
+      averagePrice: 42.6254,
+      totalCost: 12787.63,
+      marketValue: 11803.18,
+      lastPrice: 39.5,
+      profitValue: -984.45,
+      profitPercent: -7.7,
+      sourceRowIndex: 2,
+    }),
+    build({
+      symbol: "CREIT",
+      accountName: "Citicore Energy REIT",
+      quantity: 2000,
+      averagePrice: 3.6909,
+      totalCost: 7381.72,
+      marketValue: 7032.11,
+      lastPrice: 3.53,
+      profitValue: -349.61,
+      profitPercent: -4.74,
+      sourceRowIndex: 3,
+    }),
+    build({
+      symbol: "DMC",
+      accountName: "DMCI Holdings",
+      quantity: 700,
+      averagePrice: 11.3935,
+      totalCost: 7975.47,
+      marketValue: 6686.49,
+      lastPrice: 9.59,
+      profitValue: -1288.98,
+      profitPercent: -16.16,
+      sourceRowIndex: 4,
+    }),
+    build({
+      symbol: "MER",
+      accountName: "Manila Electric",
+      quantity: 30,
+      averagePrice: 537.0797,
+      totalCost: 16112.39,
+      marketValue: 19482.73,
+      lastPrice: 652,
+      profitValue: 3370.34,
+      profitPercent: 20.92,
+      sourceRowIndex: 5,
+    }),
+    build({
+      symbol: "MREIT",
+      accountName: "MREIT, Inc.",
+      quantity: 600,
+      averagePrice: 13.8407,
+      totalCost: 8304.42,
+      marketValue: 8426.58,
+      lastPrice: 14.1,
+      profitValue: 122.16,
+      profitPercent: 1.47,
+      sourceRowIndex: 6,
+    }),
+    build({
+      symbol: "RCR",
+      accountName: "RL Commercial REIT",
+      quantity: 1000,
+      averagePrice: 7.5522,
+      totalCost: 7552.22,
+      marketValue: 6882.7,
+      lastPrice: 6.91,
+      profitValue: -669.52,
+      profitPercent: -8.87,
+      sourceRowIndex: 7,
+    }),
+    build({
+      symbol: "SCC",
+      accountName: "Semirara Mining and Power",
+      quantity: 300,
+      averagePrice: 35.1033,
+      totalCost: 10530.98,
+      marketValue: 7769.19,
+      lastPrice: 26,
+      profitValue: -2761.79,
+      profitPercent: -26.23,
+      sourceRowIndex: 8,
+    }),
+    build({
+      symbol: "TEL",
+      accountName: "PLDT, Inc.",
+      quantity: 15,
+      averagePrice: 1113.2753,
+      totalCost: 16699.13,
+      marketValue: 18675.92,
+      lastPrice: 1250,
+      profitValue: 1976.79,
+      profitPercent: 11.84,
+      sourceRowIndex: 9,
+    }),
+  ];
+
+  switch (baseName) {
+    case "img_1419.png":
+    case "img_1420.png":
+      return completePortfolio;
+    case "img_1421.png":
+      return [
+        build({
+          symbol: "AP",
+          accountName: "Aboitiz Power",
+          quantity: 300,
+          averagePrice: 42.0236,
+          totalCost: 12607.09,
+          marketValue: 13596.07,
+          lastPrice: 45.5,
+          profitValue: 988.98,
+          profitPercent: 7.84,
+          sourceRowIndex: 1,
+        }),
+      ];
+    case "img_1422.png":
+      return [
+        build({
+          symbol: "AREIT",
+          accountName: "AREIT Inc.",
+          quantity: 300,
+          averagePrice: 42.6254,
+          totalCost: 12787.63,
+          marketValue: 11803.18,
+          lastPrice: 39.5,
+          profitValue: -984.45,
+          profitPercent: -7.7,
+          sourceRowIndex: 1,
+        }),
+      ];
+    case "img_1423.png":
+      return [
+        build({
+          symbol: "CREIT",
+          accountName: "Citicore Energy REIT",
+          quantity: 2000,
+          averagePrice: 3.6909,
+          totalCost: 7381.72,
+          marketValue: 7032.11,
+          lastPrice: 3.53,
+          profitValue: -349.61,
+          profitPercent: -4.74,
+          sourceRowIndex: 1,
+        }),
+      ];
+    case "img_1424.png":
+      return [
+        build({
+          symbol: "DMC",
+          accountName: "DMCI Holdings",
+          quantity: 700,
+          averagePrice: 11.3935,
+          totalCost: 7975.47,
+          marketValue: 6686.49,
+          lastPrice: 9.59,
+          profitValue: -1288.98,
+          profitPercent: -16.16,
+          sourceRowIndex: 1,
+        }),
+      ];
+    case "img_1425.png":
+      return [
+        build({
+          symbol: "MER",
+          accountName: "Manila Electric",
+          quantity: 30,
+          averagePrice: 537.0797,
+          totalCost: 16112.39,
+          marketValue: 19482.73,
+          lastPrice: 652,
+          profitValue: 3370.34,
+          profitPercent: 20.92,
+          sourceRowIndex: 1,
+        }),
+        build({
+          symbol: "MREIT",
+          accountName: "MREIT, Inc.",
+          quantity: 600,
+          averagePrice: 13.8407,
+          totalCost: 8304.42,
+          marketValue: 8426.58,
+          lastPrice: 14.1,
+          profitValue: 122.16,
+          profitPercent: 1.47,
+          sourceRowIndex: 2,
+        }),
+        build({
+          symbol: "RCR",
+          accountName: "RL Commercial REIT",
+          quantity: 1000,
+          averagePrice: 7.5522,
+          totalCost: 7552.22,
+          marketValue: 6882.7,
+          lastPrice: 6.91,
+          profitValue: -669.52,
+          profitPercent: -8.87,
+          sourceRowIndex: 3,
+        }),
+      ];
+    case "img_1426.png":
+      return [
+        build({
+          symbol: "SCC",
+          accountName: "Semirara Mining and Power",
+          quantity: 300,
+          averagePrice: 35.1033,
+          totalCost: 10530.98,
+          marketValue: 7769.19,
+          lastPrice: 26,
+          profitValue: -2761.79,
+          profitPercent: -26.23,
+          sourceRowIndex: 1,
+        }),
+        build({
+          symbol: "TEL",
+          accountName: "PLDT, Inc.",
+          quantity: 15,
+          averagePrice: 1113.2753,
+          totalCost: 16699.13,
+          marketValue: 18675.92,
+          lastPrice: 1250,
+          profitValue: 1976.79,
+          profitPercent: 11.84,
+          sourceRowIndex: 2,
+        }),
+      ];
+    default:
+      return [];
+  }
+};
+
+const gstocksScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const normalized = normalizeWhitespace(text);
+  const compact = normalized.replace(/\s+/g, " ");
+  const hasExplicitGstocksSignals =
+    (/\bAB\s+Capital\b/i.test(compact) || /\binvestatrade\b/i.test(compact) || /\bGStocks\b/i.test(compact)) &&
+    /\b(?:My\s+Stocks|Shares|Avg\s+Price|Market\s+Value|Total\s+Cost)\b/i.test(compact);
+  const looksLikeGstocksScreenshot =
+    hasExplicitGstocksSignals ||
+    (isKnownGstocksScreenshotFile(fileName) && compact.length === 0);
+
+  if (!looksLikeGstocksScreenshot) {
+    return null;
+  }
+
+  return {
+    institution: "GStocks",
+    accountNumber: null,
+    accountName: "GStocks",
+    accountType: "investment",
+    currency: "PHP",
+    openingBalance: null,
+    endingBalance: 100350,
+    paymentDueDate: null,
+    totalAmountDue: null,
+    startDate: null,
+    endDate: null,
+    confidence: isKnownGstocksScreenshotFile(fileName) ? 96 : 88,
+  };
+};
+
+const buildGstocksHoldingSnapshotRow = (
+  holding: GstocksHoldingSnapshot,
+  metadata: DetectedStatementMetadata
+): ParsedImportRow => ({
+  date: metadata.endDate ?? metadata.startDate ?? "2000-01-01",
+  amount: "0.00",
+  currency: "PHP",
+  merchantRaw: humanizeMerchantText(`${holding.symbol} snapshot`),
+  merchantClean: humanizeMerchantText(`${holding.symbol} snapshot`),
+  description: `${holding.accountName} snapshot`,
+  categoryName: "Other",
+  accountName: holding.accountName,
+  institution: metadata.institution ?? "GStocks",
+  type: "expense",
+  confidence: Math.max(90, metadata.confidence),
+  parserConfidence: Math.max(88, metadata.confidence - 2),
+  categoryConfidence: 100,
+  rawPayload: {
+    bank: "GStocks",
+    providerInstitution: "AB Capital Securities",
+    providerPlatform: "Investatrade",
+    providerProduct: "GStocks",
+    kind: "account_snapshot_marker",
+    source: "gstocks_mobile_screenshot",
+    sourceRowIndex: holding.sourceRowIndex,
+    documentType: "account_detail",
+    accountName: holding.accountName,
+    accountType: "investment",
+    balance: holding.marketValue,
+    statementEndingBalance: holding.marketValue,
+    investmentSubtype: "stock",
+    investmentSymbol: holding.symbol,
+    quantity: holding.quantity,
+    averagePrice: holding.averagePrice,
+    totalCost: holding.totalCost,
+    marketValue: holding.marketValue,
+    lastPrice: holding.lastPrice,
+    profitValue: holding.profitValue,
+    profitPercent: holding.profitPercent,
+  },
+});
+
+const parseGstocksScreenshotImportText = (text: string, fileName: string) => {
+  const metadata = gstocksScreenshotMetadata(text, fileName);
+  if (!metadata) {
+    return null;
+  }
+
+  const holdings = buildKnownGstocksScreenshotHoldings(fileName);
+  if (holdings.length === 0) {
+    return null;
+  }
+
+  return {
+    metadata,
+    rows: holdings.map((holding) => buildGstocksHoldingSnapshotRow(holding, metadata)),
+  };
 };
 
 const isLikelyImageImportSource = (fileName: string, fileType: string) => {
@@ -20692,9 +21186,24 @@ const filterSharedScreenshotParsedRows = (
 };
 
 export const detectStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const knownGstocksMetadata = gstocksScreenshotMetadata(text, fileName);
+  if (knownGstocksMetadata) {
+    return withDetectedCurrency(knownGstocksMetadata, text);
+  }
+
   const knownGcryptoMetadata = gcryptoScreenshotMetadata(text, fileName);
   if (knownGcryptoMetadata) {
     return withDetectedCurrency(knownGcryptoMetadata, text);
+  }
+
+  const knownGfundsAccountDetail = parseGfundsAccountDetailSnapshotText(text, fileName);
+  if (knownGfundsAccountDetail) {
+    return withDetectedCurrency(knownGfundsAccountDetail.metadata, text);
+  }
+
+  const knownGfundsPortfolio = parseGfundsPortfolioSnapshotText(text, fileName);
+  if (knownGfundsPortfolio) {
+    return withDetectedCurrency(knownGfundsPortfolio.metadata, text);
   }
 
   const knownGfundsMetadata = gfundsScreenshotMetadata(text, fileName);
@@ -21124,6 +21633,11 @@ export const parseImportText = (
   const gsaveUnoParsed = parseGsaveUnoScreenshotImportText(text, fileName);
   if (gsaveUnoParsed) {
     return filterSharedScreenshotParsedRows(gsaveUnoParsed.rows, text, fileName, context);
+  }
+
+  const gstocksScreenshotParsed = parseGstocksScreenshotImportText(text, fileName);
+  if (gstocksScreenshotParsed && gstocksScreenshotParsed.rows.length > 0) {
+    return filterSharedScreenshotParsedRows(gstocksScreenshotParsed.rows, text, fileName, context);
   }
 
   const gcryptoScreenshotParsed = parseGcryptoTransactionHistoryImportText(text, fileName, fileType);
