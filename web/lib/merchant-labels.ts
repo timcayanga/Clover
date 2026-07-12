@@ -2475,6 +2475,41 @@ const stripTrailingStatementNoise = (value: string) => {
 
 const GENERIC_PAYMENT_RAIL_REPLACEMENTS = new Set(["PayPal", "Grab", "GCash", "Maya", "Apple Pay", "Google Pay"]);
 
+const COMPACT_MERCHANT_CONTAINS_RULES: Array<{ needle: string; replacement: string }> = [
+  { needle: "mlbb", replacement: "MLBB Top Up" },
+  { needle: "dairyqueen", replacement: "Dairy Queen" },
+  { needle: "dunkin", replacement: "Dunkin" },
+  { needle: "hapag", replacement: "Hapag" },
+  { needle: "harlanholden", replacement: "Harlan Holden" },
+  { needle: "matchabar", replacement: "Matcha Bar" },
+  { needle: "elephantgrounds", replacement: "Elephant Grounds" },
+  { needle: "mocookies", replacement: "MO Cookies" },
+  { needle: "brunosbarbers", replacement: "Brunos Barbers" },
+  { needle: "robinsonseasymart", replacement: "Robinsons Easymart" },
+  { needle: "unclejohns", replacement: "Uncle John's" },
+  { needle: "linkedin", replacement: "LinkedIn" },
+  { needle: "wheylnutrition", replacement: "Wheyl Nutrition" },
+  { needle: "jollibee", replacement: "Jollibee" },
+  { needle: "timezone", replacement: "Timezone" },
+  { needle: "thespa", replacement: "The Spa" },
+  { needle: "nikkei", replacement: "Nikkei" },
+  { needle: "yardstick", replacement: "Yardstick" },
+  { needle: "yourlocal", replacement: "Your Local" },
+  { needle: "petron", replacement: "Petron" },
+  { needle: "brunchbureau", replacement: "Brunch Bureau" },
+  { needle: "breakfastatantonios", replacement: "Breakfast at Antonio's" },
+  { needle: "royce", replacement: "Royce" },
+  { needle: "bokkoreanfriedchicken", replacement: "BOK Korean Fried Chicken" },
+  { needle: "dintaifung", replacement: "Din Tai Fung" },
+  { needle: "7eleven", replacement: "7-Eleven" },
+  { needle: "mysterymanila", replacement: "Mystery Manila" },
+  { needle: "ralphswines", replacement: "Ralph's Wines" },
+  { needle: "nationalbookstore", replacement: "National Book Store" },
+  { needle: "arabica", replacement: "Arabica" },
+  { needle: "prioritypass", replacement: "Priority Pass" },
+  { needle: "15ppass", replacement: "Priority Pass" },
+];
+
 const ruleMatchesMerchantText = (rule: SimplifierRule, normalized: string, compact: string) => {
   const anyMatch = rule.patterns?.some((pattern) => pattern.test(normalized) || pattern.test(compact)) ?? false;
   const allMatch = rule.allPatterns?.every((pattern) => pattern.test(normalized) || pattern.test(compact)) ?? true;
@@ -2497,6 +2532,20 @@ const selectNestedMerchantReplacement = (normalized: string, compact: string) =>
 
   const specificMatch = uniqueMatches.find((replacement) => !GENERIC_PAYMENT_RAIL_REPLACEMENTS.has(replacement));
   return specificMatch ?? null;
+};
+
+const selectCompactMerchantContainsReplacement = (compact: string) => {
+  if (!compact) {
+    return null;
+  }
+
+  for (const rule of COMPACT_MERCHANT_CONTAINS_RULES) {
+    if (compact.includes(rule.needle)) {
+      return rule.replacement;
+    }
+  }
+
+  return null;
 };
 
 export const simplifyMerchantText = (value: string, institution?: string | null) => {
@@ -2532,6 +2581,11 @@ export const summarizeMerchantText = (value: string, institution?: string | null
 
   if (compact === "staples") {
     return "STAPLES";
+  }
+
+  const compactContainsReplacement = selectCompactMerchantContainsReplacement(rawCompact) ?? selectCompactMerchantContainsReplacement(compact);
+  if (compactContainsReplacement) {
+    return compactContainsReplacement;
   }
 
   if (institution === "Metrobank") {

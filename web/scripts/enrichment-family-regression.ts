@@ -1,4 +1,5 @@
 import { classifyMerchant, buildMerchantFamilySignature, guessCategoryFallback } from "@/lib/data-engine";
+import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { detectRecurringPatterns } from "@/lib/recurring-detection";
 
 const assert = (condition: unknown, message: string) => {
@@ -70,6 +71,17 @@ const runMerchantFamilyChecks = () => {
   assert(buildMerchantFamilySignature("STARBUCKS STORE 0143 CARD PURCHASE") === "starbucks", "Expected SOA family signature to collapse store and purchase noise down to Starbucks");
   assert(guessCategoryFallback("DUNKIN DONUTS BGC", "expense") === "Food & Dining", "Expected obvious all-caps food merchant to avoid generic Transfers/Other");
   assert(guessCategoryFallback("GRABCAR PH", "expense") === "Transport", "Expected Grab transport merchant to avoid generic Transfers/Other");
+  assert(summarizeMerchantText("DUNKINDONUTSBGC", "BPI") === "Dunkin", "Expected compact Philippine merchant text to normalize Dunkin");
+  assert(
+    summarizeMerchantText("ROBINSONSEASYMARTSTORE221", "BPI") === "Robinsons Easymart",
+    "Expected compact Robinsons Easymart variants to normalize cleanly"
+  );
+  assert(
+    summarizeMerchantText("NATIONALBOOKSTOREBGC", "BPI") === "National Book Store",
+    "Expected compact National Book Store variants to normalize cleanly"
+  );
+  assert(summarizeMerchantText("15PPASSMEMBERFEE", "BPI") === "Priority Pass", "Expected compact Priority Pass variants to normalize cleanly");
+  assert(summarizeMerchantText("MLBB1000DIBONUS", "UnionBank") === "MLBB Top Up", "Expected compact MLBB variants to normalize cleanly");
 };
 
 const runRecurringChecks = () => {

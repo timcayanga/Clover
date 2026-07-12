@@ -106,8 +106,8 @@ export const getStrongMerchantCategoryHint = (value: string): string | null => {
 
   if (
     matchesCategoryHint(value, {
-      lower: /sydney\s+opera\s+house|ticket\s+sales|htg\s+ticket\s+sales|theatre|theater|museum|gallery|cinema|concert|show|festival|playhouse|exhibit/,
-      compact: /sydneyoperahouse|ticketsales|htgticketsales|theatre|theater|museum|gallery|cinema|concert|show|festival|playhouse|exhibit/,
+      lower: /sydney\s+opera\s+house|ticket\s+sales|htg\s+ticket\s+sales|theatre|theater|museum|gallery|cinema|concert|show|festival|playhouse|exhibit|mobile\s+legends|\bmlbb\b/,
+      compact: /sydneyoperahouse|ticketsales|htgticketsales|theatre|theater|museum|gallery|cinema|concert|show|festival|playhouse|exhibit|mobilelegends|\bmlbb\b/,
     })
   ) {
     return "Entertainment";
@@ -247,8 +247,8 @@ export const getSharedMerchantCategoryHint = (value: string): string | null => {
 
   if (
     matchesCategoryHint(value, {
-      lower: /sydney\s+opera\s+house|ticket\s+sales|htg\s+ticket\s+sales|theatre|theater|museum|gallery|cinema|concert|show|festival|playhouse|exhibit/,
-      compact: /sydneyoperahouse|ticketsales|htgticketsales|theatre|theater|museum|gallery|cinema|concert|show|festival|playhouse|exhibit/,
+      lower: /sydney\s+opera\s+house|ticket\s+sales|htg\s+ticket\s+sales|theatre|theater|museum|gallery|cinema|concert|show|festival|playhouse|exhibit|mobile\s+legends|\bmlbb\b/,
+      compact: /sydneyoperahouse|ticketsales|htgticketsales|theatre|theater|museum|gallery|cinema|concert|show|festival|playhouse|exhibit|mobilelegends|\bmlbb\b/,
     })
   ) {
     return "Entertainment";

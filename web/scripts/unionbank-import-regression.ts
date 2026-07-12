@@ -69,6 +69,11 @@ assert.equal(cardRows.some((row) => /minimum amount due/i.test(String(row.descri
 assert.equal(cardRows[0]?.accountNumber, "1056827763912");
 assert.equal(cardRows[0]?.accountName, "Alyssa Jane Gabriel Rezada");
 assert.equal(cardRows.filter((row) => row.merchantClean === "MLBB Top Up").length, 8);
+assert.equal(
+  cardRows.filter((row) => row.merchantClean === "MLBB Top Up").every((row) => row.categoryName === "Entertainment"),
+  true,
+  "UnionBank MLBB rows should classify as Entertainment."
+);
 assert.equal(cardRows.find((row) => row.merchantClean === "Google One")?.categoryName, "Subscriptions");
 assert.equal(cardRows.find((row) => row.merchantClean === "Discord Nitro")?.categoryName, "Subscriptions");
 assert.equal(cardRows.at(-1)?.rawPayload?.balance, 9644);
