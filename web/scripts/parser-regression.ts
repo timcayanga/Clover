@@ -3712,6 +3712,33 @@ const main = async () => {
     throw new Error(`expected merchant ranking to skip table/ref header noise, got ${merchantHeaderPreview.merchantName ?? "null"}`);
   }
 
+  const settlementSummaryPreview = parseReceiptText([
+    "Home Despedida",
+    "Summary",
+    "Moses 2734.92 PHP",
+    "should pay to Kendrick",
+    "Sab 2604.92 PHP",
+    "should pay to Kendrick",
+    "Harold 2385.17 PHP",
+  ].join("\n"));
+  const settlementSummaryQuality = assessReceiptPreviewQuality(settlementSummaryPreview);
+  if (settlementSummaryQuality.reliableForFastPath) {
+    throw new Error(`expected settlement summary screen to stay off receipt fast path, got ${JSON.stringify(settlementSummaryQuality)}`);
+  }
+
+  const implausibleLargeTotalPreview = parseReceiptText([
+    "IKKORYU FUKUOKA RAMEN",
+    "Trans No.:24614",
+    "Cust Count:2",
+    "1 Chashu Tonkotsu 380.00",
+    "1 Gyoza 150.00",
+    "Amount 91732949.47",
+  ].join("\n"));
+  const implausibleLargeTotalQuality = assessReceiptPreviewQuality(implausibleLargeTotalPreview);
+  if (implausibleLargeTotalQuality.reliableForFastPath) {
+    throw new Error(`expected implausibly large receipt totals to stay off fast path, got ${JSON.stringify(implausibleLargeTotalQuality)}`);
+  }
+
   const weightedSummarySettlement = splitBillModule.buildSplitBillSettlement({
     participants: [
       { id: "alice", name: "Alice" },

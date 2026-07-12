@@ -437,7 +437,7 @@ const parseBillDateFromText = (text: string) => {
 };
 
 const isSummaryLine = (line: string) =>
-  /^[+\-*•]?\s*(subtotal|sub total|tax|vat|vatable|vat exempt|vat sales|service charge|discount|tip|tips?|round\s*off|rounding|amount due|balance due|grand total|bill total|total|total no of items|items purchased)\b/i.test(
+  /^[+\-*•]?\s*(?:\d+%\s*)?(subtotal|sub total|tax|vat|vatable|vat exempt|vat sales|service charge|servicecharge|discount|tip|tips?|round\s*off|rounding|amount due|balance due|grand total|bill total|bill amount|gross amount|net total|total|total no of items|items purchased)\b/i.test(
     line
   );
 
@@ -450,6 +450,11 @@ const isReceiptDateLine = (line: string) =>
   /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/i.test(line) &&
   /\b\d{1,2}(?:st|nd|rd|th)?\b/.test(line) &&
   /\b\d{2,4}\b/.test(line);
+
+const isReceiptAdministrativeLine = (line: string) =>
+  /\b(?:trans(?:action)?\s*no|permit\s*no|serial\s*no|or\s*no|invoice\s*no|guest\s*count|cust(?:omer)?\s*count|cashier|server|tin\b|bir\b|accre\.?\s*no|table\s*no|print\s*cnt|terminal|branch|poblacion|makati city|quezon city)\b/i.test(
+    line
+  );
 
 const isModifierLine = (line: string) =>
   /^(?:[+\-*•]|\b(?:add|extra|no|without|less|hold|substitute|sub|side|sauce|dressing|light|double|single|well\s+done|rare|medium|spicy)\b)/i.test(
@@ -677,7 +682,7 @@ const parseAmountFromLine = (line: string) => {
 };
 
 const isLikelyReceiptBodyLine = (line: string) => {
-  if (!line || isSummaryLine(line) || isNoiseLine(line)) {
+  if (!line || isSummaryLine(line) || isNoiseLine(line) || isReceiptAdministrativeLine(line)) {
     return false;
   }
 
@@ -806,6 +811,10 @@ const detectReceiptMerchantNameFromLines = (lines: string[]) => {
         return null;
       }
 
+      if (isReceiptAdministrativeLine(line)) {
+        return null;
+      }
+
       if (parseAmountFromLine(line) !== null) {
         return null;
       }
@@ -917,6 +926,10 @@ const parseReceiptAmountToken = (token: string | null | undefined) => {
 const parseReceiptTableItemLine = (line: string) => {
   const normalized = normalizeWhitespace(line);
   if (!normalized || isSummaryLine(normalized) || isNoiseLine(normalized) || isReceiptDateLine(normalized)) {
+    return null;
+  }
+
+  if (isReceiptAdministrativeLine(normalized)) {
     return null;
   }
 
@@ -1228,7 +1241,7 @@ const itemCandidatesFromText = (lines: string[], merchantName?: string | null) =
       continue;
     }
 
-    if (isSummaryLine(line) || isNoiseLine(line)) {
+    if (isSummaryLine(line) || isNoiseLine(line) || isReceiptAdministrativeLine(line)) {
       pendingDescription = null;
       continue;
     }
@@ -1730,7 +1743,7 @@ const isSuspiciousReceiptItemDescription = (description: string) => {
   if (
     isSummaryLine(normalized) ||
     isNoiseLine(normalized) ||
-    /\b(?:vatable|vat exempt|vat sales|bill total|amount due|items purchased|product\(s\) purchased|customer|signature|company|tin)\b/i.test(
+    /\b(?:vatable|vat exempt|vat sales|bill total|amount due|items purchased|product\(s\) purchased|customer|signature|company|tin|trans no|transaction no|official receipt|permit no|serial no|guest count|cust count|table no|dine in|summary|should pay to)\b/i.test(
       normalized
     )
   ) {
@@ -1748,6 +1761,15 @@ const isSuspiciousReceiptItemDescription = (description: string) => {
   }
 
   return alphaCount / compactLength < 0.45;
+};
+
+const looksLikeReceiptSettlementSummary = (text: string) => {
+  const normalized = normalizeWhitespace(text).toLowerCase();
+  return (
+    /\bshould pay to\b/.test(normalized) ||
+    /\bhome\s+despedida\b/.test(normalized) ||
+    (/\bsummary\b/.test(normalized) && /\b(?:php|\d{2,}\.\d{2})\b/.test(normalized) && /\b(?:pay to|paid to|owe|owes|share)\b/.test(normalized))
+  );
 };
 
 export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): ReceiptPreviewQualityAssessment => {
@@ -1784,6 +1806,7 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
   const suspiciousItemCount = preview.items.filter((item) => isSuspiciousReceiptItemDescription(item.description)).length;
   const cleanItemCount = Math.max(0, preview.items.length - suspiciousItemCount);
   const maxItemAmount = itemAmounts.length > 0 ? Math.max(...itemAmounts) : null;
+  const receiptText = String(preview.receiptText ?? "");
 
   if (total !== null) {
     score += 2;
@@ -1797,7 +1820,7 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
 
   if (suspiciousItemCount > 0) {
     issues.push(`suspicious line items: ${suspiciousItemCount}`);
-    score -= suspiciousItemCount >= Math.max(2, cleanItemCount) ? 3 : 1;
+    score -= suspiciousItemCount >= Math.max(2, cleanItemCount) ? 5 : suspiciousItemCount >= 2 ? 3 : 1;
   }
 
   if (subtotal !== null) {
@@ -1821,6 +1844,24 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
 
   if (cleanItemCount > 0 && subtotal !== null && Math.abs(itemTotal - subtotal) <= Math.max(1, subtotal * 0.08)) {
     score += 2;
+  }
+
+  if (subtotal !== null && subtotal >= 100_000 && cleanItemCount <= 25) {
+    issues.push("subtotal looks implausibly large");
+    score -= 6;
+    severeIssue = true;
+  }
+
+  if (total !== null && total >= 100_000 && cleanItemCount <= 25) {
+    issues.push("total looks implausibly large");
+    score -= 6;
+    severeIssue = true;
+  }
+
+  if (looksLikeReceiptSettlementSummary(receiptText)) {
+    issues.push("looks like a settlement summary, not a receipt");
+    score -= 8;
+    severeIssue = true;
   }
 
   if (total !== null && subtotal !== null && total + Math.max(1, total * 0.05) < subtotal) {
@@ -1876,7 +1917,9 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const tableItems = extractReceiptTableItems(lines, detectedMerchantName);
   const rawItems = tableItems.length > 0 ? tableItems : itemCandidatesFromText(lines, detectedMerchantName);
   const rawItemTotal = rawItems.reduce((sum, item) => sum + (parseAmountValue(item.amount) ?? 0), 0);
-  const totalLine = [...lines].reverse().find((line) => /^[+\-*•]?\s*(amount due|grand total|bill total|total)\b/i.test(line));
+  const totalLine = [...lines].reverse().find((line) =>
+    /^[+\-*•]?\s*(amount due|grand total|bill total|bill amount|gross amount|net total|total)\b/i.test(line)
+  );
   let subtotal =
     subtotalLine
       ? parseAmountFromLine(subtotalLine)
