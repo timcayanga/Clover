@@ -459,12 +459,12 @@ const parseBillDateFromText = (text: string) => {
 };
 
 const isSummaryLine = (line: string) =>
-  /^[+\-*•]?\s*(?:\d+%\s*)?(subtotal|sub total|tax|vat|vatable|vatable amount|ustable amount|vat exempt|vat sales|service charge|servicecharge|discount|tip|tips?|round\s*off|rounding|amount due|balance due|grand total|bill total|bill amount|gross amount|ross amount|net total|change|cash|tender(?:ed)?|total|total no of items|items purchased)\b/i.test(
+  /^[+\-*•]?\s*(?:\d+%\s*)?(subtotal|sub total|tax|vat|uat|vatable|vatable amount|ustable amount|vat exempt|vat sales|uat sales|service\s*ch[a-z]{2,8}|servicecharge|discount|tip|tips?|round\s*off|rounding|amount due|balance due|grand total|bill total|bill amount|gross amount|ross amount|net total|amount|change|cash|tender(?:ed)?|total|total no of items|items purchased)\b/i.test(
     line
   );
 
 const isNoiseLine = (line: string) =>
-  /^(thank you|powered by|receipt|order|invoice|official receipt|or no\.?|cashier|store copy|customer copy|page \d+|paid with|paid via|payment method|tendered with|charged to|refund|void|voided|reversal|customer|tin|company|signature)/i.test(
+  /^(thank you|powered by|receipt|order|invoice|official receipt|or no\.?|cashier|store copy|customer copy|page \d+|paid with|paid via|payment method|tendered with|charged to|refund|void|voided|reversal|customer|tin|company|signature|for comments|pls contact|please contact)/i.test(
     line
   );
 
@@ -479,7 +479,8 @@ const isReceiptAdministrativeLine = (line: string) =>
   );
 
 const isReceiptFooterValueLine = (line: string) =>
-  /\b(?:gross amount|ross amount|bill amount|amount due|grand total|bill total|vatable amount|ustable amount|vatable|vat exempt|vat zero|vat sales|cash\b|chan[zg]e\b|thank you|official receipt|trans(?:action)?\s*no|serial\s*n[bo0]|permit\s*no|\d{2,3}\s+va[tr]\b)\b/i.test(
+  /^\s*amount\b/i.test(line) ||
+  /\b(?:gross amount|ross amount|bill amount|amount due|grand total|bill total|vatable amount|ustable amount|vatable|vat exempt|vat zero|vat sales|uat sales|cash\b|chan[zg]e\b|thank you|official receipt|trans(?:action)?\s*no|serial\s*n[bo0]|permit\s*no|\d{2,3}\s+va[tr]\b|for comments|pls contact|please contact)\b/i.test(
     line
   );
 
@@ -960,9 +961,8 @@ const sanitizeReceiptMerchantName = (value: string) => {
   const allowedShortLeadTokens = new Set(["el", "la", "le", "de", "di"]);
   while (
     parts.length > 1 &&
-    parts[0].length <= 2 &&
-    /^[A-Za-z]+$/.test(parts[0]) &&
-    !allowedShortLeadTokens.has(parts[0].toLowerCase())
+    parts[0].replace(/[^A-Za-z0-9]/g, "").length <= 2 &&
+    (!/^[A-Za-z]+$/.test(parts[0]) || !allowedShortLeadTokens.has(parts[0].toLowerCase()))
   ) {
     parts.shift();
   }
@@ -1407,6 +1407,14 @@ const pruneSuspiciousReceiptItems = (items: ReceiptPreviewItem[]) =>
       return false;
     }
 
+    if (
+      /\b(?:level\s+\d+|century mall|mall|avenue|ave\.?|street|st\.?|road|rd\.?|city|poblacion|makati|quezon|salamanca|building|bldg|tin\b|pos\b|print cnt|contact)\b/i.test(
+        description
+      )
+    ) {
+      return false;
+    }
+
     return true;
   });
 
@@ -1809,7 +1817,7 @@ const extractReceiptField = (text: string, patterns: RegExp[]) => {
     const match = text.match(pattern);
     const rawValue = match?.[1] ?? null;
     const value = rawValue ? normalizeWhitespace(rawValue).replace(/[.)\]]+$/g, "").trim() : null;
-    if (value && value.length >= 3) {
+    if (value && value.length >= 3 && /\d/.test(value)) {
       return value;
     }
   }
@@ -1836,6 +1844,15 @@ const isSuspiciousReceiptMerchantName = (value: string | null | undefined) => {
   const alphaCount = (normalized.match(/[A-Za-z]/g) ?? []).length;
   const compactLength = normalized.replace(/\s+/g, "").length;
   if (alphaCount < 4 || compactLength === 0) {
+    return true;
+  }
+
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  const shortTokenCount = tokens.filter((token) => token.replace(/[^A-Za-z]/g, "").length <= 3).length;
+  const hasMerchantKeyword = /\b(?:inc|inc\.|corp|corporation|co|co\.|ltd|restaurant|grill|cafe|café|diner|kitchen|bar|ramen|telecommunications)\b/i.test(
+    normalized
+  );
+  if (!hasMerchantKeyword && alphaCount < 10 && shortTokenCount >= Math.max(2, tokens.length - 1)) {
     return true;
   }
 
@@ -2019,7 +2036,9 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const subtotalLine = [...lines].reverse().find((line) =>
     /^[+\-*•]?\s*(?:sub\s*total|vatable amount|ustable amount|gross amount|ross amount)\b/i.test(line)
   );
-  const serviceChargeLine = lines.find((line) => /\bcharge\b/i.test(line) && parseSummaryAmountFromLine(line) !== null);
+  const serviceChargeLine = lines.find(
+    (line) => /\b(?:service\s*ch[a-z]{2,8}|servicecharge|charge)\b/i.test(line) && parseSummaryAmountFromLine(line) !== null
+  );
   const taxLine = [...lines].reverse().find(
     (line) => /^[+\-*•]?\s*(tax|vat|\d{2,3}\s*va[tr])\b/i.test(line) && !/\b(?:exempt|zero|sales|sale|vatable|ustable)\b/i.test(line)
   );
@@ -2040,7 +2059,7 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
         ? inferReceiptSubtotalFromFooter(lines, rawItemTotal)
         : inferReceiptSubtotalFromFooter(lines);
   let serviceCharge = serviceChargeLine
-    ? parseSummaryAmountFromLine(serviceChargeLine, { keywordPattern: /\b(?:service\s*charge|servicecharge|charge)\b/i })
+    ? parseSummaryAmountFromLine(serviceChargeLine, { keywordPattern: /\b(?:service\s*ch[a-z]{2,8}|servicecharge|charge)\b/i })
     : null;
   const tax = taxLine ? parseSummaryAmountFromLine(taxLine, { keywordPattern: /^[+\-*•]?\s*(tax|vat|\d{2,3}\s*va[tr])\b/i }) : null;
   const tip = tipLine ? parseSummaryAmountFromLine(tipLine, { keywordPattern: /^[+\-*•]?\s*tip\b/i }) : null;
@@ -2063,6 +2082,18 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   ) {
     const inferredServiceCharge = Number((total - subtotal - (tax ?? 0) - (tip ?? 0) - (rounding ?? 0) + (discount ?? 0)).toFixed(2));
     if (Number.isFinite(inferredServiceCharge) && inferredServiceCharge > 0 && inferredServiceCharge <= Math.max(500, total * 0.35)) {
+      serviceCharge = inferredServiceCharge;
+    }
+  }
+  if (serviceCharge !== null && subtotal !== null && total !== null) {
+    const inferredServiceCharge = Number((total - subtotal - (tax ?? 0) - (tip ?? 0) - (rounding ?? 0) + (discount ?? 0)).toFixed(2));
+    const serviceChargeLooksSuspicious =
+      serviceChargeLine !== null &&
+      Number.isFinite(inferredServiceCharge) &&
+      inferredServiceCharge > 0 &&
+      inferredServiceCharge <= Math.max(500, total * 0.35) &&
+      (serviceCharge < Math.max(25, total * 0.02) || Math.abs(inferredServiceCharge - serviceCharge) > Math.max(12, serviceCharge * 0.35));
+    if (serviceChargeLooksSuspicious) {
       serviceCharge = inferredServiceCharge;
     }
   }

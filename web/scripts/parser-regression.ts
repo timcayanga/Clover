@@ -3806,6 +3806,114 @@ const main = async () => {
     );
   }
 
+  const serviceChargeRepairPreview = parseReceiptText([
+    "__d",
+    "Pe              PRE RE Se",
+    "REF.: 3",
+    "PAX #: 1              BILL NOL: 1",
+    "Qty Product           Amount",
+    "TAKE-OUT",
+    "1    CLASSIC BURRITOS - A   290.00",
+    "1 ELOTE             85.00",
+    "1 1 POUNDER BURRITOS - 590.00",
+    "1 QUARTER ROAST CHICKE 380.00",
+    "1 AL PASTOR - BURRITO 225.00",
+    "TOTAL           1.570.00",
+    "SERVICE CHARGE Th F019",
+    "AMOUNT DUE /1.668 Sie",
+    "11/22/2024  2:35",
+    "yATable             1,401.79",
+    "12% VAT                       168.21",
+    "VAT Exempt                      0.00",
+    "Bill Total               1,668.13",
+  ].join("\n"));
+  const serviceChargeRepairQuality = assessReceiptPreviewQuality(serviceChargeRepairPreview);
+  if (
+    serviceChargeRepairPreview.billDate !== "2024-11-22T00:00:00.000Z" ||
+    serviceChargeRepairPreview.subtotal !== "1570.00" ||
+    serviceChargeRepairPreview.serviceCharge !== "98.13" ||
+    serviceChargeRepairPreview.total !== "1668.13" ||
+    serviceChargeRepairQuality.reliableForFastPath
+  ) {
+    throw new Error(
+      `expected suspicious service-charge OCR to be repaired but kept off fast path, got date=${serviceChargeRepairPreview.billDate ?? "null"} subtotal=${serviceChargeRepairPreview.subtotal ?? "null"} serviceCharge=${serviceChargeRepairPreview.serviceCharge ?? "null"} total=${serviceChargeRepairPreview.total ?? "null"} quality=${JSON.stringify(serviceChargeRepairQuality)}`
+    );
+  }
+
+  const ramenOfficialReceiptPreview = parseReceiptText([
+    "7 é                IKKORYU FUKUOKA RAMEN               FR",
+    "y          Level 3 L316-L317 Century Mall          jose",
+    "113        Kalayaan Ave., Cor, Salamanca        Hts",
+    "Le          Poblacion, Makati City           He",
+    "Li            TIN#: D08-401-866-005            a",
+    "RL     1 POS!                    13 April      ics",
+    "HN     Trans No.:z4614          Cust Count:2      a",
+    "4        02 Dec 15 19:48:11             He",
+    "             -==— Dine In —--— ies",
+    "1 Chashu Tarkotsu         380.00       |i 8",
+    "1 Gyozab            150.00      | Ba",
+    "1 Karaage                180.00        | 8",
+    "| Ebi Yakimeshi         200.00         »",
+    "1 Calamansi Soda         50.00       i",
+    "10%ServiceChroe:                   96.00",
+    "Amount     1,056.00",
+    "UAT Sales            857.14",
+    "UAT Exempt Sales          0.00",
+    "12% UAT               102.86",
+    "This serves as an official receipt",
+    "For Comments And Suggestions",
+    "Pls contact #09173008333",
+  ].join("\n"));
+  const ramenOfficialReceiptQuality = assessReceiptPreviewQuality(ramenOfficialReceiptPreview);
+  if (
+    ramenOfficialReceiptPreview.merchantName !== "IKKORYU FUKUOKA RAMEN FR" ||
+    ramenOfficialReceiptPreview.billDate !== "2015-12-02T00:00:00.000Z" ||
+    ramenOfficialReceiptPreview.subtotal !== "960.00" ||
+    ramenOfficialReceiptPreview.serviceCharge !== "96.00" ||
+    ramenOfficialReceiptPreview.total !== "1056.00" ||
+    ramenOfficialReceiptPreview.items.length !== 5 ||
+    !ramenOfficialReceiptQuality.reliableForFastPath
+  ) {
+    throw new Error(
+      `expected ramen official receipt OCR to drop footer/contact noise and preserve fast path, got merchant=${ramenOfficialReceiptPreview.merchantName ?? "null"} date=${ramenOfficialReceiptPreview.billDate ?? "null"} subtotal=${ramenOfficialReceiptPreview.subtotal ?? "null"} serviceCharge=${ramenOfficialReceiptPreview.serviceCharge ?? "null"} total=${ramenOfficialReceiptPreview.total ?? "null"} items=${ramenOfficialReceiptPreview.items.length} quality=${JSON.stringify(ramenOfficialReceiptQuality)}`
+    );
+  }
+
+  const ramenOfficialReceiptPreview = parseReceiptText([
+    "7 é                IKKORYU FUKUOKA RAMEN               FR",
+    "y          Level 3 L316-L317 Century Mall          jose",
+    "113        Kalayaan Ave., Cor, Salamanca        Hts",
+    "Le          Poblacion, Makati City           He",
+    "Li            TIN#: D08-401-866-005            a",
+    "HN     Trans No.:z4614          Cust Count:2      a",
+    "4        02 Dec 15 19:48:11             He",
+    "             -==— Dine In —--— ies",
+    "1 Chashu Tarkotsu         380.00       |i 8",
+    "1 Gyozab            150.00      | Ba",
+    "1 Karaage                180.00        | 8",
+    "| Ebi Yakimeshi         200.00         »",
+    "1 Calamansi Soda         50.00       i",
+    "10%ServiceChroe:                   96.00",
+    "Amount     1,056.00",
+    "UAT Sales            857.14",
+    "UAT Exempt Sales          0.00",
+    "12% UAT               102.86",
+  ].join("\n"));
+  const ramenOfficialReceiptQuality = assessReceiptPreviewQuality(ramenOfficialReceiptPreview);
+  if (
+    ramenOfficialReceiptPreview.merchantName !== "IKKORYU FUKUOKA RAMEN FR" ||
+    ramenOfficialReceiptPreview.billDate !== "2015-12-02T00:00:00.000Z" ||
+    ramenOfficialReceiptPreview.subtotal !== "960.00" ||
+    ramenOfficialReceiptPreview.serviceCharge !== "96.00" ||
+    ramenOfficialReceiptPreview.total !== "1056.00" ||
+    ramenOfficialReceiptPreview.items.length !== 5 ||
+    !ramenOfficialReceiptQuality.reliableForFastPath
+  ) {
+    throw new Error(
+      `expected ramen official receipt OCR to drop address noise and preserve fast path, got merchant=${ramenOfficialReceiptPreview.merchantName ?? "null"} date=${ramenOfficialReceiptPreview.billDate ?? "null"} subtotal=${ramenOfficialReceiptPreview.subtotal ?? "null"} serviceCharge=${ramenOfficialReceiptPreview.serviceCharge ?? "null"} total=${ramenOfficialReceiptPreview.total ?? "null"} items=${ramenOfficialReceiptPreview.items.length} quality=${JSON.stringify(ramenOfficialReceiptQuality)}`
+    );
+  }
+
   const weightedSummarySettlement = splitBillModule.buildSplitBillSettlement({
     participants: [
       { id: "alice", name: "Alice" },
