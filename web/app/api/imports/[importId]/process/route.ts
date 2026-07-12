@@ -1371,6 +1371,63 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     };
 
+    const queueBackgroundProcessingAfterUpload = async (
+      uploadPromise: Promise<unknown>,
+      bankName?: string | null,
+      options?: { processingMessage?: string | null; queueWaitMessage?: string | null }
+    ) => {
+      stage = "scheduling background processing";
+      await updateImportFileCompat(importId, {
+        status: "processing",
+        processingPhase: "queued_retry",
+        processingMessage: options?.queueWaitMessage ?? "Finishing the file upload before Clover starts the background reader...",
+      });
+
+      after(async () => {
+        try {
+          await uploadPromise;
+          if (localDev) {
+            await ensureImportProcessingWorker();
+          }
+          await updateImportFileCompat(importId, {
+            status: "processing",
+            processingPhase: "queued_retry",
+            processingMessage: options?.processingMessage ?? "Starting screenshot import...",
+          });
+          await enqueueImportProcessing({
+            importFileId: importId,
+            actorUserId: userId,
+            password,
+            allowDuplicateStatement,
+            bankName: bankName || undefined,
+            importMode,
+            pdfJsBaseUrl,
+          });
+        } catch (error) {
+          console.error("Deferred upload import queue failed", { importId, error: summarizeErrorForLog(error) });
+          await updateImportFileCompat(importId, {
+            status: "processing",
+            processingPhase: "queued_retry",
+            processingMessage:
+              options?.processingMessage ??
+              "Clover is retrying the background reader after finishing the upload.",
+          }).catch(() => null);
+        }
+      });
+
+      queued = true;
+      return NextResponse.json({
+        ok: true,
+        queued,
+        processed: false,
+        importedRows: 0,
+        duplicate: false,
+        status: "queued",
+        importFileId: importId,
+        metadata: null,
+      });
+    };
+
     const processReceiptAfterResponse = async (bankName?: string | null) => {
       stage = "scheduling receipt processing";
       await updateImportFileCompat(importId, {
@@ -1720,6 +1777,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const isImageUpload = isImageUploadFile(effectiveFileName, effectiveFileType);
       const trainedReceiptFixture = getTrainedReceiptFixture(effectiveFileName) ?? getTrainedReceiptFixture(formFileName);
       const isStatementImageUpload = isImageUpload && (!importMode || importMode === "statement");
+      const shouldLikelyQueueStatementImageAfterUpload =
+        isStatementImageUpload &&
+        !formExtractedText.trim() &&
+        !(shouldPreferSampleFallback && Boolean(sampleFallbackText));
       const shouldDeferRawUploadForKnownBpiScreenshot =
         knownBpiMobileScreenshot && isStatementImageUpload && Boolean(sampleFallbackText);
       const shouldQueueDocumentUpload = !isStatementImageUpload && (isImageUpload || Boolean(importMode && importMode !== "statement"));
@@ -1826,19 +1887,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           }),
         ]);
       } else {
-      if (shouldDeferRawUploadForKnownBpiScreenshot) {
-        await uploadBankHintPromise;
-        after(async () => {
-          await uploadPromise.catch((error) => {
-            console.warn("Unable to finish known BPI screenshot raw file upload", {
-              importId,
-              error: summarizeErrorForLog(error),
+        if (shouldDeferRawUploadForKnownBpiScreenshot || shouldLikelyQueueStatementImageAfterUpload) {
+          await uploadBankHintPromise;
+          if (shouldDeferRawUploadForKnownBpiScreenshot) {
+            after(async () => {
+              await uploadPromise.catch((error) => {
+                console.warn("Unable to finish known BPI screenshot raw file upload", {
+                  importId,
+                  error: summarizeErrorForLog(error),
+                });
+              });
             });
-          });
-        });
-      } else {
-        await Promise.all([uploadPromise, uploadBankHintPromise]);
-      }
+          }
+        } else {
+          await Promise.all([uploadPromise, uploadBankHintPromise]);
+        }
       }
 
       if (
@@ -2241,6 +2304,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         shouldProcessInlineRequest;
 
       if (shouldProcessStatementAfterResponse) {
+        if (shouldLikelyQueueStatementImageAfterUpload) {
+          return queueBackgroundProcessingAfterUpload(uploadPromise, processingBankName || null, {
+            processingMessage: "Starting screenshot import...",
+            queueWaitMessage: "Finishing the screenshot upload before Clover starts the import...",
+          });
+        }
+
         return queueBackgroundProcessing(processingBankName || null, {
           processingMessage: "Starting screenshot import...",
         });
