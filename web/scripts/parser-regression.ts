@@ -3696,6 +3696,22 @@ const main = async () => {
     throw new Error("expected noisy OCR receipt to stay off the fast local receipt path");
   }
 
+  const merchantHeaderPreview = parseReceiptText([
+    "TABLE NO: 12",
+    "REF: 300421",
+    "PAX #: 3",
+    "EL CHUPACABRA RESTAURANT",
+    "G/F SOME BUILDING, MAKATI CITY",
+    "11/22/2025 19:41",
+    "Qty Product",
+    "1 TACOS 250.00",
+    "1 HORCHATA 120.00",
+    "TOTAL 370.00",
+  ].join("\n"));
+  if (merchantHeaderPreview.merchantName !== "EL CHUPACABRA RESTAURANT") {
+    throw new Error(`expected merchant ranking to skip table/ref header noise, got ${merchantHeaderPreview.merchantName ?? "null"}`);
+  }
+
   const weightedSummarySettlement = splitBillModule.buildSplitBillSettlement({
     participants: [
       { id: "alice", name: "Alice" },

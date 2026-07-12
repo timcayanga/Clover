@@ -690,9 +690,13 @@ const isLikelyReceiptBodyLine = (line: string) => {
 
 const cleanReceiptDescription = (line: string) =>
   normalizeWhitespace(line)
+    .replace(/^[^A-Za-z0-9(]+/, "")
+    .replace(/[^A-Za-z0-9)%]+$/g, "")
     .replace(/\s+\d{1,3}(?:[.,]\d{2})?$/, "")
     .replace(/\s+\d+x\s*$/i, "")
     .replace(/\b\d{1,3}\s*x\s*/i, "")
+    .replace(/\s*[~_=|•¦]{2,}\s*/g, " ")
+    .replace(/\s*[-:;,./]{2,}\s*/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
 
@@ -813,6 +817,7 @@ const detectReceiptMerchantNameFromLines = (lines: string[]) => {
 
       let score = 0;
       const alphaCount = (cleaned.match(/[A-Za-z]/g) ?? []).length;
+      const symbolPenalty = (cleaned.match(/[~_=|¦]/g) ?? []).length;
       score += Math.min(12, alphaCount / 2);
       score += Math.max(0, 8 - index);
       if (/\b(?:inc|inc\.|corp|co|ltd|restaurant|grill|cafe|café|diner)\b/i.test(cleaned)) {
@@ -824,9 +829,23 @@ const detectReceiptMerchantNameFromLines = (lines: string[]) => {
       if (/\b(?:city|district|legaspi|makati|san lorenzo|universal|lms|building|bldg|street|st\.?)\b/i.test(cleaned)) {
         score -= 6;
       }
-      if (/^(?:qty|description|dine in|vat item|cashier|server|guest count|invoice|sub\s*-?\s*total|service charge|amount due|total no of items|vat sales|temporary bill)\b/i.test(cleaned)) {
+      if (
+        /^(?:table|ref|pax|bill\s+no|qty|description|dine in|vat item|cashier|server|guest count|invoice|sub\s*-?\s*total|service charge|amount due|total no of items|vat sales|temporary bill)\b/i.test(
+          cleaned
+        )
+      ) {
         score -= 20;
       }
+      if (/[~_=|¦]{2,}/.test(cleaned) || /:\s*\S/.test(cleaned)) {
+        score -= 8;
+      }
+      if (/^[A-Z]{1,4}\s+\d+$/.test(cleaned)) {
+        score -= 10;
+      }
+      if (/\b(?:branch|tower|floor|suite|unit|room|bldg|building|avenue|ave\.?|road|rd\.?|drive|dr\.?)\b/i.test(cleaned)) {
+        score -= 5;
+      }
+      score -= Math.min(6, symbolPenalty * 1.5);
 
       return { cleaned, score };
   })
@@ -847,7 +866,13 @@ const sanitizeReceiptMerchantName = (value: string) => {
   }
 
   const parts = normalized.split(/\s+/).filter(Boolean);
-  while (parts.length > 1 && parts[0].length <= 2 && /^[A-Za-z]+$/.test(parts[0])) {
+  const allowedShortLeadTokens = new Set(["el", "la", "le", "de", "di"]);
+  while (
+    parts.length > 1 &&
+    parts[0].length <= 2 &&
+    /^[A-Za-z]+$/.test(parts[0]) &&
+    !allowedShortLeadTokens.has(parts[0].toLowerCase())
+  ) {
     parts.shift();
   }
 
