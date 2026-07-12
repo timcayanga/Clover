@@ -3739,6 +3739,25 @@ const main = async () => {
     throw new Error(`expected implausibly large receipt totals to stay off fast path, got ${JSON.stringify(implausibleLargeTotalQuality)}`);
   }
 
+  const summaryAmountPreview = parseReceiptText([
+    "IKKORYU FUKUOKA RAMEN",
+    "Trans No.:24614",
+    "Cust Count:2",
+    "1 Chashu Tonkotsu 380.00",
+    "1 Gyoza 150.00",
+    "10%ServiceCharge 96.00",
+    "Bill Amount 1056.00",
+  ].join("\n"));
+  if (
+    summaryAmountPreview.total !== "1056.00" ||
+    summaryAmountPreview.subtotal !== "530.00" ||
+    summaryAmountPreview.items.length !== 2
+  ) {
+    throw new Error(
+      `expected summary amount extraction to prefer money totals over IDs, got total=${summaryAmountPreview.total ?? "null"} subtotal=${summaryAmountPreview.subtotal ?? "null"} items=${summaryAmountPreview.items.length}`
+    );
+  }
+
   const weightedSummarySettlement = splitBillModule.buildSplitBillSettlement({
     participants: [
       { id: "alice", name: "Alice" },

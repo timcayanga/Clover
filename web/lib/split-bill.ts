@@ -681,6 +681,59 @@ const parseAmountFromLine = (line: string) => {
   return parseReceiptAmountToken(amountToken);
 };
 
+const parseSummaryAmountFromLine = (line: string, options?: { keywordPattern?: RegExp }) => {
+  const normalized = normalizeWhitespace(line);
+  if (!normalized) {
+    return null;
+  }
+
+  const keywordPattern = options?.keywordPattern ?? null;
+  const searchText = keywordPattern ? normalized.replace(keywordPattern, " ") : normalized;
+  const matches = Array.from(searchText.matchAll(/-?\(?[\d,.-]+\)?/g))
+    .map((match) => match[0] ?? null)
+    .filter((token): token is string => Boolean(token));
+  if (matches.length === 0) {
+    return null;
+  }
+
+  const scored = matches
+    .map((token, index) => {
+      const parsed = parseReceiptAmountToken(token);
+      if (parsed === null) {
+        return null;
+      }
+
+      let score = 0;
+      if (/(?:\.\d{2}|-\d{2})$/.test(token)) {
+        score += 6;
+      }
+      if (/^\d{1,4}$/.test(token)) {
+        score -= 3;
+      }
+      if (/^\d{7,}$/.test(token) && !/(?:\.\d{2}|-\d{2})$/.test(token)) {
+        score -= 10;
+      }
+      if (index === matches.length - 1) {
+        score += 4;
+      } else if (index >= matches.length - 2) {
+        score += 2;
+      }
+      if (Math.abs(parsed) >= 1 && Math.abs(parsed) <= 250_000) {
+        score += 2;
+      }
+
+      return {
+        token,
+        parsed,
+        score,
+      };
+    })
+    .filter((value): value is { token: string; parsed: number; score: number } => value !== null)
+    .sort((left, right) => right.score - left.score || right.parsed - left.parsed);
+
+  return scored[0]?.parsed ?? null;
+};
+
 const isLikelyReceiptBodyLine = (line: string) => {
   if (!line || isSummaryLine(line) || isNoiseLine(line) || isReceiptAdministrativeLine(line)) {
     return false;
@@ -1909,7 +1962,7 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
       null;
 
   const subtotalLine = lines.find((line) => /^[+\-*•]?\s*sub\s*total\b/i.test(line));
-  const serviceChargeLine = lines.find((line) => /\bcharge\b/i.test(line) && parseAmountFromLine(line) !== null);
+  const serviceChargeLine = lines.find((line) => /\bcharge\b/i.test(line) && parseSummaryAmountFromLine(line) !== null);
   const taxLine = lines.find((line) => /^[+\-*•]?\s*(tax|vat)\b/i.test(line));
   const tipLine = lines.find((line) => /^[+\-*•]?\s*tip\b/i.test(line));
   const roundingLine = lines.find((line) => /^[+\-*•]?\s*(round\s*off|rounding)\b/i.test(line));
@@ -1922,18 +1975,20 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   );
   let subtotal =
     subtotalLine
-      ? parseAmountFromLine(subtotalLine)
+      ? parseSummaryAmountFromLine(subtotalLine, { keywordPattern: /^[+\-*•]?\s*sub\s*total\b/i })
       : rawItemTotal > 0
         ? inferReceiptSubtotalFromFooter(lines, rawItemTotal)
         : inferReceiptSubtotalFromFooter(lines);
-  let serviceCharge = serviceChargeLine ? parseAmountFromLine(serviceChargeLine) : null;
-  const tax = taxLine ? parseAmountFromLine(taxLine) : null;
-  const tip = tipLine ? parseAmountFromLine(tipLine) : null;
-  const rounding = roundingLine ? parseAmountFromLine(roundingLine) : null;
-  const discount = discountLine ? parseAmountFromLine(discountLine) : null;
+  let serviceCharge = serviceChargeLine
+    ? parseSummaryAmountFromLine(serviceChargeLine, { keywordPattern: /\b(?:service\s*charge|servicecharge|charge)\b/i })
+    : null;
+  const tax = taxLine ? parseSummaryAmountFromLine(taxLine, { keywordPattern: /^[+\-*•]?\s*(tax|vat)\b/i }) : null;
+  const tip = tipLine ? parseSummaryAmountFromLine(tipLine, { keywordPattern: /^[+\-*•]?\s*tip\b/i }) : null;
+  const rounding = roundingLine ? parseSummaryAmountFromLine(roundingLine, { keywordPattern: /^[+\-*•]?\s*(round\s*off|rounding)\b/i }) : null;
+  const discount = discountLine ? parseSummaryAmountFromLine(discountLine, { keywordPattern: /^[+\-*•]?\s*discount\b/i }) : null;
   let total =
-    totalLine && parseAmountFromLine(totalLine) !== null
-      ? parseAmountFromLine(totalLine)
+    totalLine && parseSummaryAmountFromLine(totalLine) !== null
+      ? parseSummaryAmountFromLine(totalLine)
       : subtotal !== null
         ? subtotal + (serviceCharge ?? 0) + (tax ?? 0) + (tip ?? 0) + (rounding ?? 0) - (discount ?? 0)
         : rawItemTotal || null;
