@@ -17,7 +17,6 @@ import { DashboardTopActions } from "@/components/dashboard-top-actions";
 import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
-import { buildRecurringTransactionSummaries } from "@/lib/recurring";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { isTransientDataError } from "@/lib/transient-data";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
@@ -648,24 +647,6 @@ async function DashboardStream({
   const uploadReminderCopy = latestImport
     ? `Last import was ${daysSinceLastImport === 0 ? "today" : `${daysSinceLastImport ?? 0} day${daysSinceLastImport === 1 ? "" : "s"} ago`}. Add recent statements so advice stays current.`
     : "Upload a recent statement so Clover can start finding spending patterns.";
-  const recurringCandidates = (() => {
-    try {
-      return buildRecurringTransactionSummaries(
-        currentTransactions.map((transaction) => ({
-          amount: transaction.amount,
-          date: transaction.date,
-          type: getDashboardTransactionType(transaction),
-          merchantRaw: transaction.merchantRaw,
-          merchantClean: transaction.merchantClean,
-          currency: transaction.account?.currency ?? displayCurrency,
-          category: transaction.category,
-        }))
-      );
-    } catch {
-      return [];
-    }
-  })();
-  const recurringCandidate = recurringCandidates[0] ?? null;
   const weeklySpendDelta = weeklySummary.current.expense - weeklySummary.previous.expense;
   const weeklyNetLabel =
     weeklySummary.net >= 0
@@ -681,6 +662,9 @@ async function DashboardStream({
   const plannedPaymentsDueSoon = plannedPaymentSuggestions.filter(
     (suggestion) => suggestion.dueDate && new Date(suggestion.dueDate) <= nextSevenDays
   );
+  const recurringSuggestionCount = plannedPaymentSuggestions.filter(
+    (suggestion) => suggestion.sourceKind === "recurring_transaction" || suggestion.sourceKind === "installment"
+  ).length;
   const insightCandidates: Array<HomeAdviserItem | null> = [
     daysSinceLastImport === null || daysSinceLastImport >= 7
       ? {
@@ -712,25 +696,16 @@ async function DashboardStream({
           tone: "warning",
         }
       : null,
-    recurringCandidate
+    recurringSuggestionCount > 0
       ? {
           emoji: "🔁",
           label: "Recurring check",
-          copy: `${recurringCandidate.name} looks recurring from ${recurringCandidate.count} recent hit${recurringCandidate.count === 1 ? "" : "s"}.`,
+          copy: `${recurringSuggestionCount} potential recurring payment${recurringSuggestionCount === 1 ? "" : "s"} found.`,
           href: "/recurring",
-          actionLabel: "Open recurring",
+          actionLabel: "Review recurring",
           tone: "neutral",
         }
-      : currentThirtyDayTransactions.length >= 12
-        ? {
-            emoji: "🔁",
-            label: "Recurring check",
-            copy: "Clover has enough history to look for subscriptions and repeat bills.",
-            href: "/recurring",
-            actionLabel: "Find recurring",
-            tone: "neutral",
-          }
-        : null,
+      : null,
     currentSevenDayTransactions.length > 0
       ? {
           emoji: "🗓️",
