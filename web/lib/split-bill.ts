@@ -1848,6 +1848,18 @@ const isSuspiciousReceiptMerchantName = (value: string | null | undefined) => {
     return true;
   }
 
+  if (
+    /\b(?:republic of the philippines|province of|office of the treasurer|accountable form|received the amount stated|professional tax receipt|this document(?:\s+is)?\s+not\s+valid|input taxes?)\b/i.test(
+      normalized
+    )
+  ) {
+    return true;
+  }
+
+  if (/^this document\b/i.test(normalized)) {
+    return true;
+  }
+
   if ((normalized.match(/[~_=|]{2,}|[^\w\s:.,'&()/+-]{3,}/g) ?? []).length > 0) {
     return true;
   }
@@ -1888,6 +1900,14 @@ const isSuspiciousReceiptItemDescription = (description: string) => {
 
   if (
     /\b(?:barangay|district|philippines|street|st\.|avenue|ave\.|road|rd\.|city|province|zip\s*code|postal|address|zone)\b/i.test(
+      normalized
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /\b(?:office of the treasurer|accountable form|received the amount stated|money order|collecting officer|professional tax receipt|input taxes?|this document)\b/i.test(
       normalized
     )
   ) {
@@ -1944,6 +1964,19 @@ const looksLikeNonReceiptCapture = (text: string) => {
     /\b(?:always ask for a receipt|ask for a receipt|bir rules on receipts?)\b/.test(normalized) &&
     !/\b(?:subtotal|amount due|bill total|official receipt no|trans(?:action)? no)\b/.test(normalized)
   ) {
+    return true;
+  }
+
+  if (
+    /\b(?:republic of the philippines|province of|office of the treasurer|accountable form|received the amount stated|money order|collecting officer|professional tax receipt)\b/.test(
+      normalized
+    ) &&
+    !/\b(?:subtotal|amount due|bill total|qty|table|guest|cashier|service charge|vat:?)\b/.test(normalized)
+  ) {
+    return true;
+  }
+
+  if (/\bthis document\b.*\binput\s+t[a-z]{2,6}\b/.test(normalized)) {
     return true;
   }
 

@@ -3362,6 +3362,53 @@ const main = async () => {
     throw new Error("expected noisy card footer receipt to stay out of the split-bill fast path");
   }
 
+  const governmentFormPreview = parseReceiptText([
+    "OFFICIAL RECEIPT",
+    "Republic of the Philippines",
+    "PROVINCE OF CAVITE",
+    "OFFICE OF THE TREASURER",
+    "Accountable Form No. 51",
+    "Revise 1993 ORIGINAL",
+    "Professional Tax Receipt",
+    "Received the Amount Stated Above",
+    "1993",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(governmentFormPreview).reliableForFastPath) {
+    throw new Error("expected government-form OCR to stay out of the split-bill fast path");
+  }
+  const governmentFormDraft = splitBillDraftFromReceiptPreview(governmentFormPreview);
+  if (
+    governmentFormDraft.title !== "Receipt split" ||
+    governmentFormDraft.merchantName !== "" ||
+    governmentFormDraft.subtotal !== "" ||
+    governmentFormDraft.total !== "" ||
+    governmentFormDraft.items.length !== 1
+  ) {
+    throw new Error(
+      `expected government-form OCR to clear merchant/summary/items, got title=${governmentFormDraft.title} merchant=${governmentFormDraft.merchantName ?? "null"} subtotal=${governmentFormDraft.subtotal} total=${governmentFormDraft.total} items=${governmentFormDraft.items.length}`
+    );
+  }
+
+  const inputTaxFooterPreview = parseReceiptText([
+    "205",
+    "This document is not valid for claim of input taxes.",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(inputTaxFooterPreview).reliableForFastPath) {
+    throw new Error("expected input-tax footer OCR to stay out of the split-bill fast path");
+  }
+  const inputTaxFooterDraft = splitBillDraftFromReceiptPreview(inputTaxFooterPreview);
+  if (
+    inputTaxFooterDraft.title !== "Receipt split" ||
+    inputTaxFooterDraft.merchantName !== "" ||
+    inputTaxFooterDraft.subtotal !== "" ||
+    inputTaxFooterDraft.total !== "" ||
+    inputTaxFooterDraft.items.length !== 1
+  ) {
+    throw new Error(
+      `expected input-tax footer OCR to clear merchant/summary/items, got title=${inputTaxFooterDraft.title} merchant=${inputTaxFooterDraft.merchantName ?? "null"} subtotal=${inputTaxFooterDraft.subtotal} total=${inputTaxFooterDraft.total} items=${inputTaxFooterDraft.items.length}`
+    );
+  }
+
   const payerReceiptPreview = parseReceiptText([
     "THE BAKERY",
     "Paid by Alice",
