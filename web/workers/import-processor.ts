@@ -6978,10 +6978,14 @@ export const processImportFileText = async (
     ...checkpointMetadataOverride,
     ...(options.statementMetadataOverride ?? {}),
   };
-  const metadataForParse = {
-    ...mergedMetadata,
-    ...Object.fromEntries(Object.entries(metadataOverride).filter(([, value]) => value !== undefined)),
-  } as typeof mergedMetadata;
+  const metadataForParse = sanitizeCachedStatementMetadata({
+    metadata: {
+      ...mergedMetadata,
+      ...Object.fromEntries(Object.entries(metadataOverride).filter(([, value]) => value !== undefined)),
+    } as typeof mergedMetadata,
+    text: textForParse,
+    fileName: importFile.fileName,
+  });
 
   const parsedRowsInitial = canReuseCachedStatementParse
     ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>

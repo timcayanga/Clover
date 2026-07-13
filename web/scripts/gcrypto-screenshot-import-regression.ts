@@ -177,6 +177,15 @@ const main = async () => {
         ),
         `${fileName} should surface the canonical GCrypto investment account in status snapshots.`
       );
+      assert.equal(
+        snapshot?.statementCheckpoint?.endingBalance?.toString?.() ?? snapshot?.statementCheckpoint?.endingBalance ?? null,
+        null,
+        `${fileName} should not publish a GCrypto ending balance from transaction-history screenshots.`
+      );
+      assert.ok(
+        snapshot?.accountSummaries.every((summary) => summary.balance === null),
+        `${fileName} should keep GCrypto account summaries balance-free in import status snapshots.`
+      );
     }
 
     console.log("[PASS] GCrypto screenshot import regression keeps one investment account and 9 visible deduped transactions end-to-end.");
