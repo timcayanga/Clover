@@ -30704,7 +30704,7 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .help-section-page__inner {
-  gap: 22px;
+  gap: 28px;
 }
 
 .help-search--section {
@@ -30850,7 +30850,7 @@ button.accounts-detail__transaction-head-cell {
   --help-topic-soft: rgba(3, 168, 192, 0.1);
   --help-topic-strong: rgba(104, 220, 177, 0.14);
   display: grid;
-  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr);
+  grid-template-columns: minmax(190px, 0.5fr) minmax(0, 1fr);
   gap: 22px;
   align-items: start;
   padding: 28px;
@@ -30921,10 +30921,10 @@ button.accounts-detail__transaction-head-cell {
 
 .help-topic__intro h2 {
   margin: 0;
-  font-size: clamp(1.9rem, 2.6vw, 2.8rem);
+  font-size: clamp(1.35rem, 1.8vw, 1.85rem);
   line-height: 0.98;
   letter-spacing: -0.06em;
-  max-width: 10ch;
+  max-width: 18ch;
 }
 
 .help-topic__intro p {
@@ -30968,7 +30968,8 @@ button.accounts-detail__transaction-head-cell {
   list-style: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) 34px;
   gap: 14px;
   padding: 20px 22px;
   font-family: var(--font-heading);
@@ -31014,6 +31015,10 @@ button.accounts-detail__transaction-head-cell {
   margin: 0;
   color: var(--muted);
   line-height: 1.75;
+}
+
+.help-accordion-item__body .button {
+  margin-top: 18px;
 }
 
 .help-section-layout {
@@ -34235,6 +34240,10 @@ html[data-helper-text="hidden"] .settings-helper {
   .help-topic__intro h2,
   .help-topic__intro p {
     max-width: none;
+  }
+
+  .help-topic__intro h2 {
+    font-size: clamp(1.35rem, 5.8vw, 1.75rem);
   }
 
   .contact-page {

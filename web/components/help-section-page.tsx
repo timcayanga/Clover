@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { LandingNav } from "@/components/landing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
 import { type HelpArticle, type HelpQuestion, type HelpSection } from "@/lib/help-center";
@@ -28,7 +29,13 @@ function matchesGroup(article: HelpArticle, query: string) {
   return `${article.title} ${article.summary} ${article.steps.join(" ")} ${article.keywords.join(" ")}`.toLowerCase().includes(query);
 }
 
-function AccordionItem({ question }: { question: HelpQuestion }) {
+type AccordionCta = {
+  label: string;
+  href: string;
+  primary?: boolean;
+};
+
+function AccordionItem({ question, cta }: { question: HelpQuestion; cta?: AccordionCta }) {
   return (
     <details className="help-accordion-item">
       <summary className="help-accordion-item__summary">
@@ -36,19 +43,13 @@ function AccordionItem({ question }: { question: HelpQuestion }) {
       </summary>
       <div className="help-accordion-item__body">
         <p>{question.answer}</p>
+        {cta ? (
+          <Link className={`button ${cta.primary ? "button-primary" : "button-secondary"}`} href={cta.href} prefetch={false}>
+            {cta.label}
+          </Link>
+        ) : null}
       </div>
     </details>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M10.5 4.5a6 6 0 1 0 0 12a6 6 0 0 0 0-12Zm0-1.5a7.5 7.5 0 1 1 4.73 13.32l4.22 4.21a.75.75 0 1 1-1.06 1.06l-4.21-4.22A7.5 7.5 0 0 1 10.5 3Z"
-        fill="currentColor"
-      />
-    </svg>
   );
 }
 
@@ -57,7 +58,7 @@ export function HelpSectionPage({ section, returnTo: _returnTo, accountState }: 
   const normalizedQuery = query.trim().toLowerCase();
 
   const groupedQuestions = useMemo(() => {
-    const articleGroups = section.articles
+    return section.articles
       .map((article) => {
         const questionMatches = article.questions.filter((question) => matchesQuestion(question, normalizedQuery));
         const groupMatches = matchesGroup(article, normalizedQuery);
@@ -70,32 +71,13 @@ export function HelpSectionPage({ section, returnTo: _returnTo, accountState }: 
         return {
           key: article.slug,
           title: article.title,
-          summary: article.summary,
           questions: visibleQuestions,
+          cta: article.title.toLowerCase().includes("set up")
+            ? { label: "Sign up", href: "/sign-up", primary: true }
+            : undefined,
         };
       })
       .filter((group): group is NonNullable<typeof group> => Boolean(group));
-
-    const usedQuestions = new Set(articleGroups.flatMap((group) => group.questions.map((question) => question.question)));
-
-    const extraQuestions = section.questions.filter((question) => {
-      if (usedQuestions.has(question.question)) {
-        return false;
-      }
-
-      return matchesQuestion(question, normalizedQuery);
-    });
-
-    if (extraQuestions.length > 0) {
-      articleGroups.push({
-        key: `${section.slug}-more`,
-        title: "More answers",
-        summary: "Extra questions that come up often when people are working through this part of Clover.",
-        questions: extraQuestions,
-      });
-    }
-
-    return articleGroups;
   }, [normalizedQuery, section]);
 
   const filteredQuestions = groupedQuestions.flatMap((group) => group.questions);
@@ -119,24 +101,8 @@ export function HelpSectionPage({ section, returnTo: _returnTo, accountState }: 
       <div className="help-page__frame">
         <LandingNav accountState={accountState} />
         <div className="help-page__content help-section-page__inner">
-
-          <section className={`help-section-page__intro help-section-page__intro--${section.accent}`}>
-            <div className="help-section-page__intro-copy">
-              <h1>{section.title}</h1>
-              <p>{section.summary}</p>
-              <div className="help-section-page__intro-points" aria-label="Section highlights">
-                {section.highlights.slice(0, 3).map((highlight) => (
-                  <span key={highlight}>{highlight}</span>
-                ))}
-              </div>
-            </div>
-          </section>
-
           <div className="help-section-page__search-area">
             <label className="help-search help-search--section" htmlFor="help-section-search">
-              <span className="help-search__icon">
-                <SearchIcon />
-              </span>
               <span className="sr-only">Search within this help section</span>
               <input
                 id="help-section-search"
@@ -154,14 +120,12 @@ export function HelpSectionPage({ section, returnTo: _returnTo, accountState }: 
                 {groupedQuestions.map((group) => (
                   <section key={group.key} className={`help-topic help-topic--${section.accent}`}>
                     <div className="help-topic__intro">
-                      <p className="help-topic__eyebrow">{section.eyebrow}</p>
                       <h2>{group.title}</h2>
-                      <p>{group.summary}</p>
                     </div>
 
                     <div className="help-accordion">
-                      {group.questions.map((question) => (
-                        <AccordionItem key={question.question} question={question} />
+                      {group.questions.map((question, index) => (
+                        <AccordionItem key={question.question} question={question} cta={index === 0 ? group.cta : undefined} />
                       ))}
                     </div>
                   </section>

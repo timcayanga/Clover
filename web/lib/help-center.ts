@@ -1766,12 +1766,7 @@ export const helpSections: HelpSection[] = [
           {
             question: "Why are rows missing after import?",
             answer:
-              "Missing rows are often caused by filter settings, duplicate detection, or a statement that only covers part of the period you expected.",
-          },
-          {
-            question: "Why are transactions missing after import?",
-            answer:
-              "Missing rows can come from a partial statement period, filter settings, duplicate protection, or a file that only covers part of the account activity.",
+              "Missing rows can come from a partial statement period, filter settings, duplicate protection, or a file that only covers part of the account activity. Check the date range and filters first, then re-upload a complete file or add the missing transactions manually.",
           },
         ],
         [
@@ -1795,14 +1790,9 @@ export const helpSections: HelpSection[] = [
         ],
         [
           {
-            question: "What if I see duplicate transactions?",
+            question: "Why do duplicate transactions appear, and how do I fix them?",
             answer:
-              "Check whether the same source file was uploaded twice, then open the transaction details to confirm whether the duplicates should be removed or marked differently.",
-          },
-          {
-            question: "How do I fix a sync problem in Clover?",
-            answer:
-              "Refresh the page, confirm the right workspace is selected, and check whether the source file or data was actually saved before you try again.",
+              "Duplicates usually come from uploading overlapping files or running the same import more than once. Compare the repeated rows and their source files, keep the correct record, and remove or ignore the extra one. Check the file date range before re-uploading, then refresh and confirm you are in the right workspace.",
           },
         ],
         [
@@ -1810,37 +1800,6 @@ export const helpSections: HelpSection[] = [
             label: "Open transactions",
             href: "/transactions",
             description: "Review the duplicate or overlapping rows.",
-          },
-        ]
-      ),
-      createArticle(
-        "how-to-fix-duplicate-transactions-in-clover",
-        "How to fix duplicate transactions in Clover",
-        "Clean up repeated rows when the same activity appears more than once.",
-        "Learn how to fix duplicate transactions in Clover and avoid repeated rows after import.",
-        ["duplicate transactions", "duplicate rows", "double import"],
-        [
-          "Compare the duplicate rows and confirm which file introduced them.",
-          "Remove or ignore the repeated record if it was imported twice.",
-          "Re-import only after the duplicate source is resolved.",
-        ],
-        [
-          {
-            question: "Why do duplicate transactions appear?",
-            answer:
-              "Duplicates usually come from importing overlapping files or from re-running an import without clearing the earlier result.",
-          },
-          {
-            question: "How do I stop duplicate rows from coming back?",
-            answer:
-              "Check the file date range and make sure you are not importing the same statement twice. If needed, review the previous import before uploading again.",
-          },
-        ],
-        [
-          {
-            label: "Open review",
-            href: "/review",
-            description: "Compare the rows that were imported.",
           },
         ]
       ),
@@ -1862,14 +1821,9 @@ export const helpSections: HelpSection[] = [
           "Missing rows are often caused by filter settings, duplicate detection, or a statement that only covers part of the period you expected.",
       },
       {
-        question: "What if I see duplicate transactions?",
+        question: "Why do duplicate transactions appear, and how do I fix them?",
         answer:
-          "Check whether the same source file was uploaded twice, then open the transaction details to confirm whether the duplicates should be removed or marked differently.",
-      },
-      {
-        question: "Why are transactions missing after import?",
-        answer:
-          "Missing rows can come from a partial statement period, filter settings, duplicate protection, or a file that only covers part of the account activity.",
+          "Duplicates usually come from uploading overlapping files or running the same import more than once. Compare the repeated rows, keep the correct record, and remove or ignore the extra one before re-uploading.",
       },
       {
         question: "What should I do if Clover asks for a file password?",
