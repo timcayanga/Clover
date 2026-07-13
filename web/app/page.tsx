@@ -2,10 +2,11 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
+import { LandingClarityEngine } from "../components/landing-clarity-engine";
 import { LandingCloverBloom } from "../components/landing-clover-bloom";
 import { LandingNav } from "../components/landing-nav";
+import { LandingStoryReveal } from "../components/landing-story-reveal";
 import { MarketingFooter } from "../components/marketing-footer";
-import { ScrollReveal } from "../components/scroll-reveal";
 import { resolvePublicAccountState } from "@/lib/public-account-state";
 
 function LandingImage({
@@ -34,23 +35,26 @@ function FeatureSection({
   title,
   copy,
   visual,
+  chapter,
   reverse = false,
   id,
 }: {
   title: ReactNode;
   copy: ReactNode;
   visual: ReactNode;
+  chapter: string;
   reverse?: boolean;
   id: string;
 }) {
   return (
-    <ScrollReveal as="section" className={`landing-feature ${reverse ? "landing-feature--reverse" : ""}`.trim()} id={id}>
+    <LandingStoryReveal as="section" className={`landing-feature ${reverse ? "landing-feature--reverse" : ""}`.trim()} id={id}>
       <div className="landing-feature__copy">
+        <p className="landing-feature__chapter">{chapter}</p>
         <h2 className="landing-feature__title">{title}</h2>
         <div className="landing-feature__body">{copy}</div>
       </div>
       <div className="landing-feature__visual">{visual}</div>
-    </ScrollReveal>
+    </LandingStoryReveal>
   );
 }
 
@@ -71,48 +75,48 @@ export default async function HomePage() {
       </Script>
       <LandingNav accountState={accountState} />
 
-      <ScrollReveal as="section" className="landing-hero">
+      <LandingStoryReveal as="section" className="landing-hero" initialVisible>
         <div className="landing-hero__copy">
           <h1 className="landing-hero__title">
-            <span>Track months of finances</span>
-            <span className="landing-highlight">in minutes.</span>
+            <span>Months of finances.</span>
+            <span className="landing-highlight">Organized in minutes.</span>
           </h1>
           <p className="landing-hero__lede">
-            Clover helps you upload financial data quickly, understand your spending, and manage shared expenses in one place.
+            Upload statements, receipts, screenshots, or spreadsheets. Clover turns them into organized transactions, reports, and insights.
           </p>
 
           <div className="landing-hero__actions">
             <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
-              Start seeing clarity for free
+              Organize my finances for free
             </Link>
             <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>
               Log in
             </Link>
           </div>
+
+          <div className="landing-hero__outcomes" aria-label="What Clover organizes">
+            {["Transactions", "Accounts", "Reports", "Insights", "Split Bills"].map((outcome) => (
+              <span key={outcome}>{outcome}</span>
+            ))}
+          </div>
         </div>
 
-        <LandingImage
-          className="landing-asset--hero"
-          src="/assets/landing page/hero card.png"
-          alt="Clover dashboard preview"
-          width={1536}
-          height={1024}
-          priority
-        />
-      </ScrollReveal>
+        <LandingClarityEngine />
+      </LandingStoryReveal>
 
       <FeatureSection
         id="statement-import"
+        chapter="01 · Bring it together"
         reverse
         title={
           <>
-            Turn <span className="landing-highlight">statements</span> into usable spending data.
+            Bring your financial history into <span className="landing-highlight">one place</span>.
           </>
         }
         copy={
           <>
-            <p>Upload statements, receipts, screenshots, or enter transactions manually.</p>
-            <p>Clover turns your financial records into usable data, so you can prefill months of spending without starting from scratch.</p>
+            <p>Start with the records you already have: statements, receipts, screenshots, spreadsheets, or manual transactions.</p>
+            <p>Clover extracts the useful details so months of history can take shape without months of data entry.</p>
           </>
         }
         visual={
@@ -127,15 +131,16 @@ export default async function HomePage() {
 
       <FeatureSection
         id="insights"
+        chapter="02 · Understand what changed"
         title={
           <>
-            See what your <span className="landing-highlight">money</span> is telling you.
+            See the story behind your <span className="landing-highlight">spending</span>.
           </>
         }
         copy={
           <>
-            <p>Clover turns the data you upload into reports and insights that help you understand your spending.</p>
-            <p>Spot patterns, see progress clearly, and make better decisions toward your goals.</p>
+            <p>Your organized transactions become reports, patterns, account balances, and practical insights.</p>
+            <p>See where money went, what changed, and where a small decision could move you closer to your goals.</p>
           </>
         }
         visual={
@@ -150,16 +155,17 @@ export default async function HomePage() {
 
       <FeatureSection
         id="split-bills"
+        chapter="03 · Make shared money easier"
         reverse
         title={
           <>
-            Share expenses without the <span className="landing-highlight">hassle</span>.
+            Settle shared expenses without the <span className="landing-highlight">awkward math</span>.
           </>
         }
         copy={
           <>
-            <p>Track shared costs with friends, family, roommates, or travel groups and quickly see who owes what.</p>
-            <p>Clover keeps the math simple so settling up feels less awkward.</p>
+            <p>Turn a receipt or transaction into a clear split for friends, family, roommates, or travel groups.</p>
+            <p>Everyone can see who paid, who owes, and what is already settled.</p>
           </>
         }
         visual={
@@ -174,15 +180,16 @@ export default async function HomePage() {
 
       <FeatureSection
         id="pro"
+        chapter="04 · Go deeper when you are ready"
         title={
           <>
-            Unlock <span className="landing-highlight">Pro</span> features when you need more.
+            Expand your financial picture with <span className="landing-highlight">Pro</span>.
           </>
         }
         copy={
           <>
-            <p>Pro gives you advanced reporting, higher limits, and investment tools for a more complete view of your finances.</p>
-            <p>It is built for people who want deeper visibility as their money setup gets more complex.</p>
+            <p>Unlock advanced reports, higher limits, investment tracking, and a more complete view across your accounts.</p>
+            <p>Start simply, then add depth when your finances need it.</p>
           </>
         }
         visual={
@@ -197,16 +204,17 @@ export default async function HomePage() {
 
       <FeatureSection
         id="trust"
+        chapter="05 · Stay in control"
         reverse
         title={
           <>
-            Keep your data <span className="landing-highlight">safe and secure</span>.
+            Your financial data stays <span className="landing-highlight">yours</span>.
           </>
         }
         copy={
           <>
-            <p>Clover is built to keep your information protected and your imported data reviewable.</p>
-            <p>Your account access stays under your control while the audit trail stays intact.</p>
+            <p>Clover protects your account, keeps imported records traceable, and lets you review what was extracted.</p>
+            <p>You control access to your information and can manage the data connected to your account.</p>
           </>
         }
         visual={
@@ -219,7 +227,7 @@ export default async function HomePage() {
         }
       />
 
-      <ScrollReveal as="section" className="landing-cta" threshold={0.28} rootMargin="-10% 0px -10% 0px">
+      <LandingStoryReveal as="section" className="landing-cta">
         <div className="landing-cta__inner">
           <LandingCloverBloom />
           <div className="landing-cta__copy">
@@ -228,14 +236,14 @@ export default async function HomePage() {
           </div>
           <div className="landing-cta__actions">
             <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
-              Start seeing clarity for free
+              Organize my finances for free
             </Link>
             <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>
               Log in
             </Link>
           </div>
         </div>
-      </ScrollReveal>
+      </LandingStoryReveal>
 
       <MarketingFooter />
     </main>
