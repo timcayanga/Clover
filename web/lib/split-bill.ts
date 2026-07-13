@@ -1879,9 +1879,23 @@ const isSuspiciousReceiptItemDescription = (description: string) => {
     return true;
   }
 
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  const alphaTokens = tokens.map((token) => token.replace(/[^A-Za-z]/g, "")).filter(Boolean);
   const alphaCount = (normalized.match(/[A-Za-z]/g) ?? []).length;
   const compactLength = normalized.replace(/\s+/g, "").length;
   if (alphaCount < 3 || compactLength === 0) {
+    return true;
+  }
+
+  const tinyAlphaTokens = alphaTokens.filter((token) => token.length <= 2).length;
+  const digitHeavyTokens = tokens.filter((token) => /\d/.test(token) && /[A-Za-z]/.test(token)).length;
+  const shoutyTokenCount = alphaTokens.filter((token) => token.length >= 3 && token === token.toUpperCase()).length;
+  if (
+    alphaTokens.length >= 3 &&
+    (tinyAlphaTokens >= Math.ceil(alphaTokens.length * 0.5) ||
+      digitHeavyTokens >= Math.max(2, Math.floor(tokens.length / 3)) ||
+      (shoutyTokenCount >= Math.ceil(alphaTokens.length * 0.5) && tinyAlphaTokens >= 2))
+  ) {
     return true;
   }
 
@@ -1915,6 +1929,23 @@ const looksLikeNonReceiptCapture = (text: string) => {
   }
 
   return false;
+};
+
+const extractDeclaredReceiptItemCount = (text: string) => {
+  const normalized = normalizeWhitespace(text);
+  const patterns = [
+    /\b(?:total\s+no\s+of\s+items|product\(s\)\s+purchased|products?\s+purchased|of\s+ite(?:m|n)s?|of\s+items?)\s*[:\-]?\s*(\d{1,3})(?:\.\d+)?\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    const parsed = match?.[1] ? Number(match[1]) : null;
+    if (parsed !== null && Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
 };
 
 export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): ReceiptPreviewQualityAssessment => {
@@ -1952,6 +1983,7 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
   const cleanItemCount = Math.max(0, preview.items.length - suspiciousItemCount);
   const maxItemAmount = itemAmounts.length > 0 ? Math.max(...itemAmounts) : null;
   const receiptText = String(preview.receiptText ?? "");
+  const declaredItemCount = extractDeclaredReceiptItemCount(receiptText);
 
   if (total !== null) {
     score += 2;
@@ -1989,6 +2021,16 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
 
   if (cleanItemCount > 0 && subtotal !== null && Math.abs(itemTotal - subtotal) <= Math.max(1, subtotal * 0.08)) {
     score += 2;
+  }
+
+  if (
+    declaredItemCount !== null &&
+    cleanItemCount > 0 &&
+    declaredItemCount >= cleanItemCount + 2
+  ) {
+    issues.push(`declared item count ${declaredItemCount} exceeds parsed items ${cleanItemCount}`);
+    score -= declaredItemCount >= cleanItemCount * 2 ? 5 : 3;
+    severeIssue = true;
   }
 
   if (subtotal !== null && subtotal >= 100_000 && cleanItemCount <= 25) {

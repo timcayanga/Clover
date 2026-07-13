@@ -3766,6 +3766,22 @@ const main = async () => {
     throw new Error(`expected receipt poster image to stay off receipt fast path, got ${JSON.stringify(receiptPosterQuality)}`);
   }
 
+  const orSampleBayanPreview = parseReceiptText([
+    "Bayan Telecommunications, Inc.",
+    "2/F Ever Gotesco Commanwealth, Commonwealth Ave., Quezon City",
+    "Tel. No. 412-1212",
+    "VAT REG. TIN 000-774-471-025",
+    "Date Aug. 9, 2012",
+    "OFFICIAL RECEIPT No:L-EVe 369678a",
+    "00 is 508 Lon OED A Lg OST Perit OKOIGTRD Fay 1, 2",
+    "Sarin oy 857s oc 4 Os Wor Vt",
+    "are BL ar080 Co 10.50",
+  ].join("\n"));
+  const orSampleBayanQuality = assessReceiptPreviewQuality(orSampleBayanPreview);
+  if (orSampleBayanQuality.reliableForFastPath) {
+    throw new Error(`expected noisy official receipt OCR with gibberish items to stay off fast path, got ${JSON.stringify(orSampleBayanQuality)}`);
+  }
+
   const implausibleLargeTotalPreview = parseReceiptText([
     "IKKORYU FUKUOKA RAMEN",
     "Trans No.:24614",
@@ -3952,6 +3968,34 @@ const main = async () => {
     throw new Error(
       `expected ramen official receipt OCR to drop address noise and preserve fast path, got merchant=${ramenOfficialReceiptAddressPreview.merchantName ?? "null"} date=${ramenOfficialReceiptAddressPreview.billDate ?? "null"} subtotal=${ramenOfficialReceiptAddressPreview.subtotal ?? "null"} serviceCharge=${ramenOfficialReceiptAddressPreview.serviceCharge ?? "null"} total=${ramenOfficialReceiptAddressPreview.total ?? "null"} items=${ramenOfficialReceiptAddressPreview.items.length} quality=${JSON.stringify(ramenOfficialReceiptAddressQuality)}`
     );
+  }
+
+  const jarandjamNoisyActualPreview = parseReceiptText([
+    "—             JARANDJAM ING.                -",
+    "=     =         G/F UNIVERSAL LMS BLDG., 106 ESTEBAN ST",
+    "LEGASPI VILL., SAN LORENZO",
+    "CITY OF MAKATI",
+    "NCR, FOURTH DISTRICT",
+    "GUEST COUNT: 5",
+    "12/22/2025                 21:48:42",
+    "#0000003214            INVOICEA001-000001383",
+    "Qty Description             Amount",
+    "1.00 PORK KARE-CURRY           60.00",
+    "1.00 TORCHED SALMON DONBURT      000",
+    "1.00 YAKULT LEMONDE            180.00",
+    "1.00 LYCHEE F122              395.00",
+    "1.00 BAST OLD FASHIONED         395.00",
+    "BUNT DUE    7782.95",
+    "OF ITENS: 10.00",
+    "6379.46",
+    "765.54",
+    "0.00",
+    "0.00",
+    "TEMPORARY BILL",
+  ].join("\n"));
+  const jarandjamNoisyActualQuality = assessReceiptPreviewQuality(jarandjamNoisyActualPreview);
+  if (jarandjamNoisyActualQuality.reliableForFastPath) {
+    throw new Error(`expected under-parsed noisy Jarandjam receipt to stay off fast path, got ${JSON.stringify(jarandjamNoisyActualQuality)}`);
   }
 
   const weightedSummarySettlement = splitBillModule.buildSplitBillSettlement({
