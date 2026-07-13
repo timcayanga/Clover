@@ -1781,11 +1781,12 @@ const detectReceiptPayerNameFromText = (lines: string[]) => {
 const classifyReceiptTypeFromText = (text: string, paymentMethod: string | null) => {
   const normalized = normalizeWhitespace(text).toLowerCase();
   const paymentContext = String(paymentMethod ?? "").toLowerCase();
+  const hasWalletSignals =
+    /\b(?:sent via gcash|sent via maya|express send|total amount sent)\b/.test(normalized) ||
+    /\b(?:gcash|maya|wise)\b/.test(normalized) ||
+    /\b(?:gcash|maya|wise)\b/.test(paymentContext);
 
-  if (
-    /\b(?:sent via gcash|sent via maya|express send|total amount sent|ref\.?\s*no|reference\s*:\s*\d{6,})\b/.test(normalized) ||
-    /\b(?:gcash|maya|wise)\b/.test(paymentContext)
-  ) {
+  if (hasWalletSignals) {
     return "wallet_transfer" as const;
   }
 
@@ -1832,8 +1833,18 @@ const isSuspiciousReceiptMerchantName = (value: string | null | undefined) => {
   }
 
   if (
-    /^(?:table|qty|product|invoice|cashier|server|guest|bill\s+no|ref[:#]?|pax|vat|amount due|bill total|total)\b/i.test(normalized)
+    /^(?:table|qty|item|description|product|invoice|cashier|server|guest|bill\s+no|ref[:#]?|pax|vat|amount due|bill total|total)\b/i.test(
+      normalized
+    )
   ) {
+    return true;
+  }
+
+  if (/\bitem\b.*\btotal\b/i.test(normalized)) {
+    return true;
+  }
+
+  if (/^(?:visa|mastercard|card|cash|gcash|maya|wise)(?:\s+(?:ending|transfer|payment|paid|receipt))?$/i.test(normalized)) {
     return true;
   }
 
@@ -1868,7 +1879,15 @@ const isSuspiciousReceiptItemDescription = (description: string) => {
   if (
     isSummaryLine(normalized) ||
     isNoiseLine(normalized) ||
-    /\b(?:vatable|vat exempt|vat sales|bill total|amount due|items purchased|product\(s\) purchased|customer|signature|company|tin|trans no|transaction no|official receipt|permit no|serial no|guest count|cust count|table no|dine in|summary|should pay to)\b/i.test(
+    /\b(?:vatable|vat exempt|vat sales|bill total|amount due|items purchased|product\(s\) purchased|customer|signature|company|tin|trans(?:action)?\s*(?:no|to)?|official receipt|permit no|serial no|guest count|cust count|table no|tabie|dine in|summary|should pay to|cashier|closed|paid amount|tips?|change|reference|guest name|table sales|net of vat|service(?:\s*charge)?|sales)\b/i.test(
+      normalized
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /\b(?:barangay|district|philippines|street|st\.|avenue|ave\.|road|rd\.|city|province|zip\s*code|postal|address|zone)\b/i.test(
       normalized
     )
   ) {
@@ -1929,6 +1948,21 @@ const looksLikeNonReceiptCapture = (text: string) => {
   }
 
   return false;
+};
+
+const looksLikeSplitAllocationWorksheet = (text: string) => {
+  const normalized = normalizeWhitespace(text);
+  if (!normalized) {
+    return false;
+  }
+
+  if (/\bitem\b.*\btotal\b.*\b(?:joey|grace|tim|annab|jannie|mj|iris|ferdie)\b/i.test(normalized)) {
+    return true;
+  }
+
+  const lines = normalized.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const rowsWithManyAmounts = lines.filter((line) => (line.match(/\b\d+(?:\.\d{2})?\b/g) ?? []).length >= 5).length;
+  return rowsWithManyAmounts >= 2;
 };
 
 const extractDeclaredReceiptItemCount = (text: string) => {
@@ -2057,6 +2091,12 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
     severeIssue = true;
   }
 
+  if (looksLikeSplitAllocationWorksheet(receiptText)) {
+    issues.push("looks like a split allocation worksheet, not a receipt");
+    score -= 8;
+    severeIssue = true;
+  }
+
   if (total !== null && subtotal !== null && total + Math.max(1, total * 0.05) < subtotal) {
     issues.push("total is smaller than subtotal");
     score -= 4;
@@ -2069,7 +2109,14 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
     severeIssue = true;
   }
 
-  const reliableForFastPath = total !== null && score >= 6 && hasIdentityBackstop && !severeIssue && issues.length <= 1;
+  const reliableForFastPath =
+    total !== null &&
+    score >= 6 &&
+    merchantLooksReliable &&
+    hasIdentityBackstop &&
+    suspiciousItemCount === 0 &&
+    !severeIssue &&
+    issues.length <= 1;
 
   return {
     score,
@@ -2641,15 +2688,18 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
   const cleanPreviewItems = preview.items.filter((item) => !isSuspiciousReceiptItemDescription(item.description));
   const shouldResetReviewSummary =
     !qualityAssessment.reliableForFastPath &&
-    qualityAssessment.issues.some((issue) =>
-      /summary does not reconcile|total is smaller than subtotal|looks like a note, poster, or screenshot instead of a receipt|declared item count/i.test(
+    (qualityAssessment.issues.some((issue) =>
+      /summary does not reconcile|total is smaller than subtotal|looks like a note, poster, or screenshot instead of a receipt|looks like a split allocation worksheet, not a receipt|declared item count/i.test(
         issue
       )
-    );
+    ) ||
+      (preview.items.length > 0 && cleanPreviewItems.length === 0));
   const shouldResetReviewItems =
     !qualityAssessment.reliableForFastPath &&
     (qualityAssessment.issues.some((issue) =>
-      /suspicious line items|looks like a note, poster, or screenshot instead of a receipt|declared item count/i.test(issue)
+      /suspicious line items|looks like a note, poster, or screenshot instead of a receipt|looks like a split allocation worksheet, not a receipt|declared item count/i.test(
+        issue
+      )
     ) ||
       preview.receiptType === "wallet_transfer" ||
       cleanPreviewItems.length !== preview.items.length);

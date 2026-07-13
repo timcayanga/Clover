@@ -3297,6 +3297,71 @@ const main = async () => {
     );
   }
 
+  const addressHeavyPreview = parseReceiptText([
+    "GELOU'S TAZSHIOGAN",
+    "2480 P Villanueva St., Zone 9, Barangay 90",
+    "Fourth District, Philippines 1300",
+    "OFFICIAL RECEIPT",
+    "TOTAL AMT. DUE",
+    "3780.00",
+  ].join("\n"));
+  if (addressHeavyPreview.confidence >= 90) {
+    throw new Error(`expected address-heavy scan confidence to drop below fast-save range, got ${addressHeavyPreview.confidence}`);
+  }
+  const addressHeavyDraft = splitBillDraftFromReceiptPreview(addressHeavyPreview);
+  if (
+    addressHeavyDraft.title !== "Receipt split" ||
+    addressHeavyDraft.merchantName !== "" ||
+    addressHeavyDraft.items.length !== 1 ||
+    addressHeavyDraft.subtotal !== "" ||
+    addressHeavyDraft.total !== ""
+  ) {
+    throw new Error(
+      `expected address-heavy receipt scan to clear merchant/items/summary, got title=${addressHeavyDraft.title} merchant=${addressHeavyDraft.merchantName ?? "null"} subtotal=${addressHeavyDraft.subtotal} total=${addressHeavyDraft.total} items=${addressHeavyDraft.items.length}`
+    );
+  }
+
+  const splitWorksheetPreview = parseReceiptText([
+    "Item TOTAL Ferdie Joey Annab MJ Iris Grace Jannie Tim",
+    "3 Heineken 1125 375 375 375",
+    "1 Gin Bott 3400 567 567 567 567 567 567",
+    "7 Tonic Water 1120 187 187 187 187 187 187",
+    "1 Mushroom Chips 415 59 59 59 59 59 58 59",
+  ].join("\n"));
+  const splitWorksheetDraft = splitBillDraftFromReceiptPreview(splitWorksheetPreview);
+  if (
+    splitWorksheetDraft.subtotal !== "" ||
+    splitWorksheetDraft.total !== "" ||
+    splitWorksheetDraft.items.length !== 1 ||
+    splitWorksheetDraft.title !== "Receipt split"
+  ) {
+    throw new Error(
+      `expected split-allocation worksheet screenshot to clear summary/items, got title=${splitWorksheetDraft.title} subtotal=${splitWorksheetDraft.subtotal} total=${splitWorksheetDraft.total} items=${splitWorksheetDraft.items.length}`
+    );
+  }
+
+  const cardFooterPreview = parseReceiptText([
+    "AC BAR & LOUNGE",
+    "Sales Invoice #: 000000808",
+    "Table: 21",
+    "Date: 2024-02-20",
+    "1 Cafe Americano 365.00",
+    "1 Frito Dun 480.00",
+    "VAT: 267.04",
+    "Total: 2511.00",
+    "Mastercard",
+    "Reference:523821",
+  ].join("\n"));
+  if (cardFooterPreview.receiptType === "wallet_transfer") {
+    throw new Error(`expected card footer receipt to avoid wallet_transfer classification, got ${cardFooterPreview.receiptType}`);
+  }
+  if (cardFooterPreview.merchantName === "Mastercard") {
+    throw new Error("expected card footer receipt to avoid Mastercard as merchant name");
+  }
+  if (assessReceiptPreviewQuality(cardFooterPreview).reliableForFastPath) {
+    throw new Error("expected noisy card footer receipt to stay out of the split-bill fast path");
+  }
+
   const payerReceiptPreview = parseReceiptText([
     "THE BAKERY",
     "Paid by Alice",
