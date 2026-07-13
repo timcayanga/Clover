@@ -273,7 +273,79 @@ const inferInvestmentSubtypeFromAssetName = (assetName: string | null | undefine
     return "mutual_fund";
   }
 
+  if (/\b(uitf|unit investment trust fund)\b/i.test(normalized)) {
+    return "uitf";
+  }
+
+  if (/\b(etf|exchange traded fund)\b/i.test(normalized)) {
+    return "etf";
+  }
+
+  if (/\b(reit|real estate investment trust)\b/i.test(normalized)) {
+    return "reit";
+  }
+
+  if (/\b(crypto|bitcoin|btc|ethereum|eth|solana|usdt|gcrypto)\b/i.test(normalized)) {
+    return "crypto";
+  }
+
+  if (/\b(stock|stocks|share|shares|equity|gstocks|broker|securities)\b/i.test(normalized)) {
+    return "stock";
+  }
+
+  if (/\b(time\s+deposit|term\s+deposit|fixed\s+deposit|deposit|gsave)\b/i.test(normalized)) {
+    return "time_deposit";
+  }
+
+  if (/\b(bond|treasury|fixed\s+income)\b/i.test(normalized)) {
+    return "bond";
+  }
+
   return null;
+};
+
+const inferInvestmentSubtypeFromAccount = (account: Account, assetNames: string[] = []) => {
+  if (account.investmentSubtype) {
+    return account.investmentSubtype;
+  }
+
+  const accountText = [
+    account.name,
+    account.institution ?? "",
+    account.investmentSymbol ?? "",
+    ...assetNames,
+  ].join(" ");
+  const normalized = normalizeInvestmentLabel(accountText);
+
+  if (/\b(gcrypto|crypto|bitcoin|btc|ethereum|eth|solana|usdt)\b/i.test(normalized)) {
+    return "crypto" as const;
+  }
+  if (/\b(time\s+deposit|term\s+deposit|fixed\s+deposit|gsave)\b/i.test(normalized)) {
+    return "time_deposit" as const;
+  }
+  if (/\b(uitf|unit investment trust fund)\b/i.test(normalized)) {
+    return "uitf" as const;
+  }
+  if (/\b(etf|exchange traded fund)\b/i.test(normalized)) {
+    return "etf" as const;
+  }
+  if (/\b(reit|real estate investment trust)\b/i.test(normalized)) {
+    return "reit" as const;
+  }
+  if (/\b(money market|money-market)\b/i.test(normalized)) {
+    return "money_market_fund" as const;
+  }
+  if (/\b(mutual fund|fund|atram|gfunds|philequity|sunlife|investment fund)\b/i.test(normalized)) {
+    return "mutual_fund" as const;
+  }
+  if (/\b(bond|treasury|fixed income)\b/i.test(normalized)) {
+    return "bond" as const;
+  }
+  if (/\b(stock|stocks|share|shares|equity|gstocks|broker|securities|col financial|philstocks)\b/i.test(normalized)) {
+    return "stock" as const;
+  }
+
+  return "other" as const;
 };
 
 const getInvestmentHighlights = (account: Account) => {
@@ -448,22 +520,22 @@ const buildInvestmentGroups = (rows: Account[]): InvestmentGroup[] => {
   const groupMap = new Map<string, Account[]>();
 
   for (const account of rows) {
-    const key = account.investmentSubtype ?? "__unclassified__";
+    const key = inferInvestmentSubtypeFromAccount(account);
     const bucket = groupMap.get(key) ?? [];
     bucket.push(account);
     groupMap.set(key, bucket);
   }
 
-  const orderedKeys = [...INVESTMENT_SUBTYPES, null].map((subtype) => subtype ?? "__unclassified__");
+  const orderedKeys = [...INVESTMENT_SUBTYPES];
 
-  return orderedKeys
+  const groups: Array<InvestmentGroup | null> = orderedKeys
     .map((key) => {
       const rowsForKey = groupMap.get(key) ?? [];
       if (rowsForKey.length === 0) {
         return null;
       }
 
-      const subtype = key === "__unclassified__" ? null : (key as InvestmentSubtype);
+      const subtype = key as InvestmentSubtype;
       const currentValue = rowsForKey.reduce((sum, account) => sum + parseAmount(account.balance), 0);
       const purchaseValue = rowsForKey.reduce((sum, account) => {
         const baseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
@@ -479,21 +551,20 @@ const buildInvestmentGroups = (rows: Account[]): InvestmentGroup[] => {
         return sum + (current - purchase);
       }, 0);
 
-      return {
+      const group: InvestmentGroup = {
         key,
         subtype,
-        label: subtype ? getInvestmentSubtypeLabel(subtype) : "Unclassified investments",
-        description:
-          subtype === null
-            ? "Add a subtype later to unlock tailored tracking."
-            : getInvestmentSubtypeDescription(subtype),
+        label: subtype === "other" ? "Other" : getInvestmentSubtypeLabel(subtype),
+        description: getInvestmentSubtypeDescription(subtype),
         accounts: rowsForKey.slice().sort((left, right) => parseAmount(right.balance) - parseAmount(left.balance)),
         currentValue,
         purchaseValue,
         gainLoss,
       };
-    })
-    .filter((group): group is InvestmentGroup => group !== null);
+      return group;
+    });
+
+  return groups.filter((group): group is InvestmentGroup => group !== null);
 };
 
 const INVESTMENT_SORT_OPTIONS: Array<{ key: InvestmentSortKey; label: string }> = [
@@ -862,7 +933,7 @@ export default function InvestmentsPage() {
 
       if (!isGeneric || distinctAssetNames.length <= 1) {
         const preferredAssetName = distinctAssetNames[0] ?? account.name;
-        const subtype = account.investmentSubtype ?? inferInvestmentSubtypeFromAssetName(preferredAssetName);
+        const subtype = inferInvestmentSubtypeFromAccount(account, distinctAssetNames);
         rows.push({
           key: account.id,
           assetId: account.id,
@@ -888,7 +959,7 @@ export default function InvestmentsPage() {
           assetId: `${account.id}:${assetName}`,
           name: assetName,
           institution: account.institution,
-          subtype: inferInvestmentSubtypeFromAssetName(assetName) ?? account.investmentSubtype,
+          subtype: inferInvestmentSubtypeFromAssetName(assetName) ?? inferInvestmentSubtypeFromAccount(account, distinctAssetNames),
           symbol: null,
           detail: null,
           currentValue: null,
@@ -905,7 +976,7 @@ export default function InvestmentsPage() {
   const visibleInvestmentAccounts = useMemo(() => {
     const search = normalizeInvestmentSearchText(investmentSearch);
     const filtered = investmentAccounts.filter((account) => {
-      if (investmentSubtypeFilter !== "all" && account.investmentSubtype !== investmentSubtypeFilter) {
+      if (investmentSubtypeFilter !== "all" && inferInvestmentSubtypeFromAccount(account) !== investmentSubtypeFilter) {
         return false;
       }
 
@@ -1020,7 +1091,10 @@ export default function InvestmentsPage() {
   const selectedCurrencyCodes = useMemo(() => getCurrencyCodes(selectedCurrencyInvestmentAccounts), [selectedCurrencyInvestmentAccounts]);
   const hasVisibleCurrencySelection = selectedCurrencyInvestmentAccounts.length > 0;
 
-  const investmentGroups = useMemo<InvestmentGroup[]>(() => buildInvestmentGroups(selectedCurrencyInvestmentAccounts), [selectedCurrencyInvestmentAccounts]);
+  const investmentGroups = useMemo<InvestmentGroup[]>(
+    () => buildInvestmentGroups(selectedCurrencyInvestmentAccounts),
+    [selectedCurrencyInvestmentAccounts]
+  );
 
   const portfolioTableRows = useMemo(() => visiblePortfolioRows, [visiblePortfolioRows]);
 
@@ -1754,61 +1828,6 @@ export default function InvestmentsPage() {
                       )}
                     </article>
                   </div>
-                  <div className="investments-allocation__list investments-allocation__list--overview">
-                    {portfolioAllocation.map((group) => (
-                      <div
-                        key={group.key}
-                        className={`investments-allocation__row investments-allocation__row-card${selectedOverviewMixGroup?.key === group.key ? " is-selected" : ""}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setSelectedOverviewMixKey(group.key)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            setSelectedOverviewMixKey(group.key);
-                          }
-                        }}
-                      >
-                        <div className="investments-allocation__row-head investments-allocation__row-head--overview">
-                          <div>
-                            <strong>{group.label}</strong>
-                            <div className="investments-allocation__account-marks" aria-label={`${group.label} accounts`}>
-                              {group.accounts.slice(0, 8).map((account) => (
-                                <button
-                                  key={account.id}
-                                  type="button"
-                                  className="investments-allocation__account-mark"
-                                  title={`Open ${account.name}`}
-                                  aria-label={`Open ${account.name}`}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openInvestmentAsset(account);
-                                  }}
-                                  onKeyDown={(event) => event.stopPropagation()}
-                                >
-                                  <AccountBrandMark
-                                    accountBrand={getInvestmentAssetBrand({
-                                      symbol: account.investmentSymbol,
-                                      name: account.name,
-                                      subtype: account.investmentSubtype,
-                                      currency: account.currency,
-                                      institution: account.institution,
-                                    })}
-                                    label={account.name}
-                                  />
-                                </button>
-                              ))}
-                              {group.accounts.length > 8 ? <span className="investments-allocation__account-more">+{group.accounts.length - 8}</span> : null}
-                            </div>
-                          </div>
-                          <div>
-                            <strong>{formatInvestmentAggregate(group.currentValue, group.accounts)}</strong>
-                            <span>{group.share > 0 ? percentFormatter.format(group.share) : "0%"}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </>
               ) : (
                 <EmptyDataCta
@@ -1828,13 +1847,9 @@ export default function InvestmentsPage() {
           <>
             <section className="investments-portfolio-table glass">
               <div className="investments-portfolio-table__header">
-                <div className="investments-allocation__head-title">
-                  <p className="eyebrow">Portfolio</p>
-                  <h5>Asset summary</h5>
-                </div>
                 <div className="investments-filters investments-filters--portfolio">
                   <label className="investments-filters__search">
-                    Search holdings
+                    Search
                     <input
                       value={investmentSearch}
                       onChange={(event) => setInvestmentSearch(event.target.value)}
@@ -1862,29 +1877,6 @@ export default function InvestmentsPage() {
                       ))}
                     </select>
                   </label>
-                  <div className="investments-filters__actions investments-filters__actions--portfolio">
-                    <span>
-                      Showing {visiblePortfolioRows.length} of {portfolioSourceRows.length} investment
-                      {portfolioSourceRows.length === 1 ? "" : "s"}
-                    </span>
-                    <button
-                      className="button button-secondary button-small"
-                      type="button"
-                      onClick={() => {
-                        setInvestmentSearch("");
-                        setInvestmentSubtypeFilter("all");
-                        setInvestmentSortKey("value_desc");
-                        setPortfolioCurrencyFilter("all");
-                      }}
-                      disabled={!activeInvestmentFilters}
-                    >
-                      Reset filters
-                    </button>
-                  </div>
-                </div>
-                <div className="investments-allocation__summary">
-                  <span>Total value</span>
-                  <strong>{formatInvestmentAggregate(portfolioTableTotals.currentValue, visiblePortfolioRows)}</strong>
                 </div>
               </div>
 
@@ -1942,6 +1934,10 @@ export default function InvestmentsPage() {
                   <p>{portfolioSourceRows.length > 0 && (activeInvestmentFilters || portfolioCurrencyFilter !== "all") ? "Try another currency or reset the filters." : "Add an investment to start building your portfolio."}</p>
                 </div>
               )}
+              <div className="investments-portfolio-table__total" aria-label="Portfolio total value">
+                <span>Total value</span>
+                <strong>{formatInvestmentAggregate(portfolioTableTotals.currentValue, visiblePortfolioRows)}</strong>
+              </div>
             </section>
           </>
         ) : selectedTab === "market" ? (

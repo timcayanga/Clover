@@ -126,7 +126,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
             padding: accountBrand.logoPadding ?? undefined,
             boxSizing: accountBrand.logoPadding ? "border-box" : undefined,
           }}
-          loading="lazy"
+          loading="eager"
           fetchPriority="auto"
           decoding="async"
           referrerPolicy="no-referrer"
@@ -144,7 +144,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
           src={accountBrand.fallbackIconSrc}
           alt=""
           aria-hidden="true"
-          loading="lazy"
+          loading="eager"
           decoding="async"
           onError={() => setFallbackFailed(true)}
         />

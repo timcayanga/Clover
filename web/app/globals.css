@@ -19483,8 +19483,17 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .investments-portfolio-table__header {
+  position: sticky;
+  top: -18px;
+  z-index: 4;
   display: grid;
   gap: 14px;
+  margin: -16px -16px 0;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .investments-portfolio-table__table {
@@ -19499,9 +19508,9 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   grid-template-columns: minmax(220px, 1.8fr) minmax(120px, 1fr) minmax(90px, 0.8fr) minmax(110px, 0.9fr) minmax(140px, 1fr) minmax(140px, 1fr);
   gap: 10px;
   align-items: center;
-  min-width: 760px;
-  padding: 10px 12px;
-  border-radius: 16px;
+  min-width: 720px;
+  padding: 7px 10px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.78);
 }
 
@@ -19518,7 +19527,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 2px;
   min-width: 0;
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .investments-portfolio-table__cell--asset {
@@ -19529,13 +19538,13 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .investments-portfolio-table__cell--asset strong {
   min-width: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .investments-portfolio-table__cell--asset span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .investments-portfolio-table__cell.is-positive {
@@ -19570,6 +19579,33 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   justify-items: center;
   padding: 12px 6px 4px;
   text-align: center;
+}
+
+.investments-portfolio-table__total {
+  position: sticky;
+  bottom: 12px;
+  z-index: 3;
+  display: grid;
+  gap: 3px;
+  justify-self: end;
+  min-width: 190px;
+  padding: 11px 14px;
+  border: 1px solid rgba(3, 168, 192, 0.18);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.10);
+  text-align: right;
+}
+
+.investments-portfolio-table__total span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.investments-portfolio-table__total strong {
+  color: var(--text);
+  font-size: 18px;
+  letter-spacing: -0.03em;
 }
 
 .investments-holdings-chart {
