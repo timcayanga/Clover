@@ -94,6 +94,18 @@ export const normalizeImportedAccountKey = (
   );
 };
 
+export const buildUploadedAccountDedupeKey = (account: ImportedAccountIdentityLike) =>
+  normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
+
+export const buildUploadedAccountLastFourDedupeKey = (account: ImportedAccountIdentityLike) =>
+  normalizeImportedAccountKey(
+    account.name,
+    account.institution,
+    getImportedAccountLastFour(account.accountNumber),
+    account.type,
+    account.currency
+  );
+
 export const appendImportedAccountLastFour = (label: string, accountNumber?: string | null) => {
   const suffix = getImportedAccountLastFour(accountNumber);
   if (!suffix) {

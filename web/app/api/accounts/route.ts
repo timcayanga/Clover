@@ -15,7 +15,12 @@ import { isSupportedAccountType } from "@/lib/account-types";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { BANK_PRIORITY, normalizeBankName } from "@/lib/data-qa-banks";
-import { isWiseWalletWithoutVisibleAccountNumber, normalizeImportedCurrencyCode } from "@/lib/imported-account-identity";
+import {
+  buildUploadedAccountDedupeKey,
+  buildUploadedAccountLastFourDedupeKey,
+  isWiseWalletWithoutVisibleAccountNumber,
+  normalizeImportedCurrencyCode,
+} from "@/lib/imported-account-identity";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
 
 export const dynamic = "force-dynamic";
@@ -240,11 +245,6 @@ const resolveUploadedAccountInstitution = (
   normalizeUploadBankName(checkpointBankHint) ??
   normalizeUploadBankName(checkpointInstitution) ??
   null;
-
-const importedAccountIdentityKey = (institution?: string | null, accountNumber?: string | null) => {
-  const normalizedAccountNumber = normalizeImportAccountNumber(accountNumber);
-  return normalizedAccountNumber ? `${canonicalImportInstitutionKey(institution)}:${normalizedAccountNumber}` : null;
-};
 
 const importAccountNumbersMayMatch = (left?: string | null, right?: string | null, requireExactMatch = false) => {
   const leftDigits = normalizeImportAccountNumber(left);
@@ -503,25 +503,16 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
       createdAt: true,
     },
   });
-  const accountByNumber = new Map(
+  const accountByIdentity = new Map(
     existingAccounts
-      .map((account) => [importedAccountIdentityKey(account.institution, account.accountNumber), account] as const)
+      .map((account) => [buildUploadedAccountDedupeKey(account), account] as const)
       .filter((entry): entry is [string, (typeof existingAccounts)[number]] => Boolean(entry[0]))
   );
-  const accountByPlainNumber = new Map(
+  const accountByLastFourIdentity = new Map(
     existingAccounts
       .map((account) => {
-        const number = normalizeImportAccountNumber(account.accountNumber ?? null);
-        return number ? [number, account] as const : null;
-      })
-      .filter((entry): entry is [string, (typeof existingAccounts)[number]] => Boolean(entry))
-  );
-  const accountByLastFour = new Map(
-    existingAccounts
-      .map((account) => {
-        const number = normalizeImportAccountNumber(account.accountNumber ?? null);
-        const lastFour = number ? number.slice(-4) : null;
-        return lastFour ? [lastFour, account] as const : null;
+        const key = buildUploadedAccountLastFourDedupeKey(account);
+        return key ? [key, account] as const : null;
       })
       .filter((entry): entry is [string, (typeof existingAccounts)[number]] => Boolean(entry))
   );
@@ -546,14 +537,24 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
     }
 
     const institution = normalizeImportInstitution(row.institution ?? readImportedJsonText(row.rawPayload, "institution"));
-    const key = `${institution.toLowerCase() || "unknown"}:${accountNumber}`;
+    const accountType = readImportedAccountType(row.rawPayload) ?? "bank";
+    const key = buildUploadedAccountDedupeKey({
+      name: row.accountName?.trim() || readImportedJsonText(row.rawPayload, "accountName"),
+      institution: institution || null,
+      accountNumber,
+      type: accountType,
+      currency: row.currency?.trim().toUpperCase() || null,
+    });
+    if (!key) {
+      continue;
+    }
     const group: RepairGroup =
       groups.get(key) ??
         {
           accountNumber,
           accountName: row.accountName?.trim() || readImportedJsonText(row.rawPayload, "accountName"),
           institution: institution || null,
-          accountType: readImportedAccountType(row.rawPayload),
+          accountType,
           currency: row.currency?.trim().toUpperCase() || null,
           balance: null,
           rows: [],
@@ -569,11 +570,23 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
   for (const group of groups.values()) {
     const accountType =
       (group.accountType && isSupportedAccountType(group.accountType) ? group.accountType : null) ?? "bank";
-    const groupIdentityKey = importedAccountIdentityKey(group.institution, group.accountNumber);
+    const groupIdentityKey = buildUploadedAccountDedupeKey({
+      name: group.accountName,
+      institution: group.institution,
+      accountNumber: group.accountNumber,
+      type: accountType,
+      currency: group.currency,
+    });
+    const groupLastFourIdentityKey = buildUploadedAccountLastFourDedupeKey({
+      name: group.accountName,
+      institution: group.institution,
+      accountNumber: group.accountNumber,
+      type: accountType,
+      currency: group.currency,
+    });
     let account =
-      (groupIdentityKey ? accountByNumber.get(groupIdentityKey) ?? null : null) ??
-      accountByPlainNumber.get(normalizeImportAccountNumber(group.accountNumber) ?? "") ??
-      accountByLastFour.get((normalizeImportAccountNumber(group.accountNumber) ?? "").slice(-4)) ??
+      (groupIdentityKey ? accountByIdentity.get(groupIdentityKey) ?? null : null) ??
+      (groupLastFourIdentityKey ? accountByLastFourIdentity.get(groupLastFourIdentityKey) ?? null : null) ??
       null;
     const resolvedInstitution = resolveUploadedAccountInstitution(account?.institution ?? null, null, group.institution);
     const accountName = formatUploadAccountDisplayName(
@@ -608,7 +621,10 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
         },
       });
       if (groupIdentityKey) {
-        accountByNumber.set(groupIdentityKey, account);
+        accountByIdentity.set(groupIdentityKey, account);
+      }
+      if (groupLastFourIdentityKey) {
+        accountByLastFourIdentity.set(groupLastFourIdentityKey, account);
       }
     } else if (
       account.accountNumber &&
@@ -832,7 +848,14 @@ const collapseDuplicateUploadedAccountsByIdentity = async (workspaceId: string, 
 
   const groups = new Map<string, typeof uploadedAccounts>();
   for (const account of uploadedAccounts) {
-    const key = importedAccountIdentityKey(account.institution, account.accountNumber);
+    const key = buildUploadedAccountDedupeKey({
+      name: account.name,
+      institution: account.institution,
+      accountNumber: account.accountNumber,
+      type: account.type,
+      currency: account.currency,
+      source: account.source,
+    });
     if (!key) {
       continue;
     }
