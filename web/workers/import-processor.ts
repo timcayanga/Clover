@@ -8116,9 +8116,16 @@ export const processImportFileText = async (
     importMode !== "statement" ||
     parsedRows.length === 0 ||
     (openAiParsed?.rows.length ?? 0) >= Math.max(1, Math.floor(parsedRows.length * 0.9));
+  const parsedRowsAreSnapshotOnlyStatement =
+    importMode === "statement" &&
+    parsedRows.length > 0 &&
+    parsedRows.every((row) => isSnapshotOnlyParsedRow(row));
+  const shouldPreferLocalSnapshotOnlyStatementParse =
+    parsedRowsAreSnapshotOnlyStatement && (openAiParsed?.rows.length ?? 0) === 0;
   const shouldAdoptOpenAiStatementParse =
     importMode !== "statement" ||
-    (!hasDeterministicBpiMobileScreenshotRows &&
+    (!shouldPreferLocalSnapshotOnlyStatementParse &&
+      !hasDeterministicBpiMobileScreenshotRows &&
       (!deterministicStatementParseLooksStrong || openAiStatementRowsAreCompetitive));
   const useOpenAiParse =
     Boolean(openAiParsed?.audit.schemaValidated) &&
