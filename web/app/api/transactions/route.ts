@@ -23,6 +23,7 @@ import {
   type TransactionQueryFilters,
 } from "@/lib/transaction-query";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
+import { recoverWorkspaceImportEnrichment } from "@/lib/import-enrichment-recovery";
 
 export const dynamic = "force-dynamic";
 
@@ -880,6 +881,18 @@ export async function GET(request: Request) {
     if (shouldRunImportRecovery) {
       await withImportRecoveryTimeout(materializeOrphanParsedImportsForWorkspace(workspaceId, workspaceAccountRows)).catch((error) => {
         console.warn("[transactions] unable to materialize orphan parsed import rows", {
+          workspaceId,
+          error,
+        });
+      });
+      await withImportRecoveryTimeout(
+        recoverWorkspaceImportEnrichment({
+          workspaceId,
+          workerId: `transactions-import-enrichment-${workspaceId}`,
+          maxJobs: 2,
+        })
+      ).catch((error) => {
+        console.warn("[transactions] unable to recover workspace import enrichment", {
           workspaceId,
           error,
         });

@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode } from "@/lib/import-image-mode";
 import { listImportEnrichmentJobsByWorkspace } from "@/lib/import-enrichment-jobs";
+import { recoverWorkspaceImportEnrichment } from "@/lib/import-enrichment-recovery";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -98,6 +99,11 @@ export async function GET(request: Request) {
     if (await isLocalDevHost()) {
       const user = await getOrCreateCurrentUser("local-admin");
       const workspace = await ensureStarterWorkspace(user, user.email, user.verified);
+      await recoverWorkspaceImportEnrichment({
+        workspaceId: workspace.id,
+        workerId: "api-imports-local-recovery",
+        maxJobs: 2,
+      }).catch(() => null);
       const importFiles = await listImportFilesCompat(workspace.id);
 
       return NextResponse.json({ importFiles: await attachEnrichmentJobs(workspace.id, importFiles) });
@@ -112,6 +118,11 @@ export async function GET(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, workspaceId);
+    await recoverWorkspaceImportEnrichment({
+      workspaceId,
+      workerId: `api-imports-${userId}`,
+      maxJobs: 2,
+    }).catch(() => null);
 
     const importFiles = await listImportFilesCompat(workspaceId);
 
