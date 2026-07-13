@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { LandingNav } from "@/components/landing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
-import { type HelpArticle, type HelpSection } from "@/lib/help-center";
+import { simplifyHelpText, type HelpArticle, type HelpSection } from "@/lib/help-center";
 import type { PublicAccountState } from "@/lib/public-account-state";
 
 type HelpArticlePageProps = {
@@ -16,8 +16,8 @@ function ArticleVisual({ section, article }: { section: HelpSection; article: He
     <div className={`help-article-page__visual help-article-page__visual--${section.accent}`} aria-hidden="true">
       <div className="help-article-page__visual-card">
         <span className="help-article-page__visual-kicker">{section.eyebrow}</span>
-        <strong>{article.title}</strong>
-        <p>{article.summary}</p>
+        <strong>{simplifyHelpText(article.title)}</strong>
+        <p>{simplifyHelpText(article.summary)}</p>
       </div>
       <div className="help-article-page__visual-bubble help-article-page__visual-bubble--a" />
       <div className="help-article-page__visual-bubble help-article-page__visual-bubble--b" />
@@ -50,8 +50,8 @@ export function HelpArticlePage({ section, article, returnTo: _returnTo, account
           <section className="help-article-hero glass">
             <div className="help-article-hero__copy">
               <p className="eyebrow">{section.eyebrow}</p>
-              <h1>{article.title}</h1>
-              <p>{article.summary}</p>
+              <h1>{simplifyHelpText(article.title)}</h1>
+              <p>{simplifyHelpText(article.summary)}</p>
             </div>
 
             <ArticleVisual section={section} article={article} />
@@ -64,12 +64,12 @@ export function HelpArticlePage({ section, article, returnTo: _returnTo, account
                   <p className="eyebrow">How to do it</p>
                   <h2>Step-by-step guide</h2>
                 </div>
-                <p>{article.seoDescription}</p>
+              <p>{simplifyHelpText(article.seoDescription)}</p>
               </div>
 
               <ol className="help-steps">
                 {article.steps.map((step) => (
-                  <li key={step}>{step}</li>
+                  <li key={step}>{simplifyHelpText(step)}</li>
                 ))}
               </ol>
             </article>
@@ -79,7 +79,7 @@ export function HelpArticlePage({ section, article, returnTo: _returnTo, account
                 <p className="eyebrow">Search terms</p>
                 <div className="help-tag-list">
                   {article.keywords.map((keyword) => (
-                    <span key={keyword}>{keyword}</span>
+                    <span key={keyword}>{simplifyHelpText(keyword)}</span>
                   ))}
                 </div>
               </article>
@@ -89,8 +89,8 @@ export function HelpArticlePage({ section, article, returnTo: _returnTo, account
                 <div className="help-section-links">
                   {article.links.map((link) => (
                     <Link key={link.href} className="help-section-link" href={link.href} prefetch={false}>
-                      <strong>{link.label}</strong>
-                      <span>{link.description}</span>
+                      <strong>{simplifyHelpText(link.label)}</strong>
+                      <span>{simplifyHelpText(link.description)}</span>
                     </Link>
                   ))}
                 </div>
@@ -110,8 +110,8 @@ export function HelpArticlePage({ section, article, returnTo: _returnTo, account
             <div className="help-faq-grid">
               {article.questions.map((item) => (
                 <article key={item.question} className="help-faq">
-                  <h3>{item.question}</h3>
-                  <p>{item.answer}</p>
+                  <h3>{simplifyHelpText(item.question)}</h3>
+                  <p>{simplifyHelpText(item.answer)}</p>
                 </article>
               ))}
             </div>

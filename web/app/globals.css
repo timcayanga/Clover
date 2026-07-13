@@ -30451,9 +30451,12 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .help-page .landing-nav {
-  position: sticky;
+  position: sticky !important;
   top: 0;
   z-index: 20;
+  align-self: flex-start;
+  isolation: isolate;
+  background: rgba(255, 255, 255, 0.96);
   margin-bottom: 6px;
 }
 

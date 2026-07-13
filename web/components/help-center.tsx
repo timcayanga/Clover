@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { LandingNav } from "@/components/landing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
-import { getHelpSectionHref, getHelpSectionImageSrc, publicHelpSections, type HelpSection } from "@/lib/help-center";
+import { getHelpSectionHref, getHelpSectionImageSrc, publicHelpSections, simplifyHelpText, type HelpSection } from "@/lib/help-center";
 import type { PublicAccountState } from "@/lib/public-account-state";
 
 type HelpCenterProps = {
@@ -80,7 +80,7 @@ export function HelpCenter({ returnTo, accountState }: HelpCenterProps) {
                   decoding="async"
                 />
                 <div className="help-card__content">
-                  <h3>{section.title}</h3>
+                  <h3>{simplifyHelpText(section.title)}</h3>
                 </div>
               </Link>
             ))}

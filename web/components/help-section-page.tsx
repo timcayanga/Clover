@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { LandingNav } from "@/components/landing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
-import { type HelpArticle, type HelpQuestion, type HelpSection } from "@/lib/help-center";
+import { simplifyHelpText, type HelpArticle, type HelpQuestion, type HelpSection } from "@/lib/help-center";
 import type { PublicAccountState } from "@/lib/public-account-state";
 
 type HelpSectionPageProps = {
@@ -39,10 +39,10 @@ function AccordionItem({ question, cta }: { question: HelpQuestion; cta?: Accord
   return (
     <details className="help-accordion-item">
       <summary className="help-accordion-item__summary">
-        <span>{question.question}</span>
+        <span>{simplifyHelpText(question.question)}</span>
       </summary>
       <div className="help-accordion-item__body">
-        <p>{question.answer}</p>
+        <p>{simplifyHelpText(question.answer)}</p>
         {cta ? (
           <Link className={`button ${cta.primary ? "button-primary" : "button-secondary"}`} href={cta.href} prefetch={false}>
             {cta.label}
@@ -120,7 +120,7 @@ export function HelpSectionPage({ section, returnTo: _returnTo, accountState }: 
                 {groupedQuestions.map((group) => (
                   <section key={group.key} className={`help-topic help-topic--${section.accent}`}>
                     <div className="help-topic__intro">
-                      <h2>{group.title}</h2>
+                      <h2>{simplifyHelpText(group.title)}</h2>
                     </div>
 
                     <div className="help-accordion">

@@ -46,6 +46,15 @@ export type HelpSearchResult = {
   articleSlug?: string;
 };
 
+// Keep public Help copy focused on the user's money setup instead of internal product terms.
+export function simplifyHelpText(value: string) {
+  return value
+    .replace(/workspaces/gi, (match) => (match[0] === "W" ? "finance setups" : "finance setups"))
+    .replace(/workspace/gi, (match) => (match[0] === "W" ? "finance setup" : "finance setup"))
+    .replace(/protected pages/gi, "pages that need a login")
+    .replace(/protected page/gi, "page that needs a login");
+}
+
 const createArticle = (
   slug: string,
   title: string,
