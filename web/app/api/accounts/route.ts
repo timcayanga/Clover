@@ -246,6 +246,23 @@ const resolveUploadedAccountInstitution = (
   normalizeUploadBankName(checkpointInstitution) ??
   null;
 
+const buildUploadedAccountCrossTypeIdentityKey = (account: {
+  institution?: string | null;
+  accountNumber?: string | null;
+  currency?: string | null;
+}) => {
+  const normalizedAccountNumber = normalizeImportAccountNumber(account.accountNumber);
+  if (!normalizedAccountNumber || normalizedAccountNumber.length < 8) {
+    return null;
+  }
+
+  return [
+    canonicalImportInstitutionKey(account.institution),
+    normalizedAccountNumber,
+    normalizeImportedCurrencyCode(account.currency) ?? "",
+  ].join(":");
+};
+
 const importAccountNumbersMayMatch = (left?: string | null, right?: string | null, requireExactMatch = false) => {
   const leftDigits = normalizeImportAccountNumber(left);
   const rightDigits = normalizeImportAccountNumber(right);
@@ -921,6 +938,109 @@ const collapseDuplicateUploadedAccountsByIdentity = async (workspaceId: string, 
   }
 };
 
+const repairLegacyUploadedCardAccountSplits = async (workspaceId: string, compatibleColumns: Set<string>) => {
+  if (!compatibleColumns.has("accountNumber")) {
+    return;
+  }
+
+  const uploadedAccounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      accountNumber: { not: null },
+    },
+    select: getCompatibleAccountSelect(compatibleColumns),
+  }).catch(() => []);
+  if (uploadedAccounts.length <= 1) {
+    return;
+  }
+
+  const groups = new Map<string, typeof uploadedAccounts>();
+  for (const account of uploadedAccounts) {
+    const key = buildUploadedAccountCrossTypeIdentityKey(account);
+    if (!key) {
+      continue;
+    }
+
+    const current = groups.get(key) ?? [];
+    current.push(account);
+    groups.set(key, current);
+  }
+
+  const cardLikeTypes = new Set(["credit_card", "line_of_credit", "prepaid"]);
+
+  for (const group of groups.values()) {
+    if (group.length <= 1) {
+      continue;
+    }
+
+    const cardAccounts = group.filter((account) => cardLikeTypes.has(String(account.type ?? "").toLowerCase()));
+    const bankAccounts = group.filter((account) => String(account.type ?? "").toLowerCase() === "bank");
+    if (cardAccounts.length === 0 || bankAccounts.length === 0) {
+      continue;
+    }
+
+    const sortedCardAccounts = [...cardAccounts].sort((left, right) => {
+      const rightTime = Math.max(right.updatedAt.getTime(), right.createdAt.getTime());
+      const leftTime = Math.max(left.updatedAt.getTime(), left.createdAt.getTime());
+      if (rightTime !== leftTime) {
+        return rightTime - leftTime;
+      }
+
+      return right.id.localeCompare(left.id);
+    });
+    const canonical = sortedCardAccounts[0];
+    const duplicateIds = bankAccounts.map((account) => account.id).filter((id) => id !== canonical.id);
+    if (duplicateIds.length === 0) {
+      continue;
+    }
+
+    const canonicalBalance =
+      [...group]
+        .sort((left, right) => {
+          const rightTime = Math.max(right.updatedAt.getTime(), right.createdAt.getTime());
+          const leftTime = Math.max(left.updatedAt.getTime(), left.createdAt.getTime());
+          return rightTime - leftTime;
+        })
+        .find((account) => account.balance !== null && account.balance !== undefined)?.balance?.toString() ?? null;
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        if (canonicalBalance !== null && canonical.balance?.toString() !== canonicalBalance) {
+          await tx.account.update({
+            where: { id: canonical.id },
+            data: {
+              balance: canonicalBalance,
+              type: canonical.type,
+            },
+          });
+        }
+
+        await tx.transaction.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.importFile.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.documentImport.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.accountStatementCheckpoint.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.financialCommitment.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.receiptDocument.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.investmentSnapshot.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.investmentHolding.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.recurringPattern.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.accountRule.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.account.deleteMany({ where: { id: { in: duplicateIds }, source: "upload", type: "bank" } });
+      });
+    } catch (error) {
+      console.warn("[accounts] unable to repair legacy uploaded card account split", {
+        workspaceId,
+        canonicalAccountId: canonical.id,
+        duplicateAccountIds: duplicateIds,
+        accountNumber: canonical.accountNumber,
+        institution: canonical.institution,
+        error,
+      });
+    }
+  }
+};
+
 export async function GET(request: Request) {
   try {
     const userId = await resolveAccountsRouteUserId();
@@ -968,6 +1088,12 @@ export async function GET(request: Request) {
       });
       await collapseDuplicateUploadedAccountsByIdentity(workspaceId, compatibleColumns).catch((error) => {
         console.warn("[accounts] unable to collapse duplicate uploaded accounts", {
+          workspaceId,
+          error,
+        });
+      });
+      await repairLegacyUploadedCardAccountSplits(workspaceId, compatibleColumns).catch((error) => {
+        console.warn("[accounts] unable to repair legacy uploaded card account splits", {
           workspaceId,
           error,
         });
