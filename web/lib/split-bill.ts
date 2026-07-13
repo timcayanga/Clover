@@ -1848,6 +1848,10 @@ const isSuspiciousReceiptMerchantName = (value: string | null | undefined) => {
     return true;
   }
 
+  if (/[«»¢¥¤]/.test(normalized)) {
+    return true;
+  }
+
   if (
     /\b(?:republic of the philippines|province of|office of the treasurer|accountable form|received the amount stated|professional tax receipt|this document(?:\s+is)?\s+not\s+valid|input taxes?)\b/i.test(
       normalized
@@ -1914,6 +1918,10 @@ const isSuspiciousReceiptItemDescription = (description: string) => {
     return true;
   }
 
+  if (/\b(?:qr code|scanner pro|by going digital|carbon footprint)\b/i.test(normalized)) {
+    return true;
+  }
+
   if (/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/.test(normalized)) {
     return true;
   }
@@ -1935,6 +1943,10 @@ const isSuspiciousReceiptItemDescription = (description: string) => {
       digitHeavyTokens >= Math.max(2, Math.floor(tokens.length / 3)) ||
       (shoutyTokenCount >= Math.ceil(alphaTokens.length * 0.5) && tinyAlphaTokens >= 2))
   ) {
+    return true;
+  }
+
+  if (alphaTokens.length > 0 && alphaTokens.length <= 2 && alphaTokens.every((token) => token.length <= 2)) {
     return true;
   }
 
@@ -2126,6 +2138,17 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
 
   if (looksLikeSplitAllocationWorksheet(receiptText)) {
     issues.push("looks like a split allocation worksheet, not a receipt");
+    score -= 8;
+    severeIssue = true;
+  }
+
+  if (preview.currencyWarning) {
+    issues.push("mixed currencies detected");
+    score -= 4;
+  }
+
+  if (preview.receiptType === "wallet_transfer" && cleanItemCount > 0) {
+    issues.push("wallet transfer contains line items");
     score -= 8;
     severeIssue = true;
   }
@@ -2722,7 +2745,7 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
   const shouldResetReviewSummary =
     !qualityAssessment.reliableForFastPath &&
     (qualityAssessment.issues.some((issue) =>
-      /summary does not reconcile|total is smaller than subtotal|looks like a note, poster, or screenshot instead of a receipt|looks like a split allocation worksheet, not a receipt|declared item count/i.test(
+      /summary does not reconcile|total is smaller than subtotal|looks like a note, poster, or screenshot instead of a receipt|looks like a split allocation worksheet, not a receipt|wallet transfer contains line items|declared item count/i.test(
         issue
       )
     ) ||
@@ -2730,7 +2753,7 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
   const shouldResetReviewItems =
     !qualityAssessment.reliableForFastPath &&
     (qualityAssessment.issues.some((issue) =>
-      /suspicious line items|looks like a note, poster, or screenshot instead of a receipt|looks like a split allocation worksheet, not a receipt|declared item count/i.test(
+      /suspicious line items|looks like a note, poster, or screenshot instead of a receipt|looks like a split allocation worksheet, not a receipt|wallet transfer contains line items|mixed currencies detected|declared item count/i.test(
         issue
       )
     ) ||
@@ -2740,7 +2763,8 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
     preview.receiptType === "wallet_transfer" &&
     cleanPreviewItems.length === 0 &&
     Boolean(usableMerchantName) &&
-    qualityAssessment.score >= 2;
+    qualityAssessment.score >= 2 &&
+    preview.confidence >= 75;
   const shouldPreserveAccountHints = qualityAssessment.reliableForFastPath || shouldPreserveWalletTransferHints;
   const merchantNameForDraft =
     qualityAssessment.reliableForFastPath || shouldPreserveWalletTransferHints ? usableMerchantName : null;

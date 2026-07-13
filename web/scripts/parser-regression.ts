@@ -3409,6 +3409,59 @@ const main = async () => {
     );
   }
 
+  const mixedCurrencyNoisePreview = parseReceiptText([
+    "Tae aa Co) Sonal SIRE Sagat",
+    "Ta ha 140 - 38--",
+    "GBP",
+    "JPY",
+    "USD",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(mixedCurrencyNoisePreview).reliableForFastPath) {
+    throw new Error("expected mixed-currency OCR noise to stay out of the split-bill fast path");
+  }
+  const mixedCurrencyNoiseDraft = splitBillDraftFromReceiptPreview(mixedCurrencyNoisePreview);
+  if (
+    mixedCurrencyNoiseDraft.title !== "Receipt split" ||
+    mixedCurrencyNoiseDraft.merchantName !== "" ||
+    mixedCurrencyNoiseDraft.subtotal !== "" ||
+    mixedCurrencyNoiseDraft.total !== "" ||
+    mixedCurrencyNoiseDraft.items.length !== 1
+  ) {
+    throw new Error(
+      `expected mixed-currency OCR noise to clear merchant/summary/items, got title=${mixedCurrencyNoiseDraft.title} merchant=${mixedCurrencyNoiseDraft.merchantName ?? "null"} subtotal=${mixedCurrencyNoiseDraft.subtotal} total=${mixedCurrencyNoiseDraft.total} items=${mixedCurrencyNoiseDraft.items.length}`
+    );
+  }
+
+  const walletTransferItemPreview = parseReceiptText([
+    "Express Send",
+    "PReeeE KE«eee«K E.",
+    "+63 998 853 0054",
+    "Sent via GCash",
+    "Amount 3,210.00",
+    "Total Amount Sent $3210.00",
+    "Ref No. 5027333717575",
+    "QR Code",
+    "Scanner Pro",
+    "4.6 % FREE",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(walletTransferItemPreview).reliableForFastPath) {
+    throw new Error("expected wallet-transfer OCR with line items to stay out of the split-bill fast path");
+  }
+  const walletTransferItemDraft = splitBillDraftFromReceiptPreview(walletTransferItemPreview);
+  if (
+    walletTransferItemDraft.title !== "Receipt split" ||
+    walletTransferItemDraft.merchantName !== "" ||
+    walletTransferItemDraft.subtotal !== "" ||
+    walletTransferItemDraft.total !== "" ||
+    walletTransferItemDraft.items.length !== 1 ||
+    walletTransferItemDraft.rawPayload?.paymentMethod !== null ||
+    walletTransferItemDraft.rawPayload?.receiptAccountMatch !== null
+  ) {
+    throw new Error(
+      `expected wallet-transfer OCR with line items to clear merchant/summary/account hints, got title=${walletTransferItemDraft.title} merchant=${walletTransferItemDraft.merchantName ?? "null"} subtotal=${walletTransferItemDraft.subtotal} total=${walletTransferItemDraft.total} items=${walletTransferItemDraft.items.length} paymentMethod=${String(walletTransferItemDraft.rawPayload?.paymentMethod ?? "null")}`
+    );
+  }
+
   const payerReceiptPreview = parseReceiptText([
     "THE BAKERY",
     "Paid by Alice",
