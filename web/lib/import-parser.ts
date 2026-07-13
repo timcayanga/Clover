@@ -12217,7 +12217,14 @@ const normalizeGcashMerchant = (description: string) => {
 
   const paymentMatch = trimmed.match(/^Payment to\s+(.+)$/i);
   if (paymentMatch?.[1]) {
-    return `Payment to ${normalizeWhitespace(paymentMatch[1])}`;
+    const normalizedPayee = normalizeWhitespace(paymentMatch[1]);
+    if (/^philippine\s+digital\s+asset\s+exchang/i.test(normalizedPayee) || /\bpdax\b/i.test(normalizedPayee)) {
+      return "PDAX";
+    }
+    if (/^bancnet\s+p\s*2\s*m\s+send$/i.test(normalizedPayee)) {
+      return "BancNet P2M Send";
+    }
+    return `Payment to ${normalizedPayee}`;
   }
 
   if (/\binvno:\s*\d{8}\s+pdax/i.test(trimmed) || /\bpdaxphm/i.test(trimmed)) {
@@ -12392,8 +12399,15 @@ const guessGcashCategoryName = (description: string, type: TransactionType) => {
     return merchantHint;
   }
 
-  if (/^(?:sent gcash to|payment to)\s+.*(?:pdax|ab capital|unobank|uno\s*bank|securities|exchange)\b/i.test(description)) {
+  if (
+    /^(?:sent gcash to|payment to)\s+.*(?:pdax|ab capital|unobank|uno\s*bank|securities|exchange)\b/i.test(description) ||
+    /^payment to\s+philippine\s+digital\s+asset\s+exchang/i.test(description)
+  ) {
     return "Financial";
+  }
+
+  if (/^payment to\s+bancnet\s+p\s*2\s*m\s+send$/i.test(description)) {
+    return "Transfers";
   }
 
   if (/\bubphphmmxxxb\b/i.test(description) || /transfer from unionbank/i.test(merchant)) {
@@ -12401,6 +12415,9 @@ const guessGcashCategoryName = (description: string, type: TransactionType) => {
   }
 
   if (/^payment to\b/i.test(description)) {
+    if (/^payment to\s+bancnet\s+p\s*2\s*m\s+send$/i.test(description)) {
+      return "Transfers";
+    }
     return merchantHint ?? guessCategoryName(merchant, type);
   }
 
@@ -13491,6 +13508,10 @@ const normalizeUnionBankMerchantText = (description: string) => {
     return normalizeWhitespace(cardPurchaseMatch[1]);
   }
 
+  if (/\bxendit\b/i.test(normalized)) {
+    return "Xendit";
+  }
+
   return normalized;
 };
 
@@ -13545,7 +13566,7 @@ const classifyUnionBankTransaction = (description: string) => {
     return { type: "income" as TransactionType, categoryName: "Income" };
   }
 
-  if (/bills payment|transfer to|sent to|online fund transfer|xendit transfer|outgoing|instapay send|payment to/.test(lower)) {
+  if (/bills payment|transfer to|sent to|online fund transfer|\bxendit\b|outgoing|instapay send|payment to/.test(lower)) {
     return { type: "expense" as TransactionType, categoryName: "Transfers" };
   }
 
@@ -13672,7 +13693,7 @@ const guessUnionBankCategoryName = (description: string, type: TransactionType) 
   }
   if (/^inward payments?\b/.test(lower)) return "Income";
   if (/bills payment/.test(lower)) return "Transfers";
-  if (/sent to|transfer to|transfer from|online fund transfer|xendit transfer|cash in|received credit|instapay send|payment to/.test(lower)) {
+  if (/sent to|transfer to|transfer from|online fund transfer|\bxendit\b|cash in|received credit|instapay send|payment to/.test(lower)) {
     return "Transfers";
   }
   if (/online instapay fee|instapay fee|transfer fee|service charge|withholding tax|withheld tax|tax withheld|\bfee\b/.test(lower)) {

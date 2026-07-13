@@ -2102,6 +2102,94 @@ const main = async () => {
   }
   console.log("[PASS] BPI classification | statement payment credit rows normalize as Financial expense");
 
+  const unionBankMarchPath = join(root, "Actual SOAs/UnionBank/UnionBank SOA March 2026_unlocked.pdf");
+  const unionBankMarchBytes = await readFile(unionBankMarchPath);
+  const unionBankMarchText = await readUploadedFileText({
+    name: basename(unionBankMarchPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(unionBankMarchBytes.length);
+      copy.set(unionBankMarchBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const unionBankMarchMetadata = detectStatementMetadataFromText(unionBankMarchText);
+  const unionBankMarchRows = parser.parseImportText(unionBankMarchText, basename(unionBankMarchPath), "application/pdf", {
+    institution: unionBankMarchMetadata.institution,
+    accountName: unionBankMarchMetadata.accountName,
+    accountNumber: unionBankMarchMetadata.accountNumber,
+  });
+  const unionBankXenditRows = unionBankMarchRows.filter((row) => /\bxendit\b/i.test(String(row.description ?? row.merchantRaw ?? "")));
+  if (
+    unionBankXenditRows.length === 0 ||
+    unionBankXenditRows.some((row) => row.merchantClean !== "Xendit" || row.categoryName !== "Transfers")
+  ) {
+    throw new Error(
+      `expected UnionBank March Xendit rows to normalize as Xendit transfers, got ${JSON.stringify(
+        unionBankXenditRows.map((row) => ({
+          merchantRaw: row.merchantRaw,
+          merchantClean: row.merchantClean,
+          categoryName: row.categoryName,
+          type: row.type,
+        }))
+      )}`
+    );
+  }
+  console.log("[PASS] UnionBank normalization | March 2026 Xendit rows normalize as Transfers");
+
+  const gcashActualPath = join(root, "Actual SOAs/GCash/GCash Statement Oct 2025 - Mar 2026_unlocked.pdf");
+  const gcashActualBytes = await readFile(gcashActualPath);
+  const gcashActualText = await readUploadedFileText({
+    name: basename(gcashActualPath),
+    type: "application/pdf",
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(gcashActualBytes.length);
+      copy.set(gcashActualBytes);
+      return copy.buffer as ArrayBuffer;
+    },
+  });
+  const gcashActualMetadata = detectStatementMetadataFromText(gcashActualText);
+  const gcashActualRows = parser.parseImportText(gcashActualText, basename(gcashActualPath), "application/pdf", {
+    institution: gcashActualMetadata.institution,
+    accountName: gcashActualMetadata.accountName,
+    accountNumber: gcashActualMetadata.accountNumber,
+  });
+  const gcashPdaxRows = gcashActualRows.filter((row) =>
+    /philippine\s+digital\s+asset\s+exchang|pdax/i.test(String(row.description ?? row.merchantRaw ?? row.merchantClean ?? ""))
+  );
+  if (
+    gcashPdaxRows.length === 0 ||
+    gcashPdaxRows.some((row) => row.merchantClean !== "PDAX" || row.categoryName !== "Financial")
+  ) {
+    throw new Error(
+      `expected GCash PDAX rows to normalize as Financial, got ${JSON.stringify(
+        gcashPdaxRows.map((row) => ({
+          merchantRaw: row.merchantRaw,
+          merchantClean: row.merchantClean,
+          categoryName: row.categoryName,
+          type: row.type,
+        }))
+      )}`
+    );
+  }
+  const gcashBancnetRows = gcashActualRows.filter((row) => /payment to bancnet p 2 m send/i.test(String(row.description ?? row.merchantRaw ?? "")));
+  if (
+    gcashBancnetRows.length === 0 ||
+    gcashBancnetRows.some((row) => row.merchantClean !== "BancNet P2M Send" || row.categoryName !== "Transfers")
+  ) {
+    throw new Error(
+      `expected GCash BancNet P2M rows to normalize as Transfers, got ${JSON.stringify(
+        gcashBancnetRows.map((row) => ({
+          merchantRaw: row.merchantRaw,
+          merchantClean: row.merchantClean,
+          categoryName: row.categoryName,
+          type: row.type,
+        }))
+      )}`
+    );
+  }
+  console.log("[PASS] GCash normalization | PDAX and BancNet P2M rows avoid Other");
+
   const bpiHybridPath = join(root, "Samples/BPI/1013696218-Bank-Statement-and-Bank-Cert.pdf");
   const bpiHybridBytes = await readFile(bpiHybridPath);
   const bpiHybridText = await readUploadedFileText({

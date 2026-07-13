@@ -63,9 +63,9 @@ const matchesCategoryHint = (value: string, patterns: { lower?: RegExp; compact?
 const matchesTransferContext = (value: string) =>
   matchesCategoryHint(value, {
     lower:
-      /\b(transfer|instapay|pesonet|fund\s+transfer|wallet\s+transfer|bank\s+transfer|incoming\s+transfer|outgoing\s+transfer|incoming\s+interbank\s+transfer|outgoing\s+interbank\s+transfer|remittance|send\s+money|cash\s+in|cash\s+out|statement\s+payment|payment\s*-\s*thank\s+you|card\s+payment|payment\s+to\s+card|credit\s+to\s+cash|edl\/?mbpay)\b/,
+      /\b(transfer|instapay|pesonet|fund\s+transfer|wallet\s+transfer|bank\s+transfer|incoming\s+transfer|outgoing\s+transfer|incoming\s+interbank\s+transfer|outgoing\s+interbank\s+transfer|remittance|send\s+money|cash\s+in|cash\s+out|statement\s+payment|payment\s*-\s*thank\s+you|card\s+payment|payment\s+to\s+card|credit\s+to\s+cash|edl\/?mbpay|xendit|bancnet\s+p\s*2\s*m\s+send)\b/,
     compact:
-      /transfer|instapay|pesonet|fundtransfer|wallettransfer|banktransfer|incomingtransfer|outgoingtransfer|incominginterbanktransfer|outgoinginterbanktransfer|remittance|sendmoney|cashin|cashout|statementpayment|paymentthankyou|cardpayment|paymenttocard|credittocash|edlmbpay/,
+      /transfer|instapay|pesonet|fundtransfer|wallettransfer|banktransfer|incomingtransfer|outgoingtransfer|incominginterbanktransfer|outgoinginterbanktransfer|remittance|sendmoney|cashin|cashout|statementpayment|paymentthankyou|cardpayment|paymenttocard|credittocash|edlmbpay|xendit|bancnetp2msend/,
   });
 
 const getSpecificMerchantCategoryHint = (value: string) => {

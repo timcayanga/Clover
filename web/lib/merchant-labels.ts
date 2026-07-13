@@ -2506,6 +2506,8 @@ const COMPACT_MERCHANT_CONTAINS_RULES: Array<{ needle: string; replacement: stri
   { needle: "ralphswines", replacement: "Ralph's Wines" },
   { needle: "nationalbookstore", replacement: "National Book Store" },
   { needle: "arabica", replacement: "Arabica" },
+  { needle: "xendit", replacement: "Xendit" },
+  { needle: "bancnetp2msend", replacement: "BancNet P2M Send" },
   { needle: "prioritypass", replacement: "Priority Pass" },
   { needle: "15ppass", replacement: "Priority Pass" },
 ];
@@ -2636,6 +2638,10 @@ export const summarizeMerchantText = (value: string, institution?: string | null
 
     if (/^online\s+fund\s+transfer\b/i.test(simplified)) {
       return "Fund Transfer";
+    }
+
+    if (/\bxendit\b/i.test(simplified)) {
+      return "Xendit";
     }
   }
 
