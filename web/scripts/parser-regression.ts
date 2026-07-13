@@ -3228,6 +3228,75 @@ const main = async () => {
     );
   }
 
+  const weakReviewDraft = splitBillDraftFromReceiptPreview({
+    ...mixedCurrencyPreview,
+    merchantName: "soem #soE",
+    receiptType: "generic_receipt",
+    receiptText: [
+      "Monthly totals:",
+      "Rent = 1450",
+      "Groceries = 380",
+      "Gas = 292",
+      "Subscription = 47",
+      "Dining = 165",
+      "Shopping = 210",
+    ].join("\n"),
+    subtotal: "2497.00",
+    total: "2497.00",
+    paymentMethod: "GCash",
+    receiptAccountMatch: {
+      accountName: "GCash",
+      accountLast4: null,
+      confidence: 63,
+      reason: "Found GCash reference",
+    },
+    items: [
+      { description: "Rent = 1450", amount: "1450.00" },
+      { description: "Groceries = 380", amount: "380.00" },
+    ],
+  });
+  if (
+    weakReviewDraft.title !== "Receipt split" ||
+    weakReviewDraft.subtotal !== "" ||
+    weakReviewDraft.total !== "" ||
+    weakReviewDraft.items.length !== 1 ||
+    weakReviewDraft.rawPayload?.paymentMethod !== null ||
+    weakReviewDraft.rawPayload?.receiptAccountMatch !== null
+  ) {
+    throw new Error(
+      `expected weak review drafts to clear misleading summary/account hints, got title=${weakReviewDraft.title} subtotal=${weakReviewDraft.subtotal} total=${weakReviewDraft.total} items=${weakReviewDraft.items.length} paymentMethod=${String(weakReviewDraft.rawPayload?.paymentMethod ?? "null")}`
+    );
+  }
+
+  const weakWalletTransferDraft = splitBillDraftFromReceiptPreview({
+    ...mixedCurrencyPreview,
+    receiptType: "wallet_transfer",
+    merchantName: "DYeN TlesseY Y",
+    receiptText: [
+      "DYeN TlesseY Y.",
+      "+63 917 830 3926",
+      "Sent via GCash",
+      "Amount 750.00",
+      "Total Amount Sent £750.00",
+      "Ref No. 0028198075510",
+      "0] 131g (scoze)",
+    ].join("\n"),
+    subtotal: "3926.00",
+    total: "750.00",
+    items: [{ description: "DYeN TlesseY Y. +63 917", amount: "3926.00" }],
+  });
+  if (
+    weakWalletTransferDraft.title !== "Receipt split" ||
+    weakWalletTransferDraft.merchantName !== "" ||
+    weakWalletTransferDraft.items.length !== 1 ||
+    weakWalletTransferDraft.rawPayload?.paymentMethod !== null ||
+    weakWalletTransferDraft.rawPayload?.receiptAccountMatch !== null
+  ) {
+    throw new Error(
+      `expected noisy wallet-transfer review drafts to clear merchant/account hints, got title=${weakWalletTransferDraft.title} merchant=${weakWalletTransferDraft.merchantName ?? "null"} items=${weakWalletTransferDraft.items.length} paymentMethod=${String(weakWalletTransferDraft.rawPayload?.paymentMethod ?? "null")}`
+    );
+  }
+
   const payerReceiptPreview = parseReceiptText([
     "THE BAKERY",
     "Paid by Alice",

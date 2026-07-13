@@ -2636,8 +2636,39 @@ export const mergeSplitBillItemSplitMetadata = (
 };
 
 export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult): SplitBillDraft => {
+  const qualityAssessment = assessReceiptPreviewQuality(preview);
   const usableMerchantName = !isSuspiciousReceiptMerchantName(preview.merchantName) ? preview.merchantName : null;
-  const total = preview.total ?? "";
+  const cleanPreviewItems = preview.items.filter((item) => !isSuspiciousReceiptItemDescription(item.description));
+  const shouldResetReviewSummary =
+    !qualityAssessment.reliableForFastPath &&
+    qualityAssessment.issues.some((issue) =>
+      /summary does not reconcile|total is smaller than subtotal|looks like a note, poster, or screenshot instead of a receipt|declared item count/i.test(
+        issue
+      )
+    );
+  const shouldResetReviewItems =
+    !qualityAssessment.reliableForFastPath &&
+    (qualityAssessment.issues.some((issue) =>
+      /suspicious line items|looks like a note, poster, or screenshot instead of a receipt|declared item count/i.test(issue)
+    ) ||
+      preview.receiptType === "wallet_transfer" ||
+      cleanPreviewItems.length !== preview.items.length);
+  const shouldPreserveWalletTransferHints =
+    preview.receiptType === "wallet_transfer" &&
+    cleanPreviewItems.length === 0 &&
+    Boolean(usableMerchantName) &&
+    qualityAssessment.score >= 2;
+  const shouldPreserveAccountHints = qualityAssessment.reliableForFastPath || shouldPreserveWalletTransferHints;
+  const merchantNameForDraft =
+    qualityAssessment.reliableForFastPath || shouldPreserveWalletTransferHints ? usableMerchantName : null;
+  const total = shouldResetReviewSummary ? "" : preview.total ?? "";
+  const summarySubtotal = shouldResetReviewSummary ? "" : preview.subtotal ?? "";
+  const summaryServiceCharge = shouldResetReviewSummary ? "" : preview.serviceCharge ?? "";
+  const summaryTax = shouldResetReviewSummary ? "" : preview.tax ?? "";
+  const summaryTip = shouldResetReviewSummary ? "" : preview.tip ?? "";
+  const summaryRounding = shouldResetReviewSummary ? "" : preview.rounding ?? "";
+  const summaryDiscount = shouldResetReviewSummary ? "" : preview.discount ?? "";
+  const previewItemsForDraft = shouldResetReviewItems ? [] : cleanPreviewItems;
   const receiptParticipants =
     preview.participants.length > 0
       ? preview.participants
@@ -2712,19 +2743,19 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
         : [];
   return {
     ...createBlankSplitBillDraft(),
-    title: usableMerchantName ? `${usableMerchantName} receipt` : "Receipt split",
-    merchantName: usableMerchantName ?? "",
+    title: merchantNameForDraft ? `${merchantNameForDraft} receipt` : "Receipt split",
+    merchantName: merchantNameForDraft ?? "",
     billDate: preview.billDate ? preview.billDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
     currency: preview.currency,
     sourceType: "receipt",
     receiptText: preview.receiptText,
     receiptConfidence: preview.confidence,
-    subtotal: preview.subtotal ?? "",
-    serviceCharge: preview.serviceCharge ?? "",
-    tax: preview.tax ?? "",
-    tip: preview.tip ?? "",
-    rounding: preview.rounding ?? "",
-    discount: preview.discount ?? "",
+    subtotal: summarySubtotal,
+    serviceCharge: summaryServiceCharge,
+    tax: summaryTax,
+    tip: summaryTip,
+    rounding: summaryRounding,
+    discount: summaryDiscount,
     total,
     participants:
       payerSeededReceiptParticipants.length > 0
@@ -2734,8 +2765,8 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
           }))
         : [],
     items:
-      preview.items.length > 0
-        ? preview.items.map((item, index) => {
+      previewItemsForDraft.length > 0
+        ? previewItemsForDraft.map((item, index) => {
             const matchedParticipantNames = inferItemParticipantIds(item.description, receiptParticipantNames);
           return {
               id: `${index}`,
@@ -2752,21 +2783,21 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
     payments: [...receiptPayments, ...payerSeededPayments],
     rawPayload: mergeSplitBillReceiptSummary(
       {
-        receiptAccountMatch: preview.receiptAccountMatch,
-        paymentMethod: preview.paymentMethod,
+        receiptAccountMatch: shouldPreserveAccountHints ? preview.receiptAccountMatch : null,
+        paymentMethod: shouldPreserveAccountHints ? preview.paymentMethod : null,
         receiptPayerName: preview.receiptPayerName,
         receiptCurrencyMentions: preview.currencyMentions,
         receiptCurrencyWarning: preview.currencyWarning,
         splitAllocations: preview.splitAllocations,
       },
       {
-        subtotal: preview.subtotal,
-        serviceCharge: preview.serviceCharge,
-        tax: preview.tax,
-        tip: preview.tip,
-        rounding: preview.rounding,
-        discount: preview.discount,
-        total: preview.total,
+        subtotal: summarySubtotal || null,
+        serviceCharge: summaryServiceCharge || null,
+        tax: summaryTax || null,
+        tip: summaryTip || null,
+        rounding: summaryRounding || null,
+        discount: summaryDiscount || null,
+        total: total || null,
       }
     ),
   };
