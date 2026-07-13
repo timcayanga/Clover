@@ -2602,6 +2602,12 @@ body.transactions-manual-open .shell-quick-add-button {
   scroll-padding-bottom: 160px;
 }
 
+.content--investments {
+  min-height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
 .shell-compact-bar {
   display: none;
   align-items: center;
@@ -7576,14 +7582,14 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 
 .report-donut {
   display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.1fr);
-  gap: 14px;
+  grid-template-columns: minmax(280px, 1.15fr) minmax(0, 0.85fr);
+  gap: 18px;
   align-items: center;
 }
 
 .report-donut__chart {
   position: relative;
-  width: min(100%, 260px);
+  width: min(100%, 330px);
   justify-self: center;
 }
 
@@ -7617,7 +7623,9 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 }
 
 .report-donut__center strong {
-  font-size: 24px;
+  max-width: 13ch;
+  overflow-wrap: anywhere;
+  font-size: clamp(15px, 2vw, 20px);
   line-height: 1;
 }
 
@@ -7656,13 +7664,13 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 }
 
 .report-donut__meta strong {
-  font-size: 14px;
+  font-size: 12px;
   letter-spacing: -0.02em;
 }
 
 .report-donut__meta span {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .reports-review-queue {
@@ -19198,7 +19206,8 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 8px;
 }
 
-.investments-allocation__row-button {
+.investments-allocation__row-card {
+  min-width: 0;
   width: 100%;
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 20px;
@@ -19209,10 +19218,74 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
-.investments-allocation__row-button.is-selected {
+.investments-allocation__row-card:hover,
+.investments-allocation__row-card:focus-visible,
+.investments-allocation__row-card.is-selected {
   border-color: rgba(3, 168, 192, 0.36);
   box-shadow: 0 16px 32px rgba(3, 168, 192, 0.10);
   transform: translateY(-1px);
+}
+
+.investments-allocation__row-card:focus-visible {
+  outline: 2px solid rgba(3, 168, 192, 0.32);
+  outline-offset: 2px;
+}
+
+.investments-allocation__account-marks {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 7px;
+  min-height: 26px;
+}
+
+.investments-allocation__account-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+}
+
+.investments-allocation__account-mark:hover,
+.investments-allocation__account-mark:focus-visible {
+  box-shadow: 0 0 0 2px rgba(3, 168, 192, 0.22);
+  outline: none;
+}
+
+.investments-allocation__account-mark .accounts-brand-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+}
+
+.investments-allocation__account-more {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.07);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.investments-allocation__row-card .investments-allocation__row-head > div {
+  min-width: 0;
+}
+
+.investments-allocation__row-card .investments-allocation__row-head > div:first-child {
+  flex: 1 1 auto;
+}
+
+.investments-allocation__row-card .investments-allocation__row-head > div:last-child {
+  flex: 0 0 auto;
 }
 
 .investments-overview-mix-grid {
@@ -19225,6 +19298,14 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .investments-overview-mix-panel {
   display: grid;
   gap: 14px;
+}
+
+.investments-overview-mix-panel .report-donut {
+  grid-template-columns: minmax(300px, 1.2fr) minmax(0, 0.8fr);
+}
+
+.investments-overview-mix-panel .report-donut__chart {
+  width: min(100%, 340px);
 }
 
 .investments-overview-mix-panel__head {
@@ -19266,6 +19347,10 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 @media (max-width: 960px) {
   .investments-overview-mix-grid {
     grid-template-columns: 1fr;
+  }
+
+  .investments-overview-mix-panel .report-donut {
+    grid-template-columns: minmax(240px, 1fr) minmax(0, 1fr);
   }
 
   .investments-overview-mix-panel__filter select {

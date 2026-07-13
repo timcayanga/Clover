@@ -506,12 +506,14 @@ const INVESTMENT_SORT_OPTIONS: Array<{ key: InvestmentSortKey; label: string }> 
 ];
 
 const INVESTMENT_ANALYSIS_COLORS = [
-  "#03a8c0",
-  "#0ea5e9",
-  "#22c55e",
-  "#f59e0b",
-  "#8b5cf6",
-  "#ef4444",
+  "#0077b6",
+  "#e76f51",
+  "#2a9d8f",
+  "#f4a261",
+  "#8338ec",
+  "#ff006e",
+  "#8ac926",
+  "#3a86ff",
 ] as const;
 
 function InvestmentInsightDonut({
@@ -557,7 +559,7 @@ function InvestmentInsightDonut({
         </svg>
         <div className="report-donut__center">
           <strong>{centerValue}</strong>
-          <span>{centerLabel}</span>
+          {centerLabel ? <span>{centerLabel}</span> : null}
         </div>
       </div>
       <div className="report-donut__legend">
@@ -1717,7 +1719,7 @@ export default function InvestmentsPage() {
                       <InvestmentInsightDonut
                         ariaLabel="Portfolio mix by investment type pie chart"
                         centerValue={hasVisibleCurrencySelection ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts) : "—"}
-                        centerLabel="Visible value"
+                        centerLabel=""
                         slices={allocationAnalysisSlices}
                       />
                     </article>
@@ -1741,7 +1743,7 @@ export default function InvestmentsPage() {
                         <InvestmentInsightDonut
                           ariaLabel={`Assets in ${selectedOverviewMixGroup.label} pie chart`}
                           centerValue={formatInvestmentAggregate(selectedOverviewMixGroup.currentValue, selectedOverviewMixGroup.accounts)}
-                          centerLabel={selectedOverviewMixGroup.label}
+                          centerLabel=""
                           slices={overviewAssetMixSlices}
                         />
                       ) : (
@@ -1754,24 +1756,57 @@ export default function InvestmentsPage() {
                   </div>
                   <div className="investments-allocation__list investments-allocation__list--overview">
                     {portfolioAllocation.map((group) => (
-                      <button
+                      <div
                         key={group.key}
-                        type="button"
-                        className={`investments-allocation__row investments-allocation__row-button${selectedOverviewMixGroup?.key === group.key ? " is-selected" : ""}`}
+                        className={`investments-allocation__row investments-allocation__row-card${selectedOverviewMixGroup?.key === group.key ? " is-selected" : ""}`}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => setSelectedOverviewMixKey(group.key)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setSelectedOverviewMixKey(group.key);
+                          }
+                        }}
                       >
                         <div className="investments-allocation__row-head investments-allocation__row-head--overview">
                           <div>
                             <strong>{group.label}</strong>
-                            <span>{group.accounts.length} account{group.accounts.length === 1 ? "" : "s"}</span>
+                            <div className="investments-allocation__account-marks" aria-label={`${group.label} accounts`}>
+                              {group.accounts.slice(0, 8).map((account) => (
+                                <button
+                                  key={account.id}
+                                  type="button"
+                                  className="investments-allocation__account-mark"
+                                  title={`Open ${account.name}`}
+                                  aria-label={`Open ${account.name}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openInvestmentAsset(account);
+                                  }}
+                                  onKeyDown={(event) => event.stopPropagation()}
+                                >
+                                  <AccountBrandMark
+                                    accountBrand={getInvestmentAssetBrand({
+                                      symbol: account.investmentSymbol,
+                                      name: account.name,
+                                      subtype: account.investmentSubtype,
+                                      currency: account.currency,
+                                      institution: account.institution,
+                                    })}
+                                    label={account.name}
+                                  />
+                                </button>
+                              ))}
+                              {group.accounts.length > 8 ? <span className="investments-allocation__account-more">+{group.accounts.length - 8}</span> : null}
+                            </div>
                           </div>
                           <div>
                             <strong>{formatInvestmentAggregate(group.currentValue, group.accounts)}</strong>
                             <span>{group.share > 0 ? percentFormatter.format(group.share) : "0%"}</span>
                           </div>
                         </div>
-                        <p className="panel-muted investments-allocation__description">{group.description}</p>
-                      </button>
+                      </div>
                     ))}
                   </div>
                 </>
