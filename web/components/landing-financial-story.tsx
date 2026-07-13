@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useRef, type ReactNode } from "react";
 
 const transactions = [
@@ -12,10 +13,7 @@ const transactions = [
 function CloverCore({ secure = false }: { secure?: boolean }) {
   return (
     <div className={`gravity-core ${secure ? "gravity-core--secure" : ""}`} aria-hidden="true">
-      <span className="gravity-core__leaf gravity-core__leaf--one" />
-      <span className="gravity-core__leaf gravity-core__leaf--two" />
-      <span className="gravity-core__leaf gravity-core__leaf--three" />
-      <span className="gravity-core__leaf gravity-core__leaf--four" />
+      <Image className="gravity-core__logo" src="/clover-mark.svg" alt="" width={128} height={128} />
       {secure ? <span className="gravity-core__lock">&#10003;</span> : null}
     </div>
   );
@@ -156,12 +154,26 @@ export function LandingFinancialStory() {
       });
     };
     const requestUpdate = () => { if (!frame) frame = window.requestAnimationFrame(update); };
+    const updatePointer = (event: PointerEvent) => {
+      const x = (event.clientX / window.innerWidth - 0.5) * 2;
+      const y = (event.clientY / window.innerHeight - 0.5) * 2;
+      root.style.setProperty("--gravity-pointer-x", x.toFixed(3));
+      root.style.setProperty("--gravity-pointer-y", y.toFixed(3));
+    };
+    const resetPointer = () => {
+      root.style.setProperty("--gravity-pointer-x", "0");
+      root.style.setProperty("--gravity-pointer-y", "0");
+    };
     update();
     window.addEventListener("scroll", requestUpdate, { passive: true });
     window.addEventListener("resize", requestUpdate);
+    window.addEventListener("pointermove", updatePointer, { passive: true });
+    document.documentElement.addEventListener("mouseleave", resetPointer);
     return () => {
       window.removeEventListener("scroll", requestUpdate);
       window.removeEventListener("resize", requestUpdate);
+      window.removeEventListener("pointermove", updatePointer);
+      document.documentElement.removeEventListener("mouseleave", resetPointer);
       if (frame) window.cancelAnimationFrame(frame);
     };
   }, []);
@@ -187,10 +199,10 @@ export function LandingFinancialStory() {
       </section>
 
       <StorySection id="statement-import" eyebrow="Bring it together" reverse title={<>Start with what you <em>already have.</em></>} copy={<><p>Upload statements, receipts, screenshots, or spreadsheets. You can also add anything manually.</p><p>Clover extracts the useful details and organizes months of history without months of typing.</p></>} visual={<ImportVisual />} />
-      <StorySection id="insights" eyebrow="Understand the change" tone="mint" title={<>See what your money is <em>telling you.</em></>} copy={<><p>Organized transactions become reports, patterns, balances, and practical insights.</p><p>See what changed and where a small decision could move you closer to your goals.</p></>} visual={<InsightVisual />} />
+      <StorySection id="insights" eyebrow="Understand the change" title={<>See what your money is <em>telling you.</em></>} copy={<><p>Organized transactions become reports, patterns, balances, and practical insights.</p><p>See what changed and where a small decision could move you closer to your goals.</p></>} visual={<InsightVisual />} />
       <StorySection id="split-bills" eyebrow="Share without the awkward math" reverse title={<>One expense. Everyone’s share, <em>made clear.</em></>} copy={<><p>Choose a transaction, add the people involved, and Clover works out each share.</p><p>Everyone can see who paid, who owes, and what has already been settled.</p></>} visual={<SplitVisual />} />
-      <StorySection id="pro" eyebrow="Go deeper when you need it" tone="mint" title={<>See the whole picture with <em>Pro.</em></>} copy={<><p>Bring advanced reports, investment tracking, higher limits, and more accounts into one view.</p><p>Start simply. Add more depth when your finances are ready for it.</p></>} visual={<ProVisual />} />
-      <StorySection id="trust" eyebrow="Stay in control" reverse tone="deep" title={<>Your financial data stays <em>yours.</em></>} copy={<><p>Your files, accounts, and financial history are protected and separated from everyone else’s.</p><p>You decide what enters Clover, review what was extracted, and control access to your account.</p></>} visual={<SecurityVisual />} />
+      <StorySection id="pro" eyebrow="Go deeper when you need it" tone="deep" title={<>See the whole picture with <em>Pro.</em></>} copy={<><p>Bring advanced reports, investment tracking, higher limits, and more accounts into one view.</p><p>Start simply. Add more depth when your finances are ready for it.</p></>} visual={<ProVisual />} />
+      <StorySection id="trust" eyebrow="Stay in control" reverse title={<>Your financial data stays <em>yours.</em></>} copy={<><p>Your files, accounts, and financial history are protected and separated from everyone else’s.</p><p>You decide what enters Clover, review what was extracted, and control access to your account.</p></>} visual={<SecurityVisual />} />
 
       <section className="gravity-finale" data-gravity-chapter>
         <CloverCore />
