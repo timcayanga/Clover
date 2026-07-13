@@ -39294,3 +39294,202 @@ body[data-split-bill-modal-open="true"] .app-shell {
   .gravity-core { width: 62px; }
   .gravity-core__lock { inset: 21px; }
 }
+
+/* Animated 3D story: exploded files, money movement, and net worth. */
+.gravity-visual::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 7%;
+  bottom: 2%;
+  height: 19%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(12, 45, 55, 0.2), rgba(3, 168, 192, 0.05) 43%, transparent 72%);
+  filter: blur(18px);
+  transform: rotateX(72deg) translateZ(-90px);
+  animation: gravity-floor-shadow 5s ease-in-out infinite;
+}
+
+.gravity-hero__stage .gravity-visual,
+.gravity-chapter__stage .gravity-visual {
+  animation: gravity-camera-orbit 9s cubic-bezier(.45,.05,.55,.95) infinite;
+}
+
+.gravity-document--bank { animation: gravity-file-flight-a 8s cubic-bezier(.22,1,.36,1) infinite; }
+.gravity-document--receipt { animation: gravity-file-flight-b 8s cubic-bezier(.22,1,.36,1) infinite .35s; }
+.gravity-document--sheet { animation: gravity-file-flight-c 8s cubic-bezier(.22,1,.36,1) infinite .7s; }
+.gravity-document--shot { animation: gravity-file-flight-d 8s cubic-bezier(.22,1,.36,1) infinite 1.05s; }
+
+.gravity-orbit--outer {
+  border-width: 2px;
+  box-shadow: 0 0 38px rgba(3,168,192,.08), inset 0 0 38px rgba(102,223,193,.07);
+}
+
+.gravity-orbit--inner {
+  border-style: dashed;
+  border-width: 2px;
+}
+
+.gravity-ledger__row {
+  transform-origin: center;
+  animation: gravity-row-assemble 8s cubic-bezier(.22,1,.36,1) infinite;
+}
+
+.gravity-ledger__row:nth-child(3) { animation-delay: .12s; }
+.gravity-ledger__row:nth-child(4) { animation-delay: .24s; }
+
+.gravity-person-3d {
+  position: absolute;
+  width: 92px;
+  height: 210px;
+  z-index: 8;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 28px 22px rgba(13,40,50,.22));
+  animation: gravity-person-breathe 4.2s ease-in-out infinite;
+}
+
+.gravity-person-3d__head {
+  position: absolute;
+  left: 29px;
+  top: 0;
+  width: 42px;
+  height: 48px;
+  border-radius: 48% 48% 44% 44%;
+  background: radial-gradient(circle at 64% 28%, #ffd8bd, #d99775 78%);
+  box-shadow: inset -7px -5px 12px rgba(107,48,33,.14), 0 8px 14px rgba(31,57,65,.13);
+  transform: translateZ(28px);
+}
+
+.gravity-person-3d__head i {
+  position: absolute;
+  inset: -4px -2px 23px -3px;
+  border-radius: 55% 55% 34% 32%;
+  background: linear-gradient(145deg, #26333b, #101a20);
+  transform: rotate(-5deg) translateZ(5px);
+}
+
+.gravity-person-3d__head b,
+.gravity-person-3d__head span {
+  position: absolute;
+  top: 25px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #26333b;
+}
+.gravity-person-3d__head b { left: 12px; }
+.gravity-person-3d__head span { right: 12px; }
+.gravity-person-3d__neck { position:absolute;left:43px;top:42px;width:15px;height:18px;background:#d99b7b;transform:translateZ(15px); }
+.gravity-person-3d__body { position:absolute;left:15px;top:56px;width:72px;height:92px;border-radius:26px 26px 18px 18px;background:linear-gradient(145deg,#16b7ca,#087e9b);box-shadow:inset -15px -8px 22px rgba(4,70,88,.22);transform:translateZ(18px); }
+.gravity-person-3d__arm { position:absolute;top:10px;width:19px;height:86px;border-radius:18px;background:linear-gradient(#14acc0,#087b94);transform-origin:top; }
+.gravity-person-3d__arm--left { left:-10px;transform:rotate(12deg) translateZ(-5px); }.gravity-person-3d__arm--right { right:-10px;transform:rotate(-12deg) translateZ(8px); }
+.gravity-person-3d__legs { position:absolute;left:25px;top:140px;display:flex;gap:10px;transform:translateZ(4px); }.gravity-person-3d__legs i{width:20px;height:66px;border-radius:5px 5px 13px 13px;background:linear-gradient(#263946,#12242d);box-shadow:inset -5px 0 10px rgba(0,0,0,.17)}
+.gravity-person-3d > strong { position:absolute;left:50%;top:100%;width:max-content;padding:7px 11px;border-radius:99px;background:rgba(255,255,255,.9);color:#536873;font-size:8px;letter-spacing:.08em;text-transform:uppercase;transform:translateX(-50%) translateZ(45px);box-shadow:0 12px 30px rgba(15,35,46,.12); }
+.gravity-person-3d--pointing .gravity-person-3d__arm--right { transform:rotate(-105deg) translateZ(20px); }
+.gravity-person-3d--celebrating .gravity-person-3d__arm--left { transform:rotate(155deg) translateZ(12px); }.gravity-person-3d--celebrating .gravity-person-3d__arm--right { transform:rotate(-155deg) translateZ(12px); }
+
+.gravity-visual--sources > .gravity-person-3d {
+  right: 20%;
+  bottom: 2%;
+  transform: translateZ(260px) rotateY(-10deg) scale(.88);
+}
+
+.gravity-visual--insights > .gravity-person-3d {
+  right: 10%;
+  bottom: 1%;
+  transform: translateZ(240px) rotateY(-12deg) scale(.76);
+}
+
+.gravity-visual--pro > .gravity-person-3d {
+  right: 8%;
+  bottom: 0;
+  transform: translateZ(280px) rotateY(-15deg) scale(.82);
+}
+
+.gravity-money-flow {
+  position: absolute;
+  z-index: 7;
+  display: grid;
+  grid-template-columns: 30px auto;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid rgba(3,168,192,.13);
+  border-radius: 99px;
+  background: rgba(255,255,255,.9);
+  color: #536873;
+  box-shadow: 0 18px 38px rgba(15,35,46,.13);
+  font-size: 8px;
+  transform-style: preserve-3d;
+}
+.gravity-money-flow i { width:30px;height:30px;display:grid;place-items:center;border-radius:50%;background:linear-gradient(145deg,#6ce5ca,#04a9c1);color:white;font-style:normal;font-weight:800;box-shadow:0 7px 14px rgba(3,168,192,.22); }
+.gravity-money-flow--one { left:9%;top:24%;animation:gravity-money-travel-a 6s ease-in-out infinite; }
+.gravity-money-flow--two { left:42%;top:52%;animation:gravity-money-travel-b 6.5s ease-in-out infinite .4s; }
+.gravity-money-flow--three { right:8%;top:19%;animation:gravity-money-travel-c 7s ease-in-out infinite .8s; }
+
+.gravity-net-worth-tower {
+  position: absolute;
+  left: 47%;
+  bottom: 8%;
+  width: 165px;
+  height: 235px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  transform: translateZ(225px) rotateX(-4deg) rotateY(-12deg);
+  transform-style: preserve-3d;
+}
+.gravity-net-worth-tower i { flex:1;border-radius:10px 10px 4px 4px;background:linear-gradient(90deg,#08a9c1,#6ce6c9);box-shadow:inset -8px 0 14px rgba(1,97,115,.2),12px 18px 24px rgba(0,0,0,.2);transform-origin:bottom;animation:gravity-tower-grow 4.5s cubic-bezier(.22,1,.36,1) infinite; }
+.gravity-net-worth-tower i:nth-child(1){height:32%;}.gravity-net-worth-tower i:nth-child(2){height:50%;animation-delay:.15s}.gravity-net-worth-tower i:nth-child(3){height:69%;animation-delay:.3s}.gravity-net-worth-tower i:nth-child(4){height:92%;animation-delay:.45s;background:linear-gradient(90deg,#65e1c4,#b4ffe8)}
+.gravity-net-worth-tower span { position:absolute;left:50%;bottom:-30px;color:#b9fff0;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;transform:translateX(-50%);white-space:nowrap; }
+
+.gravity-chapter--deep .gravity-chapter__copy,
+.gravity-chapter--deep .gravity-chapter__copy h2 {
+  color: #fff;
+}
+.gravity-chapter--deep .gravity-chapter__eyebrow,
+.gravity-chapter--deep .gravity-chapter__copy h2 em {
+  color: #76ebcf;
+}
+.gravity-chapter--deep .gravity-chapter__copy > div,
+.gravity-chapter--deep .gravity-chapter__copy > div p {
+  color: rgba(236,255,251,.78);
+}
+.gravity-chapter--deep .gravity-person-3d > strong { background:rgba(8,43,52,.9);color:#9af4df;border:1px solid rgba(118,235,207,.16); }
+
+@keyframes gravity-camera-orbit { 0%,100%{rotate:x 0deg;scale:1}35%{rotate:y 2.4deg;scale:1.015}70%{rotate:y -2deg;scale:.995} }
+@keyframes gravity-floor-shadow { 0%,100%{opacity:.55;scale:.92}50%{opacity:.85;scale:1.04} }
+@keyframes gravity-file-flight-a { 0%,100%{translate:-20px 18px;rotate:-4deg;scale:.9}35%{translate:15px -18px;rotate:2deg;scale:1.06}68%{translate:50px 8px;rotate:7deg;scale:.96} }
+@keyframes gravity-file-flight-b { 0%,100%{translate:-15px 25px;rotate:2deg;scale:.92}35%{translate:28px -8px;rotate:-5deg;scale:1.04}68%{translate:62px -22px;rotate:-9deg;scale:.98} }
+@keyframes gravity-file-flight-c { 0%,100%{translate:28px -15px;rotate:3deg;scale:.9}35%{translate:-25px 18px;rotate:-4deg;scale:1.08}68%{translate:-60px 28px;rotate:-7deg;scale:.96} }
+@keyframes gravity-file-flight-d { 0%,100%{translate:25px 20px;rotate:-2deg;scale:.9}35%{translate:-18px -20px;rotate:4deg;scale:1.04}68%{translate:-58px -8px;rotate:8deg;scale:.98} }
+@keyframes gravity-row-assemble { 0%,34%{opacity:0;translate:70px 0;rotate:y -22deg}48%,82%{opacity:1;translate:0;rotate:y 0deg}95%,100%{opacity:0;translate:-28px 0} }
+@keyframes gravity-person-breathe { 0%,100%{translate:0 0;rotate:y 0deg}50%{translate:0 -10px;rotate:y 4deg} }
+@keyframes gravity-money-travel-a { 0%,100%{translate:-18px 20px;transform:translateZ(80px)}50%{translate:45px -18px;transform:translateZ(230px)} }
+@keyframes gravity-money-travel-b { 0%,100%{translate:-28px -10px;transform:translateZ(160px)}50%{translate:35px 24px;transform:translateZ(280px)} }
+@keyframes gravity-money-travel-c { 0%,100%{translate:20px -12px;transform:translateZ(100px)}50%{translate:-50px 26px;transform:translateZ(250px)} }
+@keyframes gravity-tower-grow { 0%,18%,100%{scale:1 .15;opacity:.4}45%,84%{scale:1 1;opacity:1} }
+
+@media (max-width: 980px) {
+  .gravity-person-3d { transform: scale(.68) !important; }
+  .gravity-visual--sources > .gravity-person-3d { right:16%;bottom:-4%; }
+  .gravity-net-worth-tower { left:45%;scale:.8; }
+}
+
+@media (max-width: 720px) {
+  .gravity-hero__stage .gravity-visual,
+  .gravity-chapter__stage .gravity-visual { animation-duration: 12s; }
+  .gravity-person-3d { display:none; }
+  .gravity-money-flow { scale:.72; }
+  .gravity-net-worth-tower { left:43%;bottom:0;scale:.58; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gravity-hero__stage .gravity-visual,
+  .gravity-chapter__stage .gravity-visual,
+  .gravity-document,
+  .gravity-ledger__row,
+  .gravity-money-flow,
+  .gravity-net-worth-tower i,
+  .gravity-person-3d { animation:none !important; }
+}

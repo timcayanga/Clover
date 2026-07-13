@@ -19,6 +19,18 @@ function CloverCore({ secure = false }: { secure?: boolean }) {
   );
 }
 
+function Person3D({ pose = "standing", label }: { pose?: "standing" | "pointing" | "celebrating"; label?: string }) {
+  return (
+    <div className={`gravity-person-3d gravity-person-3d--${pose}`} aria-hidden="true">
+      <div className="gravity-person-3d__head"><i /><b /><span /></div>
+      <div className="gravity-person-3d__neck" />
+      <div className="gravity-person-3d__body"><i className="gravity-person-3d__arm gravity-person-3d__arm--left" /><i className="gravity-person-3d__arm gravity-person-3d__arm--right" /></div>
+      <div className="gravity-person-3d__legs"><i /><i /></div>
+      {label ? <strong>{label}</strong> : null}
+    </div>
+  );
+}
+
 function SourceVisual() {
   return (
     <div className="gravity-visual gravity-visual--sources" aria-hidden="true">
@@ -28,6 +40,7 @@ function SourceVisual() {
       <div className="gravity-document gravity-document--receipt"><span>RECEIPT</span><b>Market</b><i /><i /><i /></div>
       <div className="gravity-document gravity-document--sheet"><span>SHEET</span><b>2026 records</b><i /><i /><i /></div>
       <div className="gravity-document gravity-document--shot"><span>SCREENSHOT</span><b>Recent activity</b><i /><i /><i /></div>
+      <Person3D pose="pointing" />
       <CloverCore />
       <div className="gravity-ledger">
         <div className="gravity-ledger__top"><span>Clover</span><b>Transactions</b></div>
@@ -69,6 +82,10 @@ function InsightVisual() {
       </div>
       <div className="gravity-insight gravity-insight--one"><span>Largest change</span><strong>Dining down 18%</strong></div>
       <div className="gravity-insight gravity-insight--two"><span>On track</span><strong>P12,400 saved</strong></div>
+      <div className="gravity-money-flow gravity-money-flow--one"><i>P</i><span>Income</span></div>
+      <div className="gravity-money-flow gravity-money-flow--two"><i>P</i><span>Spending</span></div>
+      <div className="gravity-money-flow gravity-money-flow--three"><i>P</i><span>Savings</span></div>
+      <Person3D pose="standing" label="Your money movement" />
     </div>
   );
 }
@@ -95,6 +112,8 @@ function ProVisual() {
       <div className="gravity-pro-card gravity-pro-card--cash"><span>Cash flow</span><strong>+P18,600</strong><small>Monthly average</small></div>
       <div className="gravity-pro-card gravity-pro-card--worth"><span>Net worth</span><strong>P2.08M</strong><small>Across 9 accounts</small></div>
       <div className="gravity-pro-badge">PRO</div>
+      <div className="gravity-net-worth-tower"><i /><i /><i /><i /><span>Net worth</span></div>
+      <Person3D pose="celebrating" label="Everything in view" />
     </div>
   );
 }
@@ -184,9 +203,8 @@ export function LandingFinancialStory() {
         <div className="gravity-hero__aurora" aria-hidden="true" />
         <div className="gravity-hero__inner">
           <div className="gravity-hero__copy">
-            <span className="gravity-hero__eyebrow">Your financial life, finally together</span>
             <h1>Months of finances.<br /><em>Organized in minutes.</em></h1>
-            <p>Upload the records you already have. Clover turns scattered financial information into organized transactions, useful reports, and a clearer next step.</p>
+            <p>Upload the financial files you already have. Clover organizes them so you can follow your money movement and keep track of your net worth.</p>
             <div className="gravity-hero__actions">
               <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>Organize my finances for free</Link>
               <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>Log in</Link>
@@ -195,13 +213,12 @@ export function LandingFinancialStory() {
           </div>
           <div className="gravity-hero__stage"><SourceVisual /></div>
         </div>
-        <div className="gravity-scroll-cue"><i />Scroll to see it come together</div>
       </section>
 
       <StorySection id="statement-import" eyebrow="Bring it together" reverse title={<>Start with what you <em>already have.</em></>} copy={<><p>Upload statements, receipts, screenshots, or spreadsheets. You can also add anything manually.</p><p>Clover extracts the useful details and organizes months of history without months of typing.</p></>} visual={<ImportVisual />} />
-      <StorySection id="insights" eyebrow="Understand the change" title={<>See what your money is <em>telling you.</em></>} copy={<><p>Organized transactions become reports, patterns, balances, and practical insights.</p><p>See what changed and where a small decision could move you closer to your goals.</p></>} visual={<InsightVisual />} />
+      <StorySection id="insights" eyebrow="Follow every movement" title={<>See where your money <em>comes and goes.</em></>} copy={<><p>Clover turns organized transactions into a clear view of income, spending, transfers, and savings.</p><p>Follow changes across months without rebuilding reports by hand.</p></>} visual={<InsightVisual />} />
       <StorySection id="split-bills" eyebrow="Share without the awkward math" reverse title={<>One expense. Everyone’s share, <em>made clear.</em></>} copy={<><p>Choose a transaction, add the people involved, and Clover works out each share.</p><p>Everyone can see who paid, who owes, and what has already been settled.</p></>} visual={<SplitVisual />} />
-      <StorySection id="pro" eyebrow="Go deeper when you need it" tone="deep" title={<>See the whole picture with <em>Pro.</em></>} copy={<><p>Bring advanced reports, investment tracking, higher limits, and more accounts into one view.</p><p>Start simply. Add more depth when your finances are ready for it.</p></>} visual={<ProVisual />} />
+      <StorySection id="pro" eyebrow="Your complete financial picture" tone="deep" title={<>Keep your <em>net worth</em> in view.</>} copy={<><p>Pro brings cash, debts, investments, and account balances into one continuously updated picture.</p><p>See what you own, what you owe, and how your net worth changes over time.</p></>} visual={<ProVisual />} />
       <StorySection id="trust" eyebrow="Stay in control" reverse title={<>Your financial data stays <em>yours.</em></>} copy={<><p>Your files, accounts, and financial history are protected and separated from everyone else’s.</p><p>You decide what enters Clover, review what was extracted, and control access to your account.</p></>} visual={<SecurityVisual />} />
 
       <section className="gravity-finale" data-gravity-chapter>
