@@ -38693,6 +38693,11 @@ body[data-split-bill-modal-open="true"] .app-shell {
 }
 
 /* Original landing design with livelier, non-parallax motion. */
+html:has(.landing-page),
+body:has(.landing-page) {
+  overflow-x: clip;
+}
+
 .landing-page .landing-hero__copy > * {
   opacity: 0;
   transform: translateY(18px);
