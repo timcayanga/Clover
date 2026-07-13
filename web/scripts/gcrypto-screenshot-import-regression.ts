@@ -129,6 +129,7 @@ const main = async () => {
     assert.equal(gcryptoAccounts.length, 1, `Expected exactly one uploaded GCrypto account, got ${JSON.stringify(gcryptoAccounts)}`);
     assert.equal(gcryptoAccounts[0]?.name, "GCrypto", "Expected canonical GCrypto account name.");
     assert.equal(gcryptoAccounts[0]?.type, "investment", "Expected GCrypto to land in Investments.");
+    assert.equal(gcryptoAccounts[0]?.balance, null, "GCrypto transaction-history screenshots should not invent an account balance.");
 
     const filenameAccounts = uploadedAccounts.filter((account) => String(account.name ?? "").startsWith("IMG_"));
     assert.equal(

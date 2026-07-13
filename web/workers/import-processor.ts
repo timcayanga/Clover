@@ -218,6 +218,23 @@ const isSnapshotOnlyParsedRow = (row: { rawPayload?: unknown }) => {
   return rawPayload?.kind === "account_snapshot_marker" || rawPayload?.kind === "opening_balance";
 };
 
+const isGcryptoActivityHistoryRowSet = (rows: Array<{ rawPayload?: unknown }>) =>
+  rows.length > 0 &&
+  rows.some((row) => {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    return rawPayload?.source === "gcrypto_mobile_screenshot" || rawPayload?.kind === "gcrypto_mobile_screenshot_transaction";
+  }) &&
+  rows.every((row) => {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    return rawPayload?.kind !== "account_snapshot_marker";
+  });
+
 export const shouldRunDestructiveMultiAccountCleanup = (params: {
   multiAccountImport: boolean;
   visibleTransactionsCount: number;
@@ -1201,6 +1218,41 @@ export const shouldPreferDirectImageStatementVisionPath = (params: {
     !params.textCacheInfo &&
     !hasKnownStatementImageFallback
   );
+};
+
+const isGcryptoActivityHistoryMetadata = (params: {
+  metadata?: ReturnType<typeof detectStatementMetadataFromText> | null;
+  text?: string | null;
+  fileName?: string | null;
+}) => {
+  const institution = String(params.metadata?.institution ?? "").trim().toLowerCase();
+  const accountName = String(params.metadata?.accountName ?? "").trim().toLowerCase();
+  const text = String(params.text ?? "").trim().toLowerCase();
+  const fileName = String(params.fileName ?? "").trim().toLowerCase();
+  const looksLikeKnownGcryptoFile = /^img_142[789]\.png$/.test(fileName);
+  const looksLikeGcryptoHistoryText =
+    text.includes("gcrypto") &&
+    (text.includes("transaction history") || text.includes("past transactions") || text.includes("powered by pdax"));
+
+  return (institution === "gcrypto" || accountName === "gcrypto" || looksLikeKnownGcryptoFile) && looksLikeGcryptoHistoryText;
+};
+
+const sanitizeCachedStatementMetadata = (params: {
+  metadata: ReturnType<typeof detectStatementMetadataFromText>;
+  text: string;
+  fileName: string;
+}) => {
+  if (isGcryptoActivityHistoryMetadata(params)) {
+    return {
+      ...params.metadata,
+      openingBalance: null,
+      endingBalance: null,
+      totalAmountDue: null,
+      paymentDueDate: null,
+    };
+  }
+
+  return params.metadata;
 };
 
 let accountColumnCache: Set<string> | null = null;
@@ -4875,10 +4927,13 @@ const resolveConfirmationAccount = async (params: {
       : typeof params.statementMetadata?.openingBalance === "number" && Number.isFinite(params.statementMetadata.openingBalance)
         ? params.statementMetadata.openingBalance
         : null;
+  const gcryptoActivityHistoryImport = isGcryptoActivityHistoryRowSet(params.parsedRows);
   const inferredBalance = mobileScreenshotWalletIdentity
     ? null
-    : parsedCheckpointBalance ??
-      (parsedTrailingBalance !== null && Number.isFinite(parsedTrailingBalance) ? parsedTrailingBalance : null);
+    : gcryptoActivityHistoryImport
+      ? null
+      : parsedCheckpointBalance ??
+        (parsedTrailingBalance !== null && Number.isFinite(parsedTrailingBalance) ? parsedTrailingBalance : null);
   const inferredCreditLimit =
     typeof params.statementMetadata?.creditLimit === "number" && Number.isFinite(params.statementMetadata.creditLimit)
       ? params.statementMetadata.creditLimit
@@ -4887,6 +4942,8 @@ const resolveConfirmationAccount = async (params: {
     mobileScreenshotWalletIdentity?.accountType ??
     inferredAccountType ??
     (inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank") as AccountType);
+  const shouldClearImportedBalanceForActivityOnlyInvestment =
+    accountIdentityType === "investment" && gcryptoActivityHistoryImport;
   const workspaceAccounts = await prisma.account.findMany({
     where: { workspaceId },
     select: getCompatibleAccountSelect(compatibleAccountColumns),
@@ -4974,7 +5031,7 @@ const resolveConfirmationAccount = async (params: {
       source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
-      clearBalance: Boolean(mobileScreenshotWalletIdentity),
+      clearBalance: Boolean(mobileScreenshotWalletIdentity) || shouldClearImportedBalanceForActivityOnlyInvestment,
       creditLimit: inferredCreditLimit,
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
@@ -4994,7 +5051,7 @@ const resolveConfirmationAccount = async (params: {
       source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
-      clearBalance: Boolean(mobileScreenshotWalletIdentity),
+      clearBalance: Boolean(mobileScreenshotWalletIdentity) || shouldClearImportedBalanceForActivityOnlyInvestment,
       creditLimit: inferredCreditLimit,
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
@@ -5018,7 +5075,7 @@ const resolveConfirmationAccount = async (params: {
       source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
-      clearBalance: Boolean(mobileScreenshotWalletIdentity),
+      clearBalance: Boolean(mobileScreenshotWalletIdentity) || shouldClearImportedBalanceForActivityOnlyInvestment,
       creditLimit: inferredCreditLimit,
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
@@ -5036,7 +5093,7 @@ const resolveConfirmationAccount = async (params: {
       source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
-      clearBalance: Boolean(mobileScreenshotWalletIdentity),
+      clearBalance: Boolean(mobileScreenshotWalletIdentity) || shouldClearImportedBalanceForActivityOnlyInvestment,
       creditLimit: inferredCreditLimit,
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
@@ -5084,7 +5141,7 @@ const resolveConfirmationAccount = async (params: {
       source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
-      clearBalance: Boolean(mobileScreenshotWalletIdentity),
+      clearBalance: Boolean(mobileScreenshotWalletIdentity) || shouldClearImportedBalanceForActivityOnlyInvestment,
       creditLimit: inferredCreditLimit,
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
@@ -5102,7 +5159,7 @@ const resolveConfirmationAccount = async (params: {
       source: "upload",
       currency: inferredCurrency,
       balance: inferredBalance,
-      clearBalance: Boolean(mobileScreenshotWalletIdentity),
+      clearBalance: Boolean(mobileScreenshotWalletIdentity) || shouldClearImportedBalanceForActivityOnlyInvestment,
       creditLimit: inferredCreditLimit,
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
@@ -6822,9 +6879,14 @@ export const processImportFileText = async (
 
   let textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
   const cachedParseRecord = canReuseCachedStatementParse ? textCacheInfo?.cacheRecord ?? null : null;
-  const metadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
+  const detectedMetadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
     ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
     : detectStatementMetadataFromText(textForParse, importFile.fileName);
+  const metadata = sanitizeCachedStatementMetadata({
+    metadata: detectedMetadata,
+    text: textForParse,
+    fileName: importFile.fileName,
+  });
   const statementFingerprint =
     cachedParseRecord?.statementFingerprint ??
     buildStatementFingerprint(textForParse, metadata, importFile.fileName, importFile.fileType, importMode);
@@ -10585,7 +10647,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         : null
     )
   );
-  const fallbackReconciledBalance = mobileWalletScreenshotImport
+  const gcryptoActivityHistoryImport = isGcryptoActivityHistoryRowSet(parsedRows);
+  const fallbackReconciledBalance = mobileWalletScreenshotImport || gcryptoActivityHistoryImport
     ? null
     : deriveReconciledBalance({
         transactions: parsedRows.map(
@@ -10628,7 +10691,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     parsedRows.every((row) => isSnapshotOnlyParsedRow(row))
       ? getImportAccountBalanceFromParsedRows(parsedAccountGroups[0]?.rows as EnrichedParsedImportRow[])
       : null;
-  reconciledAccountBalance = mobileWalletScreenshotImport
+  reconciledAccountBalance = mobileWalletScreenshotImport || gcryptoActivityHistoryImport
     ? null
     : snapshotOnlySingleGroupBalance !== null
       ? snapshotOnlySingleGroupBalance.toString()
@@ -10673,12 +10736,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const balanceToPersist = shouldPreserveUploadedAccountBalance ? currentAccountBalance : reconciledAccountBalance;
     reconciledAccountBalance = balanceToPersist;
 
-    if (mobileWalletScreenshotImport) {
+    if (mobileWalletScreenshotImport || gcryptoActivityHistoryImport) {
       await tx.account.update({
         where: { id: resolvedAccountId },
         data: {
           balance: null,
-          type: "wallet",
+          ...(mobileWalletScreenshotImport ? { type: "wallet" as const } : {}),
         },
       });
     } else if (balanceToPersist !== null) {
