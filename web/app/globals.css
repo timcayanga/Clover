@@ -38128,7 +38128,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
   position: relative;
   width: 100%;
   aspect-ratio: 3 / 2;
-  overflow: hidden;
+  overflow: visible;
+  animation: clarity-hero-enter 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .clarity-engine__layer {
@@ -38150,6 +38151,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
 .clarity-engine__image {
   object-fit: contain;
   filter: drop-shadow(0 24px 34px rgba(15, 23, 42, 0.11));
+  animation: clarity-image-drift 7s ease-in-out infinite 800ms;
 }
 
 .clarity-engine__scan {
@@ -38253,13 +38255,29 @@ body[data-split-bill-modal-open="true"] .app-shell {
   gap: 10px;
   width: min(430px, 78%);
   min-height: 44px;
-  margin: -24px auto 0;
+  margin: -10px auto 0;
   padding: 0 16px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(3, 168, 192, 0.13);
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.09);
   backdrop-filter: blur(18px);
+}
+
+@keyframes clarity-hero-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes clarity-image-drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
 }
 
 .clarity-engine__status-dot {
@@ -38557,7 +38575,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   .clarity-engine__status {
     width: min(360px, 88%);
     min-height: 40px;
-    margin-top: -16px;
+    margin-top: -6px;
     padding-inline: 13px;
   }
 
@@ -38898,6 +38916,8 @@ body:has(.landing-page) {
 
 @media (prefers-reduced-motion: reduce) {
   .landing-page .landing-hero__copy > *,
+  .clarity-engine__canvas,
+  .clarity-engine__image,
   .landing-feature .landing-feature__copy,
   .landing-feature .landing-feature__visual,
   .landing-feature.is-visible .landing-asset__image,

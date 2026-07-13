@@ -17,38 +17,14 @@ export function LandingClarityEngine() {
     >
       <div className="clarity-engine__glow" aria-hidden="true" />
       <div className="clarity-engine__canvas" aria-hidden="true">
-        <div className="clarity-engine__layer clarity-engine__layer--sources">
-          <Image
-            className="clarity-engine__image"
-            src="/assets/landing page/hero card.png"
-            alt=""
-            fill
-            priority
-            sizes="(max-width: 720px) 100vw, 56vw"
-          />
-        </div>
-        <div className="clarity-engine__layer clarity-engine__layer--workspace">
-          <Image
-            className="clarity-engine__image"
-            src="/assets/landing page/hero card.png"
-            alt=""
-            fill
-            priority
-            sizes="(max-width: 720px) 100vw, 56vw"
-          />
-        </div>
-
-        <div className="clarity-engine__pulse clarity-engine__pulse--a" />
-        <div className="clarity-engine__pulse clarity-engine__pulse--b" />
-        <div className="clarity-engine__scan">
-          <Image src="/clover-mark.svg" alt="" width={32} height={32} />
-        </div>
-
-        <div className="clarity-engine__result-card">
-          <span className="clarity-engine__result-kicker">This month</span>
-          <strong>12 categories organized</strong>
-          <span>288 transactions ready to explore</span>
-        </div>
+        <Image
+          className="clarity-engine__image"
+          src="/assets/landing page/hero card.png"
+          alt=""
+          fill
+          priority
+          sizes="(max-width: 720px) 100vw, 56vw"
+        />
       </div>
 
       <div className="clarity-engine__status" aria-hidden="true">
