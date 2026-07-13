@@ -752,6 +752,70 @@ const cleanupEmptyGenericUploadedAccountPlaceholders = async (workspaceId: strin
   }
 };
 
+const cleanupFilenameUploadedAccountPlaceholders = async (workspaceId: string) => {
+  const candidateAccounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      accountNumber: null,
+      transactions: { none: { deletedAt: null } },
+    },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      source: true,
+      balance: true,
+    },
+  }).catch(() => []);
+
+  if (candidateAccounts.length === 0) {
+    return;
+  }
+
+  const checkpointAccountIds = new Set<string>();
+  if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+    const checkpointRows = await prisma.accountStatementCheckpoint.findMany({
+      where: {
+        workspaceId,
+        accountId: {
+          in: candidateAccounts.map((account) => account.id),
+        },
+      },
+      select: { accountId: true },
+    }).catch(() => []);
+
+    for (const row of checkpointRows) {
+      if (typeof row.accountId === "string" && row.accountId.trim()) {
+        checkpointAccountIds.add(row.accountId);
+      }
+    }
+  }
+
+  const deletableIds = candidateAccounts
+    .filter((account) => looksLikeReceiptImageFilenameAccount(account) || looksLikeGenericImageFilenameAccount(account))
+    .filter((account) => !checkpointAccountIds.has(account.id))
+    .filter((account) => {
+      const balanceText = account.balance?.toString().trim() ?? "";
+      const numericBalance = balanceText ? Number(balanceText.replace(/[^0-9.-]/g, "")) : 0;
+      return !balanceText || !Number.isFinite(numericBalance) || numericBalance === 0;
+    })
+    .map((account) => account.id);
+
+  if (deletableIds.length === 0) {
+    return;
+  }
+
+  await prisma.account.deleteMany({
+    where: {
+      workspaceId,
+      id: { in: deletableIds },
+      source: "upload",
+    },
+  }).catch(() => null);
+};
+
 const collapseDuplicateUploadedAccountsByIdentity = async (workspaceId: string, compatibleColumns: Set<string>) => {
   if (!compatibleColumns.has("accountNumber")) {
     return;
@@ -867,6 +931,12 @@ export async function GET(request: Request) {
       (searchParams.get("cleanupImportedAccounts") ?? "").trim().toLowerCase()
     );
     if (shouldCleanupImportedAccounts) {
+      await cleanupFilenameUploadedAccountPlaceholders(workspaceId).catch((error) => {
+        console.warn("[accounts] unable to clean up filename imported account placeholders", {
+          workspaceId,
+          error,
+        });
+      });
       await cleanupEmptyGenericUploadedAccountPlaceholders(workspaceId, compatibleColumns).catch((error) => {
         console.warn("[accounts] unable to clean up empty generic imported account placeholders", {
           workspaceId,
@@ -1238,7 +1308,10 @@ export async function GET(request: Request) {
       };
     });
     const responseAccounts = accountsWithCheckpointBackfill.filter(
-      (account) => !isOrphanUploadedAccountPlaceholder(account)
+      (account) =>
+        !isOrphanUploadedAccountPlaceholder(account) &&
+        !looksLikeReceiptImageFilenameAccount(account) &&
+        !looksLikeGenericImageFilenameAccount(account)
     );
 
     return NextResponse.json({

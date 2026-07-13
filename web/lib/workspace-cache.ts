@@ -366,8 +366,52 @@ const isOrphanImportedAccountPlaceholder = (account: CachedRecord) => {
   return !balanceText || !Number.isFinite(numericBalance) || numericBalance === 0;
 };
 
+const looksLikeImportedImageFilenameAccount = (account: CachedRecord) => {
+  if (readImportedAccountText(account, "source") !== "upload") {
+    return false;
+  }
+
+  const name = readImportedAccountText(account, "name");
+  const institution = readImportedAccountText(account, "institution");
+  const accountNumber = readImportedAccountText(account, "accountNumber");
+  const combined = `${name} ${institution} ${accountNumber}`.trim();
+
+  return (
+    /\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)(?:\s|$)/i.test(combined) ||
+    /^img[_-]?\d+(?:\.(?:jpe?g|png|webp))?(?:\s|$)/i.test(combined) ||
+    /^\d{4}-\d{2}-\d{2}\s+\d{2}\.\d{2}\.\d{2}(?:\.(?:jpe?g|png|webp))?(?:\s|$)/i.test(combined) ||
+    /^(?:img|screenshot|screen\s*shot|photo|image)[_\s-]?\d{3,8}(?:\s*\(\d+\))?(?:\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif))?(?:\s+\d{4})?$/i.test(
+      name
+    )
+  );
+};
+
+const isFilenameImportedAccountPlaceholder = (account: CachedRecord) => {
+  if (typeof account.id === "string" && account.id.startsWith("optimistic-")) {
+    return false;
+  }
+
+  if (!looksLikeImportedImageFilenameAccount(account) || hasImportedAccountNumber(account.accountNumber)) {
+    return false;
+  }
+
+  const transactionCount = Number(account.transactionCount ?? 0);
+  if (Number.isFinite(transactionCount) && transactionCount > 0) {
+    return false;
+  }
+
+  const balanceText = String(account.balance ?? "").trim();
+  const numericBalance = balanceText ? Number(balanceText.replace(/[^0-9.-]/g, "")) : 0;
+  return !balanceText || !Number.isFinite(numericBalance) || numericBalance === 0;
+};
+
 const pruneOrphanImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) =>
-  accounts.filter((account) => !isOrphanImportedAccountPlaceholder(account) && !isTransientImportedAccountPlaceholder(account));
+  accounts.filter(
+    (account) =>
+      !isOrphanImportedAccountPlaceholder(account) &&
+      !isTransientImportedAccountPlaceholder(account) &&
+      !isFilenameImportedAccountPlaceholder(account)
+  );
 
 export const pruneImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) =>
   pruneOrphanImportedAccountPlaceholders(pruneGenericImportedAccountPlaceholders(accounts));
