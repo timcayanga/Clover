@@ -4418,6 +4418,10 @@ body.transactions-manual-open .shell-quick-add-button {
   line-height: 1.45;
 }
 
+.dashboard-home__report-card .eyebrow {
+  font-size: 12px;
+}
+
 .dashboard-home__report-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
