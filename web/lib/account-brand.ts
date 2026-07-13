@@ -190,7 +190,10 @@ const makeBrand = (params: {
   const resolvedBackground =
     params.background && !usesLegacyTintWash(params.background) ? params.background : buildMetallicBackground(params.accent);
 
-  const resolvedForeground = params.foreground ?? inferForeground(params.accent, resolvedBackground);
+  // Resolve text against the final card background. Some brand palettes start as
+  // translucent tints but are rendered as metallic gradients, so a hard-coded
+  // foreground can become unreadable after the background is normalized.
+  const resolvedForeground = inferForeground(params.accent, resolvedBackground);
   return {
     label: params.label,
     logoSrc: params.logoSrc ?? null,
