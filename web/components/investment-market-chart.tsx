@@ -19,6 +19,8 @@ type InvestmentAccount = {
   name: string;
   investmentSubtype: string | null;
   investmentSymbol: string | null;
+  currency: string;
+  balance: string | null;
 };
 
 type MarketHistoryResponse = {
@@ -58,6 +60,17 @@ type TickerSuggestion = {
 
 type InvestmentMarketChartProps = {
   investmentAccounts: InvestmentAccount[];
+};
+
+const isMarketTrackableSubtype = (value: string | null) =>
+  value === "stock" || value === "etf" || value === "reit" || value === "crypto";
+
+const getMarketForInvestment = (account: InvestmentAccount): MarketKey => {
+  if (account.investmentSubtype === "crypto") {
+    return "crypto";
+  }
+
+  return account.currency.trim().toUpperCase() === "PHP" ? "ph" : "us";
 };
 
 const chartWidth = 760;
@@ -251,10 +264,20 @@ const formatRelativeTime = (timestamp: number) => {
 };
 
 export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketChartProps) {
-  const [tickerInput, setTickerInput] = useState("");
-  const [selectedMarket, setSelectedMarket] = useState<MarketKey>("us");
-  const [submittedSymbol, setSubmittedSymbol] = useState("");
-  const [submittedMarket, setSubmittedMarket] = useState<MarketKey>("us");
+  const defaultMarketAsset = useMemo(
+    () =>
+      investmentAccounts
+        .filter((account) => isMarketTrackableSubtype(account.investmentSubtype) && Boolean(account.investmentSymbol?.trim()))
+        .slice()
+        .sort((left, right) => Number(right.balance ?? 0) - Number(left.balance ?? 0))[0] ?? null,
+    [investmentAccounts]
+  );
+  const defaultMarket = defaultMarketAsset ? getMarketForInvestment(defaultMarketAsset) : "us";
+  const defaultSymbol = defaultMarketAsset?.investmentSymbol?.trim().toUpperCase() ?? "";
+  const [tickerInput, setTickerInput] = useState(defaultSymbol);
+  const [selectedMarket, setSelectedMarket] = useState<MarketKey>(defaultMarket);
+  const [submittedSymbol, setSubmittedSymbol] = useState(defaultSymbol);
+  const [submittedMarket, setSubmittedMarket] = useState<MarketKey>(defaultMarket);
   const [queryRevision, setQueryRevision] = useState(0);
   const [isTickerFocused, setTickerFocused] = useState(false);
   const [range, setRange] = useState<MarketRange>("1D");
@@ -270,6 +293,17 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   const [benchmarkKey, setBenchmarkKey] = useState<BenchmarkKey>("none");
   const [benchmarkHistory, setBenchmarkHistory] = useState<MarketHistoryResponse | null>(null);
   const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!submittedSymbol && defaultSymbol) {
+      setTickerInput(defaultSymbol);
+      setSelectedMarket(defaultMarket);
+      setSubmittedSymbol(defaultSymbol);
+      setSubmittedMarket(defaultMarket);
+      setDisplayCurrency(defaultMarket === "ph" ? "PHP" : "USD");
+      setQueryRevision((value) => value + 1);
+    }
+  }, [defaultMarket, defaultSymbol, submittedSymbol]);
 
   const tickerSuggestions = useMemo(() => {
     const query = normalizeMarketSymbol(tickerInput);

@@ -592,11 +592,13 @@ function InvestmentInsightDonut({
   centerValue,
   centerLabel,
   slices,
+  className,
 }: {
   ariaLabel: string;
   centerValue: string;
   centerLabel: string;
   slices: InvestmentAnalysisSlice[];
+  className?: string;
 }) {
   const total = slices.reduce((sum, slice) => sum + slice.value, 0);
   const radius = 82;
@@ -604,7 +606,7 @@ function InvestmentInsightDonut({
   let offset = 0;
 
   return (
-    <div className="report-donut">
+    <div className={`report-donut${className ? ` ${className}` : ""}`}>
       <div className="report-donut__chart" role="img" aria-label={ariaLabel}>
         <svg viewBox="0 0 240 240" aria-hidden="true">
           <circle cx="120" cy="120" r={radius} className="report-donut__track" />
@@ -2012,6 +2014,7 @@ export default function InvestmentsPage() {
                   }
                   centerLabel="Visible value"
                   slices={allocationAnalysisSlices}
+                  className="investments-analysis-donut"
                 />
               ) : (
                 <EmptyDataCta
@@ -2057,6 +2060,7 @@ export default function InvestmentsPage() {
                   centerValue={formatInvestmentAggregate(topHoldingAnalysisSlices.reduce((sum, slice) => sum + slice.value, 0), selectedCurrencyInvestmentAccounts)}
                   centerLabel="Top positions"
                   slices={topHoldingAnalysisSlices}
+                  className="investments-analysis-donut"
                 />
               ) : (
                 <EmptyDataCta
