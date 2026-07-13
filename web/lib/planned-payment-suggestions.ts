@@ -68,6 +68,9 @@ const INSTALLMENT_SIGNAL =
   /\b(installment|amortization|credit-?to-?cash|balance conversion|balance summary|sip balance|sip|paylite|easy\s*installment|easy\s*pay)\b|\b\d{1,2}\s*(?:\/|of)\s*\d{1,2}\s*(?:installments?|payments?)\b/i;
 const GENERIC_RECURRING_TITLE_PATTERN =
   /^(payment|repayment|subscription|service|bill|utilities|loan payment|statement payment|installment|dues|fee)$/i;
+const POTENTIAL_RECURRING_SIGNAL =
+  /\b(subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|rent|lease|internet|broadband|wifi|phone|mobile\s+plan|electric|water|utility|utilities|insurance|mortgage|loan|repayment|amortization|tuition|school\s+fee|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|prime|apple\s+services?|figma|zoom|dropbox|airalo|slack|autosweep|easytrip|beep\s+card|parking\s+subscription)\b/i;
+const POTENTIAL_RECURRING_LOOKBACK_DAYS = 120;
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 const ordinalDay = (value: number) =>
@@ -420,6 +423,7 @@ const buildRecurringTransactionSuggestions = (
 ) => {
   const suggestions: PlannedPaymentSuggestion[] = [];
   const patterns = detectRecurringPatterns(transactions).filter((pattern) => pattern.transactionCount >= 2);
+  const detectedFamilyKeys = new Set<string>();
 
   for (const pattern of patterns) {
     const title = (pattern.canonicalTitle || pattern.merchantClean || pattern.merchantRaw).trim();
@@ -432,6 +436,7 @@ const buildRecurringTransactionSuggestions = (
       normalizeKey(title),
     ].join("::")}`;
     const familyKey = buildRecurringMerchantFamilySignature(title);
+    detectedFamilyKeys.add(`${pattern.accountId ?? "workspace"}::${pattern.currency}::${familyKey}`);
     if (
       existingCommitmentKeys.has(key) ||
       dismissedSuppressionKeys.has(pattern.suppressionKey) ||
@@ -511,6 +516,85 @@ const buildRecurringTransactionSuggestions = (
       confidenceTier: getRecurringConfidenceTier(confidence),
       confidence,
       sourceFileName: pattern.importFile?.fileName ?? null,
+    });
+  }
+
+  const potentialGroups = new Map<string, (typeof transactions)[number][]>();
+  const lookbackCutoff = Date.now() - POTENTIAL_RECURRING_LOOKBACK_DAYS * DAY_IN_MS;
+
+  for (const transaction of transactions) {
+    if (transaction.type !== "expense" || transaction.date.getTime() < lookbackCutoff) {
+      continue;
+    }
+
+    const text = [transaction.merchantClean, transaction.merchantRaw, transaction.description].filter(Boolean).join(" ");
+    if (!POTENTIAL_RECURRING_SIGNAL.test(text)) {
+      continue;
+    }
+
+    const title = (transaction.merchantClean ?? transaction.merchantRaw ?? transaction.description ?? "").trim();
+    const familyKey = buildRecurringMerchantFamilySignature(title);
+    const currency = (transaction.currency ?? "PHP").trim().toUpperCase() || "PHP";
+    const groupKey = `${transaction.accountId ?? "workspace"}::${currency}::${familyKey}`;
+    if (!familyKey || detectedFamilyKeys.has(groupKey)) {
+      continue;
+    }
+
+    potentialGroups.set(groupKey, [...(potentialGroups.get(groupKey) ?? []), transaction]);
+  }
+
+  for (const [groupKey, group] of potentialGroups.entries()) {
+    const latest = [...group].sort((left, right) => right.date.getTime() - left.date.getTime())[0];
+    if (!latest) {
+      continue;
+    }
+
+    const title = (latest.merchantClean ?? latest.merchantRaw ?? latest.description ?? "").trim();
+    if (!title || GENERIC_RECURRING_TITLE_PATTERN.test(title)) {
+      continue;
+    }
+
+    const currency = (latest.currency ?? "PHP").trim().toUpperCase() || "PHP";
+    const familyKey = buildRecurringMerchantFamilySignature(title);
+    const normalizedTitle = normalizeKey(title);
+    const commitmentKey = `recurring_transaction::${[latest.accountId ?? "workspace", currency, normalizedTitle].join("::")}`;
+    if (
+      existingCommitmentKeys.has(commitmentKey) ||
+      dismissedFamilyKeys.has(familyKey) ||
+      dismissedSuppressionKeys.has(makeRecurringSuppressionKey({ accountId: latest.accountId, currency, title }))
+    ) {
+      continue;
+    }
+
+    const dueDate = new Date(latest.date);
+    while (dueDate.getTime() <= Date.now()) {
+      const next = addMonths(dueDate, 1);
+      dueDate.setTime(next.getTime());
+    }
+    const suggestionType = describeRecurringSuggestionType(title, ["potential recurring"]);
+    const amount = parseAmount(latest.amount);
+
+    suggestions.push({
+      id: `potential_recurring_transaction::${groupKey}`,
+      sourceKind: "recurring_transaction",
+      title,
+      counterparty: title,
+      amount: amount > 0 ? amount.toFixed(2) : null,
+      currency,
+      dueDate: dueDate.toISOString(),
+      recurrence: "monthly",
+      accountId: latest.accountId,
+      accountName: latest.account?.name ?? null,
+      statementCheckpointId: null,
+      installmentTerms: null,
+      notes: `Clover found a recent transaction with a ${suggestionType.tag ?? "recurring"} signal. Confirm it after you see another matching charge.`,
+      sourceLabel: "Potential recurring payment",
+      sourceDetail: `Seen ${group.length} time${group.length === 1 ? "" : "s"} · last seen ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(latest.date)}`,
+      reasonSummary: "The merchant name or transaction description looks like a subscription, bill, or other repeating payment.",
+      reasonTags: [suggestionType.tag ?? "recurring signal", "needs confirmation"],
+      confidenceTier: "low",
+      confidence: 52,
+      sourceFileName: readTransactionImportFileName(latest),
     });
   }
 
