@@ -30440,7 +30440,7 @@ button.accounts-detail__transaction-head-cell {
   display: flex;
   flex-direction: column;
   flex: 1 0 auto;
-  padding: 0;
+  padding-top: 54px;
 }
 
 .help-page__content {
@@ -30451,12 +30451,15 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .help-page .landing-nav {
-  position: sticky !important;
+  position: fixed !important;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 20;
   align-self: flex-start;
   isolation: isolate;
   background: rgba(255, 255, 255, 0.96);
+  margin-left: 0;
   margin-bottom: 6px;
 }
 
