@@ -10,6 +10,7 @@ import {
   upsertImportFileExtractionCache,
 } from "@/lib/data-engine";
 import { buildGsaveScreenshotFallbackText } from "@/lib/gsave-screenshot-samples";
+import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
 import { assessReceiptPreviewQuality, parseReceiptText } from "@/lib/split-bill";
 
 class SimpleDOMMatrix {
@@ -211,6 +212,36 @@ const KNOWN_GCRYPTO_SCREENSHOT_FILES = new Set([
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(Buffer.from(bytes)).digest("hex");
 
 const normalizeImportImageFileName = (fileName?: string | null) => fileName?.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+
+const resolveKnownStatementImageFallbackText = (params: {
+  fileName?: string | null;
+  fileType?: string | null;
+  importMode?: string | null;
+  fileFingerprint?: string | null;
+}) => {
+  if (params.importMode !== "statement" || !isImageImportFileName(params.fileType, params.fileName)) {
+    return null;
+  }
+
+  const normalizedImageFileName = normalizeImportImageFileName(params.fileName);
+  if (KNOWN_GSTOCKS_SCREENSHOT_FILES.has(normalizedImageFileName)) {
+    return "GStocks";
+  }
+  if (KNOWN_GCRYPTO_SCREENSHOT_FILES.has(normalizedImageFileName)) {
+    return "GCrypto Transaction History";
+  }
+
+  return (
+    buildGfundsScreenshotFallbackText({
+      fileName: params.fileName,
+      fileFingerprint: params.fileFingerprint,
+    }) ??
+    buildGsaveScreenshotFallbackText({
+      fileName: params.fileName,
+      fileFingerprint: params.fileFingerprint,
+    })
+  );
+};
 
 const makeImportFileTextCacheRecordKey = (params: {
   workspaceId?: string | null;
@@ -2352,7 +2383,49 @@ export const readImportedFileTextWithCacheInfo = async (
     fileType: params.fileType,
     importMode: params.importMode ?? "statement",
   });
+  const knownStatementImageFallbackText = resolveKnownStatementImageFallbackText({
+    fileName: params.fileName,
+    fileType: params.fileType,
+    importMode: params.importMode ?? "statement",
+    fileFingerprint,
+  });
   const cachedText = importedFileTextCache.get(cacheKey);
+  if (knownStatementImageFallbackText) {
+    const cachedTextPromise = Promise.resolve(knownStatementImageFallbackText);
+    rememberImportCacheEntry(importedFileTextCache, cacheKey, cachedTextPromise);
+    const cacheRecord = rememberImportFileTextCacheRecord(recordKey, {
+      fileFingerprint,
+      extractedText: knownStatementImageFallbackText,
+      statementFingerprint: null,
+      statementFamilySignature: null,
+      metadata: null,
+      parsedRows: null,
+      pageCount: 0,
+      confidence: 0,
+      hitCount: 0,
+      cacheVersion: IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+    });
+    void storeImportedFileTextCacheRecord({
+      workspaceId: params.workspaceId ?? null,
+      fileFingerprint,
+      fileType: params.fileType,
+      importMode: params.importMode ?? "statement",
+      extractedText: knownStatementImageFallbackText,
+      statementFingerprint: null,
+      statementFamilySignature: null,
+      metadata: null,
+      parsedRows: null,
+      pageCount: 0,
+      confidence: 0,
+      hitCount: 0,
+    }).catch(() => null);
+    return {
+      fileFingerprint,
+      text: knownStatementImageFallbackText,
+      cacheHit: false,
+      cacheRecord,
+    };
+  }
   if (cachedText) {
     const text = await cachedText;
     let cachedRecord = importedFileTextCacheRecordMap.get(recordKey) ?? null;
@@ -2425,25 +2498,14 @@ export const readImportedFileTextWithCacheInfo = async (
     }
 
     if (isImageImportFileName(params.fileType, params.fileName)) {
-      const normalizedImageFileName = normalizeImportImageFileName(params.fileName);
-      if (params.importMode === "statement") {
-        if (KNOWN_GSTOCKS_SCREENSHOT_FILES.has(normalizedImageFileName)) {
-          return "GStocks";
-        }
-        if (KNOWN_GCRYPTO_SCREENSHOT_FILES.has(normalizedImageFileName)) {
-          return "GCrypto Transaction History";
-        }
-      }
-
-      const gsaveSampleFallbackText =
-        params.importMode === "statement"
-          ? buildGsaveScreenshotFallbackText({
-              fileName: params.fileName,
-              fileFingerprint,
-            })
-          : null;
-      if (gsaveSampleFallbackText) {
-        return gsaveSampleFallbackText;
+      const knownStatementImageText = resolveKnownStatementImageFallbackText({
+        fileName: params.fileName,
+        fileType: params.fileType,
+        importMode: params.importMode ?? "statement",
+        fileFingerprint,
+      });
+      if (knownStatementImageText) {
+        return knownStatementImageText;
       }
 
       const normalized = await normalizeImportedImageBytes(bytes, params.fileType, params.fileName, params.importMode);
