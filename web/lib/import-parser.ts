@@ -10799,7 +10799,7 @@ const gstocksScreenshotMetadata = (text: string, fileName = ""): DetectedStateme
     /\b(?:My\s+Stocks|Shares|Avg\s+Price|Market\s+Value|Total\s+Cost)\b/i.test(compact);
   const looksLikeGstocksScreenshot =
     hasExplicitGstocksSignals ||
-    (isKnownGstocksScreenshotFile(fileName) && compact.length === 0);
+    isKnownGstocksScreenshotFile(fileName);
 
   if (!looksLikeGstocksScreenshot) {
     return null;
