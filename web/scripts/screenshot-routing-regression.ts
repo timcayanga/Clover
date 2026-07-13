@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   assessImageStatementParse,
   buildParserRoutingDecision,
+  shouldPreferDirectImageStatementVisionPath,
   shouldAttemptGenericScreenshotTranscriptRepair,
 } from "@/workers/import-processor";
 
@@ -350,6 +351,45 @@ assert.equal(
   sparseGcryptoRoutingDecision.decision,
   "backup_required",
   `Sparse GCrypto screenshot parses should escalate early. got=${sparseGcryptoRoutingDecision.decision}`
+);
+
+assert.equal(
+  shouldPreferDirectImageStatementVisionPath({
+    fileName: "IMG_1407.PNG",
+    fileType: "image/png",
+    importMode: "statement",
+    text: "",
+    textCacheInfo: null,
+    trainedReceiptDetails: null,
+  }),
+  false,
+  "Known GSave screenshots should keep deterministic text extraction enabled in the background path."
+);
+
+assert.equal(
+  shouldPreferDirectImageStatementVisionPath({
+    fileName: "IMG_1415.PNG",
+    fileType: "image/png",
+    importMode: "statement",
+    text: "",
+    textCacheInfo: null,
+    trainedReceiptDetails: null,
+  }),
+  false,
+  "Known GFunds screenshots should keep deterministic text extraction enabled in the background path."
+);
+
+assert.equal(
+  shouldPreferDirectImageStatementVisionPath({
+    fileName: "IMG_9100.PNG",
+    fileType: "image/png",
+    importMode: "statement",
+    text: "",
+    textCacheInfo: null,
+    trainedReceiptDetails: null,
+  }),
+  true,
+  "Unknown screenshots can still use the direct vision path when no text was provided."
 );
 
 assert.equal(

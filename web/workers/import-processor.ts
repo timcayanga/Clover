@@ -33,6 +33,7 @@ import {
   readImportedFileImageDataUrls,
   readImportedFileTextWithCacheInfo,
   readImportedPdfPageImages,
+  resolveKnownStatementImageFallbackText,
   storeImportedFileTextCacheRecord,
 } from "@/lib/import-file-text.server";
 import { downloadImportObject } from "@/lib/import-storage.server";
@@ -1174,6 +1175,33 @@ type ConfirmImportResult = {
 };
 
 type ImportFileTextCacheInfo = Awaited<ReturnType<typeof readImportedFileTextWithCacheInfo>>;
+
+export const shouldPreferDirectImageStatementVisionPath = (params: {
+  fileName: string;
+  fileType: string;
+  importMode: ImportImageMode;
+  text?: string | null;
+  textCacheInfo?: ImportFileTextCacheInfo | null;
+  trainedReceiptDetails?: unknown;
+}) => {
+  const imageImport = isImageImportFile(params.fileType, params.fileName);
+  const hasKnownStatementImageFallback = Boolean(
+    resolveKnownStatementImageFallbackText({
+      fileName: params.fileName,
+      fileType: params.fileType,
+      importMode: params.importMode,
+    })
+  );
+
+  return (
+    imageImport &&
+    params.importMode === "statement" &&
+    !params.trainedReceiptDetails &&
+    !String(params.text ?? "").trim() &&
+    !params.textCacheInfo &&
+    !hasKnownStatementImageFallback
+  );
+};
 
 let accountColumnCache: Set<string> | null = null;
 
@@ -6622,12 +6650,14 @@ export const processImportFileText = async (
   const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
   const trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
   const likelyScreenshotStatement = imageImport && importMode === "statement" && isLikelyScreenshotImageFile(fileName);
-  const shouldPreferDirectImageStatementVision =
-    imageImport &&
-    importMode === "statement" &&
-    !trainedReceiptDetails &&
-    !String(options.text ?? "").trim() &&
-    !options.textCacheInfo;
+  const shouldPreferDirectImageStatementVision = shouldPreferDirectImageStatementVisionPath({
+    fileName,
+    fileType,
+    importMode,
+    text: options.text,
+    textCacheInfo: options.textCacheInfo ?? null,
+    trainedReceiptDetails,
+  });
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
   const loadFallbackAssets = async () => {

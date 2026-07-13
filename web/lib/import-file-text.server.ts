@@ -213,7 +213,7 @@ export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash(
 
 const normalizeImportImageFileName = (fileName?: string | null) => fileName?.split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
 
-const resolveKnownStatementImageFallbackText = (params: {
+export const resolveKnownStatementImageFallbackText = (params: {
   fileName?: string | null;
   fileType?: string | null;
   importMode?: string | null;
