@@ -1707,6 +1707,9 @@ export async function POST(request: Request) {
       "When the user asks to see a report, use open_report so the UI can open Clover's existing Reports page.",
       "When the user asks whether they can afford a named purchase with a price, use check_affordability.",
       "When the user asks about goal progress, use get_goal_progress.",
+      "When the user asks to find, explain, or review transactions, use find_transactions.",
+      "When the user asks about bills, cash-flow pressure, or split bills, use get_cashflow_outlook or get_split_bill_status.",
+      "When the user asks about investments, use get_investment_summary before giving educational context.",
       "When the user asks Clover to add or edit a record, use prepare_write_action and wait for confirmation; never describe a proposed write as completed.",
       "",
       "Workspace context:",
@@ -1827,6 +1830,35 @@ export async function POST(request: Request) {
       },
       {
         type: "function",
+        name: "find_transactions",
+        description: "Find matching transactions in Clover's existing transaction history. Use for questions about a merchant, category, unusual item, or specific transaction.",
+        parameters: {
+          type: "object",
+          properties: { query: { type: "string" }, limit: { type: "number" } },
+          required: ["query", "limit"],
+          additionalProperties: false,
+        },
+      },
+      {
+        type: "function",
+        name: "get_cashflow_outlook",
+        description: "Summarize upcoming recurring obligations, commitments, open split bills, and available cash.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
+        name: "get_split_bill_status",
+        description: "Read open split bills and outstanding amounts from Clover.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
+        name: "get_investment_summary",
+        description: "Read the latest investment snapshot available in Clover. Use for portfolio status and educational context, not personalized security recommendations.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
         name: "prepare_write_action",
         description: "Prepare a confirmation card for a user-requested manual write. Never execute it. Supported action types are set_goal, create_budget, create_transaction, edit_transaction, create_account, create_investment, and create_split_bill.",
         parameters: {
@@ -1907,6 +1939,60 @@ export async function POST(request: Request) {
         } else if (call.name === "get_goal_progress") {
           result = { goal: goalLabel, status: goalProgressLabel, targetAmount: goalTargetAmount, progress: goalProgress };
           actions.push({ id: `goal-${actions.length + 1}`, kind: "navigate", type: "open_goal", label: "Open Goals", description: "Review the goal and its progress in Clover.", href: "/goals" });
+        } else if (call.name === "find_transactions") {
+          const query = String(args.query ?? "").trim().toLowerCase();
+          const limit = Math.max(1, Math.min(10, Number(args.limit ?? 5)));
+          const matches = allTransactions
+            .filter((transaction) => {
+              const haystack = [transaction.merchantClean, transaction.merchantRaw, transaction.description, transaction.account.name]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase();
+              return query ? haystack.includes(query) : true;
+            })
+            .slice(0, limit)
+            .map((transaction) => ({
+              id: transaction.id,
+              merchant: transaction.merchantClean ?? transaction.merchantRaw,
+              amount: Number(transaction.amount),
+              type: transaction.type,
+              date: transaction.date.toISOString(),
+              account: transaction.account.name,
+            }));
+          const href = query ? `/transactions?q=${encodeURIComponent(query)}` : "/transactions";
+          actions.push({ id: `transactions-${actions.length + 1}`, kind: "navigate", type: "find_transactions", label: "Review these transactions", description: "Open Clover Transactions to inspect the matching records.", href });
+          result = { query: query || null, matches, href };
+        } else if (call.name === "get_cashflow_outlook") {
+          const upcomingRecurring = recurringDueSoon.reduce((sum, item) => sum + item.amount, 0);
+          const upcomingCommitments = commitmentsDueSoon.reduce((sum, item) => sum + item.amount, 0);
+          const protectedCash = upcomingRecurring + upcomingCommitments + openSplitBillAmount;
+          result = {
+            availableCash: spendableAccountBalance,
+            upcomingRecurring,
+            upcomingCommitments,
+            openSplitBills: openSplitBillAmount,
+            protectedCash,
+            roomAfterKnownPressure: spendableAccountBalance - protectedCash,
+            recurring: recurringDueSoon,
+            commitments: commitmentsDueSoon,
+          };
+          actions.push({ id: `cashflow-${actions.length + 1}`, kind: "navigate", type: "open_cashflow", label: "Review cash-flow details", description: "Open Recurring and Accounts to review known obligations and available cash.", href: "/recurring" });
+        } else if (call.name === "get_split_bill_status") {
+          result = { openBills: openSplitBills, totalOutstanding: openSplitBillAmount, href: "/split-bills" };
+          actions.push({ id: `split-${actions.length + 1}`, kind: "navigate", type: "open_split_bills", label: "Open Split Bills", description: "Review open shared expenses and settlement status.", href: "/split-bills" });
+        } else if (call.name === "get_investment_summary") {
+          result = {
+            latestSnapshot: latestInvestmentSnapshot
+              ? {
+                  value: Number(latestInvestmentSnapshot.totalValue ?? 0),
+                  currency: latestInvestmentSnapshot.currency,
+                  date: latestInvestmentSnapshot.snapshotDate?.toISOString() ?? null,
+                  change: investmentDelta,
+                }
+              : null,
+            guidance: "Use this data for education and portfolio review. Do not make a personalized security recommendation without suitability information.",
+          };
+          actions.push({ id: `investments-${actions.length + 1}`, kind: "navigate", type: "open_investments", label: "Open Investments", description: "Review holdings and snapshots in Clover.", href: "/investments" });
         } else if (call.name === "open_clover_area") {
           const area = String(args.area ?? "transactions");
           const href = `/${area}`;

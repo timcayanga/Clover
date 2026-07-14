@@ -353,7 +353,7 @@ async function ReportsStream({
   searchParams,
 }: {
   active?: "reports" | "adviser";
-  searchParams?: { range?: string; section?: string };
+  searchParams?: { range?: string; section?: string; filter?: string };
 }) {
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
@@ -641,11 +641,20 @@ async function ReportsStream({
       ...normalizedReportTransactions,
       ...mapParsedRowsToReportTransactions(parsedReportRows),
     ].sort((left, right) => right.date.getTime() - left.date.getTime());
-    const reportCurrentWindowTransactions = reportAllTransactions.filter((transaction) => transaction.date >= currentWindowStart);
-    const reportPreviousWindowTransactions = reportAllTransactions.filter(
+    const requestedFilter = searchParams?.filter?.trim().toLowerCase() ?? "";
+    const reportScopedTransactions = requestedFilter
+      ? reportAllTransactions.filter((transaction) => {
+          const category = getReportTransactionCategoryName(transaction).toLowerCase();
+          const merchant = normalizeMerchant(transaction.merchantClean ?? transaction.merchantRaw).toLowerCase();
+          const account = transaction.account.name.toLowerCase();
+          return category.includes(requestedFilter) || merchant.includes(requestedFilter) || account.includes(requestedFilter);
+        })
+      : reportAllTransactions;
+    const reportCurrentWindowTransactions = reportScopedTransactions.filter((transaction) => transaction.date >= currentWindowStart);
+    const reportPreviousWindowTransactions = reportScopedTransactions.filter(
       (transaction) => transaction.date >= previousWindowStart && transaction.date < currentWindowStart
     );
-    const reportSixMonthTransactions = reportAllTransactions.filter((transaction) => transaction.date >= sixMonthsAgo);
+    const reportSixMonthTransactions = reportScopedTransactions.filter((transaction) => transaction.date >= sixMonthsAgo);
     const reportDisplayTransactions =
       reportCurrentWindowTransactions.length > 0
         ? reportCurrentWindowTransactions
@@ -669,7 +678,7 @@ async function ReportsStream({
       reportCurrentWindowTransactions.length === 0 && reportDisplayTransactions.length > 0
         ? "No activity in the selected range yet. Showing the latest available transactions instead."
         : null;
-    const reportHistoricalTransactions = reportAllTransactions.filter((transaction) => transaction.date < currentWindowStart);
+    const reportHistoricalTransactions = reportScopedTransactions.filter((transaction) => transaction.date < currentWindowStart);
 
     const currentSummary: WindowSummary = reportDisplayTransactions.reduce(
       (accumulator, transaction) => {
@@ -2272,7 +2281,7 @@ async function ReportsStream({
   }
 }
 
-async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string }> }) {
+async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string }> }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
@@ -2301,6 +2310,6 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   );
 }
 
-export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string }> }) {
+export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string }> }) {
   return <RouteSplash label="reports"><ReportsPageStream searchParams={searchParams} /></RouteSplash>;
 }
