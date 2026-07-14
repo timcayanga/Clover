@@ -13,6 +13,7 @@ import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { recordAdviserChatQuestion } from "@/lib/adviser-actions";
 import { deriveReconciledBalance } from "@/lib/account-balance";
+import { assertRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,31 @@ type ChatMessage = {
 type RequestBody = {
   messages?: ChatMessage[];
 };
+
+type AdviserUsage = {
+  plan: "free" | "pro";
+  used: number;
+  limit: number;
+  remaining: number;
+  resetsAt: string;
+};
+
+type AdviserAction = {
+  id: string;
+  kind: "navigate" | "confirm";
+  type: string;
+  label: string;
+  description: string;
+  href?: string;
+  payload?: Record<string, unknown>;
+};
+
+const ADVISER_CHAT_LIMITS = {
+  free: 5,
+  pro: 100,
+} as const;
+
+const getNextMonthStart = (referenceDate: Date) => new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 1);
 
 type AdviserMemoryStats = {
   count: number;
@@ -81,6 +107,7 @@ type AdviserThresholdProfile = {
 };
 
 type AdviserChatAccountSource = {
+  id: string;
   name: string;
   type: string;
   currency: string | null;
@@ -753,8 +780,38 @@ export async function POST(request: Request) {
     const { userId } = await getSessionContext();
     const user = await getOrCreateCurrentUser(userId);
 
-    if (user.planTier !== "pro") {
-      return NextResponse.json({ error: "Adviser chat is available on Pro only." }, { status: 403 });
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const resetsAt = getNextMonthStart(now);
+    const limit = ADVISER_CHAT_LIMITS[user.planTier];
+    const usageCount = await prisma.auditLog.count({
+      where: {
+        actorUserId: user.id,
+        action: "adviser.chat_asked",
+        createdAt: { gte: monthStart },
+      },
+    });
+
+    try {
+      assertRateLimit(`adviser-chat:${user.id}`, user.planTier === "pro" ? 30 : 8, 60 * 1000);
+    } catch {
+      return NextResponse.json(
+        {
+          error: "Clover needs a short pause before the next question.",
+          usage: { plan: user.planTier, used: usageCount, limit, remaining: Math.max(0, limit - usageCount), resetsAt: resetsAt.toISOString() } satisfies AdviserUsage,
+        },
+        { status: 429 }
+      );
+    }
+
+    if (usageCount >= limit) {
+      return NextResponse.json(
+        {
+          error: user.planTier === "free" ? "You have used this month's Adviser preview questions. Upgrade to Pro for more room." : "You have reached this month's Adviser Chat limit.",
+          usage: { plan: user.planTier, used: usageCount, limit, remaining: 0, resetsAt: resetsAt.toISOString() } satisfies AdviserUsage,
+        },
+        { status: 429 }
+      );
     }
 
     const body = (await request.json().catch(() => null)) as RequestBody | null;
@@ -788,6 +845,7 @@ export async function POST(request: Request) {
               name: true,
               accounts: {
                 select: {
+                  id: true,
                   name: true,
                   type: true,
                   currency: true,
@@ -833,6 +891,7 @@ export async function POST(request: Request) {
           name: true,
             accounts: {
               select: {
+                id: true,
                 name: true,
                 type: true,
                 currency: true,
@@ -890,13 +949,13 @@ export async function POST(request: Request) {
     };
 
     const chatAccounts = (workspace.accounts as AdviserChatAccountSource[]).map((account) => ({
+      id: account.id,
       name: account.name,
       type: account.type,
       currency: account.currency,
       balance: reconcileChatAccountBalance(account),
     }));
 
-    const now = new Date();
     const nextSevenDays = new Date(now);
     nextSevenDays.setDate(nextSevenDays.getDate() + 7);
     const nextFourteenDays = new Date(now);
@@ -910,6 +969,7 @@ export async function POST(request: Request) {
             isExcluded: false,
           },
           select: {
+            id: true,
             date: true,
             amount: true,
             type: true,
@@ -1055,6 +1115,7 @@ export async function POST(request: Request) {
     }
 
     const allTransactions = allTransactionsQuery as Array<{
+      id: string;
       date: Date;
       amount: unknown;
       type: "income" | "expense" | "transfer";
@@ -1604,6 +1665,7 @@ export async function POST(request: Request) {
     const summaryLines = [
       `Workspace: ${workspace.name}`,
       `Data grounding: ${groundingMode}; accounts ${workspace.accounts.length}; coverage ${Math.round(accountCoverageScore)}/100; liquid ${formatCurrency(liquidBalance, displayCurrency)}; available cash ${formatCurrency(spendableAccountBalance, displayCurrency)}; balances owed ${formatCurrency(liabilityAccountBalance, displayCurrency)}; top balance share ${formatPercent(largestAccountShare * 100)}`,
+      `Accounts available for manual actions: ${chatAccounts.map((account) => `${account.id} ${account.name} (${account.type}, ${formatCurrency(account.balance, account.currency)})`).join(" | ") || "none"}`,
       `${currentWindowLabel}: income ${formatCurrency(currentSummary.income)}, spend ${formatCurrency(currentSpend)}, net ${formatSignedCurrency(currentNet)}`,
       `${previousWindowLabel}: income ${formatCurrency(previousSummary.income)}, spend ${formatCurrency(previousSpend)}, net ${formatSignedCurrency(previousNet)}`,
       `${longTermWindowLabel}: avg income ${formatCurrency(longTermAverageIncome)}, avg spend ${formatCurrency(longTermAverageSpend)}, avg net ${formatSignedCurrency(longTermAverageNet)}`,
@@ -1628,6 +1690,7 @@ export async function POST(request: Request) {
       `Liquid balance: ${formatCurrency(liquidBalance, displayCurrency)}`,
       `Account concentration: ${largestAccountBalance && largestAccountBalance.name ? `${largestAccountBalance.name} ${formatPercent(largestAccountShare * 100)}` : "none"}`,
       `Goal: ${goalValue ?? "none"} (${goalProgress.bandLabel})`,
+      `Recent transaction references: ${allTransactions.slice(0, 20).map((transaction) => `${transaction.id} ${transaction.merchantClean ?? transaction.merchantRaw} ${formatCurrency(Math.abs(Number(transaction.amount)), displayCurrency)} ${toShortDateLabel(transaction.date)}`).join(" | ") || "none"}`,
     ].join("\n");
 
     const systemPrompt = [
@@ -1641,6 +1704,10 @@ export async function POST(request: Request) {
       "Do not pretend to be a financial advisor. Keep guidance educational and contextual.",
       "If the user's question asks for investment advice, stay cautious and avoid personalized investment recommendations.",
       "If the data is insufficient, say what is missing and suggest where to check in Clover.",
+      "When the user asks to see a report, use open_report so the UI can open Clover's existing Reports page.",
+      "When the user asks whether they can afford a named purchase with a price, use check_affordability.",
+      "When the user asks about goal progress, use get_goal_progress.",
+      "When the user asks Clover to add or edit a record, use prepare_write_action and wait for confirmation; never describe a proposed write as completed.",
       "",
       "Workspace context:",
       summaryLines,
@@ -1709,49 +1776,160 @@ export async function POST(request: Request) {
 
     const env = getEnv();
     if (!env.OPENAI_API_KEY) {
-      return NextResponse.json({ reply: fallbackReply });
+      const currentUsage = { plan: user.planTier, used: usageCount + 1, limit, remaining: Math.max(0, limit - usageCount - 1), resetsAt: resetsAt.toISOString() } satisfies AdviserUsage;
+      return NextResponse.json({ reply: fallbackReply, actions: [], usage: currentUsage });
     }
 
     const model = env.OPENAI_ADVISER_MODEL?.trim() || "gpt-4.1";
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        max_output_tokens: 900,
-        input: [
-          {
-            role: "system",
-            content: [{ type: "input_text", text: systemPrompt }],
+    const actions: AdviserAction[] = [];
+    const tools = [
+      {
+        type: "function",
+        name: "open_report",
+        description: "Open Clover's existing Reports page for a requested time range and optional category, merchant, or account filter.",
+        parameters: {
+          type: "object",
+          properties: {
+            range: { type: "string", enum: ["30d", "90d", "ytd"] },
+            section: { type: "string", enum: ["overview", "spending", "trends", "advanced"] },
+            category: { type: ["string", "null"] },
+            merchant: { type: ["string", "null"] },
+            account: { type: ["string", "null"] },
           },
-          ...incomingMessages.map((message) => ({
-            role: message.role,
-            content: [{ type: "input_text", text: message.content }],
-          })),
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      return NextResponse.json(
-        {
-          error: errorText || "Unable to generate an Adviser response.",
+          required: ["range", "section", "category", "merchant", "account"],
+          additionalProperties: false,
         },
-        { status: 502 }
-      );
+      },
+      {
+        type: "function",
+        name: "check_affordability",
+        description: "Check whether a purchase fits after protecting upcoming obligations and a baseline spending reserve. Use when the user provides a price or asks whether they can afford something.",
+        parameters: {
+          type: "object",
+          properties: {
+            itemName: { type: "string" },
+            price: { type: "number" },
+          },
+          required: ["itemName", "price"],
+          additionalProperties: false,
+        },
+      },
+      {
+        type: "function",
+        name: "get_goal_progress",
+        description: "Read the user's current goal progress from Clover.",
+        parameters: {
+          type: "object",
+          properties: { goal: { type: ["string", "null"] } },
+          required: ["goal"],
+          additionalProperties: false,
+        },
+      },
+      {
+        type: "function",
+        name: "prepare_write_action",
+        description: "Prepare a confirmation card for a user-requested manual write. Never execute it. Supported action types are set_goal, create_budget, create_transaction, edit_transaction, create_account, create_investment, and create_split_bill.",
+        parameters: {
+          type: "object",
+          properties: {
+            actionType: { type: "string", enum: ["set_goal", "create_budget", "create_transaction", "edit_transaction", "create_account", "create_investment", "create_split_bill"] },
+            payload: { type: "object", additionalProperties: true },
+            label: { type: "string" },
+            description: { type: "string" },
+          },
+          required: ["actionType", "payload", "label", "description"],
+          additionalProperties: false,
+        },
+      },
+      {
+        type: "function",
+        name: "open_clover_area",
+        description: "Open an existing Clover area for goals, budgeting, investments, transactions, accounts, recurring items, or split bills.",
+        parameters: {
+          type: "object",
+          properties: { area: { type: "string", enum: ["goals", "budgeting", "investments", "transactions", "accounts", "recurring", "split-bills"] } },
+          required: ["area"],
+          additionalProperties: false,
+        },
+      },
+    ];
+
+    const baseInput: unknown[] = [
+      { role: "system", content: [{ type: "input_text", text: `${systemPrompt}\n\nTool rules: Use read tools when a Clover page or calculation is needed. Use prepare_write_action only when the user explicitly asks Clover to create or record something. Never claim a write happened until the user confirms it.` }] },
+      ...incomingMessages.map((message) => ({ role: message.role, content: [{ type: "input_text", text: message.content }] })),
+    ];
+    let modelInput = baseInput;
+    let payload: Record<string, unknown> = {};
+
+    for (let step = 0; step < 3; step += 1) {
+      const response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, temperature: 0.2, max_output_tokens: 900, tools, input: modelInput }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        return NextResponse.json({ error: errorText || "Unable to generate an Adviser response." }, { status: 502 });
+      }
+
+      payload = (await response.json()) as Record<string, unknown>;
+      const output = Array.isArray(payload.output) ? payload.output : [];
+      const calls = output.filter((item): item is { type: "function_call"; name: string; call_id: string; arguments: string } => Boolean(item && typeof item === "object" && (item as { type?: unknown }).type === "function_call"));
+
+      if (calls.length === 0) {
+        break;
+      }
+
+      const toolOutputs = calls.map((call) => {
+        let args: Record<string, unknown> = {};
+        try {
+          args = JSON.parse(call.arguments) as Record<string, unknown>;
+        } catch {
+          args = {};
+        }
+
+        let result: Record<string, unknown>;
+        if (call.name === "open_report") {
+          const params = new URLSearchParams();
+          params.set("range", String(args.range ?? "30d"));
+          params.set("section", String(args.section ?? "overview"));
+          const filter = typeof args.category === "string" ? args.category : typeof args.merchant === "string" ? args.merchant : typeof args.account === "string" ? args.account : "";
+          if (filter) params.set("filter", filter);
+          const href = `/reports?${params.toString()}`;
+          actions.push({ id: `report-${actions.length + 1}`, kind: "navigate", type: "open_report", label: "Open this report", description: "Use Clover's existing Reports view for the requested period.", href });
+          result = { href, report: "existing Clover Reports view", range: args.range ?? "30d", section: args.section ?? "overview", filter: filter || null };
+        } else if (call.name === "check_affordability") {
+          const price = Number(args.price ?? 0);
+          const protectedCash = recurringDueSoon.reduce((sum, item) => sum + item.amount, 0) + commitmentsDueSoon.reduce((sum, item) => sum + item.amount, 0) + Math.max(weightedHistoricalBaseline.spend, baselineSpend);
+          const roomAfterPurchase = spendableAccountBalance - protectedCash - price;
+          result = { itemName: args.itemName ?? "purchase", price, availableCash: spendableAccountBalance, protectedCash, roomAfterPurchase, status: roomAfterPurchase >= 0 ? "fits_after_reserve" : "would_reduce_reserve", freshness: dataFreshnessLabel };
+        } else if (call.name === "get_goal_progress") {
+          result = { goal: goalLabel, status: goalProgressLabel, targetAmount: goalTargetAmount, progress: goalProgress };
+          actions.push({ id: `goal-${actions.length + 1}`, kind: "navigate", type: "open_goal", label: "Open Goals", description: "Review the goal and its progress in Clover.", href: "/goals" });
+        } else if (call.name === "open_clover_area") {
+          const area = String(args.area ?? "transactions");
+          const href = `/${area}`;
+          actions.push({ id: `area-${actions.length + 1}`, kind: "navigate", type: `open_${area}`, label: `Open ${area.replace("-", " ")}`, description: "Continue in the existing Clover workflow.", href });
+          result = { area, href };
+        } else if (call.name === "prepare_write_action") {
+          const actionType = String(args.actionType ?? "");
+          const action: AdviserAction = { id: `action-${actions.length + 1}`, kind: "confirm", type: actionType, label: String(args.label ?? "Confirm this action"), description: String(args.description ?? "Review and confirm this Clover action."), payload: { ...(args.payload as Record<string, unknown>), workspaceId: workspace.id } };
+          actions.push(action);
+          result = { requiresConfirmation: true, actionId: action.id, actionType, payload: action.payload };
+        } else {
+          result = { error: `Unknown Adviser tool: ${call.name}` };
+        }
+
+        return { type: "function_call_output", call_id: call.call_id, output: JSON.stringify(result) };
+      });
+
+      modelInput = [...modelInput, ...output, ...toolOutputs];
     }
 
-    const payload = (await response.json()) as Record<string, unknown>;
     const reply = extractOutputText(payload) || "I could not generate a response right now.";
-
-    return NextResponse.json({
-      reply,
-    });
+    const currentUsage = { plan: user.planTier, used: usageCount + 1, limit, remaining: Math.max(0, limit - usageCount - 1), resetsAt: resetsAt.toISOString() } satisfies AdviserUsage;
+    return NextResponse.json({ reply, actions, usage: currentUsage });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to generate an Adviser response.";
     return NextResponse.json({ error: message }, { status: 400 });

@@ -3212,7 +3212,7 @@ async function AdviserPageContent() {
 
         <section className="adviser-section adviser-section--chat glass">
           <p className="eyebrow">Ask Clover anything</p>
-          <AdviserChat isPro={user.planTier === "pro"} prompts={promptSuggestions} />
+          <AdviserChat prompts={promptSuggestions} />
         </section>
       </section>
     </CloverShell>

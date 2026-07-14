@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { trackAdviserInteraction } from "@/lib/adviser-interactions";
@@ -17,16 +16,42 @@ type ChatMessage = {
   content: string;
 };
 
+type AdviserUsage = {
+  plan: "free" | "pro";
+  used: number;
+  limit: number;
+  remaining: number;
+  resetsAt: string;
+};
+
+type AdviserAction = {
+  id: string;
+  kind: "navigate" | "confirm";
+  type: string;
+  label: string;
+  description: string;
+  href?: string;
+  payload?: Record<string, unknown>;
+};
+
 type AdviserChatProps = {
-  isPro: boolean;
   prompts: AdviserPrompt[];
 };
 
-export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
+const actionDetails = (action: AdviserAction) =>
+  Object.entries(action.payload ?? {})
+    .filter(([key, value]) => key !== "workspaceId" && value !== null && value !== undefined && value !== "")
+    .slice(0, 5)
+    .map(([key, value]) => `${key.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`)}: ${Array.isArray(value) ? value.join(", ") : String(value)}`)
+    .join(" • ");
+
+export function AdviserChat({ prompts }: AdviserChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<AdviserUsage | null>(null);
+  const [actions, setActions] = useState<AdviserAction[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const visiblePrompts = useMemo(() => prompts.slice(0, 4), [prompts]);
@@ -58,15 +83,19 @@ export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
         }),
       });
 
+      const payload = (await response.json().catch(() => null)) as { error?: string; usage?: AdviserUsage; actions?: AdviserAction[]; reply?: string } | null;
+      if (payload?.usage) {
+        setUsage(payload.usage);
+      }
+
       if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(payload?.error ?? "Unable to get a response from Adviser.");
       }
 
-      const payload = (await response.json()) as { reply?: string };
       const reply = payload.reply?.trim() || "I could not generate a response just now.";
 
       setMessages((current) => [...current, { role: "assistant", content: reply }]);
+      setActions((current) => [...current, ...(payload.actions ?? [])]);
       window.setTimeout(scrollToBottom, 0);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to get a response from Adviser.");
@@ -75,29 +104,43 @@ export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
     }
   };
 
+  const completeAction = async (action: AdviserAction) => {
+    if (action.kind === "navigate" && action.href) {
+      window.location.href = action.href;
+      return;
+    }
+
+    if (action.kind !== "confirm" || !action.payload) {
+      return;
+    }
+
+    setError(null);
+    try {
+      const response = await fetch("/api/adviser/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string; result?: unknown } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Clover could not complete that action.");
+      }
+
+      setActions((current) => current.filter((item) => item.id !== action.id));
+      setMessages((current) => [...current, { role: "assistant", content: `${action.label} completed. You can ask me to check the updated picture.` }]);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Clover could not complete that action.");
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await sendMessage(input);
   };
 
-  if (!isPro) {
-    return (
-      <div className="adviser-chat adviser-chat--locked">
-        <div className="adviser-chat__locked-copy">
-          <p className="eyebrow">Pro only</p>
-          <p>
-            Upgrade to Pro to unlock conversational help, guided follow-ups, and contextual answers from the same Adviser data model.
-          </p>
-        </div>
-        <Link href="/pricing" className="button button-primary button-small">
-          View Pro
-        </Link>
-      </div>
-    );
-  }
-
   return (
     <div className="adviser-chat">
+      {usage ? <p className="adviser-chat__status">{usage.remaining} Adviser question{usage.remaining === 1 ? "" : "s"} left this month on {usage.plan === "pro" ? "Pro" : "Free"}.</p> : null}
       <form className="adviser-chat__composer" onSubmit={handleSubmit}>
         <label className="sr-only" htmlFor="adviser-chat-input">
           Ask Clover anything
@@ -151,6 +194,22 @@ export function AdviserChat({ isPro, prompts }: AdviserChatProps) {
             </article>
           ))}
           <div ref={bottomRef} />
+        </div>
+      ) : null}
+
+      {actions.length > 0 ? (
+        <div className="adviser-chat__thread" aria-label="Clover actions">
+          {actions.map((action) => (
+            <article key={action.id} className="adviser-chat__message adviser-chat__message--assistant">
+              <span>{action.kind === "confirm" ? "Confirmation" : "Clover"}</span>
+              <strong>{action.label}</strong>
+              <p>{action.description}</p>
+              {action.kind === "confirm" && actionDetails(action) ? <p>{actionDetails(action)}</p> : null}
+              <button type="button" className="button button-primary button-small" onClick={() => void completeAction(action)}>
+                {action.kind === "confirm" ? "Confirm" : "Open"}
+              </button>
+            </article>
+          ))}
         </div>
       ) : null}
     </div>
