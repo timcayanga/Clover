@@ -55,6 +55,8 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const visiblePrompts = useMemo(() => prompts.slice(0, 4), [prompts]);
+  const hasReachedLimit = usage !== null && usage.remaining <= 0;
+  const resetLabel = usage ? new Date(usage.resetsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
 
   const scrollToBottom = () => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -140,7 +142,13 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
 
   return (
     <div className="adviser-chat">
-      {usage ? <p className="adviser-chat__status">{usage.remaining} Adviser question{usage.remaining === 1 ? "" : "s"} left this month on {usage.plan === "pro" ? "Pro" : "Free"}.</p> : null}
+      {usage ? (
+        <p className="adviser-chat__status">
+          {hasReachedLimit
+            ? `Your Adviser questions refresh on ${resetLabel}.`
+            : `${usage.remaining} Adviser question${usage.remaining === 1 ? "" : "s"} left this month on ${usage.plan === "pro" ? "Pro" : "Free"}.`}
+        </p>
+      ) : null}
       <form className="adviser-chat__composer" onSubmit={handleSubmit}>
         <label className="sr-only" htmlFor="adviser-chat-input">
           Ask Clover anything
@@ -152,8 +160,9 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
             value={input}
             onChange={(event) => setInput(event.target.value)}
             placeholder="Ask Clover a question about your money..."
+            disabled={hasReachedLimit}
           />
-          <button type="submit" className="button button-primary button-small" disabled={isSending || input.trim().length === 0}>
+          <button type="submit" className="button button-primary button-small" disabled={hasReachedLimit || isSending || input.trim().length === 0}>
             {isSending ? "Sending" : "Send"}
           </button>
           {isSending || error ? <span className="adviser-chat__status">{isSending ? "Thinking..." : error}</span> : null}
@@ -166,6 +175,7 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
             key={prompt.id}
             type="button"
             className="adviser-chat__prompt"
+            disabled={hasReachedLimit || isSending}
             onClick={() => {
               trackAdviserInteraction({
                 kind: "prompt",

@@ -1730,6 +1730,7 @@ export async function POST(request: Request) {
       "If the data is insufficient, say what is missing and suggest where to check in Clover.",
       "When the user asks to see a report, use open_report so the UI can open Clover's existing Reports page.",
       "When the user asks whether they can afford a named purchase with a price, use check_affordability.",
+      "When the user asks about account balances, connected accounts, or where their money is held, use get_account_summary.",
       "When the user asks about goal progress, use get_goal_progress.",
       "When the user asks to find, explain, or review transactions, use find_transactions.",
       "When the user asks about bills, cash-flow pressure, or split bills, use get_cashflow_outlook or get_split_bill_status.",
@@ -1843,6 +1844,12 @@ export async function POST(request: Request) {
           required: ["itemName", "price"],
           additionalProperties: false,
         },
+      },
+      {
+        type: "function",
+        name: "get_account_summary",
+        description: "Read reconciled balances and basic details for the user's connected Clover accounts.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
       },
       {
         type: "function",
@@ -1981,8 +1988,33 @@ export async function POST(request: Request) {
           const protectedCash = recurringDueSoon.reduce((sum, item) => sum + item.amount, 0) + commitmentsDueSoon.reduce((sum, item) => sum + item.amount, 0) + Math.max(weightedHistoricalBaseline.spend, baselineSpend);
           const roomAfterPurchase = spendableAccountBalance - protectedCash - price;
           result = { itemName: args.itemName ?? "purchase", price, availableCash: spendableAccountBalance, protectedCash, roomAfterPurchase, status: roomAfterPurchase >= 0 ? "fits_after_reserve" : "would_reduce_reserve", freshness: dataFreshnessLabel };
+        } else if (call.name === "get_account_summary") {
+          const accounts = chatAccounts.map((account) => ({
+            id: account.id,
+            name: account.name,
+            type: account.type,
+            currency: account.currency,
+            balance: account.balance,
+          }));
+          result = {
+            accounts,
+            accountCount: accounts.length,
+            availableCash: spendableAccountBalance,
+            liquidBalance,
+            balancesOwed: liabilityAccountBalance,
+            freshness: dataFreshnessLabel,
+            href: "/accounts",
+          };
+          actions.push({ id: `accounts-${actions.length + 1}`, kind: "navigate", type: "open_accounts", label: "Open Accounts", description: "Review account balances and connected accounts in Clover.", href: "/accounts" });
         } else if (call.name === "get_goal_progress") {
-          result = { goal: goalLabel, status: goalProgressLabel, targetAmount: goalTargetAmount, progress: goalProgress };
+          result = {
+            goal: goalLabel,
+            goalSet: Boolean(goalValue),
+            status: goalProgressLabel,
+            targetAmount: goalTargetAmount,
+            progress: goalProgress,
+            nextStep: goalValue ? "Review the goal's progress and update its target if needed." : "Set a goal in Clover before measuring progress.",
+          };
           actions.push({ id: `goal-${actions.length + 1}`, kind: "navigate", type: "open_goal", label: "Open Goals", description: "Review the goal and its progress in Clover.", href: "/goals" });
         } else if (call.name === "find_transactions") {
           const query = String(args.query ?? "").trim().toLowerCase();
