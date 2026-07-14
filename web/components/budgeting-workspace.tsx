@@ -30,6 +30,7 @@ type BudgetItem = {
   kindLabel: string;
   statusLabel: string;
   statusDetail: string;
+  isAtRisk: boolean;
 };
 
 type BudgetAlert = BudgetItem & {
@@ -232,8 +233,8 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const activeAlerts = data.overview.alerts;
   const openBudgetCount = data.overview.activeBudgetCount;
   const visibleBudgets = data.budgets;
-  const onTrackBudgets = visibleBudgets.filter((budget) => budget.stage === "safe" || budget.stage === "watch");
-  const atRiskBudgets = visibleBudgets.filter((budget) => budget.stage === "warning" || budget.stage === "critical" || budget.stage === "exceeded");
+  const onTrackBudgets = visibleBudgets.filter((budget) => !budget.isAtRisk);
+  const atRiskBudgets = visibleBudgets.filter((budget) => budget.isAtRisk);
   const selectedHistoryBudget = historyBudgetId ? data.budgets.find((budget) => budget.id === historyBudgetId) ?? null : null;
 
   const budgetGroups = useMemo(() => {
@@ -488,7 +489,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                       </div>
                       <div className="budget-card__bar" aria-hidden="true">
                         <span
-                          className={`budget-card__bar-fill budget-card__bar-fill--${budget.stage}`}
+                          className={`budget-card__bar-fill budget-card__bar-fill--${budget.kind === "savings_target" && budget.stage === "exceeded" ? "safe" : budget.stage}`}
                           style={{ width: `${Math.min(budget.progressPercent, 100)}%` }}
                         />
                       </div>

@@ -54,6 +54,7 @@ export type BudgetProgress = {
   kindLabel: string;
   statusLabel: string;
   statusDetail: string;
+  isAtRisk: boolean;
 };
 
 export type BudgetAlert = BudgetProgress & {
@@ -395,6 +396,7 @@ export const buildBudgetOverview = (params: {
       const nextThreshold = getBudgetNextThreshold(progressPercent);
       const status = getBudgetStatus(budget.kind, stage);
       const paceLabel = getBudgetPaceLabel(budget.kind, progressPercent, budget.cadence, now);
+      const isAtRisk = budget.kind === "savings_target" ? paceLabel === "Behind pace" : stage !== "safe";
       const remainingAmount = targetAmount - actualAmount;
 
       return {
@@ -419,12 +421,13 @@ export const buildBudgetOverview = (params: {
         kindLabel: formatBudgetKindLabel(budget.kind),
         statusLabel: status.label,
         statusDetail: `${status.detail} ${paceLabel}.`,
+        isAtRisk,
       } satisfies BudgetProgress;
     })
     .sort((left, right) => right.progressPercent - left.progressPercent || left.name.localeCompare(right.name));
 
   const alerts = budgets
-    .filter((budget) => budget.stage !== "safe")
+    .filter((budget) => budget.isAtRisk)
     .map((budget) => {
       const tone = budget.stage === "exceeded" || budget.stage === "critical" ? "danger" : "warning";
       const actionLabel = budget.scope === "category" ? "Review category spend" : budget.scope === "account" ? "Check account activity" : "Open budgeting";
