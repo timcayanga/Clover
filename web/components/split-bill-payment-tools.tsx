@@ -25,6 +25,7 @@ type PaymentRequest = {
   amount: string;
   currency: string;
   dueDate: string | null;
+  note: string | null;
   status: "requested" | "payment_reported" | "paid" | "declined";
   shareUrl: string;
 };
@@ -41,7 +42,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [showProfileForm, setShowProfileForm] = useState(false);
   const [profileDraft, setProfileDraft] = useState(emptyProfile);
-  const [requestDraft, setRequestDraft] = useState({ recipientParticipantId: "", payeeParticipantId: "", amount: "", recipientEmail: "", dueDate: "", paymentProfileId: "" });
+  const [requestDraft, setRequestDraft] = useState({ recipientParticipantId: "", payeeParticipantId: "", amount: "", recipientEmail: "", dueDate: "", paymentProfileId: "", note: "" });
   const [lastShareUrl, setLastShareUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -127,7 +128,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
   const emailRequest = (entry: PaymentRequest) => {
     const shareUrl = `${window.location.origin}${entry.shareUrl}`;
     const subject = encodeURIComponent(`Payment request for ${bill.title}`);
-    const body = encodeURIComponent(`Please send ${entry.currency} ${entry.amount} for ${bill.title}.\n\nPayment details: ${shareUrl}`);
+    const body = encodeURIComponent(`Please send ${entry.currency} ${entry.amount} for ${bill.title}.${entry.note ? `\n\nNote: ${entry.note}` : ""}\n\nPayment details: ${shareUrl}`);
     window.location.href = `mailto:${entry.recipientEmail ?? ""}?subject=${subject}&body=${body}`;
   };
 
@@ -188,6 +189,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
           <input className="settings-input" placeholder="Amount" value={requestDraft.amount} onChange={(event) => setRequestDraft({ ...requestDraft, amount: event.target.value })} />
           <input className="settings-input" type="email" placeholder="Email (optional)" value={requestDraft.recipientEmail} onChange={(event) => setRequestDraft({ ...requestDraft, recipientEmail: event.target.value })} />
           <input className="settings-input" type="date" aria-label="Payment due date" value={requestDraft.dueDate} onChange={(event) => setRequestDraft({ ...requestDraft, dueDate: event.target.value })} />
+          <input className="settings-input" placeholder="Note (optional)" value={requestDraft.note} onChange={(event) => setRequestDraft({ ...requestDraft, note: event.target.value })} />
           <select className="settings-input" value={requestDraft.paymentProfileId} onChange={(event) => setRequestDraft({ ...requestDraft, paymentProfileId: event.target.value })}>
             <option value="">No payment method</option>
             {availableProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}{profile.personName ? ` · ${profile.personName}` : ""}</option>)}
@@ -197,7 +199,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
       ) : <span className="split-bill-subtle-empty">No open transfers to request yet.</span>}
 
       {lastShareUrl ? <div className="split-bill-payment-tools__share"><span>Share link ready</span><button className="button button-secondary button-small" type="button" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}${lastShareUrl}`)}>Copy link</button></div> : null}
-      {requests.length > 0 ? <div className="split-bill-payment-tools__requests">{requests.map((entry) => <div key={entry.id} className="split-bill-payment-tools__request"><span>{entry.recipientName} · {entry.currency} {entry.amount}{entry.dueDate ? ` · due ${new Date(entry.dueDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}` : ""} · {entry.status.replace("_", " ")}</span><div><button className="button button-secondary button-small" type="button" onClick={() => void navigator.clipboard?.writeText(`${window.location.origin}${entry.shareUrl}`)}>Copy</button><button className="button button-secondary button-small" type="button" onClick={() => emailRequest(entry)}>Email</button>{entry.status === "payment_reported" ? <button className="button button-primary button-small" type="button" onClick={async () => { const response = await fetch(`/api/split-bills/${bill.id}/payment-requests/${entry.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "paid" }) }); const payload = await response.json(); if (response.ok) { setRequests((current) => current.map((item) => item.id === entry.id ? { ...item, status: "paid" } : item)); if (payload.bill) onBillUpdated?.(payload.bill); } }}>Confirm paid</button> : null}</div></div>)}</div> : null}
+      {requests.length > 0 ? <div className="split-bill-payment-tools__requests">{requests.map((entry) => <div key={entry.id} className="split-bill-payment-tools__request"><span>{entry.recipientName} · {entry.currency} {entry.amount}{entry.dueDate ? ` · due ${new Date(entry.dueDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}` : ""} · {entry.status.replace("_", " ")}{entry.note ? ` · ${entry.note}` : ""}</span><div><button className="button button-secondary button-small" type="button" onClick={() => void navigator.clipboard?.writeText(`${window.location.origin}${entry.shareUrl}`)}>Copy</button><button className="button button-secondary button-small" type="button" onClick={() => emailRequest(entry)}>Email</button>{entry.status === "payment_reported" ? <button className="button button-primary button-small" type="button" onClick={async () => { const response = await fetch(`/api/split-bills/${bill.id}/payment-requests/${entry.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "paid" }) }); const payload = await response.json(); if (response.ok) { setRequests((current) => current.map((item) => item.id === entry.id ? { ...item, status: "paid" } : item)); if (payload.bill) onBillUpdated?.(payload.bill); } }}>Confirm paid</button> : null}</div></div>)}</div> : null}
       {error ? <p className="split-bill-editor__error">{error}</p> : null}
     </section>
   );
