@@ -1886,7 +1886,7 @@ export async function POST(request: Request) {
       "If the user's question asks for investment advice, stay cautious and avoid personalized investment recommendations.",
       "If the data is insufficient, say what is missing and suggest where to check in Clover.",
       "When the user asks to see a report, use open_report so the UI can open Clover's existing Reports page.",
-      "When the user asks whether they can afford a named purchase with a price, use check_affordability. If the user mentions travel, a future month, or a date by which the purchase must be affordable, pass the stated horizon or untilDate instead of using the default.",
+      "When the user asks whether they can afford a named purchase with a price, use check_affordability. If the user mentions travel, a future month, or a date by which the purchase must be affordable, pass the stated horizon or untilDate instead of using the default. If the user provides expected income or an extra cash buffer, pass those too.",
       "When the user asks how much they can safely spend, how much room they have until payday, or what is safe to spend, use calculate_safe_to_spend. Explain available cash, protected obligations, recommended buffer, safe amount, and confidence separately. If payday income is not confirmed, do not invent it. If the user gives a payday/date, pass it as untilDate; if they give expected income, pass it as expectedIncome; if they specify an extra cash buffer, pass it as additionalBuffer. Mention when the calculation is limited to one currency or based on stale or thin data.",
       "When the user asks about account balances, connected accounts, or where their money is held, use get_account_summary.",
       "When the user asks what changed, what is new, or what deserves attention since their last check, use get_adviser_changes.",
@@ -2017,8 +2017,10 @@ export async function POST(request: Request) {
             price: { type: "number" },
             horizonDays: { type: ["number", "null"], description: "Number of days to protect when the purchase is for a stated future window." },
             untilDate: { type: ["string", "null"], description: "The future date by which the purchase or trip must be affordable, in ISO format." },
+            expectedIncome: { type: ["number", "null"], description: "Expected income only when the user explicitly provides a reliable amount for the period." },
+            additionalBuffer: { type: ["number", "null"], description: "An extra cash buffer amount only when the user explicitly requests one." },
           },
-          required: ["itemName", "price", "horizonDays", "untilDate"],
+          required: ["itemName", "price", "horizonDays", "untilDate", "expectedIncome", "additionalBuffer"],
           additionalProperties: false,
         },
       },
@@ -2211,6 +2213,8 @@ export async function POST(request: Request) {
           const safeToSpend = calculateSafeToSpend({
             horizonDays: typeof args.horizonDays === "number" ? args.horizonDays : 14,
             untilDate: typeof args.untilDate === "string" ? args.untilDate : null,
+            expectedIncome: typeof args.expectedIncome === "number" ? args.expectedIncome : null,
+            additionalBuffer: typeof args.additionalBuffer === "number" ? args.additionalBuffer : null,
           });
           const roomAfterPurchase = safeToSpend.roomAfterProtection - price;
           result = {
