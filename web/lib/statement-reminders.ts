@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { hasCompatibleTable } from "@/lib/data-engine";
 
-const CREDIT_CARD_REMINDER_INSTITUTIONS = new Set(["BPI", "AUB", "RCBC"]);
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const REMINDER_RECENCY_WINDOW_DAYS = 450;
 
@@ -143,7 +142,27 @@ const extractSourceMetadata = (checkpoint: ReminderCheckpoint) => {
   return checkpoint.sourceMetadata as Record<string, unknown>;
 };
 
-const readExplicitPaymentDueDate = (sourceMetadata: Record<string, unknown> | null, checkpoint: ReminderCheckpoint) => {
+const inferCreditCardCheckpoint = (checkpoint: ReminderCheckpoint, sourceMetadata: Record<string, unknown> | null) => {
+  const explicitAccountType =
+    typeof sourceMetadata?.accountType === "string"
+      ? sourceMetadata.accountType.trim().toLowerCase()
+      : checkpoint.account?.type?.trim().toLowerCase() ?? null;
+  if (explicitAccountType === "credit_card") {
+    return true;
+  }
+
+  const text = [
+    checkpoint.importFile?.fileName ?? "",
+    typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : "",
+    typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return /\b(visa|mastercard|amex|jcb|bankard|credit\s*card|platinum|world|black)\b/.test(text);
+};
+
+const readExplicitPaymentDueDate = (sourceMetadata: Record<string, unknown> | null) => {
   const candidates = [
     sourceMetadata?.paymentDueDate,
     sourceMetadata?.dueDate,
@@ -171,12 +190,15 @@ const readExplicitPaymentDueDate = (sourceMetadata: Record<string, unknown> | nu
     }
   }
 
-  const institution = String(sourceMetadata?.institution ?? checkpoint.account?.institution ?? "");
-  const fallbackValue =
-    CREDIT_CARD_REMINDER_INSTITUTIONS.has(institution)
-      ? sourceMetadata?.endDate ?? checkpoint.statementEndDate?.toISOString() ?? null
-      : null;
-  return parseReminderDate(fallbackValue);
+  return null;
+};
+
+const readStatementEndFallback = (checkpoint: ReminderCheckpoint, sourceMetadata: Record<string, unknown> | null) => {
+  if (!inferCreditCardCheckpoint(checkpoint, sourceMetadata)) {
+    return null;
+  }
+
+  return parseReminderDate(sourceMetadata?.endDate ?? checkpoint.statementEndDate?.toISOString() ?? null);
 };
 
 const readExplicitDueDay = (sourceMetadata: Record<string, unknown> | null) => {
@@ -231,26 +253,6 @@ const inferDueDateFromHistory = (
   const baseDate = new Date(normalizedStatementEndDate);
   baseDate.setUTCDate(Math.min(inferredDay, 28));
   return baseDate.getTime() <= normalizedStatementEndDate.getTime() ? addMonths(baseDate, 1) : baseDate;
-};
-
-const inferCreditCardCheckpoint = (checkpoint: ReminderCheckpoint, sourceMetadata: Record<string, unknown> | null) => {
-  const explicitAccountType =
-    typeof sourceMetadata?.accountType === "string"
-      ? sourceMetadata.accountType.trim().toLowerCase()
-      : checkpoint.account?.type?.trim().toLowerCase() ?? null;
-  if (explicitAccountType === "credit_card") {
-    return true;
-  }
-
-  const text = [
-    checkpoint.importFile?.fileName ?? "",
-    typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : "",
-    typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : "",
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  return /\b(visa|mastercard|amex|jcb|bankard|credit\s*card|platinum|world|black)\b/.test(text);
 };
 
 const buildReminderFingerprint = (reminder: StatementReminder) =>
@@ -330,7 +332,7 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
       institution,
       sourceFileName: checkpoint.importFile?.fileName ?? null,
     });
-    const explicitDueDate = readExplicitPaymentDueDate(sourceMetadata, checkpoint);
+    const explicitDueDate = readExplicitPaymentDueDate(sourceMetadata);
     const explicitDueDay = readExplicitDueDay(sourceMetadata);
     if (!explicitDueDate && !explicitDueDay) {
       continue;
@@ -376,9 +378,11 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
       institution,
       sourceFileName: checkpoint.importFile?.fileName ?? null,
     });
-    const explicitPaymentDueDate = readExplicitPaymentDueDate(sourceMetadata, checkpoint);
+    const explicitPaymentDueDate = readExplicitPaymentDueDate(sourceMetadata);
+    const statementEndFallback = explicitPaymentDueDate ? null : readStatementEndFallback(checkpoint, sourceMetadata);
     const rawPaymentDueDate =
       explicitPaymentDueDate ??
+      statementEndFallback ??
       inferDueDateFromHistory(
         checkpoint.statementEndDate,
         knownDueDaysByAccountKey.get(accountKey) ?? [],
