@@ -67,6 +67,8 @@ export type BudgetProgress = {
   isAtRisk: boolean;
   plannedAmount: number;
   plannedCount: number;
+  projectedAmount: number;
+  projectedProgressPercent: number;
   isActive: boolean;
 };
 
@@ -445,6 +447,8 @@ export const buildBudgetOverview = (params: {
       const targetAmount = toAmount(budget.targetAmount);
       const actualAmount = getBudgetActualAmount(budget.kind, periodTransactions);
       const progressPercent = targetAmount > 0 ? (actualAmount / targetAmount) * 100 : 0;
+      const projectedAmount = budget.kind === "savings_target" ? actualAmount : actualAmount + plannedAmount;
+      const projectedProgressPercent = targetAmount > 0 ? (projectedAmount / targetAmount) * 100 : 0;
       const stage = getBudgetStage(progressPercent);
       const nextThreshold = getBudgetNextThreshold(progressPercent);
       const status = getBudgetStatus(budget.kind, stage);
@@ -477,6 +481,8 @@ export const buildBudgetOverview = (params: {
         isAtRisk,
         plannedAmount,
         plannedCount: periodCommitments.length,
+        projectedAmount,
+        projectedProgressPercent,
         isActive: budget.isActive,
       } satisfies BudgetProgress;
     })

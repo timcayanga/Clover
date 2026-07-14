@@ -5957,6 +5957,11 @@ body.transactions-manual-open .shell-quick-add-button {
   font-size: 12px;
 }
 
+.budget-card__meta-projected {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .budget-card__actions {
   display: flex;
   gap: 12px;

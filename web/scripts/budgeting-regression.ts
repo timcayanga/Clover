@@ -58,6 +58,8 @@ const overview = buildBudgetOverview({
 assert.equal(overview.budgets[0]?.actualAmount, 100, "only included transactions in the current period should count");
 assert.equal(overview.budgets[0]?.plannedAmount, 250, "only matching planned commitments in the current period should count");
 assert.equal(overview.budgets[0]?.plannedCount, 1, "planned commitment count should match the planned amount");
+assert.equal(overview.budgets[0]?.projectedAmount, 350, "projected spend should combine actual and planned amounts");
+assert.equal(overview.budgets[0]?.projectedProgressPercent, 35, "projected progress should use the budget target");
 
 const scopedOverview = buildBudgetOverview({
   budgets: [

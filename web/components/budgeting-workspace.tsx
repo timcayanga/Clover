@@ -33,6 +33,8 @@ type BudgetItem = {
   isAtRisk: boolean;
   plannedAmount: number;
   plannedCount: number;
+  projectedAmount: number;
+  projectedProgressPercent: number;
   isActive: boolean;
 };
 
@@ -606,6 +608,11 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                           {budget.stage === "exceeded" ? "Over limit" : budget.statusLabel}
                           {budget.plannedCount > 0 ? ` · ${formatCurrency(budget.plannedAmount, budget.currency)} planned` : ""}
                         </span>
+                        {budget.plannedCount > 0 && budget.kind !== "savings_target" ? (
+                          <span className="budget-card__meta-projected">
+                            Projected {toPercentage(budget.projectedProgressPercent)} · {formatCurrency(budget.projectedAmount, budget.currency)}
+                          </span>
+                        ) : null}
                       </div>
                       <div className="budget-card__actions">
                         <button className="pill-link pill-link--inline" type="button" onClick={() => openEditEditor(budget.id)}>
