@@ -79,6 +79,7 @@ type BudgetOverview = {
   highestAlert: BudgetItem | null;
   uncategorizedTransactionCount: number;
   uncategorizedAmount: number;
+  overlappingBudgetNames: string[];
 };
 
 type BudgetCategoryOption = {
@@ -470,6 +471,11 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
           <p className="budgeting-section__note">
             {formatCurrency(data.overview.uncategorizedAmount, data.budgets[0]?.currency)} across {data.overview.uncategorizedTransactionCount} uncategorized transaction
             {data.overview.uncategorizedTransactionCount === 1 ? "" : "s"}. Category budgets will not include it yet.
+          </p>
+        ) : null}
+        {data.overview.overlappingBudgetNames.length > 0 ? (
+          <p className="budgeting-section__note">
+            More than one cadence is active for {data.overview.overlappingBudgetNames.join(", ")}. Each limit is tracked separately, not added together.
           </p>
         ) : null}
 

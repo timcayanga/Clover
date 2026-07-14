@@ -112,6 +112,7 @@ export type BudgetOverview = {
   highestAlert: BudgetProgress | null;
   uncategorizedTransactionCount: number;
   uncategorizedAmount: number;
+  overlappingBudgetNames: string[];
 };
 
 const thresholdSteps = [50, 70, 90, 100];
@@ -465,6 +466,17 @@ export const buildBudgetOverview = (params: {
   const totalTargetAmount = budgets.reduce((sum, budget) => sum + budget.targetAmount, 0);
   const totalActualAmount = budgets.reduce((sum, budget) => sum + budget.actualAmount, 0);
   const totalProgressPercent = totalTargetAmount > 0 ? (totalActualAmount / totalTargetAmount) * 100 : 0;
+  const overlapGroups = new Map<string, Set<string>>();
+  for (const budget of budgets) {
+    const targetKey = `${budget.kind}:${budget.scope}:${budget.accountId ?? "all"}:${budget.categoryId ?? "all"}`;
+    const names = overlapGroups.get(targetKey) ?? new Set<string>();
+    names.add(budget.name);
+    overlapGroups.set(targetKey, names);
+  }
+  const overlappingBudgetNames = [...overlapGroups.values()]
+    .filter((names) => names.size > 1)
+    .flatMap((names) => [...names])
+    .slice(0, 3);
 
   return {
     budgets,
@@ -476,6 +488,7 @@ export const buildBudgetOverview = (params: {
     highestAlert: budgets[0] ?? null,
     uncategorizedTransactionCount: uncategorizedTransactions.length,
     uncategorizedAmount: uncategorizedTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0),
+    overlappingBudgetNames,
   } satisfies BudgetOverview;
 };
 
