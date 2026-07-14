@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { hasCompatibleTable } from "@/lib/data-engine";
 import { prisma } from "@/lib/prisma";
 
 export type SplitBillTransferSettlementDbRow = {
@@ -16,7 +17,7 @@ export type SplitBillTransferSettlementDbRow = {
 };
 
 export const loadSplitBillTransferSettlementsForBills = async (billIds: string[]) => {
-  if (billIds.length === 0) {
+  if (billIds.length === 0 || !(await hasCompatibleTable("SplitBillTransferSettlement"))) {
     return new Map<string, SplitBillTransferSettlementDbRow[]>();
   }
 
