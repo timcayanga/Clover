@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
@@ -695,16 +696,19 @@ async function GoalsPageStream() {
       label: "Spending pressure",
       value: spendDelta === null ? "N/A" : formatPercent(spendDelta),
       note: spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Spending is higher than before" : "Spending is easing",
+      tone: spendDelta === null ? "neutral" : spendDelta > 0 ? "negative" : "positive",
     },
     {
       label: "Savings rate",
       value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
       note: currentSavingsRate === null ? "Need more income context" : savingsRateDelta !== null && savingsRateDelta >= 0 ? "Improving momentum" : "Needs a reset",
+      tone: currentSavingsRate === null ? "neutral" : savingsRateDelta !== null && savingsRateDelta >= 0 ? "positive" : "negative",
     },
     {
       label: "Recurring costs",
       value: recurringShare > 0 ? formatPercent(recurringShare * 100) : "Clean",
       note: recurringShare > 0.25 ? "A meaningful slice of the month" : "Recurring spending is under control",
+      tone: recurringShare > 0.25 ? "negative" : "positive",
     },
     {
       label: "Investment movement",
@@ -713,107 +717,110 @@ async function GoalsPageStream() {
         investmentHoldingsCount > 0
           ? `${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"} · ${investmentGainLoss >= 0 ? "+" : "-"}${formatCurrency(Math.abs(investmentGainLoss), goalCurrency)}`
           : "Connect Investments to make this lane feel real",
+      tone: investmentHoldingsCount > 0 ? "positive" : "neutral",
     },
   ];
+
+  const goalEmojis: Record<string, string> = {
+    save_more: "🌱",
+    pay_down_debt: "🧭",
+    track_spending: "🔎",
+    build_emergency_fund: "🛡️",
+    invest_better: "📈",
+  };
+  const goalEmoji = selectedGoalKey ? goalEmojis[selectedGoalKey] ?? "🎯" : "🎯";
+  const roadmapMilestones = playbook.milestones.map((milestone) => ({
+    ...milestone,
+    reached: hasGoalTarget && goalProgress.progressPercent !== null && goalProgress.progressPercent >= milestone.threshold,
+    current: hasGoalTarget && goalProgress.progressPercent !== null && goalProgress.progressPercent < milestone.threshold && (milestone.threshold === playbook.milestones[0]?.threshold || goalProgress.progressPercent >= (playbook.milestones[playbook.milestones.indexOf(milestone) - 1]?.threshold ?? 0)),
+  }));
 
   return (
     <RouteSplash label="goals">
       <CloverShell active="goals" title="Goals">
         <section className="goals-page">
-          <section className="goals-section goals-section--summary">
-            <div className="goals-overview__cards">
-              <article className="goals-overview__card goals-overview__card--current glass">
-                <span>Current target</span>
-                <strong>{currentTargetValue}</strong>
-                {currentTargetNote ? <small>{currentTargetNote}</small> : null}
-                <div className="goals-overview__card-actions">
-                  <GoalsEditor
-                    goals={GOAL_OPTIONS}
-                    currentGoal={selectedGoalKey}
-                    currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
-                    currentGoalPlan={currentGoalPlan}
-                    monthlyIncome={monthlyIncome}
-                    suggestedTargetAmount={suggestedGoalTarget}
-                    investmentHoldingsCount={investmentHoldingsCount}
-                    investmentHoldingsValue={investmentHoldingsValue}
-                    paydayHint={paydayHint}
-                    currency={goalCurrency}
-                    compact
-                    triggerLabel={hasGoalTarget ? "Change goal" : "Set goal"}
-                    triggerClassName="button button-primary button-pill button-small"
-                  />
-                </div>
-              </article>
+          {!hasGoalSelection ? (
+            <section className="goals-blank-state glass">
+              <span className="goals-blank-state__emoji" aria-hidden="true">🎯</span>
+              <p className="eyebrow">Your primary goal</p>
+              <h3>What do you want your money to help you do?</h3>
+              <p>Choose a direction or tell Clover in your own words. We will turn it into a clear target and roadmap for you to confirm.</p>
+              <GoalsEditor
+                goals={GOAL_OPTIONS.filter((goal) => goal.value !== "track_spending")}
+                currentGoal={selectedGoalKey}
+                currentTargetAmount={null}
+                currentGoalPlan={null}
+                monthlyIncome={monthlyIncome}
+                suggestedTargetAmount={suggestedGoalTarget}
+                investmentHoldingsCount={investmentHoldingsCount}
+                investmentHoldingsValue={investmentHoldingsValue}
+                paydayHint={paydayHint}
+                currency={goalCurrency}
+                compact
+                triggerLabel="Set primary goal"
+                triggerClassName="button button-primary button-pill"
+              />
+            </section>
+          ) : (
+            <section className="goals-section goals-section--summary">
+              <div className="goals-overview__cards">
+                <article className="goals-overview__card goals-overview__card--current glass">
+                  <span>Primary goal</span>
+                  <strong><span aria-hidden="true">{goalEmoji}</span> {selectedGoal.title}</strong>
+                  <small>{currentTargetValue}{currentTargetNote ? ` · ${currentTargetNote}` : ""}</small>
+                </article>
+                <article className="goals-overview__card glass">
+                  <span>Goal progress</span>
+                  <strong>{hasGoalTarget && goalProgress.progressPercent !== null ? `${Math.round(goalProgress.progressPercent)}%` : "Set target"}</strong>
+                  <small>{hasGoalTarget ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} of ${formatCurrency(goalProgress.targetAmount ?? 0, goalCurrency)}` : "Add a target to unlock the roadmap"}</small>
+                </article>
+                <article className="goals-overview__card glass">
+                  <span>Suggested action</span>
+                  <strong>{hasGoalTarget ? goalNextAction : "Set a target to begin"}</strong>
+                  {goalNextActionNote ? <small>{goalNextActionNote}</small> : null}
+                </article>
+              </div>
+            </section>
+          )}
 
-              <article className="goals-overview__card glass">
-                <span>Status</span>
-                <strong>{goalStatusLabel}</strong>
-                {goalStatusNote ? <small>{goalStatusNote}</small> : null}
-              </article>
-
-              <article className="goals-overview__card glass">
-                <span>Next action</span>
-                <strong>{goalNextAction}</strong>
-                {goalNextActionNote ? <small>{goalNextActionNote}</small> : null}
-              </article>
-            </div>
-          </section>
-
-          <section className="goals-section goals-section--progress">
-            <article className="goals-orb-card glass">
-              <div className="goals-panel__head goals-orb-card__head">
+          <section className="goals-section goals-section--roadmap">
+            <article className="goals-roadmap glass">
+              <div className="goals-panel__head">
                 <div>
-                  <p className="eyebrow">Goal progress</p>
-                  <h4>{hasGoalTarget ? playbook.heroLead : "Set your goal to start the dial"}</h4>
+                  <p className="eyebrow">Roadmap</p>
+                  <h4>{hasGoalTarget ? `Your path to ${formatCurrency(goalProgress.targetAmount ?? 0, goalCurrency)}` : "Set a target to build your roadmap"}</h4>
                 </div>
-                <div className="goals-panel__stat">
-                  <strong>{goalStatusLabel}</strong>
-                  <span>{hasGoalTarget ? goalProgress.bandLabel : "Waiting for a target"}</span>
-                </div>
+                {hasGoalTarget ? <span className="goals-roadmap__badge">{goalProgress.bandLabel}</span> : null}
               </div>
-
-              <div className="goals-orb" aria-label={`Monthly goal progress ${Math.round(progressRingPercent)} percent`}>
-                <div className="goals-orb__shell">
-                  <div className="goals-orb__ring">
-                    <div className="goals-orb__ring-shadow" aria-hidden="true" />
-                    <svg className="goals-orb__svg" viewBox="0 0 100 100" aria-hidden="true">
-                      <circle className="goals-orb__track" cx="50" cy="50" r={goalDialRadius} />
-                      <circle
-                        className="goals-orb__progress"
-                        cx="50"
-                        cy="50"
-                        r={goalDialRadius}
-                        style={{
-                          strokeDasharray: goalDialCircumference,
-                          strokeDashoffset: goalDialOffset,
-                        }}
-                      />
-                    </svg>
-                    <div className="goals-orb__core">
-                      <strong>{hasGoalTarget && goalProgress.progressPercent !== null ? `${Math.round(goalProgress.progressPercent)}%` : "0%"}</strong>
-                      <span>{hasGoalTarget ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} of ${formatCurrency(goalProgress.targetAmount ?? 0, goalCurrency)}` : "No target yet"}</span>
+              {hasGoalTarget ? (
+                <div className="goals-roadmap__track" aria-label="Goal milestones">
+                  {roadmapMilestones.map((milestone, index) => (
+                    <div key={milestone.label} className={`goals-roadmap__milestone${milestone.reached ? " is-reached" : ""}${milestone.current ? " is-current" : ""}`}>
+                      <div className="goals-roadmap__node"><span>{milestone.reached ? "✓" : index + 1}</span></div>
+                      <strong>{milestone.label}</strong>
+                      <span>{milestone.threshold}%</span>
+                      <small>{milestone.detail}</small>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              </div>
-
-              <p className="goals-orb__copy">{hasGoalTarget ? goalProgress.coachCopy : "Set a target and Clover will start tracking progress right away."}</p>
+              ) : (
+                <div className="goals-roadmap__empty">Clover will create milestones from your target, pace, and real cash flow once you confirm a goal.</div>
+              )}
             </article>
           </section>
 
           <section className="goals-section goals-section--signals">
-            <article className="goals-weekly glass">
+            <article className="goals-progress-panel glass">
               <div className="goals-panel__head">
                 <div>
-                  <p className="eyebrow">Weekly change</p>
-                  <h4>What shifted since the last check</h4>
+                  <p className="eyebrow">Progress</p>
+                  <h4>What changed recently</h4>
                 </div>
                 <div className="goals-panel__stat">
-                  <strong className={goalScore >= 70 ? "positive" : "negative"}>{goalScore}</strong>
-                  <span>Coach score</span>
+                  <strong>{hasGoalTarget ? `${Math.round(progressRingPercent)}%` : "--"}</strong>
+                  <span>Goal progress</span>
                 </div>
               </div>
-
               <div className="goals-weekly__grid">
                 {weeklyChangeCards.map((signal) => (
                   <div key={signal.label} className={`goals-weekly__card ${signal.tone}`}>
@@ -823,20 +830,6 @@ async function GoalsPageStream() {
                   </div>
                 ))}
               </div>
-            </article>
-
-            <article className="goals-drivers glass">
-              <div className="goals-panel__head">
-                <div>
-                  <p className="eyebrow">Drivers</p>
-                  <h4>What is moving the goal the most</h4>
-                </div>
-                <div className="goals-panel__stat">
-                  <strong>{formatPercent(recurringShare * 100)}</strong>
-                  <span>Recurring share</span>
-                </div>
-              </div>
-
               <div className="goals-drivers-grid goals-drivers-grid--simple">
                 {driverCards.map((card) => (
                   <article key={card.label} className={`goals-driver--summary glass ${card.tone}`}>
@@ -845,6 +838,22 @@ async function GoalsPageStream() {
                     <small>{card.note}</small>
                   </article>
                 ))}
+              </div>
+            </article>
+
+            <article className="goals-coach-panel glass">
+              <div className="goals-panel__head">
+                <div>
+                  <p className="eyebrow">Goal Coach</p>
+                  <h4>{hasGoalTarget ? "One useful move for now" : "Your coach will start here"}</h4>
+                </div>
+                <strong className="goals-coach-panel__emoji" aria-hidden="true">✨</strong>
+              </div>
+              <p>{hasGoalTarget ? goalProgress.coachCopy : "Set a primary goal and Clover will explain what is helping, what is getting in the way, and what to do next."}</p>
+              <strong className="goals-coach-panel__action">{goalNextAction}</strong>
+              <div className="goals-coach-panel__links">
+                <Link className="button button-secondary button-small" href={selectedGoalKey === "invest_better" ? "/investments" : selectedGoalKey === "track_spending" ? "/budgeting" : "/reports"}>Open supporting page</Link>
+                <Link className="pill-link pill-link--inline" href="/adviser">Ask Adviser</Link>
               </div>
             </article>
           </section>
@@ -873,6 +882,27 @@ async function GoalsPageStream() {
               <p className="goals-history__hint">{playbook.historyMarkers[0]}</p>
             </article>
           </section>
+
+          {hasGoalSelection ? (
+            <section className="goals-goal-actions">
+              <span>Want to change direction?</span>
+              <GoalsEditor
+                goals={GOAL_OPTIONS.filter((goal) => goal.value !== "track_spending")}
+                currentGoal={selectedGoalKey}
+                currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
+                currentGoalPlan={currentGoalPlan}
+                monthlyIncome={monthlyIncome}
+                suggestedTargetAmount={suggestedGoalTarget}
+                investmentHoldingsCount={investmentHoldingsCount}
+                investmentHoldingsValue={investmentHoldingsValue}
+                paydayHint={paydayHint}
+                currency={goalCurrency}
+                compact
+                triggerLabel="Edit goal"
+                triggerClassName="pill-link pill-link--inline"
+              />
+            </section>
+          ) : null}
         </section>
       </CloverShell>
     </RouteSplash>

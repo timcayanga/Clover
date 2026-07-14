@@ -48,7 +48,7 @@ export async function GET() {
     });
   } catch (error) {
     if (isTransientDataError(error)) {
-      return createTransientDataUnavailableResponse("Clover is reconnecting to your profile.");
+      return createTransientDataUnavailableResponse("Clover is refreshing your profile.");
     }
 
     if (isUnauthorizedDataError(error)) {

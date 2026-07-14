@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { CloverShell } from "@/components/clover-shell";
-import { EmptyDataCta } from "@/components/empty-data-cta";
 import { RecurringPageClient } from "@/components/recurring-page-client";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
@@ -9,6 +8,7 @@ import { getRecurringPageData, getRecurringWorkspaceId } from "@/lib/recurring-p
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { isTransientDataError } from "@/lib/transient-data";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
+import { TransientDataRecovery } from "@/components/transient-data-recovery";
 
 export const dynamic = "force-dynamic";
 
@@ -20,25 +20,7 @@ function RecurringUnavailableState() {
   return (
     <CloverShell active="recurring" title="Recurring">
       <section className="recurring-page">
-        <EmptyDataCta
-          className="dashboard-empty-state"
-          eyebrow="Recurring"
-          title="Clover is refreshing your recurring payments"
-          copy="Your saved bills and subscriptions are still here. Clover just needs another moment to reconnect before this page can show the latest schedule."
-          highlights={[
-            "Try refreshing in a few seconds if you were importing or switching pages.",
-            "Uploads already in progress should keep processing in the background.",
-            "Once the refresh finishes, subscriptions, loans, and upcoming payments will return here.",
-          ]}
-          illustration="/illustrations/clover-empty-dashboard-3d.png"
-          illustrationAlt="A 3D Clover dashboard illustration"
-          importHref="/transactions?import=1"
-          accountHref="/accounts"
-          transactionHref="/transactions?manual=1"
-          importLabel="Upload files"
-          accountLabel="Open accounts"
-          transactionLabel="Add a transaction"
-        />
+        <TransientDataRecovery eyebrow="Recurring" pageLabel="Recurring" transactionHref="/transactions?manual=1" transactionLabel="Add a transaction" />
       </section>
     </CloverShell>
   );
