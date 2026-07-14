@@ -74,6 +74,20 @@ type BudgetHistoryTransactionRow = Prisma.TransactionGetPayload<{
   };
 }>;
 
+type BudgetHistoryInput = {
+  id: string;
+  accountId: string;
+  categoryId: string | null;
+  type: Prisma.TransactionGetPayload<{ select: { type: true } }>["type"];
+  amount: Prisma.TransactionGetPayload<{ select: { amount: true } }>["amount"];
+  date: Date;
+  isExcluded: boolean;
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  description?: string | null;
+  categoryName?: string | null;
+};
+
 const getHistoryLookbackDays = (cadence: "daily" | "weekly" | "monthly" | "annual") => {
   if (cadence === "daily") {
     return 14;
@@ -183,12 +197,68 @@ export async function GET(_request: Request, { params }: Params) {
     throw error;
   }
 
+  let historyTransactions: BudgetHistoryInput[] = transactions.map((transaction) => ({
+    ...transaction,
+    categoryName: transaction.category?.name ?? null,
+  }));
+  if (transactions.length === 0) {
+    const [categories, parsedRows] = await Promise.all([
+      prisma.category.findMany({
+        where: { workspaceId: context.workspaceId, type: "expense" },
+        select: { id: true, name: true },
+      }),
+      prisma.parsedTransaction.findMany({
+        where: {
+          workspaceId: context.workspaceId,
+          date: { gte: lookbackStart },
+          amount: { not: null },
+          importFile: {
+            OR: [{ status: "done" }, { confirmedAt: { not: null } }, { parsedRowsCount: { gt: 0 } }],
+          },
+        },
+        select: {
+          id: true,
+          date: true,
+          amount: true,
+          type: true,
+          merchantRaw: true,
+          merchantClean: true,
+          categoryName: true,
+          importFile: {
+            select: { accountId: true },
+          },
+        },
+        orderBy: { date: "asc" },
+      }),
+    ]);
+    const categoryIdByName = new Map(categories.map((category) => [category.name.trim().toLowerCase(), category.id]));
+    historyTransactions = parsedRows.flatMap((row) => {
+      if (!row.date || row.amount === null) {
+        return [];
+      }
+
+      const categoryName = row.categoryName?.trim() ?? "";
+      return [
+        {
+          id: `parsed:${row.id}`,
+          accountId: row.importFile.accountId ?? "__imported_account__",
+          categoryId: categoryIdByName.get(categoryName.toLowerCase()) ?? null,
+          type: row.type ?? (categoryName.toLowerCase() === "income" ? "income" : "expense"),
+          amount: row.amount,
+          date: row.date,
+          isExcluded: false,
+          merchantRaw: row.merchantRaw,
+          merchantClean: row.merchantClean,
+          description: null,
+          categoryName: row.categoryName,
+        },
+      ];
+    });
+  }
+
   const budgetHistory = buildBudgetHistory(
     budget,
-    transactions.map((transaction) => ({
-      ...transaction,
-      categoryName: transaction.category?.name ?? null,
-    })),
+    historyTransactions,
     new Date()
   );
 
