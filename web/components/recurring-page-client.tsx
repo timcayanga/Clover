@@ -12,8 +12,19 @@ type RecurringPageClientProps = {
   plannedPaymentSuggestions: Parameters<typeof CommitmentsPanel>[0]["plannedPaymentSuggestions"];
   accounts: Parameters<typeof CommitmentsPanel>[0]["accounts"];
   transactions: Parameters<typeof CommitmentsPanel>[0]["transactions"];
+  initialTab?: RecurringTab;
   initialAddOpen?: boolean;
 };
+
+export type RecurringTab = "overview" | "planned" | "debt" | "owed" | "installments";
+
+const recurringTabs: Array<{ id: RecurringTab; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "planned", label: "Planned Payments" },
+  { id: "debt", label: "Debt & Loans" },
+  { id: "owed", label: "Money Owed" },
+  { id: "installments", label: "Installments" },
+];
 
 const addButtonIconStyle = {
   display: "inline-flex",
@@ -34,10 +45,12 @@ export function RecurringPageClient({
   plannedPaymentSuggestions,
   accounts,
   transactions,
+  initialTab = "overview",
   initialAddOpen = false,
 }: RecurringPageClientProps) {
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(initialAddOpen);
+  const [activeTab, setActiveTab] = useState<RecurringTab>(initialTab);
 
   useEffect(() => {
     document.body.toggleAttribute("data-clover-page-modal", addOpen);
@@ -73,7 +86,9 @@ export function RecurringPageClient({
   useEffect(() => {
     const handleOpenAdd = () => {
       setAddOpen(true);
-      window.history.replaceState({}, "", `${window.location.pathname}?add=1`);
+      const query = new URLSearchParams(window.location.search);
+      query.set("add", "1");
+      window.history.replaceState({}, "", `${window.location.pathname}?${query.toString()}`);
     };
 
     window.addEventListener("clover:open-recurring-add", handleOpenAdd);
@@ -84,12 +99,25 @@ export function RecurringPageClient({
 
   const openAddModal = () => {
     setAddOpen(true);
-    window.history.replaceState({}, "", `${window.location.pathname}?add=1`);
+    const query = new URLSearchParams(window.location.search);
+    query.set("add", "1");
+    window.history.replaceState({}, "", `${window.location.pathname}?${query.toString()}`);
   };
 
   const closeAddModal = () => {
     setAddOpen(false);
-    window.history.replaceState({}, "", window.location.pathname);
+    const query = new URLSearchParams(window.location.search);
+    query.delete("add");
+    const suffix = query.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${suffix ? `?${suffix}` : ""}`);
+  };
+
+  const selectTab = (tab: RecurringTab) => {
+    setActiveTab(tab);
+    const query = new URLSearchParams(window.location.search);
+    query.set("tab", tab);
+    query.delete("add");
+    window.history.replaceState({}, "", `${window.location.pathname}?${query.toString()}`);
   };
 
   return (
@@ -118,6 +146,19 @@ export function RecurringPageClient({
       }
     >
       <div className="recurring-page__stack">
+        <nav className="recurring-tabs" aria-label="Recurring sections">
+          {recurringTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`recurring-tabs__button${activeTab === tab.id ? " is-active" : ""}`}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+              onClick={() => selectTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
         <CommitmentsPanel
           workspaceId={workspaceId}
           commitments={commitments}
@@ -125,6 +166,7 @@ export function RecurringPageClient({
           plannedPaymentSuggestions={plannedPaymentSuggestions}
           accounts={accounts}
           transactions={transactions}
+          activeTab={activeTab}
           showAddModal={addOpen}
           onCloseAdd={closeAddModal}
         />

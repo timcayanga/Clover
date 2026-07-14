@@ -29,7 +29,7 @@ function RecurringUnavailableState() {
 export default async function RecurringPage({
   searchParams,
 }: {
-  searchParams: Promise<{ add?: string }>;
+  searchParams: Promise<{ add?: string; tab?: string }>;
 }) {
   try {
     const session = await getSessionContext();
@@ -40,6 +40,9 @@ export default async function RecurringPage({
 
     const params = await searchParams;
     const showAddModal = params.add === "1" || params.add === "true";
+    const initialTab = ["overview", "planned", "debt", "owed", "installments"].includes(params.tab ?? "")
+      ? (params.tab as "overview" | "planned" | "debt" | "owed" | "installments")
+      : "overview";
     const cookieStore = await cookies();
     const selectedWorkspaceId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
     const workspaceId = await getRecurringWorkspaceId(user.clerkUserId, user.email, user.verified, selectedWorkspaceId);
@@ -54,6 +57,7 @@ export default async function RecurringPage({
         plannedPaymentSuggestions={plannedPaymentSuggestions}
         accounts={workspaceAccounts}
         transactions={recentTransactions}
+        initialTab={initialTab}
         initialAddOpen={showAddModal}
       />
     );

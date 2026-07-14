@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CurrencySelector } from "@/components/currency-selector";
 import {
@@ -44,6 +44,7 @@ type CommitmentsPanelProps = {
   plannedPaymentSuggestions: PlannedPaymentSuggestion[];
   accounts: CommitmentAccountOption[];
   transactions: CommitmentTransactionOption[];
+  activeTab?: "overview" | "planned" | "debt" | "owed" | "installments";
   showAddModal?: boolean;
   onCloseAdd?: () => void;
 };
@@ -60,8 +61,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-PH", {
   year: "numeric",
 });
 
-const kindOrder = ["planned_payment", "debt", "receivable", "reminder"] as const;
-type CommitmentKind = (typeof kindOrder)[number];
+type CommitmentKind = "planned_payment" | "debt" | "receivable" | "reminder";
 type CommitmentFormKind = CommitmentKind;
 
 type CommitmentFormCopy = {
@@ -156,20 +156,6 @@ const formatTransactionLabel = (transaction: CommitmentTransactionOption) => {
   const amount = Number(transaction.amount);
   const amountLabel = Number.isFinite(amount) ? currencyFormatter.format(amount) : transaction.amount;
   return `${merchant} · ${amountLabel} · ${dateFormatter.format(new Date(transaction.date))}`;
-};
-
-const kindBadgeTone: Record<CommitmentKind, string> = {
-  planned_payment: "var(--accent)",
-  debt: "var(--warn)",
-  receivable: "var(--good)",
-  reminder: "var(--muted)",
-};
-
-const kindRingTone: Record<CommitmentKind, string> = {
-  planned_payment: "rgba(3, 168, 192, 0.22)",
-  debt: "rgba(245, 158, 11, 0.24)",
-  receivable: "rgba(16, 185, 129, 0.24)",
-  reminder: "rgba(148, 163, 184, 0.24)",
 };
 
 const getCommitmentDateValue = (commitment: FinancialCommitmentSummary) => commitment.nextDueDate ?? commitment.dueDate;
@@ -275,12 +261,11 @@ export function CommitmentsPanel({
   plannedPaymentSuggestions,
   accounts,
   transactions,
+  activeTab = "overview",
   showAddModal = false,
   onCloseAdd,
 }: CommitmentsPanelProps) {
   const router = useRouter();
-  const detailPanelRef = useRef<HTMLDivElement | null>(null);
-  const hasMountedRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [confirmingPatternId, setConfirmingPatternId] = useState<string | null>(null);
   const [dismissingPatternId, setDismissingPatternId] = useState<string | null>(null);
@@ -325,69 +310,15 @@ export function CommitmentsPanel({
   const [accountId, setAccountId] = useState("");
   const [transactionId, setTransactionId] = useState("");
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
-  const [selectedKind, setSelectedKind] = useState<CommitmentKind>(() => {
-    for (const entryKind of kindOrder) {
-      if (commitments.some((item) => item.kind === entryKind)) {
-        return entryKind;
-      }
-    }
-
-    return "planned_payment";
-  });
-
-  const groupedCommitments = useMemo(
+  const selectedItems = commitments;
+  const nextOverviewDueDate = useMemo(
     () =>
-      kindOrder.map((entryKind) => {
-        const items = commitments.filter((item) => item.kind === entryKind);
-        const nextDueDate = items
-          .map((item) => getCommitmentDateValue(item))
-          .filter((value): value is string => Boolean(value))
-          .sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0] ?? null;
-
-        return {
-          kind: entryKind,
-          items,
-          count: items.length,
-          nextDueDate,
-          activeCount: items.filter((item) => item.status === "active").length,
-        };
-      }),
+      commitments
+        .map((item) => getCommitmentDateValue(item))
+        .filter((value): value is string => Boolean(value))
+        .sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0] ?? null,
     [commitments]
   );
-
-  const selectedGroup = groupedCommitments.find((group) => group.kind === selectedKind) ?? groupedCommitments[0];
-  const selectedItems = selectedGroup?.items ?? [];
-
-  useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      return;
-    }
-
-    detailPanelRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }, [selectedKind]);
-
-  const totals = useMemo(() => {
-    return groupedCommitments.reduce<Record<CommitmentKind, { count: number; nextDueDate: string | null; activeCount: number }>>(
-      (acc, group) => {
-        acc[group.kind] = {
-          count: group.count,
-          nextDueDate: group.nextDueDate,
-          activeCount: group.activeCount,
-        };
-        return acc;
-      },
-      {
-        planned_payment: { count: 0, nextDueDate: null, activeCount: 0 },
-        debt: { count: 0, nextDueDate: null, activeCount: 0 },
-        receivable: { count: 0, nextDueDate: null, activeCount: 0 },
-        reminder: { count: 0, nextDueDate: null, activeCount: 0 },
-      }
-    );
-  }, [groupedCommitments]);
 
   const recentTransactions = transactions.slice(0, 24);
   const suggestedRecurringPatterns = recurringPatterns.filter(
@@ -710,44 +641,118 @@ export function CommitmentsPanel({
       });
   };
 
+  const tabCommitments = useMemo(() => {
+    switch (activeTab) {
+      case "planned":
+        return commitments.filter((commitment) => commitment.kind === "planned_payment");
+      case "debt":
+        return commitments.filter((commitment) => commitment.kind === "debt");
+      case "owed":
+        return commitments.filter((commitment) => commitment.kind === "receivable");
+      case "installments":
+        return commitments.filter(
+          (commitment) =>
+            commitment.notes?.toLowerCase().includes("installment") ||
+            commitment.notes?.toLowerCase().match(/payment\s+\d+\s+of\s+\d+/) !== null
+        );
+      default:
+        return [];
+    }
+  }, [activeTab, commitments]);
+
+  const tabSuggestions = useMemo(() => {
+    switch (activeTab) {
+      case "planned":
+        return plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind !== "installment");
+      case "debt":
+        return plannedPaymentSuggestions.filter((suggestion) =>
+          suggestion.reasonTags.some((tag) => ["loan", "statement payment", "installment terms"].includes(tag))
+        );
+      case "installments":
+        return plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind === "installment");
+      default:
+        return [];
+    }
+  }, [activeTab, plannedPaymentSuggestions]);
+
+  const renderRecurringTable = () => (
+    <article className="panel commitments-detail-panel">
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <p className="eyebrow">
+            {activeTab === "planned" ? "Planned payments" : activeTab === "debt" ? "Debt & loans" : activeTab === "owed" ? "Money owed" : "Installments"}
+          </p>
+          <h3 style={{ margin: 0 }}>Your recurring items</h3>
+        </div>
+        <span className="button button-secondary button-small">
+          {tabCommitments.length + tabSuggestions.length} item{tabCommitments.length + tabSuggestions.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      {tabCommitments.length > 0 || tabSuggestions.length > 0 ? (
+        <div className="table-wrap transactions-table-wrap commitments-table-wrap">
+          <table className="transactions-table commitments-table">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Due date</th>
+                <th>Type</th>
+                <th>Amount</th>
+                <th>Account</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tabSuggestions.map((suggestion) => (
+                <tr key={suggestion.id}>
+                  <td>
+                    <strong>{suggestion.title}</strong>
+                    <span className="commitments-table__secondary">{suggestion.sourceLabel}</span>
+                  </td>
+                  <td>{formatDate(suggestion.dueDate)}</td>
+                  <td>{suggestion.recurrence === "once" ? "One-time" : commitmentRecurrenceLabels[suggestion.recurrence]}</td>
+                  <td>{formatCurrency(suggestion.amount)}</td>
+                  <td>{suggestion.accountName ?? "Not linked"}</td>
+                  <td>
+                    <button className="button button-primary button-small" type="button" onClick={() => openPlannedPaymentReview(suggestion)}>
+                      Review and add
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {tabCommitments.map((commitment) => (
+                <tr key={commitment.id}>
+                  <td>
+                    <strong>{commitment.title}</strong>
+                    <span className="commitments-table__secondary">{commitment.counterparty ?? commitmentStatusLabels[commitment.status]}</span>
+                  </td>
+                  <td>{formatDate(getCommitmentDateValue(commitment))}</td>
+                  <td>{commitment.recurrence === "once" ? "One-time" : commitmentRecurrenceLabels[commitment.recurrence]}</td>
+                  <td>{formatCurrency(commitment.amount)}</td>
+                  <td>{commitment.account?.name ?? "Not linked"}</td>
+                  <td>
+                    <button className="button button-secondary button-small" type="button" onClick={() => handleDelete(commitment.id)} disabled={isSaving}>
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="panel-muted" style={{ margin: 0 }}>
+          Nothing is saved here yet. Add an item or review a suggestion when Clover finds one.
+        </p>
+      )}
+    </article>
+  );
+
   return (
     <section style={{ display: "grid", gap: 24 }}>
-      <div className="commitments-summary-grid">
-        {groupedCommitments.map((group) => {
-          const isSelected = selectedKind === group.kind;
+      {activeTab !== "overview" ? renderRecurringTable() : null}
 
-          return (
-            <button
-              key={group.kind}
-              type="button"
-              onClick={() => setSelectedKind(group.kind)}
-              className="panel"
-              aria-pressed={isSelected}
-              style={{
-                appearance: "none",
-                border: `1px solid ${isSelected ? kindRingTone[group.kind] : "rgba(148, 163, 184, 0.18)"}`,
-                background: isSelected ? "rgba(255, 255, 255, 0.92)" : "rgba(255, 255, 255, 0.68)",
-                display: "grid",
-                gap: 10,
-                padding: 18,
-                textAlign: "left",
-                boxShadow: isSelected ? "0 18px 36px rgba(15, 23, 42, 0.08)" : "none",
-                transform: isSelected ? "translateY(-1px)" : "none",
-                cursor: "pointer",
-              }}
-            >
-              <p className="notification-item__tone" style={{ color: kindBadgeTone[group.kind] }}>
-                {commitmentKindLabels[group.kind]}
-              </p>
-              <strong style={{ fontSize: 28, letterSpacing: "-0.03em" }}>{group.count}</strong>
-              <div style={{ display: "grid", gap: 4, color: "var(--muted-foreground)" }}>
-                <span>{group.nextDueDate ? `Next due ${formatDate(group.nextDueDate)}` : "No due date yet"}</span>
-                <span>{group.activeCount} active</span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {activeTab === "overview" ? <>
 
       {plannedPaymentSuggestions.length > 0 ? (
         <article className="panel commitments-suggestions-panel">
@@ -882,6 +887,8 @@ export function CommitmentsPanel({
           </div>
         </article>
       ) : null}
+
+      </> : null}
 
       {reviewingSuggestion ? (
         <div
@@ -1071,11 +1078,12 @@ export function CommitmentsPanel({
         </div>
       ) : null}
 
+      {activeTab === "overview" ? <>
       {hasSavedCommitments || hasSuggestionContent ? (
-        <article className="panel commitments-detail-panel" ref={detailPanelRef}>
+        <article className="panel commitments-detail-panel">
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div>
-              <p className="eyebrow">{commitmentKindLabels[selectedKind]}</p>
+              <p className="eyebrow">Overview</p>
               <h3 style={{ margin: 0 }}>
                 {selectedItems.length > 0
                   ? `${selectedItems.length} item${selectedItems.length === 1 ? "" : "s"}`
@@ -1085,9 +1093,9 @@ export function CommitmentsPanel({
               </h3>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <span className="button button-secondary button-small">{totals[selectedKind].activeCount} active</span>
-              {totals[selectedKind].nextDueDate ? (
-                <span className="button button-secondary button-small">Next {formatDate(totals[selectedKind].nextDueDate)}</span>
+              <span className="button button-secondary button-small">{commitments.filter((item) => item.status === "active").length} active</span>
+              {nextOverviewDueDate ? (
+                <span className="button button-secondary button-small">Next {formatDate(nextOverviewDueDate)}</span>
               ) : (
                 <span className="button button-secondary button-small">No due date</span>
               )}
@@ -1143,7 +1151,7 @@ export function CommitmentsPanel({
             <p className="panel-muted" style={{ margin: 0 }}>
               {hasSuggestionContent
                 ? "Suggested recurring transactions are ready above. Review and add them to start tracking them here."
-                : `Saved ${commitmentKindLabels[selectedKind].toLowerCase()}s will appear here once you add one.`}
+                : "Saved recurring items will appear here once you add one."}
             </p>
           )}
         </article>
@@ -1158,6 +1166,8 @@ export function CommitmentsPanel({
           </button>
         </article>
       )}
+
+      </> : null}
 
       {showAddModal ? (
         <div
