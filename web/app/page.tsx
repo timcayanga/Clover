@@ -45,7 +45,7 @@ function FeatureSection({
   id: string;
 }) {
   return (
-    <LandingStoryReveal as="section" className={`landing-feature ${reverse ? "landing-feature--reverse" : ""}`.trim()} id={id}>
+    <LandingStoryReveal as="section" className={`landing-feature ${reverse ? "landing-feature--reverse" : ""} ${id === "pro" ? "landing-feature--pro" : ""}`.trim()} id={id}>
       <div className="landing-feature__copy">
         <h2 className="landing-feature__title">{title}</h2>
         <div className="landing-feature__body">{copy}</div>
@@ -78,9 +78,10 @@ export default async function HomePage() {
             <span>Months of finances.</span>
             <span className="landing-highlight">Organized in minutes.</span>
           </h1>
-          <p className="landing-hero__lede">
-            Upload bank statements, receipts, screenshots, or spreadsheets. Clover automatically organizes them into transactions, accounts, reports, and practical financial guidance.
-          </p>
+          <div className="landing-hero__lede">
+            <p>Upload bank statements, receipts, screenshots, or spreadsheets.</p>
+            <p>Clover automatically organizes them into transactions, accounts, reports, and practical financial guidance.</p>
+          </div>
 
           <div className="landing-hero__actions">
             <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
@@ -103,13 +104,6 @@ export default async function HomePage() {
 
       <LandingStoryReveal as="section" className="landing-bridge" id="organize-not-track">
         <div className="landing-bridge__inner">
-          <h2 className="landing-bridge__title">
-            Stop tracking. <span className="landing-highlight">Start organizing.</span>
-          </h2>
-          <p className="landing-bridge__subtitle">
-            Most budgeting apps ask you to manually record every expense. Clover starts with the financial records you already have.
-          </p>
-
           <div className="landing-bridge__table-wrap">
             <table className="landing-bridge__table">
               <thead>
@@ -138,12 +132,20 @@ export default async function HomePage() {
               </tbody>
             </table>
           </div>
+
+          <div className="landing-bridge__copy">
+            <h2 className="landing-bridge__title">
+              Stop tracking. <span className="landing-highlight">Start organizing.</span>
+            </h2>
+            <p className="landing-bridge__subtitle">
+              Most budgeting apps ask you to manually record every expense. Clover starts with the financial records you already have.
+            </p>
+          </div>
         </div>
       </LandingStoryReveal>
 
       <FeatureSection
         id="statement-import"
-        reverse
         title={
           <>
             Never rebuild your financial history <span className="landing-highlight">again</span>.
@@ -151,7 +153,8 @@ export default async function HomePage() {
         }
         copy={
           <>
-            <p>Stop rebuilding your finances one transaction at a time. Upload the records you already have - bank statements, receipts, screenshots, spreadsheets, or manual entries - and Clover extracts the useful details automatically.</p>
+            <p>Stop rebuilding your finances one transaction at a time.</p>
+            <p>Upload the records you already have - <strong>bank statements, receipts, screenshots, spreadsheets, or manual entries</strong> - and Clover extracts the useful details automatically.</p>
             <p>Months of financial history can take shape in minutes.</p>
           </>
         }
@@ -167,6 +170,7 @@ export default async function HomePage() {
 
       <FeatureSection
         id="insights"
+        reverse
         title={
           <>
             Finally understand where your money actually <span className="landing-highlight">goes</span>.
@@ -195,7 +199,6 @@ export default async function HomePage() {
 
       <FeatureSection
         id="split-bills"
-        reverse
         title={
           <>
             Settle shared expenses without the <span className="landing-highlight">awkward math</span>.
