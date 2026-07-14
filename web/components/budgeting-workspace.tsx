@@ -270,6 +270,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const onTrackBudgets = visibleBudgets.filter((budget) => !budget.isAtRisk);
   const atRiskBudgets = visibleBudgets.filter((budget) => budget.isAtRisk);
   const suggestions = data.suggestions.slice(0, 2);
+  const budgetCurrencies = [...new Set(visibleBudgets.map((budget) => budget.currency.toUpperCase()))];
   const selectedHistoryBudget = historyBudgetId ? data.budgets.find((budget) => budget.id === historyBudgetId) ?? null : null;
 
   const budgetGroups = useMemo(() => {
@@ -561,6 +562,11 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
         {data.overview.overlappingBudgetNames.length > 0 ? (
           <p className="budgeting-section__note">
             More than one cadence is active for {data.overview.overlappingBudgetNames.join(", ")}. Each limit is tracked separately, not added together.
+          </p>
+        ) : null}
+        {budgetCurrencies.length > 1 ? (
+          <p className="budgeting-section__note">
+            Budgets use their own currencies ({budgetCurrencies.join(", ")}). Clover does not combine them into one total.
           </p>
         ) : null}
 
