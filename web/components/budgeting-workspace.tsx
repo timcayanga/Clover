@@ -233,11 +233,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
     );
   }, [data.budgets, editingBudget, editorPreset, isEditorOpen]);
 
-  const totalProgress = data.overview.totalProgressPercent;
-  const totalBudgeted = data.overview.totalTargetAmount;
-  const totalUsed = data.overview.totalActualAmount;
   const activeAlerts = data.overview.alerts;
-  const openBudgetCount = data.overview.activeBudgetCount;
   const visibleBudgets = data.budgets;
   const onTrackBudgets = visibleBudgets.filter((budget) => !budget.isAtRisk);
   const atRiskBudgets = visibleBudgets.filter((budget) => budget.isAtRisk);
@@ -421,7 +417,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
               <p className="eyebrow">On Track</p>
               <h4>{onTrackBudgets.length} budgets</h4>
             </div>
-            <strong>{toPercentage(totalProgress)}</strong>
+            <strong>{onTrackBudgets.length > 0 ? "On pace" : "—"}</strong>
           </div>
           <div className="budget-summary-card__items">
             {onTrackBudgets.slice(0, 3).map((budget) => (
