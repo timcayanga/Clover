@@ -10,7 +10,7 @@ const budgetPayloadSchema = z
     name: z.string().trim().min(2).max(80),
     kind: z.enum(["spend_limit", "savings_target"]).default("spend_limit"),
     scope: z.enum(["global", "account", "category"]).default("global"),
-    cadence: z.enum(["daily", "weekly", "monthly", "annual"]).default("monthly"),
+    cadence: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]).default("monthly"),
     targetAmount: z.coerce.number().positive().max(1_000_000_000),
     currency: z.string().trim().min(3).max(8).default("PHP"),
     accountId: z.string().trim().min(1).nullable().optional(),

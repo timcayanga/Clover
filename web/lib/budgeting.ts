@@ -124,6 +124,8 @@ const monthlyEquivalent = (amount: number) => (amount <= 0 ? 0 : amount * (30 / 
 export const formatBudgetCadenceLabel = (cadence: BudgetCadence) => {
   if (cadence === "daily") return "Daily";
   if (cadence === "weekly") return "Weekly";
+  if (cadence === "biweekly") return "Every 2 weeks";
+  if (cadence === "quarterly") return "Quarterly";
   if (cadence === "annual") return "Yearly";
   return "Monthly";
 };
@@ -153,6 +155,9 @@ export const getBudgetPeriodStart = (cadence: BudgetCadence, now = new Date()) =
     return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
   }
 
+  if (cadence === "biweekly") return getBiweeklyPeriodStart(now);
+  if (cadence === "quarterly") return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+
   if (cadence === "annual") {
     return new Date(now.getFullYear(), 0, 1);
   }
@@ -163,6 +168,8 @@ export const getBudgetPeriodStart = (cadence: BudgetCadence, now = new Date()) =
 export const getBudgetPeriodLabel = (cadence: BudgetCadence) => {
   if (cadence === "daily") return "This day";
   if (cadence === "weekly") return "This week";
+  if (cadence === "biweekly") return "These 2 weeks";
+  if (cadence === "quarterly") return "This quarter";
   if (cadence === "annual") return "This year";
   return "This month";
 };
@@ -183,6 +190,13 @@ const startOfWeek = (date: Date) => {
   const daysSinceMonday = (day + 6) % 7;
   return startOfDay(new Date(date.getFullYear(), date.getMonth(), date.getDate() - daysSinceMonday));
 };
+const getBiweeklyPeriodStart = (date: Date) => {
+  const base = new Date(1970, 0, 5);
+  const dayMs = 24 * 60 * 60 * 1000;
+  const dateIndex = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / dayMs);
+  const baseIndex = Math.floor(Date.UTC(base.getFullYear(), base.getMonth(), base.getDate()) / dayMs);
+  return addDays(base, Math.floor((dateIndex - baseIndex) / 14) * 14);
+};
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
 const addDays = (date: Date, days: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
@@ -196,6 +210,9 @@ const getPeriodStart = (cadence: BudgetCadence, offset: number, now: Date) => {
   if (cadence === "weekly") {
     return addDays(startOfWeek(now), -offset * 7);
   }
+
+  if (cadence === "biweekly") return addDays(getBiweeklyPeriodStart(now), -offset * 14);
+  if (cadence === "quarterly") return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 - offset * 3, 1);
 
   if (cadence === "annual") {
     return new Date(now.getFullYear() - offset, 0, 1);
@@ -212,6 +229,9 @@ const getPeriodEnd = (cadence: BudgetCadence, start: Date) => {
   if (cadence === "weekly") {
     return addDays(start, 7);
   }
+
+  if (cadence === "biweekly") return addDays(start, 14);
+  if (cadence === "quarterly") return addMonths(start, 3);
 
   if (cadence === "annual") {
     return new Date(start.getFullYear() + 1, 0, 1);
@@ -237,6 +257,9 @@ const formatHistoryLabel = (cadence: BudgetCadence, start: Date, end: Date) => {
   if (cadence === "weekly") {
     return `${shortDateFormatter.format(start)} - ${shortDateFormatter.format(addDays(end, -1))}`;
   }
+
+  if (cadence === "biweekly") return `${shortDateFormatter.format(start)} - ${shortDateFormatter.format(addDays(end, -1))}`;
+  if (cadence === "quarterly") return `Q${Math.floor(start.getMonth() / 3) + 1} ${start.getFullYear()}`;
 
   if (cadence === "annual") {
     return String(start.getFullYear());

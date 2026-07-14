@@ -12,7 +12,7 @@ const budgetUpdateSchema = z
     name: z.string().trim().min(2).max(80),
     kind: z.enum(["spend_limit", "savings_target"]).default("spend_limit"),
     scope: z.enum(["global", "account", "category"]).default("global"),
-    cadence: z.enum(["daily", "weekly", "monthly", "annual"]).default("monthly"),
+    cadence: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]).default("monthly"),
     targetAmount: z.coerce.number().positive().max(1_000_000_000),
     currency: z.string().trim().min(3).max(8).default("PHP"),
     accountId: z.string().trim().min(1).nullable().optional(),
@@ -88,7 +88,7 @@ type BudgetHistoryInput = {
   categoryName?: string | null;
 };
 
-const getHistoryLookbackDays = (cadence: "daily" | "weekly" | "monthly" | "annual") => {
+const getHistoryLookbackDays = (cadence: "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "annual") => {
   if (cadence === "daily") {
     return 14;
   }
@@ -96,6 +96,9 @@ const getHistoryLookbackDays = (cadence: "daily" | "weekly" | "monthly" | "annua
   if (cadence === "weekly") {
     return 84;
   }
+
+  if (cadence === "biweekly") return 168;
+  if (cadence === "quarterly") return 6 * 93;
 
   if (cadence === "annual") {
     return 6 * 366;

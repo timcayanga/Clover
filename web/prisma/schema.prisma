@@ -90,7 +90,9 @@ enum BudgetScope {
 enum BudgetCadence {
   daily
   weekly
+  biweekly
   monthly
+  quarterly
   annual
 }
 

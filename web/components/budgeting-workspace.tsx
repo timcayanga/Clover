@@ -5,7 +5,7 @@ import { formatCurrencyAmount } from "@/lib/currency-format";
 
 type BudgetKind = "spend_limit" | "savings_target";
 type BudgetScope = "global" | "account" | "category";
-type BudgetCadence = "daily" | "weekly" | "monthly" | "annual";
+type BudgetCadence = "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "annual";
 type BudgetStage = "safe" | "watch" | "warning" | "critical" | "exceeded";
 
 type BudgetItem = {
@@ -117,7 +117,9 @@ type BudgetingWorkspaceProps = {
 const cadenceLabels: Record<BudgetCadence, string> = {
   daily: "Daily",
   weekly: "Weekly",
+  biweekly: "Every 2 weeks",
   monthly: "Monthly",
+  quarterly: "Quarterly",
   annual: "Yearly",
 };
 
@@ -251,7 +253,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
       .map(([name, budgets]) => ({
         name,
         budgets: [...budgets].sort((left, right) => {
-          const cadenceOrder: Record<BudgetCadence, number> = { daily: 0, weekly: 1, monthly: 2, annual: 3 };
+          const cadenceOrder: Record<BudgetCadence, number> = { daily: 0, weekly: 1, biweekly: 2, monthly: 3, quarterly: 4, annual: 5 };
           return cadenceOrder[left.cadence] - cadenceOrder[right.cadence] || right.progressPercent - left.progressPercent;
         }),
         maxProgress: Math.max(...budgets.map((budget) => budget.progressPercent)),
@@ -608,7 +610,9 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                   <select value={form.cadence} onChange={(event) => updateFormField("cadence", event.target.value as BudgetCadence)}>
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
+                    <option value="biweekly">Every 2 weeks</option>
                     <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
                     <option value="annual">Yearly</option>
                   </select>
                 </label>
