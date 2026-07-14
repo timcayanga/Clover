@@ -18,6 +18,7 @@ type PaymentProfile = {
 type PaymentRequest = {
   id: string;
   recipientParticipantId: string;
+  payeeParticipantId: string;
   recipientName: string;
   recipientEmail: string | null;
   amount: string;
@@ -29,16 +30,17 @@ type PaymentRequest = {
 
 type SplitBillPaymentToolsProps = {
   bill: SplitBillSerializedBill;
+  onBillUpdated?: (bill: SplitBillSerializedBill) => void;
 };
 
 const emptyProfile = { label: "", provider: "", currency: "PHP", accountName: "", accountNumber: "", qrPayload: "", qrImageData: "" };
 
-export function SplitBillPaymentTools({ bill }: SplitBillPaymentToolsProps) {
+export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentToolsProps) {
   const [profiles, setProfiles] = useState<PaymentProfile[]>([]);
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [showProfileForm, setShowProfileForm] = useState(false);
   const [profileDraft, setProfileDraft] = useState(emptyProfile);
-  const [requestDraft, setRequestDraft] = useState({ recipientParticipantId: "", amount: "", recipientEmail: "", dueDate: "", paymentProfileId: "" });
+  const [requestDraft, setRequestDraft] = useState({ recipientParticipantId: "", payeeParticipantId: "", amount: "", recipientEmail: "", dueDate: "", paymentProfileId: "" });
   const [lastShareUrl, setLastShareUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -60,6 +62,7 @@ export function SplitBillPaymentTools({ bill }: SplitBillPaymentToolsProps) {
     setRequestDraft((current) => ({
       ...current,
       recipientParticipantId: current.recipientParticipantId || firstTransfer?.fromParticipantId || "",
+      payeeParticipantId: current.payeeParticipantId || firstTransfer?.toParticipantId || "",
       amount: current.amount || (firstTransfer ? firstTransfer.amount.toFixed(2) : ""),
       paymentProfileId: current.paymentProfileId || profiles.find((profile) => profile.isDefault)?.id || profiles[0]?.id || "",
     }));
@@ -101,6 +104,14 @@ export function SplitBillPaymentTools({ bill }: SplitBillPaymentToolsProps) {
     setLastShareUrl(payload.request.shareUrl);
   };
 
+  const removeProfile = async (profileId: string) => {
+    const response = await fetch(`/api/split-bill-payment-profiles/${profileId}`, { method: "DELETE" });
+    if (response.ok) {
+      setProfiles((current) => current.filter((profile) => profile.id !== profileId));
+      setRequestDraft((current) => ({ ...current, paymentProfileId: current.paymentProfileId === profileId ? "" : current.paymentProfileId }));
+    }
+  };
+
   const emailRequest = (entry: PaymentRequest) => {
     const shareUrl = `${window.location.origin}${entry.shareUrl}`;
     const subject = encodeURIComponent(`Payment request for ${bill.title}`);
@@ -132,11 +143,13 @@ export function SplitBillPaymentTools({ bill }: SplitBillPaymentToolsProps) {
         </div>
       ) : null}
 
+      {profiles.length > 0 ? <div className="split-bill-payment-tools__profiles">{profiles.map((profile) => <div key={profile.id} className="split-bill-payment-tools__profile"><span>{profile.label} · {profile.provider}</span><button className="button button-secondary button-small" type="button" onClick={() => void removeProfile(profile.id)}>Remove</button></div>)}</div> : null}
+
       {transferOptions.length > 0 ? (
         <div className="split-bill-payment-tools__request-form">
           <select className="settings-input" value={requestDraft.recipientParticipantId} onChange={(event) => {
             const transfer = transferOptions.find((entry) => entry.fromParticipantId === event.target.value);
-            setRequestDraft({ ...requestDraft, recipientParticipantId: event.target.value, amount: transfer?.amount.toFixed(2) ?? requestDraft.amount });
+            setRequestDraft({ ...requestDraft, recipientParticipantId: event.target.value, payeeParticipantId: transfer?.toParticipantId ?? requestDraft.payeeParticipantId, amount: transfer?.amount.toFixed(2) ?? requestDraft.amount });
           }}>
             {transferOptions.map((transfer) => <option key={`${transfer.fromParticipantId}-${transfer.toParticipantId}`} value={transfer.fromParticipantId}>{transfer.fromParticipantName} owes {transfer.toParticipantName}</option>)}
           </select>
@@ -152,7 +165,7 @@ export function SplitBillPaymentTools({ bill }: SplitBillPaymentToolsProps) {
       ) : <span className="split-bill-subtle-empty">No open transfers to request yet.</span>}
 
       {lastShareUrl ? <div className="split-bill-payment-tools__share"><span>Share link ready</span><button className="button button-secondary button-small" type="button" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}${lastShareUrl}`)}>Copy link</button></div> : null}
-      {requests.length > 0 ? <div className="split-bill-payment-tools__requests">{requests.map((entry) => <div key={entry.id} className="split-bill-payment-tools__request"><span>{entry.recipientName} · {entry.currency} {entry.amount}{entry.dueDate ? ` · due ${new Date(entry.dueDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}` : ""} · {entry.status.replace("_", " ")}</span><div><button className="button button-secondary button-small" type="button" onClick={() => void navigator.clipboard?.writeText(`${window.location.origin}${entry.shareUrl}`)}>Copy</button><button className="button button-secondary button-small" type="button" onClick={() => emailRequest(entry)}>Email</button>{entry.status === "payment_reported" ? <button className="button button-primary button-small" type="button" onClick={async () => { const response = await fetch(`/api/split-bills/${bill.id}/payment-requests/${entry.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "paid" }) }); if (response.ok) setRequests((current) => current.map((item) => item.id === entry.id ? { ...item, status: "paid" } : item)); }}>Confirm paid</button> : null}</div></div>)}</div> : null}
+      {requests.length > 0 ? <div className="split-bill-payment-tools__requests">{requests.map((entry) => <div key={entry.id} className="split-bill-payment-tools__request"><span>{entry.recipientName} · {entry.currency} {entry.amount}{entry.dueDate ? ` · due ${new Date(entry.dueDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}` : ""} · {entry.status.replace("_", " ")}</span><div><button className="button button-secondary button-small" type="button" onClick={() => void navigator.clipboard?.writeText(`${window.location.origin}${entry.shareUrl}`)}>Copy</button><button className="button button-secondary button-small" type="button" onClick={() => emailRequest(entry)}>Email</button>{entry.status === "payment_reported" ? <button className="button button-primary button-small" type="button" onClick={async () => { const response = await fetch(`/api/split-bills/${bill.id}/payment-requests/${entry.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "paid" }) }); const payload = await response.json(); if (response.ok) { setRequests((current) => current.map((item) => item.id === entry.id ? { ...item, status: "paid" } : item)); if (payload.bill) onBillUpdated?.(payload.bill); } }}>Confirm paid</button> : null}</div></div>)}</div> : null}
       {error ? <p className="split-bill-editor__error">{error}</p> : null}
     </section>
   );

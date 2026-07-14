@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const requestSchema = z.object({
   recipientParticipantId: z.string().min(1),
+  payeeParticipantId: z.string().min(1),
   paymentProfileId: z.string().nullable().optional(),
   recipientEmail: z.string().email().nullable().optional(),
   amount: z.union([z.string(), z.number()]),
@@ -20,7 +21,9 @@ const serializeRequest = (entry: {
   billId: string;
   paymentProfileId: string | null;
   recipientParticipantId: string;
+  payeeParticipantId: string;
   recipientName: string;
+  payeeName: string;
   recipientEmail: string | null;
   amount: unknown;
   currency: string;
@@ -74,8 +77,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
     const recipient = bill.participants.find((participant) => participant.id === body.recipientParticipantId);
-    if (!recipient) {
+    const payee = bill.participants.find((participant) => participant.id === body.payeeParticipantId);
+    if (!recipient || !payee) {
       throw new Error("Recipient must be part of this bill.");
+    }
+    if (recipient.id === payee.id) {
+      throw new Error("Choose two different people for a payment request.");
     }
     if (body.paymentProfileId) {
       const profile = await prisma.splitBillPaymentProfile.findFirst({ where: { id: body.paymentProfileId, userId: user.id }, select: { id: true } });
@@ -89,7 +96,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
         billId,
         paymentProfileId: body.paymentProfileId || null,
         recipientParticipantId: recipient.id,
+        payeeParticipantId: payee.id,
         recipientName: recipient.name,
+        payeeName: payee.name,
         recipientEmail: body.recipientEmail || null,
         amount: amount.toFixed(2),
         currency: bill.currency,

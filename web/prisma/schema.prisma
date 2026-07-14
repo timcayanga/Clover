@@ -1063,7 +1063,9 @@ model SplitBillPaymentRequest {
   billId                String
   paymentProfileId      String?
   recipientParticipantId String
+  payeeParticipantId    String
   recipientName         String
+  payeeName             String
   recipientEmail        String?
   amount                Decimal                        @db.Decimal(18, 2)
   currency              String                         @default("PHP")

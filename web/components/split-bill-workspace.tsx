@@ -1270,6 +1270,15 @@ export function SplitBillWorkspace({
                     </button>
                   )}
                 </div>
+                {selectedBill.sourceType === "receipt" && (selectedBill.receiptConfidence < 80 || !selectedBill.total) ? (
+                  <div className="split-bill-receipt-quality" role="status">
+                    <strong>Review receipt details</strong>
+                    <span>
+                      {selectedBill.receiptConfidence > 0 ? `${selectedBill.receiptConfidence}% extraction confidence` : "Receipt values need review"}
+                      {!selectedBill.total ? " · total not confirmed" : ""}
+                    </span>
+                  </div>
+                ) : null}
                 {isEditingBill && selectedBillDraft ? (
                   <>
                     <div className="split-bill-detail-modal__editor-grid">
@@ -1432,7 +1441,10 @@ export function SplitBillWorkspace({
                         <span>{formatSettlementTransfers(selectedBill)}</span>
                       </div>
                     </div>
-                    <SplitBillPaymentTools bill={selectedBill} />
+                    <SplitBillPaymentTools
+                      bill={selectedBill}
+                      onBillUpdated={(updatedBill) => setBills((current) => current.map((entry) => (entry.id === updatedBill.id ? updatedBill : entry)))}
+                    />
                     {renderBillItemsTable(selectedBill, false)}
                     <div className="split-bill-activity">
                       <strong>Activity</strong>
