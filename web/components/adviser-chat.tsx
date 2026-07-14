@@ -52,6 +52,7 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<AdviserUsage | null>(null);
   const [actions, setActions] = useState<AdviserAction[]>([]);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const visiblePrompts = useMemo(() => prompts.slice(0, 4), [prompts]);
@@ -90,8 +91,12 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
         setUsage(payload.usage);
       }
 
+      if (!payload) {
+        throw new Error("Clover did not return an Adviser response.");
+      }
+
       if (!response.ok) {
-        throw new Error(payload?.error ?? "Unable to get a response from Adviser.");
+        throw new Error(payload.error ?? "Unable to get a response from Adviser.");
       }
 
       const reply = payload.reply?.trim() || "I could not generate a response just now.";
@@ -117,6 +122,10 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
     }
 
     setError(null);
+    if (pendingActionId) {
+      return;
+    }
+    setPendingActionId(action.id);
     try {
       const response = await fetch("/api/adviser/actions", {
         method: "POST",
@@ -132,6 +141,8 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
       setMessages((current) => [...current, { role: "assistant", content: `${action.label} completed. You can ask me to check the updated picture.` }]);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Clover could not complete that action.");
+    } finally {
+      setPendingActionId(null);
     }
   };
 
@@ -215,8 +226,8 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
               <strong>{action.label}</strong>
               <p>{action.description}</p>
               {action.kind === "confirm" && actionDetails(action) ? <p>{actionDetails(action)}</p> : null}
-              <button type="button" className="button button-primary button-small" onClick={() => void completeAction(action)}>
-                {action.kind === "confirm" ? "Confirm" : "Open"}
+              <button type="button" className="button button-primary button-small" disabled={pendingActionId === action.id} onClick={() => void completeAction(action)}>
+                {pendingActionId === action.id ? "Saving" : action.kind === "confirm" ? "Confirm" : "Open"}
               </button>
             </article>
           ))}

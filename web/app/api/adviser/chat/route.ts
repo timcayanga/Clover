@@ -1376,7 +1376,6 @@ export async function POST(request: Request) {
       commitmentAmountPressure,
       splitBillSettlementPressure,
       baselineSpend,
-      baselineIncome,
       monthlyExpenseTrend,
       monthlyIncomeTrend,
       monthlyNetTrend,
@@ -1411,7 +1410,15 @@ export async function POST(request: Request) {
       currentTransactionConfidence,
       thresholdProfile
     );
-    const preferenceProfile = buildPreferenceProfile(adviserInteractions, adviserOutcomeByGroup, adviserOutcomeByItem, now);
+    const preferenceProfile = buildPreferenceProfile(
+      adviserInteractions.map((interaction) => ({
+        ...interaction,
+        metadata: interaction.metadata && typeof interaction.metadata === "object" ? (interaction.metadata as AdviserAuditMetadata) : null,
+      })),
+      adviserOutcomeByGroup,
+      adviserOutcomeByItem,
+      now
+    );
     const completionDatesByTheme = adviserCompletionLogs.reduce<Record<AdviserSignalTheme, Date[]>>(
       (accumulator, log) => {
         const metadata = log.metadata as AdviserAuditMetadata | null;
@@ -1478,7 +1485,7 @@ export async function POST(request: Request) {
 
       return Math.max(0, Math.min(100, average([...memoryScores, ...outcomeScores, groups.length > 0 ? 55 : 30])));
     };
-    const themeScores: AdviserThemeScore[] = [
+    const themeScores = ([
       {
         key: "cashflow",
         score: average([
@@ -1520,7 +1527,7 @@ export async function POST(request: Request) {
           currentTransactionConfidence,
         ]),
       },
-    ].sort((left, right) => right.score - left.score);
+    ] satisfies AdviserThemeScore[]).sort((left, right) => right.score - left.score);
     const dominantTheme = themeScores[0] ?? null;
     const secondaryTheme = themeScores[1] ?? null;
 
@@ -1806,9 +1813,15 @@ export async function POST(request: Request) {
       .join(" ");
 
     const env = getEnv();
+    const usageForResponse = () => ({
+      plan: user.planTier,
+      used: usageCount + 1,
+      limit,
+      remaining: Math.max(0, limit - usageCount - 1),
+      resetsAt: resetsAt.toISOString(),
+    }) satisfies AdviserUsage;
     if (!env.OPENAI_API_KEY) {
-      const currentUsage = { plan: user.planTier, used: usageCount + 1, limit, remaining: Math.max(0, limit - usageCount - 1), resetsAt: resetsAt.toISOString() } satisfies AdviserUsage;
-      return NextResponse.json({ reply: fallbackReply, actions: [], usage: currentUsage });
+      return NextResponse.json({ reply: fallbackReply, actions: [], usage: usageForResponse(), degraded: true });
     }
 
     const model = env.OPENAI_ADVISER_MODEL?.trim() || "gpt-4.1";
@@ -1946,15 +1959,26 @@ export async function POST(request: Request) {
     let payload: Record<string, unknown> = {};
 
     for (let step = 0; step < 3; step += 1) {
-      const response = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, temperature: 0.2, max_output_tokens: 900, tools, input: modelInput }),
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      let response: Response;
+      try {
+        response = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model, temperature: 0.2, max_output_tokens: 900, tools, input: modelInput }),
+          signal: controller.signal,
+        });
+      } catch (error) {
+        console.error("Adviser model request failed", error instanceof Error ? error.message : error);
+        return NextResponse.json({ reply: fallbackReply, actions, usage: usageForResponse(), degraded: true });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        return NextResponse.json({ error: errorText || "Unable to generate an Adviser response." }, { status: 502 });
+        console.error("Adviser model request returned an error", response.status);
+        return NextResponse.json({ reply: fallbackReply, actions, usage: usageForResponse(), degraded: true });
       }
 
       payload = (await response.json()) as Record<string, unknown>;
@@ -2153,8 +2177,7 @@ export async function POST(request: Request) {
     }
 
     const reply = extractOutputText(payload) || "I could not generate a response right now.";
-    const currentUsage = { plan: user.planTier, used: usageCount + 1, limit, remaining: Math.max(0, limit - usageCount - 1), resetsAt: resetsAt.toISOString() } satisfies AdviserUsage;
-    return NextResponse.json({ reply, actions, usage: currentUsage });
+    return NextResponse.json({ reply, actions, usage: usageForResponse() });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to generate an Adviser response.";
     return NextResponse.json({ error: message }, { status: 400 });
