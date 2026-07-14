@@ -1609,6 +1609,71 @@ export async function POST(request: Request) {
       .join(" · ");
     const signalThemes = themeScores;
     const openSplitBillCount = openSplitBills.length;
+    const calculateSafeToSpend = (options?: { horizonDays?: number | null; expectedIncome?: number | null }) => {
+      const horizonDays = Math.max(1, Math.min(90, Math.round(Number(options?.horizonDays ?? 14))));
+      const horizonEnd = new Date(now);
+      horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
+      const upcomingRecurring = recurringPatterns.filter(
+        (pattern) => pattern.nextExpectedDate && pattern.nextExpectedDate >= now && pattern.nextExpectedDate <= horizonEnd
+      );
+      const upcomingCommitments = financialCommitments.filter((commitment) => {
+        const dueDate = commitment.nextDueDate ?? commitment.dueDate;
+        return dueDate && dueDate >= now && dueDate <= horizonEnd;
+      });
+      const recurringReserve = upcomingRecurring.reduce((sum, item) => sum + Math.abs(Number(item.amount ?? 0)), 0);
+      const commitmentReserve = upcomingCommitments.reduce((sum, item) => sum + Math.abs(Number(item.amount ?? 0)), 0);
+      const everydaySpendingBuffer = Math.max(0, baselineSpend) * (horizonDays / 30);
+      const goalContribution = goalProgress.targetAmount && goalProgress.targetAmount > 0
+        ? goalProgress.targetAmount * (horizonDays / 30)
+        : 0;
+      const knownObligations = recurringReserve + commitmentReserve + openSplitBillAmount;
+      const recommendedBuffer = everydaySpendingBuffer + goalContribution;
+      const enteredIncome = Number(options?.expectedIncome ?? 0);
+      const expectedIncomeIncluded = Number.isFinite(enteredIncome) && enteredIncome > 0 ? enteredIncome : 0;
+      const roomAfterProtection = spendableAccountBalance + expectedIncomeIncluded - knownObligations - recommendedBuffer;
+
+      return {
+        horizonDays,
+        asOf: now.toISOString(),
+        through: horizonEnd.toISOString(),
+        currency: displayCurrency,
+        availableCash: spendableAccountBalance,
+        expectedIncome: expectedIncomeIncluded,
+        expectedIncomeIncluded: expectedIncomeIncluded > 0,
+        reservedForBills: recurringReserve + commitmentReserve,
+        reservedForSharedExpenses: openSplitBillAmount,
+        recommendedBuffer,
+        everydaySpendingBuffer,
+        goalContribution,
+        knownObligations,
+        safeToSpend: Math.max(0, roomAfterProtection),
+        roomAfterProtection,
+        status: roomAfterProtection >= 0 ? "room_available" : "protect_cash_first",
+        details: {
+          recurring: upcomingRecurring.map((item) => ({
+            label: item.merchantClean ?? item.merchantRaw,
+            amount: Math.abs(Number(item.amount ?? 0)),
+            due: item.nextExpectedDate?.toISOString() ?? null,
+          })),
+          commitments: upcomingCommitments.map((item) => ({
+            label: item.title,
+            amount: Math.abs(Number(item.amount ?? 0)),
+            due: (item.nextDueDate ?? item.dueDate)?.toISOString() ?? null,
+          })),
+          openSplitBillCount,
+          openSplitBillAmount,
+          goal: goalValue,
+          goalStatus: goalProgressLabel,
+        },
+        caveats: [
+          expectedIncomeIncluded > 0 ? "The result includes the income amount supplied in the question." : "Expected income is not included because Clover does not have a confirmed payday amount.",
+          "The buffer is based on the user's historical spending baseline and active goal target when available.",
+          openSplitBillCount > 0 ? "Open split bills are reserved in full because their settlement timing is not confirmed." : null,
+          dataFreshnessLabel.toLowerCase().includes("stale") ? `The latest transaction data is ${dataFreshnessLabel.toLowerCase()}.` : null,
+        ].filter((caveat): caveat is string => Boolean(caveat)),
+        freshness: dataFreshnessLabel,
+      };
+    };
     const cashflowPressureScore = forecastSignal?.score ?? average([
       currentSavingsRate !== null && currentSavingsRate < 0 ? 90 : 45,
       accountPressureEstimate,
@@ -1750,6 +1815,7 @@ export async function POST(request: Request) {
       "If the data is insufficient, say what is missing and suggest where to check in Clover.",
       "When the user asks to see a report, use open_report so the UI can open Clover's existing Reports page.",
       "When the user asks whether they can afford a named purchase with a price, use check_affordability.",
+      "When the user asks how much they can safely spend, how much room they have until payday, or what is safe to spend, use calculate_safe_to_spend. Explain available cash, protected obligations, recommended buffer, and safe amount separately. If payday income is not confirmed, do not invent it.",
       "When the user asks about account balances, connected accounts, or where their money is held, use get_account_summary.",
       "When the user asks what changed, what is new, or what deserves attention since their last check, use get_adviser_changes.",
       "When the user asks about goal progress, use get_goal_progress.",
@@ -1879,6 +1945,20 @@ export async function POST(request: Request) {
             price: { type: "number" },
           },
           required: ["itemName", "price"],
+          additionalProperties: false,
+        },
+      },
+      {
+        type: "function",
+        name: "calculate_safe_to_spend",
+        description: "Calculate a transparent safe-to-spend amount after protecting known bills, unsettled shared expenses, everyday spending, and active goal contributions. Use for questions about safe spending, room until payday, or discretionary cash. Do not invent expected income.",
+        parameters: {
+          type: "object",
+          properties: {
+            horizonDays: { type: ["number", "null"], description: "Number of days to protect. Use 14 when the user asks generally, or infer a stated time window. Keep between 1 and 90." },
+            expectedIncome: { type: ["number", "null"], description: "Expected income only when the user explicitly provides a reliable amount for the period." },
+          },
+          required: ["horizonDays", "expectedIncome"],
           additionalProperties: false,
         },
       },
@@ -2043,11 +2123,22 @@ export async function POST(request: Request) {
           const href = `/reports?${params.toString()}`;
           actions.push({ id: `report-${actions.length + 1}`, kind: "navigate", type: "open_report", label: "Open this report", description: "Use Clover's existing Reports view for the requested period.", href });
           result = { href, report: "existing Clover Reports view", range: args.range ?? "30d", section: args.section ?? "overview", filter: filter || null };
+        } else if (call.name === "calculate_safe_to_spend") {
+          result = calculateSafeToSpend({
+            horizonDays: typeof args.horizonDays === "number" ? args.horizonDays : null,
+            expectedIncome: typeof args.expectedIncome === "number" ? args.expectedIncome : null,
+          });
         } else if (call.name === "check_affordability") {
           const price = Number(args.price ?? 0);
-          const protectedCash = recurringDueSoon.reduce((sum, item) => sum + item.amount, 0) + commitmentsDueSoon.reduce((sum, item) => sum + item.amount, 0) + Math.max(weightedHistoricalBaseline.spend, baselineSpend);
-          const roomAfterPurchase = spendableAccountBalance - protectedCash - price;
-          result = { itemName: args.itemName ?? "purchase", price, availableCash: spendableAccountBalance, protectedCash, roomAfterPurchase, status: roomAfterPurchase >= 0 ? "fits_after_reserve" : "would_reduce_reserve", freshness: dataFreshnessLabel };
+          const safeToSpend = calculateSafeToSpend({ horizonDays: 14 });
+          const roomAfterPurchase = safeToSpend.roomAfterProtection - price;
+          result = {
+            itemName: args.itemName ?? "purchase",
+            price,
+            ...safeToSpend,
+            roomAfterPurchase,
+            status: roomAfterPurchase >= 0 ? "fits_after_reserve" : "would_reduce_reserve",
+          };
         } else if (call.name === "get_account_summary") {
           const accounts = chatAccounts.map((account) => ({
             id: account.id,
