@@ -31,6 +31,8 @@ type BudgetItem = {
   statusLabel: string;
   statusDetail: string;
   isAtRisk: boolean;
+  plannedAmount: number;
+  plannedCount: number;
 };
 
 type BudgetAlert = BudgetItem & {
@@ -509,7 +511,10 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                         <span>
                           {formatCurrency(budget.actualAmount, budget.currency)} of {formatCurrency(budget.targetAmount, budget.currency)}
                         </span>
-                        <span>{budget.stage === "exceeded" ? "Over limit" : budget.statusLabel}</span>
+                        <span>
+                          {budget.stage === "exceeded" ? "Over limit" : budget.statusLabel}
+                          {budget.plannedCount > 0 ? ` · ${formatCurrency(budget.plannedAmount, budget.currency)} planned` : ""}
+                        </span>
                       </div>
                       <div className="budget-card__actions">
                         <button className="pill-link pill-link--inline" type="button" onClick={() => openEditEditor(budget.id)}>

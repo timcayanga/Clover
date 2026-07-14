@@ -1,4 +1,4 @@
-import type { BudgetCadence, BudgetKind, BudgetScope, TransactionType } from "@prisma/client";
+import type { BudgetCadence, BudgetKind, BudgetScope, CommitmentKind, CommitmentStatus, TransactionType } from "@prisma/client";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 
 export type BudgetRecord = {
@@ -30,6 +30,16 @@ export type BudgetTransaction = {
   isExcluded: boolean;
 };
 
+export type BudgetCommitment = {
+  amount: unknown;
+  currency: string;
+  accountId: string | null;
+  dueDate: Date | null;
+  nextDueDate: Date | null;
+  kind: CommitmentKind;
+  status: CommitmentStatus;
+};
+
 export type BudgetAlertStage = "safe" | "watch" | "warning" | "critical" | "exceeded";
 
 export type BudgetProgress = {
@@ -55,6 +65,8 @@ export type BudgetProgress = {
   statusLabel: string;
   statusDetail: string;
   isAtRisk: boolean;
+  plannedAmount: number;
+  plannedCount: number;
 };
 
 export type BudgetAlert = BudgetProgress & {
@@ -397,9 +409,11 @@ export const buildBudgetHistory = (
 export const buildBudgetOverview = (params: {
   budgets: BudgetRecord[];
   transactions: BudgetTransaction[];
+  commitments?: BudgetCommitment[];
   now?: Date;
 }) => {
   const now = params.now ?? new Date();
+  const commitments = params.commitments ?? [];
   const currentMonthStart = startOfMonth(now);
   const uncategorizedTransactions = params.transactions.filter(
     (transaction) =>
@@ -412,7 +426,15 @@ export const buildBudgetOverview = (params: {
     .filter((budget) => budget.isActive)
     .map((budget) => {
       const periodStart = getBudgetPeriodStart(budget.cadence, now);
+      const periodEnd = getPeriodEnd(budget.cadence, periodStart);
       const periodTransactions = params.transactions.filter((transaction) => transaction.date >= periodStart && matchesBudgetScope(budget, transaction) && !transaction.isExcluded);
+      const periodCommitments = budget.kind === "savings_target" || budget.scope === "category" ? [] : commitments.filter((commitment) => {
+        const dueDate = commitment.nextDueDate ?? commitment.dueDate;
+        return commitment.status === "active" && dueDate !== null && dueDate >= periodStart && dueDate < periodEnd &&
+          commitment.currency.toUpperCase() === budget.currency.toUpperCase() &&
+          (budget.scope !== "account" || commitment.accountId === budget.accountId);
+      });
+      const plannedAmount = periodCommitments.reduce((sum, commitment) => sum + Math.abs(toAmount(commitment.amount)), 0);
       const targetAmount = toAmount(budget.targetAmount);
       const actualAmount = getBudgetActualAmount(budget.kind, periodTransactions);
       const progressPercent = targetAmount > 0 ? (actualAmount / targetAmount) * 100 : 0;
@@ -446,6 +468,8 @@ export const buildBudgetOverview = (params: {
         statusLabel: status.label,
         statusDetail: `${status.detail} ${paceLabel}.`,
         isAtRisk,
+        plannedAmount,
+        plannedCount: periodCommitments.length,
       } satisfies BudgetProgress;
     })
     .sort((left, right) => right.progressPercent - left.progressPercent || left.name.localeCompare(right.name));

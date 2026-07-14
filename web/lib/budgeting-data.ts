@@ -49,7 +49,7 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
       throw error;
     });
 
-  const [budgets, transactions, categories, accounts] = await Promise.all([
+  const [budgets, transactions, categories, accounts, commitments] = await Promise.all([
     budgetsPromise,
     prisma.transaction.findMany({
       where: {
@@ -99,6 +99,22 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
         type: true,
       },
       orderBy: [{ name: "asc" }],
+    }),
+    prisma.financialCommitment.findMany({
+      where: {
+        workspaceId,
+        status: "active",
+        kind: { in: ["planned_payment", "debt"] },
+      },
+      select: {
+        amount: true,
+        currency: true,
+        accountId: true,
+        dueDate: true,
+        nextDueDate: true,
+        kind: true,
+        status: true,
+      },
     }),
   ]);
 
@@ -150,6 +166,7 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
   const overview = buildBudgetOverview({
     budgets,
     transactions: budgetTransactions,
+    commitments,
     now,
   });
 
