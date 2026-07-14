@@ -628,7 +628,6 @@ async function DashboardStream({
   const currentSavingsRate = currentSummary.current.income > 0 ? currentSummary.net / currentSummary.current.income : null;
   const previousNet = currentSummary.previous.income - currentSummary.previous.expense;
   const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
-  const spendDelta = currentSummary.current.expense - currentSummary.previous.expense;
   const reviewAttentionTransactions = currentThirtyDayTransactions.filter(
     (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || (transaction.categoryConfidence ?? 0) < 70
   );
@@ -737,14 +736,6 @@ async function DashboardStream({
   ];
   const weeklyReportTone = weeklySummary.net >= 0 ? "positive" : "warning";
   const monthlyReportTone = currentSummary.net >= 0 ? "positive" : "warning";
-  const weeklyReportCaption =
-    weeklySummary.previous.expense > 0
-      ? `Spending ${weeklySpendMovement}.`
-      : `${weeklyWindowSummary.transactions} transaction${weeklyWindowSummary.transactions === 1 ? "" : "s"} this week.`;
-  const monthlyReportCaption =
-    spendDelta === 0
-      ? `${monthSummary.transactions} transaction${monthSummary.transactions === 1 ? "" : "s"} this month.`
-      : `Spending is ${spendDelta >= 0 ? "up" : "down"} ${formatCurrency(Math.abs(spendDelta), displayCurrency)} vs last month.`;
   return (
     <>
       <PostHogPersonProperties
@@ -842,7 +833,6 @@ async function DashboardStream({
               </div>
               <span className="dashboard-visual-pill">{weeklyWindowSummary.activeDays} active day{weeklyWindowSummary.activeDays === 1 ? "" : "s"}</span>
             </div>
-            <p>{weeklyReportCaption}</p>
             <div className="dashboard-home__report-metrics" aria-label="Weekly report metrics">
               <span>
                 <small>Income</small>
@@ -870,7 +860,6 @@ async function DashboardStream({
               </div>
               <span className="dashboard-visual-pill">{monthSummary.activeDays} active day{monthSummary.activeDays === 1 ? "" : "s"}</span>
             </div>
-            <p>{monthlyReportCaption}</p>
             <div className="dashboard-home__report-metrics" aria-label="Monthly report metrics">
               <span>
                 <small>Income</small>
