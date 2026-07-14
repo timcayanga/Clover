@@ -91,6 +91,18 @@ const parseAmount = (value: unknown) => {
 const countDistinctMonths = (dates: Date[]) =>
   new Set(dates.map((date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`)).size;
 
+const getMonthIndex = (date: Date) => date.getUTCFullYear() * 12 + date.getUTCMonth();
+
+const getMedianNumber = (values: number[]) => {
+  const sorted = [...values].sort((left, right) => left - right);
+  if (sorted.length === 0) {
+    return 0;
+  }
+
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2 : sorted[middle] ?? 0;
+};
+
 export const getRecurringConfidenceTier = (confidence: number): "high" | "medium" | "low" => {
   if (confidence >= 85) {
     return "high";
@@ -582,10 +594,32 @@ const buildRecurringTransactionSuggestions = (
     const minimumAmount = amounts.length > 0 ? Math.min(...amounts) : null;
     const maximumAmount = amounts.length > 0 ? Math.max(...amounts) : null;
     const amountRange = formatAmountRange(minimumAmount, maximumAmount, currency);
-    const expectedDay = Math.round(group.reduce((sum, transaction) => sum + transaction.date.getDate(), 0) / group.length);
-    const averageDayVariance = group.reduce((sum, transaction) => sum + Math.abs(transaction.date.getDate() - expectedDay), 0) / group.length;
+    const monthIndexes = [...new Set(group.map((transaction) => getMonthIndex(transaction.date)))].sort((left, right) => left - right);
+    const monthGaps = monthIndexes.slice(1).map((month, index) => month - (monthIndexes[index] ?? month));
+    if (monthGaps.some((gap) => gap < 1 || gap > 2)) {
+      continue;
+    }
+
+    const expectedDay = Math.round(getMedianNumber(group.map((transaction) => transaction.date.getUTCDate())));
+    const averageDayVariance = group.reduce((sum, transaction) => sum + Math.abs(transaction.date.getUTCDate() - expectedDay), 0) / group.length;
+    const medianAmount = getMedianNumber(amounts);
+    const amountTolerance = Math.max(20, medianAmount * 0.35);
+    const stableAmountCount = amounts.filter((value) => Math.abs(value - medianAmount) <= amountTolerance).length;
+    const amountStability = amounts.length > 0 ? stableAmountCount / amounts.length : 0;
+    const allowsVariableAmount = /\b(rent|lease|internet|bill|utility|utilities|electric|water|phone|insurance|mortgage|loan|repayment|amortization|dues|tuition|school\s+fee|globe|smart|pldt|meralco|maynilad)\b/i.test(title);
+    if (averageDayVariance > 8 || (amounts.length > 0 && amountStability < 0.5 && !allowsVariableAmount)) {
+      continue;
+    }
+
     const amount = parseAmount(latest.amount);
-    const confidence = Math.min(78, 50 + Math.min(distinctMonthCount, 4) * 5 + (averageDayVariance <= 5 ? 8 : 0) + (amountRange ? 5 : 0));
+    const confidence = Math.min(
+      78,
+      50 +
+        Math.min(distinctMonthCount, 4) * 5 +
+        (averageDayVariance <= 5 ? 8 : 3) +
+        (amountRange ? 5 : 0) +
+        (amountStability >= 0.75 ? 5 : allowsVariableAmount ? 2 : 0)
+    );
 
     suggestions.push({
       id: `potential_recurring_transaction::${groupKey}`,
@@ -604,12 +638,13 @@ const buildRecurringTransactionSuggestions = (
         `Clover found ${group.length} matching transaction${group.length === 1 ? "" : "s"} across ${distinctMonthCount} months.`,
         `Charges usually occur around the ${ordinalDay(expectedDay)}.`,
         amountRange ? `Amounts are usually ${amountRange}.` : null,
+        allowsVariableAmount && amountStability < 0.75 ? "The amount varies like a bill or utility." : null,
         "Review the evidence before adding it to your recurring schedule.",
       ].filter(Boolean).join(" "),
       sourceLabel: "Potential recurring payment",
-      sourceDetail: `Seen across ${distinctMonthCount} months · around the ${ordinalDay(expectedDay)} · last seen ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(latest.date)}`,
-      reasonSummary: `The same merchant family appears across multiple months with a ${suggestionType.tag ?? "recurring"} signal.`,
-      reasonTags: [suggestionType.tag ?? "recurring signal", "multi-month", averageDayVariance <= 5 ? "similar date" : "variable date", "needs confirmation"],
+      sourceDetail: `Seen across ${distinctMonthCount} consecutive months · around the ${ordinalDay(expectedDay)} · last seen ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(latest.date)}`,
+      reasonSummary: `The same merchant family appears across consecutive months with a ${suggestionType.tag ?? "recurring"} signal, similar timing, and ${allowsVariableAmount ? "bill-like" : "similar"} amounts.`,
+      reasonTags: [suggestionType.tag ?? "recurring signal", "multi-month", "similar date", allowsVariableAmount && amountStability < 0.75 ? "variable amount" : "similar amount", "needs confirmation"],
       confidenceTier: getRecurringConfidenceTier(confidence),
       confidence,
       sourceFileName: readTransactionImportFileName(latest),
