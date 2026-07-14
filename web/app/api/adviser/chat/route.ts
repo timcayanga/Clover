@@ -991,7 +991,7 @@ export async function POST(request: Request) {
             },
           },
           orderBy: { date: "desc" },
-          take: 1000,
+          take: 5000,
         }),
         prisma.recurringPattern.findMany({
         where: { workspaceId: workspace.id },
@@ -1744,6 +1744,7 @@ export async function POST(request: Request) {
       "When the user asks about investments, use get_investment_summary before giving educational context.",
       "When the user asks about budgets or whether spending is within a limit, use get_budget_status.",
       "When the user asks how much they could invest, use estimate_investment_contribution and explain that it is a conservative planning range, not a security recommendation.",
+      "When the user asks what they should invest in or asks for personalized investment advice, use get_investment_readiness first. Explain what suitability information is still needed before discussing options.",
       "When the user asks about duplicate, uncategorized, or review-needed transactions, use find_data_quality_issues.",
       "When the user asks Clover to add or edit a record, use prepare_write_action and wait for confirmation; never describe a proposed write as completed. Supported writes include goals, budgets, transactions, accounts, investments, and split bills.",
       "",
@@ -1914,6 +1915,12 @@ export async function POST(request: Request) {
         type: "function",
         name: "estimate_investment_contribution",
         description: "Estimate a conservative monthly amount the user might be able to set aside for investing after known obligations and a spending reserve. Do not recommend specific securities.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
+        name: "get_investment_readiness",
+        description: "Assess whether Clover has enough context for educational investment planning. Never select a security or make a personalized recommendation.",
         parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
       },
       {
@@ -2133,6 +2140,28 @@ export async function POST(request: Request) {
             href: "/investments",
           };
           actions.push({ id: `investment-plan-${actions.length + 1}`, kind: "navigate", type: "open_investment_plan", label: "Review Investments", description: "Review investment accounts and decide on a contribution that fits your plan.", href: "/investments" });
+        } else if (call.name === "get_investment_readiness") {
+          const reserveReady = spendableAccountBalance >= Math.max(0, baselineSpend);
+          const surplusReady = longTermAverageNet > 0;
+          const hasInvestmentData = Boolean(latestInvestmentSnapshot);
+          result = {
+            readiness: reserveReady && surplusReady ? "planning_context_available" : "build_context_first",
+            signals: {
+              reserveReady,
+              positiveHistoricalSurplus: surplusReady,
+              existingInvestmentData: hasInvestmentData,
+              latestInvestmentSnapshot: latestInvestmentSnapshot?.snapshotDate?.toISOString() ?? null,
+            },
+            missingSuitabilityContext: [
+              "time horizon",
+              "comfort with losses and volatility",
+              "near-term cash needs",
+              "emergency-fund preference",
+            ],
+            guidance: "Clover can explain investment concepts and compare options at a high level, but it should not choose a security or give personalized investment advice without suitability details.",
+            href: "/investments",
+          };
+          actions.push({ id: `investment-readiness-${actions.length + 1}`, kind: "navigate", type: "open_investment_readiness", label: "Review Investments", description: "Review your investment context before choosing an approach.", href: "/investments" });
         } else if (call.name === "find_data_quality_issues") {
           const duplicateGroups = new Map<string, typeof allTransactions>();
           for (const transaction of allTransactions) {
