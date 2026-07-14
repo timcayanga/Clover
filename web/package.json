@@ -36,6 +36,7 @@
     "qa:backup-parser-template": "tsx scripts/backup-parser-template-regression.ts",
     "qa:training-signals-db": "tsx scripts/record-training-signal-regression.ts",
     "qa:data-loop": "tsx scripts/data-qa-regression.ts",
+    "qa:budgeting": "tsx scripts/budgeting-regression.ts",
     "train:image-labels": "tsx --tsconfig tsconfig.json scripts/train-image-label-corpus.ts"
   },
   "dependencies": {
