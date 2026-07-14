@@ -4060,9 +4060,9 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .dashboard-top-actions .transactions-toolbar-add {
-  background: rgba(242, 245, 247, 0.98);
-  border-color: rgba(182, 191, 197, 1);
-  color: #111111;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(3, 168, 192, 0.22);
+  color: var(--accent);
   box-shadow: none;
   font-weight: 600;
   font-size: 0.78rem;
@@ -4070,9 +4070,9 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .dashboard-top-actions .transactions-toolbar-add:hover,
 .dashboard-top-actions .transactions-toolbar-add:focus-visible {
-  background: rgba(235, 239, 241, 0.98);
-  border-color: rgba(160, 170, 176, 1);
-  color: #111111;
+  background: rgba(245, 252, 253, 0.98);
+  border-color: rgba(3, 168, 192, 0.38);
+  color: var(--accent);
   box-shadow: none;
 }
 
@@ -18087,9 +18087,9 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .transactions-page .transactions-toolbar-add {
-  background: rgba(242, 245, 247, 0.98);
-  border-color: rgba(182, 191, 197, 1);
-  color: #111111;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(3, 168, 192, 0.22);
+  color: var(--accent);
   box-shadow: none;
   font-weight: 600;
   font-size: 0.78rem;
@@ -18097,9 +18097,9 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .transactions-page .transactions-toolbar-add:hover,
 .transactions-page .transactions-toolbar-add:focus {
-  background: rgba(235, 239, 241, 0.98);
-  border-color: rgba(160, 170, 176, 1);
-  color: #111111;
+  background: rgba(245, 252, 253, 0.98);
+  border-color: rgba(3, 168, 192, 0.38);
+  color: var(--accent);
   box-shadow: none;
 }
 
@@ -18340,6 +18340,12 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  font-size: 0.78rem;
+}
+
+.content--investments .investments-currency-filter .transactions-currency-filter__button,
+.content--investments .investments-page__add-button-label {
+  font-size: 0.78rem;
 }
 
 .investments-page__toolbar-button {
