@@ -40,6 +40,7 @@ type AdviserAlert = {
 };
 
 const ADVISER_ALERT_DISMISSALS_KEY = "clover.adviser-alert-dismissals.v1";
+const ADVISER_ALERTS_ENABLED_KEY = "clover.adviser-alerts-enabled.v1";
 
 const formatUpdatedAt = (updatedAt: number) => {
   if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
@@ -97,6 +98,7 @@ export function NotificationsClient() {
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
   const [adviserAlerts, setAdviserAlerts] = useState<AdviserAlert[]>([]);
   const [dismissedAdviserAlerts, setDismissedAdviserAlerts] = useState<string[]>([]);
+  const [adviserAlertsEnabled, setAdviserAlertsEnabled] = useState(true);
 
   useEffect(() => subscribeImportActivity(() => setActivity(readImportActivity())), []);
   useEffect(() => {
@@ -108,6 +110,12 @@ export function NotificationsClient() {
       }
     } catch {
       setDismissedAdviserAlerts([]);
+    }
+  }, []);
+  useEffect(() => {
+    const stored = window.localStorage.getItem(ADVISER_ALERTS_ENABLED_KEY);
+    if (stored === "false") {
+      setAdviserAlertsEnabled(false);
     }
   }, []);
   useEffect(() => {
@@ -170,6 +178,13 @@ export function NotificationsClient() {
       return next;
     });
   };
+  const toggleAdviserAlerts = () => {
+    setAdviserAlertsEnabled((current) => {
+      const next = !current;
+      window.localStorage.setItem(ADVISER_ALERTS_ENABLED_KEY, String(next));
+      return next;
+    });
+  };
   const importChecklist = activity?.summary ? buildImportResultChecklist(activity.summary) : [];
   const visibleAdviserAlerts = adviserAlerts.filter((alert) => !dismissedAdviserAlerts.includes(alert.id));
 
@@ -222,13 +237,16 @@ export function NotificationsClient() {
             </article>
           )}
 
-          {visibleAdviserAlerts.length > 0 ? (
+          {adviserAlertsEnabled && visibleAdviserAlerts.length > 0 ? (
             <section className="notifications-budget">
               <div className="report-card__head report-card__head--compact">
                 <div>
                   <p className="eyebrow">Adviser alerts</p>
                   <h4>Worth a look right now</h4>
                 </div>
+                <button className="button button-secondary button-small" type="button" onClick={toggleAdviserAlerts}>
+                  Pause alerts
+                </button>
               </div>
               <div className="notifications-budget__grid">
                 {visibleAdviserAlerts.map((alert) => (
@@ -250,6 +268,19 @@ export function NotificationsClient() {
                 ))}
               </div>
             </section>
+          ) : adviserAlerts.length > 0 ? (
+            <article className="notification-item glass">
+              <div className="notification-item__main">
+                <p className="notification-item__tone">Adviser alerts paused</p>
+                <h4>Notifications are still available when you want them</h4>
+                <p>Adviser will keep generating grounded signals, but this device will not show them here until you resume alerts.</p>
+              </div>
+              <div className="notification-item__time">
+                <button className="button button-secondary button-small" type="button" onClick={toggleAdviserAlerts}>
+                  Resume alerts
+                </button>
+              </div>
+            </article>
           ) : null}
 
           {budgetAlerts.length > 0 ? (
