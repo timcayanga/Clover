@@ -665,6 +665,8 @@ async function DashboardStream({
   const recurringSuggestionCount = plannedPaymentSuggestions.filter(
     (suggestion) => suggestion.sourceKind === "recurring_transaction" || suggestion.sourceKind === "installment"
   ).length;
+  const recurringWatchCount = Math.max(recurringSuggestionCount, plannedPaymentsDueSoon.length);
+  const recurringWatchProgress = recurringWatchCount > 0 ? Math.min(recurringWatchCount * 30, 100) : 18;
   const insightCandidates: Array<HomeAdviserItem | null> = [
     daysSinceLastImport === null || daysSinceLastImport >= 7
       ? {
@@ -899,25 +901,22 @@ async function DashboardStream({
                 className="dashboard-home__ring dashboard-home__ring--compact"
                 style={{
                   background: `conic-gradient(var(--accent) 0 ${Math.min(
-                    recurringCandidate ? recurringCandidate.confidence * 0.9 : plannedPaymentsDueSoon.length > 0 ? plannedPaymentsDueSoon.length * 30 : 18,
+                    recurringWatchProgress,
                     100
-                  )}%, rgba(15, 23, 42, 0.08) ${Math.min(
-                    recurringCandidate ? recurringCandidate.confidence * 0.9 : plannedPaymentsDueSoon.length > 0 ? plannedPaymentsDueSoon.length * 30 : 18,
-                    100
-                  )}% 100%)`,
+                  )}%, rgba(15, 23, 42, 0.08) ${Math.min(recurringWatchProgress, 100)}% 100%)`,
                 }}
               >
                 <div className="dashboard-home__ring-inner">
-                  <strong>{recurringCandidate ? `${recurringCandidate.count}x` : `${plannedPaymentsDueSoon.length}`}</strong>
+                  <strong>{recurringWatchCount}</strong>
                 </div>
               </div>
               <div className="dashboard-home__goal-card-copy">
-                <strong>{recurringCandidate?.name ?? "Repeat bills surface here"}</strong>
+                <strong>{recurringWatchCount > 0 ? "Recurring payments" : "Repeat bills surface here"}</strong>
                 <small>
-                  {recurringCandidate
-                    ? `${recurringCandidate.count} recent hit${recurringCandidate.count === 1 ? "" : "s"} found`
-                    : plannedPaymentsDueSoon.length > 0
-                      ? `${plannedPaymentsDueSoon.length} planned payment${plannedPaymentsDueSoon.length === 1 ? "" : "s"} due soon`
+                  {plannedPaymentsDueSoon.length > 0
+                    ? `${plannedPaymentsDueSoon.length} planned payment${plannedPaymentsDueSoon.length === 1 ? "" : "s"} due soon`
+                    : recurringSuggestionCount > 0
+                      ? `${recurringSuggestionCount} potential recurring payment${recurringSuggestionCount === 1 ? "" : "s"} found`
                       : "Clover will surface repeat costs and upcoming payments here."}
                 </small>
               </div>
