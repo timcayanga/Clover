@@ -83,8 +83,58 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
         },
         body: JSON.stringify({
           messages: nextMessages,
+          stream: true,
         }),
       });
+
+      if (response.ok && response.headers.get("content-type")?.includes("text/event-stream")) {
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error("Clover did not return a readable Adviser response.");
+        }
+
+        const assistantIndex = nextMessages.length;
+        setMessages((current) => [...current, { role: "assistant", content: "" }]);
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let streamedReply = "";
+        let streamedActions: AdviserAction[] = [];
+        let streamedUsage: AdviserUsage | undefined;
+
+        const handleEvent = (event: string) => {
+          const dataLine = event.split("\n").find((line) => line.startsWith("data: "));
+          if (!dataLine) {
+            return;
+          }
+          const data = JSON.parse(dataLine.slice(6)) as { type?: string; text?: string; usage?: AdviserUsage; actions?: AdviserAction[] };
+          if (data.type === "delta" && data.text) {
+            streamedReply += data.text;
+            setMessages((current) => current.map((message, index) => (index === assistantIndex ? { ...message, content: streamedReply } : message)));
+          }
+          if (data.type === "complete") {
+            streamedActions = data.actions ?? [];
+            streamedUsage = data.usage;
+          }
+        };
+
+        while (true) {
+          const { value, done } = await reader.read();
+          buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+          const events = buffer.split("\n\n");
+          buffer = events.pop() ?? "";
+          events.forEach(handleEvent);
+          if (done) {
+            break;
+          }
+        }
+
+        if (streamedUsage) {
+          setUsage(streamedUsage);
+        }
+        setActions((current) => [...current, ...streamedActions]);
+        window.setTimeout(scrollToBottom, 0);
+        return;
+      }
 
       const payload = (await response.json().catch(() => null)) as { error?: string; usage?: AdviserUsage; actions?: AdviserAction[]; reply?: string } | null;
       if (payload?.usage) {

@@ -24,6 +24,7 @@ type ChatMessage = {
 
 type RequestBody = {
   messages?: ChatMessage[];
+  stream?: boolean;
 };
 
 type AdviserUsage = {
@@ -815,6 +816,7 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json().catch(() => null)) as RequestBody | null;
+    const streamRequested = body?.stream === true;
     const incomingMessages = Array.isArray(body?.messages)
       ? body?.messages
           .filter(
@@ -2242,6 +2244,33 @@ export async function POST(request: Request) {
     }
 
     const reply = extractOutputText(payload) || "I could not generate a response right now.";
+    if (streamRequested) {
+      const encoder = new TextEncoder();
+      const responseStream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const chunks = reply.match(/.{1,28}(?:\s+|$)/g) ?? [reply];
+          let index = 0;
+          const emit = () => {
+            if (index >= chunks.length) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions })}\n\n`));
+              controller.close();
+              return;
+            }
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", text: chunks[index] })}\n\n`));
+            index += 1;
+            setTimeout(emit, 12);
+          };
+          emit();
+        },
+      });
+      return new Response(responseStream, {
+        headers: {
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+          "Content-Type": "text/event-stream; charset=utf-8",
+        },
+      });
+    }
     return NextResponse.json({ reply, actions, usage: usageForResponse() });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to generate an Adviser response.";
