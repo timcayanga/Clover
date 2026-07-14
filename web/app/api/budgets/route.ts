@@ -10,7 +10,7 @@ const budgetPayloadSchema = z
     name: z.string().trim().min(2).max(80),
     kind: z.enum(["spend_limit", "savings_target"]).default("spend_limit"),
     scope: z.enum(["global", "account", "category"]).default("global"),
-    cadence: z.enum(["daily", "weekly", "monthly"]).default("monthly"),
+    cadence: z.enum(["daily", "weekly", "monthly", "annual"]).default("monthly"),
     targetAmount: z.coerce.number().positive().max(1_000_000_000),
     currency: z.string().trim().min(3).max(8).default("PHP"),
     accountId: z.string().trim().min(1).nullable().optional(),
@@ -53,6 +53,7 @@ export async function GET() {
     budgets: data.overview.budgets,
     overview: data.overview,
     categories: data.categories,
+    accounts: data.accounts,
     workspaceId: context.workspaceId,
   });
 }
@@ -72,6 +73,14 @@ export async function POST(request: Request) {
   const payload = parsed.data;
   const accountId = payload.scope === "account" ? payload.accountId ?? null : null;
   const categoryId = payload.scope === "category" ? payload.categoryId ?? null : null;
+
+  const [account, category] = await Promise.all([
+    accountId ? prisma.account.findFirst({ where: { id: accountId, workspaceId: context.workspaceId }, select: { id: true } }) : null,
+    categoryId ? prisma.category.findFirst({ where: { id: categoryId, workspaceId: context.workspaceId, type: "expense" }, select: { id: true } }) : null,
+  ]);
+  if ((accountId && !account) || (categoryId && !category)) {
+    return NextResponse.json({ error: "Choose a valid account or expense category." }, { status: 400 });
+  }
 
   let budget;
   try {
@@ -106,5 +115,6 @@ export async function POST(request: Request) {
     budget,
     budgets: data.overview.budgets,
     overview: data.overview,
+    accounts: data.accounts,
   });
 }

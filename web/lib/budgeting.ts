@@ -121,6 +121,7 @@ const monthlyEquivalent = (amount: number) => (amount <= 0 ? 0 : amount * (30 / 
 export const formatBudgetCadenceLabel = (cadence: BudgetCadence) => {
   if (cadence === "daily") return "Daily";
   if (cadence === "weekly") return "Weekly";
+  if (cadence === "annual") return "Yearly";
   return "Monthly";
 };
 
@@ -133,7 +134,7 @@ export const formatBudgetScopeLabel = (scope: BudgetScope, budget: BudgetRecord)
     return budget.category?.name ?? "Category";
   }
 
-  return "All accounts";
+  return "All spending";
 };
 
 export const formatBudgetKindLabel = (kind: BudgetKind) => (kind === "savings_target" ? "Savings target" : "Spend limit");
@@ -149,12 +150,17 @@ export const getBudgetPeriodStart = (cadence: BudgetCadence, now = new Date()) =
     return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
   }
 
+  if (cadence === "annual") {
+    return new Date(now.getFullYear(), 0, 1);
+  }
+
   return new Date(now.getFullYear(), now.getMonth(), 1);
 };
 
 export const getBudgetPeriodLabel = (cadence: BudgetCadence) => {
   if (cadence === "daily") return "This day";
   if (cadence === "weekly") return "This week";
+  if (cadence === "annual") return "This year";
   return "This month";
 };
 
@@ -188,6 +194,10 @@ const getPeriodStart = (cadence: BudgetCadence, offset: number, now: Date) => {
     return addDays(startOfWeek(now), -offset * 7);
   }
 
+  if (cadence === "annual") {
+    return new Date(now.getFullYear() - offset, 0, 1);
+  }
+
   return addMonths(startOfMonth(now), -offset);
 };
 
@@ -198,6 +208,10 @@ const getPeriodEnd = (cadence: BudgetCadence, start: Date) => {
 
   if (cadence === "weekly") {
     return addDays(start, 7);
+  }
+
+  if (cadence === "annual") {
+    return new Date(start.getFullYear() + 1, 0, 1);
   }
 
   return addMonths(start, 1);
@@ -219,6 +233,10 @@ const formatHistoryLabel = (cadence: BudgetCadence, start: Date, end: Date) => {
 
   if (cadence === "weekly") {
     return `${shortDateFormatter.format(start)} - ${shortDateFormatter.format(addDays(end, -1))}`;
+  }
+
+  if (cadence === "annual") {
+    return String(start.getFullYear());
   }
 
   return monthYearFormatter.format(start);

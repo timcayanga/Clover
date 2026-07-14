@@ -91,6 +91,7 @@ enum BudgetCadence {
   daily
   weekly
   monthly
+  annual
 }
 
 enum BudgetKind {

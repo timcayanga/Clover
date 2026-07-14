@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { buildBudgetHistory } from "@/lib/budgeting";
 import { resolveBudgetingWorkspace } from "@/lib/budgeting-context";
@@ -11,7 +12,7 @@ const budgetUpdateSchema = z
     name: z.string().trim().min(2).max(80),
     kind: z.enum(["spend_limit", "savings_target"]).default("spend_limit"),
     scope: z.enum(["global", "account", "category"]).default("global"),
-    cadence: z.enum(["daily", "weekly", "monthly"]).default("monthly"),
+    cadence: z.enum(["daily", "weekly", "monthly", "annual"]).default("monthly"),
     targetAmount: z.coerce.number().positive().max(1_000_000_000),
     currency: z.string().trim().min(3).max(8).default("PHP"),
     accountId: z.string().trim().min(1).nullable().optional(),
@@ -50,13 +51,40 @@ type Params = {
   }>;
 };
 
-const getHistoryLookbackDays = (cadence: "daily" | "weekly" | "monthly") => {
+type BudgetWithRelations = Prisma.BudgetGetPayload<{
+  include: {
+    account: { select: { name: true; currency: true } };
+    category: { select: { name: true } };
+  };
+}>;
+
+type BudgetHistoryTransactionRow = Prisma.TransactionGetPayload<{
+  select: {
+    id: true;
+    accountId: true;
+    categoryId: true;
+    type: true;
+    amount: true;
+    date: true;
+    isExcluded: true;
+    merchantRaw: true;
+    merchantClean: true;
+    description: true;
+    category: { select: { name: true } };
+  };
+}>;
+
+const getHistoryLookbackDays = (cadence: "daily" | "weekly" | "monthly" | "annual") => {
   if (cadence === "daily") {
     return 14;
   }
 
   if (cadence === "weekly") {
     return 84;
+  }
+
+  if (cadence === "annual") {
+    return 6 * 366;
   }
 
   return 240;
@@ -70,7 +98,7 @@ export async function GET(_request: Request, { params }: Params) {
 
   const { budgetId } = await params;
 
-  let budget: Awaited<ReturnType<typeof prisma.budget.findFirst>> = null;
+  let budget: BudgetWithRelations | null = null;
   try {
     budget = await prisma.budget.findFirst({
       where: {
@@ -111,7 +139,7 @@ export async function GET(_request: Request, { params }: Params) {
   const lookbackDays = getHistoryLookbackDays(budget.cadence);
   const lookbackStart = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
 
-  let transactions: Awaited<ReturnType<typeof prisma.transaction.findMany>> = [];
+  let transactions: BudgetHistoryTransactionRow[] = [];
   try {
     transactions = await prisma.transaction.findMany({
       where: {
@@ -210,6 +238,14 @@ export async function PATCH(request: Request, { params }: Params) {
   const accountId = payload.scope === "account" ? payload.accountId ?? null : null;
   const categoryId = payload.scope === "category" ? payload.categoryId ?? null : null;
 
+  const [account, category] = await Promise.all([
+    accountId ? prisma.account.findFirst({ where: { id: accountId, workspaceId: context.workspaceId }, select: { id: true } }) : null,
+    categoryId ? prisma.category.findFirst({ where: { id: categoryId, workspaceId: context.workspaceId, type: "expense" }, select: { id: true } }) : null,
+  ]);
+  if ((accountId && !account) || (categoryId && !category)) {
+    return NextResponse.json({ error: "Choose a valid account or expense category." }, { status: 400 });
+  }
+
   let budget;
   try {
     budget = await prisma.budget.update({
@@ -246,6 +282,7 @@ export async function PATCH(request: Request, { params }: Params) {
     budget,
     budgets: data.overview.budgets,
     overview: data.overview,
+    accounts: data.accounts,
   });
 }
 
@@ -289,5 +326,6 @@ export async function DELETE(_request: Request, { params }: Params) {
   return NextResponse.json({
     budgets: data.overview.budgets,
     overview: data.overview,
+    accounts: data.accounts,
   });
 }

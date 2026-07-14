@@ -5,7 +5,7 @@ import { formatCurrencyAmount } from "@/lib/currency-format";
 
 type BudgetKind = "spend_limit" | "savings_target";
 type BudgetScope = "global" | "account" | "category";
-type BudgetCadence = "daily" | "weekly" | "monthly";
+type BudgetCadence = "daily" | "weekly" | "monthly" | "annual";
 type BudgetStage = "safe" | "watch" | "warning" | "critical" | "exceeded";
 
 type BudgetItem = {
@@ -83,15 +83,25 @@ type BudgetCategoryOption = {
   name: string;
 };
 
+type BudgetAccountOption = {
+  id: string;
+  name: string;
+  currency: string;
+  type: string;
+};
+
 type BudgetingData = {
   budgets: BudgetItem[];
   overview: BudgetOverview;
   categories: BudgetCategoryOption[];
+  accounts: BudgetAccountOption[];
 };
 
 type BudgetFormState = {
+  kind: BudgetKind;
   name: string;
   categoryId: string;
+  accountId: string;
   cadence: BudgetCadence;
   targetAmount: string;
   currency: string;
@@ -105,6 +115,7 @@ const cadenceLabels: Record<BudgetCadence, string> = {
   daily: "Daily",
   weekly: "Weekly",
   monthly: "Monthly",
+  annual: "Yearly",
 };
 
 const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
@@ -115,8 +126,10 @@ const formatShortDate = (value: string) =>
   }).format(new Date(value));
 
 const defaultFormState = (currency = "PHP"): BudgetFormState => ({
+  kind: "spend_limit",
   name: "",
   categoryId: "__all__",
+  accountId: "__none__",
   cadence: "monthly",
   targetAmount: "",
   currency,
@@ -124,14 +137,22 @@ const defaultFormState = (currency = "PHP"): BudgetFormState => ({
 
 const toPercentage = (value: number) => `${Math.max(0, Math.round(value))}%`;
 
-const getBudgetDraftName = (form: BudgetFormState, categories: BudgetCategoryOption[]) => {
+const getBudgetDraftName = (form: BudgetFormState, categories: BudgetCategoryOption[], accounts: BudgetAccountOption[]) => {
   const customName = form.name.trim();
   if (customName) {
     return customName;
   }
 
+  if (form.kind === "savings_target") {
+    return "Savings target";
+  }
+
+  if (form.accountId !== "__none__") {
+    return accounts.find((account) => account.id === form.accountId)?.name ?? "Account budget";
+  }
+
   if (form.categoryId === "__all__") {
-    return "All Categories";
+    return "All spending";
   }
 
   return categories.find((category) => category.id === form.categoryId)?.name ?? "Category";
@@ -193,6 +214,8 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
         ? {
             name: editingBudget.name,
             categoryId: editingBudget.categoryId ?? "__all__",
+            accountId: editingBudget.accountId ?? "__none__",
+            kind: editingBudget.kind,
             cadence: editingBudget.cadence,
             targetAmount: String(editingBudget.targetAmount),
             currency: editingBudget.currency,
@@ -223,7 +246,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
       .map(([name, budgets]) => ({
         name,
         budgets: [...budgets].sort((left, right) => {
-          const cadenceOrder: Record<BudgetCadence, number> = { weekly: 0, monthly: 1, daily: 2 };
+          const cadenceOrder: Record<BudgetCadence, number> = { daily: 0, weekly: 1, monthly: 2, annual: 3 };
           return cadenceOrder[left.cadence] - cadenceOrder[right.cadence] || right.progressPercent - left.progressPercent;
         }),
         maxProgress: Math.max(...budgets.map((budget) => budget.progressPercent)),
@@ -329,17 +352,18 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   };
 
   const saveBudget = async () => {
-    const draftName = getBudgetDraftName(form, data.categories);
+    const draftName = getBudgetDraftName(form, data.categories, data.accounts);
+    const isAccountBudget = form.accountId !== "__none__" && form.kind === "spend_limit";
     const isAllCategories = form.categoryId === "__all__";
     const payload = {
       name: draftName,
-      kind: "spend_limit" as const,
-      scope: isAllCategories ? ("global" as const) : ("category" as const),
+      kind: form.kind,
+      scope: form.kind === "savings_target" ? ("global" as const) : isAccountBudget ? ("account" as const) : isAllCategories ? ("global" as const) : ("category" as const),
       cadence: form.cadence,
       targetAmount: Number(form.targetAmount),
       currency: form.currency.trim() || "PHP",
-      accountId: null,
-      categoryId: isAllCategories ? null : form.categoryId,
+      accountId: isAccountBudget ? form.accountId : null,
+      categoryId: form.kind === "savings_target" || isAccountBudget || isAllCategories ? null : form.categoryId,
     };
 
     await runBudgetRequest(payload, editingBudgetId ? "update" : "create", editingBudgetId ?? undefined);
@@ -516,22 +540,63 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
             <div className="budget-editor__form">
               <div className="budget-editor__inline-controls">
                 <label className="budget-editor__field">
-                  <span>Category</span>
-                  <select value={form.categoryId} onChange={(event) => updateFormField("categoryId", event.target.value)}>
-                    <option value="__all__">All Categories</option>
-                    {data.categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
+                  <span>Type</span>
+                  <select
+                    value={form.kind}
+                    onChange={(event) => {
+                      const kind = event.target.value as BudgetKind;
+                      setForm((current) => ({
+                        ...current,
+                        kind,
+                        accountId: kind === "savings_target" ? "__none__" : current.accountId,
+                        categoryId: kind === "savings_target" ? "__all__" : current.categoryId,
+                      }));
+                    }}
+                  >
+                    <option value="spend_limit">Spending limit</option>
+                    <option value="savings_target">Savings target</option>
+                  </select>
+                </label>
+
+                <label className="budget-editor__field">
+                  <span>Applies to</span>
+                  <select
+                    value={form.accountId !== "__none__" ? `account:${form.accountId}` : form.categoryId}
+                    disabled={form.kind === "savings_target"}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      if (value.startsWith("account:")) {
+                        setForm((current) => ({ ...current, accountId: value.slice("account:".length), categoryId: "__all__" }));
+                      } else {
+                        setForm((current) => ({ ...current, accountId: "__none__", categoryId: value }));
+                      }
+                    }}
+                  >
+                    <option value="__all__">All spending</option>
+                    <optgroup label="Categories">
+                      {data.categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Accounts">
+                      {data.accounts.map((account) => (
+                        <option key={account.id} value={`account:${account.id}`}>
+                          {account.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </label>
 
                 <label className="budget-editor__field">
                   <span>Cadence</span>
                   <select value={form.cadence} onChange={(event) => updateFormField("cadence", event.target.value as BudgetCadence)}>
+                    <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
                     <option value="monthly">Monthly</option>
+                    <option value="annual">Yearly</option>
                   </select>
                 </label>
               </div>

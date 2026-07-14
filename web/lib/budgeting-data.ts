@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { buildBudgetOverview } from "@/lib/budgeting";
 
-export const budgetLookbackDays = 35;
+export const budgetLookbackDays = 400;
 
 export const getBudgetLookbackStart = (now = new Date()) => new Date(now.getTime() - budgetLookbackDays * 24 * 60 * 60 * 1000);
 
@@ -49,7 +49,7 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
       throw error;
     });
 
-  const [budgets, transactions, categories] = await Promise.all([
+  const [budgets, transactions, categories, accounts] = await Promise.all([
     budgetsPromise,
     prisma.transaction.findMany({
       where: {
@@ -87,18 +87,77 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
         },
       ],
     }),
+    prisma.account.findMany({
+      where: {
+        workspaceId,
+        type: { not: "investment" },
+      },
+      select: {
+        id: true,
+        name: true,
+        currency: true,
+        type: true,
+      },
+      orderBy: [{ name: "asc" }],
+    }),
   ]);
+
+  // Parsed rows can be visible in Transactions before the normalization worker finishes.
+  // Use them as a read-only fallback so budgets do not look empty during that window.
+  let budgetTransactions = transactions;
+  if (transactions.length === 0) {
+    const parsedRows = await prisma.parsedTransaction.findMany({
+      where: {
+        workspaceId,
+        date: { gte: lookbackStart },
+        amount: { not: null },
+        importFile: {
+          OR: [{ status: "done" }, { confirmedAt: { not: null } }, { parsedRowsCount: { gt: 0 } }],
+        },
+      },
+      select: {
+        date: true,
+        amount: true,
+        type: true,
+        categoryName: true,
+        importFile: {
+          select: {
+            accountId: true,
+          },
+        },
+      },
+    });
+    const categoryIdByName = new Map(categories.map((category) => [category.name.trim().toLowerCase(), category.id]));
+    budgetTransactions = parsedRows.flatMap((row) => {
+      if (!row.date || row.amount === null) {
+        return [];
+      }
+
+      const categoryName = row.categoryName?.trim() ?? "";
+      return [
+        {
+          accountId: row.importFile.accountId ?? "__imported_account__",
+          categoryId: categoryIdByName.get(categoryName.toLowerCase()) ?? null,
+          type: row.type ?? (categoryName.toLowerCase() === "income" ? "income" : "expense"),
+          amount: row.amount,
+          date: row.date,
+          isExcluded: false,
+        },
+      ];
+    });
+  }
 
   const overview = buildBudgetOverview({
     budgets,
-    transactions,
+    transactions: budgetTransactions,
     now,
   });
 
   return {
     budgets,
-    transactions,
+    transactions: budgetTransactions,
     categories,
+    accounts,
     overview,
   };
 };
