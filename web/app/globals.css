@@ -20270,7 +20270,8 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   color: currentColor;
 }
 
-.accounts-toolbar-button span:last-child {
+.accounts-toolbar-button span:last-child,
+.accounts-toolbar-add span:last-child {
   font-size: 0.8rem;
   font-weight: 600;
 }
