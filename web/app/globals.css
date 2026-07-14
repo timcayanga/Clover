@@ -38242,7 +38242,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   grid-column: 1;
   grid-row: 1;
   margin-top: 0;
-  overflow-x: auto;
+  overflow: visible;
   padding: 0 2px 6px;
 }
 
@@ -38271,7 +38271,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
 .landing-bridge__table {
   width: 100%;
-  min-width: 620px;
+  min-width: 0;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0 10px;
   color: var(--muted);

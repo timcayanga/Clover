@@ -30,8 +30,8 @@ export function LandingStoryReveal({
     }
 
     const observer = new IntersectionObserver(
-      ([entry]) => setIsVisible(Boolean(entry?.isIntersecting)),
-      { threshold: 0.2, rootMargin: "-6% 0px -6% 0px" },
+      ([entry]) => setIsVisible(Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.35)),
+      { threshold: [0, 0.35], rootMargin: "-12% 0px -12% 0px" },
     );
 
     observer.observe(node);
