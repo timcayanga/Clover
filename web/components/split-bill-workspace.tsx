@@ -1184,7 +1184,7 @@ export function SplitBillWorkspace({
   return (
     <CloverShell
       active="split-bill"
-      title="Split Bill"
+      title="Split Bills"
       actions={
         <SplitBillPageActions
           currentUserName={currentUserName}

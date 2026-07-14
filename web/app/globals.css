@@ -36526,6 +36526,13 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   justify-content: center;
 }
 
+.split-bill-panel__empty-cta {
+  width: 100%;
+  max-width: none;
+  margin: 4px 0 0;
+  padding: 18px 20px 24px;
+}
+
 .split-bill-empty-launchpad {
   display: flex;
   align-items: center;

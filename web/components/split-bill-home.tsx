@@ -164,19 +164,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
 
   return (
     <div className="split-bill-home">
-      {isBlankState ? (
-        <section className="split-bill-empty-cta" aria-label="Start splitting bills">
-          <img src="/assets/3d%20icons/split%20bills.png" alt="" aria-hidden="true" />
-          <h2>
-            <span>Upload a receipt</span>, split the items, and track who owes what
-          </h2>
-          <SplitBillActionButtons
-            className="split-bill-empty-cta__actions"
-            onAddBill={() => window.dispatchEvent(new CustomEvent("clover:open-split-bill-add", { detail: { mode: "manual" } }))}
-            onUploadReceipt={() => window.dispatchEvent(new CustomEvent("clover:open-split-bill-add", { detail: { mode: "import" } }))}
-          />
-        </section>
-      ) : (
+      {!isBlankState && (
         <section className="split-bill-pulse panel glass" aria-label="Split Bills balance summary">
           <div className="split-bill-pulse__metrics">
             <article>
@@ -229,64 +217,78 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
           </div>
         </div>
 
-        <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
-          <div className="split-bill-table__header" role="row">
-            <span role="columnheader">Description</span>
-            <span role="columnheader">Date</span>
-            <span role="columnheader">People</span>
-            <span role="columnheader">Total</span>
-            <span role="columnheader">Status</span>
-            <span role="columnheader" aria-hidden="true" />
-          </div>
-          {recentBills.length > 0 ? (
-            recentBills.map((bill) => {
-              const status = buildRowStatus(bill.settlement.transfers);
-              const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
+        {isBlankState ? (
+          <section className="split-bill-empty-cta split-bill-panel__empty-cta" aria-label="Start splitting bills">
+            <img src="/assets/3d%20icons/split%20bills.png" alt="" aria-hidden="true" />
+            <h2>
+              <span>Upload a receipt</span>, split the items, and track who owes what
+            </h2>
+            <SplitBillActionButtons
+              className="split-bill-empty-cta__actions"
+              onAddBill={() => window.dispatchEvent(new CustomEvent("clover:open-split-bill-add", { detail: { mode: "manual" } }))}
+              onUploadReceipt={() => window.dispatchEvent(new CustomEvent("clover:open-split-bill-add", { detail: { mode: "import" } }))}
+            />
+          </section>
+        ) : (
+          <>
+            <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
+              <div className="split-bill-table__header" role="row">
+                <span role="columnheader">Description</span>
+                <span role="columnheader">Date</span>
+                <span role="columnheader">People</span>
+                <span role="columnheader">Total</span>
+                <span role="columnheader">Status</span>
+                <span role="columnheader" aria-hidden="true" />
+              </div>
+              {recentBills.length > 0 ? (
+                recentBills.map((bill) => {
+                  const status = buildRowStatus(bill.settlement.transfers);
+                  const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
 
-              return (
-                <div key={bill.id} className="split-bill-table__row split-bill-table__row--interactive" role="row">
-                  <div role="cell" className="split-bill-table__bill">
-                    <strong>{bill.title}</strong>
-                    <span>
-                      {sourceLabel}
-                      {bill.group?.name ? ` · ${bill.group.name}` : ""}
-                    </span>
-                  </div>
-                  <div role="cell">{formatDate(bill.billDate)}</div>
-                  <div role="cell" className="split-bill-table__chips">
-                    {bill.participants.length > 0 ? (
-                      bill.participants.map((participant) => (
-                        <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
-                          <SplitBillEntityAvatar name={participant.name} avatarUrl={null} sizeClass="split-bill-person-avatar--small" />
+                  return (
+                    <div key={bill.id} className="split-bill-table__row split-bill-table__row--interactive" role="row">
+                      <div role="cell" className="split-bill-table__bill">
+                        <strong>{bill.title}</strong>
+                        <span>
+                          {sourceLabel}
+                          {bill.group?.name ? ` · ${bill.group.name}` : ""}
                         </span>
-                      ))
-                    ) : (
-                      <span className="split-bill-subtle-empty">No people yet</span>
-                    )}
-                  </div>
-                  <div role="cell">{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</div>
-                  <div role="cell">
-                    <span className={`split-bill-status-pill${bill.settlement.transfers.length === 0 ? " is-settled" : ""}`}>{status}</span>
-                  </div>
-                  <div role="cell" className="split-bill-table__row-action">
-                    <button className="split-bill-table__chevron" type="button" aria-label={`View ${bill.title}`} onClick={() => onOpenBill(bill.id)}>
-                      ›
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="split-bill-table__empty-state">
-              {isBlankState ? null : "No bills match this view."}
+                      </div>
+                      <div role="cell">{formatDate(bill.billDate)}</div>
+                      <div role="cell" className="split-bill-table__chips">
+                        {bill.participants.length > 0 ? (
+                          bill.participants.map((participant) => (
+                            <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
+                              <SplitBillEntityAvatar name={participant.name} avatarUrl={null} sizeClass="split-bill-person-avatar--small" />
+                            </span>
+                          ))
+                        ) : (
+                          <span className="split-bill-subtle-empty">No people yet</span>
+                        )}
+                      </div>
+                      <div role="cell">{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</div>
+                      <div role="cell">
+                        <span className={`split-bill-status-pill${bill.settlement.transfers.length === 0 ? " is-settled" : ""}`}>{status}</span>
+                      </div>
+                      <div role="cell" className="split-bill-table__row-action">
+                        <button className="split-bill-table__chevron" type="button" aria-label={`View ${bill.title}`} onClick={() => onOpenBill(bill.id)}>
+                          ›
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="split-bill-table__empty-state">No bills match this view.</div>
+              )}
             </div>
-          )}
-        </div>
-        <div className="split-bill-table__footer">
-          <button className="split-bill-table__more-link" type="button" onClick={toggleBills}>
-            {billToggleLabel}
-          </button>
-        </div>
+            <div className="split-bill-table__footer">
+              <button className="split-bill-table__more-link" type="button" onClick={toggleBills}>
+                {billToggleLabel}
+              </button>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="split-bill-mobile-home">
