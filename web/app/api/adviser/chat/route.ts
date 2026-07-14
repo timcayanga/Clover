@@ -152,6 +152,15 @@ const toShortDateLabel = (date: Date) =>
   }).format(date);
 const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
 const average = (values: number[]) => (values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0);
+const median = (values: number[]) => {
+  const sorted = [...values].sort((left, right) => left - right);
+  if (sorted.length === 0) {
+    return 0;
+  }
+
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2 : sorted[middle] ?? 0;
+};
 const getDataFreshnessCopy = (anchorDate: Date, now: Date) => {
   const daysOld = Math.max(0, Math.floor((now.getTime() - anchorDate.getTime()) / (1000 * 60 * 60 * 24)));
 
@@ -1172,6 +1181,26 @@ export async function POST(request: Request) {
 
     const analysisAnchorDate = allTransactions[0]?.date ?? now;
     const dataFreshnessLabel = getDataFreshnessCopy(analysisAnchorDate, now);
+    const incomeHistory = allTransactions
+      .filter((transaction) => transaction.type === "income" && Math.abs(Number(transaction.amount ?? 0)) > 0)
+      .sort((left, right) => left.date.getTime() - right.date.getTime());
+    const recentIncomeHistory = incomeHistory.slice(-12);
+    const incomeIntervals = recentIncomeHistory.slice(1).map((income, index) =>
+      Math.round((income.date.getTime() - (recentIncomeHistory[index]?.date.getTime() ?? income.date.getTime())) / (24 * 60 * 60 * 1000))
+    );
+    const medianIncomeInterval = median(incomeIntervals.filter((interval) => interval > 0));
+    const medianIncomeAmount = median(recentIncomeHistory.map((income) => Math.abs(Number(income.amount ?? 0))));
+    const incomeCadence = medianIncomeInterval >= 5 && medianIncomeInterval <= 9
+      ? "weekly"
+      : medianIncomeInterval >= 12 && medianIncomeInterval <= 18
+        ? "biweekly"
+        : medianIncomeInterval >= 25 && medianIncomeInterval <= 35
+          ? "monthly"
+          : "irregular";
+    const estimatedNextIncomeDate = recentIncomeHistory.length >= 3 && incomeCadence !== "irregular"
+      ? new Date((recentIncomeHistory[recentIncomeHistory.length - 1]?.date ?? now).getTime() + medianIncomeInterval * 24 * 60 * 60 * 1000)
+      : null;
+    const incomeTimingConfidence = recentIncomeHistory.length >= 6 && incomeCadence !== "irregular" ? "medium" : recentIncomeHistory.length >= 3 ? "low" : "insufficient";
     const currentWindowStart = new Date(analysisAnchorDate);
     currentWindowStart.setDate(currentWindowStart.getDate() - 30);
     const previousWindowStart = new Date(analysisAnchorDate);
@@ -1848,6 +1877,7 @@ export async function POST(request: Request) {
       `${previousWindowLabel}: income ${formatCurrency(previousSummary.income)}, spend ${formatCurrency(previousSpend)}, net ${formatSignedCurrency(previousNet)}`,
       `${longTermWindowLabel}: avg income ${formatCurrency(longTermAverageIncome)}, avg spend ${formatCurrency(longTermAverageSpend)}, avg net ${formatSignedCurrency(longTermAverageNet)}`,
       `Baseline model: spend ${formatCurrency(weightedHistoricalBaseline.spend)}, income ${formatCurrency(weightedHistoricalBaseline.income)}, net ${formatSignedCurrency(weightedHistoricalBaseline.net)}`,
+      `Income timing signal: ${incomeTimingConfidence}; cadence ${incomeCadence}; median amount ${medianIncomeAmount > 0 ? formatCurrency(medianIncomeAmount, displayCurrency) : "N/A"}; estimated next date ${estimatedNextIncomeDate ? toShortDateLabel(estimatedNextIncomeDate) : "unconfirmed"}`,
       `Savings rate: ${currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}${baselineSavingsRate === null ? "" : `; baseline ${formatPercent(baselineSavingsRate * 100)}`}`,
       `Trend signals: spend ${monthlyExpenseTrend.direction > 0 ? "rising" : monthlyExpenseTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyExpenseTrend.score)}), income ${monthlyIncomeTrend.direction > 0 ? "rising" : monthlyIncomeTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyIncomeTrend.score)}), net ${monthlyNetTrend.direction > 0 ? "rising" : monthlyNetTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyNetTrend.score)})`,
       `Adviser themes: ${topThemeLine || "none"}`,
@@ -1888,6 +1918,7 @@ export async function POST(request: Request) {
       "When the user asks to see a report, use open_report so the UI can open Clover's existing Reports page.",
       "When the user asks whether they can afford a named purchase with a price, use check_affordability. If the user mentions travel, a future month, or a date by which the purchase must be affordable, pass the stated horizon or untilDate instead of using the default. If the user provides expected income or an extra cash buffer, pass those too.",
       "When the user asks how much they can safely spend, how much room they have until payday, or what is safe to spend, use calculate_safe_to_spend. Explain available cash, protected obligations, recommended buffer, safe amount, and confidence separately. If payday income is not confirmed, do not invent it. If the user gives a payday/date, pass it as untilDate; if they give expected income, pass it as expectedIncome; if they specify an extra cash buffer, pass it as additionalBuffer. Mention when the calculation is limited to one currency or based on stale or thin data.",
+      "When the user asks when income or salary may arrive, or whether Clover can see a payday pattern, use get_income_outlook. Treat the result as an unconfirmed historical pattern and never include it in Safe-to-Spend unless the user confirms the expected amount.",
       "When the user asks about account balances, connected accounts, or where their money is held, use get_account_summary.",
       "When the user asks what changed, what is new, or what deserves attention since their last check, use get_adviser_changes.",
       "When the user asks about goal progress, use get_goal_progress.",
@@ -2044,6 +2075,12 @@ export async function POST(request: Request) {
         type: "function",
         name: "get_account_summary",
         description: "Read reconciled balances and basic details for the user's connected Clover accounts.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
+        name: "get_income_outlook",
+        description: "Read historical income timing and estimate a possible cadence and next date without treating it as confirmed future income. Use for payday or salary timing questions.",
         parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
       },
       {
@@ -2223,6 +2260,19 @@ export async function POST(request: Request) {
             ...safeToSpend,
             roomAfterPurchase,
             status: roomAfterPurchase >= 0 ? "fits_after_reserve" : "would_reduce_reserve",
+          };
+        } else if (call.name === "get_income_outlook") {
+          result = {
+            cadence: incomeCadence,
+            confidence: incomeTimingConfidence,
+            observedIncomeEvents: recentIncomeHistory.length,
+            medianAmount: medianIncomeAmount,
+            lastIncomeDate: recentIncomeHistory[recentIncomeHistory.length - 1]?.date.toISOString() ?? null,
+            estimatedNextIncomeDate: estimatedNextIncomeDate?.toISOString() ?? null,
+            guidance: estimatedNextIncomeDate
+              ? "This is an unconfirmed pattern from historical transactions. Confirm the expected amount and date before including it in Safe-to-Spend."
+              : "Clover does not have a consistent enough income pattern to estimate a payday confidently.",
+            includedInSafeToSpend: false,
           };
         } else if (call.name === "get_account_summary") {
           const accounts = chatAccounts.map((account) => ({
