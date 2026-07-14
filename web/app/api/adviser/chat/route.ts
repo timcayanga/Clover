@@ -1659,6 +1659,17 @@ export async function POST(request: Request) {
       const enteredIncome = Number(options?.expectedIncome ?? 0);
       const expectedIncomeIncluded = Number.isFinite(enteredIncome) && enteredIncome > 0 ? enteredIncome : 0;
       const roomAfterProtection = spendableAccountBalance + expectedIncomeIncluded - knownObligations - recommendedBuffer;
+      const freshnessScore = dataFreshnessLabel.toLowerCase().includes("stale") ? 45 : 85;
+      const safeToSpendConfidenceScore = Math.round(
+        average([
+          accountCoverageScore,
+          currentTransactionConfidence,
+          baselineSpend > 0 ? 82 : 32,
+          currencyCandidates.size > 1 ? 55 : 90,
+          freshnessScore,
+        ])
+      );
+      const safeToSpendConfidence = safeToSpendConfidenceScore >= 75 ? "high" : safeToSpendConfidenceScore >= 55 ? "medium" : "low";
 
       return {
         horizonDays,
@@ -1680,6 +1691,20 @@ export async function POST(request: Request) {
         safeToSpend: Math.max(0, roomAfterProtection),
         roomAfterProtection,
         status: roomAfterProtection >= 0 ? "room_available" : "protect_cash_first",
+        confidence: {
+          score: safeToSpendConfidenceScore,
+          label: safeToSpendConfidence,
+        },
+        dataCoverage: {
+          accountCount: workspace.accounts.length,
+          analyzedAccountCount: accountAnalysisAccounts.length,
+          transactionCount: allTransactions.length,
+          historyDays: historySpanDays,
+          recurringPatternCount: recurringPatterns.length,
+          plannedPaymentCount: plannedPaymentSuggestions.length,
+          currency: displayCurrency,
+          multipleCurrenciesDetected: currencyCandidates.size > 1,
+        },
         details: {
           recurring: upcomingRecurring.map((item) => ({
             label: item.merchantClean ?? item.merchantRaw,
@@ -1708,6 +1733,8 @@ export async function POST(request: Request) {
           plannedPayments.length > 0 ? "Planned statement payments and installments are included when Clover has a due date." : null,
           baselineSpend <= 0 ? "Clover does not have enough spending history to estimate an everyday spending buffer." : null,
           additionalBuffer > 0 ? "The recommended buffer includes the extra amount requested in the question." : null,
+          currencyCandidates.size > 1 ? `Only ${displayCurrency} accounts are included; Clover detected multiple currencies.` : null,
+          accountAnalysisAccounts.length === 0 ? `Clover could not find a ${displayCurrency} cash account balance to use.` : null,
           openSplitBillCount > 0 ? "Open split bills are reserved in full because their settlement timing is not confirmed." : null,
           dataFreshnessLabel.toLowerCase().includes("stale") ? `The latest transaction data is ${dataFreshnessLabel.toLowerCase()}.` : null,
         ].filter((caveat): caveat is string => Boolean(caveat)),
@@ -1856,7 +1883,7 @@ export async function POST(request: Request) {
       "If the data is insufficient, say what is missing and suggest where to check in Clover.",
       "When the user asks to see a report, use open_report so the UI can open Clover's existing Reports page.",
       "When the user asks whether they can afford a named purchase with a price, use check_affordability.",
-      "When the user asks how much they can safely spend, how much room they have until payday, or what is safe to spend, use calculate_safe_to_spend. Explain available cash, protected obligations, recommended buffer, and safe amount separately. If payday income is not confirmed, do not invent it. If the user gives a payday/date, pass it as untilDate; if they give expected income, pass it as expectedIncome; if they specify an extra cash buffer, pass it as additionalBuffer.",
+      "When the user asks how much they can safely spend, how much room they have until payday, or what is safe to spend, use calculate_safe_to_spend. Explain available cash, protected obligations, recommended buffer, safe amount, and confidence separately. If payday income is not confirmed, do not invent it. If the user gives a payday/date, pass it as untilDate; if they give expected income, pass it as expectedIncome; if they specify an extra cash buffer, pass it as additionalBuffer. Mention when the calculation is limited to one currency or based on stale or thin data.",
       "When the user asks about account balances, connected accounts, or where their money is held, use get_account_summary.",
       "When the user asks what changed, what is new, or what deserves attention since their last check, use get_adviser_changes.",
       "When the user asks about goal progress, use get_goal_progress.",
