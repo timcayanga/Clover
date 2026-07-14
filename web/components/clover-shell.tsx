@@ -1638,17 +1638,6 @@ export function CloverShell({
                         </span>
                         Reports
                       </button>
-                      <button
-                        className={`sidebar-nav__submenu-link${pathname?.startsWith("/help") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/help")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="help" />
-                        </span>
-                        Help
-                      </button>
                     </div>
                   ) : null}
                 </div>
@@ -1719,6 +1708,25 @@ export function CloverShell({
             onClick={handleNotificationsToggle}
           >
             <MenuIcon name="notifications" />
+          </button>
+          <button
+            className={`sidebar-icon-button sidebar-footer__help${pathname?.startsWith("/help") ? " is-active" : ""}`}
+            type="button"
+            aria-label="Help"
+            aria-current={pathname?.startsWith("/help") ? "page" : undefined}
+            onMouseDown={(event) => {
+              if (event.button !== 0) {
+                return;
+              }
+
+              event.preventDefault();
+              navigateTo("/help");
+            }}
+            onClick={() => navigateTo("/help")}
+            onMouseEnter={() => prefetchNavTarget("/help")}
+            onTouchStart={() => prefetchNavTarget("/help")}
+          >
+            <MenuIcon name="help" />
           </button>
 
           {isProfileMenuOpen ? (
