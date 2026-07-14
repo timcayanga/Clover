@@ -76,6 +76,8 @@ type BudgetOverview = {
   totalActualAmount: number;
   totalProgressPercent: number;
   highestAlert: BudgetItem | null;
+  uncategorizedTransactionCount: number;
+  uncategorizedAmount: number;
 };
 
 type BudgetCategoryOption = {
@@ -459,6 +461,12 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
             Add budget
           </button>
         </div>
+        {data.overview.uncategorizedTransactionCount > 0 ? (
+          <p className="budgeting-section__note">
+            {formatCurrency(data.overview.uncategorizedAmount, data.budgets[0]?.currency)} across {data.overview.uncategorizedTransactionCount} uncategorized transaction
+            {data.overview.uncategorizedTransactionCount === 1 ? "" : "s"}. Category budgets will not include it yet.
+          </p>
+        ) : null}
 
         {budgetGroups.length > 0 ? (
           <div className="budgeting-grid">

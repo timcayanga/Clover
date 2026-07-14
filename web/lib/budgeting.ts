@@ -109,6 +109,8 @@ export type BudgetOverview = {
   totalActualAmount: number;
   totalProgressPercent: number;
   highestAlert: BudgetProgress | null;
+  uncategorizedTransactionCount: number;
+  uncategorizedAmount: number;
 };
 
 const thresholdSteps = [50, 70, 90, 100];
@@ -373,6 +375,14 @@ export const buildBudgetOverview = (params: {
   now?: Date;
 }) => {
   const now = params.now ?? new Date();
+  const currentMonthStart = startOfMonth(now);
+  const uncategorizedTransactions = params.transactions.filter(
+    (transaction) =>
+      transaction.type === "expense" &&
+      transaction.categoryId === null &&
+      transaction.date >= currentMonthStart &&
+      !transaction.isExcluded
+  );
   const budgets = params.budgets
     .filter((budget) => budget.isActive)
     .map((budget) => {
@@ -438,6 +448,8 @@ export const buildBudgetOverview = (params: {
     totalActualAmount,
     totalProgressPercent,
     highestAlert: budgets[0] ?? null,
+    uncategorizedTransactionCount: uncategorizedTransactions.length,
+    uncategorizedAmount: uncategorizedTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0),
   } satisfies BudgetOverview;
 };
 
