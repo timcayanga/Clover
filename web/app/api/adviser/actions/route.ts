@@ -22,6 +22,8 @@ const actionSchema = z.object({
       "edit_transaction",
       "create_account",
       "create_investment",
+      "edit_account",
+      "edit_investment",
       "create_split_bill",
     ]),
     payload: z.record(z.string(), z.unknown()).default({}),
@@ -35,6 +37,11 @@ const numberValue = (value: unknown, fallback = 0) => {
 };
 
 const stringValue = (value: unknown, fallback = "") => (typeof value === "string" ? value.trim() : fallback);
+const validDate = (value: unknown, fallback = new Date()) => {
+  const parsed = value instanceof Date ? value : new Date(stringValue(value, fallback.toISOString()));
+  return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+};
+const hasOwn = (value: Record<string, unknown>, key: string) => Object.prototype.hasOwnProperty.call(value, key);
 
 const getWorkspaceForUser = async (userId: string, requestedWorkspaceId?: string) => {
   const cookieStore = await cookies();
@@ -86,6 +93,8 @@ export async function POST(request: Request) {
     if (action.type === "set_goal") {
       const goal = stringValue(payload.goal, null as unknown as string) || null;
       const targetAmount = payload.targetAmount === null || payload.targetAmount === undefined || payload.targetAmount === "" ? null : numberValue(payload.targetAmount);
+      if (!goal && targetAmount === null) return NextResponse.json({ error: "Add a goal or target amount before confirming." }, { status: 400 });
+      if (targetAmount !== null && targetAmount <= 0) return NextResponse.json({ error: "A goal target must be greater than zero." }, { status: 400 });
       const goalPlan = payload.goalPlan && typeof payload.goalPlan === "object" ? payload.goalPlan : goal ? { goalKey: goal, targetMode: "amount", cadence: "monthly", targetAmount, targetPercent: null, purpose: null } : null;
       const updated = await prisma.user.update({
         where: { id: user.id },
@@ -108,6 +117,8 @@ export async function POST(request: Request) {
       });
       result = { goal: updated.primaryGoal, targetAmount: updated.goalTargetAmount?.toString() ?? null };
     } else if (action.type === "create_budget") {
+      const targetAmount = numberValue(payload.targetAmount);
+      if (targetAmount <= 0) return NextResponse.json({ error: "A budget limit must be greater than zero." }, { status: 400 });
       const budget = await prisma.budget.create({
         data: {
           workspaceId: workspace.id,
@@ -115,7 +126,7 @@ export async function POST(request: Request) {
           kind: stringValue(payload.kind, "spend_limit") === "savings_target" ? "savings_target" : "spend_limit",
           scope: "global",
           cadence: ["daily", "weekly", "monthly", "annual"].includes(stringValue(payload.cadence)) ? (stringValue(payload.cadence) as "daily" | "weekly" | "monthly" | "annual") : "monthly",
-          targetAmount: new Prisma.Decimal(numberValue(payload.targetAmount)),
+          targetAmount: new Prisma.Decimal(targetAmount),
           currency: stringValue(payload.currency, "PHP").toUpperCase(),
         },
         select: { id: true, name: true, targetAmount: true, currency: true },
@@ -125,13 +136,16 @@ export async function POST(request: Request) {
       const accountId = stringValue(payload.accountId);
       const account = await prisma.account.findFirst({ where: { id: accountId, workspaceId: workspace.id }, select: { id: true } });
       if (!account) return NextResponse.json({ error: "Choose a valid account before recording the transaction." }, { status: 400 });
+      if (!Number.isFinite(Number(payload.amount))) return NextResponse.json({ error: "Add a valid transaction amount before confirming." }, { status: 400 });
+      const transactionDate = validDate(payload.date);
+      if (payload.date !== undefined && Number.isNaN(new Date(stringValue(payload.date)).getTime())) return NextResponse.json({ error: "Add a valid transaction date before confirming." }, { status: 400 });
       const type = ["income", "expense", "transfer"].includes(stringValue(payload.type)) ? (stringValue(payload.type) as "income" | "expense" | "transfer") : "expense";
       const merchantRaw = stringValue(payload.merchantRaw, "Manual transaction");
       const transaction = await prisma.transaction.create({
         data: {
           workspaceId: workspace.id,
           accountId,
-          date: new Date(stringValue(payload.date, new Date().toISOString())),
+          date: transactionDate,
           amount: new Prisma.Decimal(numberValue(payload.amount)),
           currency: stringValue(payload.currency, "PHP").toUpperCase(),
           type,
@@ -155,19 +169,26 @@ export async function POST(request: Request) {
       const transactionId = stringValue(payload.transactionId);
       const existing = await prisma.transaction.findFirst({ where: { id: transactionId, workspaceId: workspace.id }, select: { id: true } });
       if (!existing) return NextResponse.json({ error: "The transaction could not be found in this workspace." }, { status: 404 });
+      if (!hasOwn(payload, "merchantClean") && !hasOwn(payload, "description") && !hasOwn(payload, "amount") && !hasOwn(payload, "date")) {
+        return NextResponse.json({ error: "Choose a transaction field to edit before confirming." }, { status: 400 });
+      }
+      if (hasOwn(payload, "amount") && !Number.isFinite(Number(payload.amount))) return NextResponse.json({ error: "Add a valid transaction amount before confirming." }, { status: 400 });
+      if (hasOwn(payload, "date") && Number.isNaN(new Date(stringValue(payload.date)).getTime())) return NextResponse.json({ error: "Add a valid transaction date before confirming." }, { status: 400 });
       const updated = await prisma.transaction.update({
         where: { id: transactionId },
         data: {
           merchantClean: payload.merchantClean === undefined ? undefined : stringValue(payload.merchantClean) || null,
           description: payload.description === undefined ? undefined : stringValue(payload.description) || null,
           amount: payload.amount === undefined ? undefined : new Prisma.Decimal(numberValue(payload.amount)),
-          date: payload.date === undefined ? undefined : new Date(stringValue(payload.date)),
+          date: payload.date === undefined ? undefined : validDate(payload.date),
           reviewStatus: "edited",
         },
         select: { id: true, merchantClean: true, description: true, amount: true, date: true },
       });
       result = { transaction: { ...updated, amount: updated.amount.toString(), date: updated.date.toISOString() } };
     } else if (action.type === "create_account" || action.type === "create_investment") {
+      if (!stringValue(payload.name)) return NextResponse.json({ error: "Add an account name before confirming." }, { status: 400 });
+      if (!Number.isFinite(Number(payload.balance))) return NextResponse.json({ error: "Add a valid account balance before confirming." }, { status: 400 });
       const account = await prisma.account.create({
         data: {
           workspaceId: workspace.id,
@@ -185,6 +206,22 @@ export async function POST(request: Request) {
         select: { id: true, name: true, type: true, currency: true, balance: true },
       });
       result = { account: { ...account, balance: account.balance?.toString() ?? null } };
+    } else if (action.type === "edit_account" || action.type === "edit_investment") {
+      const accountId = stringValue(payload.accountId);
+      const existing = await prisma.account.findFirst({ where: { id: accountId, workspaceId: workspace.id, ...(action.type === "edit_investment" ? { type: "investment" } : {}) }, select: { id: true, type: true } });
+      if (!existing) return NextResponse.json({ error: "The account could not be found in this workspace." }, { status: 404 });
+      const data: Record<string, unknown> = {};
+      if (hasOwn(payload, "name")) data.name = stringValue(payload.name);
+      if (hasOwn(payload, "institution")) data.institution = stringValue(payload.institution) || null;
+      if (action.type === "edit_investment") {
+        if (hasOwn(payload, "investmentSubtype")) data.investmentSubtype = stringValue(payload.investmentSubtype) || null;
+        if (hasOwn(payload, "investmentSymbol")) data.investmentSymbol = stringValue(payload.investmentSymbol) || null;
+        if (hasOwn(payload, "investmentQuantity")) data.investmentQuantity = payload.investmentQuantity === null || payload.investmentQuantity === "" ? null : new Prisma.Decimal(numberValue(payload.investmentQuantity));
+        if (hasOwn(payload, "investmentCostBasis")) data.investmentCostBasis = payload.investmentCostBasis === null || payload.investmentCostBasis === "" ? null : new Prisma.Decimal(numberValue(payload.investmentCostBasis));
+      }
+      if (Object.keys(data).length === 0) return NextResponse.json({ error: "Choose an account detail to edit before confirming." }, { status: 400 });
+      const updated = await prisma.account.update({ where: { id: accountId }, data, select: { id: true, name: true, institution: true, type: true, currency: true } });
+      result = { account: updated };
     } else if (action.type === "create_split_bill") {
       const transactionId = stringValue(payload.transactionId) || null;
       if (transactionId) {
@@ -192,6 +229,9 @@ export async function POST(request: Request) {
         if (!transaction) return NextResponse.json({ error: "The transaction is not available in this workspace." }, { status: 400 });
       }
       const participantNames = Array.isArray(payload.participants) ? payload.participants.map((name) => stringValue(name)).filter(Boolean) : [];
+      const total = numberValue(payload.total);
+      if (total <= 0) return NextResponse.json({ error: "A split bill total must be greater than zero." }, { status: 400 });
+      if (participantNames.length === 0) return NextResponse.json({ error: "Add at least one person to the split bill before confirming." }, { status: 400 });
       const bill = await prisma.splitBill.create({
         data: {
           userId: user.id,
@@ -200,7 +240,7 @@ export async function POST(request: Request) {
           billDate: new Date(stringValue(payload.billDate, new Date().toISOString())),
           currency: stringValue(payload.currency, "PHP").toUpperCase(),
           merchantName: stringValue(payload.merchantName) || null,
-          total: new Prisma.Decimal(numberValue(payload.total)),
+          total: new Prisma.Decimal(total),
           sourceType: "manual",
           participants: { create: participantNames.map((name) => ({ name })) },
         },

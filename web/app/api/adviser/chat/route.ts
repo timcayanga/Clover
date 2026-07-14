@@ -1738,7 +1738,7 @@ export async function POST(request: Request) {
       "When the user asks about budgets or whether spending is within a limit, use get_budget_status.",
       "When the user asks how much they could invest, use estimate_investment_contribution and explain that it is a conservative planning range, not a security recommendation.",
       "When the user asks about duplicate, uncategorized, or review-needed transactions, use find_data_quality_issues.",
-      "When the user asks Clover to add or edit a record, use prepare_write_action and wait for confirmation; never describe a proposed write as completed.",
+      "When the user asks Clover to add or edit a record, use prepare_write_action and wait for confirmation; never describe a proposed write as completed. Supported writes include goals, budgets, transactions, accounts, investments, and split bills.",
       "",
       "Workspace context:",
       summaryLines,
@@ -1912,11 +1912,11 @@ export async function POST(request: Request) {
       {
         type: "function",
         name: "prepare_write_action",
-        description: "Prepare a confirmation card for a user-requested manual write. Never execute it. Supported action types are set_goal, create_budget, create_transaction, edit_transaction, create_account, create_investment, and create_split_bill.",
+        description: "Prepare a confirmation card for a user-requested manual write. Never execute it. Supported action types are set_goal, create_budget, create_transaction, edit_transaction, create_account, create_investment, edit_account, edit_investment, and create_split_bill.",
         parameters: {
           type: "object",
           properties: {
-            actionType: { type: "string", enum: ["set_goal", "create_budget", "create_transaction", "edit_transaction", "create_account", "create_investment", "create_split_bill"] },
+            actionType: { type: "string", enum: ["set_goal", "create_budget", "create_transaction", "edit_transaction", "create_account", "create_investment", "edit_account", "edit_investment", "create_split_bill"] },
             payload: { type: "object", additionalProperties: true },
             label: { type: "string" },
             description: { type: "string" },
