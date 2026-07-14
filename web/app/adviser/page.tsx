@@ -2067,6 +2067,11 @@ async function AdviserPageContent() {
     return clamp(Math.round(baseScore * confidenceMultiplier + memoryBoost + contextBoost + themeBoost + priorityBoost + personaBoost));
   };
 
+  const lastAdviserCheck = adviserInteractions.find((interaction) => interaction.action !== "adviser.chat_asked")?.createdAt ?? null;
+  const transactionsSinceLastCheck = lastAdviserCheck
+    ? allTransactions.filter((transaction) => transaction.date > lastAdviserCheck).length
+    : 0;
+
   const summaryCards = [
     {
       id: "money_left",
@@ -2105,6 +2110,28 @@ async function AdviserPageContent() {
 
   const passiveCards: RankedAdviserCard[] = selectTopRanked(
     [
+      lastAdviserCheck && transactionsSinceLastCheck > 0
+        ? {
+            id: "since_last_check",
+            title: "There is something new to review",
+            summary: `Clover found ${transactionsSinceLastCheck} transaction${transactionsSinceLastCheck === 1 ? "" : "s"} since your last Adviser check.`,
+            evidence: `${activeTransactionWindowLabel}: ${formatCurrency(currentSpend)} spent, ${formatCurrency(currentSummary.income)} income, and ${topCategoryName ? `${topCategoryName} is the top category` : "no single top category yet"}`,
+            ctaLabel: "Review recent changes",
+            href: "/reports?range=30d&section=trends",
+            tone: spendDelta !== null && spendDelta > 0 ? "warning" : "neutral",
+            group: "cashflow",
+            insightKey: "since-last-check",
+            breakdown: {
+              impact: clamp(transactionsSinceLastCheck * 8 + 35),
+              urgency: clamp(spendDelta !== null && spendDelta > 0 ? spendDelta + 45 : 42),
+              confidence: currentTransactionConfidence,
+              personalization: 96,
+              recency: 100,
+              actionability: 94,
+            },
+            score: 0,
+          }
+        : null,
       budgetOverview.activeBudgetCount > 0
         ? {
             id: "budget_pressure",
