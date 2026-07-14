@@ -592,6 +592,7 @@ model Transaction {
   @@index([reviewStatus])
   @@index([deletedAt])
   @@index([date])
+  @@index([workspaceId, date])
 }
 
 model TransactionTag {
@@ -1206,6 +1207,7 @@ model FinancialCommitment {
   @@index([workspaceId])
   @@index([kind])
   @@index([status])
+  @@index([workspaceId, status, kind])
   @@index([dueDate])
   @@index([nextDueDate])
   @@index([accountId])
