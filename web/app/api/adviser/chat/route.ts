@@ -1659,6 +1659,7 @@ export async function POST(request: Request) {
       const enteredIncome = Number(options?.expectedIncome ?? 0);
       const expectedIncomeIncluded = Number.isFinite(enteredIncome) && enteredIncome > 0 ? enteredIncome : 0;
       const roomAfterProtection = spendableAccountBalance + expectedIncomeIncluded - knownObligations - recommendedBuffer;
+      const safeToSpend = Math.max(0, roomAfterProtection);
       const freshnessScore = dataFreshnessLabel.toLowerCase().includes("stale") ? 45 : 85;
       const safeToSpendConfidenceScore = Math.round(
         average([
@@ -1688,7 +1689,10 @@ export async function POST(request: Request) {
         goalContribution,
         additionalBuffer,
         knownObligations,
-        safeToSpend: Math.max(0, roomAfterProtection),
+        safeToSpend,
+        safeToSpendPerDay: safeToSpend / horizonDays,
+        safeToSpendPerWeek: safeToSpend * (7 / horizonDays),
+        safeToSpendPerWeekend: safeToSpend * (2 / horizonDays),
         roomAfterProtection,
         status: roomAfterProtection >= 0 ? "room_available" : "protect_cash_first",
         confidence: {
@@ -1882,7 +1886,7 @@ export async function POST(request: Request) {
       "If the user's question asks for investment advice, stay cautious and avoid personalized investment recommendations.",
       "If the data is insufficient, say what is missing and suggest where to check in Clover.",
       "When the user asks to see a report, use open_report so the UI can open Clover's existing Reports page.",
-      "When the user asks whether they can afford a named purchase with a price, use check_affordability.",
+      "When the user asks whether they can afford a named purchase with a price, use check_affordability. If the user mentions travel, a future month, or a date by which the purchase must be affordable, pass the stated horizon or untilDate instead of using the default.",
       "When the user asks how much they can safely spend, how much room they have until payday, or what is safe to spend, use calculate_safe_to_spend. Explain available cash, protected obligations, recommended buffer, safe amount, and confidence separately. If payday income is not confirmed, do not invent it. If the user gives a payday/date, pass it as untilDate; if they give expected income, pass it as expectedIncome; if they specify an extra cash buffer, pass it as additionalBuffer. Mention when the calculation is limited to one currency or based on stale or thin data.",
       "When the user asks about account balances, connected accounts, or where their money is held, use get_account_summary.",
       "When the user asks what changed, what is new, or what deserves attention since their last check, use get_adviser_changes.",
@@ -2011,15 +2015,17 @@ export async function POST(request: Request) {
           properties: {
             itemName: { type: "string" },
             price: { type: "number" },
+            horizonDays: { type: ["number", "null"], description: "Number of days to protect when the purchase is for a stated future window." },
+            untilDate: { type: ["string", "null"], description: "The future date by which the purchase or trip must be affordable, in ISO format." },
           },
-          required: ["itemName", "price"],
+          required: ["itemName", "price", "horizonDays", "untilDate"],
           additionalProperties: false,
         },
       },
       {
         type: "function",
         name: "calculate_safe_to_spend",
-        description: "Calculate a transparent safe-to-spend amount after protecting known bills, planned statement payments, installments, unsettled shared expenses, everyday spending, and active goal contributions. Use for questions about safe spending, room until payday, or discretionary cash. Do not invent expected income.",
+        description: "Calculate a transparent safe-to-spend amount after protecting known bills, planned statement payments, installments, unsettled shared expenses, everyday spending, and active goal contributions. Use for questions about safe spending, room until payday, discretionary cash, weekend limits, or travel planning. Do not invent expected income.",
         parameters: {
           type: "object",
           properties: {
@@ -2202,7 +2208,10 @@ export async function POST(request: Request) {
           });
         } else if (call.name === "check_affordability") {
           const price = Number(args.price ?? 0);
-          const safeToSpend = calculateSafeToSpend({ horizonDays: 14 });
+          const safeToSpend = calculateSafeToSpend({
+            horizonDays: typeof args.horizonDays === "number" ? args.horizonDays : 14,
+            untilDate: typeof args.untilDate === "string" ? args.untilDate : null,
+          });
           const roomAfterPurchase = safeToSpend.roomAfterProtection - price;
           result = {
             itemName: args.itemName ?? "purchase",
