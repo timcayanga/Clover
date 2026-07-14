@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
+import { loadSplitBillBill } from "@/lib/split-bill-loaders";
+import { serializeSplitBillRecord } from "@/lib/split-bill";
+import { loadSplitBillTransferSettlementsForBill } from "@/lib/split-bill-transfer-settlements";
 
 export const dynamic = "force-dynamic";
 
@@ -69,13 +72,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
       throw new Error("Enter an amount greater than zero.");
     }
 
-    const bill = await prisma.splitBill.findFirst({
-      where: { id: billId, userId: user.id },
-      include: { participants: true },
-    });
+    const parsedDueDate = body.dueDate ? new Date(`${body.dueDate}T12:00:00`) : null;
+    if (body.dueDate && (!/^\d{4}-\d{2}-\d{2}$/.test(body.dueDate) || !parsedDueDate || Number.isNaN(parsedDueDate.getTime()))) {
+      throw new Error("Choose a valid due date.");
+    }
+
+    const bill = await loadSplitBillBill(user.id, billId);
     if (!bill) {
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
+    const transferSettlements = await loadSplitBillTransferSettlementsForBill(billId);
+    const serializedBill = serializeSplitBillRecord({
+      ...bill,
+      transferSettlements,
+    } as Parameters<typeof serializeSplitBillRecord>[0]);
     const recipient = bill.participants.find((participant) => participant.id === body.recipientParticipantId);
     const payee = bill.participants.find((participant) => participant.id === body.payeeParticipantId);
     if (!recipient || !payee) {
@@ -83,6 +93,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
     }
     if (recipient.id === payee.id) {
       throw new Error("Choose two different people for a payment request.");
+    }
+    const transfer = serializedBill.settlement.transfers.find(
+      (entry) => entry.fromParticipantId === recipient.id && entry.toParticipantId === payee.id
+    );
+    if (!transfer) {
+      throw new Error("There is no open balance for this payment request.");
+    }
+    const activeRequests = await prisma.splitBillPaymentRequest.findMany({
+      where: {
+        billId,
+        recipientParticipantId: recipient.id,
+        payeeParticipantId: payee.id,
+        status: { in: ["requested", "payment_reported"] },
+      },
+      select: { amount: true },
+    });
+    const alreadyRequested = activeRequests.reduce((sum, entry) => sum + Number(entry.amount), 0);
+    const remainingAfterRequests = transfer.amount - alreadyRequested;
+    if (amount > remainingAfterRequests + 0.005) {
+      throw new Error(`This request can be up to ${bill.currency.toUpperCase()} ${Math.max(0, remainingAfterRequests).toFixed(2)}.`);
     }
     if (body.paymentProfileId) {
       const profile = await prisma.splitBillPaymentProfile.findFirst({
@@ -111,7 +141,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
         recipientEmail: body.recipientEmail || null,
         amount: amount.toFixed(2),
         currency: bill.currency,
-        dueDate: body.dueDate ? new Date(`${body.dueDate}T12:00:00`) : null,
+        dueDate: parsedDueDate,
         note: body.note || null,
         shareToken: randomUUID().replaceAll("-", ""),
       },

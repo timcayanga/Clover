@@ -35,8 +35,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
   if (!entry) {
     return NextResponse.json({ error: "Payment request not found" }, { status: 404 });
   }
-  if (entry.status === "paid") {
+  if (entry.status === "paid" || entry.status === "payment_reported") {
     return NextResponse.json({ ok: true, status: entry.status });
+  }
+  if (entry.status !== "requested") {
+    return NextResponse.json({ error: "This payment request is no longer active." }, { status: 409 });
   }
   const updated = await prisma.splitBillPaymentRequest.update({
     where: { id: entry.id },
