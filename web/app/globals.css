@@ -38078,7 +38078,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   gap: 32px;
   align-items: center;
   min-height: max(720px, calc(100svh - 88px));
-  padding: 28px 0 132px;
+  padding: 28px 0 44px;
 }
 
 .landing-page .landing-hero__copy {
@@ -38231,7 +38231,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
 }
 
 .landing-bridge {
-  padding: clamp(86px, 11vw, 150px) 0 clamp(100px, 13vw, 170px);
+  padding: clamp(52px, 7vw, 76px) 0 clamp(100px, 13vw, 170px);
   border-top: 1px solid rgba(15, 23, 42, 0.06);
   border-bottom: 1px solid rgba(15, 23, 42, 0.06);
 }
@@ -39181,7 +39181,7 @@ body:has(.landing-page) {
 
 @media (max-width: 720px) {
   .landing-bridge {
-    padding: 72px 0 88px;
+    padding: 44px 0 88px;
   }
 
   .landing-bridge__inner {
