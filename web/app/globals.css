@@ -887,8 +887,8 @@ body.dashboard-modal-open .app-shell {
   color: var(--muted);
   text-align: left;
   width: 100%;
-  min-height: 40px;
-  padding: 8px 10px;
+  min-height: 34px;
+  padding: 5px 10px;
   border-radius: 13px;
   font-size: 13px;
   line-height: 1.2;
@@ -899,8 +899,8 @@ body.dashboard-modal-open .app-shell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   color: var(--accent);
   flex: none;
   background: transparent !important;
@@ -1453,8 +1453,8 @@ body.transactions-manual-open .shell-quick-add-button {
   }
 
   .sidebar-nav__submenu-link {
-    min-height: 36px;
-    padding: 7px 9px;
+    min-height: 32px;
+    padding: 4px 9px;
   }
 }
 

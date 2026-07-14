@@ -306,6 +306,7 @@ const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
   reports: "/assets/3d%20icons/menu/reports.png",
   adviser: "/assets/3d%20icons/menu/adviser.png",
   budgeting: "/assets/3d%20icons/menu/budgeting.png",
+  goals: "/assets/icons/goals.png",
   more: "/assets/3d%20icons/menu/more.png",
   notifications: `/assets/3d%20icons/notifications.png?v=${MENU_ICON_VERSION}`,
   settings: `/assets/3d%20icons/settings.png?v=${MENU_ICON_VERSION}`,
@@ -1501,6 +1502,17 @@ export function CloverShell({
                         Split Bills
                       </button>
                       <button
+                        className={`sidebar-nav__submenu-link${active === "goals" || pathname?.startsWith("/goals") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/goals")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="goals" />
+                        </span>
+                        Goals
+                      </button>
+                      <button
                         className={`sidebar-nav__submenu-link${active === "budgeting" || pathname?.startsWith("/budgeting") ? " is-active" : ""}`}
                         type="button"
                         role="menuitem"
@@ -1521,17 +1533,6 @@ export function CloverShell({
                           <MenuIcon name="reports" />
                         </span>
                         Reports
-                      </button>
-                      <button
-                        className={`sidebar-nav__submenu-link${active === "goals" || pathname?.startsWith("/goals") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/goals")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="goals" />
-                        </span>
-                        Goals
                       </button>
                     </div>
                   ) : null}
