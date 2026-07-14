@@ -22,6 +22,7 @@ export type AdviserChatQuestionPayload = {
   sourceAction: string;
   href?: string | null;
   pathname?: string | null;
+  question?: string | null;
 };
 
 export const recordAdviserActionCompletion = async (payload: AdviserActionCompletionPayload) => {
@@ -61,6 +62,7 @@ export const recordAdviserChatQuestion = async (payload: AdviserChatQuestionPayl
         sourceAction: payload.sourceAction,
         href: payload.href ?? null,
         pathname: payload.pathname ?? null,
+        question: payload.question?.slice(0, 240) ?? null,
       },
     },
   });

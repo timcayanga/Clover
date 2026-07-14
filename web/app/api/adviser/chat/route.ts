@@ -65,6 +65,7 @@ type AdviserAuditMetadata = {
   label?: string;
   href?: string;
   pathname?: string;
+  question?: string;
 };
 
 type AdviserSignalTheme = "cashflow" | "behavior" | "goals" | "investments" | "cleanup";
@@ -1102,6 +1103,15 @@ export async function POST(request: Request) {
       },
     });
 
+    const recentAdviserQuestions = adviserInteractions
+      .filter((interaction) => interaction.action === "adviser.chat_asked")
+      .map((interaction) => {
+        const metadata = interaction.metadata && typeof interaction.metadata === "object" ? (interaction.metadata as AdviserAuditMetadata) : null;
+        return metadata?.question || metadata?.label || null;
+      })
+      .filter((question): question is string => Boolean(question))
+      .slice(0, 6);
+
     const adviserMemoryByGroup = new Map<string, AdviserMemoryStats>();
     const adviserMemoryByItem = new Map<string, AdviserMemoryStats>();
     const adviserOutcomeByGroup = new Map<string, AdviserMemoryStats>();
@@ -1706,6 +1716,7 @@ export async function POST(request: Request) {
       `Trend signals: spend ${monthlyExpenseTrend.direction > 0 ? "rising" : monthlyExpenseTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyExpenseTrend.score)}), income ${monthlyIncomeTrend.direction > 0 ? "rising" : monthlyIncomeTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyIncomeTrend.score)}), net ${monthlyNetTrend.direction > 0 ? "rising" : monthlyNetTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyNetTrend.score)})`,
       `Adviser themes: ${topThemeLine || "none"}`,
       `Adviser memory: ${adviserInteractions.length} interactions, ${adviserCompletionLogs.length} completion actions, follow-through rate ${formatPercent(adviserFollowThroughRate)}, cleanup affinity ${Math.round(userPreferenceAffinity.cleanup)}, cashflow affinity ${Math.round(userPreferenceAffinity.cashflow)}`,
+      `Recent Adviser questions: ${recentAdviserQuestions.join(" | ") || "none"}`,
       `Preference profile: cashflow ${Math.round(userPreferenceAffinity.cashflow)}, behavior ${Math.round(userPreferenceAffinity.behavior)}, goals ${Math.round(userPreferenceAffinity.goals)}, investments ${Math.round(userPreferenceAffinity.investments)}, cleanup ${Math.round(userPreferenceAffinity.cleanup)}`,
       `Financial persona: ${financialPersona.label} - ${financialPersona.summary}`,
       `Narrative: ${adviserNarrative}`,
@@ -1778,6 +1789,7 @@ export async function POST(request: Request) {
       sourceAction: "adviser_chat",
       href: "/adviser",
       pathname: "/adviser",
+      question: latestQuestion,
     }).catch(() => null);
 
     const strongestFallbackSignal = explainabilityBundle[0] ?? null;
