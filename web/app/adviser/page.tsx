@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
@@ -1159,7 +1160,7 @@ async function AdviserPageContent() {
         },
       },
     },
-  } as const;
+  } satisfies Prisma.WorkspaceInclude;
 
   const selectedWorkspace =
     (selectedWorkspaceCookieId
@@ -1734,7 +1735,15 @@ async function AdviserPageContent() {
     currentTransactionConfidence,
     thresholdProfile
   );
-  const preferenceProfile = buildPreferenceProfile(adviserInteractions, adviserOutcomeByGroup, adviserOutcomeByItem, now);
+  const preferenceProfile = buildPreferenceProfile(
+    adviserInteractions.map((interaction) => ({
+      ...interaction,
+      metadata: interaction.metadata && typeof interaction.metadata === "object" ? (interaction.metadata as AdviserAuditMetadata) : null,
+    })),
+    adviserOutcomeByGroup,
+    adviserOutcomeByItem,
+    now
+  );
   const completionDatesByTheme = adviserCompletionLogs.reduce<Record<AdviserSignalTheme, Date[]>>(
     (accumulator, log) => {
       const metadata = log.metadata as AdviserAuditMetadata | null;
@@ -1843,7 +1852,7 @@ async function AdviserPageContent() {
     ])
   );
 
-  const signalThemes: AdviserThemeScore[] = [
+  const signalThemes = ([
     {
       key: "cashflow",
       score: average([
@@ -1856,7 +1865,7 @@ async function AdviserPageContent() {
     { key: "goals", score: goalPressureScore },
     { key: "investments", score: investmentSignalScore },
     { key: "cleanup", score: cleanupPressureScore },
-  ].sort((left, right) => right.score - left.score);
+  ] satisfies AdviserThemeScore[]).sort((left, right) => right.score - left.score);
   const dominantTheme = signalThemes[0];
   const secondaryTheme = signalThemes[1];
   const crossSignalSynergy = scoreTheme([dominantTheme?.score ?? 0, secondaryTheme?.score ?? 0]);
@@ -2023,7 +2032,7 @@ async function AdviserPageContent() {
     return clamp(Math.round(baseScore * confidenceMultiplier + memoryBoost + contextBoost + themeBoost + priorityBoost + personaBoost));
   };
 
-  const scorePromptRelevance = (prompt: Pick<RankedAdviserPrompt, "group" | "id">, baseScore: number) => {
+  const scorePromptRelevance = (prompt: Pick<RankedAdviserPrompt, "group" | "id" | "breakdown">, baseScore: number) => {
     const memoryBoost = promptMemoryBoost(prompt.group, prompt.id);
     let contextBoost = 0;
     let themeBoost = 0;
@@ -2389,10 +2398,13 @@ async function AdviserPageContent() {
             score: 0,
           }
         : null,
-    ].filter((card): card is RankedAdviserCard => card !== null).map((card) => ({
-      ...card,
-      score: scoreCardRelevance(card, scoreCandidate(card.breakdown, adviserCardWeights.passive)),
-    })),
+    ].filter(Boolean).map((card) => {
+      const typedCard = card as RankedAdviserCard;
+      return {
+        ...typedCard,
+        score: scoreCardRelevance(typedCard, scoreCandidate(typedCard.breakdown, adviserCardWeights.passive)),
+      };
+    }),
     3
   );
 
@@ -2652,10 +2664,13 @@ async function AdviserPageContent() {
             score: 0,
           }
         : null,
-    ].filter((card): card is RankedAdviserCard => card !== null).map((card) => ({
-      ...card,
-      score: scoreCardRelevance(card, scoreCandidate(card.breakdown, adviserCardWeights.recommendation)),
-    })),
+    ].filter(Boolean).map((card) => {
+      const typedCard = card as RankedAdviserCard;
+      return {
+        ...typedCard,
+        score: scoreCardRelevance(typedCard, scoreCandidate(typedCard.breakdown, adviserCardWeights.recommendation)),
+      };
+    }),
     3
   );
 
@@ -2869,10 +2884,13 @@ async function AdviserPageContent() {
             score: 0,
           }
         : null,
-    ].filter((card): card is RankedAdviserCard => card !== null).map((card) => ({
-      ...card,
-      score: scoreCardRelevance(card, scoreCandidate(card.breakdown, adviserCardWeights.coaching)),
-    })),
+    ].filter(Boolean).map((card) => {
+      const typedCard = card as RankedAdviserCard;
+      return {
+        ...typedCard,
+        score: scoreCardRelevance(typedCard, scoreCandidate(typedCard.breakdown, adviserCardWeights.coaching)),
+      };
+    }),
     3
   );
 
@@ -2882,7 +2900,7 @@ async function AdviserPageContent() {
   const isAdviserGettingStarted =
     workspaceAccounts.length === 0 &&
     allTransactions.length === 0 &&
-    commitments.length === 0 &&
+    financialCommitments.length === 0 &&
     recurringPatterns.length === 0;
   const summaryCardsToRender = isAdviserGettingStarted
     ? [
@@ -3143,10 +3161,13 @@ async function AdviserPageContent() {
             score: 0,
           }
         : null,
-    ].filter((prompt): prompt is RankedAdviserPrompt => prompt !== null).map((prompt) => ({
-      ...prompt,
-      score: scorePromptRelevance(prompt, scorePromptCandidate(prompt.breakdown, adviserCardWeights.prompt)),
-    })),
+    ].filter(Boolean).map((prompt) => {
+      const typedPrompt = prompt as RankedAdviserPrompt;
+      return {
+        ...typedPrompt,
+        score: scorePromptRelevance(typedPrompt, scorePromptCandidate(typedPrompt.breakdown, adviserCardWeights.prompt)),
+      };
+    }),
     4
   );
 
