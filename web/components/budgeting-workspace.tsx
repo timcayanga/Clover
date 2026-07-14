@@ -121,6 +121,12 @@ const cadenceLabels: Record<BudgetCadence, string> = {
   annual: "Yearly",
 };
 
+const scopeLabels: Record<BudgetScope, string> = {
+  global: "All spending",
+  account: "Account",
+  category: "Category",
+};
+
 const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
 const formatShortDate = (value: string) =>
   new Intl.DateTimeFormat("en-US", {
@@ -484,7 +490,9 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                   {group.budgets.map((budget) => (
                     <div key={budget.id} className={`budget-card__cadence-row budget-card__cadence-row--${budget.stage}`}>
                       <div className="budget-card__cadence-head">
-                        <span>{cadenceLabels[budget.cadence]}</span>
+                        <span>
+                          {cadenceLabels[budget.cadence]} · {budget.scopeLabel || scopeLabels[budget.scope]}
+                        </span>
                         <strong>{toPercentage(budget.progressPercent)}</strong>
                       </div>
                       <div className="budget-card__bar" aria-hidden="true">
@@ -662,9 +670,9 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                 <p className="eyebrow">Budget history</p>
                 <h4>{historyData?.budget.name ?? selectedHistoryBudget?.name ?? "Budget"}</h4>
                 <p className="budget-history__subhead">
-                  {historyData?.budget.categoryName ?? selectedHistoryBudget?.categoryName ?? "All Categories"} ·{" "}
+                  {historyData?.budget.categoryName ?? selectedHistoryBudget?.categoryName ?? historyData?.budget.accountName ?? selectedHistoryBudget?.accountName ?? "All spending"} ·{" "}
                   {cadenceLabels[historyData?.budget.cadence ?? selectedHistoryBudget?.cadence ?? "monthly"]} ·{" "}
-                  {historyData?.budget.scope ?? selectedHistoryBudget?.scope ?? "global"}
+                  {scopeLabels[historyData?.budget.scope ?? selectedHistoryBudget?.scope ?? "global"]}
                 </p>
               </div>
               <button className="icon-button" type="button" onClick={closeHistoryModal} aria-label="Close budget history">
