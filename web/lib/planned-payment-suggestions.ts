@@ -70,7 +70,7 @@ const GENERIC_RECURRING_TITLE_PATTERN =
   /^(payment|repayment|subscription|service|bill|utilities|loan payment|statement payment|installment|dues|fee)$/i;
 const POTENTIAL_RECURRING_SIGNAL =
   /\b(subscription|subscr(?:iption)?|monthly|annual|membership|premium|dues|rent|lease|internet|broadband|wifi|phone|mobile\s+plan|electric|water|utility|utilities|insurance|mortgage|loan|repayment|amortization|tuition|school\s+fee|gym|fitness|netflix|spotify|youtube|icloud|google|notion|openai|chatgpt|adobe|microsoft|canva|scribd|linkedin|globe|smart|pldt|meralco|maynilad|prime|apple\s+services?|figma|zoom|dropbox|airalo|slack|autosweep|easytrip|beep\s+card|parking\s+subscription)\b/i;
-const POTENTIAL_RECURRING_LOOKBACK_DAYS = 120;
+const POTENTIAL_RECURRING_LOOKBACK_DAYS = 400;
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 const ordinalDay = (value: number) =>
@@ -550,6 +550,10 @@ const buildRecurringTransactionSuggestions = (
     if (!latest) {
       continue;
     }
+    const distinctMonthCount = countDistinctMonths(group.map((transaction) => transaction.date));
+    if (distinctMonthCount < 2) {
+      continue;
+    }
 
     const title = (latest.merchantClean ?? latest.merchantRaw ?? latest.description ?? "").trim();
     if (!title || GENERIC_RECURRING_TITLE_PATTERN.test(title)) {
@@ -574,7 +578,14 @@ const buildRecurringTransactionSuggestions = (
       dueDate.setTime(next.getTime());
     }
     const suggestionType = describeRecurringSuggestionType(title, ["potential recurring"]);
+    const amounts = group.map((transaction) => parseAmount(transaction.amount)).filter((value) => value > 0);
+    const minimumAmount = amounts.length > 0 ? Math.min(...amounts) : null;
+    const maximumAmount = amounts.length > 0 ? Math.max(...amounts) : null;
+    const amountRange = formatAmountRange(minimumAmount, maximumAmount, currency);
+    const expectedDay = Math.round(group.reduce((sum, transaction) => sum + transaction.date.getDate(), 0) / group.length);
+    const averageDayVariance = group.reduce((sum, transaction) => sum + Math.abs(transaction.date.getDate() - expectedDay), 0) / group.length;
     const amount = parseAmount(latest.amount);
+    const confidence = Math.min(78, 50 + Math.min(distinctMonthCount, 4) * 5 + (averageDayVariance <= 5 ? 8 : 0) + (amountRange ? 5 : 0));
 
     suggestions.push({
       id: `potential_recurring_transaction::${groupKey}`,
@@ -589,13 +600,18 @@ const buildRecurringTransactionSuggestions = (
       accountName: latest.account?.name ?? null,
       statementCheckpointId: null,
       installmentTerms: null,
-      notes: `Clover found a recent transaction with a ${suggestionType.tag ?? "recurring"} signal. Confirm it after you see another matching charge.`,
+      notes: [
+        `Clover found ${group.length} matching transaction${group.length === 1 ? "" : "s"} across ${distinctMonthCount} months.`,
+        `Charges usually occur around the ${ordinalDay(expectedDay)}.`,
+        amountRange ? `Amounts are usually ${amountRange}.` : null,
+        "Review the evidence before adding it to your recurring schedule.",
+      ].filter(Boolean).join(" "),
       sourceLabel: "Potential recurring payment",
-      sourceDetail: `Seen ${group.length} time${group.length === 1 ? "" : "s"} · last seen ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(latest.date)}`,
-      reasonSummary: "The merchant name or transaction description looks like a subscription, bill, or other repeating payment.",
-      reasonTags: [suggestionType.tag ?? "recurring signal", "needs confirmation"],
-      confidenceTier: "low",
-      confidence: 52,
+      sourceDetail: `Seen across ${distinctMonthCount} months · around the ${ordinalDay(expectedDay)} · last seen ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(latest.date)}`,
+      reasonSummary: `The same merchant family appears across multiple months with a ${suggestionType.tag ?? "recurring"} signal.`,
+      reasonTags: [suggestionType.tag ?? "recurring signal", "multi-month", averageDayVariance <= 5 ? "similar date" : "variable date", "needs confirmation"],
+      confidenceTier: getRecurringConfidenceTier(confidence),
+      confidence,
       sourceFileName: readTransactionImportFileName(latest),
     });
   }
