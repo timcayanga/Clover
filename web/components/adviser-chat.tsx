@@ -24,6 +24,15 @@ type AdviserUsage = {
   resetsAt: string;
 };
 
+type AdviserGrounding = {
+  accountCount: number;
+  transactionCount: number;
+  historyThrough: string;
+  recurringCount: number;
+  budgetCount: number;
+  investmentSnapshotAvailable: boolean;
+};
+
 type AdviserAction = {
   id: string;
   kind: "navigate" | "confirm";
@@ -53,6 +62,7 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
   const [usage, setUsage] = useState<AdviserUsage | null>(null);
   const [actions, setActions] = useState<AdviserAction[]>([]);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [grounding, setGrounding] = useState<AdviserGrounding | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const visiblePrompts = useMemo(() => prompts.slice(0, 4), [prompts]);
@@ -100,13 +110,14 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
         let streamedReply = "";
         let streamedActions: AdviserAction[] = [];
         let streamedUsage: AdviserUsage | undefined;
+        let streamedGrounding: AdviserGrounding | undefined;
 
         const handleEvent = (event: string) => {
           const dataLine = event.split("\n").find((line) => line.startsWith("data: "));
           if (!dataLine) {
             return;
           }
-          const data = JSON.parse(dataLine.slice(6)) as { type?: string; text?: string; usage?: AdviserUsage; actions?: AdviserAction[] };
+          const data = JSON.parse(dataLine.slice(6)) as { type?: string; text?: string; usage?: AdviserUsage; actions?: AdviserAction[]; grounding?: AdviserGrounding };
           if (data.type === "delta" && data.text) {
             streamedReply += data.text;
             setMessages((current) => current.map((message, index) => (index === assistantIndex ? { ...message, content: streamedReply } : message)));
@@ -114,6 +125,7 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
           if (data.type === "complete") {
             streamedActions = data.actions ?? [];
             streamedUsage = data.usage;
+            streamedGrounding = data.grounding;
           }
         };
 
@@ -131,12 +143,15 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
         if (streamedUsage) {
           setUsage(streamedUsage);
         }
+        if (streamedGrounding) {
+          setGrounding(streamedGrounding);
+        }
         setActions((current) => [...current, ...streamedActions]);
         window.setTimeout(scrollToBottom, 0);
         return;
       }
 
-      const payload = (await response.json().catch(() => null)) as { error?: string; usage?: AdviserUsage; actions?: AdviserAction[]; reply?: string } | null;
+      const payload = (await response.json().catch(() => null)) as { error?: string; usage?: AdviserUsage; actions?: AdviserAction[]; reply?: string; grounding?: AdviserGrounding } | null;
       if (payload?.usage) {
         setUsage(payload.usage);
       }
@@ -147,6 +162,10 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
 
       if (!response.ok) {
         throw new Error(payload.error ?? "Unable to get a response from Adviser.");
+      }
+
+      if (payload.grounding) {
+        setGrounding(payload.grounding);
       }
 
       const reply = payload.reply?.trim() || "I could not generate a response just now.";
@@ -252,6 +271,11 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
           </button>
         ))}
       </div>
+      {grounding ? (
+        <p className="adviser-chat__status">
+          Based on {grounding.transactionCount.toLocaleString()} transactions across {grounding.accountCount} account{grounding.accountCount === 1 ? "" : "s"}, through {new Date(grounding.historyThrough).toLocaleDateString()}.
+        </p>
+      ) : null}
 
       {messages.length > 0 ? (
         <div className="adviser-chat__thread" role="log" aria-live="polite" aria-relevant="additions text">

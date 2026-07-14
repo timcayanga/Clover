@@ -1829,6 +1829,14 @@ export async function POST(request: Request) {
       .join(" ");
 
     const env = getEnv();
+    const grounding = {
+      accountCount: workspace.accounts.length,
+      transactionCount: allTransactions.length,
+      historyThrough: analysisAnchorDate.toISOString(),
+      recurringCount: recurringPatterns.length,
+      budgetCount: budgets.length,
+      investmentSnapshotAvailable: Boolean(latestInvestmentSnapshot),
+    };
     const usageForResponse = () => ({
       plan: user.planTier,
       used: usageCount + 1,
@@ -1837,7 +1845,7 @@ export async function POST(request: Request) {
       resetsAt: resetsAt.toISOString(),
     }) satisfies AdviserUsage;
     if (!env.OPENAI_API_KEY) {
-      return NextResponse.json({ reply: fallbackReply, actions: [], usage: usageForResponse(), degraded: true });
+      return NextResponse.json({ reply: fallbackReply, actions: [], usage: usageForResponse(), grounding, degraded: true });
     }
 
     const model = env.OPENAI_ADVISER_MODEL?.trim() || "gpt-4.1";
@@ -1999,14 +2007,14 @@ export async function POST(request: Request) {
         });
       } catch (error) {
         console.error("Adviser model request failed", error instanceof Error ? error.message : error);
-        return NextResponse.json({ reply: fallbackReply, actions, usage: usageForResponse(), degraded: true });
+        return NextResponse.json({ reply: fallbackReply, actions, usage: usageForResponse(), grounding, degraded: true });
       } finally {
         clearTimeout(timeout);
       }
 
       if (!response.ok) {
         console.error("Adviser model request returned an error", response.status);
-        return NextResponse.json({ reply: fallbackReply, actions, usage: usageForResponse(), degraded: true });
+        return NextResponse.json({ reply: fallbackReply, actions, usage: usageForResponse(), grounding, degraded: true });
       }
 
       payload = (await response.json()) as Record<string, unknown>;
@@ -2295,7 +2303,7 @@ export async function POST(request: Request) {
                   }
                   if (done) break;
                 }
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions })}\n\n`));
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions, grounding })}\n\n`));
                 controller.close();
               } catch (error) {
                 console.error("Adviser upstream stream read failed", error instanceof Error ? error.message : error);
@@ -2309,7 +2317,7 @@ export async function POST(request: Request) {
               let index = 0;
               const emit = () => {
                 if (index >= chunks.length) {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions })}\n\n`));
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions, grounding })}\n\n`));
                   controller.close();
                   return;
                 }
@@ -2328,7 +2336,7 @@ export async function POST(request: Request) {
         },
       });
     }
-    return NextResponse.json({ reply, actions, usage: usageForResponse() });
+    return NextResponse.json({ reply, actions, usage: usageForResponse(), grounding });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to generate an Adviser response.";
     return NextResponse.json({ error: message }, { status: 400 });
