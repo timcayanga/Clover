@@ -232,13 +232,13 @@ export default async function HomePage() {
         reverse
         title={
           <>
-            Your financial data stays <span className="landing-highlight">yours</span>.
+            Your financial data stays <span className="landing-highlight">protected and under your control</span>.
           </>
         }
         copy={
           <>
-            <p>Clover keeps imported records traceable, editable, and under your control. Review every extracted transaction before it becomes part of your financial history.</p>
-            <p>Your information stays protected, and you decide what Clover remembers.</p>
+            <p>Clover keeps your records private, traceable, and editable. You can review what was imported, make corrections, and delete your files or data whenever you choose.</p>
+            <p>Clover does not sell your personal information.</p>
           </>
         }
         visual={
