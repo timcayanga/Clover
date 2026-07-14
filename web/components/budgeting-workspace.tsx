@@ -328,6 +328,21 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
     setIsEditorOpen(true);
   };
 
+  const openCopyEditor = (budget: BudgetItem) => {
+    setEditingBudgetId(null);
+    setError(null);
+    setEditorPreset({
+      name: "",
+      kind: budget.kind,
+      categoryId: budget.categoryId ?? "__all__",
+      accountId: budget.accountId ?? "__none__",
+      cadence: budget.cadence,
+      targetAmount: String(budget.targetAmount),
+      currency: budget.currency,
+    });
+    setIsEditorOpen(true);
+  };
+
   const closeHistoryModal = () => {
     setHistoryBudgetId(null);
     setHistoryData(null);
@@ -617,6 +632,9 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                       <div className="budget-card__actions">
                         <button className="pill-link pill-link--inline" type="button" onClick={() => openEditEditor(budget.id)}>
                           Edit
+                        </button>
+                        <button className="pill-link pill-link--inline" type="button" onClick={() => openCopyEditor(budget)}>
+                          Copy
                         </button>
                         <button
                           className="budget-card__chevron-button"
