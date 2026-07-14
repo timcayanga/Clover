@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { buildBudgetOverview } from "@/lib/budgeting";
+import { buildBudgetOverview, buildBudgetSuggestions } from "@/lib/budgeting";
 
 export const budgetLookbackDays = 400;
 
@@ -169,12 +169,18 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
     commitments,
     now,
   });
+  const suggestions = buildBudgetSuggestions({
+    transactions: budgetTransactions,
+    accounts,
+    categories,
+  });
 
   return {
     budgets,
     transactions: budgetTransactions,
     categories,
     accounts,
+    suggestions,
     overview,
   };
 };

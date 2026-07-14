@@ -86,6 +86,20 @@ type BudgetOverview = {
   overlappingBudgetNames: string[];
 };
 
+type BudgetSuggestion = {
+  id: string;
+  title: string;
+  detail: string;
+  amount: number;
+  currency: string;
+  kind: BudgetKind;
+  cadence: BudgetCadence;
+  accountId: string | null;
+  categoryId: string | null;
+  actionLabel: string;
+  tone: "positive" | "warning" | "neutral";
+};
+
 type BudgetCategoryOption = {
   id: string;
   name: string;
@@ -103,6 +117,7 @@ type BudgetingData = {
   overview: BudgetOverview;
   categories: BudgetCategoryOption[];
   accounts: BudgetAccountOption[];
+  suggestions: BudgetSuggestion[];
 };
 
 type BudgetFormState = {
@@ -245,6 +260,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const pausedBudgets = data.overview.inactiveBudgets;
   const onTrackBudgets = visibleBudgets.filter((budget) => !budget.isAtRisk);
   const atRiskBudgets = visibleBudgets.filter((budget) => budget.isAtRisk);
+  const suggestions = data.suggestions.slice(0, 2);
   const selectedHistoryBudget = historyBudgetId ? data.budgets.find((budget) => budget.id === historyBudgetId) ?? null : null;
 
   const budgetGroups = useMemo(() => {
@@ -278,6 +294,21 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
     setEditingBudgetId(null);
     setEditorPreset(null);
     setError(null);
+    setIsEditorOpen(true);
+  };
+
+  const openSuggestion = (suggestion: BudgetSuggestion) => {
+    setEditingBudgetId(null);
+    setError(null);
+    setEditorPreset({
+      kind: suggestion.kind,
+      name: "",
+      categoryId: suggestion.categoryId ?? "__all__",
+      accountId: suggestion.accountId ?? "__none__",
+      cadence: suggestion.cadence,
+      targetAmount: String(suggestion.amount),
+      currency: suggestion.currency,
+    });
     setIsEditorOpen(true);
   };
 
@@ -507,6 +538,31 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
           <p className="budgeting-section__note">
             More than one cadence is active for {data.overview.overlappingBudgetNames.join(", ")}. Each limit is tracked separately, not added together.
           </p>
+        ) : null}
+
+        {suggestions.length > 0 ? (
+          <div className="budget-suggestions" aria-label="Budget suggestions based on recent spending">
+            <div>
+              <p className="eyebrow">Based on your spending</p>
+              <p className="budget-suggestions__detail">Start with a limit that matches your recent activity.</p>
+            </div>
+            <div className="budget-suggestions__list">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion.id}
+                  className={`budget-suggestion budget-suggestion--${suggestion.tone}`}
+                  type="button"
+                  onClick={() => openSuggestion(suggestion)}
+                >
+                  <span>
+                    <strong>{suggestion.title}</strong>
+                    <small>{suggestion.detail}</small>
+                  </span>
+                  <em>{suggestion.actionLabel}</em>
+                </button>
+              ))}
+            </div>
+          </div>
         ) : null}
 
         {budgetGroups.length > 0 ? (

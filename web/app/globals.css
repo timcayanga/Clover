@@ -5678,6 +5678,49 @@ body.transactions-manual-open .shell-quick-add-button {
   line-height: 1.45;
 }
 
+.budget-suggestions {
+  display: grid;
+  gap: 10px;
+  margin: 2px 0 4px;
+}
+
+.budget-suggestions__detail {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.budget-suggestions__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.budget-suggestion {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.budget-suggestion > span {
+  display: grid;
+  gap: 4px;
+}
+
+.budget-suggestion small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.budget-suggestion em {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .budgeting-suggestion-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
