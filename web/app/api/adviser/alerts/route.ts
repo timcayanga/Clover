@@ -51,7 +51,7 @@ export async function GET() {
 
     if (spendingChange !== null && spendingChange >= 15) {
       alerts.push({
-        id: "adviser-spending-change",
+        id: `adviser-spending-change-${Math.round(spendingChange)}`,
         tone: spendingChange >= 30 ? "danger" : "warning",
         title: "Spending moved up",
         body: `Spending is up ${Math.round(spendingChange)}% versus the previous available 30-day window.`,
@@ -63,7 +63,7 @@ export async function GET() {
     if (recurring.length > 0) {
       const recurringTotal = recurring.reduce((sum, item) => sum + Math.abs(Number(item.amount ?? 0)), 0);
       alerts.push({
-        id: "adviser-upcoming-bills",
+        id: `adviser-upcoming-bills-${recurring.map((item) => `${item.id}:${item.nextExpectedDate?.toISOString() ?? ""}`).join(",")}`,
         tone: recurringTotal > 0 ? "warning" : "positive",
         title: "Bills are coming up",
         body: `${recurring.length} recurring item${recurring.length === 1 ? " is" : "s are"} expected within the next 14 days${recurringTotal > 0 ? `, totaling about ${recurringTotal.toLocaleString("en-PH", { style: "currency", currency: recurring[0].currency || "PHP" })}` : ""}.`,
@@ -74,7 +74,7 @@ export async function GET() {
 
     for (const budget of budgetData?.overview.alerts.slice(0, 3) ?? []) {
       alerts.push({
-        id: `adviser-budget-${budget.id}`,
+        id: `adviser-budget-${budget.id}-${budget.stage}-${Math.round(budget.progressPercent / 10) * 10}`,
         tone: budget.tone === "danger" ? "danger" : "warning",
         title: budget.name,
         body: `${budget.statusLabel} · ${Math.round(budget.progressPercent)}% of ${budget.periodLabel.toLowerCase()} limit used.`,
