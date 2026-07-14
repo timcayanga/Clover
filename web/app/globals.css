@@ -26360,6 +26360,8 @@ button.accounts-detail__transaction-head-cell {
 
 .dashboard-empty-state {
   width: min(100%, 520px);
+  align-self: center;
+  margin-inline: auto;
   padding: 0;
   grid-template-columns: none;
   gap: 4px;
