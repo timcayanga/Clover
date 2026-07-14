@@ -36599,6 +36599,36 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-size: 0.84rem;
 }
 
+.split-bill-payment-tools__profile-copy,
+.split-bill-payment-tools__profile-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.split-bill-payment-tools__profile-copy {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.split-bill-payment-tools__profile-copy span {
+  color: var(--text-secondary);
+}
+
+.split-bill-payment-tools__profile-meta {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.split-bill-payment-tools__profile-badge {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.1);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .split-bill-receipt-quality {
   display: flex;
   flex-wrap: wrap;
@@ -36700,9 +36730,14 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   }
 
   .split-bill-payment-tools__request,
-  .split-bill-payment-tools__share {
+  .split-bill-payment-tools__share,
+  .split-bill-payment-tools__profile {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .split-bill-payment-tools__profile-meta {
+    justify-content: flex-start;
   }
 }
 

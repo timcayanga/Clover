@@ -65,11 +65,20 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "settled">("all");
   const isBlankState = bills.length === 0;
   const duePaymentRequests = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const nextWeek = Date.now() + 7 * 24 * 60 * 60 * 1000;
     return bills.flatMap((bill) =>
       (bill.paymentRequests ?? [])
         .filter((request) => request.status === "requested" || request.status === "payment_reported")
-        .filter((request) => request.dueDate && new Date(request.dueDate).getTime() <= nextWeek)
+        .filter((request) => {
+          if (!request.dueDate) {
+            return false;
+          }
+
+          const dueTime = new Date(request.dueDate).getTime();
+          return dueTime >= today.getTime() && dueTime <= nextWeek;
+        })
         .map((request) => ({ bill, request }))
     );
   }, [bills]);

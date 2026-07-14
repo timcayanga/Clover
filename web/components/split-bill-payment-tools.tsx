@@ -49,8 +49,12 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
   const transferOptions = useMemo(() => bill.settlement.transfers.filter((transfer) => transfer.amount > 0), [bill.settlement.transfers]);
   const selectedTransfer = transferOptions.find((transfer) => transfer.fromParticipantId === requestDraft.recipientParticipantId) ?? transferOptions[0];
   const availableProfiles = useMemo(
-    () => profiles.filter((profile) => !profile.personName || profile.personName === selectedTransfer?.toParticipantName),
-    [profiles, selectedTransfer?.toParticipantName]
+    () => profiles.filter(
+      (profile) =>
+        profile.currency.toUpperCase() === bill.currency.toUpperCase() &&
+        (!profile.personName || profile.personName === selectedTransfer?.toParticipantName)
+    ),
+    [bill.currency, profiles, selectedTransfer?.toParticipantName]
   );
 
   useEffect(() => {
@@ -65,14 +69,16 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
 
   useEffect(() => {
     const firstTransfer = transferOptions[0];
+    const currentProfileIsAvailable = availableProfiles.some((profile) => profile.id === requestDraft.paymentProfileId);
+    const fallbackProfile = availableProfiles.find((profile) => profile.isDefault) ?? availableProfiles[0];
     setRequestDraft((current) => ({
       ...current,
       recipientParticipantId: current.recipientParticipantId || firstTransfer?.fromParticipantId || "",
       payeeParticipantId: current.payeeParticipantId || firstTransfer?.toParticipantId || "",
       amount: current.amount || (firstTransfer ? firstTransfer.amount.toFixed(2) : ""),
-      paymentProfileId: current.paymentProfileId || availableProfiles.find((profile) => profile.isDefault)?.id || availableProfiles[0]?.id || "",
+      paymentProfileId: currentProfileIsAvailable ? current.paymentProfileId : fallbackProfile?.id || "",
     }));
-  }, [availableProfiles, transferOptions]);
+  }, [availableProfiles, requestDraft.paymentProfileId, transferOptions]);
 
   const saveProfile = async () => {
     setError(null);
@@ -153,7 +159,23 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
         </div>
       ) : null}
 
-      {profiles.length > 0 ? <div className="split-bill-payment-tools__profiles">{profiles.map((profile) => <div key={profile.id} className="split-bill-payment-tools__profile"><span>{profile.label} · {profile.provider}</span><button className="button button-secondary button-small" type="button" onClick={() => void removeProfile(profile.id)}>Remove</button></div>)}</div> : null}
+      {profiles.length > 0 ? (
+        <div className="split-bill-payment-tools__profiles" aria-label="Saved payment methods">
+          {profiles.map((profile) => (
+            <div key={profile.id} className="split-bill-payment-tools__profile">
+              <div className="split-bill-payment-tools__profile-copy">
+                <strong>{profile.label}</strong>
+                <span>{profile.provider}{profile.personName ? ` · ${profile.personName}` : ""}{profile.accountNumber ? ` · ending ${profile.accountNumber.slice(-4)}` : ""}</span>
+              </div>
+              <div className="split-bill-payment-tools__profile-meta">
+                {profile.qrImageData || profile.qrPayload ? <span className="split-bill-payment-tools__profile-badge">QR saved</span> : null}
+                {profile.isDefault ? <span className="split-bill-payment-tools__profile-badge">Default</span> : null}
+                <button className="button button-secondary button-small" type="button" onClick={() => void removeProfile(profile.id)}>Remove</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {transferOptions.length > 0 ? (
         <div className="split-bill-payment-tools__request-form">
