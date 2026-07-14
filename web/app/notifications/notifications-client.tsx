@@ -30,6 +30,15 @@ type BudgetAlert = {
   href: string;
 };
 
+type AdviserAlert = {
+  id: string;
+  tone: "positive" | "warning" | "danger";
+  title: string;
+  body: string;
+  href: string;
+  actionLabel: string;
+};
+
 const formatUpdatedAt = (updatedAt: number) => {
   if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
     return "Just now";
@@ -84,6 +93,7 @@ const getImportNotificationBody = (activity: ImportActivitySnapshot) => {
 export function NotificationsClient() {
   const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
+  const [adviserAlerts, setAdviserAlerts] = useState<AdviserAlert[]>([]);
 
   useEffect(() => subscribeImportActivity(() => setActivity(readImportActivity())), []);
   useEffect(() => {
@@ -108,6 +118,27 @@ export function NotificationsClient() {
     };
 
     void loadBudgetAlerts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/adviser/alerts", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((result: { alerts?: AdviserAlert[] } | null) => {
+        if (!cancelled) {
+          setAdviserAlerts(result?.alerts ?? []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAdviserAlerts([]);
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -168,6 +199,33 @@ export function NotificationsClient() {
               </div>
             </article>
           )}
+
+          {adviserAlerts.length > 0 ? (
+            <section className="notifications-budget">
+              <div className="report-card__head report-card__head--compact">
+                <div>
+                  <p className="eyebrow">Adviser alerts</p>
+                  <h4>Worth a look right now</h4>
+                </div>
+              </div>
+              <div className="notifications-budget__grid">
+                {adviserAlerts.map((alert) => (
+                  <article key={alert.id} className={`notification-item glass notification-item--${alert.tone}`}>
+                    <div className="notification-item__main">
+                      <p className="notification-item__tone">Adviser</p>
+                      <h4>{alert.title}</h4>
+                      <p>{alert.body}</p>
+                    </div>
+                    <div className="notification-item__time">
+                      <a className="button button-secondary button-small" href={alert.href}>
+                        {alert.actionLabel}
+                      </a>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {budgetAlerts.length > 0 ? (
             <section className="notifications-budget">
