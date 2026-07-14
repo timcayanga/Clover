@@ -23,6 +23,7 @@ import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
 import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
+import { DashboardBudgetPulse } from "@/components/dashboard-budget-pulse";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -823,6 +824,8 @@ async function DashboardStream({
             </div>
           </article>
         ) : null}
+
+        <DashboardBudgetPulse />
 
         <div className="dashboard-home__snapshot-grid" aria-label="Week and month snapshot">
           <article className={`dashboard-home__report-card dashboard-home__report-card--${weeklyReportTone} glass`}>
