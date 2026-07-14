@@ -961,7 +961,7 @@ export async function POST(request: Request) {
     const nextFourteenDays = new Date(now);
     nextFourteenDays.setDate(nextFourteenDays.getDate() + 14);
 
-    const [allTransactionsQuery, recurringPatterns, financialCommitments, goalHistoryRows, investmentSnapshots, splitBillWorkspaceData] =
+    const [allTransactionsQuery, recurringPatterns, financialCommitments, goalHistoryRows, investmentSnapshots, budgets, splitBillWorkspaceData] =
       await Promise.all([
         prisma.transaction.findMany({
           where: {
@@ -1034,6 +1034,29 @@ export async function POST(request: Request) {
             totalValue: true,
             currency: true,
             account: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        }),
+        prisma.budget.findMany({
+          where: {
+            workspaceId: workspace.id,
+            isActive: true,
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 20,
+          select: {
+            id: true,
+            name: true,
+            kind: true,
+            scope: true,
+            cadence: true,
+            targetAmount: true,
+            currency: true,
+            categoryId: true,
+            category: {
               select: {
                 name: true,
               },
@@ -1690,6 +1713,7 @@ export async function POST(request: Request) {
       `Liquid balance: ${formatCurrency(liquidBalance, displayCurrency)}`,
       `Account concentration: ${largestAccountBalance && largestAccountBalance.name ? `${largestAccountBalance.name} ${formatPercent(largestAccountShare * 100)}` : "none"}`,
       `Goal: ${goalValue ?? "none"} (${goalProgress.bandLabel})`,
+      `Active budgets: ${budgets.map((budget) => `${budget.name} ${formatCurrency(Number(budget.targetAmount), budget.currency)}${budget.category?.name ? ` for ${budget.category.name}` : ""}`).join("; ") || "none"}`,
       `Recent transaction references: ${allTransactions.slice(0, 20).map((transaction) => `${transaction.id} ${transaction.merchantClean ?? transaction.merchantRaw} ${formatCurrency(Math.abs(Number(transaction.amount)), displayCurrency)} ${toShortDateLabel(transaction.date)}`).join(" | ") || "none"}`,
     ].join("\n");
 
@@ -1710,6 +1734,9 @@ export async function POST(request: Request) {
       "When the user asks to find, explain, or review transactions, use find_transactions.",
       "When the user asks about bills, cash-flow pressure, or split bills, use get_cashflow_outlook or get_split_bill_status.",
       "When the user asks about investments, use get_investment_summary before giving educational context.",
+      "When the user asks about budgets or whether spending is within a limit, use get_budget_status.",
+      "When the user asks how much they could invest, use estimate_investment_contribution and explain that it is a conservative planning range, not a security recommendation.",
+      "When the user asks about duplicate, uncategorized, or review-needed transactions, use find_data_quality_issues.",
       "When the user asks Clover to add or edit a record, use prepare_write_action and wait for confirmation; never describe a proposed write as completed.",
       "",
       "Workspace context:",
@@ -1859,6 +1886,24 @@ export async function POST(request: Request) {
       },
       {
         type: "function",
+        name: "get_budget_status",
+        description: "Compare active Clover budgets with current-period spending. Use for questions about budget progress, overspending, or remaining room.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
+        name: "estimate_investment_contribution",
+        description: "Estimate a conservative monthly amount the user might be able to set aside for investing after known obligations and a spending reserve. Do not recommend specific securities.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
+        name: "find_data_quality_issues",
+        description: "Check Clover transaction history for likely duplicate transactions and uncategorized records that may need review.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
         name: "prepare_write_action",
         description: "Prepare a confirmation card for a user-requested manual write. Never execute it. Supported action types are set_goal, create_budget, create_transaction, edit_transaction, create_account, create_investment, and create_split_bill.",
         parameters: {
@@ -1993,6 +2038,68 @@ export async function POST(request: Request) {
             guidance: "Use this data for education and portfolio review. Do not make a personalized security recommendation without suitability information.",
           };
           actions.push({ id: `investments-${actions.length + 1}`, kind: "navigate", type: "open_investments", label: "Open Investments", description: "Review holdings and snapshots in Clover.", href: "/investments" });
+        } else if (call.name === "get_budget_status") {
+          const budgetStatuses = budgets.map((budget) => {
+            const categoryName = budget.category?.name ?? null;
+            const spent = categoryName
+              ? currentSummary.expenseCategories.get(categoryName) ?? 0
+              : currentSummary.expense;
+            const target = Number(budget.targetAmount);
+            return {
+              name: budget.name,
+              category: categoryName,
+              cadence: budget.cadence,
+              target,
+              spent,
+              remaining: target - spent,
+              percentUsed: target > 0 ? (spent / target) * 100 : null,
+              status: target > 0 && spent > target ? "over_limit" : "within_limit",
+            };
+          });
+          result = { period: currentWindowLabel, budgets: budgetStatuses, href: "/budgeting" };
+          actions.push({ id: `budget-${actions.length + 1}`, kind: "navigate", type: "open_budgeting", label: "Review budgets", description: "Open Budgeting to adjust limits or review spending.", href: "/budgeting" });
+        } else if (call.name === "estimate_investment_contribution") {
+          const monthlySurplus = Math.max(0, longTermAverageNet);
+          const knownPressure = recurringDueSoon.reduce((sum, item) => sum + item.amount, 0) + commitmentsDueSoon.reduce((sum, item) => sum + item.amount, 0) + openSplitBillAmount;
+          const reserveTarget = Math.max(0, baselineSpend) + knownPressure;
+          const reserveGap = Math.max(0, reserveTarget - spendableAccountBalance);
+          const monthlyLow = reserveGap > 0 ? 0 : monthlySurplus * 0.1;
+          const monthlyHigh = reserveGap > 0 ? 0 : monthlySurplus * 0.2;
+          result = {
+            monthlySurplus,
+            reserveTarget,
+            availableCash: spendableAccountBalance,
+            reserveGap,
+            suggestedMonthlyRange: { low: monthlyLow, high: monthlyHigh },
+            guidance: reserveGap > 0
+              ? "Build the cash reserve first; there is not enough room above the current reserve target for a confident contribution estimate."
+              : "This is a conservative planning range based on historical surplus, not personalized investment advice or a recommendation for a specific security.",
+            href: "/investments",
+          };
+          actions.push({ id: `investment-plan-${actions.length + 1}`, kind: "navigate", type: "open_investment_plan", label: "Review Investments", description: "Review investment accounts and decide on a contribution that fits your plan.", href: "/investments" });
+        } else if (call.name === "find_data_quality_issues") {
+          const duplicateGroups = new Map<string, typeof allTransactions>();
+          for (const transaction of allTransactions) {
+            const merchant = (transaction.merchantClean ?? transaction.merchantRaw ?? transaction.description ?? "").trim().toLowerCase();
+            const key = [transaction.date.toISOString().slice(0, 10), transaction.account.name, transaction.type, Math.abs(Number(transaction.amount)).toFixed(2), merchant].join("|");
+            const group = duplicateGroups.get(key) ?? [];
+            group.push(transaction);
+            duplicateGroups.set(key, group);
+          }
+          const likelyDuplicates = Array.from(duplicateGroups.values())
+            .filter((group) => group.length > 1)
+            .slice(0, 10)
+            .map((group) => ({
+              count: group.length,
+              date: group[0].date.toISOString(),
+              merchant: group[0].merchantClean ?? group[0].merchantRaw ?? group[0].description,
+              amount: Math.abs(Number(group[0].amount)),
+              account: group[0].account.name,
+              transactionIds: group.map((transaction) => transaction.id),
+            }));
+          const uncategorized = allTransactions.filter((transaction) => !transaction.category?.name).length;
+          result = { likelyDuplicates, duplicateGroupCount: likelyDuplicates.length, uncategorizedCount: uncategorized, href: "/transactions" };
+          actions.push({ id: `quality-${actions.length + 1}`, kind: "navigate", type: "open_data_quality", label: "Review transactions", description: "Open Transactions to confirm duplicates and fill in missing categories.", href: "/transactions" });
         } else if (call.name === "open_clover_area") {
           const area = String(args.area ?? "transactions");
           const href = `/${area}`;
