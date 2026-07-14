@@ -129,34 +129,27 @@ const workspaceBillSelect = {
 };
 
 export const loadSplitBillWorkspaceData = async (userId: string) => {
-  const [bills, groups, people] = await Promise.all([
+  const groups = await prisma.splitBillGroup.findMany({
+    where: { OR: [{ userId }, { collaborators: { some: { userId } } }], archivedAt: null },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      name: true,
+      avatarUrl: true,
+      archivedAt: true,
+      members: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { id: true, name: true, sortOrder: true },
+      },
+      _count: { select: { bills: true } },
+    },
+  });
+  const accessibleGroupIds = groups.map((group) => group.id);
+  const [bills, people] = await Promise.all([
     prisma.splitBill.findMany({
-      where: { userId },
+      where: { OR: [{ userId }, ...(accessibleGroupIds.length > 0 ? [{ groupId: { in: accessibleGroupIds } }] : [])] },
       orderBy: [{ billDate: "desc" }, { updatedAt: "desc" }],
       select: workspaceBillSelect,
-    }),
-    prisma.splitBillGroup.findMany({
-      where: { userId, archivedAt: null },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      select: {
-        id: true,
-        name: true,
-        avatarUrl: true,
-        archivedAt: true,
-        members: {
-          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-          select: {
-            id: true,
-            name: true,
-            sortOrder: true,
-          },
-        },
-        _count: {
-          select: {
-            bills: true,
-          },
-        },
-      },
     }),
     prisma.splitBillPerson.findMany({
       where: { userId },
@@ -197,7 +190,7 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
 
 export const loadSplitBillEditorGroups = async (userId: string) =>
   prisma.splitBillGroup.findMany({
-    where: { userId, archivedAt: null },
+    where: { OR: [{ userId }, { collaborators: { some: { userId } } }], archivedAt: null },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     include: {
       members: {
@@ -210,7 +203,7 @@ export const loadSplitBillBill = async (userId: string, billId: string) => {
   const bill = await prisma.splitBill.findFirst({
     where: {
       id: billId,
-      userId,
+      OR: [{ userId }, { group: { collaborators: { some: { userId } } } }],
     },
     include: billInclude,
   });
@@ -230,7 +223,7 @@ export const loadSplitBillGroup = async (userId: string, groupId: string) =>
   prisma.splitBillGroup.findFirst({
     where: {
       id: groupId,
-      userId,
+      OR: [{ userId }, { collaborators: { some: { userId } } }],
     },
     include: {
       members: {

@@ -47,7 +47,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ bil
   try {
     const user = await getSplitBillCurrentUser();
     const { billId } = await params;
-    const bill = await prisma.splitBill.findFirst({ where: { id: billId, userId: user.id }, select: { id: true } });
+    const bill = await loadSplitBillBill(user.id, billId);
     if (!bill) {
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }

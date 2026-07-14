@@ -198,6 +198,7 @@ model User {
   workspaces               Workspace[]
   goalSettings             GoalSetting[]
   splitBillGroups          SplitBillGroup[]
+  splitBillGroupCollaborations SplitBillGroupCollaborator[]
   splitBillPeople          SplitBillPerson[]
   splitBills               SplitBill[]
   splitBillPaymentProfiles SplitBillPaymentProfile[]
@@ -966,13 +967,27 @@ model SplitBillGroup {
   userId    String
   name      String
   avatarUrl String?               @db.Text
+  shareToken String?              @unique
   createdAt DateTime              @default(now())
   updatedAt DateTime              @updatedAt
   archivedAt DateTime?
   user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   members   SplitBillGroupMember[]
+  collaborators SplitBillGroupCollaborator[]
   bills     SplitBill[]
 
+  @@index([userId])
+}
+
+model SplitBillGroupCollaborator {
+  id        String @id @default(cuid())
+  groupId   String
+  userId    String
+  createdAt DateTime @default(now())
+  group     SplitBillGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
   @@index([userId])
 }
 
@@ -1059,6 +1074,7 @@ model SplitBillPaymentProfile {
 
   @@index([userId])
   @@index([userId, currency])
+  @@index([userId, personName])
 }
 
 model SplitBillPaymentRequest {

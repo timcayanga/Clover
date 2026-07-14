@@ -36773,6 +36773,49 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-weight: 700;
 }
 
+.split-bill-share-status {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .split-bill-modal,
+  .split-bill-modal * {
+    visibility: visible !important;
+  }
+
+  .split-bill-modal {
+    position: static !important;
+    display: block !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .split-bill-detail-modal {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .split-bill-detail-modal__summary-actions,
+  .split-bill-detail-modal__actions,
+  .split-bill-payment-tools,
+  .split-bill-icon-button,
+  .split-bill-table__chip-remove {
+    display: none !important;
+  }
+}
+
 @media (max-width: 640px) {
   .split-bill-due-strip {
     align-items: flex-start;

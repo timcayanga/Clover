@@ -345,6 +345,7 @@ export function SplitBillWorkspace({
   const [isEditingBill, setIsEditingBill] = useState(false);
   const [billEditError, setBillEditError] = useState<string | null>(null);
   const [isSavingBillEdit, setIsSavingBillEdit] = useState(false);
+  const [groupShareUrl, setGroupShareUrl] = useState<string | null>(null);
 
   const selectedBill = selected?.kind === "bill" ? bills.find((bill) => bill.id === selected.id) ?? null : null;
   const selectedGroup = selected?.kind === "group" ? groups.find((group) => group.id === selected.id) ?? null : null;
@@ -429,6 +430,15 @@ export function SplitBillWorkspace({
 
     setGroups((current) => current.filter((entry) => entry.id !== groupId));
     setSelected(null);
+  };
+
+  const shareGroup = async (groupId: string) => {
+    const response = await fetch(`/api/split-bill-groups/${groupId}/share`, { method: "POST" });
+    const payload = (await response.json()) as { shareUrl?: string };
+    if (!response.ok || !payload.shareUrl) return;
+    const shareUrl = `${window.location.origin}${payload.shareUrl}`;
+    setGroupShareUrl(shareUrl);
+    await navigator.clipboard?.writeText(shareUrl);
   };
 
   const removePerson = async (personId: string) => {
@@ -1265,9 +1275,14 @@ export function SplitBillWorkspace({
                       </button>
                     </>
                   ) : (
-                    <button className="button button-secondary button-small" type="button" onClick={startEditingSelectedBill}>
-                      Edit bill
-                    </button>
+                    <>
+                      <button className="button button-secondary button-small" type="button" onClick={startEditingSelectedBill}>
+                        Edit bill
+                      </button>
+                      <button className="button button-secondary button-small" type="button" onClick={() => window.print()}>
+                        Print summary
+                      </button>
+                    </>
                   )}
                 </div>
                 {selectedBill.sourceType === "receipt" && (selectedBill.receiptConfidence < 80 || !selectedBill.total) ? (
@@ -1508,6 +1523,9 @@ export function SplitBillWorkspace({
                 {detailTab === "settle" ? renderSettlementBoard(selectedGroupBills) : null}
                 {detailTab === "activity" ? renderActivityList(selectedGroupActivity) : null}
                 <div className="split-bill-detail-modal__actions">
+                  <button className="button button-secondary button-small" type="button" onClick={() => void shareGroup(selectedGroup.id)}>
+                    Share group
+                  </button>
                   <button className="button button-secondary button-small" type="button" onClick={() => void archiveGroup(selectedGroup.id)}>
                     Archive group
                   </button>
@@ -1515,6 +1533,7 @@ export function SplitBillWorkspace({
                     Delete group
                   </button>
                 </div>
+                {groupShareUrl ? <p className="split-bill-share-status">Group link copied. Share it with another Clover account to join.</p> : null}
               </div>
             ) : null}
 

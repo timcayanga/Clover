@@ -41,6 +41,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
   const [profiles, setProfiles] = useState<PaymentProfile[]>([]);
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [showProfileForm, setShowProfileForm] = useState(false);
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [profileDraft, setProfileDraft] = useState(emptyProfile);
   const [requestDraft, setRequestDraft] = useState({ recipientParticipantId: "", payeeParticipantId: "", amount: "", recipientEmail: "", dueDate: "", paymentProfileId: "", note: "" });
   const [lastShareUrl, setLastShareUrl] = useState<string | null>(null);
@@ -84,8 +85,8 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
   const saveProfile = async () => {
     setError(null);
     setIsSavingProfile(true);
-    const response = await fetch("/api/split-bill-payment-profiles", {
-      method: "POST",
+    const response = await fetch(editingProfileId ? `/api/split-bill-payment-profiles/${editingProfileId}` : "/api/split-bill-payment-profiles", {
+      method: editingProfileId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(profileDraft),
     });
@@ -95,10 +96,17 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
       setIsSavingProfile(false);
       return;
     }
-    setProfiles((current) => [payload.profile, ...current]);
+    setProfiles((current) => editingProfileId ? current.map((profile) => profile.id === editingProfileId ? payload.profile : profile) : [payload.profile, ...current]);
     setProfileDraft(emptyProfile);
+    setEditingProfileId(null);
     setShowProfileForm(false);
     setIsSavingProfile(false);
+  };
+
+  const editProfile = (profile: PaymentProfile) => {
+    setEditingProfileId(profile.id);
+    setProfileDraft({ label: profile.label, provider: profile.provider, currency: profile.currency, personName: profile.personName ?? "", accountName: profile.accountName ?? "", accountNumber: profile.accountNumber ?? "", qrPayload: profile.qrPayload ?? "", qrImageData: profile.qrImageData ?? "" });
+    setShowProfileForm(true);
   };
 
   const createRequest = async () => {
@@ -139,7 +147,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
           <strong>Request payment</strong>
           <p className="split-bill-table__hint">Share your payment details. Clover never moves the money.</p>
         </div>
-        <button className="button button-secondary button-small" type="button" onClick={() => setShowProfileForm((current) => !current)}>
+        <button className="button button-secondary button-small" type="button" onClick={() => { setShowProfileForm((current) => !current); if (showProfileForm) setEditingProfileId(null); }}>
           {showProfileForm ? "Close" : "Payment method"}
         </button>
       </div>
@@ -156,7 +164,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
           <input className="settings-input" placeholder="Account number or mobile" value={profileDraft.accountNumber} onChange={(event) => setProfileDraft({ ...profileDraft, accountNumber: event.target.value })} />
           <input className="settings-input" placeholder="QR payload (optional)" value={profileDraft.qrPayload} onChange={(event) => setProfileDraft({ ...profileDraft, qrPayload: event.target.value })} />
           <label className="split-bill-payment-tools__file-field"><span>QR image (optional)</span><input type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setProfileDraft((current) => ({ ...current, qrImageData: typeof reader.result === "string" ? reader.result : "" })); reader.readAsDataURL(file); }} /></label>
-          <button className="button button-primary button-small" type="button" onClick={() => void saveProfile()} disabled={isSavingProfile}>{isSavingProfile ? "Saving..." : "Save payment method"}</button>
+          <button className="button button-primary button-small" type="button" onClick={() => void saveProfile()} disabled={isSavingProfile}>{isSavingProfile ? "Saving..." : editingProfileId ? "Save changes" : "Save payment method"}</button>
         </div>
       ) : null}
 
@@ -171,6 +179,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
               <div className="split-bill-payment-tools__profile-meta">
                 {profile.qrImageData || profile.qrPayload ? <span className="split-bill-payment-tools__profile-badge">QR saved</span> : null}
                 {profile.isDefault ? <span className="split-bill-payment-tools__profile-badge">Default</span> : null}
+                <button className="button button-secondary button-small" type="button" onClick={() => editProfile(profile)}>Edit</button>
                 <button className="button button-secondary button-small" type="button" onClick={() => void removeProfile(profile.id)}>Remove</button>
               </div>
             </div>
