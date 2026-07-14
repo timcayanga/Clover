@@ -1522,6 +1522,17 @@ export function CloverShell({
                         </span>
                         Reports
                       </button>
+                      <button
+                        className={`sidebar-nav__submenu-link${active === "goals" || pathname?.startsWith("/goals") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/goals")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="goals" />
+                        </span>
+                        Goals
+                      </button>
                     </div>
                   ) : null}
                 </div>
