@@ -4439,8 +4439,14 @@ body.transactions-manual-open .shell-quick-add-button {
   line-height: 1.45;
 }
 
-.dashboard-home__report-card .eyebrow {
+.dashboard-home__report-card .eyebrow,
+.dashboard-home__goal-card-head .eyebrow {
+  margin: 0 0 6px;
+  color: var(--muted-2);
   font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: 0.14em;
 }
 
 .dashboard-home__report-metrics {
