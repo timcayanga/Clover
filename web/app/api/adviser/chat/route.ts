@@ -1738,6 +1738,7 @@ export async function POST(request: Request) {
       "When the user asks to see a report, use open_report so the UI can open Clover's existing Reports page.",
       "When the user asks whether they can afford a named purchase with a price, use check_affordability.",
       "When the user asks about account balances, connected accounts, or where their money is held, use get_account_summary.",
+      "When the user asks what changed, what is new, or what deserves attention since their last check, use get_adviser_changes.",
       "When the user asks about goal progress, use get_goal_progress.",
       "When the user asks to find, explain, or review transactions, use find_transactions.",
       "When the user asks about bills, cash-flow pressure, or split bills, use get_cashflow_outlook or get_split_bill_status.",
@@ -1863,6 +1864,12 @@ export async function POST(request: Request) {
         type: "function",
         name: "get_account_summary",
         description: "Read reconciled balances and basic details for the user's connected Clover accounts.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
+        name: "get_adviser_changes",
+        description: "Compare the user's latest available financial window with the previous window and summarize what changed since their last Adviser interaction.",
         parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
       },
       {
@@ -2037,6 +2044,35 @@ export async function POST(request: Request) {
             href: "/accounts",
           };
           actions.push({ id: `accounts-${actions.length + 1}`, kind: "navigate", type: "open_accounts", label: "Open Accounts", description: "Review account balances and connected accounts in Clover.", href: "/accounts" });
+        } else if (call.name === "get_adviser_changes") {
+          const lastInteraction = adviserInteractions.find((interaction) => interaction.action !== "adviser.chat_asked")?.createdAt ?? null;
+          const transactionsSinceLastCheck = lastInteraction
+            ? allTransactions.filter((transaction) => transaction.date > lastInteraction).length
+            : null;
+          result = {
+            lastAdviserCheck: lastInteraction?.toISOString() ?? null,
+            transactionsSinceLastCheck,
+            latestWindow: {
+              label: currentWindowLabel,
+              income: currentSummary.income,
+              spending: currentSpend,
+              net: currentNet,
+              topCategory: topCategoryName,
+            },
+            previousWindow: {
+              label: previousWindowLabel,
+              income: previousSummary.income,
+              spending: previousSpend,
+              net: previousNet,
+            },
+            changes: {
+              spending: previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null,
+              income: previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null,
+              savingsRate: currentSavingsRate,
+            },
+            strongestSignal: explainabilityBundle[0] ?? null,
+          };
+          actions.push({ id: `changes-${actions.length + 1}`, kind: "navigate", type: "open_changes_report", label: "Review recent changes", description: "Open Reports to inspect the latest spending and income movement.", href: "/reports?range=30d&section=trends" });
         } else if (call.name === "get_goal_progress") {
           result = {
             goal: goalLabel,
