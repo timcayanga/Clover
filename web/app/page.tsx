@@ -101,6 +101,46 @@ export default async function HomePage() {
         <LandingClarityEngine />
       </LandingStoryReveal>
 
+      <LandingStoryReveal as="section" className="landing-bridge" id="organize-not-track">
+        <div className="landing-bridge__inner">
+          <h2 className="landing-bridge__title">
+            Stop tracking. <span className="landing-highlight">Start organizing.</span>
+          </h2>
+          <p className="landing-bridge__subtitle">
+            Most budgeting apps ask you to manually record every expense. Clover starts with the financial records you already have.
+          </p>
+
+          <div className="landing-bridge__table-wrap">
+            <table className="landing-bridge__table">
+              <thead>
+                <tr>
+                  <th scope="col">The old way</th>
+                  <th scope="col" className="landing-bridge__clover-heading">A simpler way</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Type transactions one by one</td>
+                  <td className="landing-bridge__clover-cell"><strong>1. Upload</strong> statements, receipts, or screenshots</td>
+                </tr>
+                <tr>
+                  <td>Build your history manually</td>
+                  <td className="landing-bridge__clover-cell"><strong>2. Organize</strong> months of transactions in minutes</td>
+                </tr>
+                <tr>
+                  <td>Sort and categorize everything yourself</td>
+                  <td className="landing-bridge__clover-cell"><strong>3. Review</strong> what Clover organized</td>
+                </tr>
+                <tr>
+                  <td>Use separate apps to understand your money</td>
+                  <td className="landing-bridge__clover-cell"><strong>4. See</strong> one clear financial picture</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </LandingStoryReveal>
+
       <FeatureSection
         id="statement-import"
         reverse
