@@ -1424,6 +1424,21 @@ body.transactions-manual-open .shell-quick-add-button {
     padding: 2px 2px 4px;
   }
 
+  .nav-link {
+    min-height: 32px;
+    padding: 2px 12px 2px 11px;
+  }
+
+  .nav-link__icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .nav-link .menu-icon-3d--home {
+    width: 32px;
+    height: 32px;
+  }
+
   .sidebar-search-wrap {
     gap: 6px;
   }
