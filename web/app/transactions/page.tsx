@@ -2206,6 +2206,7 @@ function TransactionsPageContent() {
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
   const [transactionsLoadFailed, setTransactionsLoadFailed] = useState(false);
+  const transactionsAutoRetryRef = useRef(0);
   const [, setHasInitialTransactionsLoaded] = useState(false);
   const [hasLoadedWorkspaceList, setHasLoadedWorkspaceList] = useState(false);
   const [workspaceCurrencyCodes, setWorkspaceCurrencyCodes] = useState<string[]>(() => ["PHP"]);
@@ -2606,6 +2607,7 @@ function TransactionsPageContent() {
     if (!workspaceId) {
       setTransactions([]);
       setTransactionsLoadFailed(false);
+      transactionsAutoRetryRef.current = 0;
       setTransactionsSummary({
         totalCount: 0,
         income: 0,
@@ -2929,6 +2931,24 @@ function TransactionsPageContent() {
       if (!options?.background) {
         const hadFallbackRows = transactionsRef.current.length > 0 || hydrateWorkspaceFromCache(workspaceId);
         const shouldSuppressFailure = hadFallbackRows || hasResilientFallbackEvidence();
+
+        if (!shouldSuppressFailure && transactionsAutoRetryRef.current < 3) {
+          const retryAttempt = transactionsAutoRetryRef.current;
+          transactionsAutoRetryRef.current += 1;
+          setTransactionsLoadFailed(false);
+          setIsWorkspaceDataReady(false);
+          setHasInitialTransactionsLoaded(false);
+          setMessage("Clover is checking the latest transactions again.");
+          window.setTimeout(() => {
+            void loadTransactionsPage(workspaceId, {
+              pageOverride: options?.pageOverride ?? transactionsPage,
+              pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
+              summaryMode: options?.summaryMode ?? "light",
+            });
+          }, 1200 * 2 ** retryAttempt);
+          return;
+        }
+
         setMessage(shouldSuppressFailure ? "" : "Unable to load transactions.");
         setTransactionsLoadFailed(!shouldSuppressFailure);
         setIsWorkspaceDataReady(true);

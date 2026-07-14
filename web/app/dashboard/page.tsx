@@ -15,10 +15,10 @@ import { RouteSplash } from "@/components/route-splash";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardTopActions } from "@/components/dashboard-top-actions";
 import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
-import { EmptyDataCta } from "@/components/empty-data-cta";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { isTransientDataError } from "@/lib/transient-data";
+import { TransientDataRecovery } from "@/components/transient-data-recovery";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
@@ -235,25 +235,7 @@ const comparePeriods = (currentTransactions: DashboardTransaction[], previousTra
 function DashboardUnavailableContent() {
   return (
     <section className="dashboard-home">
-      <EmptyDataCta
-        className="dashboard-home__starter-empty"
-        eyebrow="Home"
-        title="Clover is reconnecting to your latest data"
-        copy="Your balances and activity are still yours. Clover just needs another moment to refresh them before the Home page can load properly."
-        highlights={[
-          "Try refreshing in a few seconds if you were importing or switching pages.",
-          "Uploads already in progress should keep processing in the background.",
-          "Once the connection settles, your balances, reports, and Adviser cards will return here.",
-        ]}
-        illustration="/illustrations/clover-empty-dashboard-3d.png"
-        illustrationAlt="Clover dashboard loading"
-        importHref="/transactions?import=1"
-        accountHref="/accounts"
-        transactionHref="/transactions"
-        importLabel="Upload files"
-        accountLabel="Open accounts"
-        transactionLabel="Open transactions"
-      />
+      <TransientDataRecovery eyebrow="Home" pageLabel="Home" />
     </section>
   );
 }

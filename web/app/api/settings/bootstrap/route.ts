@@ -93,7 +93,7 @@ export async function GET() {
     });
   } catch (error) {
     if (isTransientDataError(error)) {
-      return createTransientDataUnavailableResponse("Clover is reconnecting to your latest settings.");
+      return createTransientDataUnavailableResponse("Clover is refreshing your latest settings.");
     }
 
     if (isUnauthorizedDataError(error)) {

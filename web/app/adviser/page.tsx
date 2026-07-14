@@ -22,6 +22,7 @@ import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { isTransientDataError } from "@/lib/transient-data";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
+import { TransientDataRecovery } from "@/components/transient-data-recovery";
 
 export const dynamic = "force-dynamic";
 
@@ -383,25 +384,7 @@ const withAdviserEmoji = (card: AdviserCard): AdviserSectionCard => ({
 function AdviserUnavailableContent() {
   return (
     <section className="adviser-page">
-      <EmptyDataCta
-        className="dashboard-empty-state"
-        eyebrow="Adviser"
-        title="Clover is reconnecting to your latest guidance"
-        copy="Your transactions and accounts are still yours. Clover just needs another moment to refresh them before Adviser can pull together the latest suggestions."
-        highlights={[
-          "Try refreshing in a few seconds if you were importing or switching pages.",
-          "Uploads already in progress should keep processing in the background.",
-          "Once the connection settles, your cards, prompts, and recommendations will return here.",
-        ]}
-        illustration="/illustrations/clover-empty-dashboard-3d.png"
-        illustrationAlt="A 3D Clover dashboard illustration"
-        importHref="/transactions?import=1"
-        accountHref="/accounts"
-        transactionHref="/transactions"
-        importLabel="Upload files"
-        accountLabel="Open accounts"
-        transactionLabel="Open transactions"
-      />
+      <TransientDataRecovery eyebrow="Adviser" pageLabel="Adviser" />
     </section>
   );
 }
