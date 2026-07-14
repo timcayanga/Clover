@@ -189,6 +189,13 @@ const getBudgetDraftName = (form: BudgetFormState, categories: BudgetCategoryOpt
   return categories.find((category) => category.id === form.categoryId)?.name ?? "Category";
 };
 
+const getBudgetScopeHint = (form: BudgetFormState) => {
+  if (form.kind === "savings_target") return "Savings are measured across this profile's income and spending.";
+  if (form.accountId !== "__none__") return "Only transactions from this account are counted.";
+  if (form.categoryId !== "__all__") return "Only transactions in this category are counted.";
+  return "All spending in this Clover profile is counted.";
+};
+
 export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const [data, setData] = useState<BudgetingData>(initialData);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -720,6 +727,8 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
                   </select>
                 </label>
               </div>
+
+              <p className="budget-editor__scope-hint">{getBudgetScopeHint(form)}</p>
 
               <div className="budget-editor__inline-controls">
                 <label className="budget-editor__field">

@@ -6037,6 +6037,13 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 12px;
 }
 
+.budget-editor__scope-hint {
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .budget-editor__inline-controls,
 .budget-editor__advanced {
   grid-column: 1 / -1;

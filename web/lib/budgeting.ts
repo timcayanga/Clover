@@ -556,6 +556,13 @@ export const buildBudgetSuggestions = (params: {
   categories: Array<{ id: string; name: string }>;
   currency?: string;
 }) => {
+  const accountCurrencies = new Set(
+    params.accounts.map((account) => account.currency?.trim().toUpperCase()).filter((value): value is string => Boolean(value))
+  );
+  if (accountCurrencies.size > 1) {
+    return [];
+  }
+
   const currency = params.currency ?? params.accounts.find((account) => account.currency)?.currency ?? "PHP";
   const totalIncome = params.transactions
     .filter((transaction) => transaction.type === "income" && !transaction.isExcluded)

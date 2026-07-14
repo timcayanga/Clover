@@ -55,6 +55,7 @@ async function BudgetingPageContent() {
         overview: data.overview,
         categories: data.categories,
         accounts: data.accounts,
+        suggestions: data.suggestions,
       }}
     />
   );

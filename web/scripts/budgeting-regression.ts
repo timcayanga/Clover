@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { BudgetRecord, BudgetTransaction, BudgetCommitment } from "@/lib/budgeting";
-import { buildBudgetOverview } from "@/lib/budgeting";
+import { buildBudgetOverview, buildBudgetSuggestions } from "@/lib/budgeting";
 
 const now = new Date("2026-07-14T12:00:00.000Z");
 
@@ -77,5 +77,18 @@ assert.equal(scopedOverview.budgets.find((item) => item.id === "account-budget")
 assert.equal(scopedOverview.budgets.find((item) => item.id === "account-budget")?.plannedCount, 1, "account budgets should include matching planned commitments");
 assert.equal(scopedOverview.budgets.find((item) => item.id === "category-budget")?.actualAmount, 300, "category budgets should include only their category activity");
 assert.equal(scopedOverview.budgets.find((item) => item.id === "category-budget")?.plannedCount, 0, "category budgets should not claim account-level commitments");
+
+assert.deepEqual(
+  buildBudgetSuggestions({
+    transactions: [transaction()],
+    accounts: [
+      { id: "account-1", name: "PHP account", currency: "PHP" },
+      { id: "account-2", name: "USD account", currency: "USD" },
+    ],
+    categories: [{ id: "category-1", name: "Shopping" }],
+  }),
+  [],
+  "mixed-currency workspaces should not receive ambiguous spending suggestions"
+);
 
 console.log("Budgeting regression checks passed.");
