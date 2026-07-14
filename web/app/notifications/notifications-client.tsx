@@ -39,6 +39,8 @@ type AdviserAlert = {
   actionLabel: string;
 };
 
+const ADVISER_ALERT_DISMISSALS_KEY = "clover.adviser-alert-dismissals.v1";
+
 const formatUpdatedAt = (updatedAt: number) => {
   if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
     return "Just now";
@@ -94,8 +96,20 @@ export function NotificationsClient() {
   const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
   const [adviserAlerts, setAdviserAlerts] = useState<AdviserAlert[]>([]);
+  const [dismissedAdviserAlerts, setDismissedAdviserAlerts] = useState<string[]>([]);
 
   useEffect(() => subscribeImportActivity(() => setActivity(readImportActivity())), []);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(ADVISER_ALERT_DISMISSALS_KEY);
+      const parsed = stored ? JSON.parse(stored) : [];
+      if (Array.isArray(parsed)) {
+        setDismissedAdviserAlerts(parsed.filter((value): value is string => typeof value === "string"));
+      }
+    } catch {
+      setDismissedAdviserAlerts([]);
+    }
+  }, []);
   useEffect(() => {
     let cancelled = false;
 
@@ -149,7 +163,15 @@ export function NotificationsClient() {
     clearImportActivity();
     setActivity(null);
   };
+  const dismissAdviserAlert = (alertId: string) => {
+    setDismissedAdviserAlerts((current) => {
+      const next = Array.from(new Set([...current, alertId])).slice(-50);
+      window.localStorage.setItem(ADVISER_ALERT_DISMISSALS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
   const importChecklist = activity?.summary ? buildImportResultChecklist(activity.summary) : [];
+  const visibleAdviserAlerts = adviserAlerts.filter((alert) => !dismissedAdviserAlerts.includes(alert.id));
 
   return (
     <CloverShell
@@ -200,7 +222,7 @@ export function NotificationsClient() {
             </article>
           )}
 
-          {adviserAlerts.length > 0 ? (
+          {visibleAdviserAlerts.length > 0 ? (
             <section className="notifications-budget">
               <div className="report-card__head report-card__head--compact">
                 <div>
@@ -209,7 +231,7 @@ export function NotificationsClient() {
                 </div>
               </div>
               <div className="notifications-budget__grid">
-                {adviserAlerts.map((alert) => (
+                {visibleAdviserAlerts.map((alert) => (
                   <article key={alert.id} className={`notification-item glass notification-item--${alert.tone}`}>
                     <div className="notification-item__main">
                       <p className="notification-item__tone">Adviser</p>
@@ -220,6 +242,9 @@ export function NotificationsClient() {
                       <a className="button button-secondary button-small" href={alert.href}>
                         {alert.actionLabel}
                       </a>
+                      <button className="button button-secondary button-small" type="button" onClick={() => dismissAdviserAlert(alert.id)}>
+                        Dismiss
+                      </button>
                     </div>
                   </article>
                 ))}
