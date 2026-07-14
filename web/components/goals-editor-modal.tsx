@@ -33,6 +33,28 @@ type GoalsEditorProps = {
 
 const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
 
+const parseIntentAmount = (value: string) => {
+  const match = value.match(/(?:₱|php|p)?\s*([\d,]+(?:\.\d+)?)\s*(k|m)?/i);
+  if (!match) return null;
+  const base = Number(match[1].replace(/,/g, ""));
+  if (!Number.isFinite(base) || base <= 0) return null;
+  const multiplier = match[2]?.toLowerCase() === "m" ? 1_000_000 : match[2]?.toLowerCase() === "k" ? 1_000 : 1;
+  return base * multiplier;
+};
+
+const getIntentSuggestion = (value: string, currency?: string | null) => {
+  const text = value.trim().toLowerCase();
+  if (!text) return null;
+  const amount = parseIntentAmount(value);
+  if (amount !== null) {
+    return `Clover found a ${formatCurrency(amount, currency)} target in your note. Save the goal to use it in your roadmap.`;
+  }
+  if (/car|vehicle|house|home|school|tuition|travel|trip|phone|laptop/.test(text)) {
+    return "A target amount or date will make this roadmap more useful. Clover can suggest one from your recent cash flow.";
+  }
+  return "Add an amount or target date if you want Clover to build more specific milestones.";
+};
+
 const getPlanDefaults = (goalKey: string | null): { targetMode: GoalTargetMode; cadence: GoalTargetCadence; purpose: string } => ({
   targetMode: goalKey === "invest_better" ? "percent" : "amount",
   cadence: "monthly",
@@ -189,7 +211,7 @@ export function GoalsEditor({
       return;
     }
 
-    const selectedGoalKey = goalValue ?? selectedGoal ?? null;
+    const selectedGoalKey = goalValue === null ? null : goalValue ?? selectedGoal ?? null;
     const rawAmount = targetAmount.trim() ? Number(targetAmount) : null;
     const rawPercent = targetPercent.trim() ? Number(targetPercent) : null;
     const nextPlan = {
@@ -201,8 +223,8 @@ export function GoalsEditor({
       purpose: purpose.trim() || null,
     };
 
-    const summary =
-      getGoalPlanSummary(
+    const summary = selectedGoalKey
+      ? getGoalPlanSummary(
         {
           goalKey: selectedGoalKey ?? (selectedGoal ?? goals[0]?.value ?? null),
           targetMode,
@@ -213,7 +235,8 @@ export function GoalsEditor({
         } as GoalPlan,
         monthlyIncome,
         currency
-      ) ?? null;
+        ) ?? null
+      : null;
 
     const nextGoalLabel = goals.find((goal) => goal.value === selectedGoalKey)?.title ?? "Goal";
     setStatus("Saving your goal...");
@@ -274,6 +297,7 @@ export function GoalsEditor({
           currency
         )}.`
       : null;
+  const intentSuggestion = getIntentSuggestion(purpose, currency);
   const paydayContextCopy = selectedGoal === "invest_better" ? paydayHint ?? "Aim to move the investing transfer right after payday." : null;
   const triggerText = triggerLabel ?? (currentGoal ? "Adjust goal" : "Set a goal");
   const triggerClasses = triggerClassName ?? "button button-secondary button-small";
@@ -351,6 +375,39 @@ export function GoalsEditor({
                   );
                 })}
               </div>
+
+              <label className="goals-editor__intent">
+                <span>What are you working toward?</span>
+                <input
+                  type="text"
+                  value={purpose}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setPurpose(value);
+                    const lowerValue = value.toLowerCase();
+                    const detectedGoal: GoalPlan["goalKey"] | null = /invest|portfolio|stocks|fund/.test(lowerValue)
+                      ? "invest_better"
+                      : /debt|loan|credit card/.test(lowerValue)
+                        ? "pay_down_debt"
+                        : /emergency|buffer|rainy day/.test(lowerValue)
+                          ? "build_emergency_fund"
+                          : /spend|track|overspend/.test(lowerValue)
+                            ? "track_spending"
+                            : /save|car|vehicle|house|home|school|tuition|travel|trip|phone|laptop/.test(lowerValue)
+                              ? "save_more"
+                              : null;
+                    if (!currentGoal && detectedGoal) {
+                      setSelectedGoal(detectedGoal);
+                    }
+                    const detectedAmount = parseIntentAmount(value);
+                    if (detectedAmount !== null && targetMode === "amount") {
+                      setTargetAmount(String(detectedAmount));
+                    }
+                  }}
+                  placeholder="e.g. Save 25k for a phone"
+                />
+                {intentSuggestion ? <small>{intentSuggestion}</small> : null}
+              </label>
 
               <label className="goals-editor__amount">
                 <span>
@@ -458,6 +515,11 @@ export function GoalsEditor({
                 >
                   {selectedGoal ? "Save goal" : "Clear goal"}
                 </button>
+                {currentGoal ? (
+                  <button type="button" className="pill-link pill-link--inline goals-editor__delete" disabled={isSaving} onClick={() => saveGoal(null)}>
+                    Delete goal
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="button button-secondary"
