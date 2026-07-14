@@ -33,6 +33,7 @@ type BudgetItem = {
   isAtRisk: boolean;
   plannedAmount: number;
   plannedCount: number;
+  isActive: boolean;
 };
 
 type BudgetAlert = BudgetItem & {
@@ -73,6 +74,7 @@ type BudgetHistoryResponse = {
 
 type BudgetOverview = {
   budgets: BudgetItem[];
+  inactiveBudgets: BudgetItem[];
   alerts: BudgetAlert[];
   activeBudgetCount: number;
   totalTargetAmount: number;
@@ -186,8 +188,8 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const [historyError, setHistoryError] = useState<string | null>(null);
 
   const editingBudget = useMemo(
-    () => data.budgets.find((budget) => budget.id === editingBudgetId) ?? null,
-    [data.budgets, editingBudgetId]
+    () => [...data.budgets, ...data.overview.inactiveBudgets].find((budget) => budget.id === editingBudgetId) ?? null,
+    [data.budgets, data.overview.inactiveBudgets, editingBudgetId]
   );
 
   useEffect(() => {
@@ -240,6 +242,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
 
   const activeAlerts = data.overview.alerts;
   const visibleBudgets = data.budgets;
+  const pausedBudgets = data.overview.inactiveBudgets;
   const onTrackBudgets = visibleBudgets.filter((budget) => !budget.isAtRisk);
   const atRiskBudgets = visibleBudgets.filter((budget) => budget.isAtRisk);
   const selectedHistoryBudget = historyBudgetId ? data.budgets.find((budget) => budget.id === historyBudgetId) ?? null : null;
@@ -377,6 +380,31 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
     };
 
     await runBudgetRequest(payload, editingBudgetId ? "update" : "create", editingBudgetId ?? undefined);
+  };
+
+  const toggleBudgetActive = async () => {
+    if (!editingBudget || saving) {
+      return;
+    }
+
+    const draftName = getBudgetDraftName(form, data.categories, data.accounts);
+    const isAccountBudget = form.accountId !== "__none__" && form.kind === "spend_limit";
+    const isAllCategories = form.categoryId === "__all__";
+    await runBudgetRequest(
+      {
+        name: draftName,
+        kind: form.kind,
+        scope: form.kind === "savings_target" ? "global" : isAccountBudget ? "account" : isAllCategories ? "global" : "category",
+        cadence: form.cadence,
+        targetAmount: Number(form.targetAmount),
+        currency: form.currency.trim() || "PHP",
+        accountId: isAccountBudget ? form.accountId : null,
+        categoryId: form.kind === "savings_target" || isAccountBudget || isAllCategories ? null : form.categoryId,
+        isActive: !editingBudget.isActive,
+      },
+      "update",
+      editingBudget.id
+    );
   };
 
   const deleteBudget = async () => {
@@ -542,6 +570,14 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
             </button>
           </article>
         )}
+        {pausedBudgets.length > 0 ? (
+          <div className="budget-paused-list">
+            <span>{pausedBudgets.length} paused budget{pausedBudgets.length === 1 ? "" : "s"}</span>
+            <button className="pill-link pill-link--inline" type="button" onClick={() => openEditEditor(pausedBudgets[0].id)}>
+              Review
+            </button>
+          </div>
+        ) : null}
       </section>
 
       {isEditorOpen ? (
@@ -651,9 +687,14 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
 
             <div className="budget-editor__actions">
               {editingBudget ? (
-                <button className="button button-secondary button-pill" type="button" onClick={deleteBudget} disabled={saving}>
-                  Delete
-                </button>
+                <>
+                  <button className="button button-secondary button-pill" type="button" onClick={() => void toggleBudgetActive()} disabled={saving}>
+                    {editingBudget.isActive ? "Pause" : "Resume"}
+                  </button>
+                  <button className="button button-secondary button-pill" type="button" onClick={deleteBudget} disabled={saving}>
+                    Delete
+                  </button>
+                </>
               ) : null}
               <div className="budget-editor__spacer" />
               <button className="button button-secondary button-pill" type="button" onClick={resetEditor} disabled={saving}>

@@ -67,6 +67,7 @@ export type BudgetProgress = {
   isAtRisk: boolean;
   plannedAmount: number;
   plannedCount: number;
+  isActive: boolean;
 };
 
 export type BudgetAlert = BudgetProgress & {
@@ -116,6 +117,7 @@ export type BudgetSuggestion = {
 
 export type BudgetOverview = {
   budgets: BudgetProgress[];
+  inactiveBudgets: BudgetProgress[];
   alerts: BudgetAlert[];
   activeBudgetCount: number;
   totalTargetAmount: number;
@@ -422,8 +424,7 @@ export const buildBudgetOverview = (params: {
       transaction.date >= currentMonthStart &&
       !transaction.isExcluded
   );
-  const budgets = params.budgets
-    .filter((budget) => budget.isActive)
+  const allBudgets = params.budgets
     .map((budget) => {
       const periodStart = getBudgetPeriodStart(budget.cadence, now);
       const periodEnd = getPeriodEnd(budget.cadence, periodStart);
@@ -476,9 +477,13 @@ export const buildBudgetOverview = (params: {
         isAtRisk,
         plannedAmount,
         plannedCount: periodCommitments.length,
+        isActive: budget.isActive,
       } satisfies BudgetProgress;
     })
     .sort((left, right) => right.progressPercent - left.progressPercent || left.name.localeCompare(right.name));
+
+  const budgets = allBudgets.filter((budget) => budget.isActive);
+  const inactiveBudgets = allBudgets.filter((budget) => !budget.isActive);
 
   const alerts = budgets
     .filter((budget) => budget.isAtRisk)
@@ -510,6 +515,7 @@ export const buildBudgetOverview = (params: {
 
   return {
     budgets,
+    inactiveBudgets,
     alerts,
     activeBudgetCount: budgets.length,
     totalTargetAmount,
