@@ -35,21 +35,18 @@ function FeatureSection({
   title,
   copy,
   visual,
-  chapter,
   reverse = false,
   id,
 }: {
   title: ReactNode;
   copy: ReactNode;
   visual: ReactNode;
-  chapter: string;
   reverse?: boolean;
   id: string;
 }) {
   return (
     <LandingStoryReveal as="section" className={`landing-feature ${reverse ? "landing-feature--reverse" : ""}`.trim()} id={id}>
       <div className="landing-feature__copy">
-        <p className="landing-feature__chapter">{chapter}</p>
         <h2 className="landing-feature__title">{title}</h2>
         <div className="landing-feature__body">{copy}</div>
       </div>
@@ -82,7 +79,7 @@ export default async function HomePage() {
             <span className="landing-highlight">Organized in minutes.</span>
           </h1>
           <p className="landing-hero__lede">
-            Upload statements, receipts, screenshots, or spreadsheets. Clover turns them into organized transactions, reports, and insights.
+            Upload bank statements, receipts, screenshots, or spreadsheets. Clover automatically organizes them into transactions, accounts, reports, and practical financial guidance.
           </p>
 
           <div className="landing-hero__actions">
@@ -106,17 +103,16 @@ export default async function HomePage() {
 
       <FeatureSection
         id="statement-import"
-        chapter="01 · Bring it together"
         reverse
         title={
           <>
-            Bring your financial history into <span className="landing-highlight">one place</span>.
+            Never rebuild your financial history <span className="landing-highlight">again</span>.
           </>
         }
         copy={
           <>
-            <p>Start with the records you already have: statements, receipts, screenshots, spreadsheets, or manual transactions.</p>
-            <p>Clover extracts the useful details so months of history can take shape without months of data entry.</p>
+            <p>Stop rebuilding your finances one transaction at a time. Upload the records you already have - bank statements, receipts, screenshots, spreadsheets, or manual entries - and Clover extracts the useful details automatically.</p>
+            <p>Months of financial history can take shape in minutes.</p>
           </>
         }
         visual={
@@ -131,16 +127,20 @@ export default async function HomePage() {
 
       <FeatureSection
         id="insights"
-        chapter="02 · Understand what changed"
         title={
           <>
-            See the story behind your <span className="landing-highlight">spending</span>.
+            Finally understand where your money actually <span className="landing-highlight">goes</span>.
           </>
         }
         copy={
           <>
-            <p>Your organized transactions become reports, patterns, account balances, and practical insights.</p>
-            <p>See where money went, what changed, and where a small decision could move you closer to your goals.</p>
+            <p>Your organized transactions become trends, reports, balances, and financial guidance.</p>
+            <p>You'll know:</p>
+            <ul>
+              <li>What changed</li>
+              <li>What caused it</li>
+              <li>What deserves your attention next</li>
+            </ul>
           </>
         }
         visual={
@@ -155,7 +155,6 @@ export default async function HomePage() {
 
       <FeatureSection
         id="split-bills"
-        chapter="03 · Make shared money easier"
         reverse
         title={
           <>
@@ -164,8 +163,15 @@ export default async function HomePage() {
         }
         copy={
           <>
-            <p>Turn a receipt or transaction into a clear split for friends, family, roommates, or travel groups.</p>
-            <p>Everyone can see who paid, who owes, and what is already settled.</p>
+            <p>Turn any receipt or transaction into a shared expense. Split by item or equally, track who paid, who owes, and what has already been settled.</p>
+            <p>All without chasing people manually.</p>
+            <p>Perfect for:</p>
+            <ul>
+              <li>Barkada trips</li>
+              <li>Roommates</li>
+              <li>Couples</li>
+              <li>Families</li>
+            </ul>
           </>
         }
         visual={
@@ -179,32 +185,7 @@ export default async function HomePage() {
       />
 
       <FeatureSection
-        id="pro"
-        chapter="04 · Go deeper when you are ready"
-        title={
-          <>
-            Expand your financial picture with <span className="landing-highlight">Pro</span>.
-          </>
-        }
-        copy={
-          <>
-            <p>Unlock advanced reports, higher limits, investment tracking, and a more complete view across your accounts.</p>
-            <p>Start simply, then add depth when your finances need it.</p>
-          </>
-        }
-        visual={
-          <LandingImage
-            src="/assets/landing page/pro.png"
-            alt="Clover Pro feature preview"
-            width={612}
-            height={408}
-          />
-        }
-      />
-
-      <FeatureSection
         id="trust"
-        chapter="05 · Stay in control"
         reverse
         title={
           <>
@@ -213,8 +194,8 @@ export default async function HomePage() {
         }
         copy={
           <>
-            <p>Clover protects your account, keeps imported records traceable, and lets you review what was extracted.</p>
-            <p>You control access to your information and can manage the data connected to your account.</p>
+            <p>Clover keeps imported records traceable, editable, and under your control. Review every extracted transaction before it becomes part of your financial history.</p>
+            <p>Your information stays protected, and you decide what Clover remembers.</p>
           </>
         }
         visual={
@@ -227,12 +208,41 @@ export default async function HomePage() {
         }
       />
 
+      <FeatureSection
+        id="pro"
+        title={
+          <>
+            Grow with confidence with <span className="landing-highlight">Pro</span>.
+          </>
+        }
+        copy={
+          <>
+            <p>Start free. Upgrade only when your finances grow.</p>
+            <p>Unlock:</p>
+            <ul>
+              <li>Higher upload limits</li>
+              <li>Advanced reports</li>
+              <li>Investment tracking</li>
+              <li>Richer Adviser insights</li>
+              <li>More accounts and profiles</li>
+            </ul>
+          </>
+        }
+        visual={
+          <LandingImage
+            src="/assets/landing page/pro.png"
+            alt="Clover Pro feature preview"
+            width={612}
+            height={408}
+          />
+        }
+      />
+
       <LandingStoryReveal as="section" className="landing-cta">
         <div className="landing-cta__inner">
           <LandingCloverBloom />
           <div className="landing-cta__copy">
-            <h2>Make money management feel simpler.</h2>
-            <p>Import statements, track spending, and split bills with Clover.</p>
+            <h2>Ready to organize months of finances in minutes?</h2>
           </div>
           <div className="landing-cta__actions">
             <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
