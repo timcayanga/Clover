@@ -257,6 +257,32 @@ const getBudgetActualAmount = (kind: BudgetKind, transactions: BudgetTransaction
   return spendingTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0);
 };
 
+const getBudgetElapsedPercent = (cadence: BudgetCadence, now: Date) => {
+  const periodStart = getBudgetPeriodStart(cadence, now);
+  const periodEnd = getPeriodEnd(cadence, periodStart);
+  const periodLength = periodEnd.getTime() - periodStart.getTime();
+  if (periodLength <= 0) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, ((now.getTime() - periodStart.getTime()) / periodLength) * 100));
+};
+
+const getBudgetPaceLabel = (kind: BudgetKind, progressPercent: number, cadence: BudgetCadence, now: Date) => {
+  const elapsedPercent = getBudgetElapsedPercent(cadence, now);
+  const paceDifference = progressPercent - elapsedPercent;
+
+  if (paceDifference >= 15) {
+    return kind === "savings_target" ? "Ahead of pace" : "Running hot";
+  }
+
+  if (paceDifference <= -15) {
+    return kind === "savings_target" ? "Behind pace" : "Ahead of pace";
+  }
+
+  return "On pace";
+};
+
 const getBudgetStatus = (kind: BudgetKind, stage: BudgetAlertStage) => {
   if (kind === "savings_target") {
     if (stage === "exceeded") return { label: "Target reached", detail: "You are over the target pace.", tone: "positive" as const };
@@ -358,6 +384,7 @@ export const buildBudgetOverview = (params: {
       const stage = getBudgetStage(progressPercent);
       const nextThreshold = getBudgetNextThreshold(progressPercent);
       const status = getBudgetStatus(budget.kind, stage);
+      const paceLabel = getBudgetPaceLabel(budget.kind, progressPercent, budget.cadence, now);
       const remainingAmount = targetAmount - actualAmount;
 
       return {
@@ -381,7 +408,7 @@ export const buildBudgetOverview = (params: {
         categoryName: budget.category?.name ?? null,
         kindLabel: formatBudgetKindLabel(budget.kind),
         statusLabel: status.label,
-        statusDetail: status.detail,
+        statusDetail: `${status.detail} ${paceLabel}.`,
       } satisfies BudgetProgress;
     })
     .sort((left, right) => right.progressPercent - left.progressPercent || left.name.localeCompare(right.name));
