@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CommitmentsPanel } from "@/components/commitments-panel";
 
@@ -35,6 +36,7 @@ export function RecurringPageClient({
   transactions,
   initialAddOpen = false,
 }: RecurringPageClientProps) {
+  const router = useRouter();
   const [addOpen, setAddOpen] = useState(initialAddOpen);
 
   useEffect(() => {
@@ -52,6 +54,21 @@ export function RecurringPageClient({
 
     setAddOpen(true);
   }, [initialAddOpen]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    };
+
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [router]);
 
   useEffect(() => {
     const handleOpenAdd = () => {

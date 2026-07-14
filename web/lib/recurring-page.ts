@@ -140,12 +140,12 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
       where: {
         workspaceId,
         deletedAt: null,
-        date: {
-          gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000),
+      date: {
+          gte: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
         },
       },
       orderBy: { date: "desc" },
-      take: 250,
+      take: 1200,
       select: {
         id: true,
         date: true,

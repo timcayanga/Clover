@@ -560,6 +560,8 @@ export function CommitmentsPanel({
     notes: string;
     sourceLabel: string;
     sourceDetail: string | null;
+    reasonSummary: string | null;
+    reasonTags: string[];
     statementCheckpointId: string | null;
     installmentTerms: string;
   }) => {

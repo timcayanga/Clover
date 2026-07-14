@@ -186,8 +186,10 @@ const extractInstallmentTerms = (text: string) => {
   return null;
 };
 
-const readTransactionImportFileName = (transaction: PlannedPaymentTransactionLike) => {
-  const rawPayload = transaction.rawPayload;
+const readTransactionImportFileName = (transaction: unknown) => {
+  const rawPayload = transaction && typeof transaction === "object" && !Array.isArray(transaction)
+    ? (transaction as Record<string, unknown>).rawPayload
+    : null;
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return null;
   }
