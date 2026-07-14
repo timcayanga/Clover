@@ -2258,23 +2258,68 @@ export async function POST(request: Request) {
     const reply = extractOutputText(payload) || "I could not generate a response right now.";
     if (streamRequested) {
       const encoder = new TextEncoder();
-      const responseStream = new ReadableStream<Uint8Array>({
-        start(controller) {
-          const chunks = reply.match(/.{1,28}(?:\s+|$)/g) ?? [reply];
-          let index = 0;
-          const emit = () => {
-            if (index >= chunks.length) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions })}\n\n`));
-              controller.close();
-              return;
-            }
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", text: chunks[index] })}\n\n`));
-            index += 1;
-            setTimeout(emit, 12);
-          };
-          emit();
-        },
-      });
+      let upstreamResponse: Response | null = null;
+      try {
+        upstreamResponse = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model, stream: true, temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
+        });
+      } catch (error) {
+        console.error("Adviser upstream stream failed", error instanceof Error ? error.message : error);
+      }
+
+      const responseStream = upstreamResponse?.ok && upstreamResponse.body
+        ? new ReadableStream<Uint8Array>({
+            async start(controller) {
+              const reader = upstreamResponse.body!.getReader();
+              const decoder = new TextDecoder();
+              let buffer = "";
+              try {
+                while (true) {
+                  const { value, done } = await reader.read();
+                  buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+                  const events = buffer.split("\n\n");
+                  buffer = events.pop() ?? "";
+                  for (const event of events) {
+                    const dataLine = event.split("\n").find((line) => line.startsWith("data: "));
+                    if (!dataLine || dataLine.slice(6).trim() === "[DONE]") continue;
+                    try {
+                      const data = JSON.parse(dataLine.slice(6)) as { type?: string; delta?: string };
+                      if (data.type === "response.output_text.delta" && data.delta) {
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", text: data.delta })}\n\n`));
+                      }
+                    } catch {
+                      // Ignore provider keep-alive events that are not JSON.
+                    }
+                  }
+                  if (done) break;
+                }
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions })}\n\n`));
+                controller.close();
+              } catch (error) {
+                console.error("Adviser upstream stream read failed", error instanceof Error ? error.message : error);
+                controller.error(error);
+              }
+            },
+          })
+        : new ReadableStream<Uint8Array>({
+            start(controller) {
+              const chunks = reply.match(/.{1,28}(?:\s+|$)/g) ?? [reply];
+              let index = 0;
+              const emit = () => {
+                if (index >= chunks.length) {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions })}\n\n`));
+                  controller.close();
+                  return;
+                }
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", text: chunks[index] })}\n\n`));
+                index += 1;
+                setTimeout(emit, 12);
+              };
+              emit();
+            },
+          });
       return new Response(responseStream, {
         headers: {
           "Cache-Control": "no-cache, no-transform",
