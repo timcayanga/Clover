@@ -239,6 +239,15 @@ export type SplitBillSerializedBill = {
   } | null;
   transferSettlements?: SplitBillTransferSettlementRecord[];
   activity?: SplitBillActivityRecord[];
+  paymentRequests?: Array<{
+    id: string;
+    recipientName: string;
+    payeeName: string;
+    amount: string;
+    currency: string;
+    dueDate: string | null;
+    status: "requested" | "payment_reported" | "paid" | "declined";
+  }>;
   settlement: SplitBillSettlement;
 };
 

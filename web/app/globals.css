@@ -36611,6 +36611,36 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-size: 0.82rem;
 }
 
+.split-bill-due-strip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-color: rgba(245, 158, 11, 0.22);
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.split-bill-due-strip__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.split-bill-due-strip__items button {
+  display: grid;
+  gap: 2px;
+  padding: 7px 10px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  color: inherit;
+  text-align: left;
+}
+
+.split-bill-due-strip__items small {
+  color: var(--text-secondary);
+}
+
 .split-bill-public-request {
   display: grid;
   place-items: center;
@@ -36659,6 +36689,11 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 }
 
 @media (max-width: 640px) {
+  .split-bill-due-strip {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .split-bill-payment-tools__profile-form,
   .split-bill-payment-tools__request-form {
     grid-template-columns: 1fr;

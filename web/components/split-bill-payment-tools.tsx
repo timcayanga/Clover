@@ -8,6 +8,7 @@ type PaymentProfile = {
   label: string;
   provider: string;
   currency: string;
+  personName: string | null;
   accountName: string | null;
   accountNumber: string | null;
   qrPayload: string | null;
@@ -33,7 +34,7 @@ type SplitBillPaymentToolsProps = {
   onBillUpdated?: (bill: SplitBillSerializedBill) => void;
 };
 
-const emptyProfile = { label: "", provider: "", currency: "PHP", accountName: "", accountNumber: "", qrPayload: "", qrImageData: "" };
+const emptyProfile = { label: "", provider: "", currency: "PHP", personName: "", accountName: "", accountNumber: "", qrPayload: "", qrImageData: "" };
 
 export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentToolsProps) {
   const [profiles, setProfiles] = useState<PaymentProfile[]>([]);
@@ -46,6 +47,11 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   const transferOptions = useMemo(() => bill.settlement.transfers.filter((transfer) => transfer.amount > 0), [bill.settlement.transfers]);
+  const selectedTransfer = transferOptions.find((transfer) => transfer.fromParticipantId === requestDraft.recipientParticipantId) ?? transferOptions[0];
+  const availableProfiles = useMemo(
+    () => profiles.filter((profile) => !profile.personName || profile.personName === selectedTransfer?.toParticipantName),
+    [profiles, selectedTransfer?.toParticipantName]
+  );
 
   useEffect(() => {
     void Promise.all([
@@ -64,9 +70,9 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
       recipientParticipantId: current.recipientParticipantId || firstTransfer?.fromParticipantId || "",
       payeeParticipantId: current.payeeParticipantId || firstTransfer?.toParticipantId || "",
       amount: current.amount || (firstTransfer ? firstTransfer.amount.toFixed(2) : ""),
-      paymentProfileId: current.paymentProfileId || profiles.find((profile) => profile.isDefault)?.id || profiles[0]?.id || "",
+      paymentProfileId: current.paymentProfileId || availableProfiles.find((profile) => profile.isDefault)?.id || availableProfiles[0]?.id || "",
     }));
-  }, [profiles, transferOptions]);
+  }, [availableProfiles, transferOptions]);
 
   const saveProfile = async () => {
     setError(null);
@@ -135,6 +141,10 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
         <div className="split-bill-payment-tools__profile-form">
           <input className="settings-input" placeholder="Label, e.g. Main GCash" value={profileDraft.label} onChange={(event) => setProfileDraft({ ...profileDraft, label: event.target.value })} />
           <input className="settings-input" placeholder="Provider, e.g. GCash or BPI" value={profileDraft.provider} onChange={(event) => setProfileDraft({ ...profileDraft, provider: event.target.value })} />
+          <select className="settings-input" value={profileDraft.personName} onChange={(event) => setProfileDraft({ ...profileDraft, personName: event.target.value })}>
+            <option value="">Payment method belongs to me</option>
+            {bill.participants.map((participant) => <option key={participant.id} value={participant.name}>{participant.name}</option>)}
+          </select>
           <input className="settings-input" placeholder="Account name" value={profileDraft.accountName} onChange={(event) => setProfileDraft({ ...profileDraft, accountName: event.target.value })} />
           <input className="settings-input" placeholder="Account number or mobile" value={profileDraft.accountNumber} onChange={(event) => setProfileDraft({ ...profileDraft, accountNumber: event.target.value })} />
           <input className="settings-input" placeholder="QR payload (optional)" value={profileDraft.qrPayload} onChange={(event) => setProfileDraft({ ...profileDraft, qrPayload: event.target.value })} />
@@ -158,7 +168,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
           <input className="settings-input" type="date" aria-label="Payment due date" value={requestDraft.dueDate} onChange={(event) => setRequestDraft({ ...requestDraft, dueDate: event.target.value })} />
           <select className="settings-input" value={requestDraft.paymentProfileId} onChange={(event) => setRequestDraft({ ...requestDraft, paymentProfileId: event.target.value })}>
             <option value="">No payment method</option>
-            {profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+            {availableProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}{profile.personName ? ` · ${profile.personName}` : ""}</option>)}
           </select>
           <button className="button button-primary button-small" type="button" onClick={() => void createRequest()}>Create request</button>
         </div>

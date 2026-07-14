@@ -64,6 +64,15 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
   const [billSearch, setBillSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "settled">("all");
   const isBlankState = bills.length === 0;
+  const duePaymentRequests = useMemo(() => {
+    const nextWeek = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    return bills.flatMap((bill) =>
+      (bill.paymentRequests ?? [])
+        .filter((request) => request.status === "requested" || request.status === "payment_reported")
+        .filter((request) => request.dueDate && new Date(request.dueDate).getTime() <= nextWeek)
+        .map((request) => ({ bill, request }))
+    );
+  }, [bills]);
 
   const balancePulse = useMemo(() => {
     const owes = new Map<string, number>();
@@ -182,6 +191,20 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
           </div>
         </section>
       )}
+
+      {duePaymentRequests.length > 0 ? (
+        <section className="split-bill-due-strip panel glass" aria-label="Payment requests due soon">
+          <strong>Due soon</strong>
+          <div className="split-bill-due-strip__items">
+            {duePaymentRequests.slice(0, 3).map(({ bill, request }) => (
+              <button key={request.id} type="button" onClick={() => onOpenBill(bill.id)}>
+                <span>{request.recipientName}</span>
+                <small>{formatSplitBillAmount(Number(request.amount), request.currency)} · {new Date(request.dueDate!).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="split-bill-panel panel glass">
         <div className="split-bill-panel__head">

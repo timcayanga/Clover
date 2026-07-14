@@ -1046,6 +1046,7 @@ model SplitBillPaymentProfile {
   label       String
   provider    String
   currency    String   @default("PHP")
+  personName  String?
   accountName String?
   accountNumber String?
   qrPayload   String?  @db.Text

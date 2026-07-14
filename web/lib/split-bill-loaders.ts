@@ -115,6 +115,17 @@ const workspaceBillSelect = {
       note: true,
     },
   },
+  paymentRequests: {
+    select: {
+      id: true,
+      recipientName: true,
+      payeeName: true,
+      amount: true,
+      currency: true,
+      dueDate: true,
+      status: true,
+    },
+  },
 };
 
 export const loadSplitBillWorkspaceData = async (userId: string) => {
@@ -160,13 +171,25 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
   const transferSettlementsByBillId = await loadSplitBillTransferSettlementsForBills(bills.map((bill) => bill.id));
 
   return {
-    bills: bills.map((bill) =>
-      serializeSplitBillRecord({
+    bills: bills.map((bill) => {
+      const serializedBill = serializeSplitBillRecord({
         ...bill,
         receiptText: null,
         transferSettlements: transferSettlementsByBillId.get(bill.id) ?? [],
-      } as Parameters<typeof serializeSplitBillRecord>[0])
-    ),
+      } as Parameters<typeof serializeSplitBillRecord>[0]);
+      return {
+        ...serializedBill,
+        paymentRequests: bill.paymentRequests.map((request) => ({
+          id: request.id,
+          recipientName: request.recipientName,
+          payeeName: request.payeeName,
+          amount: request.amount.toString(),
+          currency: request.currency,
+          dueDate: request.dueDate?.toISOString() ?? null,
+          status: request.status,
+        })),
+      };
+    }),
     groups: groups as unknown as SplitBillGroupSummary[],
     people: people as unknown as SplitBillPersonSummary[],
   };
