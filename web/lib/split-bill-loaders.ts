@@ -125,12 +125,13 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
       select: workspaceBillSelect,
     }),
     prisma.splitBillGroup.findMany({
-      where: { userId },
+      where: { userId, archivedAt: null },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,
         name: true,
         avatarUrl: true,
+        archivedAt: true,
         members: {
           orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
           select: {
@@ -173,7 +174,7 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
 
 export const loadSplitBillEditorGroups = async (userId: string) =>
   prisma.splitBillGroup.findMany({
-    where: { userId },
+    where: { userId, archivedAt: null },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     include: {
       members: {

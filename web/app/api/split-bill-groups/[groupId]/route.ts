@@ -16,6 +16,7 @@ const updateGroupSchema = z.object({
   name: z.string().trim().min(1),
   avatarUrl: z.string().trim().nullable().optional(),
   members: z.array(groupMemberSchema).default([]),
+  archivedAt: z.string().nullable().optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ groupId: string }> }) {
@@ -42,6 +43,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
           name: body.name,
           avatarUrl:
             body.avatarUrl === undefined ? existing.avatarUrl ?? null : body.avatarUrl?.trim() || null,
+          archivedAt: body.archivedAt === undefined ? existing.archivedAt : body.archivedAt ? new Date(body.archivedAt) : null,
         },
       });
 

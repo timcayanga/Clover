@@ -36533,6 +36533,106 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   justify-content: center;
 }
 
+.split-bill-payment-tools {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  border-radius: 16px;
+  background: rgba(3, 168, 192, 0.04);
+}
+
+.split-bill-payment-tools__profile-form,
+.split-bill-payment-tools__request-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.split-bill-payment-tools__file-field {
+  display: grid;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.split-bill-payment-tools__profile-form button,
+.split-bill-payment-tools__request-form button {
+  width: fit-content;
+}
+
+.split-bill-payment-tools__share,
+.split-bill-payment-tools__request {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.split-bill-payment-tools__request {
+  font-size: 0.84rem;
+}
+
+.split-bill-payment-tools__request > div {
+  display: flex;
+  gap: 6px;
+}
+
+.split-bill-payment-tools__requests {
+  display: grid;
+  gap: 6px;
+}
+
+.split-bill-public-request {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--surface, #f6fafb);
+}
+
+.split-bill-public-request__card {
+  display: grid;
+  gap: 14px;
+  width: min(100%, 520px);
+}
+
+.split-bill-public-request__card h1,
+.split-bill-public-request__card p {
+  margin: 0;
+}
+
+.split-bill-public-request__amount {
+  color: var(--accent);
+  font-size: 2rem;
+}
+
+.split-bill-public-request__method {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(3, 168, 192, 0.08);
+}
+
+.split-bill-public-request__method img {
+  width: min(100%, 240px);
+  max-height: 240px;
+  object-fit: contain;
+}
+
+.split-bill-public-request__method code {
+  overflow-wrap: anywhere;
+}
+
+.split-bill-public-request__success {
+  color: var(--success, #047857);
+  font-weight: 700;
+}
+
 .split-bill-panel__empty-cta {
   width: 100%;
   max-width: none;

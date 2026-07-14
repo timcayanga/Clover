@@ -22,7 +22,7 @@ export async function GET() {
   try {
     const user = await getSplitBillCurrentUser();
     const groups = await prisma.splitBillGroup.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, archivedAt: null },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       include: {
         members: {

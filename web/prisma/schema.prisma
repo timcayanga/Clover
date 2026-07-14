@@ -131,6 +131,13 @@ enum SplitBillSourceType {
   receipt
 }
 
+enum SplitBillPaymentRequestStatus {
+  requested
+  payment_reported
+  paid
+  declined
+}
+
 enum BillingSubscriptionStatus {
   approval_pending
   active
@@ -191,6 +198,7 @@ model User {
   splitBillGroups          SplitBillGroup[]
   splitBillPeople          SplitBillPerson[]
   splitBills               SplitBill[]
+  splitBillPaymentProfiles SplitBillPaymentProfile[]
   billingSubscription      BillingSubscription?
   billingEvents            BillingEvent[]
   brankasStatementSessions BrankasStatementSession[]
@@ -958,6 +966,7 @@ model SplitBillGroup {
   avatarUrl String?               @db.Text
   createdAt DateTime              @default(now())
   updatedAt DateTime              @updatedAt
+  archivedAt DateTime?
   user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   members   SplitBillGroupMember[]
   bills     SplitBill[]
@@ -1020,12 +1029,59 @@ model SplitBill {
   items               SplitBillItem[]
   payments            SplitBillPayment[]
   transferSettlements SplitBillTransferSettlement[]
+  paymentRequests      SplitBillPaymentRequest[]
 
   @@index([userId])
   @@index([transactionId])
   @@index([groupId])
   @@index([billDate])
   @@index([sourceType])
+}
+
+model SplitBillPaymentProfile {
+  id          String   @id @default(cuid())
+  userId      String
+  label       String
+  provider    String
+  currency    String   @default("PHP")
+  accountName String?
+  accountNumber String?
+  qrPayload   String?  @db.Text
+  qrImageData String?  @db.Text
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requests    SplitBillPaymentRequest[]
+
+  @@index([userId])
+  @@index([userId, currency])
+}
+
+model SplitBillPaymentRequest {
+  id                    String                         @id @default(cuid())
+  billId                String
+  paymentProfileId      String?
+  recipientParticipantId String
+  recipientName         String
+  recipientEmail        String?
+  amount                Decimal                        @db.Decimal(18, 2)
+  currency              String                         @default("PHP")
+  dueDate               DateTime?
+  status                SplitBillPaymentRequestStatus  @default(requested)
+  shareToken             String                         @unique
+  note                  String?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+  paymentReportedAt     DateTime?
+  paidAt                DateTime?
+  bill                  SplitBill                      @relation(fields: [billId], references: [id], onDelete: Cascade)
+  paymentProfile        SplitBillPaymentProfile?       @relation(fields: [paymentProfileId], references: [id], onDelete: SetNull)
+
+  @@index([billId])
+  @@index([recipientParticipantId])
+  @@index([status])
+  @@index([dueDate])
 }
 
 model SplitBillParticipant {

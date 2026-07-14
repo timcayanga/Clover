@@ -6,6 +6,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import { SplitBillHome } from "@/components/split-bill-home";
 import { SplitBillPageActions } from "@/components/split-bill-page-actions";
+import { SplitBillPaymentTools } from "@/components/split-bill-payment-tools";
 import {
   formatSplitBillAmount,
   mergeSplitBillItemSplitMetadata,
@@ -409,6 +410,25 @@ export function SplitBillWorkspace({
     if (selected?.kind === "group" && selected.id === groupId) {
       setSelected(null);
     }
+  };
+
+  const archiveGroup = async (groupId: string) => {
+    const group = groups.find((entry) => entry.id === groupId);
+    if (!group || !window.confirm(`Archive ${group.name}? Its bill history will stay intact.`)) {
+      return;
+    }
+
+    const response = await fetch(`/api/split-bill-groups/${groupId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: group.name, members: group.members, archivedAt: new Date().toISOString() }),
+    });
+    if (!response.ok) {
+      return;
+    }
+
+    setGroups((current) => current.filter((entry) => entry.id !== groupId));
+    setSelected(null);
   };
 
   const removePerson = async (personId: string) => {
@@ -1412,6 +1432,7 @@ export function SplitBillWorkspace({
                         <span>{formatSettlementTransfers(selectedBill)}</span>
                       </div>
                     </div>
+                    <SplitBillPaymentTools bill={selectedBill} />
                     {renderBillItemsTable(selectedBill, false)}
                     <div className="split-bill-activity">
                       <strong>Activity</strong>
@@ -1475,6 +1496,9 @@ export function SplitBillWorkspace({
                 {detailTab === "settle" ? renderSettlementBoard(selectedGroupBills) : null}
                 {detailTab === "activity" ? renderActivityList(selectedGroupActivity) : null}
                 <div className="split-bill-detail-modal__actions">
+                  <button className="button button-secondary button-small" type="button" onClick={() => void archiveGroup(selectedGroup.id)}>
+                    Archive group
+                  </button>
                   <button className="button button-danger button-small" type="button" onClick={() => void removeGroup(selectedGroup.id)}>
                     Delete group
                   </button>

@@ -9,5 +9,6 @@ export type SplitBillPersonSummary = SplitBillEntityAvatar & {
 
 export type SplitBillGroupSummary = SplitBillEntityAvatar & {
   id: string;
+  archivedAt?: string | null;
   members: Array<{ id: string; name: string; sortOrder: number }>;
 };

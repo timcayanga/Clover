@@ -1,0 +1,107 @@
+import { randomUUID } from "node:crypto";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
+
+export const dynamic = "force-dynamic";
+
+const requestSchema = z.object({
+  recipientParticipantId: z.string().min(1),
+  paymentProfileId: z.string().nullable().optional(),
+  recipientEmail: z.string().email().nullable().optional(),
+  amount: z.union([z.string(), z.number()]),
+  dueDate: z.string().nullable().optional(),
+  note: z.string().trim().max(240).nullable().optional(),
+});
+
+const serializeRequest = (entry: {
+  id: string;
+  billId: string;
+  paymentProfileId: string | null;
+  recipientParticipantId: string;
+  recipientName: string;
+  recipientEmail: string | null;
+  amount: unknown;
+  currency: string;
+  dueDate: Date | null;
+  status: string;
+  shareToken: string;
+  note: string | null;
+  createdAt: Date;
+  paymentReportedAt: Date | null;
+  paidAt: Date | null;
+}) => ({
+  ...entry,
+  amount: entry.amount?.toString() ?? "0",
+  shareUrl: `/split-bill/request/${entry.shareToken}`,
+});
+
+export async function GET(_request: Request, { params }: { params: Promise<{ billId: string }> }) {
+  try {
+    const user = await getSplitBillCurrentUser();
+    const { billId } = await params;
+    const bill = await prisma.splitBill.findFirst({ where: { id: billId, userId: user.id }, select: { id: true } });
+    if (!bill) {
+      return NextResponse.json({ error: "Bill not found" }, { status: 404 });
+    }
+    const requests = await prisma.splitBillPaymentRequest.findMany({
+      where: { billId },
+      include: { paymentProfile: true },
+      orderBy: { createdAt: "desc" },
+    });
+    return NextResponse.json({ requests: requests.map(serializeRequest) });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load payment requests" }, { status: 400 });
+  }
+}
+
+export async function POST(request: Request, { params }: { params: Promise<{ billId: string }> }) {
+  try {
+    const user = await getSplitBillCurrentUser();
+    const { billId } = await params;
+    const body = requestSchema.parse(await request.json());
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("Enter an amount greater than zero.");
+    }
+
+    const bill = await prisma.splitBill.findFirst({
+      where: { id: billId, userId: user.id },
+      include: { participants: true },
+    });
+    if (!bill) {
+      return NextResponse.json({ error: "Bill not found" }, { status: 404 });
+    }
+    const recipient = bill.participants.find((participant) => participant.id === body.recipientParticipantId);
+    if (!recipient) {
+      throw new Error("Recipient must be part of this bill.");
+    }
+    if (body.paymentProfileId) {
+      const profile = await prisma.splitBillPaymentProfile.findFirst({ where: { id: body.paymentProfileId, userId: user.id }, select: { id: true } });
+      if (!profile) {
+        throw new Error("Payment method not found.");
+      }
+    }
+
+    const entry = await prisma.splitBillPaymentRequest.create({
+      data: {
+        billId,
+        paymentProfileId: body.paymentProfileId || null,
+        recipientParticipantId: recipient.id,
+        recipientName: recipient.name,
+        recipientEmail: body.recipientEmail || null,
+        amount: amount.toFixed(2),
+        currency: bill.currency,
+        dueDate: body.dueDate ? new Date(`${body.dueDate}T12:00:00`) : null,
+        note: body.note || null,
+        shareToken: randomUUID().replaceAll("-", ""),
+      },
+      include: { paymentProfile: true },
+    });
+
+    return NextResponse.json({ request: serializeRequest(entry) }, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to create payment request" }, { status: 400 });
+  }
+}
