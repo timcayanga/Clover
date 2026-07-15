@@ -322,6 +322,7 @@ const PRELOADED_MENU_ICON_NAMES: IconName[] = [
   "sign-out",
   "investments",
   "split-bill",
+  "goals",
   "budgeting",
   "reports",
   "help",
