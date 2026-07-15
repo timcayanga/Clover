@@ -128,7 +128,6 @@ export type BudgetOverview = {
   highestAlert: BudgetProgress | null;
   uncategorizedTransactionCount: number;
   uncategorizedAmount: number;
-  overlappingBudgetNames: string[];
 };
 
 const thresholdSteps = [50, 70, 90, 100];
@@ -172,8 +171,13 @@ export const getBudgetPeriodStart = (cadence: BudgetCadence, now = new Date()) =
     return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
   }
 
-  if (cadence === "biweekly") return getBiweeklyPeriodStart(now);
-  if (cadence === "quarterly") return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+  if (cadence === "biweekly") {
+    return getBiweeklyPeriodStart(now);
+  }
+
+  if (cadence === "quarterly") {
+    return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+  }
 
   if (cadence === "annual") {
     return new Date(now.getFullYear(), 0, 1);
@@ -212,7 +216,8 @@ const getBiweeklyPeriodStart = (date: Date) => {
   const dayMs = 24 * 60 * 60 * 1000;
   const dateIndex = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / dayMs);
   const baseIndex = Math.floor(Date.UTC(base.getFullYear(), base.getMonth(), base.getDate()) / dayMs);
-  return addDays(base, Math.floor((dateIndex - baseIndex) / 14) * 14);
+  const periodOffset = Math.floor((dateIndex - baseIndex) / 14) * 14;
+  return addDays(base, periodOffset);
 };
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
@@ -228,8 +233,13 @@ const getPeriodStart = (cadence: BudgetCadence, offset: number, now: Date) => {
     return addDays(startOfWeek(now), -offset * 7);
   }
 
-  if (cadence === "biweekly") return addDays(getBiweeklyPeriodStart(now), -offset * 14);
-  if (cadence === "quarterly") return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 - offset * 3, 1);
+  if (cadence === "biweekly") {
+    return addDays(getBiweeklyPeriodStart(now), -offset * 14);
+  }
+
+  if (cadence === "quarterly") {
+    return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 - offset * 3, 1);
+  }
 
   if (cadence === "annual") {
     return new Date(now.getFullYear() - offset, 0, 1);
@@ -247,8 +257,13 @@ const getPeriodEnd = (cadence: BudgetCadence, start: Date) => {
     return addDays(start, 7);
   }
 
-  if (cadence === "biweekly") return addDays(start, 14);
-  if (cadence === "quarterly") return addMonths(start, 3);
+  if (cadence === "biweekly") {
+    return addDays(start, 14);
+  }
+
+  if (cadence === "quarterly") {
+    return addMonths(start, 3);
+  }
 
   if (cadence === "annual") {
     return new Date(start.getFullYear() + 1, 0, 1);
@@ -275,8 +290,13 @@ const formatHistoryLabel = (cadence: BudgetCadence, start: Date, end: Date) => {
     return `${shortDateFormatter.format(start)} - ${shortDateFormatter.format(addDays(end, -1))}`;
   }
 
-  if (cadence === "biweekly") return `${shortDateFormatter.format(start)} - ${shortDateFormatter.format(addDays(end, -1))}`;
-  if (cadence === "quarterly") return `Q${Math.floor(start.getMonth() / 3) + 1} ${start.getFullYear()}`;
+  if (cadence === "biweekly") {
+    return `${shortDateFormatter.format(start)} - ${shortDateFormatter.format(addDays(end, -1))}`;
+  }
+
+  if (cadence === "quarterly") {
+    return `Q${Math.floor(start.getMonth() / 3) + 1} ${start.getFullYear()}`;
+  }
 
   if (cadence === "annual") {
     return String(start.getFullYear());
@@ -507,17 +527,6 @@ export const buildBudgetOverview = (params: {
   const totalTargetAmount = budgets.reduce((sum, budget) => sum + budget.targetAmount, 0);
   const totalActualAmount = budgets.reduce((sum, budget) => sum + budget.actualAmount, 0);
   const totalProgressPercent = totalTargetAmount > 0 ? (totalActualAmount / totalTargetAmount) * 100 : 0;
-  const overlapGroups = new Map<string, Set<string>>();
-  for (const budget of budgets) {
-    const targetKey = `${budget.kind}:${budget.scope}:${budget.accountId ?? "all"}:${budget.categoryId ?? "all"}`;
-    const names = overlapGroups.get(targetKey) ?? new Set<string>();
-    names.add(budget.name);
-    overlapGroups.set(targetKey, names);
-  }
-  const overlappingBudgetNames = [...overlapGroups.values()]
-    .filter((names) => names.size > 1)
-    .flatMap((names) => [...names])
-    .slice(0, 3);
 
   return {
     budgets,
@@ -530,7 +539,6 @@ export const buildBudgetOverview = (params: {
     highestAlert: budgets[0] ?? null,
     uncategorizedTransactionCount: uncategorizedTransactions.length,
     uncategorizedAmount: uncategorizedTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0),
-    overlappingBudgetNames,
   } satisfies BudgetOverview;
 };
 

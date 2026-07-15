@@ -97,8 +97,13 @@ const getHistoryLookbackDays = (cadence: "daily" | "weekly" | "biweekly" | "mont
     return 84;
   }
 
-  if (cadence === "biweekly") return 168;
-  if (cadence === "quarterly") return 6 * 93;
+  if (cadence === "biweekly") {
+    return 168;
+  }
+
+  if (cadence === "quarterly") {
+    return 6 * 93;
+  }
 
   if (cadence === "annual") {
     return 6 * 366;
@@ -312,14 +317,11 @@ export async function PATCH(request: Request, { params }: Params) {
   const categoryId = payload.scope === "category" ? payload.categoryId ?? null : null;
 
   const [account, category] = await Promise.all([
-    accountId ? prisma.account.findFirst({ where: { id: accountId, workspaceId: context.workspaceId }, select: { id: true, currency: true } }) : null,
+    accountId ? prisma.account.findFirst({ where: { id: accountId, workspaceId: context.workspaceId }, select: { id: true } }) : null,
     categoryId ? prisma.category.findFirst({ where: { id: categoryId, workspaceId: context.workspaceId, type: "expense" }, select: { id: true } }) : null,
   ]);
   if ((accountId && !account) || (categoryId && !category)) {
     return NextResponse.json({ error: "Choose a valid account or expense category." }, { status: 400 });
-  }
-  if (accountId && account?.currency && account.currency.toUpperCase() !== payload.currency.toUpperCase()) {
-    return NextResponse.json({ error: `Use ${account.currency} for this account budget.` }, { status: 400 });
   }
 
   let budget;
