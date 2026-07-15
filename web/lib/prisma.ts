@@ -56,11 +56,21 @@ const resolveDatabaseUrl = () => {
 
 const connectionString = resolveDatabaseUrl();
 
+const resolvePoolMax = () => {
+  const configured = Number.parseInt(process.env.DATABASE_POOL_MAX ?? "3", 10);
+  if (!Number.isFinite(configured)) {
+    return 3;
+  }
+
+  return Math.max(1, Math.min(configured, 5));
+};
+
 const pool =
   globalForPrisma.prismaPool ??
   new Pool({
     connectionString,
-    max: 1,
+    max: resolvePoolMax(),
+    connectionTimeoutMillis: 8_000,
     idleTimeoutMillis: 10_000,
   });
 

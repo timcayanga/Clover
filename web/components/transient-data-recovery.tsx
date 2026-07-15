@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 
-const MAX_AUTOMATIC_RETRIES = 3;
+const MAX_AUTOMATIC_RETRIES = 1;
 const INITIAL_RETRY_DELAY_MS = 1200;
 const RETRY_STATE_TTL_MS = 120000;
 

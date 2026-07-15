@@ -915,17 +915,6 @@ export function CloverShell({
   }, []);
 
   useEffect(() => {
-    const prefetchTargets = ["/home", "/accounts", "/investments", "/transactions", "/reports", "/budgeting", "/adviser", "/more", "/settings", "/help"];
-
-    for (const href of prefetchTargets) {
-      if (pathname === href) {
-        continue;
-      }
-      void router.prefetch(href);
-    }
-  }, [router, pathname]);
-
-  useEffect(() => {
     if (!pathname || typeof window === "undefined") {
       return;
     }

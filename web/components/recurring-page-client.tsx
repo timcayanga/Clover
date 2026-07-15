@@ -84,21 +84,6 @@ export function RecurringPageClient({
   }, [initialAddOpen]);
 
   useEffect(() => {
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") {
-        router.refresh();
-      }
-    };
-
-    window.addEventListener("focus", refreshWhenVisible);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    return () => {
-      window.removeEventListener("focus", refreshWhenVisible);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
-  }, [router]);
-
-  useEffect(() => {
     const handleOpenAdd = (event: Event) => {
       const detail = (event as CustomEvent<{ kind?: RecurringAddKind }>).detail;
       if (detail?.kind) {
