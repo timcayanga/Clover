@@ -61,6 +61,21 @@ const getNextPaydayDate = (referenceDate: Date, paydayDay: number) => {
   const thisMonth = buildDate(referenceDate.getFullYear(), referenceDate.getMonth());
   return thisMonth > referenceDate ? thisMonth : buildDate(referenceDate.getFullYear(), referenceDate.getMonth() + 1);
 };
+const getNextRecurringDate = (date: Date, frequency: string | null | undefined) => {
+  const next = new Date(date);
+  if (frequency === "weekly") {
+    next.setDate(next.getDate() + 7);
+  } else if (frequency === "biweekly") {
+    next.setDate(next.getDate() + 14);
+  } else if (frequency === "quarterly") {
+    next.setMonth(next.getMonth() + 3);
+  } else if (frequency === "annual") {
+    next.setFullYear(next.getFullYear() + 1);
+  } else {
+    next.setMonth(next.getMonth() + 1);
+  }
+  return next;
+};
 
 type AdviserMemoryStats = {
   count: number;
@@ -1670,7 +1685,25 @@ export async function POST(request: Request) {
         const dueDate = commitment.nextDueDate ?? commitment.dueDate;
         return dueDate && dueDate >= now && dueDate <= horizonEnd;
       });
-      const recurringReserve = upcomingRecurring.reduce((sum, item) => sum + Math.abs(Number(item.amount ?? 0)), 0);
+      const recurringOccurrences = upcomingRecurring.flatMap((pattern) => {
+        const occurrences: Array<{ label: string; amount: number; due: Date }> = [];
+        let due = pattern.nextExpectedDate ? new Date(pattern.nextExpectedDate) : null;
+        for (let count = 0; due && due <= horizonEnd && count < 12; count += 1) {
+          if (due >= now) {
+            occurrences.push({
+              label: pattern.merchantClean ?? pattern.merchantRaw,
+              amount: Math.abs(Number(pattern.amount ?? 0)),
+              due,
+            });
+          }
+          if (!pattern.frequency) {
+            break;
+          }
+          due = getNextRecurringDate(due, pattern.frequency);
+        }
+        return occurrences;
+      });
+      const recurringReserve = recurringOccurrences.reduce((sum, item) => sum + item.amount, 0);
       const commitmentReserve = upcomingCommitments.reduce((sum, item) => sum + Math.abs(Number(item.amount ?? 0)), 0);
       const plannedPayments = plannedPaymentSuggestions.filter((payment) => {
         if (!payment.dueDate || payment.sourceKind === "recurring_transaction") {
@@ -1749,15 +1782,16 @@ export async function POST(request: Request) {
           transactionCount: allTransactions.length,
           historyDays: historySpanDays,
           recurringPatternCount: recurringPatterns.length,
+          recurringOccurrenceCount: recurringOccurrences.length,
           plannedPaymentCount: plannedPaymentSuggestions.length,
           currency: displayCurrency,
           multipleCurrenciesDetected: currencyCandidates.size > 1,
         },
         details: {
-          recurring: upcomingRecurring.map((item) => ({
-            label: item.merchantClean ?? item.merchantRaw,
-            amount: Math.abs(Number(item.amount ?? 0)),
-            due: item.nextExpectedDate?.toISOString() ?? null,
+          recurring: recurringOccurrences.map((item) => ({
+            label: item.label,
+            amount: item.amount,
+            due: item.due.toISOString(),
           })),
           commitments: upcomingCommitments.map((item) => ({
             label: item.title,
