@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
 import { LandingNav } from "@/components/landing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
@@ -87,12 +88,11 @@ export default async function PricingPage() {
                 <PlanIcon name="starter" />
               </span>
               <div>
-                <p className="pricing-card__eyebrow">Free</p>
-                <h2>Try Clover and build a lighter overview.</h2>
+                <h2>Free</h2>
               </div>
             </div>
             <p className="pricing-card__summary">
-              Great for getting started, importing a smaller set of statements, and seeing the value of Clover before you upgrade.
+              Organize your finances with the core Clover tools.
             </p>
             <ul className="pricing-card__list">
               <PlanFeatureItem label="Manual transaction tracking" />
@@ -104,7 +104,10 @@ export default async function PricingPage() {
               <PlanFeatureItem label="Basic reports and Adviser guidance" />
               <PlanFeatureItem label="Basic goal tracking" />
             </ul>
-        </article>
+            <Link className="button button-secondary button-pill pricing-card__cta" href={accountState.signedIn ? "/home" : "/sign-up"} prefetch={false}>
+              {accountState.signedIn ? "Go to Clover" : "Start for free"}
+            </Link>
+          </article>
 
         <article className="pricing-card pricing-card--featured">
             <div className="pricing-card__top">
@@ -112,21 +115,12 @@ export default async function PricingPage() {
                 <PlanIcon name="growth" />
               </span>
               <div>
-                <p className="pricing-card__eyebrow">Pro</p>
-                <h2>Unlock the full value of Clover.</h2>
+                <h2>Pro</h2>
               </div>
             </div>
             <p className="pricing-card__summary">
-              Built for people who want to track more, upload more, and get deeper Adviser guidance without running into monthly limits.
+              More room for uploads, accounts, reports, Adviser guidance, and investments.
             </p>
-            <PricingProSelector
-              signedIn={accountState.signedIn}
-              isPro={user?.planTier === "pro"}
-              clientId={env.PAYPAL_CLIENT_ID ?? null}
-              monthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
-              annualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? null}
-              customId={user?.id ?? null}
-            />
             <ul className="pricing-card__list">
               <PlanFeatureItem label="Manual transaction tracking" />
               <PlanFeatureItem label="20 non-cash accounts" />
@@ -136,7 +130,15 @@ export default async function PricingPage() {
               <PlanFeatureItem label="Advanced reports and Adviser guidance" />
               <PlanFeatureItem label="Enhanced goal tracking and recommendations" />
             </ul>
-        </article>
+            <PricingProSelector
+              signedIn={accountState.signedIn}
+              isPro={user?.planTier === "pro"}
+              clientId={env.PAYPAL_CLIENT_ID ?? null}
+              monthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
+              annualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? null}
+              customId={user?.id ?? null}
+            />
+          </article>
       </section>
 
       <MarketingFooter />

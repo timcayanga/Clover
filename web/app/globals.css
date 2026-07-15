@@ -31292,6 +31292,20 @@ button.accounts-detail__transaction-head-cell {
   width: min(100%, 1120px);
 }
 
+.pricing-page {
+  min-height: 100dvh;
+  overflow: visible;
+}
+
+html:has(.pricing-page) {
+  overflow: hidden;
+}
+
+body:has(.pricing-page) {
+  height: 100dvh;
+  overflow-y: auto;
+}
+
 .pricing-page__header {
   display: grid;
   gap: 12px;
@@ -31318,8 +31332,8 @@ button.accounts-detail__transaction-head-cell {
 
 .pricing-card {
   display: grid;
-  gap: 18px;
-  padding: 24px;
+  gap: 12px;
+  padding: 18px;
   border-radius: 28px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background:
@@ -31341,7 +31355,7 @@ button.accounts-detail__transaction-head-cell {
 .pricing-card__top {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
+  gap: 10px;
 }
 
 .pricing-card__icon {
@@ -31371,19 +31385,20 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .pricing-card h2 {
-  font-size: clamp(1.55rem, 2.8vw, 2.2rem);
+  font-size: clamp(1.35rem, 2.2vw, 1.75rem);
   line-height: 1.08;
   letter-spacing: -0.04em;
 }
 
 .pricing-card__summary {
   color: var(--muted);
-  line-height: 1.75;
+  line-height: 1.55;
+  font-size: 0.92rem;
 }
 
 .pricing-card__list {
   display: grid;
-  gap: 12px;
+  gap: 7px;
   margin: 0;
   padding: 0;
   overflow: visible;
@@ -31393,10 +31408,15 @@ button.accounts-detail__transaction-head-cell {
   overflow: visible;
 }
 
+.pricing-card__cta {
+  width: 100%;
+  margin-top: 4px;
+}
+
 .pricing-pro-selector {
   display: grid;
   gap: 12px;
-  padding: 16px;
+  padding: 12px;
   border-radius: 20px;
   background: rgba(3, 168, 192, 0.06);
   border: 1px solid rgba(3, 168, 192, 0.14);
@@ -31435,7 +31455,7 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .pricing-pro-selector__price strong {
-  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  font-size: clamp(1.55rem, 2.5vw, 2rem);
   letter-spacing: -0.05em;
 }
 
@@ -31460,6 +31480,50 @@ button.accounts-detail__transaction-head-cell {
 .pricing-pro-selector__checkout,
 .pricing-pro-selector__signup {
   width: 100%;
+}
+
+.pricing-page .plan-feature-item {
+  gap: 7px;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.pricing-page .plan-feature-item__check,
+.pricing-page .plan-feature-item__info-button,
+.pricing-page .plan-feature-item__info-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.pricing-page .plan-feature-item__check {
+  margin-top: 1px;
+  font-size: 0.62rem;
+}
+
+.pricing-page .plan-feature-item__tooltip {
+  left: 50%;
+  right: auto;
+  width: min(300px, calc(100vw - 32px));
+  min-width: 0;
+  max-width: min(300px, calc(100vw - 32px));
+  padding: 11px;
+  border-radius: 14px;
+  transform: translate(-50%, -4px);
+}
+
+.pricing-page .plan-feature-item:hover .plan-feature-item__tooltip,
+.pricing-page .plan-feature-item:focus-within .plan-feature-item__tooltip {
+  transform: translate(-50%, 0);
+}
+
+.pricing-page .plan-feature-item__tooltip-grid {
+  gap: 8px;
+}
+
+.pricing-page .plan-feature-item__tooltip-column {
+  gap: 5px;
+  padding: 8px;
+  border-radius: 10px;
 }
 
 .pricing-page__value,
@@ -33287,7 +33351,7 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .pricing-card {
-    padding: 20px;
+    padding: 16px;
   }
 
   .pricing-card__top {
