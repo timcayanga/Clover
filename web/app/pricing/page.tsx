@@ -1,12 +1,12 @@
-import Link from "next/link";
-import { BillingActions } from "@/components/billing-actions";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
+import { LandingNav } from "@/components/landing-nav";
+import { MarketingFooter } from "@/components/marketing-footer";
+import { PricingProSelector } from "@/components/pricing-pro-selector";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
-import { getUserBillingSubscription } from "@/lib/paypal-billing";
 import type { PublicAccountState } from "@/lib/public-account-state";
 
 function PlanIcon({ name }: { name: "starter" | "growth" }) {
@@ -50,7 +50,6 @@ export default async function PricingPage() {
   }
   const env = getEnv();
   const user = session?.userId ? await getOrCreateCurrentUser(session.userId) : null;
-  const billingSubscription = user ? await getUserBillingSubscription(user.id) : null;
   const accountState: PublicAccountState = user
     ? {
         signedIn: true,
@@ -64,42 +63,25 @@ export default async function PricingPage() {
       };
 
   return (
-    <main className="legal-page pricing-page">
-      <div className="legal-page__inner pricing-page__inner">
-        <nav className="legal-page__nav" aria-label="Pricing page navigation">
-          <Link className="landing-brand" href="/" aria-label="Clover home">
-            <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
-            <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" loading="eager" fetchPriority="high" />
-          </Link>
-          <div className="legal-page__nav-links">
-            <Link href="/">Home</Link>
-            <Link href="/pricing" aria-current="page">
-              Pricing
-            </Link>
-            {accountState.signedIn ? <Link href="/settings#billing">Billing</Link> : <Link href="/sign-in">Log in</Link>}
-            {accountState.signedIn ? <Link href="/settings">App</Link> : <Link href="/sign-up">Sign up</Link>}
-          </div>
-        </nav>
+    <main className="landing-page pricing-page">
+      <LandingNav accountState={accountState} />
 
-        <header className="pricing-page__header">
-          <span className="legal-page__eyebrow">Clover</span>
-          <h1>Pricing</h1>
-          <p>Choose a plan that fits the way you want to understand your money.</p>
-          <p>Start free if you want to explore Clover first. Upgrade to Pro when you need higher limits, fuller investing tools, and richer reports, Adviser guidance, and goals.</p>
-        </header>
+      <header className="pricing-page__header">
+        <h1>Pricing</h1>
+      </header>
 
-        <PostHogEvent
-          event="upgrade_prompt_viewed"
-          onceKey={analyticsOnceKey("upgrade_prompt_viewed", `pricing:${accountState.signedIn ? "signed-in" : "guest"}`)}
-          properties={{
-            plan_tier: accountState.signedIn ? "free" : "guest",
-            prompt_location: "pricing_page",
-            cta_href: accountState.signedIn ? "/settings#billing" : "/sign-up",
-          }}
-        />
+      <PostHogEvent
+        event="upgrade_prompt_viewed"
+        onceKey={analyticsOnceKey("upgrade_prompt_viewed", `pricing:${accountState.signedIn ? "signed-in" : "guest"}`)}
+        properties={{
+          plan_tier: accountState.signedIn ? "free" : "guest",
+          prompt_location: "pricing_page",
+          cta_href: accountState.signedIn ? "/settings#billing" : "/sign-up",
+        }}
+      />
 
-        <section className="pricing-page__comparison" aria-label="Clover pricing plans">
-          <article className="pricing-card">
+      <section className="pricing-page__comparison" aria-label="Clover pricing plans">
+        <article className="pricing-card">
             <div className="pricing-card__top">
               <span className="pricing-card__icon">
                 <PlanIcon name="starter" />
@@ -122,9 +104,9 @@ export default async function PricingPage() {
               <PlanFeatureItem label="Basic reports and Adviser guidance" />
               <PlanFeatureItem label="Basic goal tracking" />
             </ul>
-          </article>
+        </article>
 
-          <article className="pricing-card pricing-card--featured">
+        <article className="pricing-card pricing-card--featured">
             <div className="pricing-card__top">
               <span className="pricing-card__icon pricing-card__icon--featured">
                 <PlanIcon name="growth" />
@@ -137,9 +119,14 @@ export default async function PricingPage() {
             <p className="pricing-card__summary">
               Built for people who want to track more, upload more, and get deeper Adviser guidance without running into monthly limits.
             </p>
-            <p className="pricing-card__summary pricing-card__summary--strong">
-              PHP 149 monthly or PHP 1,299 annually.
-            </p>
+            <PricingProSelector
+              signedIn={accountState.signedIn}
+              isPro={user?.planTier === "pro"}
+              clientId={env.PAYPAL_CLIENT_ID ?? null}
+              monthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
+              annualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? null}
+              customId={user?.id ?? null}
+            />
             <ul className="pricing-card__list">
               <PlanFeatureItem label="Manual transaction tracking" />
               <PlanFeatureItem label="20 non-cash accounts" />
@@ -149,89 +136,10 @@ export default async function PricingPage() {
               <PlanFeatureItem label="Advanced reports and Adviser guidance" />
               <PlanFeatureItem label="Enhanced goal tracking and recommendations" />
             </ul>
-          </article>
-        </section>
+        </article>
+      </section>
 
-        <section className="pricing-page__value">
-          <div>
-            <p className="eyebrow">Why Pro matters</p>
-            <h2>More room means more clarity.</h2>
-          </div>
-          <p>
-            Clover is most useful when it can see a fuller picture of your money. Pro gives you the headroom to bring in more statements, organize
-            more of your finances, and get better reports over time.
-          </p>
-        </section>
-
-        <section className="pricing-page__refunds">
-          <p className="eyebrow">Refund policy</p>
-          <h2>Refund terms will be published before paid billing starts.</h2>
-          <p>
-            When paid subscriptions are enabled, Clover will publish the billing terms, renewal terms, and refund policy that apply at the time of
-            purchase. Unless required by law or stated otherwise in the then-current policy, charges may not be refundable.
-          </p>
-        </section>
-
-        <section className="pricing-page__cta">
-          <h2>Start with the plan that fits your current needs.</h2>
-          {user ? (
-            <p className="pricing-page__cta-copy">
-              You are signed in, so you can upgrade or switch plans right here. Clover uses your current account to match the subscription
-              automatically.
-            </p>
-          ) : (
-            <p className="pricing-page__cta-copy">
-              Sign up first, then choose the plan you want from Settings or come back here to upgrade after you have an account.
-            </p>
-          )}
-          {user ? (
-            <BillingActions
-              planTier={user.planTier}
-              clientId={env.PAYPAL_CLIENT_ID ?? null}
-              monthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
-              annualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? null}
-              customId={user.id}
-              returnPath="/pricing"
-              subscription={
-                billingSubscription
-                  ? {
-                      status: billingSubscription.status,
-                      interval: billingSubscription.interval,
-                      pendingPlanId: billingSubscription.pendingPlanId,
-                      pendingInterval: billingSubscription.pendingInterval,
-                      providerSubscriptionId: billingSubscription.providerSubscriptionId,
-                      currentPeriodEnd: billingSubscription.currentPeriodEnd ? billingSubscription.currentPeriodEnd.toISOString() : null,
-                      nextBillingTime: billingSubscription.nextBillingTime ? billingSubscription.nextBillingTime.toISOString() : null,
-                      planTier: billingSubscription.planTier,
-                    }
-                  : null
-              }
-              className="pricing-page__billing-actions"
-            />
-          ) : null}
-          <div className="pricing-page__cta-actions">
-            {user ? (
-              <>
-                <Link className="button button-primary button-pill" href="/settings#billing">
-                  Manage billing
-                </Link>
-                <Link className="button button-secondary button-pill" href="/dashboard">
-                  Go to dashboard
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link className="button button-primary button-pill" href="/sign-up">
-                  Get started
-                </Link>
-                <Link className="button button-secondary button-pill" href="/sign-in">
-                  Log in
-                </Link>
-              </>
-            )}
-          </div>
-        </section>
-      </div>
+      <MarketingFooter />
     </main>
   );
 }

@@ -31207,13 +31207,13 @@ button.accounts-detail__transaction-head-cell {
 .pricing-page__header {
   display: grid;
   gap: 12px;
-  padding-bottom: 4px;
+  padding: clamp(40px, 7vw, 84px) 0 20px;
 }
 
 .pricing-page__header h1 {
-  font-size: clamp(2.6rem, 5vw, 4rem);
+  font-size: clamp(2rem, 3.6vw, 3rem);
   line-height: 1;
-  max-width: 10ch;
+  max-width: none;
 }
 
 .pricing-page__header p {
@@ -31303,6 +31303,75 @@ button.accounts-detail__transaction-head-cell {
 
 .pricing-card__list li {
   overflow: visible;
+}
+
+.pricing-pro-selector {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(3, 168, 192, 0.06);
+  border: 1px solid rgba(3, 168, 192, 0.14);
+}
+
+.pricing-pro-selector__billing {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px;
+  gap: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(3, 168, 192, 0.16);
+}
+
+.pricing-pro-selector__billing button {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 13px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pricing-pro-selector__billing button.is-selected {
+  color: var(--text);
+  background: var(--accent-mint);
+  font-weight: 700;
+}
+
+.pricing-pro-selector__price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.pricing-pro-selector__price strong {
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  letter-spacing: -0.05em;
+}
+
+.pricing-pro-selector__price span,
+.pricing-pro-selector__saving,
+.pricing-pro-selector__status {
+  color: var(--muted);
+}
+
+.pricing-pro-selector__saving,
+.pricing-pro-selector__status {
+  margin: 0;
+  line-height: 1.55;
+  font-size: 0.9rem;
+}
+
+.pricing-pro-selector__saving s {
+  margin-right: 6px;
+  color: var(--muted-2);
+}
+
+.pricing-pro-selector__checkout,
+.pricing-pro-selector__signup {
+  width: 100%;
 }
 
 .pricing-page__value,
@@ -33123,6 +33192,10 @@ button.accounts-detail__transaction-head-cell {
 
   .pricing-page__comparison {
     grid-template-columns: 1fr;
+  }
+
+  .pricing-page__header {
+    padding-top: 28px;
   }
 
   .pricing-card {
