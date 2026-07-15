@@ -1438,6 +1438,7 @@ body.transactions-manual-open .shell-quick-add-button {
   .sidebar {
     padding: 12px 10px;
     gap: 4px;
+    overflow: hidden;
   }
 
   .sidebar-header {
@@ -1466,6 +1467,23 @@ body.transactions-manual-open .shell-quick-add-button {
   .sidebar-nav__section-label {
     padding: 1px 10px 0;
     font-size: 9px;
+  }
+
+  .sidebar-nav {
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-bottom: 4px;
+    scrollbar-gutter: stable;
+  }
+
+  .sidebar-footer {
+    flex: none;
+    margin-top: 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 60;
+    background: var(--surface);
+    box-shadow: 0 -8px 18px rgba(15, 23, 42, 0.08);
   }
 
   .sidebar-search-wrap {
