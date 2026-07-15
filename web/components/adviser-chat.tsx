@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { trackAdviserInteraction } from "@/lib/adviser-interactions";
 
@@ -47,6 +47,8 @@ type AdviserChatProps = {
   prompts: AdviserPrompt[];
 };
 
+const adviserChatStorageKey = "clover-adviser-chat-session-v1";
+
 const actionDetails = (action: AdviserAction) =>
   Object.entries(action.payload ?? {})
     .filter(([key, value]) => key !== "workspaceId" && value !== null && value !== undefined && value !== "")
@@ -64,11 +66,50 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [grounding, setGrounding] = useState<AdviserGrounding | null>(null);
   const [suggestedPrompts, setSuggestedPrompts] = useState<AdviserPrompt[]>([]);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [feedbackByMessage, setFeedbackByMessage] = useState<Record<number, "helpful" | "not_helpful">>({});
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const visiblePrompts = useMemo(() => (suggestedPrompts.length > 0 ? suggestedPrompts : prompts).slice(0, 6), [prompts, suggestedPrompts]);
   const hasReachedLimit = usage !== null && usage.remaining <= 0;
   const resetLabel = usage ? new Date(usage.resetsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
+
+  useEffect(() => {
+    try {
+      const stored = window.sessionStorage.getItem(adviserChatStorageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored) as { messages?: ChatMessage[]; suggestions?: AdviserPrompt[]; grounding?: AdviserGrounding };
+        if (Array.isArray(parsed.messages)) {
+          setMessages(parsed.messages.filter((message) => (message?.role === "user" || message?.role === "assistant") && typeof message.content === "string").slice(-10));
+        }
+        if (Array.isArray(parsed.suggestions)) {
+          setSuggestedPrompts(parsed.suggestions.slice(0, 6));
+        }
+        if (parsed.grounding) {
+          setGrounding(parsed.grounding);
+        }
+      }
+    } catch {
+      // A private browsing mode or malformed session should not block Adviser.
+    } finally {
+      setIsHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
+    try {
+      window.sessionStorage.setItem(
+        adviserChatStorageKey,
+        JSON.stringify({ messages: messages.slice(-10), suggestions: suggestedPrompts.slice(0, 6), grounding })
+      );
+    } catch {
+      // Session persistence is helpful but never required for chat.
+    }
+  }, [grounding, isHydrated, messages, suggestedPrompts]);
 
   const scrollToBottom = () => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -229,6 +270,37 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
     await sendMessage(input);
   };
 
+  const startNewConversation = () => {
+    setMessages([]);
+    setActions([]);
+    setSuggestedPrompts([]);
+    setFeedbackByMessage({});
+    setGrounding(null);
+    setError(null);
+    try {
+      window.sessionStorage.removeItem(adviserChatStorageKey);
+    } catch {
+      // Ignore storage failures; the visible conversation is still cleared.
+    }
+  };
+
+  const submitFeedback = (messageIndex: number, rating: "helpful" | "not_helpful") => {
+    setFeedbackByMessage((current) => ({ ...current, [messageIndex]: rating }));
+    void fetch("/api/adviser/interaction", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "feedback",
+        group: "chat",
+        itemId: `message-${messageIndex}`,
+        label: "Ask Clover answer",
+        rating,
+        pathname: window.location.pathname,
+      }),
+      keepalive: true,
+    }).catch(() => null);
+  };
+
   return (
     <div className="adviser-chat">
       {usage ? (
@@ -261,7 +333,14 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
           </button>
         ))}
       </div>
-      <p className="eyebrow adviser-chat__ask-label">Ask Clover</p>
+      <div className="adviser-chat__heading-row">
+        <p className="eyebrow adviser-chat__ask-label">Ask Clover</p>
+        {messages.length > 0 ? (
+          <button type="button" className="adviser-chat__reset" onClick={startNewConversation}>
+            Start fresh
+          </button>
+        ) : null}
+      </div>
       <form className="adviser-chat__composer" onSubmit={handleSubmit}>
         <label className="sr-only" htmlFor="adviser-chat-input">
           Ask Clover anything
@@ -296,6 +375,29 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
             >
               <span>{message.role === "user" ? "You" : "Clover"}</span>
               <p>{message.content}</p>
+              {message.role === "assistant" && message.content.trim() ? (
+                <div className="adviser-chat__feedback" aria-label="Rate this answer">
+                  <span>Was this useful?</span>
+                  <button
+                    type="button"
+                    className={feedbackByMessage[index] === "helpful" ? "is-selected" : ""}
+                    aria-label="This answer was helpful"
+                    aria-pressed={feedbackByMessage[index] === "helpful"}
+                    onClick={() => submitFeedback(index, "helpful")}
+                  >
+                    Helpful
+                  </button>
+                  <button
+                    type="button"
+                    className={feedbackByMessage[index] === "not_helpful" ? "is-selected" : ""}
+                    aria-label="This answer was not helpful"
+                    aria-pressed={feedbackByMessage[index] === "not_helpful"}
+                    onClick={() => submitFeedback(index, "not_helpful")}
+                  >
+                    Not quite
+                  </button>
+                </div>
+              ) : null}
             </article>
           ))}
           <div ref={bottomRef} />
