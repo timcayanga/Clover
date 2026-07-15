@@ -91,13 +91,14 @@ type AdviserMemoryStats = {
 };
 
 type AdviserAuditMetadata = {
-  kind?: "card" | "prompt" | "chat";
+  kind?: "card" | "prompt" | "chat" | "feedback";
   group?: string;
   itemId?: string;
   label?: string;
   href?: string;
   pathname?: string;
   question?: string;
+  rating?: "helpful" | "not_helpful";
 };
 
 type AdviserSignalTheme = "cashflow" | "behavior" | "goals" | "investments" | "cleanup";
@@ -1128,6 +1129,30 @@ export async function POST(request: Request) {
       },
     });
 
+    const adviserFeedbackLogs = await prisma.auditLog.findMany({
+      where: {
+        workspaceId: workspace.id,
+        action: "adviser.chat_feedback",
+      },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        metadata: true,
+      },
+    });
+    const adviserFeedback = adviserFeedbackLogs.reduce(
+      (summary, log) => {
+        const metadata = log.metadata && typeof log.metadata === "object" ? (log.metadata as AdviserAuditMetadata) : null;
+        if (metadata?.rating === "helpful") {
+          summary.helpful += 1;
+        } else if (metadata?.rating === "not_helpful") {
+          summary.notHelpful += 1;
+        }
+        return summary;
+      },
+      { helpful: 0, notHelpful: 0 }
+    );
+
     const adviserCompletionLogs = await prisma.auditLog.findMany({
       where: {
         workspaceId: workspace.id,
@@ -1947,6 +1972,11 @@ export async function POST(request: Request) {
     const currentWindowLabel = currentWindowTransactions.length > 0 ? dataFreshnessLabel : "Latest available window";
     const previousWindowLabel = previousWindowTransactions.length > 0 ? "Previous 30 days" : "Earlier available window";
     const longTermWindowLabel = historySpanDays > 0 ? `All available history (${Math.ceil(historySpanDays / 30)} month${Math.ceil(historySpanDays / 30) === 1 ? "" : "s"})` : "All available history";
+    const answerFeedbackGuidance = adviserFeedback.notHelpful > adviserFeedback.helpful
+      ? "Recent answer feedback has been mixed or negative. Be more explicit, show the calculation steps briefly, and avoid generic reassurance."
+      : adviserFeedback.helpful > 0
+        ? "Recent answer feedback is positive. Keep the answer direct and grounded while preserving the user's preferred concise style."
+        : "There is not enough answer feedback yet. Prefer a concise, concrete answer with one clear next step.";
 
     const summaryLines = [
       `Workspace: ${workspace.name}`,
@@ -1961,6 +1991,7 @@ export async function POST(request: Request) {
       `Trend signals: spend ${monthlyExpenseTrend.direction > 0 ? "rising" : monthlyExpenseTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyExpenseTrend.score)}), income ${monthlyIncomeTrend.direction > 0 ? "rising" : monthlyIncomeTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyIncomeTrend.score)}), net ${monthlyNetTrend.direction > 0 ? "rising" : monthlyNetTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyNetTrend.score)})`,
       `Adviser themes: ${topThemeLine || "none"}`,
       `Adviser memory: ${adviserInteractions.length} interactions, ${adviserCompletionLogs.length} completion actions, follow-through rate ${formatPercent(adviserFollowThroughRate)}, cleanup affinity ${Math.round(userPreferenceAffinity.cleanup)}, cashflow affinity ${Math.round(userPreferenceAffinity.cashflow)}`,
+      `Answer feedback: ${adviserFeedback.helpful} helpful, ${adviserFeedback.notHelpful} not helpful`,
       `Recent Adviser questions: ${recentAdviserQuestions.join(" | ") || "none"}`,
       `Preference profile: cashflow ${Math.round(userPreferenceAffinity.cashflow)}, behavior ${Math.round(userPreferenceAffinity.behavior)}, goals ${Math.round(userPreferenceAffinity.goals)}, investments ${Math.round(userPreferenceAffinity.investments)}, cleanup ${Math.round(userPreferenceAffinity.cleanup)}`,
       `Financial persona: ${financialPersona.label} - ${financialPersona.summary}`,
@@ -1994,6 +2025,7 @@ export async function POST(request: Request) {
       "For calculations, separate what is available, what is protected, what is estimated, and what remains. Never hide uncertainty inside a single confident number.",
       "For follow-up questions, use the previous conversation context and do not repeat the same explanation unless a new number or caveat changes it.",
       "When the user asks a broad question, choose the most useful interpretation from the data and state the assumption in one short sentence rather than asking a vague clarifying question.",
+      answerFeedbackGuidance,
       "Do not pretend to be a financial advisor. Keep guidance educational and contextual.",
       "If the user's question asks for investment advice, stay cautious and avoid personalized investment recommendations.",
       "If the data is insufficient, say what is missing and suggest where to check in Clover.",
@@ -2198,6 +2230,8 @@ export async function POST(request: Request) {
       accountCount: workspace.accounts.length,
       transactionCount: allTransactions.length,
       historyThrough: analysisAnchorDate.toISOString(),
+      freshness: dataFreshnessLabel,
+      historyDays: historySpanDays,
       recurringCount: recurringPatterns.length,
       budgetCount: budgets.length,
       investmentSnapshotAvailable: Boolean(latestInvestmentSnapshot),

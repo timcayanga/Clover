@@ -28,6 +28,8 @@ type AdviserGrounding = {
   accountCount: number;
   transactionCount: number;
   historyThrough: string;
+  freshness?: string;
+  historyDays?: number;
   recurringCount: number;
   budgetCount: number;
   investmentSnapshotAvailable: boolean;
@@ -362,7 +364,7 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
       </form>
       {grounding ? (
         <p className="adviser-chat__status">
-          Based on {grounding.transactionCount.toLocaleString()} transactions across {grounding.accountCount} account{grounding.accountCount === 1 ? "" : "s"}, through {new Date(grounding.historyThrough).toLocaleDateString()}.
+          Using {grounding.transactionCount.toLocaleString()} transaction{grounding.transactionCount === 1 ? "" : "s"} across {grounding.accountCount} account{grounding.accountCount === 1 ? "" : "s"}; {grounding.freshness ?? `history through ${new Date(grounding.historyThrough).toLocaleDateString()}`}.
         </p>
       ) : null}
 
