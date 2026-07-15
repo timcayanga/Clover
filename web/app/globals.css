@@ -1437,7 +1437,7 @@ body.transactions-manual-open .shell-quick-add-button {
 @media (min-width: 921px) {
   .sidebar {
     padding: 12px 10px;
-    gap: 8px;
+    gap: 4px;
   }
 
   .sidebar-header {
@@ -1445,18 +1445,27 @@ body.transactions-manual-open .shell-quick-add-button {
   }
 
   .nav-link {
-    min-height: 32px;
-    padding: 2px 12px 2px 11px;
+    min-height: 28px;
+    padding: 0 10px 0 9px;
   }
 
   .nav-link__icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .nav-link .menu-icon-3d--home {
     width: 28px;
     height: 28px;
   }
 
-  .nav-link .menu-icon-3d--home {
-    width: 32px;
-    height: 32px;
+  .sidebar-nav__section + .sidebar-nav__section {
+    margin-top: 3px;
+  }
+
+  .sidebar-nav__section-label {
+    padding: 1px 10px 0;
+    font-size: 9px;
   }
 
   .sidebar-search-wrap {
