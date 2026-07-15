@@ -37,6 +37,13 @@ type AdviserUsage = {
   resetsAt: string;
 };
 
+type AdviserSuggestedQuestion = {
+  id: string;
+  group: string;
+  label: string;
+  prompt: string;
+};
+
 type AdviserAction = {
   id: string;
   kind: "navigate" | "confirm";
@@ -1983,7 +1990,10 @@ export async function POST(request: Request) {
       "If transactions are sparse, lean on account balances, recurring items, commitments, split bills, and long-term history before giving a weak answer.",
       "If data is stale or historical, say so plainly and avoid implying it reflects today.",
       "If you can, mention the exact source of the signal, the relevant period, and one practical next step.",
-      "Keep the answer short: one main read, one reason, and one next step unless the user asks for more detail.",
+      "Keep the answer short: lead with the direct answer, then give the key numbers or reason, then one practical next step. Use bullets when comparing amounts or obligations.",
+      "For calculations, separate what is available, what is protected, what is estimated, and what remains. Never hide uncertainty inside a single confident number.",
+      "For follow-up questions, use the previous conversation context and do not repeat the same explanation unless a new number or caveat changes it.",
+      "When the user asks a broad question, choose the most useful interpretation from the data and state the assumption in one short sentence rather than asking a vague clarifying question.",
       "Do not pretend to be a financial advisor. Keep guidance educational and contextual.",
       "If the user's question asks for investment advice, stay cautious and avoid personalized investment recommendations.",
       "If the data is insufficient, say what is missing and suggest where to check in Clover.",
@@ -2072,6 +2082,117 @@ export async function POST(request: Request) {
       .filter((line): line is string => Boolean(line))
       .join(" ");
 
+    const suggestedQuestions: AdviserSuggestedQuestion[] = (() => {
+      const questions: AdviserSuggestedQuestion[] = [];
+      const add = (id: string, group: string, label: string, prompt: string) => {
+        if (!questions.some((question) => question.prompt === prompt)) {
+          questions.push({ id, group, label, prompt });
+        }
+      };
+
+      if (inferredQuestionTheme === "cashflow") {
+        add(
+          "follow-up-safe-to-spend",
+          "cashflow",
+          "How much can I safely spend next?",
+          "How much can I safely spend next, after protecting my upcoming bills, shared expenses, goals, and cash buffer?"
+        );
+        if (recurringDueSoon.length > 0 || financialCommitments.length > 0) {
+          add(
+            "follow-up-upcoming-bills",
+            "recurring",
+            "Will I have enough for upcoming bills?",
+            "Will I have enough for my upcoming bills and commitments, and which payment should I prepare for first?"
+          );
+        }
+        if (currentSpend > 0) {
+          add(
+            "follow-up-room-to-save",
+            "cashflow",
+            "Where can I create more room?",
+            "Where could I create more room in my cash flow without making an unrealistic cut?"
+          );
+        }
+      }
+
+      if (inferredQuestionTheme === "behavior") {
+        add(
+          "follow-up-spending-change",
+          "behavior",
+          "What changed in my spending?",
+          `What changed in my spending across the ${currentWindowLabel}, and what is the clearest explanation?`
+        );
+        if (topCategoryName) {
+          add(
+            "follow-up-top-category",
+            "transactions",
+            `Why is ${topCategoryName} so important?`,
+            `Why is ${topCategoryName} such a large part of my spending, and which transactions should I review first?`
+          );
+        }
+        add(
+          "follow-up-report",
+          "reports",
+          "Show me the report behind this",
+          "Open the existing Clover report that best supports this spending explanation."
+        );
+      }
+
+      if (inferredQuestionTheme === "goals") {
+        add(
+          "follow-up-goal-progress",
+          "goals",
+          goalValue ? "What would help me reach this goal faster?" : "How should I set a savings goal?",
+          goalValue
+            ? "What realistic change would help me reach my current goal faster?"
+            : "How should I set a savings goal using my actual income, spending, and available cash?"
+        );
+        add(
+          "follow-up-goal-tradeoff",
+          "goals",
+          "What should I protect before saving more?",
+          "What should I protect first before increasing my savings contribution?"
+        );
+      }
+
+      if (inferredQuestionTheme === "investments") {
+        add(
+          "follow-up-investment-contribution",
+          "investments",
+          "How much could I invest safely?",
+          "How much could I reasonably set aside for investing after protecting my cash reserve and upcoming obligations?"
+        );
+        add(
+          "follow-up-investment-readiness",
+          "investments",
+          latestInvestmentSnapshot ? "What should I review in my investments?" : "Am I ready to start investing?",
+          latestInvestmentSnapshot
+            ? "What should I review in my latest investment snapshot before making any decision?"
+            : "Am I ready to start investing, and what information should I decide first?"
+        );
+      }
+
+      if (openSplitBills.length > 0) {
+        add(
+          "follow-up-shared-money",
+          "split-bills",
+          "Who still owes me money?",
+          "Who still owes me money from open split bills, and which settlement should I follow up on first?"
+        );
+      }
+
+      if (questions.length < 4) {
+        add(
+          "follow-up-account-picture",
+          "accounts",
+          "What is my overall money picture?",
+          "Give me a concise overview of my balances, spending, upcoming pressure, and the one thing I should focus on next."
+        );
+      }
+
+      return questions.slice(0, 6);
+    })();
+
     const env = getEnv();
     const grounding = {
       accountCount: workspace.accounts.length,
@@ -2089,7 +2210,7 @@ export async function POST(request: Request) {
       resetsAt: resetsAt.toISOString(),
     }) satisfies AdviserUsage;
     if (!env.OPENAI_API_KEY) {
-      return NextResponse.json({ reply: fallbackReply, actions: [], usage: usageForResponse(), grounding, degraded: true });
+      return NextResponse.json({ reply: fallbackReply, actions: [], suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
     }
 
     const model = env.OPENAI_ADVISER_MODEL?.trim() || "gpt-4.1";
@@ -2313,14 +2434,14 @@ export async function POST(request: Request) {
         });
       } catch (error) {
         console.error("Adviser model request failed", error instanceof Error ? error.message : error);
-        return NextResponse.json({ reply: fallbackReply, actions, usage: usageForResponse(), grounding, degraded: true });
+        return NextResponse.json({ reply: fallbackReply, actions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
       } finally {
         clearTimeout(timeout);
       }
 
       if (!response.ok) {
         console.error("Adviser model request returned an error", response.status);
-        return NextResponse.json({ reply: fallbackReply, actions, usage: usageForResponse(), grounding, degraded: true });
+        return NextResponse.json({ reply: fallbackReply, actions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
       }
 
       payload = (await response.json()) as Record<string, unknown>;
@@ -2388,8 +2509,8 @@ export async function POST(request: Request) {
               entityId: `scenario-${Date.now()}-${call.call_id}`,
               metadata: {
                 kind: "scenario",
-                scenarios: result.scenarios,
-                bestFit: result.bestFit,
+                scenarios,
+                bestFit: scenarios.filter((scenario) => scenario.status === "fits_after_reserve").sort((left, right) => right.roomAfterPurchase - left.roomAfterPurchase)[0]?.name ?? null,
                 currency: scenarios[0]?.currency ?? displayCurrency,
               },
             },
@@ -2700,7 +2821,7 @@ export async function POST(request: Request) {
                   }
                   if (done) break;
                 }
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions, grounding })}\n\n`));
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions, suggestions: suggestedQuestions, grounding })}\n\n`));
                 controller.close();
               } catch (error) {
                 console.error("Adviser upstream stream read failed", error instanceof Error ? error.message : error);
@@ -2714,7 +2835,7 @@ export async function POST(request: Request) {
               let index = 0;
               const emit = () => {
                 if (index >= chunks.length) {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions, grounding })}\n\n`));
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions, suggestions: suggestedQuestions, grounding })}\n\n`));
                   controller.close();
                   return;
                 }
@@ -2733,7 +2854,7 @@ export async function POST(request: Request) {
         },
       });
     }
-    return NextResponse.json({ reply, actions, usage: usageForResponse(), grounding });
+    return NextResponse.json({ reply, actions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to generate an Adviser response.";
     return NextResponse.json({ error: message }, { status: 400 });

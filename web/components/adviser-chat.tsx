@@ -63,9 +63,10 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
   const [actions, setActions] = useState<AdviserAction[]>([]);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [grounding, setGrounding] = useState<AdviserGrounding | null>(null);
+  const [suggestedPrompts, setSuggestedPrompts] = useState<AdviserPrompt[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const visiblePrompts = useMemo(() => prompts.slice(0, 6), [prompts]);
+  const visiblePrompts = useMemo(() => (suggestedPrompts.length > 0 ? suggestedPrompts : prompts).slice(0, 6), [prompts, suggestedPrompts]);
   const hasReachedLimit = usage !== null && usage.remaining <= 0;
   const resetLabel = usage ? new Date(usage.resetsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
 
@@ -109,6 +110,7 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
         let buffer = "";
         let streamedReply = "";
         let streamedActions: AdviserAction[] = [];
+        let streamedSuggestions: AdviserPrompt[] = [];
         let streamedUsage: AdviserUsage | undefined;
         let streamedGrounding: AdviserGrounding | undefined;
 
@@ -117,13 +119,14 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
           if (!dataLine) {
             return;
           }
-          const data = JSON.parse(dataLine.slice(6)) as { type?: string; text?: string; usage?: AdviserUsage; actions?: AdviserAction[]; grounding?: AdviserGrounding };
+          const data = JSON.parse(dataLine.slice(6)) as { type?: string; text?: string; usage?: AdviserUsage; actions?: AdviserAction[]; suggestions?: AdviserPrompt[]; grounding?: AdviserGrounding };
           if (data.type === "delta" && data.text) {
             streamedReply += data.text;
             setMessages((current) => current.map((message, index) => (index === assistantIndex ? { ...message, content: streamedReply } : message)));
           }
           if (data.type === "complete") {
             streamedActions = data.actions ?? [];
+            streamedSuggestions = data.suggestions ?? [];
             streamedUsage = data.usage;
             streamedGrounding = data.grounding;
           }
@@ -146,12 +149,15 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
         if (streamedGrounding) {
           setGrounding(streamedGrounding);
         }
+        if (streamedSuggestions.length > 0) {
+          setSuggestedPrompts(streamedSuggestions);
+        }
         setActions((current) => [...current, ...streamedActions]);
         window.setTimeout(scrollToBottom, 0);
         return;
       }
 
-      const payload = (await response.json().catch(() => null)) as { error?: string; usage?: AdviserUsage; actions?: AdviserAction[]; reply?: string; grounding?: AdviserGrounding } | null;
+      const payload = (await response.json().catch(() => null)) as { error?: string; usage?: AdviserUsage; actions?: AdviserAction[]; suggestions?: AdviserPrompt[]; reply?: string; grounding?: AdviserGrounding } | null;
       if (payload?.usage) {
         setUsage(payload.usage);
       }
@@ -166,6 +172,9 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
 
       if (payload.grounding) {
         setGrounding(payload.grounding);
+      }
+      if (payload.suggestions?.length) {
+        setSuggestedPrompts(payload.suggestions);
       }
 
       const reply = payload.reply?.trim() || "I could not generate a response just now.";
