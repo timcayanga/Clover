@@ -31213,7 +31213,7 @@ button.accounts-detail__transaction-head-cell {
   isolation: isolate;
   background: rgba(255, 255, 255, 0.96);
   margin-left: 0;
-  margin-bottom: 6px;
+  margin-bottom: 0;
 }
 
 .help-page__nav {
@@ -38966,7 +38966,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
 .landing-page {
   width: min(1120px, calc(100% - 28px));
   margin: 0 auto;
-  padding: 16px 0 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
 }
@@ -39733,11 +39733,11 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .landing-page {
     width: min(100%, calc(100% - 16px));
-    padding-top: 10px;
+    padding-top: 0;
   }
 
   .landing-page .landing-nav {
-    margin-bottom: 4px;
+    margin-bottom: 0;
   }
 
   .landing-page .landing-hero {
