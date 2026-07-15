@@ -19,12 +19,12 @@ type RecurringPageClientProps = {
 export type RecurringTab = "overview" | "planned" | "debt" | "owed" | "installments";
 type RecurringAddKind = "planned_payment" | "debt" | "receivable" | "reminder";
 
-const recurringTabs: Array<{ id: RecurringTab; label: string }> = [
-  { id: "overview", label: "Overview" },
-  { id: "planned", label: "Planned Payments" },
-  { id: "debt", label: "Debt & Loans" },
-  { id: "owed", label: "Money Owed" },
-  { id: "installments", label: "Installments" },
+const recurringTabs: Array<{ id: RecurringTab; label: string; mobileLabel: string }> = [
+  { id: "overview", label: "Overview", mobileLabel: "Overview" },
+  { id: "planned", label: "Planned Payments", mobileLabel: "Planned" },
+  { id: "debt", label: "Debt & Loans", mobileLabel: "Debts" },
+  { id: "owed", label: "Money Owed", mobileLabel: "Owed" },
+  { id: "installments", label: "Installments", mobileLabel: "Installments" },
 ];
 
 const addKindForTab = (tab: RecurringTab): RecurringAddKind => {
@@ -136,7 +136,8 @@ export function RecurringPageClient({
               aria-current={activeTab === tab.id ? "page" : undefined}
               onClick={() => selectTab(tab.id)}
             >
-              {tab.label}
+              <span className="recurring-tab-label recurring-tab-label--desktop">{tab.label}</span>
+              <span className="recurring-tab-label recurring-tab-label--mobile">{tab.mobileLabel}</span>
             </button>
           ))}
         </nav>

@@ -5258,6 +5258,10 @@ body.transactions-manual-open .shell-quick-add-button {
   flex: 0 0 auto;
 }
 
+.recurring-tab-label--mobile {
+  display: none;
+}
+
 .recurring-tabs::-webkit-scrollbar {
   display: none;
 }
@@ -18628,6 +18632,14 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 @media (max-width: 760px) {
+  .recurring-tab-label--desktop {
+    display: none;
+  }
+
+  .recurring-tab-label--mobile {
+    display: inline;
+  }
+
   .recurring-topbar-add {
     width: 40px;
     min-width: 40px;
