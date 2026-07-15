@@ -2057,6 +2057,7 @@ export async function POST(request: Request) {
       "When the user asks what they should invest in or asks for personalized investment advice, use get_investment_readiness first. Explain what suitability information is still needed before discussing options.",
       "When the user asks about duplicate, uncategorized, or review-needed transactions, use find_data_quality_issues.",
       "When the user asks Clover to add or edit a record, use prepare_write_action and wait for confirmation; never describe a proposed write as completed. Supported writes include goals, budgets, Adviser planning preferences, transactions, accounts, investments, and split bills.",
+      "Before prepare_write_action, verify that the required fields for that action are present. If anything essential is missing, ask one focused follow-up question instead of creating a partial confirmation card.",
       "",
       "Workspace context:",
       summaryLines,
@@ -2848,9 +2849,58 @@ export async function POST(request: Request) {
           result = { area, href };
         } else if (call.name === "prepare_write_action") {
           const actionType = String(args.actionType ?? "");
-          const action: AdviserAction = { id: `action-${actions.length + 1}`, kind: "confirm", type: actionType, label: String(args.label ?? "Confirm this action"), description: String(args.description ?? "Review and confirm this Clover action."), payload: { ...(args.payload as Record<string, unknown>), workspaceId: workspace.id } };
-          actions.push(action);
-          result = { requiresConfirmation: true, actionId: action.id, actionType, payload: action.payload };
+          const rawPayload = args.payload;
+          const payload = rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+            ? rawPayload as Record<string, unknown>
+            : {};
+          const hasKey = (key: string) => Object.prototype.hasOwnProperty.call(payload, key);
+          const hasValue = (key: string) => {
+            const value = payload[key];
+            return value !== undefined && value !== null && value !== "" && !(Array.isArray(value) && value.length === 0);
+          };
+          const missingFields: string[] = [];
+
+          if (actionType === "set_goal") {
+            if (!hasValue("goal") && !hasValue("targetAmount")) missingFields.push("a goal name or target amount");
+          } else if (actionType === "set_adviser_preferences") {
+            if (!hasKey("paydayDay") && !hasKey("preferredBuffer")) missingFields.push("a payday day or preferred buffer");
+          } else if (actionType === "create_budget") {
+            if (!hasValue("name")) missingFields.push("a budget name");
+            if (!hasValue("targetAmount")) missingFields.push("a target amount");
+          } else if (actionType === "create_transaction") {
+            if (!hasValue("accountId")) missingFields.push("the account");
+            if (!hasValue("amount")) missingFields.push("the amount");
+          } else if (actionType === "edit_transaction") {
+            if (!hasValue("transactionId")) missingFields.push("the transaction");
+            if (!["merchantClean", "description", "amount", "date"].some(hasValue)) missingFields.push("at least one change");
+          } else if (actionType === "create_account" || actionType === "create_investment") {
+            if (!hasValue("name")) missingFields.push("a name");
+            if (!hasValue("balance")) missingFields.push("the current balance");
+          } else if (actionType === "edit_account") {
+            if (!hasValue("accountId")) missingFields.push("the account");
+            if (!["name", "institution", "balance"].some(hasValue)) missingFields.push("at least one change");
+          } else if (actionType === "edit_investment") {
+            if (!hasValue("investmentId")) missingFields.push("the investment");
+            if (!["name", "institution", "investmentSubtype", "investmentSymbol", "investmentQuantity", "investmentCostBasis", "balance"].some(hasValue)) missingFields.push("at least one change");
+          } else if (actionType === "create_split_bill") {
+            if (!hasValue("total")) missingFields.push("the bill total");
+            if (!Array.isArray(payload.participants) || payload.participants.length === 0) missingFields.push("the people sharing the bill");
+          } else {
+            missingFields.push("a supported action type");
+          }
+
+          if (missingFields.length > 0) {
+            result = {
+              requiresClarification: true,
+              actionType,
+              missingFields,
+              guidance: `Ask the user for ${missingFields.join(" and ")} before preparing a confirmation.`,
+            };
+          } else {
+            const action: AdviserAction = { id: `action-${actions.length + 1}`, kind: "confirm", type: actionType, label: String(args.label ?? "Confirm this action"), description: String(args.description ?? "Review and confirm this Clover action."), payload: { ...payload, workspaceId: workspace.id } };
+            actions.push(action);
+            result = { requiresConfirmation: true, actionId: action.id, actionType, payload: action.payload };
+          }
         } else {
           result = { error: `Unknown Adviser tool: ${call.name}` };
         }
