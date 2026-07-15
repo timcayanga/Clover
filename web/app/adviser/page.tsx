@@ -2981,11 +2981,30 @@ async function AdviserPageContent() {
             score: 0,
           }
         : null,
+      workspaceAccounts.length > 0
+        ? {
+            id: "prompt-safe-to-spend",
+            label: "Can I safely spend from my accounts?",
+            prompt: `Can I safely spend from my accounts based on my balances, ${knownBillsDueSoonAmount > 0 ? "upcoming bills, " : ""}and a reasonable cash buffer? Use my ${hasTransactionFlow ? activeTransactionWindowLabel : "available account data"}.`,
+            group: "cashflow",
+            diversityKey: "cashflow-safe-to-spend",
+            insightKey: "safe-to-spend",
+            breakdown: {
+              impact: clamp(accountPressureEstimate + (knownBillsDueSoonAmount > 0 ? 20 : 0)),
+              urgency: clamp(accountPressureEstimate + (knownBillsDueSoonAmount > 0 ? 25 : 0)),
+              confidence: clamp(average([accountCoverageScore, currentTransactionConfidence, knownBillsDueSoonAmount > 0 ? 85 : 55])),
+              personalization: 96,
+              recency: workspaceAccounts.length > 0 ? 100 : dataFreshness.recencyScore,
+              actionability: 98,
+            },
+            score: 0,
+          }
+        : null,
       recurringDueSoon.length > 0 || plannedPaymentsDueSoon.length > 0 || commitmentsDueSoon.length > 0
         ? {
             id: "prompt-upcoming",
-            label: "What’s due soon?",
-            prompt: "Which recurring bills, planned payments, or commitments are due soon, and which ones matter most?",
+            label: "Will I have enough for upcoming bills?",
+            prompt: "Will I have enough for my upcoming recurring bills, planned payments, and commitments, and which ones should I prepare for first?",
             group: "recurring",
             diversityKey: "recurring-upcoming",
             insightKey: "upcoming-obligations",
@@ -3060,8 +3079,8 @@ async function AdviserPageContent() {
       currentSummary.income > 0 || currentSummary.expense > 0
         ? {
             id: "prompt-cashflow",
-            label: "How is my cash flow?",
-            prompt: `How is my cash flow looking from the ${activeTransactionWindowLabel}, and what stands out most?`,
+            label: "How much am I really saving?",
+            prompt: `How much am I really saving from the ${activeTransactionWindowLabel}, and what should I change if I want to save more?`,
             group: "cashflow",
             diversityKey: "cashflow-summary",
             insightKey: "cashflow-readiness",
@@ -3079,7 +3098,7 @@ async function AdviserPageContent() {
       budgetOverview.activeBudgetCount > 0
         ? {
             id: "prompt-budgeting",
-            label: "How are my budgets doing?",
+            label: "Where am I closest to my limit?",
             prompt: "Which budget is closest to its limit, and what should I watch first?",
             group: "cashflow",
             diversityKey: "cashflow-budgeting",
@@ -3098,8 +3117,8 @@ async function AdviserPageContent() {
       workspaceAccounts.length > 0
         ? {
             id: "prompt-accounts",
-            label: "Where is my balance?",
-            prompt: "Which account or account type is holding the most balance right now?",
+            label: "How much cash do I actually have?",
+            prompt: "How much cash do I actually have across my accounts, and what is already spoken for?",
             group: "accounts",
             diversityKey: "accounts-balance",
             insightKey: "account-concentration",
@@ -3136,8 +3155,8 @@ async function AdviserPageContent() {
       activeTransactions.length > 0 && currentSummary.expense > 0
         ? {
             id: "prompt-patterns",
-            label: "What pattern stands out?",
-            prompt: `What spending pattern stands out most from my ${dataFreshness.shortLabel}?`,
+            label: "Where did my money go?",
+            prompt: `Where did my money go in my ${dataFreshness.shortLabel}, and what change would make the biggest difference?`,
             group: "patterns",
             diversityKey: "patterns-overview",
             insightKey: topCategoryShare > weekendExpenseShare ? "category-concentration" : "weekend-behavior",
@@ -3178,7 +3197,7 @@ async function AdviserPageContent() {
         score: scorePromptRelevance(typedPrompt, scorePromptCandidate(typedPrompt.breakdown, adviserCardWeights.prompt)),
       };
     }),
-    4
+    6
   );
 
   return (
@@ -3229,20 +3248,8 @@ async function AdviserPageContent() {
           cards={passiveCardsDisplay}
         />
 
-        <AdviserSectionCarousel
-          title="What you should do"
-          ariaLabel="What you should do cards"
-          cards={recommendationCardsDisplay}
-        />
-
-        <AdviserSectionCarousel
-          title="How you can improve"
-          ariaLabel="How you can improve cards"
-          cards={coachingCardsDisplay}
-        />
-
-        <section className="adviser-section adviser-section--chat glass">
-          <p className="eyebrow">Ask Clover anything</p>
+        <section className="adviser-section adviser-section--questions glass">
+          <p className="eyebrow">Recommended questions</p>
           <AdviserChat prompts={promptSuggestions} />
         </section>
       </section>

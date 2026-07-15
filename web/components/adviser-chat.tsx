@@ -65,7 +65,7 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
   const [grounding, setGrounding] = useState<AdviserGrounding | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const visiblePrompts = useMemo(() => prompts.slice(0, 4), [prompts]);
+  const visiblePrompts = useMemo(() => prompts.slice(0, 6), [prompts]);
   const hasReachedLimit = usage !== null && usage.remaining <= 0;
   const resetLabel = usage ? new Date(usage.resetsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
 
@@ -229,26 +229,7 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
             : `${usage.remaining} Adviser question${usage.remaining === 1 ? "" : "s"} left this month on ${usage.plan === "pro" ? "Pro" : "Free"}.`}
         </p>
       ) : null}
-      <form className="adviser-chat__composer" onSubmit={handleSubmit}>
-        <label className="sr-only" htmlFor="adviser-chat-input">
-          Ask Clover anything
-        </label>
-        <div className="adviser-chat__composer-bar">
-          <input
-            id="adviser-chat-input"
-            type="text"
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="Ask Clover a question about your money..."
-            disabled={hasReachedLimit}
-          />
-          <button type="submit" className="button button-primary button-small" disabled={hasReachedLimit || isSending || input.trim().length === 0}>
-            {isSending ? "Sending" : "Send"}
-          </button>
-          {isSending || error ? <span className="adviser-chat__status">{isSending ? "Thinking..." : error}</span> : null}
-        </div>
-      </form>
-
+      <p className="adviser-chat__question-lead">Here&apos;s what I&apos;d ask if I were looking at your finances.</p>
       <div className="adviser-chat__prompt-row" aria-label="Suggested questions">
         {visiblePrompts.map((prompt) => (
           <button
@@ -271,6 +252,26 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
           </button>
         ))}
       </div>
+      <p className="eyebrow adviser-chat__ask-label">Ask Clover</p>
+      <form className="adviser-chat__composer" onSubmit={handleSubmit}>
+        <label className="sr-only" htmlFor="adviser-chat-input">
+          Ask Clover anything
+        </label>
+        <div className="adviser-chat__composer-bar">
+          <input
+            id="adviser-chat-input"
+            type="text"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Ask Clover a question about your money..."
+            disabled={hasReachedLimit}
+          />
+          <button type="submit" className="button button-primary button-small" disabled={hasReachedLimit || isSending || input.trim().length === 0}>
+            {isSending ? "Sending" : "Send"}
+          </button>
+          {isSending || error ? <span className="adviser-chat__status">{isSending ? "Thinking..." : error}</span> : null}
+        </div>
+      </form>
       {grounding ? (
         <p className="adviser-chat__status">
           Based on {grounding.transactionCount.toLocaleString()} transactions across {grounding.accountCount} account{grounding.accountCount === 1 ? "" : "s"}, through {new Date(grounding.historyThrough).toLocaleDateString()}.
