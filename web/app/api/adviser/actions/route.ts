@@ -9,6 +9,7 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { prisma } from "@/lib/prisma";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
+import { normalizeAdviserPreferences } from "@/lib/adviser-preferences";
 
 export const dynamic = "force-dynamic";
 
@@ -92,8 +93,13 @@ export async function POST(request: Request) {
     let result: Record<string, unknown> = {};
 
     if (action.type === "set_adviser_preferences") {
-      const paydayDay = payload.paydayDay === null || payload.paydayDay === undefined || payload.paydayDay === "" ? null : numberValue(payload.paydayDay, 0);
-      const preferredBuffer = payload.preferredBuffer === null || payload.preferredBuffer === undefined || payload.preferredBuffer === "" ? null : numberValue(payload.preferredBuffer, 0);
+      const currentPreferences = normalizeAdviserPreferences(user.adviserPreferences);
+      const paydayDay = hasOwn(payload, "paydayDay")
+        ? payload.paydayDay === null || payload.paydayDay === "" ? null : numberValue(payload.paydayDay, 0)
+        : currentPreferences.paydayDay;
+      const preferredBuffer = hasOwn(payload, "preferredBuffer")
+        ? payload.preferredBuffer === null || payload.preferredBuffer === "" ? null : numberValue(payload.preferredBuffer, 0)
+        : currentPreferences.preferredBuffer;
       if (paydayDay !== null && (!Number.isInteger(paydayDay) || paydayDay < 1 || paydayDay > 31)) {
         return NextResponse.json({ error: "Choose a payday from the 1st through the 31st." }, { status: 400 });
       }
