@@ -145,7 +145,7 @@ export function ContactUsForm() {
         </label>
 
         <label className="contact-field contact-field--full">
-          <span>Inquiry / question / concern *</span>
+          <span>How can we help? *</span>
           <textarea
             value={message}
             onChange={(event) => setMessage(event.target.value)}
@@ -160,7 +160,7 @@ export function ContactUsForm() {
         </label>
 
         <label className="contact-field contact-field--full contact-field--attachment">
-          <span>Upload an image if something is wrong</span>
+          <span>Upload an image</span>
           <input type="file" accept="image/*" onChange={onAttachmentChange} />
           <small>Optional, but helpful if you want to show an error, broken layout, or upload issue.</small>
           {attachmentLabel ? <small>{attachmentLabel}</small> : null}

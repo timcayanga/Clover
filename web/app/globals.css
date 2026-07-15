@@ -30853,15 +30853,16 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .contact-page__header h1 {
-  font-size: clamp(2.6rem, 5vw, 4rem);
+  font-size: clamp(2.1rem, 4vw, 3.1rem);
   line-height: 1;
   letter-spacing: -0.06em;
 }
 
 .contact-page__header p {
-  max-width: 60ch;
+  max-width: none;
   color: var(--muted);
   line-height: 1.7;
+  white-space: nowrap;
 }
 
 .contact-page__email-note a {
@@ -35235,6 +35236,10 @@ html[data-helper-text="hidden"] .settings-helper {
 
   .contact-page {
     padding: 0 0 40px;
+  }
+
+  .contact-page__header p {
+    white-space: normal;
   }
 
   .contact-page__nav,
