@@ -4492,7 +4492,7 @@ body.transactions-manual-open .shell-quick-add-button {
   margin: 0 0 6px;
   color: var(--muted-2);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.45;
   letter-spacing: 0.14em;
 }
