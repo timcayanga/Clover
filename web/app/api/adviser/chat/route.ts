@@ -2084,6 +2084,41 @@ export async function POST(request: Request) {
               ? "cashflow"
               : null
     ) ?? dominantTheme?.key ?? "cashflow";
+    const asksAboutSpecificPurchase = /can i afford|can we afford|could i afford|can i buy|should i buy|would .* be affordable|affordability|can i travel|can we travel|trip .* budget/.test(latestQuestionLower) && !/how much can i safely spend/.test(latestQuestionLower);
+    const includesPurchaseAmount = /(?:₱|php|usd|\$|€|£)\s*[\d,.]+|\b\d+(?:[,.]\d{2})?\s*[km]?\b(?!\s*(?:day|days|month|months|week|weeks|year|years))/i.test(latestQuestionLower);
+    const requestRoutingHint = (() => {
+      if (/show|open|view|see|report|statement|chart|graph/.test(latestQuestionLower) && /report|statement|chart|graph|transaction/.test(latestQuestionLower)) {
+        return "Route this request to open_report so Clover opens an existing Reports view instead of recreating a report in chat.";
+      }
+      if (asksAboutSpecificPurchase && includesPurchaseAmount) {
+        return "Route this request to check_affordability and compare the purchase with protected obligations, buffer, and safe-to-spend room.";
+      }
+      if (/compare|which is better|either|between .* and|option|options|trip|purchase/.test(latestQuestionLower) && /\d/.test(latestQuestionLower)) {
+        return "Route this request to compare_safe_to_spend_scenarios when there are two or more priced options; evaluate them against the same reserves.";
+      }
+      if (/safe to spend|how much can i spend|how much room|spend until payday|spend before payday|left until payday/.test(latestQuestionLower)) {
+        return "Route this request to calculate_safe_to_spend and explain available cash, protected obligations, buffer, and confidence separately.";
+      }
+      if (/what should i invest|what can i invest|which investment|which stock|personalized investment|where should i invest/.test(latestQuestionLower)) {
+        return "Route this request to get_investment_readiness first; keep the response educational and do not select a security.";
+      }
+      if (/how much.*invest|invest.*how much|contribute.*invest|set aside.*invest/.test(latestQuestionLower)) {
+        return "Route this request to estimate_investment_contribution and present it as a conservative planning range, not a recommendation.";
+      }
+      if (/goal progress|progress.*goal|how am i doing.*goal|on track.*goal/.test(latestQuestionLower)) {
+        return "Route this request to get_goal_progress and state clearly when no goal has been set.";
+      }
+      if (/duplicate|uncategorized|needs review|review queue|missing categor/.test(latestQuestionLower)) {
+        return "Route this request to find_data_quality_issues and distinguish likely duplicates from uncategorized records.";
+      }
+      if (/add|create|record|edit|change|update|set up|split this bill|remember my payday|remember my buffer/.test(latestQuestionLower)) {
+        return "This may be a write request. Use prepare_write_action only after collecting the required fields and always wait for confirmation.";
+      }
+      if (/transaction|merchant|where did.*spend|what did i spend|spent on/.test(latestQuestionLower)) {
+        return "Route this request to find_transactions when the user is asking about specific transaction records or merchants.";
+      }
+      return "Use the most relevant read tool for the user's question; preserve the recent conversation topic if this is a short follow-up.";
+    })();
     const questionSignature = `chat:${latestQuestionLower.replace(/[^a-z0-9]+/g, " ").trim().slice(0, 80) || "question"}`;
     await recordAdviserChatQuestion({
       workspaceId: workspace.id,
@@ -2314,8 +2349,6 @@ export async function POST(request: Request) {
       remaining: Math.max(0, limit - usageCount - 1),
       resetsAt: resetsAt.toISOString(),
     }) satisfies AdviserUsage;
-    const asksAboutSpecificPurchase = /can i afford|can we afford|could i afford|can i buy|should i buy|would .* be affordable|affordability|can i travel|can we travel|trip .* budget/.test(latestQuestionLower) && !/how much can i safely spend/.test(latestQuestionLower);
-    const includesPurchaseAmount = /(?:₱|php|usd|\$|€|£)\s*[\d,.]+|\b\d+(?:[,.]\d{2})?\s*[km]?\b(?!\s*(?:day|days|month|months|week|weeks|year|years))/i.test(latestQuestionLower);
     if (asksAboutSpecificPurchase && !includesPurchaseAmount) {
       return NextResponse.json({
         reply: "I can check that safely, but I need the purchase price first. If timing matters, tell me the date you need it by or how long you want your cash to last. I will compare it with your available cash, known obligations, and a reasonable buffer.",
@@ -2532,7 +2565,7 @@ export async function POST(request: Request) {
     ];
 
     const baseInput: unknown[] = [
-      { role: "system", content: [{ type: "input_text", text: `${systemPrompt}\n\nTool rules: Use read tools when a Clover page or calculation is needed. Use prepare_write_action only when the user explicitly asks Clover to create or record something. Never claim a write happened until the user confirms it.` }] },
+      { role: "system", content: [{ type: "input_text", text: `${systemPrompt}\n\nRequest routing hint: ${requestRoutingHint}\n\nTool rules: Use read tools when a Clover page or calculation is needed. Use prepare_write_action only when the user explicitly asks Clover to create or record something. Never claim a write happened until the user confirms it.` }] },
       ...incomingMessages.map((message) => ({ role: message.role, content: [{ type: "input_text", text: message.content }] })),
     ];
     let modelInput = baseInput;
