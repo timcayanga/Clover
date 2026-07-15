@@ -5344,6 +5344,101 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 16px;
 }
 
+.recurring-overview-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.recurring-overview-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 148px;
+}
+
+.recurring-overview-card__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.recurring-overview-card__heading .eyebrow {
+  margin: 0;
+}
+
+.recurring-overview-card__heading > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.recurring-overview-card__icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--accent);
+  background: rgba(3, 168, 192, 0.1);
+  font-size: 16px;
+}
+
+.recurring-overview-card__value {
+  color: var(--foreground);
+  font-size: clamp(1.45rem, 2.2vw, 2rem);
+  letter-spacing: -0.04em;
+}
+
+.recurring-overview-card > p:not(.eyebrow),
+.recurring-overview-card__empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.recurring-overview-list {
+  display: grid;
+  gap: 8px;
+}
+
+.recurring-overview-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--stroke);
+}
+
+.recurring-overview-list__item > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.recurring-overview-list__item strong,
+.recurring-overview-list__item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recurring-overview-list__item strong {
+  font-size: 13px;
+}
+
+.recurring-overview-list__item small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.recurring-overview-list__item .button {
+  flex: 0 0 auto;
+}
+
 .recurring-empty-cta {
   display: grid;
   justify-items: center;
@@ -5379,6 +5474,10 @@ body.transactions-manual-open .shell-quick-add-button {
 @media (max-width: 980px) {
   .commitments-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recurring-overview-grid {
+    grid-template-columns: 1fr;
   }
 
   .recurring-tabs {

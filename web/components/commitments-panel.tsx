@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CurrencySelector } from "@/components/currency-selector";
@@ -14,7 +13,6 @@ import {
 } from "@/lib/commitments";
 import type { RecurringPatternSummary } from "@/lib/recurring-page";
 import type { PlannedPaymentSuggestion } from "@/lib/planned-payment-suggestions";
-import { getAccountPath } from "@/lib/account-path";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatAccountTypeLabel, getRecurringKindSuggestionForAccountType, isLiabilityAccountType } from "@/lib/account-types";
 
@@ -322,15 +320,49 @@ export function CommitmentsPanel({
   const [transactionId, setTransactionId] = useState("");
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [visibleCommitments, setVisibleCommitments] = useState(commitments);
-  const selectedItems = visibleCommitments;
-  const nextOverviewDueDate = useMemo(
-    () =>
-      visibleCommitments
-        .map((item) => getCommitmentDateValue(item))
-        .filter((value): value is string => Boolean(value))
-        .sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0] ?? null,
-    [visibleCommitments]
-  );
+  const overviewStats = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 30);
+    const activeCommitments = visibleCommitments.filter((item) => item.status === "active");
+    const upcoming = activeCommitments
+      .map((item) => ({ item, date: getCommitmentDateValue(item) }))
+      .filter(({ date }) => {
+        if (!date) {
+          return false;
+        }
+
+        const timestamp = new Date(date).getTime();
+        return Number.isFinite(timestamp) && timestamp >= start.getTime();
+      })
+      .sort((left, right) => new Date(left.date!).getTime() - new Date(right.date!).getTime());
+    const dueWithin30Days = upcoming.filter(({ date }) => new Date(date!).getTime() <= end.getTime());
+    const monthlyTotal = activeCommitments.reduce((total, item) => {
+      const value = Number(item.amount);
+      if (!Number.isFinite(value)) {
+        return total;
+      }
+
+      const multiplier = {
+        weekly: 52 / 12,
+        biweekly: 26 / 12,
+        monthly: 1,
+        quarterly: 1 / 3,
+        annual: 1 / 12,
+        once: 0,
+      }[item.recurrence] ?? 0;
+      return total + value * multiplier;
+    }, 0);
+
+    return {
+      upcoming,
+      dueWithin30Days,
+      dueWithin30DaysTotal: dueWithin30Days.reduce((total, { item }) => total + (Number(item.amount) || 0), 0),
+      monthlyTotal,
+      activeCount: activeCommitments.length,
+    };
+  }, [visibleCommitments]);
 
   useEffect(() => {
     setVisibleCommitments(commitments);
@@ -361,8 +393,6 @@ export function CommitmentsPanel({
     [selectedAccount?.type]
   );
   const formCopy = commitmentFormCopy[kind];
-  const hasSavedCommitments = visibleCommitments.length > 0;
-  const hasSuggestionContent = plannedPaymentSuggestions.length > 0 || suggestedRecurringPatterns.length > 0;
   const addKindForActiveTab: CommitmentKind =
     activeTab === "debt" ? "debt" : activeTab === "owed" ? "receivable" : activeTab === "installments" ? "reminder" : activeTab === "planned" ? "planned_payment" : initialKind;
   const openRecurringAdd = () => {
@@ -805,6 +835,82 @@ export function CommitmentsPanel({
       {activeTab !== "overview" ? renderRecurringTable() : null}
 
       {activeTab === "overview" ? <>
+      <section className="recurring-overview-grid" aria-label="Recurring overview">
+        <article className="panel recurring-overview-card">
+          <div className="recurring-overview-card__heading">
+            <p className="eyebrow">Next 30 days</p>
+            <span className="recurring-overview-card__icon" aria-hidden="true">↗</span>
+          </div>
+          <strong className="recurring-overview-card__value">{formatCurrency(String(overviewStats.dueWithin30DaysTotal))}</strong>
+          <p>{overviewStats.dueWithin30Days.length === 0 ? "No payments due yet" : `${overviewStats.dueWithin30Days.length} payment${overviewStats.dueWithin30Days.length === 1 ? "" : "s"} due`}</p>
+        </article>
+
+        <article className="panel recurring-overview-card recurring-overview-card--list">
+          <div className="recurring-overview-card__heading">
+            <p className="eyebrow">Upcoming payments</p>
+            <span>{overviewStats.upcoming.length} scheduled</span>
+          </div>
+          {overviewStats.upcoming.length > 0 ? (
+            <div className="recurring-overview-list">
+              {overviewStats.upcoming.slice(0, 4).map(({ item }) => (
+                <div key={item.id} className="recurring-overview-list__item">
+                  <span>
+                    <strong>{item.title}</strong>
+                    <small>{formatDate(getCommitmentDateValue(item))}</small>
+                  </span>
+                  <strong>{formatCurrency(item.amount)}</strong>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="recurring-overview-card__empty">Add recurring items to see what is coming up.</p>
+          )}
+        </article>
+
+        <article className="panel recurring-overview-card">
+          <div className="recurring-overview-card__heading">
+            <p className="eyebrow">Monthly commitments</p>
+            <span>{overviewStats.activeCount} active</span>
+          </div>
+          <strong className="recurring-overview-card__value">{formatCurrency(String(overviewStats.monthlyTotal))}</strong>
+          <p>Estimated from recurring active items</p>
+        </article>
+
+        <article className="panel recurring-overview-card recurring-overview-card--list">
+          <div className="recurring-overview-card__heading">
+            <p className="eyebrow">Needs attention</p>
+            <span>{plannedPaymentSuggestions.length + suggestedRecurringPatterns.length}</span>
+          </div>
+          {plannedPaymentSuggestions.length > 0 || suggestedRecurringPatterns.length > 0 ? (
+            <div className="recurring-overview-list">
+              {plannedPaymentSuggestions.slice(0, 2).map((suggestion) => (
+                <div key={suggestion.id} className="recurring-overview-list__item">
+                  <span>
+                    <strong>{suggestion.title}</strong>
+                    <small>{suggestion.sourceLabel}</small>
+                  </span>
+                  <button className="button button-secondary button-small" type="button" onClick={() => openPlannedPaymentReview(suggestion)}>
+                    Review
+                  </button>
+                </div>
+              ))}
+              {plannedPaymentSuggestions.length < 2 ? suggestedRecurringPatterns.slice(0, 2).map((pattern) => (
+                <div key={pattern.id} className="recurring-overview-list__item">
+                  <span>
+                    <strong>{pattern.merchantClean ?? pattern.merchantRaw}</strong>
+                    <small>{pattern.confidence}% confidence</small>
+                  </span>
+                  <button className="button button-secondary button-small" type="button" onClick={() => openPatternReview(pattern)}>
+                    Review
+                  </button>
+                </div>
+              )) : null}
+            </div>
+          ) : (
+            <p className="recurring-overview-card__empty">Clover will show suggestions and missing details here.</p>
+          )}
+        </article>
+      </section>
 
       {plannedPaymentSuggestions.length > 0 ? (
         <article className="panel commitments-suggestions-panel">
@@ -1129,97 +1235,6 @@ export function CommitmentsPanel({
           </section>
         </div>
       ) : null}
-
-      {activeTab === "overview" ? <>
-      {hasSavedCommitments || hasSuggestionContent ? (
-        <article className="panel commitments-detail-panel">
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div>
-              <p className="eyebrow">Overview</p>
-              <h3 style={{ margin: 0 }}>
-                {selectedItems.length > 0
-                  ? `${selectedItems.length} item${selectedItems.length === 1 ? "" : "s"}`
-                  : hasSuggestionContent
-                    ? "Suggestions ready"
-                    : "Nothing saved yet"}
-              </h3>
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <span className="button button-secondary button-small">{commitments.filter((item) => item.status === "active").length} active</span>
-              {nextOverviewDueDate ? (
-                <span className="button button-secondary button-small">Next {formatDate(nextOverviewDueDate)}</span>
-              ) : (
-                <span className="button button-secondary button-small">No due date</span>
-              )}
-            </div>
-          </div>
-
-          {selectedItems.length > 0 ? (
-            <div style={{ display: "grid", gap: 10 }}>
-              {selectedItems.map((commitment) => (
-                <article key={commitment.id} className="notification-item" style={{ alignItems: "flex-start" }}>
-                  <div className="notification-item__main" style={{ gap: 4 }}>
-                    <p className="notification-item__tone">
-                      {commitmentStatusLabels[commitment.status]} · {commitment.recurrence ? commitmentRecurrenceLabels[commitment.recurrence] : "One-time"}
-                    </p>
-                    <h4>{commitment.title}</h4>
-                    <p>
-                      {formatCurrency(commitment.amount)}
-                      {commitment.counterparty ? ` · ${commitment.counterparty}` : ""}
-                      {commitment.dueDate ? ` · Due ${formatDate(commitment.dueDate)}` : ""}
-                      {commitment.nextDueDate && commitment.nextDueDate !== commitment.dueDate ? ` · Next ${formatDate(commitment.nextDueDate)}` : ""}
-                    </p>
-                    {commitment.notes ? <p className="panel-muted">{commitment.notes}</p> : null}
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {commitment.account ? (
-                        <Link className="button button-secondary button-small" href={getAccountPath({ id: commitment.account.id, name: commitment.account.name })}>
-                          Open account
-                        </Link>
-                      ) : null}
-                      {commitment.transaction ? (
-                        <span className="button button-secondary button-small" aria-label="Linked transaction">
-                          {commitment.transaction.merchantClean ?? commitment.transaction.merchantRaw}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="notification-item__time" style={{ minWidth: 110 }}>
-                    <time>{formatDate(getCommitmentDateValue(commitment))}</time>
-                    <div style={{ marginTop: 8 }}>
-                      <button
-                        type="button"
-                        className="button button-secondary button-small"
-                        onClick={() => handleDelete(commitment.id)}
-                        disabled={isSaving}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p className="panel-muted" style={{ margin: 0 }}>
-              {hasSuggestionContent
-                ? "Suggested recurring transactions are ready above. Review and add them to start tracking them here."
-                : "Saved recurring items will appear here once you add one."}
-            </p>
-          )}
-        </article>
-      ) : (
-        <article className="recurring-empty-cta">
-          <img src="/clover-mark.svg" alt="" aria-hidden="true" />
-          <p>
-            <span>Add recurring transactions</span> to track what is due next, what repeats every month, and what needs follow-up.
-          </p>
-          <button className="button button-primary button-small recurring-topbar-add transactions-action-button" type="button" onClick={openRecurringAdd}>
-            <span>Add Recurring</span>
-          </button>
-        </article>
-      )}
-
-      </> : null}
 
       {showAddModal ? (
         <div
