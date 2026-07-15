@@ -252,58 +252,84 @@ function DashboardUnavailableState() {
 function DashboardStreamFallback() {
   return (
     <section className="dashboard-home" aria-label="Loading dashboard content">
-      <article className="dashboard-home__hero glass dashboard-home__hero--balance">
-        <div className="dashboard-home__hero-copy">
+      <article className="dashboard-home__hero dashboard-home__hero--balance dashboard-home__hero--loading glass">
+        <div className="dashboard-home__hero-main">
           <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 108 }} />
           <span className="skeleton-block skeleton-block--line" style={{ width: "min(100%, 340px)", height: 38, borderRadius: 999 }} />
-          <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 380px)" }} />
+        </div>
+        <div className="dashboard-home__hero-aside" aria-hidden="true">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <div key={index} className="dashboard-home__hero-mini-pill dashboard-home__hero-mini-pill--loading">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 112 }} />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 88, height: 18 }} />
+            </div>
+          ))}
         </div>
       </article>
 
-      <section className="dashboard-home__movement-grid">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <article key={index} className="dashboard-home__movement-card glass">
-            <div className="dashboard-home__movement-card-head">
-              <div className="dashboard-home__summary-card-title">
-                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 72 }} />
-                <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 92, height: 24 }} />
-              </div>
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 54 }} />
-            </div>
-            <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 200px)" }} />
-            <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: "min(100%, 180px)" }} />
+      <section className="dashboard-home__hero-mobile-metrics" aria-label="Loading monthly balance summary">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <article key={index} className="dashboard-home__hero-mobile-card glass">
             <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 112 }} />
+            <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 88, height: 18 }} />
           </article>
         ))}
       </section>
 
-      <article className="dashboard-home__activity-card glass">
-        <div className="dashboard-home__summary-card-head">
-          <div className="dashboard-home__summary-card-title">
-            <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 72 }} />
-            <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 180, height: 24 }} />
-          </div>
-          <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 128 }} />
-        </div>
-        <div className="dashboard-home__activity-chart">
-          {Array.from({ length: 7 }).map((_, index) => (
-            <div key={index} className="dashboard-home__activity-bar">
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 16 }} />
-              <span className="skeleton-block dashboard-home__activity-bar-track" />
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 24 }} />
-            </div>
-          ))}
-        </div>
-        <div className="dashboard-home__activity-metrics">
+      <article className="dashboard-home__insight-strip dashboard-home__insight-strip--loading glass">
+        <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 68 }} />
+        <div className="dashboard-home__insight-strip-list">
           {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="dashboard-home__mini-card dashboard-home__mini-card--loading">
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 78 }} />
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 112 }} />
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 148 }} />
+            <div key={index} className="dashboard-home__insight-strip-item">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 100 }} />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "90%" }} />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 80 }} />
             </div>
           ))}
         </div>
       </article>
+
+      <div className="dashboard-home__snapshot-grid">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <article key={index} className="dashboard-home__report-card dashboard-home__report-card--loading glass">
+            <div className="dashboard-home__report-card-head">
+              <div className="dashboard-home__summary-card-title">
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 116 }} />
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 128, height: 30 }} />
+              </div>
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 92 }} />
+            </div>
+            <div className="dashboard-home__report-metrics">
+              {Array.from({ length: 3 }).map((__, metricIndex) => (
+                <span key={metricIndex}>
+                  <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 54 }} />
+                  <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 76 }} />
+                </span>
+              ))}
+            </div>
+            <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 96 }} />
+          </article>
+        ))}
+      </div>
+
+      <div className="dashboard-home__snapshot-grid dashboard-home__snapshot-grid--lower">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <article key={index} className="dashboard-home__goal-card dashboard-home__goal-card--loading glass">
+            <div className="dashboard-home__goal-card-head">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 116 }} />
+            </div>
+            <div className="dashboard-home__goal-card-body">
+              <span className="skeleton-block dashboard-home__ring dashboard-home__ring--compact" />
+              <div className="dashboard-home__goal-card-copy">
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 180px)", height: 22 }} />
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: "min(100%, 220px)" }} />
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 112 }} />
+              </div>
+            </div>
+            <span className="skeleton-block skeleton-block--line" style={{ width: 128, height: 34, borderRadius: 999 }} />
+          </article>
+        ))}
+      </div>
 
     </section>
   );

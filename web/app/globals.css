@@ -5493,6 +5493,27 @@ body.transactions-manual-open .shell-quick-add-button {
   min-height: 10px;
 }
 
+.dashboard-home__report-card--loading {
+  min-height: 220px;
+}
+
+.dashboard-home__report-card--loading .dashboard-home__report-metrics > span {
+  align-content: center;
+  gap: 7px;
+}
+
+.dashboard-home__goal-card--loading {
+  min-height: 252px;
+}
+
+.dashboard-home__goal-card--loading .dashboard-home__ring {
+  min-width: 128px;
+}
+
+.dashboard-home__insight-strip--loading .dashboard-home__insight-strip-item {
+  min-height: 86px;
+}
+
 .dashboard-home__summary-card-title {
   display: grid;
   gap: 6px;
