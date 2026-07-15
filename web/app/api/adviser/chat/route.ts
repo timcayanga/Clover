@@ -2030,6 +2030,7 @@ export async function POST(request: Request) {
       "Keep the answer short: lead with the direct answer, then give the key numbers or reason, then one practical next step. Use bullets when comparing amounts or obligations.",
       "For calculations, separate what is available, what is protected, what is estimated, and what remains. Never hide uncertainty inside a single confident number.",
       "For follow-up questions, use the previous conversation context and do not repeat the same explanation unless a new number or caveat changes it.",
+      "Treat short follow-ups such as 'what about next month?', 'how much more?', 'why?', or 'do that' as continuations of the recent conversation. Preserve the prior topic, numbers, and requested action instead of resetting to a generic overview.",
       "When the user asks a broad question, choose the most useful interpretation from the data and state the assumption in one short sentence rather than asking a vague clarifying question.",
       "If the user asks whether they can afford a purchase but does not provide a price, ask for the price and, if relevant, the date they need it by. Do not invent a price or give a yes/no answer without one.",
       "If the user asks what to invest in, do not name a specific security as a personalized recommendation. Explain the missing suitability details and offer high-level educational categories only after checking investment readiness.",
@@ -2063,14 +2064,22 @@ export async function POST(request: Request) {
 
     const latestQuestion = incomingMessages[incomingMessages.length - 1]?.content?.trim() || "your question";
     const latestQuestionLower = latestQuestion.toLowerCase();
+    const recentUserContext = incomingMessages
+      .filter((message) => message.role === "user")
+      .slice(-3)
+      .map((message) => message.content)
+      .join(" ")
+      .toLowerCase();
+    const latestHasExplicitTheme = /goal|target|track|progress|save|invest|portfolio|dividend|gain|loss|snapshot|stock|transaction|spend|merchant|bill|recurr|due|loan|balance|cash flow|budget|owe|payment|pressure|account|afford|purchase|phone|car|travel|safe to spend|payday/.test(latestQuestionLower);
+    const themeSource = latestHasExplicitTheme ? latestQuestionLower : recentUserContext;
     const inferredQuestionTheme = (
-      /goal|target|track|progress|save more|emergency fund|drift/.test(latestQuestionLower)
+      /goal|target|track|progress|save more|emergency fund|drift/.test(themeSource)
         ? "goals"
-        : /invest|portfolio|dividend|gain|loss|snapshot|stock/.test(latestQuestionLower)
+        : /invest|portfolio|dividend|gain|loss|snapshot|stock/.test(themeSource)
           ? "investments"
-          : /uncategorized|cleanup|categor|merchant|transaction|spend|weekend|pattern|why/.test(latestQuestionLower)
+          : /uncategorized|cleanup|categor|merchant|transaction|spend|weekend|pattern|why|where did my money go/.test(themeSource)
             ? "behavior"
-            : /bill|recurr|due|loan|balance|cash flow|budget|owe|payment|pressure|account/.test(latestQuestionLower)
+            : /bill|recurr|due|loan|balance|cash flow|budget|owe|payment|pressure|account|afford|purchase|phone|car|travel|safe to spend|payday/.test(themeSource)
               ? "cashflow"
               : null
     ) ?? dominantTheme?.key ?? "cashflow";
