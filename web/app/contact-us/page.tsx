@@ -24,6 +24,9 @@ export default async function ContactUsPage() {
             The Clover team will get back to you within 1 to 3 days. Please fill out every required field so we can review your message
             quickly.
           </p>
+          <p className="contact-page__email-note">
+            Prefer email? Write to <a href="mailto:hello@clover.ph">hello@clover.ph</a>.
+          </p>
         </header>
 
         <section className="contact-page__layout">

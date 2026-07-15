@@ -30843,6 +30843,11 @@ button.accounts-detail__transaction-head-cell {
   line-height: 1.7;
 }
 
+.contact-page__email-note a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .contact-page__layout {
   display: grid;
   gap: 20px;
