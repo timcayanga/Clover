@@ -31338,12 +31338,20 @@ body:has(.pricing-page) {
 .pricing-page .landing-footer--expanded {
   min-height: 136px;
   margin-top: auto;
+  margin-bottom: 0;
+}
+
+.pricing-page .landing-nav--scrolled {
+  background: #ffffff;
+  border-bottom-color: rgba(15, 23, 42, 0.08);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .pricing-card {
   display: grid;
-  gap: 12px;
-  padding: 18px;
+  gap: 8px;
+  padding: 14px;
   border-radius: 28px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background:
@@ -31364,7 +31372,7 @@ body:has(.pricing-page) {
 
 .pricing-card__top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
 }
 
@@ -31395,7 +31403,7 @@ body:has(.pricing-page) {
 }
 
 .pricing-card h2 {
-  font-size: clamp(1.35rem, 2.2vw, 1.75rem);
+  font-size: clamp(1.2rem, 1.8vw, 1.5rem);
   line-height: 1.08;
   letter-spacing: -0.04em;
 }
@@ -31403,12 +31411,12 @@ body:has(.pricing-page) {
 .pricing-card__summary {
   color: var(--muted);
   line-height: 1.55;
-  font-size: 0.92rem;
+  font-size: 0.84rem;
 }
 
 .pricing-card__list {
   display: grid;
-  gap: 7px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   overflow: visible;
@@ -31419,14 +31427,17 @@ body:has(.pricing-page) {
 }
 
 .pricing-card__cta {
-  width: 100%;
-  margin-top: 4px;
+  width: fit-content;
+  min-height: 36px;
+  margin-top: 3px;
+  padding: 0 14px;
+  font-size: 0.88rem;
 }
 
 .pricing-pro-selector {
   display: grid;
-  gap: 12px;
-  padding: 12px;
+  gap: 7px;
+  padding: 9px;
   border-radius: 20px;
   background: rgba(3, 168, 192, 0.06);
   border: 1px solid rgba(3, 168, 192, 0.14);
@@ -31445,7 +31456,8 @@ body:has(.pricing-page) {
 .pricing-pro-selector__billing button {
   border: 0;
   border-radius: 999px;
-  padding: 8px 13px;
+  padding: 5px 9px;
+  font-size: 0.78rem;
   color: var(--muted);
   background: transparent;
   font: inherit;
@@ -31465,7 +31477,7 @@ body:has(.pricing-page) {
 }
 
 .pricing-pro-selector__price strong {
-  font-size: clamp(1.55rem, 2.5vw, 2rem);
+  font-size: clamp(1.25rem, 2vw, 1.65rem);
   letter-spacing: -0.05em;
 }
 
@@ -31479,7 +31491,7 @@ body:has(.pricing-page) {
 .pricing-pro-selector__status {
   margin: 0;
   line-height: 1.55;
-  font-size: 0.9rem;
+  font-size: 0.78rem;
 }
 
 .pricing-pro-selector__saving s {
@@ -31489,13 +31501,16 @@ body:has(.pricing-page) {
 
 .pricing-pro-selector__checkout,
 .pricing-pro-selector__signup {
-  width: 100%;
+  width: fit-content;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 0.88rem;
 }
 
 .pricing-page .plan-feature-item {
   gap: 7px;
-  font-size: 0.88rem;
-  line-height: 1.35;
+  font-size: 0.8rem;
+  line-height: 1.25;
 }
 
 .pricing-page .plan-feature-item__check,
@@ -31534,6 +31549,10 @@ body:has(.pricing-page) {
   gap: 5px;
   padding: 8px;
   border-radius: 10px;
+}
+
+.pricing-page .landing-footer--expanded::after {
+  display: none;
 }
 
 .pricing-page__value,

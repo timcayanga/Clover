@@ -6,7 +6,6 @@ import { PricingProSelector } from "@/components/pricing-pro-selector";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
-import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import type { PublicAccountState } from "@/lib/public-account-state";
 
@@ -49,7 +48,6 @@ export default async function PricingPage() {
   } catch {
     session = null;
   }
-  const env = getEnv();
   const user = session?.userId ? await getOrCreateCurrentUser(session.userId) : null;
   const accountState: PublicAccountState = user
     ? {
@@ -105,7 +103,7 @@ export default async function PricingPage() {
               <PlanFeatureItem label="Basic goal tracking" />
             </ul>
             <Link className="button button-secondary button-pill pricing-card__cta" href={accountState.signedIn ? "/home" : "/sign-up"} prefetch={false}>
-              {accountState.signedIn ? "Go to Clover" : "Start for free"}
+              {accountState.signedIn ? "Go to Clover" : "Sign Up"}
             </Link>
           </article>
 
@@ -132,11 +130,6 @@ export default async function PricingPage() {
             </ul>
             <PricingProSelector
               signedIn={accountState.signedIn}
-              isPro={user?.planTier === "pro"}
-              clientId={env.PAYPAL_CLIENT_ID ?? null}
-              monthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
-              annualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? null}
-              customId={user?.id ?? null}
             />
           </article>
       </section>
