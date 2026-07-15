@@ -2229,6 +2229,42 @@ export async function POST(request: Request) {
         );
       }
 
+      if (uncategorizedTransactions.length > 0) {
+        add(
+          "follow-up-cleanup",
+          "cleanup",
+          `${uncategorizedTransactions.length} transaction${uncategorizedTransactions.length === 1 ? " needs" : "s need"} a category`,
+          `Which of my ${uncategorizedTransactions.length} uncategorized transactions should I review first, and why do they matter?`
+        );
+      }
+
+      if (!goalValue) {
+        add(
+          "follow-up-set-goal",
+          "goals",
+          "What goal fits my money right now?",
+          "Based on my actual cash flow and account balances, what savings goal would be realistic for me right now?"
+        );
+      }
+
+      if (historySpanDays >= 180 && currentSpend > 0) {
+        add(
+          "follow-up-long-term-pattern",
+          "behavior",
+          "What pattern stands out over time?",
+          `Across my ${Math.ceil(historySpanDays / 30)} months of history, what money pattern should I pay attention to first?`
+        );
+      }
+
+      if (dataFreshnessLabel.toLowerCase().includes("stale")) {
+        add(
+          "follow-up-data-freshness",
+          "accounts",
+          "How current is my money picture?",
+          "How current is the data Clover is using, and which parts of my money picture may have changed since the latest transaction?"
+        );
+      }
+
       if (openSplitBills.length > 0) {
         add(
           "follow-up-shared-money",
@@ -2279,7 +2315,7 @@ export async function POST(request: Request) {
       resetsAt: resetsAt.toISOString(),
     }) satisfies AdviserUsage;
     const asksAboutSpecificPurchase = /can i afford|can we afford|could i afford|can i buy|should i buy|would .* be affordable|affordability|can i travel|can we travel|trip .* budget/.test(latestQuestionLower) && !/how much can i safely spend/.test(latestQuestionLower);
-    const includesPurchaseAmount = /(?:₱|php|usd|\$|€|£)\s*[\d,.]+|\b\d{3,}(?:[,.]\d{2})?\b/i.test(latestQuestionLower);
+    const includesPurchaseAmount = /(?:₱|php|usd|\$|€|£)\s*[\d,.]+|\b\d+(?:[,.]\d{2})?\s*[km]?\b(?!\s*(?:day|days|month|months|week|weeks|year|years))/i.test(latestQuestionLower);
     if (asksAboutSpecificPurchase && !includesPurchaseAmount) {
       return NextResponse.json({
         reply: "I can check that safely, but I need the purchase price first. If timing matters, tell me the date you need it by or how long you want your cash to last. I will compare it with your available cash, known obligations, and a reasonable buffer.",
@@ -2878,10 +2914,10 @@ export async function POST(request: Request) {
             if (!hasValue("balance")) missingFields.push("the current balance");
           } else if (actionType === "edit_account") {
             if (!hasValue("accountId")) missingFields.push("the account");
-            if (!["name", "institution", "balance"].some(hasValue)) missingFields.push("at least one change");
+            if (!["name", "institution"].some(hasValue)) missingFields.push("a new name or institution");
           } else if (actionType === "edit_investment") {
-            if (!hasValue("investmentId")) missingFields.push("the investment");
-            if (!["name", "institution", "investmentSubtype", "investmentSymbol", "investmentQuantity", "investmentCostBasis", "balance"].some(hasValue)) missingFields.push("at least one change");
+            if (!hasValue("accountId")) missingFields.push("the investment account");
+            if (!["name", "institution", "investmentSubtype", "investmentSymbol", "investmentQuantity", "investmentCostBasis"].some(hasValue)) missingFields.push("at least one change");
           } else if (actionType === "create_split_bill") {
             if (!hasValue("total")) missingFields.push("the bill total");
             if (!Array.isArray(payload.participants) || payload.participants.length === 0) missingFields.push("the people sharing the bill");
