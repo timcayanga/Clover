@@ -1704,7 +1704,25 @@ export async function POST(request: Request) {
         return occurrences;
       });
       const recurringReserve = recurringOccurrences.reduce((sum, item) => sum + item.amount, 0);
-      const commitmentReserve = upcomingCommitments.reduce((sum, item) => sum + Math.abs(Number(item.amount ?? 0)), 0);
+      const commitmentOccurrences = upcomingCommitments.flatMap((commitment) => {
+        const occurrences: Array<{ label: string; amount: number; due: Date }> = [];
+        let due = commitment.nextDueDate ?? commitment.dueDate;
+        for (let count = 0; due && due <= horizonEnd && count < 12; count += 1) {
+          if (due >= now) {
+            occurrences.push({
+              label: commitment.title,
+              amount: Math.abs(Number(commitment.amount ?? 0)),
+              due,
+            });
+          }
+          if (commitment.recurrence === "once") {
+            break;
+          }
+          due = getNextRecurringDate(due, commitment.recurrence);
+        }
+        return occurrences;
+      });
+      const commitmentReserve = commitmentOccurrences.reduce((sum, item) => sum + item.amount, 0);
       const plannedPayments = plannedPaymentSuggestions.filter((payment) => {
         if (!payment.dueDate || payment.sourceKind === "recurring_transaction") {
           return false;
@@ -1715,11 +1733,9 @@ export async function POST(request: Request) {
         }
 
         const paymentAmount = Math.abs(Number(payment.amount ?? 0));
-        const matchesKnownCommitment = upcomingCommitments.some((commitment) => {
-          const commitmentDate = commitment.nextDueDate ?? commitment.dueDate;
-          return commitmentDate &&
-            Math.abs(commitmentDate.getTime() - dueDate.getTime()) <= 3 * 24 * 60 * 60 * 1000 &&
-            Math.abs(Math.abs(Number(commitment.amount ?? 0)) - paymentAmount) < 0.01;
+        const matchesKnownCommitment = commitmentOccurrences.some((commitment) => {
+          return Math.abs(commitment.due.getTime() - dueDate.getTime()) <= 3 * 24 * 60 * 60 * 1000 &&
+            Math.abs(commitment.amount - paymentAmount) < 0.01;
         });
         return !matchesKnownCommitment;
       });
@@ -1783,6 +1799,8 @@ export async function POST(request: Request) {
           historyDays: historySpanDays,
           recurringPatternCount: recurringPatterns.length,
           recurringOccurrenceCount: recurringOccurrences.length,
+          commitmentCount: financialCommitments.length,
+          commitmentOccurrenceCount: commitmentOccurrences.length,
           plannedPaymentCount: plannedPaymentSuggestions.length,
           currency: displayCurrency,
           multipleCurrenciesDetected: currencyCandidates.size > 1,
@@ -1793,10 +1811,10 @@ export async function POST(request: Request) {
             amount: item.amount,
             due: item.due.toISOString(),
           })),
-          commitments: upcomingCommitments.map((item) => ({
-            label: item.title,
-            amount: Math.abs(Number(item.amount ?? 0)),
-            due: (item.nextDueDate ?? item.dueDate)?.toISOString() ?? null,
+          commitments: commitmentOccurrences.map((item) => ({
+            label: item.label,
+            amount: item.amount,
+            due: item.due.toISOString(),
           })),
           plannedPayments: plannedPayments.map((item) => ({
             label: item.title,
