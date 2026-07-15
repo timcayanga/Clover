@@ -2103,25 +2103,31 @@ export async function POST(request: Request) {
                   ? "Open Split Bills and settle the largest open balance first."
                   : "Open Transactions and review the clearest driver Clover surfaced.";
 
-    const fallbackReply = [
-      `Based on your ${dataFreshnessLabel}, ${topCategoryName ? `${topCategoryName} is the main spending driver` : "spending is fairly spread out"}${spendDelta !== null ? ` and spending is ${formatPercent(spendDelta)} vs baseline` : ""}.`,
-      strongestFallbackSignal ? `Strongest signal: ${strongestFallbackSignal}.` : null,
-      workspace.accounts.length > 0
-        ? `You also have ${workspace.accounts.length} connected account${workspace.accounts.length === 1 ? "" : "s"}, with ${formatCurrency(spendableAccountBalance, displayCurrency)} available cash and ${formatCurrency(liabilityAccountBalance, displayCurrency)} in balances owed.`
-        : null,
-      recurringDueSoon.length > 0
-        ? `You also have ${recurringDueSoon.length} recurring item${recurringDueSoon.length === 1 ? "" : "s"} coming up, so check those first if you want more room in cash flow.`
-        : null,
-      openSplitBills.length > 0
-        ? `There are ${openSplitBills.length} open split bill${openSplitBills.length === 1 ? "" : "s"} still waiting on settlement.`
-        : null,
-      latestInvestmentSnapshot
-        ? `Your latest investment snapshot is available, so if your question is about investments, start there next.`
-        : null,
-      `For "${latestQuestion}", ${fallbackNextStep}`,
-    ]
-      .filter((line): line is string => Boolean(line))
-      .join(" ");
+    const fallbackReply = (() => {
+      if (inferredQuestionTheme === "goals") {
+        return goalLabel
+          ? `Your ${goalLabel.toLowerCase()} goal is currently ${goalProgressLabel.toLowerCase()} based on your ${dataFreshnessLabel}. ${fallbackNextStep}`
+          : `You do not have an active goal set yet. Clover can help you choose a realistic target from your available income and spending history. ${fallbackNextStep}`;
+      }
+
+      if (inferredQuestionTheme === "investments") {
+        return latestInvestmentSnapshot
+          ? `Your latest investment snapshot is available${latestInvestmentSnapshot.snapshotDate ? ` from ${toShortDateLabel(latestInvestmentSnapshot.snapshotDate)}` : ""}. Review its value and change before making a decision. ${fallbackNextStep}`
+          : `Clover does not have an investment snapshot to analyze yet. I can still help you think through readiness, cash reserves, time horizon, and comfort with losses before discussing options. ${fallbackNextStep}`;
+      }
+
+      if (inferredQuestionTheme === "behavior") {
+        return `Based on your ${dataFreshnessLabel}, ${topCategoryName ? `${topCategoryName} is the main spending driver` : "spending is fairly spread out"}${spendDelta !== null ? ` and spending is ${formatPercent(spendDelta)} versus baseline` : ""}. ${strongestFallbackSignal ? `The strongest signal is ${strongestFallbackSignal}. ` : ""}${fallbackNextStep}`;
+      }
+
+      if (inferredQuestionTheme === "cashflow") {
+        return workspace.accounts.length > 0
+          ? `Clover can see ${formatCurrency(spendableAccountBalance, displayCurrency)} in available cash across ${workspace.accounts.length} account${workspace.accounts.length === 1 ? "" : "s"}. ${recurringDueSoon.length > 0 ? `${recurringDueSoon.length} recurring payment${recurringDueSoon.length === 1 ? " is" : "s are"} coming up, so protect those before moving money. ` : ""}${fallbackNextStep}`
+          : `Clover needs account or transaction data before it can give a grounded cash-flow answer. ${fallbackNextStep}`;
+      }
+
+      return `Based on your ${dataFreshnessLabel}, Clover has enough context to start with ${topCategoryName ? `${topCategoryName} as the main spending driver` : "your available account and transaction picture"}. ${fallbackNextStep}`;
+    })();
 
     const suggestedQuestions: AdviserSuggestedQuestion[] = (() => {
       const questions: AdviserSuggestedQuestion[] = [];
