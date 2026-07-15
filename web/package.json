@@ -51,6 +51,7 @@
     "ioredis": "^5.10.1",
     "jszip": "^3.10.1",
     "next": "^15.5.0",
+    "nodemailer": "^9.0.3",
     "pdfjs-dist": "^5.7.284",
     "pdfjs-serverless": "^1.2.2",
     "pg": "^8.20.0",
@@ -66,6 +67,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "typescript": "^5.9.2"

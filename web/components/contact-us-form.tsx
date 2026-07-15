@@ -14,6 +14,7 @@ export function ContactUsForm() {
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
   const canSubmit = name.trim().length >= 2 && email.trim().length > 0 && message.trim().length >= 10 && status !== "submitting";
 
   const onAttachmentChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -58,7 +59,9 @@ export function ContactUsForm() {
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!canSubmit) {
+    if (!event.currentTarget.reportValidity() || !emailIsValid || !canSubmit) {
+      setStatus("error");
+      setFeedback("Please enter a valid email address before sending your inquiry.");
       return;
     }
 
@@ -124,7 +127,9 @@ export function ContactUsForm() {
             autoComplete="email"
             required
             maxLength={160}
+            aria-invalid={email.length > 0 && !emailIsValid}
           />
+          {email.length > 0 && !emailIsValid ? <small>Please enter a valid email address.</small> : null}
         </label>
 
         <label className="contact-field contact-field--full">
