@@ -2087,7 +2087,7 @@ export async function POST(request: Request) {
     const asksAboutSpecificPurchase = /can i afford|can we afford|could i afford|can i buy|should i buy|would .* be affordable|affordability|can i travel|can we travel|trip .* budget/.test(latestQuestionLower) && !/how much can i safely spend/.test(latestQuestionLower);
     const includesPurchaseAmount = /(?:₱|php|usd|\$|€|£)\s*[\d,.]+|\b\d+(?:[,.]\d{2})?\s*[km]?\b(?!\s*(?:day|days|month|months|week|weeks|year|years))/i.test(latestQuestionLower);
     const requestRoutingHint = (() => {
-      if (/show|open|view|see|report|statement|chart|graph/.test(latestQuestionLower) && /report|statement|chart|graph|transaction/.test(latestQuestionLower)) {
+      if (/show|open|view|see|report|statement|chart|graph/.test(latestQuestionLower) && /report|statement|chart|graph/.test(latestQuestionLower)) {
         return "Route this request to open_report so Clover opens an existing Reports view instead of recreating a report in chat.";
       }
       if (asksAboutSpecificPurchase && includesPurchaseAmount) {
@@ -2107,6 +2107,21 @@ export async function POST(request: Request) {
       }
       if (/goal progress|progress.*goal|how am i doing.*goal|on track.*goal/.test(latestQuestionLower)) {
         return "Route this request to get_goal_progress and state clearly when no goal has been set.";
+      }
+      if (/what changed|what is new|what's new|since i last|since my last|deserve.*attention|changed recently/.test(latestQuestionLower)) {
+        return "Route this request to get_adviser_changes and compare the latest window with the previous available window.";
+      }
+      if (/budget|spending limit|within my limit|over my limit/.test(latestQuestionLower)) {
+        return "Route this request to get_budget_status and distinguish actual spending from the user's budget target.";
+      }
+      if (/recurring|subscription|subscriptions|upcoming bill|bills coming|payment due|loan payment/.test(latestQuestionLower)) {
+        return "Route this request to get_cashflow_outlook and include known recurring payments, commitments, and planned payments.";
+      }
+      if (/split bill|shared expense|who owes|owe me|settlement/.test(latestQuestionLower)) {
+        return "Route this request to get_split_bill_status when the user is asking about shared-expense balances or settlements.";
+      }
+      if (/account|balance|where.*money|money.*held/.test(latestQuestionLower) && !/safe to spend|can i afford|purchase/.test(latestQuestionLower)) {
+        return "Route this request to get_account_summary and distinguish liquid cash from liabilities and investment accounts.";
       }
       if (/duplicate|uncategorized|needs review|review queue|missing categor/.test(latestQuestionLower)) {
         return "Route this request to find_data_quality_issues and distinguish likely duplicates from uncategorized records.";
@@ -2297,6 +2312,25 @@ export async function POST(request: Request) {
           "accounts",
           "How current is my money picture?",
           "How current is the data Clover is using, and which parts of my money picture may have changed since the latest transaction?"
+        );
+      }
+
+      if (budgets.length === 0 && currentSpend > 0) {
+        add(
+          "follow-up-budget-fit",
+          "budgets",
+          "Would a spending limit help me?",
+          "Would a spending limit help me right now, and what category or amount would be realistic based on my actual history?"
+        );
+      }
+
+      if ((recurringDueSoon.length > 0 || commitmentsDueSoon.length > 0) && !questions.some((question) => question.id === "follow-up-upcoming-bills")) {
+        const paymentCount = recurringDueSoon.length + commitmentsDueSoon.length;
+        add(
+          "follow-up-upcoming-pressure",
+          "cashflow",
+          `${paymentCount} upcoming payment${paymentCount === 1 ? "" : "s"}: what should I protect?`,
+          "Which upcoming bills or commitments should I protect first, and how much cash should I keep aside for them?"
         );
       }
 
