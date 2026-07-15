@@ -1971,6 +1971,7 @@ export async function POST(request: Request) {
       "If the data is insufficient, say what is missing and suggest where to check in Clover.",
       "When the user asks to see a report, use open_report so the UI can open Clover's existing Reports page.",
       "When the user asks whether they can afford a named purchase with a price, use check_affordability. If the user mentions travel, a future month, or a date by which the purchase must be affordable, pass the stated horizon or untilDate instead of using the default. If the user provides expected income or an extra cash buffer, pass those too.",
+      "When the user compares two or more purchases, trips, or spending options, use compare_safe_to_spend_scenarios so every option is evaluated against the same obligations and buffer.",
       "When the user asks how much they can safely spend, how much room they have until payday, or what is safe to spend, use calculate_safe_to_spend. Explain available cash, protected obligations, recommended buffer, safe amount, and confidence separately. If payday income is not confirmed, do not invent it. If the user gives a payday/date, pass it as untilDate; if they give expected income, pass it as expectedIncome; if they specify an extra cash buffer, pass it as additionalBuffer. Mention when the calculation is limited to one currency or based on stale or thin data.",
       "When the user asks when income or salary may arrive, or whether Clover can see a payday pattern, use get_income_outlook. Treat the result as an unconfirmed historical pattern and never include it in Safe-to-Spend unless the user confirms the expected amount.",
       "When the user asks Clover to remember their payday day or preferred cash buffer, use prepare_write_action with set_adviser_preferences and wait for confirmation. These preferences are planning settings, not financial records.",
@@ -2123,6 +2124,36 @@ export async function POST(request: Request) {
             additionalBuffer: { type: ["number", "null"], description: "An extra cash buffer amount only when the user explicitly requests one." },
           },
           required: ["horizonDays", "untilDate", "expectedIncome", "additionalBuffer"],
+          additionalProperties: false,
+        },
+      },
+      {
+        type: "function",
+        name: "compare_safe_to_spend_scenarios",
+        description: "Compare up to six future purchases or trips using the same Safe-to-Spend calculation and planning assumptions. Use when the user asks which option fits better or wants to compare alternatives.",
+        parameters: {
+          type: "object",
+          properties: {
+            scenarios: {
+              type: "array",
+              minItems: 2,
+              maxItems: 6,
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  amount: { type: "number" },
+                  horizonDays: { type: ["number", "null"] },
+                  untilDate: { type: ["string", "null"] },
+                  expectedIncome: { type: ["number", "null"] },
+                  additionalBuffer: { type: ["number", "null"] },
+                },
+                required: ["name", "amount", "horizonDays", "untilDate", "expectedIncome", "additionalBuffer"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["scenarios"],
           additionalProperties: false,
         },
       },
@@ -2293,6 +2324,36 @@ export async function POST(request: Request) {
           const href = `/reports?${params.toString()}`;
           actions.push({ id: `report-${actions.length + 1}`, kind: "navigate", type: "open_report", label: "Open this report", description: "Use Clover's existing Reports view for the requested period.", href });
           result = { href, report: "existing Clover Reports view", range: args.range ?? "30d", section: args.section ?? "overview", filter: filter || null };
+        } else if (call.name === "compare_safe_to_spend_scenarios") {
+          const scenarios = (Array.isArray(args.scenarios) ? args.scenarios : [])
+            .filter((scenario): scenario is Record<string, unknown> => Boolean(scenario && typeof scenario === "object" && !Array.isArray(scenario)))
+            .slice(0, 6)
+            .map((scenario) => {
+              const amount = Number(scenario.amount ?? 0);
+              const safeToSpend = calculateSafeToSpend({
+                horizonDays: typeof scenario.horizonDays === "number" ? scenario.horizonDays : null,
+                untilDate: typeof scenario.untilDate === "string" ? scenario.untilDate : null,
+                expectedIncome: typeof scenario.expectedIncome === "number" ? scenario.expectedIncome : null,
+                additionalBuffer: typeof scenario.additionalBuffer === "number" ? scenario.additionalBuffer : null,
+              });
+              const normalizedAmount = Number.isFinite(amount) && amount > 0 ? amount : 0;
+              const roomAfterPurchase = safeToSpend.roomAfterProtection - normalizedAmount;
+              return {
+                name: typeof scenario.name === "string" ? scenario.name : "Scenario",
+                amount: normalizedAmount,
+                roomAfterPurchase,
+                status: roomAfterPurchase >= 0 ? "fits_after_reserve" : "would_reduce_reserve",
+                safeToSpend: safeToSpend.safeToSpend,
+                confidence: safeToSpend.confidence,
+                horizonDays: safeToSpend.horizonDays,
+                currency: safeToSpend.currency,
+              };
+            });
+          result = {
+            scenarios,
+            bestFit: scenarios.filter((scenario) => scenario.status === "fits_after_reserve").sort((left, right) => right.roomAfterPurchase - left.roomAfterPurchase)[0]?.name ?? null,
+            guidance: scenarios.length >= 2 ? "Compare the options using room after protected bills, shared expenses, goals, and spending buffer." : "Provide at least two scenarios to compare.",
+          };
         } else if (call.name === "calculate_safe_to_spend") {
           result = calculateSafeToSpend({
             horizonDays: typeof args.horizonDays === "number" ? args.horizonDays : null,
