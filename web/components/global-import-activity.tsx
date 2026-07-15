@@ -40,7 +40,7 @@ const IMPORT_ACTIVITY_APP_PATH_PREFIXES = [
   "/onboarding",
   "/profile",
   "/recurring",
-  "/reports",
+  "/adviser",
   "/review",
   "/settings",
   "/split-bill",

@@ -348,7 +348,7 @@ function ReportsEmptyNote({ title, copy }: { title: string; copy: string }) {
   );
 }
 
-async function ReportsStream({
+export async function ReportsStream({
   active = "reports",
   searchParams,
 }: {
@@ -1617,7 +1617,7 @@ async function ReportsStream({
             chart_type: "timeline",
           }}
         />
-        <ReportsSectionPanel section="overview">
+        {active === "reports" ? <ReportsSectionPanel section="overview">
           <>
             <section className="reports-summary-grid reports-summary-grid--highlights reports-overview-grid">
               <article className="metric compact metric--highlight glass">
@@ -1702,7 +1702,7 @@ async function ReportsStream({
               </article>
             </section>
           </>
-        </ReportsSectionPanel>
+        </ReportsSectionPanel> : null}
 
         {isPro ? (
           <ReportsSectionPanel section="advanced">
@@ -2303,5 +2303,5 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
 }
 
 export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string }> }) {
-  return <RouteSplash label="reports"><ReportsPageStream searchParams={searchParams} /></RouteSplash>;
+  redirect("/adviser");
 }

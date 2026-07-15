@@ -12,14 +12,14 @@ type ReportsTabsContextValue = {
 };
 
 const reportsSectionLabels: Record<ReportsSection, string> = {
-  overview: "Summary",
-  spending: "Spend",
-  trends: "Patterns",
-  advanced: "More",
+  overview: "Overview",
+  spending: "Spending",
+  trends: "Trends",
+  advanced: "Recommendations",
 };
 
 const ReportsTabsContext = createContext<ReportsTabsContextValue | null>(null);
-const reportsSectionStorageKey = "clover.reports.active-section.v1";
+const reportsSectionStorageKey = "clover.adviser.active-section.v1";
 
 const normalizeReportsSection = (value: string | null | undefined, availableSections: ReportsSection[], fallback: ReportsSection) => {
   if (value === "overview" || value === "spending" || value === "trends" || value === "advanced") {

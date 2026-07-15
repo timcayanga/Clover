@@ -149,14 +149,6 @@ const sidebarSearchPages: Array<{
     terms: ["split bill", "split bill", "splitwise", "receipt split", "shared bill", "bill split"],
   },
   {
-    key: "reports",
-    title: "Reports",
-    href: "/reports",
-    icon: "reports",
-    detail: "Cash flow, mix, and summary views.",
-    terms: ["reports", "report", "cash flow", "cashflow", "adviser", "advice", "trend", "summary"],
-  },
-  {
     key: "adviser",
     title: "Adviser",
     href: "/adviser",
@@ -285,7 +277,6 @@ const desktopNavSections = [
       { href: "/budgeting", label: "Budget", key: "budgeting" as const },
       { href: "/goals", label: "Goals", key: "goals" as const },
       { href: "/investments", label: "Investments", key: "investments" as const },
-      { href: "/reports", label: "Reports", key: "reports" as const },
     ],
   },
 ];

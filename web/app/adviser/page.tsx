@@ -23,6 +23,9 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { isTransientDataError } from "@/lib/transient-data";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { TransientDataRecovery } from "@/components/transient-data-recovery";
+import { ReportsRangeMenu } from "@/components/reports-range-menu";
+import { ReportsSection as ReportsSectionPanel, ReportsTabsProvider, ReportsTopTabs } from "@/components/reports-tabs";
+import { ReportsStream } from "@/app/reports/page";
 
 export const dynamic = "force-dynamic";
 
@@ -414,7 +417,7 @@ const adviserGettingStartedCards: Record<"noticed" | "do" | "improve", AdviserSe
       id: "adviser-get-started-transactions",
       title: "Feed recent activity",
       summary: "Transactions help Clover spot spending shifts, cash-flow patterns, and categories worth watching.",
-      evidence: "A few imports are enough to make Adviser, Reports, and Budgets much more useful.",
+      evidence: "A few imports are enough to make Adviser and Budgets much more useful.",
       ctaLabel: "Open transactions",
       href: "/transactions?import=1",
       tone: "positive",
@@ -460,7 +463,7 @@ const adviserGettingStartedCards: Record<"noticed" | "do" | "improve", AdviserSe
       id: "adviser-next-set-routine",
       title: "Build a weekly habit",
       summary: "A quick weekly upload is enough to keep Adviser current without making money admin feel heavy.",
-      evidence: "Fresh imports make alerts, reports, and coaching feel timely instead of stale.",
+      evidence: "Fresh imports make alerts, trends, and coaching feel timely instead of stale.",
       ctaLabel: "Start with imports",
       href: "/transactions?import=1",
       tone: "warning",
@@ -495,7 +498,7 @@ const adviserGettingStartedCards: Record<"noticed" | "do" | "improve", AdviserSe
       id: "adviser-improve-review",
       title: "Clean up a few rows",
       summary: "Merchant names and categories do not need to be perfect, but a little cleanup makes every page smarter.",
-      evidence: "That helps Reports, Budgets, and Adviser tell a cleaner story from the same data.",
+      evidence: "That helps Adviser and Budgets tell a cleaner story from the same data.",
       ctaLabel: "Review transactions",
       href: "/transactions",
       tone: "warning",
@@ -1086,9 +1089,22 @@ const getWeightedHistoricalBaseline = (series: Array<{ income: number; expense: 
   };
 };
 
-async function AdviserPageContent() {
+type AdviserSearchParams = { range?: string; section?: string; filter?: string };
+
+const adviserReportRanges = {
+  "30d": "30 days",
+  "90d": "90 days",
+  ytd: "Year to date",
+} as const;
+
+const normalizeAdviserReportRange = (value: string | undefined): keyof typeof adviserReportRanges =>
+  value === "90d" || value === "ytd" ? value : "30d";
+
+async function AdviserPageContent({ searchParams }: { searchParams?: Promise<AdviserSearchParams> }) {
   try {
   const now = new Date();
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const selectedReportRange = normalizeAdviserReportRange(resolvedSearchParams?.range);
   const session = await getSessionContext();
   const existingUser = await prisma.user.findUnique({
     where: { clerkUserId: session.userId },
@@ -2100,7 +2116,7 @@ async function AdviserPageContent() {
             summary: `Clover found ${transactionsSinceLastCheck} transaction${transactionsSinceLastCheck === 1 ? "" : "s"} since your last Adviser check.`,
             evidence: `${activeTransactionWindowLabel}: ${formatCurrency(currentSpend)} spent, ${formatCurrency(currentSummary.income)} income, and ${topCategoryName ? `${topCategoryName} is the top category` : "no single top category yet"}`,
             ctaLabel: "Review recent changes",
-            href: "/reports?range=30d&section=trends",
+            href: "/adviser",
             tone: spendDelta !== null && spendDelta > 0 ? "warning" : "neutral",
             group: "cashflow",
             insightKey: "since-last-check",
@@ -2150,7 +2166,7 @@ async function AdviserPageContent() {
             summary: anomalySignal.summary,
             evidence: anomalySignal.evidence,
             ctaLabel: "Review details",
-            href: "/reports",
+            href: "/adviser",
             tone: anomalySignal.tone,
             group: "cashflow",
             insightKey: anomalySignal.title === "Most spending is coming from a few places" ? "category-concentration" : "spend-anomaly",
@@ -2491,7 +2507,7 @@ async function AdviserPageContent() {
             id: "review_uncategorized",
             title: "Clean up transactions Clover is unsure about",
             summary: `${uncategorizedTransactions.length} row${uncategorizedTransactions.length === 1 ? "" : "s"} still need a category or clearer merchant name.`,
-            evidence: "A few quick fixes will make Adviser and Reports more accurate.",
+            evidence: "A few quick fixes will make Adviser more accurate.",
             ctaLabel: "Fix transactions",
             href: "/transactions",
             tone: "warning",
@@ -2739,7 +2755,7 @@ async function AdviserPageContent() {
             summary: "A small number of categories are carrying most of the spending load.",
             evidence: `${topCategoryName ?? "Your top category"} is about ${formatPercent(topCategoryShare * 100)} of expenses.`,
             ctaLabel: "Review mix",
-            href: "/reports",
+            href: "/adviser",
             tone: "neutral",
             group: "category-pattern",
             insightKey: "category-concentration",
@@ -2854,8 +2870,8 @@ async function AdviserPageContent() {
                 ? "Keeping the surplus visible can help it turn into savings instead of disappearing into small purchases."
                 : "When spending runs ahead of income, a simple weekly check can reduce the surprise.",
             evidence: `${formatCurrency(currentSummary.income)} income vs ${formatCurrency(currentSummary.expense)} spending in the ${activeTransactionWindowLabel}.`,
-            ctaLabel: "View reports",
-            href: "/reports",
+            ctaLabel: "Review details",
+            href: "/adviser",
             tone: currentNet >= 0 ? "positive" : "warning",
             group: "cashflow",
             insightKey: "cashflow-rhythm",
@@ -2878,8 +2894,8 @@ async function AdviserPageContent() {
             evidence: incomeDelta === null
               ? "Clover can see income activity in this window."
               : `Income is ${formatPercent(incomeDelta)} versus your comparison period.`,
-            ctaLabel: "View reports",
-            href: "/reports",
+            ctaLabel: "Review details",
+            href: "/adviser",
             tone: "neutral",
             group: "cashflow",
             insightKey: "income-timing",
@@ -3200,8 +3216,17 @@ async function AdviserPageContent() {
     6
   );
 
+  const reportSections = user.planTier === "pro" ? ["overview", "spending", "trends", "advanced"] as const : ["overview", "spending", "trends"] as const;
+
   return (
-    <CloverShell active="adviser" title="Adviser">
+    <ReportsTabsProvider initialSection="overview" availableSections={[...reportSections]}>
+      <CloverShell
+        active="adviser"
+        title="Adviser"
+        titleAddon={<ReportsTopTabs />}
+        actions={<ReportsRangeMenu currentRange={selectedReportRange} currentRangeLabel={adviserReportRanges[selectedReportRange]} />}
+      >
+      <ReportsSectionPanel section="overview">
       <section className="adviser-page">
         {isAdviserGettingStarted ? (
           <EmptyDataCta
@@ -3211,7 +3236,7 @@ async function AdviserPageContent() {
             copy="Adviser works best once Clover can see your accounts, transactions, and recurring obligations. Give it a little context and it starts surfacing what matters next."
             highlights={[
               "Spot spending shifts, account pressure, and category patterns earlier.",
-              "Get clearer prompts, reports, and coaching from the same data you already upload.",
+              "Get clearer prompts, trends, and coaching from the same data you already upload.",
               "Use budgets, goals, and recurring items to make the advice feel more personal.",
             ]}
             illustration="/illustrations/clover-empty-dashboard-3d.png"
@@ -3252,8 +3277,12 @@ async function AdviserPageContent() {
           <p className="eyebrow">Recommended questions</p>
           <AdviserChat prompts={promptSuggestions} />
         </section>
+
       </section>
-    </CloverShell>
+      </ReportsSectionPanel>
+      <ReportsStream active="adviser" searchParams={resolvedSearchParams} />
+      </CloverShell>
+    </ReportsTabsProvider>
   );
   } catch (error) {
     if (isNextNavigationSignal(error)) {
@@ -3272,10 +3301,10 @@ async function AdviserPageContent() {
   }
 }
 
-export default function AdviserPage() {
+export default function AdviserPage({ searchParams }: { searchParams?: Promise<AdviserSearchParams> }) {
   return (
     <RouteSplash label="adviser">
-      <AdviserPageContent />
+      <AdviserPageContent searchParams={searchParams} />
     </RouteSplash>
   );
 }
