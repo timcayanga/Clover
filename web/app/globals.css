@@ -18627,6 +18627,43 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   display: inline;
 }
 
+@media (max-width: 760px) {
+  .recurring-topbar-add {
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding-inline: 0;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .recurring-topbar-add > span:not(.button-icon),
+  .recurring-topbar-add > .button-icon:last-child {
+    display: none;
+  }
+
+  .recurring-topbar-add > .button-icon:first-child {
+    margin-right: 0;
+  }
+
+  .split-bill-action-button {
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding-inline: 0;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .split-bill-action-button > span:not(.button-icon) {
+    display: none;
+  }
+
+  .split-bill-action-button .button-icon {
+    margin-right: 0;
+  }
+}
+
 @media (max-width: 1100px) {
   .transactions-topbar {
     gap: 10px;
@@ -19134,7 +19171,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
   .investments-mobile-header__bar h1 {
     margin: 0;
-    font-size: clamp(1.1rem, 5vw, 1.35rem);
+    font-size: 1rem;
     font-weight: 700;
     letter-spacing: -0.05em;
     line-height: 1;
@@ -30588,7 +30625,7 @@ button.accounts-detail__transaction-head-cell {
 
 .contact-page {
   min-height: 100dvh;
-  padding: 32px 0 56px;
+  padding: 0 0 56px;
 }
 
 .contact-page__inner {
@@ -35028,7 +35065,7 @@ html[data-helper-text="hidden"] .settings-helper {
   }
 
   .contact-page {
-    padding: 22px 0 40px;
+    padding: 0 0 40px;
   }
 
   .contact-page__nav,
@@ -36471,6 +36508,22 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 
 .split-bill-action-button {
   gap: 7px;
+}
+
+.split-bill-action-button--add {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(3, 168, 192, 0.22);
+  color: var(--accent);
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.split-bill-action-button--add:hover,
+.split-bill-action-button--add:focus-visible {
+  background: rgba(245, 252, 253, 0.98);
+  border-color: rgba(3, 168, 192, 0.38);
+  color: var(--accent);
+  box-shadow: none;
 }
 
 .split-bill-currency-selector .currency-selector__trigger-all {
@@ -38912,7 +38965,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   position: sticky;
   top: 0;
   z-index: 20;
-  margin-bottom: 6px;
+  margin-bottom: 0;
 }
 
 .landing-page .landing-hero {
