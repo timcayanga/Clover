@@ -48,7 +48,6 @@ export async function sendContactInquiryEmail(input: {
     },
   });
 
-  const sourcePage = input.sourcePage?.trim() || "Direct contact page";
   const safeName = stripNewlines(input.name);
   const mailAttachment = attachmentToMailAttachment(input.attachment ?? null);
 
@@ -60,7 +59,6 @@ export async function sendContactInquiryEmail(input: {
     text: [
       `Name: ${safeName}`,
       `Email: ${input.email.trim().toLowerCase()}`,
-      `Source: ${sourcePage}`,
       "",
       input.message.trim(),
     ].join("\n"),
