@@ -36,11 +36,11 @@ export function CloverLoadingMark({ className }: CloverLoadingMarkProps) {
           <stop stopColor="#6EE7B7" />
           <stop offset="1" stopColor="#7EF0C2" />
         </linearGradient>
-        <linearGradient id="clover-loading-screen-bottom-right" x1="124" y1="64" x2="64" y2="124" gradientUnits="userSpaceOnUse">
+        <linearGradient id="clover-loading-screen-bottom-right" x1="64" y1="64" x2="124" y2="124" gradientUnits="userSpaceOnUse">
           <stop stopColor="#00DFFF" />
           <stop offset="0.5" stopColor="#03A8C0" />
         </linearGradient>
-        <linearGradient id="clover-loading-screen-bottom-left" x1="0" y1="64" x2="60" y2="124" gradientUnits="userSpaceOnUse">
+        <linearGradient id="clover-loading-screen-bottom-left" x1="60" y1="64" x2="0" y2="124" gradientUnits="userSpaceOnUse">
           <stop stopColor="#00DFFF" />
           <stop offset="0.5" stopColor="#03A8C0" />
         </linearGradient>
