@@ -658,8 +658,24 @@ const main = async () => {
 
   const readUploadedFileText = importFileTextModule.readUploadedFileText as (
     file: { name?: string; type?: string; arrayBuffer: () => Promise<ArrayBuffer | SharedArrayBuffer> },
-    password?: string
+    password?: string,
+    options?: { importMode?: string | null }
   ) => Promise<string>;
+  const resolveImageNormalizationProfile = importFileTextModule.resolveImageNormalizationProfile as (params: {
+    fileType?: string | null;
+    fileName?: string | null;
+    importMode?: string | null;
+  }) => string;
+  if (
+    resolveImageNormalizationProfile({
+      fileType: "image/jpeg",
+      fileName: "2026-05-01 22.08.42.jpg",
+      importMode: "receipt",
+    }) !== "receipt"
+  ) {
+    throw new Error("expected receipt uploads with generic filenames to use the receipt OCR profile");
+  }
+  console.log("[PASS] receipt OCR routing | generic receipt filenames use receipt normalization");
   const buildLayoutAwarePdfTextFromContentItems = importFileTextModule.buildLayoutAwarePdfTextFromContentItems as (
     items: Array<{ str?: string; transform?: number[]; width?: number; height?: number }>
   ) => string;
@@ -3828,6 +3844,9 @@ const main = async () => {
     throw new Error(
       `expected petty cash voucher to resolve Petty Cash account, got ${pettyCashVoucherPreview.receiptAccountMatch?.accountName ?? "null"}`
     );
+  }
+  if (assessReceiptPreviewQuality(pettyCashVoucherPreview).reliableForFastPath) {
+    throw new Error("expected petty cash voucher to stay out of the receipt fast path");
   }
 
   const visaTicketPreview = parseReceiptText([

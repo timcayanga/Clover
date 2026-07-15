@@ -1975,6 +1975,13 @@ const looksLikeNonReceiptCapture = (text: string) => {
   const normalized = normalizeWhitespace(text).toLowerCase();
 
   if (
+    /\bpetty\s+cash\s+voucher\b/.test(normalized) &&
+    /\b(?:approved\s+for\s+payment|paid\s+by|received\s+payment|particulars)\b/.test(normalized)
+  ) {
+    return true;
+  }
+
+  if (
     /\b(?:monthly totals?|rent\s*=|groceries\s*=|shopping\s*=|subscription\s*=|dining\s*=|gas\s*=)\b/.test(normalized) &&
     !/\b(?:official receipt|receipt|invoice|amount due|bill total|subtotal|service charge|vat)\b/.test(normalized)
   ) {

@@ -439,21 +439,22 @@ const loadCanvasModule = async (): Promise<CanvasModule | null> => {
   }
 };
 
-let ocrWorkerPromise: Promise<OcrWorker | null> | null = null;
-let ocrWorkerUnavailable = false;
+const ocrWorkerPromises = new Map<string, Promise<OcrWorker | null>>();
 
-const getOcrWorker = async () => {
-  if (ocrWorkerUnavailable) {
-    return null;
+const getOcrWorker = async (pageSegMode = "6") => {
+  const workerKey = String(pageSegMode);
+  const cachedWorker = ocrWorkerPromises.get(workerKey);
+  if (cachedWorker) {
+    return cachedWorker;
   }
 
   // Prefer attempting the local OCR worker even in Vercel so screenshot imports
   // still have a deterministic read path when the remote image fallback is slow
-  // or unavailable. If the runtime cannot initialize Tesseract, we cache that
-  // failure below and continue with the remote fallback path.
+  // or unavailable. Keep one worker per page segmentation mode so OCR passes can
+  // run concurrently without racing the worker's global mode setting.
 
-  if (!ocrWorkerPromise) {
-    ocrWorkerPromise = (async () => {
+  const workerPromise = (async () => {
+    try {
       const { createWorker } = await import("tesseract.js");
       const worker = (await createWorker("eng", 1, {
         logger: () => {
@@ -463,20 +464,20 @@ const getOcrWorker = async () => {
       try {
         await worker.setParameters({
           preserve_interword_spaces: "1",
-          tessedit_pageseg_mode: "6",
+          tessedit_pageseg_mode: workerKey,
         } as any);
       } catch {
         // If OCR parameter setup fails, continue with the default worker config.
       }
       return worker;
-    })().catch((error) => {
-      ocrWorkerUnavailable = true;
+    } catch (error) {
       console.warn("OCR worker unavailable; skipping tesseract fallback", error);
       return null;
-    });
-  }
+    }
+  })();
 
-  return ocrWorkerPromise;
+  ocrWorkerPromises.set(workerKey, workerPromise);
+  return workerPromise;
 };
 
 const extractTextFromImageBufferWithOcr = async (
@@ -484,7 +485,7 @@ const extractTextFromImageBufferWithOcr = async (
   pageSegMode = "6"
 ) => {
   try {
-    const worker = await getOcrWorker();
+    const worker = await getOcrWorker(pageSegMode);
     if (!worker) {
       return "";
     }
@@ -492,14 +493,6 @@ const extractTextFromImageBufferWithOcr = async (
       typeof imageSource === "string"
         ? imageSource
         : `data:image/jpeg;base64,${Buffer.from(imageSource).toString("base64")}`;
-    try {
-      await worker.setParameters({
-        preserve_interword_spaces: "1",
-        tessedit_pageseg_mode: pageSegMode,
-      } as any);
-    } catch {
-      // Keep the default OCR configuration if per-pass tuning fails.
-    }
     const {
       data: { text },
     } = await worker.recognize(source as any);
@@ -525,12 +518,14 @@ const extractTextFromImageBufferWithOcrBestEffort = async (
         : ["6", "11", "4"];
   const passes = await Promise.all(pageSegModes.map((mode) => extractTextFromImageBufferWithOcr(imageSource, mode)));
 
-  return pickBestStatementTextCandidate(
-    passes.map((text, index) => ({
-      text,
-      label: `ocr-psm-${pageSegModes[index] ?? "6"}`,
-    }))
-  );
+  const candidates = passes.map((text, index) => ({
+    text,
+    label: `ocr-psm-${pageSegModes[index] ?? "6"}`,
+  }));
+
+  return profile === "receipt" || profile === "wallet_screenshot"
+    ? pickBestReceiptTextCandidate(candidates, profile)
+    : pickBestStatementTextCandidate(candidates);
 };
 
 const detectReceiptOcrFamilyFromText = (text: string, profile: ImageNormalizationProfile): ReceiptOcrFamily => {
@@ -1798,7 +1793,7 @@ const isImageImportFileName = (fileType: string | null | undefined, fileName: st
   );
 };
 
-const resolveImageNormalizationProfile = (params: {
+export const resolveImageNormalizationProfile = (params: {
   fileType?: string | null;
   fileName?: string | null;
   importMode?: string | null;
@@ -2296,9 +2291,14 @@ const renderPdfPageImagesFromBytes = async (
   }
 };
 
-export const readUploadedFileText = async (file: File | ImportFileLike, password?: string) => {
+export const readUploadedFileText = async (
+  file: File | ImportFileLike,
+  password?: string,
+  options?: { importMode?: string | null }
+) => {
   const lowerName = String(file.name ?? "").toLowerCase();
   const lowerType = String(file.type ?? "").toLowerCase();
+  const importMode = options?.importMode ?? null;
 
   if (
     lowerName.endsWith(".csv") ||
@@ -2336,12 +2336,18 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
       throw new Error("Unable to read imported file.");
     }
 
-    const normalized = await normalizeImportedImageBytes(new Uint8Array(await file.arrayBuffer()), lowerType, lowerName);
+    const normalized = await normalizeImportedImageBytes(
+      new Uint8Array(await file.arrayBuffer()),
+      lowerType,
+      lowerName,
+      importMode
+    );
     return extractTextFromImageBufferWithReceiptAwareFallback({
       normalizedDataUrl: normalized.dataUrl,
       normalizedBuffer: normalized.buffer,
       fileType: lowerType,
       fileName: lowerName,
+      importMode,
     });
   }
 

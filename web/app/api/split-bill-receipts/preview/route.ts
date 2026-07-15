@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Receipt file is required" }, { status: 400 });
     }
 
-    const receiptText = await readUploadedFileText(file as File);
+    const receiptText = await readUploadedFileText(file as File, undefined, { importMode: "receipt" });
     const preview = parseReceiptText(receiptText);
 
     return NextResponse.json({ preview });
