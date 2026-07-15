@@ -31362,12 +31362,33 @@ body:has(.pricing-page) {
 
 .pricing-card--featured {
   border-color: rgba(3, 168, 192, 0.22);
-  background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.14), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 251, 252, 0.9));
+  background: linear-gradient(145deg, #038fa7 0%, #03a8c0 52%, #6ee7b7 100%);
+  color: white;
   box-shadow:
     0 24px 60px rgba(3, 168, 192, 0.14),
     var(--shadow);
+}
+
+.pricing-card--featured h2,
+.pricing-card--featured .pricing-card__summary,
+.pricing-card--featured .pricing-card__eyebrow,
+.pricing-card--featured .plan-feature-item {
+  color: white;
+}
+
+.pricing-card--featured .pricing-card__icon {
+  color: white;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.pricing-card--featured .plan-feature-item__check {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.pricing-card--featured .plan-feature-item__info-button {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .pricing-card__top {
