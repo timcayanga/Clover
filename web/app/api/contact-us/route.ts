@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { createContactInquiry } from "@/lib/contact-inquiries";
 import { sendContactInquiryEmail } from "@/lib/contact-email";
@@ -39,14 +39,6 @@ export async function POST(request: Request) {
     assertRateLimit(`contact-us:${getRequestClientIp(request)}`, 5, 15 * 60_000);
 
     const payload = schema.parse(await request.json());
-    await sendContactInquiryEmail({
-      name: payload.name,
-      email: payload.email,
-      message: payload.message,
-      attachment: payload.attachment ?? null,
-      sourcePage: payload.sourcePage ?? request.headers.get("referer") ?? null,
-    });
-
     const inquiry = await createContactInquiry({
       name: payload.name,
       email: payload.email,
@@ -54,6 +46,22 @@ export async function POST(request: Request) {
       attachment: payload.attachment ?? null,
       sourcePage: payload.sourcePage ?? request.headers.get("referer") ?? null,
       userAgent: request.headers.get("user-agent"),
+    });
+
+    const emailInput = {
+      name: payload.name,
+      email: payload.email,
+      message: payload.message,
+      attachment: payload.attachment ?? null,
+      sourcePage: payload.sourcePage ?? request.headers.get("referer") ?? null,
+    };
+
+    after(async () => {
+      try {
+        await sendContactInquiryEmail(emailInput);
+      } catch (error) {
+        console.error("Contact inquiry email delivery failed", error);
+      }
     });
 
     void capturePostHogServerEvent("support_contacted", payload.email, {
