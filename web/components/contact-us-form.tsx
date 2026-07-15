@@ -67,7 +67,8 @@ export function ContactUsForm() {
 
     if (!event.currentTarget.reportValidity() || Boolean(nameError || emailError || messageError) || !canSubmit) {
       setStatus("error");
-      setFeedback("Please correct the highlighted fields before sending your inquiry.");
+      const errors = [nameError, emailError, messageError].filter(Boolean);
+      setFeedback(errors.length > 0 ? errors.join(" ") : "Please correct the highlighted fields before sending your inquiry.");
       return;
     }
 
