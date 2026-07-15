@@ -7582,6 +7582,47 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   line-height: 1.2;
 }
 
+.metric--highlight,
+.report-card,
+.report-ai-card,
+.reports-next {
+  position: relative;
+}
+
+.reports-container-info {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+}
+
+.reports-container-info.report-tip::after {
+  left: auto;
+  right: 0;
+  transform: translateY(-2px);
+}
+
+.reports-container-info.report-tip::before {
+  left: auto;
+  right: 7px;
+  transform: translateY(-2px);
+}
+
+.reports-container-info.report-tip:hover::after,
+.reports-container-info.report-tip:focus-visible::after {
+  transform: translateY(0);
+}
+
+.reports-container-info.report-tip:hover::before,
+.reports-container-info.report-tip:focus-visible::before {
+  transform: translateY(0);
+}
+
+.report-card__head-title,
+.metric__label {
+  padding-right: 24px;
+}
+
 .report-card__head--compact {
   margin-bottom: 10px;
 }

@@ -8,9 +8,10 @@ type InfoTooltipProps = {
   label: string;
   title?: string;
   align?: "left" | "right";
+  className?: string;
 };
 
-export function InfoTooltip({ label, title, align = "right" }: InfoTooltipProps) {
+export function InfoTooltip({ label, title, align = "right", className }: InfoTooltipProps) {
   const triggerRef = useRef<HTMLSpanElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [panelStyle, setPanelStyle] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -55,7 +56,7 @@ export function InfoTooltip({ label, title, align = "right" }: InfoTooltipProps)
   return (
     <span
       ref={triggerRef}
-      className={`info-tooltip info-tooltip--${align}`}
+      className={`info-tooltip info-tooltip--${align}${className ? ` ${className}` : ""}`}
       onMouseEnter={() => setIsOpen(true)}
       onMouseLeave={() => setIsOpen(false)}
     >

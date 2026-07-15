@@ -1621,41 +1621,33 @@ async function ReportsStream({
           <>
             <section className="reports-summary-grid reports-summary-grid--highlights reports-overview-grid">
               <article className="metric compact metric--highlight glass">
-                <div className="metric__label">
-                  <span>Income</span>
-                  <InfoTooltip align="left" label="All money coming in during the selected range." />
-                </div>
+                <InfoTooltip className="reports-container-info" align="left" label="All money coming in during the selected range." />
+                <div className="metric__label"><span>Income</span></div>
                 <strong>{formatCurrency(currentSummary.income)}</strong>
               </article>
               <article className="metric compact metric--highlight glass">
-                <div className="metric__label">
-                  <span>Expenses</span>
-                  <ReportInfoTip label="All spending recorded in the selected range." />
-                </div>
+                <ReportInfoTip className="reports-container-info" label="All spending recorded in the selected range." />
+                <div className="metric__label"><span>Expenses</span></div>
                 <strong>{formatCurrency(currentSummary.expense)}</strong>
               </article>
               <article className="metric compact metric--highlight glass">
-                <div className="metric__label">
-                  <span>Net income</span>
-                  <ReportInfoTip label="Income minus spending for the selected range." />
-                </div>
+                <ReportInfoTip className="reports-container-info" label="Income minus spending for the selected range." />
+                <div className="metric__label"><span>Net income</span></div>
                 <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
               </article>
               <article className="metric compact metric--highlight glass">
-                <div className="metric__label">
-                  <span>Savings rate</span>
-                  <ReportInfoTip label="The share of income left after spending." />
-                </div>
+                <ReportInfoTip className="reports-container-info" label="The share of income left after spending." />
+                <div className="metric__label"><span>Savings rate</span></div>
                 <strong>{savingsRate === null ? "N/A" : formatPercent(savingsRate * 100)}</strong>
               </article>
             </section>
 
             <section className="reports-grid reports-grid--primary reports-overview-visual">
               <article className="report-card glass report-card--wide">
+                <ReportInfoTip className="reports-container-info" label={`A ${reportCurrentWindowTransactions.length > 0 ? rangeWindowText : "latest available activity"} view of how the balance moved.`} />
                 <div className="report-card__head">
                   <div className="report-card__head-title">
                     <h4>Money over time</h4>
-                    <ReportInfoTip label={`A ${reportCurrentWindowTransactions.length > 0 ? rangeWindowText : "latest available activity"} view of how the balance moved.`} />
                   </div>
                   <div className="report-card__stat">
                     <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
@@ -1717,11 +1709,11 @@ async function ReportsStream({
             <>
             <section className="reports-brief-grid reports-brief-grid--more">
               <article className="report-ai-card report-ai-card--featured report-sankey-card glass">
+                <ReportInfoTip className="reports-container-info" label="A Sankey view of how income flows into accounts and then into spending categories." />
                 <div className="report-card__head report-card__head--compact">
                   <div>
                     <h4>🗺️ Cash flow map</h4>
                   </div>
-                  <ReportInfoTip label="A Sankey view of how income flows into accounts and then into spending categories." />
                 </div>
 
                 {sankeyIncomeLinks.length > 0 ? (
@@ -1865,11 +1857,11 @@ async function ReportsStream({
 
               <div className="reports-brief-grid__split">
                 <article className="report-ai-card report-ai-card--compact glass">
+                  <ReportInfoTip className="reports-container-info" label="The biggest reasons behind the shift." />
                   <div className="report-card__head report-card__head--compact">
                     <div>
                       <h4>🧭 Main drivers</h4>
                     </div>
-                    <ReportInfoTip label="The biggest reasons behind the shift." />
                   </div>
                   <div className="report-ai-signal-grid report-ai-signal-grid--compact">
                     {aiSignals.slice(0, 3).map((signal) => (
@@ -1883,11 +1875,11 @@ async function ReportsStream({
                 </article>
 
                 <article className="report-ai-card report-ai-card--compact glass">
+                  <ReportInfoTip className="reports-container-info" label="One easy action to take right now." />
                   <div className="report-card__head report-card__head--compact">
                     <div>
                       <h4>✨ Next Steps</h4>
                     </div>
-                    <ReportInfoTip label="One easy action to take right now." />
                   </div>
                   <div className="report-list">
                     {aiActions.map((action) => (
@@ -1931,10 +1923,10 @@ async function ReportsStream({
         <ReportsSectionPanel section="spending">
         <section className="reports-grid reports-grid--primary">
           <article className="report-card glass report-card--wide">
+            <ReportInfoTip className="reports-container-info" label="A simple view of where income flowed." />
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>Where it went</h4>
-                <ReportInfoTip label="A simple view of where income flowed." />
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(currentSummary.income)}</strong>
@@ -1996,10 +1988,10 @@ async function ReportsStream({
           </article>
 
           <article className="report-card glass">
+            <ReportInfoTip className="reports-container-info" label="The biggest spending groups in this period." />
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>Spending mix</h4>
-                <ReportInfoTip label="The biggest spending groups in this period." />
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(reportSpentTotal)}</strong>
@@ -2094,10 +2086,10 @@ async function ReportsStream({
         <ReportsSectionPanel section="trends">
         <section className="reports-grid reports-grid--trends">
           <article className="report-card glass">
+            <ReportInfoTip className="reports-container-info" label="A quick look at this month versus the last one." />
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>Month summary</h4>
-                <ReportInfoTip label="A quick look at this month versus the last one." />
               </div>
               <div className="report-card__stat">
                 <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
@@ -2134,10 +2126,10 @@ async function ReportsStream({
           </article>
 
           <article className="report-card glass">
+            <ReportInfoTip className="reports-container-info" label="Bills and merchants that tend to show up again." />
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>Repeat bills</h4>
-                <ReportInfoTip label="Bills and merchants that tend to show up again." />
               </div>
               <div className="report-card__stat">
                 <strong>{recurringMerchants.length}</strong>
@@ -2191,10 +2183,10 @@ async function ReportsStream({
           </article>
 
           <article className="report-card glass">
+            <ReportInfoTip className="reports-container-info" label="The merchants taking the biggest share of spend." />
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>Biggest merchants</h4>
-                <ReportInfoTip label="The merchants taking the biggest share of spend." />
               </div>
               <div className="report-card__stat">
                 <strong>{topMerchants.length}</strong>
