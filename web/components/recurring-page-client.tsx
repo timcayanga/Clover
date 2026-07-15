@@ -17,6 +17,7 @@ type RecurringPageClientProps = {
 };
 
 export type RecurringTab = "overview" | "planned" | "debt" | "owed" | "installments";
+type RecurringAddKind = "planned_payment" | "debt" | "receivable" | "reminder";
 
 const recurringTabs: Array<{ id: RecurringTab; label: string }> = [
   { id: "overview", label: "Overview" },
@@ -25,6 +26,19 @@ const recurringTabs: Array<{ id: RecurringTab; label: string }> = [
   { id: "owed", label: "Money Owed" },
   { id: "installments", label: "Installments" },
 ];
+
+const addKindForTab = (tab: RecurringTab): RecurringAddKind => {
+  switch (tab) {
+    case "debt":
+      return "debt";
+    case "owed":
+      return "receivable";
+    case "installments":
+      return "reminder";
+    default:
+      return "planned_payment";
+  }
+};
 
 const addButtonIconStyle = {
   display: "inline-flex",
@@ -51,6 +65,7 @@ export function RecurringPageClient({
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(initialAddOpen);
   const [activeTab, setActiveTab] = useState<RecurringTab>(initialTab);
+  const [addKind, setAddKind] = useState<RecurringAddKind>(addKindForTab(initialTab));
 
   useEffect(() => {
     document.body.toggleAttribute("data-clover-page-modal", addOpen);
@@ -84,7 +99,11 @@ export function RecurringPageClient({
   }, [router]);
 
   useEffect(() => {
-    const handleOpenAdd = () => {
+    const handleOpenAdd = (event: Event) => {
+      const detail = (event as CustomEvent<{ kind?: RecurringAddKind }>).detail;
+      if (detail?.kind) {
+        setAddKind(detail.kind);
+      }
       setAddOpen(true);
       const query = new URLSearchParams(window.location.search);
       query.set("add", "1");
@@ -98,6 +117,7 @@ export function RecurringPageClient({
   }, []);
 
   const openAddModal = () => {
+    setAddKind(addKindForTab(activeTab));
     setAddOpen(true);
     const query = new URLSearchParams(window.location.search);
     query.set("add", "1");
@@ -114,16 +134,28 @@ export function RecurringPageClient({
 
   const selectTab = (tab: RecurringTab) => {
     setActiveTab(tab);
-    const query = new URLSearchParams(window.location.search);
-    query.set("tab", tab);
-    query.delete("add");
-    window.history.replaceState({}, "", `${window.location.pathname}?${query.toString()}`);
+    window.history.replaceState({}, "", "/recurring");
   };
 
   return (
     <CloverShell
       active="recurring"
       title="Recurring"
+      titleAddon={
+        <nav className="investments-tabs recurring-tabs--top" aria-label="Recurring sections">
+          {recurringTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`investments-tab${activeTab === tab.id ? " is-active" : ""}`}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+              onClick={() => selectTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      }
       actions={
         <button
           type="button"
@@ -146,19 +178,6 @@ export function RecurringPageClient({
       }
     >
       <div className="recurring-page__stack">
-        <nav className="recurring-tabs" aria-label="Recurring sections">
-          {recurringTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`recurring-tabs__button${activeTab === tab.id ? " is-active" : ""}`}
-              aria-current={activeTab === tab.id ? "page" : undefined}
-              onClick={() => selectTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
         <CommitmentsPanel
           workspaceId={workspaceId}
           commitments={commitments}
@@ -167,6 +186,7 @@ export function RecurringPageClient({
           accounts={accounts}
           transactions={transactions}
           activeTab={activeTab}
+          initialKind={addKind}
           showAddModal={addOpen}
           onCloseAdd={closeAddModal}
         />

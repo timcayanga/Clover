@@ -45,6 +45,7 @@ type CommitmentsPanelProps = {
   accounts: CommitmentAccountOption[];
   transactions: CommitmentTransactionOption[];
   activeTab?: "overview" | "planned" | "debt" | "owed" | "installments";
+  initialKind?: CommitmentKind;
   showAddModal?: boolean;
   onCloseAdd?: () => void;
 };
@@ -237,20 +238,29 @@ const commitmentFormCopy: Record<CommitmentFormKind, CommitmentFormCopy> = {
     showNotes: true,
   },
   reminder: {
-    eyebrow: "Reminder",
-    headline: "Add a quick reminder",
-    helper: "Fastest option. Just give it a title and the date you want to remember.",
-    titleLabel: "Reminder",
-    titlePlaceholder: "Renew insurance, file taxes, follow up",
-    dueDateLabel: "Reminder date",
-    showCounterparty: false,
-    showAmount: false,
-    showCurrency: false,
+    eyebrow: "Installment",
+    headline: "Track an installment plan",
+    helper: "Keep the next payment, amount, and cadence visible in one place.",
+    titleLabel: "Installment",
+    titlePlaceholder: "Phone plan, BNPL, salary loan",
+    counterpartyLabel: "Provider or lender",
+    counterpartyPlaceholder: "Bank, lender, merchant, or provider",
+    amountLabel: "Installment amount",
+    amountPlaceholder: "2500.00",
+    dueDateLabel: "Next installment date",
+    recurrenceLabel: "Payment cadence",
+    linkedAccountLabel: "Linked account",
+    linkedAccountHelp: "Optional if you want Clover to anchor the plan to an account.",
+    notesLabel: "Notes",
+    notesPlaceholder: "Add terms, remaining payments, or follow-up details.",
+    showCounterparty: true,
+    showAmount: true,
+    showCurrency: true,
     showDueDate: true,
-    showRecurrence: false,
-    showLinkedAccount: false,
+    showRecurrence: true,
+    showLinkedAccount: true,
     showTransaction: false,
-    showNotes: false,
+    showNotes: true,
   },
 };
 
@@ -262,6 +272,7 @@ export function CommitmentsPanel({
   accounts,
   transactions,
   activeTab = "overview",
+  initialKind = "planned_payment",
   showAddModal = false,
   onCloseAdd,
 }: CommitmentsPanelProps) {
@@ -299,7 +310,7 @@ export function CommitmentsPanel({
     statementCheckpointId: "",
     installmentTerms: "",
   });
-  const [kind, setKind] = useState<CommitmentKind>("planned_payment");
+  const [kind, setKind] = useState<CommitmentKind>(initialKind);
   const [title, setTitle] = useState("");
   const [counterparty, setCounterparty] = useState("");
   const [amount, setAmount] = useState("");
@@ -310,20 +321,31 @@ export function CommitmentsPanel({
   const [accountId, setAccountId] = useState("");
   const [transactionId, setTransactionId] = useState("");
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
-  const selectedItems = commitments;
+  const [visibleCommitments, setVisibleCommitments] = useState(commitments);
+  const selectedItems = visibleCommitments;
   const nextOverviewDueDate = useMemo(
     () =>
-      commitments
+      visibleCommitments
         .map((item) => getCommitmentDateValue(item))
         .filter((value): value is string => Boolean(value))
         .sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0] ?? null,
-    [commitments]
+    [visibleCommitments]
   );
+
+  useEffect(() => {
+    setVisibleCommitments(commitments);
+  }, [commitments]);
+
+  useEffect(() => {
+    if (showAddModal) {
+      setKind(initialKind);
+    }
+  }, [initialKind, showAddModal]);
 
   const recentTransactions = transactions.slice(0, 24);
   const suggestedRecurringPatterns = recurringPatterns.filter(
     (pattern) =>
-      !commitments.some((commitment) => {
+      !visibleCommitments.some((commitment) => {
         const commitmentTitle = `${commitment.title} ${commitment.counterparty ?? ""}`.trim().toLowerCase();
         const patternName = (pattern.merchantClean ?? pattern.merchantRaw).trim().toLowerCase();
         return commitmentTitle.includes(patternName) || patternName.includes(commitment.title.trim().toLowerCase());
@@ -339,10 +361,12 @@ export function CommitmentsPanel({
     [selectedAccount?.type]
   );
   const formCopy = commitmentFormCopy[kind];
-  const hasSavedCommitments = commitments.length > 0;
+  const hasSavedCommitments = visibleCommitments.length > 0;
   const hasSuggestionContent = plannedPaymentSuggestions.length > 0 || suggestedRecurringPatterns.length > 0;
+  const addKindForActiveTab: CommitmentKind =
+    activeTab === "debt" ? "debt" : activeTab === "owed" ? "receivable" : activeTab === "installments" ? "reminder" : activeTab === "planned" ? "planned_payment" : initialKind;
   const openRecurringAdd = () => {
-    window.dispatchEvent(new Event("clover:open-recurring-add"));
+    window.dispatchEvent(new CustomEvent("clover:open-recurring-add", { detail: { kind: addKindForActiveTab } }));
   };
 
   useEffect(() => {
@@ -439,6 +463,31 @@ export function CommitmentsPanel({
           throw new Error(payload?.error ?? "Unable to save commitment");
         }
 
+        const now = new Date().toISOString();
+        const optimisticCommitment: FinancialCommitmentSummary = {
+          id: `optimistic-${Date.now()}`,
+          workspaceId,
+          kind,
+          title: title.trim(),
+          counterparty: formCopy.showCounterparty && counterparty.trim() ? counterparty.trim() : null,
+          amount: formCopy.showAmount && amount.trim() ? amount.trim() : null,
+          currency: formCopy.showCurrency ? currency.trim() || "PHP" : "PHP",
+          dueDate: formCopy.showDueDate && dueDate ? new Date(`${dueDate}T00:00:00`).toISOString() : null,
+          recurrence: formCopy.showRecurrence ? recurrence : "once",
+          nextDueDate: formCopy.showDueDate && dueDate ? new Date(`${dueDate}T00:00:00`).toISOString() : null,
+          notes: notes.trim() || null,
+          accountId: formCopy.showLinkedAccount && accountId ? accountId : null,
+          transactionId: formCopy.showTransaction && transactionId ? transactionId : null,
+          statementCheckpointId: null,
+          status: "active",
+          source: "manual",
+          confidence: 100,
+          createdAt: now,
+          updatedAt: now,
+          account: selectedAccount,
+          transaction: null,
+        };
+        setVisibleCommitments((current) => [optimisticCommitment, ...current]);
         resetForm();
         onCloseAdd?.();
         router.refresh();
@@ -585,7 +634,7 @@ export function CommitmentsPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             workspaceId,
-            kind: "planned_payment",
+            kind: reviewingSuggestion.sourceKind === "installment" ? "reminder" : "planned_payment",
             title: patternDraft.title,
             counterparty: patternDraft.counterparty.trim() ? patternDraft.counterparty : null,
             amount: patternDraft.amount.trim() ? patternDraft.amount : null,
@@ -602,9 +651,13 @@ export function CommitmentsPanel({
 
     void request
       .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as { commitment?: FinancialCommitmentSummary; error?: string } | null;
         if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
           throw new Error(payload?.error ?? "Unable to add recurring item");
+        }
+
+        if (payload?.commitment) {
+          setVisibleCommitments((current) => [payload.commitment as FinancialCommitmentSummary, ...current.filter((item) => item.id !== payload.commitment?.id)]);
         }
 
         setReviewingSuggestion(null);
@@ -644,21 +697,22 @@ export function CommitmentsPanel({
   const tabCommitments = useMemo(() => {
     switch (activeTab) {
       case "planned":
-        return commitments.filter((commitment) => commitment.kind === "planned_payment");
+        return visibleCommitments.filter((commitment) => commitment.kind === "planned_payment");
       case "debt":
-        return commitments.filter((commitment) => commitment.kind === "debt");
+        return visibleCommitments.filter((commitment) => commitment.kind === "debt");
       case "owed":
-        return commitments.filter((commitment) => commitment.kind === "receivable");
+        return visibleCommitments.filter((commitment) => commitment.kind === "receivable");
       case "installments":
-        return commitments.filter(
+        return visibleCommitments.filter(
           (commitment) =>
+            commitment.kind === "reminder" ||
             commitment.notes?.toLowerCase().includes("installment") ||
-            commitment.notes?.toLowerCase().match(/payment\s+\d+\s+of\s+\d+/) !== null
+            Boolean(commitment.notes?.toLowerCase().match(/payment\s+\d+\s+of\s+\d+/))
         );
       default:
         return [];
     }
-  }, [activeTab, commitments]);
+  }, [activeTab, visibleCommitments]);
 
   const tabSuggestions = useMemo(() => {
     switch (activeTab) {
@@ -675,27 +729,18 @@ export function CommitmentsPanel({
     }
   }, [activeTab, plannedPaymentSuggestions]);
 
-  const renderRecurringTable = () => (
-    <article className="panel commitments-detail-panel">
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <p className="eyebrow">
-            {activeTab === "planned" ? "Planned payments" : activeTab === "debt" ? "Debt & loans" : activeTab === "owed" ? "Money owed" : "Installments"}
-          </p>
-          <h3 style={{ margin: 0 }}>Your recurring items</h3>
-        </div>
-        <span className="button button-secondary button-small">
-          {tabCommitments.length + tabSuggestions.length} item{tabCommitments.length + tabSuggestions.length === 1 ? "" : "s"}
-        </span>
-      </div>
+  const renderRecurringTable = () => {
+    const tabLabel = activeTab === "planned" ? "planned payment" : activeTab === "debt" ? "debt or loan" : activeTab === "owed" ? "money owed" : "installment";
+    const hasRows = tabCommitments.length > 0 || tabSuggestions.length > 0;
 
-      {tabCommitments.length > 0 || tabSuggestions.length > 0 ? (
+    return (
+      <article className="panel commitments-detail-panel">
         <div className="table-wrap transactions-table-wrap commitments-table-wrap">
           <table className="transactions-table commitments-table">
             <thead>
               <tr>
                 <th>Description</th>
-                <th>Due date</th>
+                <th>Due Date</th>
                 <th>Type</th>
                 <th>Amount</th>
                 <th>Account</th>
@@ -703,6 +748,17 @@ export function CommitmentsPanel({
               </tr>
             </thead>
             <tbody>
+              {!hasRows ? (
+                <tr>
+                  <td colSpan={6} className="commitments-table__empty">
+                    <strong>No {tabLabel}s yet</strong>
+                    <span>Add one to start tracking it here.</span>
+                    <button className="button button-primary button-small" type="button" onClick={openRecurringAdd}>
+                      Add {tabLabel}
+                    </button>
+                  </td>
+                </tr>
+              ) : null}
               {tabSuggestions.map((suggestion) => (
                 <tr key={suggestion.id}>
                   <td>
@@ -740,13 +796,9 @@ export function CommitmentsPanel({
             </tbody>
           </table>
         </div>
-      ) : (
-        <p className="panel-muted" style={{ margin: 0 }}>
-          Nothing is saved here yet. Add an item or review a suggestion when Clover finds one.
-        </p>
-      )}
-    </article>
-  );
+      </article>
+    );
+  };
 
   return (
     <section style={{ display: "grid", gap: 24 }}>

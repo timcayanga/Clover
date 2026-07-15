@@ -70,6 +70,30 @@ export type RecurringPageData = {
   liabilityAccountCount: number;
 };
 
+const RECURRING_ENRICHMENT_TIMEOUT_MS = 2500;
+
+const withRecurringEnrichmentTimeout = async <T>(promise: Promise<T>, fallback: T, label: string) => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise.catch((error: unknown) => {
+        console.warn(`Unable to load recurring ${label}`, error);
+        return fallback;
+      }),
+      new Promise<T>((resolve) => {
+        timeoutId = setTimeout(() => {
+          console.warn(`Timed out loading recurring ${label}`);
+          resolve(fallback);
+        }, RECURRING_ENRICHMENT_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+};
+
 export async function getRecurringWorkspaceId(
   clerkUserId: string,
   email: string,
@@ -118,13 +142,11 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
   const hasRecurringPatternTable = await hasCompatibleTable("RecurringPattern");
 
   if (hasRecurringPatternTable) {
-    await syncWorkspaceRecurringPatterns(workspaceId).catch((error) => {
-      console.warn("Unable to backfill recurring suggestions", error);
-    });
+    await withRecurringEnrichmentTimeout(syncWorkspaceRecurringPatterns(workspaceId), [], "patterns");
   }
 
   const [reminders, accounts, transactions, commitments, recurringPatterns, plannedPaymentSuggestions] = await Promise.all([
-    getUpcomingStatementReminders(workspaceId),
+    withRecurringEnrichmentTimeout(getUpcomingStatementReminders(workspaceId), [], "statement reminders"),
     prisma.account.findMany({
       where: { workspaceId },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
@@ -240,7 +262,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
           },
         })
       : Promise.resolve([]),
-    getPlannedPaymentSuggestions(workspaceId),
+    withRecurringEnrichmentTimeout(getPlannedPaymentSuggestions(workspaceId), [], "payment suggestions"),
   ]);
 
   const recurringItems = buildRecurringTransactionSummaries(transactions as RecurringTransactionLike[]);

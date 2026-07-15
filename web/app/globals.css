@@ -1259,19 +1259,19 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .recurring-add-modal__money-row {
-  grid-template-columns: minmax(132px, 0.44fr) minmax(0, 1fr);
+  grid-template-columns: minmax(112px, 0.28fr) minmax(0, 1fr);
 }
 
 .recurring-currency-field__selector {
-  width: auto;
-  min-width: 132px;
+  width: 100%;
+  min-width: 112px;
 }
 
 .recurring-currency-field__selector .currency-selector__button {
-  width: auto;
-  min-height: 36px;
+  width: 100%;
+  min-height: 42px;
   padding-inline: 10px;
-  border-radius: 999px;
+  border-radius: 14px;
   justify-content: space-between;
 }
 
@@ -5247,6 +5247,17 @@ body.transactions-manual-open .shell-quick-add-button {
   scrollbar-width: none;
 }
 
+.recurring-tabs--top {
+  border: 0;
+  gap: 12px;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.recurring-tabs--top .investments-tab {
+  flex: 0 0 auto;
+}
+
 .recurring-tabs::-webkit-scrollbar {
   display: none;
 }
@@ -5291,6 +5302,27 @@ body.transactions-manual-open .shell-quick-add-button {
 .commitments-table td strong,
 .commitments-table__secondary {
   display: block;
+}
+
+.commitments-table__empty {
+  height: 220px;
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+.commitments-table__empty strong,
+.commitments-table__empty span {
+  display: block;
+}
+
+.commitments-table__empty strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.commitments-table__empty span {
+  color: var(--muted);
+  margin: 6px 0 14px;
 }
 
 .commitments-table__secondary {

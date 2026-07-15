@@ -46,14 +46,14 @@ export const commitmentKindLabels: Record<CommitmentKind, string> = {
   planned_payment: "Planned payment",
   debt: "Debt",
   receivable: "Receivable",
-  reminder: "Reminder",
+  reminder: "Installment",
 };
 
 export const commitmentKindHelp: Record<CommitmentKind, string> = {
   planned_payment: "Future bill, subscription, or transfer you want to remember.",
   debt: "Money you owe and want to keep visible.",
   receivable: "Money someone owes you and you want to track.",
-  reminder: "Date-based reminder without a balance.",
+  reminder: "Installment plans with a next payment and repeat cadence.",
 };
 
 export const commitmentRecurrenceLabels: Record<CommitmentRecurrence, string> = {
