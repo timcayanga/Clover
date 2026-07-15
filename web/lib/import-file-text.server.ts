@@ -658,6 +658,18 @@ const shouldRetryImageOcrBestEffort = (params: {
     return false;
   }
 
+  if (profile === "receipt") {
+    const firstPassPreview = parseReceiptText(firstPassText);
+    const firstPassQuality = assessReceiptPreviewQuality(firstPassPreview);
+    const needsReceiptRecovery = firstPassQuality.issues.some((issue) =>
+      /merchant looks noisy|total missing|suspicious line items/i.test(issue)
+    );
+
+    if (needsReceiptRecovery) {
+      return true;
+    }
+  }
+
   const family = detectReceiptOcrFamilyFromText(firstPassText, profile);
 
   const compact = firstPassText.replace(/\s+/g, " ").trim();

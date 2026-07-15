@@ -2390,7 +2390,7 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
     confidence: 0,
   } satisfies ReceiptPreviewResult;
   const qualityAssessment = assessReceiptPreviewQuality(provisionalPreview);
-  const confidence = Math.max(
+  const rawConfidence = Math.max(
     35,
     Math.min(
       98,
@@ -2419,6 +2419,25 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
         Math.max(0, 4 - qualityAssessment.score) * 5
     )
   );
+  const qualityConfidencePenalty = qualityAssessment.issues.reduce((penalty, issue) => {
+    if (/looks like a (?:note|poster|screenshot)|split allocation worksheet|wallet transfer contains line items/i.test(issue)) {
+      return penalty + 28;
+    }
+    if (/total missing/i.test(issue)) {
+      return penalty + 24;
+    }
+    if (/suspicious line items/i.test(issue)) {
+      return penalty + 16;
+    }
+    if (/merchant looks noisy/i.test(issue)) {
+      return penalty + 16;
+    }
+    if (/mixed currencies detected|summary does not reconcile|total is smaller than subtotal|line item exceeds total/i.test(issue)) {
+      return penalty + 10;
+    }
+    return penalty + 4;
+  }, 0);
+  const confidence = Math.max(35, Math.min(rawConfidence, 98 - qualityConfidencePenalty));
 
   return {
     ...provisionalPreview,

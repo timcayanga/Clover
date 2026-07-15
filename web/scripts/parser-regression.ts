@@ -4052,6 +4052,9 @@ const main = async () => {
   if (noisyReceiptQuality.reliableForFastPath) {
     throw new Error("expected noisy OCR receipt to stay off the fast local receipt path");
   }
+  if (noisyReceiptPreview.confidence >= 90) {
+    throw new Error(`expected noisy OCR confidence to reflect unresolved receipt noise, got ${noisyReceiptPreview.confidence}`);
+  }
 
   const merchantHeaderPreview = parseReceiptText([
     "TABLE NO: 12",
