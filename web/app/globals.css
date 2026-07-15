@@ -18810,6 +18810,44 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   }
 }
 
+/* Keep compact top actions usable on narrow tablet and mobile layouts. */
+@media (max-width: 1100px) {
+  .recurring-topbar-add {
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding-inline: 0;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .recurring-topbar-add > span:not(.button-icon),
+  .recurring-topbar-add > .button-icon:last-child {
+    display: none !important;
+  }
+
+  .recurring-topbar-add > .button-icon:first-child {
+    margin-right: 0;
+  }
+
+  .split-bill-action-button {
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding-inline: 0;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .split-bill-action-button > span:not(.button-icon) {
+    display: none !important;
+  }
+
+  .split-bill-action-button .button-icon {
+    margin-right: 0;
+  }
+}
+
 @media (max-width: 1100px) {
   .transactions-topbar {
     gap: 10px;
