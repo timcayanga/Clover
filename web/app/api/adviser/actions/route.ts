@@ -17,6 +17,7 @@ const actionSchema = z.object({
     id: z.string().min(1).max(120),
     type: z.enum([
       "set_goal",
+      "set_adviser_preferences",
       "create_budget",
       "create_transaction",
       "edit_transaction",
@@ -90,7 +91,22 @@ export async function POST(request: Request) {
     const payload = action.payload;
     let result: Record<string, unknown> = {};
 
-    if (action.type === "set_goal") {
+    if (action.type === "set_adviser_preferences") {
+      const paydayDay = payload.paydayDay === null || payload.paydayDay === undefined || payload.paydayDay === "" ? null : numberValue(payload.paydayDay, 0);
+      const preferredBuffer = payload.preferredBuffer === null || payload.preferredBuffer === undefined || payload.preferredBuffer === "" ? null : numberValue(payload.preferredBuffer, 0);
+      if (paydayDay !== null && (!Number.isInteger(paydayDay) || paydayDay < 1 || paydayDay > 31)) {
+        return NextResponse.json({ error: "Choose a payday from the 1st through the 31st." }, { status: 400 });
+      }
+      if (preferredBuffer !== null && preferredBuffer < 0) {
+        return NextResponse.json({ error: "Your preferred buffer cannot be negative." }, { status: 400 });
+      }
+      const preferences = { paydayDay, preferredBuffer };
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { adviserPreferences: preferences as Prisma.InputJsonValue },
+      });
+      result = { adviserPreferences: preferences };
+    } else if (action.type === "set_goal") {
       const goal = stringValue(payload.goal, null as unknown as string) || null;
       const targetAmount = payload.targetAmount === null || payload.targetAmount === undefined || payload.targetAmount === "" ? null : numberValue(payload.targetAmount);
       if (!goal && targetAmount === null) return NextResponse.json({ error: "Add a goal or target amount before confirming." }, { status: 400 });

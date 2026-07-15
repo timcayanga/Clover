@@ -191,6 +191,7 @@ model User {
   goalTargetAmount         Decimal?                  @db.Decimal(18, 2)
   goalTargetSource         String?
   goalPlan                 Json?
+  adviserPreferences       Json?
   onboardingCompletedAt    DateTime?
   dataWipedAt              DateTime?
   createdAt                DateTime                  @default(now())

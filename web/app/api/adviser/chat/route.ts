@@ -15,6 +15,7 @@ import { recordAdviserChatQuestion } from "@/lib/adviser-actions";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { assertRateLimit } from "@/lib/rate-limit";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
+import { normalizeAdviserPreferences } from "@/lib/adviser-preferences";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,14 @@ const ADVISER_CHAT_LIMITS = {
 } as const;
 
 const getNextMonthStart = (referenceDate: Date) => new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 1);
+const getNextPaydayDate = (referenceDate: Date, paydayDay: number) => {
+  const buildDate = (year: number, month: number) => {
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    return new Date(year, month, Math.min(paydayDay, lastDay));
+  };
+  const thisMonth = buildDate(referenceDate.getFullYear(), referenceDate.getMonth());
+  return thisMonth > referenceDate ? thisMonth : buildDate(referenceDate.getFullYear(), referenceDate.getMonth() + 1);
+};
 
 type AdviserMemoryStats = {
   count: number;
@@ -1279,6 +1288,7 @@ export async function POST(request: Request) {
     );
     const goalLabel = goalValue ? goalValue.replace(/_/g, " ") : null;
     const goalProgressLabel = goalLabel ? goalProgress.bandLabel : "Set a Goal";
+    const adviserPreferences = normalizeAdviserPreferences(user.adviserPreferences);
 
     const topCategories = Array.from(currentSummary.expenseCategories.entries())
       .sort((left, right) => right[1] - left[1])
@@ -1643,10 +1653,14 @@ export async function POST(request: Request) {
     const calculateSafeToSpend = (options?: { horizonDays?: number | null; untilDate?: string | null; expectedIncome?: number | null; additionalBuffer?: number | null }) => {
       const parsedUntilDate = options?.untilDate ? new Date(options.untilDate) : null;
       const hasValidUntilDate = Boolean(parsedUntilDate && !Number.isNaN(parsedUntilDate.getTime()) && parsedUntilDate > now);
+      const preferencePaydayDate = adviserPreferences.paydayDay ? getNextPaydayDate(now, adviserPreferences.paydayDay) : null;
+      const defaultHorizonDays = preferencePaydayDate
+        ? Math.max(1, Math.ceil((preferencePaydayDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)))
+        : 14;
       const requestedHorizonDays = hasValidUntilDate
         ? Math.ceil((parsedUntilDate!.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
-        : Number(options?.horizonDays ?? 14);
-      const horizonDays = Math.max(1, Math.min(90, Math.round(Number.isFinite(requestedHorizonDays) ? requestedHorizonDays : 14)));
+        : Number(options?.horizonDays ?? defaultHorizonDays);
+      const horizonDays = Math.max(1, Math.min(90, Math.round(Number.isFinite(requestedHorizonDays) ? requestedHorizonDays : defaultHorizonDays)));
       const horizonEnd = new Date(now);
       horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
       const upcomingRecurring = recurringPatterns.filter(
@@ -1681,7 +1695,7 @@ export async function POST(request: Request) {
       const goalContribution = goalProgress.targetAmount && goalProgress.targetAmount > 0
         ? goalProgress.targetAmount * (horizonDays / 30)
         : 0;
-      const enteredBuffer = Number(options?.additionalBuffer ?? 0);
+      const enteredBuffer = Number(options?.additionalBuffer ?? adviserPreferences.preferredBuffer ?? 0);
       const additionalBuffer = Number.isFinite(enteredBuffer) && enteredBuffer > 0 ? enteredBuffer : 0;
       const knownObligations = recurringReserve + commitmentReserve + plannedPaymentReserve + openSplitBillAmount;
       const recommendedBuffer = everydaySpendingBuffer + goalContribution + additionalBuffer;
@@ -1706,6 +1720,7 @@ export async function POST(request: Request) {
         asOf: now.toISOString(),
         through: horizonEnd.toISOString(),
         untilDateUsed: hasValidUntilDate,
+        paydayPreferenceUsed: !hasValidUntilDate && !options?.horizonDays && Boolean(preferencePaydayDate),
         currency: displayCurrency,
         availableCash: spendableAccountBalance,
         expectedIncome: expectedIncomeIncluded,
@@ -1765,7 +1780,12 @@ export async function POST(request: Request) {
           "The buffer is based on the user's historical spending baseline and active goal target when available.",
           plannedPayments.length > 0 ? "Planned statement payments and installments are included when Clover has a due date." : null,
           baselineSpend <= 0 ? "Clover does not have enough spending history to estimate an everyday spending buffer." : null,
-          additionalBuffer > 0 ? "The recommended buffer includes the extra amount requested in the question." : null,
+          additionalBuffer > 0
+            ? options?.additionalBuffer === undefined || options.additionalBuffer === null
+              ? "The recommended buffer includes your saved preferred buffer."
+              : "The recommended buffer includes the extra amount requested in the question."
+            : null,
+          !hasValidUntilDate && !options?.horizonDays && preferencePaydayDate ? `The planning window uses your saved payday preference (${adviserPreferences.paydayDay}th).` : null,
           currencyCandidates.size > 1 ? `Only ${displayCurrency} accounts are included; Clover detected multiple currencies.` : null,
           accountAnalysisAccounts.length === 0 ? `Clover could not find a ${displayCurrency} cash account balance to use.` : null,
           openSplitBillCount > 0 ? "Open split bills are reserved in full because their settlement timing is not confirmed." : null,
@@ -1919,6 +1939,7 @@ export async function POST(request: Request) {
       "When the user asks whether they can afford a named purchase with a price, use check_affordability. If the user mentions travel, a future month, or a date by which the purchase must be affordable, pass the stated horizon or untilDate instead of using the default. If the user provides expected income or an extra cash buffer, pass those too.",
       "When the user asks how much they can safely spend, how much room they have until payday, or what is safe to spend, use calculate_safe_to_spend. Explain available cash, protected obligations, recommended buffer, safe amount, and confidence separately. If payday income is not confirmed, do not invent it. If the user gives a payday/date, pass it as untilDate; if they give expected income, pass it as expectedIncome; if they specify an extra cash buffer, pass it as additionalBuffer. Mention when the calculation is limited to one currency or based on stale or thin data.",
       "When the user asks when income or salary may arrive, or whether Clover can see a payday pattern, use get_income_outlook. Treat the result as an unconfirmed historical pattern and never include it in Safe-to-Spend unless the user confirms the expected amount.",
+      "When the user asks Clover to remember their payday day or preferred cash buffer, use prepare_write_action with set_adviser_preferences and wait for confirmation. These preferences are planning settings, not financial records.",
       "When the user asks about account balances, connected accounts, or where their money is held, use get_account_summary.",
       "When the user asks what changed, what is new, or what deserves attention since their last check, use get_adviser_changes.",
       "When the user asks about goal progress, use get_goal_progress.",
@@ -1929,7 +1950,7 @@ export async function POST(request: Request) {
       "When the user asks how much they could invest, use estimate_investment_contribution and explain that it is a conservative planning range, not a security recommendation.",
       "When the user asks what they should invest in or asks for personalized investment advice, use get_investment_readiness first. Explain what suitability information is still needed before discussing options.",
       "When the user asks about duplicate, uncategorized, or review-needed transactions, use find_data_quality_issues.",
-      "When the user asks Clover to add or edit a record, use prepare_write_action and wait for confirmation; never describe a proposed write as completed. Supported writes include goals, budgets, transactions, accounts, investments, and split bills.",
+      "When the user asks Clover to add or edit a record, use prepare_write_action and wait for confirmation; never describe a proposed write as completed. Supported writes include goals, budgets, Adviser planning preferences, transactions, accounts, investments, and split bills.",
       "",
       "Workspace context:",
       summaryLines,
@@ -2156,11 +2177,11 @@ export async function POST(request: Request) {
       {
         type: "function",
         name: "prepare_write_action",
-        description: "Prepare a confirmation card for a user-requested manual write. Never execute it. Supported action types are set_goal, create_budget, create_transaction, edit_transaction, create_account, create_investment, edit_account, edit_investment, and create_split_bill.",
+        description: "Prepare a confirmation card for a user-requested manual write or planning preference. Never execute it. Supported action types are set_goal, set_adviser_preferences, create_budget, create_transaction, edit_transaction, create_account, create_investment, edit_account, edit_investment, and create_split_bill.",
         parameters: {
           type: "object",
           properties: {
-            actionType: { type: "string", enum: ["set_goal", "create_budget", "create_transaction", "edit_transaction", "create_account", "create_investment", "edit_account", "edit_investment", "create_split_bill"] },
+            actionType: { type: "string", enum: ["set_goal", "set_adviser_preferences", "create_budget", "create_transaction", "edit_transaction", "create_account", "create_investment", "edit_account", "edit_investment", "create_split_bill"] },
             payload: { type: "object", additionalProperties: true },
             label: { type: "string" },
             description: { type: "string" },
