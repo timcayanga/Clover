@@ -13,9 +13,13 @@ export function ContactUsForm() {
   const [attachmentLabel, setAttachmentLabel] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [touched, setTouched] = useState({ name: false, email: false, message: false });
 
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
-  const canSubmit = name.trim().length >= 2 && email.trim().length > 0 && message.trim().length >= 10 && status !== "submitting";
+  const nameError = !name.trim() ? "Name is required." : name.trim().length < 2 ? "Please enter at least 2 characters." : null;
+  const emailError = !email.trim() ? "Email is required." : !emailIsValid ? "Please enter a valid email address." : null;
+  const messageError = !message.trim() ? "An inquiry is required." : message.trim().length < 10 ? "Please enter at least 10 characters." : null;
+  const canSubmit = status !== "submitting";
 
   const onAttachmentChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -59,9 +63,11 @@ export function ContactUsForm() {
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!event.currentTarget.reportValidity() || !emailIsValid || !canSubmit) {
+    setTouched({ name: true, email: true, message: true });
+
+    if (!event.currentTarget.reportValidity() || Boolean(nameError || emailError || messageError) || !canSubmit) {
       setStatus("error");
-      setFeedback("Please enter a valid email address before sending your inquiry.");
+      setFeedback("Please correct the highlighted fields before sending your inquiry.");
       return;
     }
 
@@ -93,6 +99,7 @@ export function ContactUsForm() {
       setMessage("");
       setAttachment(null);
       setAttachmentLabel(null);
+      setTouched({ name: false, email: false, message: false });
       setStatus("success");
       setFeedback("Thanks. The Clover team will get back to you within 1 to 3 days.");
     } catch (error) {
@@ -114,7 +121,10 @@ export function ContactUsForm() {
             required
             minLength={2}
             maxLength={120}
+            aria-invalid={touched.name && Boolean(nameError)}
+            onBlur={() => setTouched((current) => ({ ...current, name: true }))}
           />
+          {touched.name && nameError ? <small className="contact-field__error">{nameError}</small> : null}
         </label>
 
         <label className="contact-field">
@@ -127,9 +137,10 @@ export function ContactUsForm() {
             autoComplete="email"
             required
             maxLength={160}
-            aria-invalid={email.length > 0 && !emailIsValid}
+            aria-invalid={touched.email && Boolean(emailError)}
+            onBlur={() => setTouched((current) => ({ ...current, email: true }))}
           />
-          {email.length > 0 && !emailIsValid ? <small>Please enter a valid email address.</small> : null}
+          {touched.email && emailError ? <small className="contact-field__error">{emailError}</small> : null}
         </label>
 
         <label className="contact-field contact-field--full">
@@ -141,7 +152,10 @@ export function ContactUsForm() {
             required
             minLength={10}
             maxLength={4000}
+            aria-invalid={touched.message && Boolean(messageError)}
+            onBlur={() => setTouched((current) => ({ ...current, message: true }))}
           />
+          {touched.message && messageError ? <small className="contact-field__error">{messageError}</small> : null}
         </label>
 
         <label className="contact-field contact-field--full contact-field--attachment">

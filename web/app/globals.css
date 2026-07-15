@@ -30720,12 +30720,27 @@ button.accounts-detail__transaction-head-cell {
 .contact-field {
   display: grid;
   gap: 8px;
+  align-content: start;
   color: var(--text);
 }
 
 .contact-field span {
   font-size: 14px;
   font-weight: 500;
+}
+
+.contact-field input,
+.contact-field textarea {
+  width: 100%;
+}
+
+.contact-field input {
+  min-height: 48px;
+}
+
+.contact-field__error {
+  color: #b91c1c;
+  line-height: 1.4;
 }
 
 .contact-field textarea {
