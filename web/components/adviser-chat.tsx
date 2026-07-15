@@ -51,6 +51,23 @@ type AdviserChatProps = {
 
 const adviserChatStorageKey = "clover-adviser-chat-session-v1";
 
+const inferFeedbackGroup = (question: string) => {
+  const normalized = question.toLowerCase();
+  if (/goal|target|track|progress|save more|emergency fund|drift/.test(normalized)) {
+    return "goals";
+  }
+  if (/invest|portfolio|dividend|gain|loss|snapshot|stock/.test(normalized)) {
+    return "investments";
+  }
+  if (/uncategorized|cleanup|categor|merchant|transaction|spend|weekend|pattern|why/.test(normalized)) {
+    return "behavior";
+  }
+  if (/bill|recurr|due|loan|balance|cash flow|budget|owe|payment|pressure|account/.test(normalized)) {
+    return "cashflow";
+  }
+  return "cashflow";
+};
+
 const actionDetails = (action: AdviserAction) =>
   Object.entries(action.payload ?? {})
     .filter(([key, value]) => key !== "workspaceId" && value !== null && value !== undefined && value !== "")
@@ -288,12 +305,13 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
 
   const submitFeedback = (messageIndex: number, rating: "helpful" | "not_helpful") => {
     setFeedbackByMessage((current) => ({ ...current, [messageIndex]: rating }));
+    const sourceQuestion = [...messages.slice(0, messageIndex)].reverse().find((message) => message.role === "user")?.content ?? "";
     void fetch("/api/adviser/interaction", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         kind: "feedback",
-        group: "chat",
+        group: inferFeedbackGroup(sourceQuestion),
         itemId: `message-${messageIndex}`,
         label: "Ask Clover answer",
         rating,

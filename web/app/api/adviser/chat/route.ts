@@ -1143,14 +1143,19 @@ export async function POST(request: Request) {
     const adviserFeedback = adviserFeedbackLogs.reduce(
       (summary, log) => {
         const metadata = log.metadata && typeof log.metadata === "object" ? (log.metadata as AdviserAuditMetadata) : null;
+        const group = metadata?.group?.trim() || "unknown";
+        const groupSummary = summary.byGroup[group] ?? { helpful: 0, notHelpful: 0 };
         if (metadata?.rating === "helpful") {
           summary.helpful += 1;
+          groupSummary.helpful += 1;
         } else if (metadata?.rating === "not_helpful") {
           summary.notHelpful += 1;
+          groupSummary.notHelpful += 1;
         }
+        summary.byGroup[group] = groupSummary;
         return summary;
       },
-      { helpful: 0, notHelpful: 0 }
+      { helpful: 0, notHelpful: 0, byGroup: {} as Record<string, { helpful: number; notHelpful: number }> }
     );
 
     const adviserCompletionLogs = await prisma.auditLog.findMany({
@@ -1992,6 +1997,7 @@ export async function POST(request: Request) {
       `Adviser themes: ${topThemeLine || "none"}`,
       `Adviser memory: ${adviserInteractions.length} interactions, ${adviserCompletionLogs.length} completion actions, follow-through rate ${formatPercent(adviserFollowThroughRate)}, cleanup affinity ${Math.round(userPreferenceAffinity.cleanup)}, cashflow affinity ${Math.round(userPreferenceAffinity.cashflow)}`,
       `Answer feedback: ${adviserFeedback.helpful} helpful, ${adviserFeedback.notHelpful} not helpful`,
+      `Answer feedback by topic: ${Object.entries(adviserFeedback.byGroup).map(([group, feedback]) => `${group} ${feedback.helpful} helpful/${feedback.notHelpful} not helpful`).join("; ") || "none"}`,
       `Recent Adviser questions: ${recentAdviserQuestions.join(" | ") || "none"}`,
       `Preference profile: cashflow ${Math.round(userPreferenceAffinity.cashflow)}, behavior ${Math.round(userPreferenceAffinity.behavior)}, goals ${Math.round(userPreferenceAffinity.goals)}, investments ${Math.round(userPreferenceAffinity.investments)}, cleanup ${Math.round(userPreferenceAffinity.cleanup)}`,
       `Financial persona: ${financialPersona.label} - ${financialPersona.summary}`,
