@@ -2529,18 +2529,13 @@ export async function POST(request: Request) {
           actions.push({ id: `transactions-${actions.length + 1}`, kind: "navigate", type: "find_transactions", label: "Review these transactions", description: "Open Clover Transactions to inspect the matching records.", href });
           result = { query: query || null, matches, href };
         } else if (call.name === "get_cashflow_outlook") {
-          const upcomingRecurring = recurringDueSoon.reduce((sum, item) => sum + item.amount, 0);
-          const upcomingCommitments = commitmentsDueSoon.reduce((sum, item) => sum + item.amount, 0);
-          const protectedCash = upcomingRecurring + upcomingCommitments + openSplitBillAmount;
+          const safeToSpend = calculateSafeToSpend({ horizonDays: 14 });
           result = {
-            availableCash: spendableAccountBalance,
-            upcomingRecurring,
-            upcomingCommitments,
-            openSplitBills: openSplitBillAmount,
-            protectedCash,
-            roomAfterKnownPressure: spendableAccountBalance - protectedCash,
-            recurring: recurringDueSoon,
-            commitments: commitmentsDueSoon,
+            ...safeToSpend,
+            roomAfterKnownPressure: safeToSpend.roomAfterProtection,
+            recurring: safeToSpend.details.recurring,
+            commitments: safeToSpend.details.commitments,
+            plannedPayments: safeToSpend.details.plannedPayments,
           };
           actions.push({ id: `cashflow-${actions.length + 1}`, kind: "navigate", type: "open_cashflow", label: "Review cash-flow details", description: "Open Recurring and Accounts to review known obligations and available cash.", href: "/recurring" });
         } else if (call.name === "get_split_bill_status") {
@@ -2581,16 +2576,18 @@ export async function POST(request: Request) {
           actions.push({ id: `budget-${actions.length + 1}`, kind: "navigate", type: "open_budgeting", label: "Review budgets", description: "Open Budgeting to adjust limits or review spending.", href: "/budgeting" });
         } else if (call.name === "estimate_investment_contribution") {
           const monthlySurplus = Math.max(0, longTermAverageNet);
-          const knownPressure = recurringDueSoon.reduce((sum, item) => sum + item.amount, 0) + commitmentsDueSoon.reduce((sum, item) => sum + item.amount, 0) + openSplitBillAmount;
-          const reserveTarget = Math.max(0, baselineSpend) + knownPressure;
+          const monthlySafeToSpend = calculateSafeToSpend({ horizonDays: 30 });
+          const reserveTarget = monthlySafeToSpend.knownObligations + monthlySafeToSpend.recommendedBuffer;
           const reserveGap = Math.max(0, reserveTarget - spendableAccountBalance);
-          const monthlyLow = reserveGap > 0 ? 0 : monthlySurplus * 0.1;
-          const monthlyHigh = reserveGap > 0 ? 0 : monthlySurplus * 0.2;
+          const monthlyLow = reserveGap > 0 ? 0 : Math.min(monthlySurplus * 0.1, monthlySafeToSpend.safeToSpend * 0.1);
+          const monthlyHigh = reserveGap > 0 ? 0 : Math.min(monthlySurplus * 0.2, monthlySafeToSpend.safeToSpend * 0.2);
           result = {
             monthlySurplus,
             reserveTarget,
             availableCash: spendableAccountBalance,
             reserveGap,
+            safeToSpend: monthlySafeToSpend.safeToSpend,
+            confidence: monthlySafeToSpend.confidence,
             suggestedMonthlyRange: { low: monthlyLow, high: monthlyHigh },
             guidance: reserveGap > 0
               ? "Build the cash reserve first; there is not enough room above the current reserve target for a confident contribution estimate."
