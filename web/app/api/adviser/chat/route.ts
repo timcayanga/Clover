@@ -2277,6 +2277,18 @@ export async function POST(request: Request) {
       remaining: Math.max(0, limit - usageCount - 1),
       resetsAt: resetsAt.toISOString(),
     }) satisfies AdviserUsage;
+    const asksAboutSpecificPurchase = /can i afford|can we afford|could i afford|can i buy|should i buy|would .* be affordable|affordability|can i travel|can we travel|trip .* budget/.test(latestQuestionLower) && !/how much can i safely spend/.test(latestQuestionLower);
+    const includesPurchaseAmount = /(?:₱|php|usd|\$|€|£)\s*[\d,.]+|\b\d{3,}(?:[,.]\d{2})?\b/i.test(latestQuestionLower);
+    if (asksAboutSpecificPurchase && !includesPurchaseAmount) {
+      return NextResponse.json({
+        reply: "I can check that safely, but I need the purchase price first. If timing matters, tell me the date you need it by or how long you want your cash to last. I will compare it with your available cash, known obligations, and a reasonable buffer.",
+        actions: [],
+        suggestions: suggestedQuestions,
+        usage: usageForResponse(),
+        grounding,
+        requiresInput: "purchase_price",
+      });
+    }
     if (!env.OPENAI_API_KEY) {
       return NextResponse.json({ reply: fallbackReply, actions: [], suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
     }
