@@ -232,7 +232,7 @@ export default async function HomePage() {
         reverse
         title={
           <>
-            Your financial data stays <span className="landing-highlight">protected and under your control</span>.
+            Your financial data stays <span className="landing-highlight">protected and under your control.</span>
           </>
         }
         copy={
