@@ -1972,6 +1972,7 @@ export async function POST(request: Request) {
       "When the user asks to see a report, use open_report so the UI can open Clover's existing Reports page.",
       "When the user asks whether they can afford a named purchase with a price, use check_affordability. If the user mentions travel, a future month, or a date by which the purchase must be affordable, pass the stated horizon or untilDate instead of using the default. If the user provides expected income or an extra cash buffer, pass those too.",
       "When the user compares two or more purchases, trips, or spending options, use compare_safe_to_spend_scenarios so every option is evaluated against the same obligations and buffer.",
+      "When the user asks what scenarios they previously compared, use get_adviser_scenario_history.",
       "When the user asks how much they can safely spend, how much room they have until payday, or what is safe to spend, use calculate_safe_to_spend. Explain available cash, protected obligations, recommended buffer, safe amount, and confidence separately. If payday income is not confirmed, do not invent it. If the user gives a payday/date, pass it as untilDate; if they give expected income, pass it as expectedIncome; if they specify an extra cash buffer, pass it as additionalBuffer. Mention when the calculation is limited to one currency or based on stale or thin data.",
       "When the user asks when income or salary may arrive, or whether Clover can see a payday pattern, use get_income_outlook. Treat the result as an unconfirmed historical pattern and never include it in Safe-to-Spend unless the user confirms the expected amount.",
       "When the user asks Clover to remember their payday day or preferred cash buffer, use prepare_write_action with set_adviser_preferences and wait for confirmation. These preferences are planning settings, not financial records.",
@@ -2159,6 +2160,12 @@ export async function POST(request: Request) {
       },
       {
         type: "function",
+        name: "get_adviser_scenario_history",
+        description: "Read the user's recent Adviser spending scenario comparisons. Use when they ask what they previously compared or want to revisit a prior planning question.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
         name: "get_account_summary",
         description: "Read reconciled balances and basic details for the user's connected Clover accounts.",
         parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
@@ -2306,7 +2313,7 @@ export async function POST(request: Request) {
         break;
       }
 
-      const toolOutputs = calls.map((call) => {
+      const toolOutputs = await Promise.all(calls.map(async (call) => {
         let args: Record<string, unknown> = {};
         try {
           args = JSON.parse(call.arguments) as Record<string, unknown>;
@@ -2353,6 +2360,39 @@ export async function POST(request: Request) {
             scenarios,
             bestFit: scenarios.filter((scenario) => scenario.status === "fits_after_reserve").sort((left, right) => right.roomAfterPurchase - left.roomAfterPurchase)[0]?.name ?? null,
             guidance: scenarios.length >= 2 ? "Compare the options using room after protected bills, shared expenses, goals, and spending buffer." : "Provide at least two scenarios to compare.",
+          };
+          await prisma.auditLog.create({
+            data: {
+              workspaceId: workspace.id,
+              actorUserId: user.id,
+              action: "adviser.scenario_compared",
+              entity: "AdviserScenario",
+              entityId: `scenario-${Date.now()}-${call.call_id}`,
+              metadata: {
+                kind: "scenario",
+                scenarios: result.scenarios,
+                bestFit: result.bestFit,
+                currency: scenarios[0]?.currency ?? displayCurrency,
+              },
+            },
+          });
+        } else if (call.name === "get_adviser_scenario_history") {
+          const history = await prisma.auditLog.findMany({
+            where: {
+              workspaceId: workspace.id,
+              actorUserId: user.id,
+              action: "adviser.scenario_compared",
+            },
+            orderBy: { createdAt: "desc" },
+            take: 6,
+            select: { createdAt: true, metadata: true },
+          });
+          result = {
+            comparisons: history.map((entry) => ({
+              comparedAt: entry.createdAt.toISOString(),
+              ...(entry.metadata && typeof entry.metadata === "object" && !Array.isArray(entry.metadata) ? entry.metadata : {}),
+            })),
+            guidance: history.length > 0 ? "These are the most recent scenario comparisons saved by Adviser." : "No previous scenario comparisons are saved yet.",
           };
         } else if (call.name === "calculate_safe_to_spend") {
           result = calculateSafeToSpend({
@@ -2600,7 +2640,7 @@ export async function POST(request: Request) {
         }
 
         return { type: "function_call_output", call_id: call.call_id, output: JSON.stringify(result) };
-      });
+      }));
 
       modelInput = [...modelInput, ...output, ...toolOutputs];
     }
