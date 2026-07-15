@@ -2031,6 +2031,9 @@ export async function POST(request: Request) {
       "For calculations, separate what is available, what is protected, what is estimated, and what remains. Never hide uncertainty inside a single confident number.",
       "For follow-up questions, use the previous conversation context and do not repeat the same explanation unless a new number or caveat changes it.",
       "When the user asks a broad question, choose the most useful interpretation from the data and state the assumption in one short sentence rather than asking a vague clarifying question.",
+      "If the user asks whether they can afford a purchase but does not provide a price, ask for the price and, if relevant, the date they need it by. Do not invent a price or give a yes/no answer without one.",
+      "If the user asks what to invest in, do not name a specific security as a personalized recommendation. Explain the missing suitability details and offer high-level educational categories only after checking investment readiness.",
+      "If the user asks how to set up a goal, budget, transaction, account, investment, or split bill, explain the next step and use a confirmation action only when they explicitly ask Clover to create or edit it.",
       answerFeedbackGuidance,
       "Do not pretend to be a financial advisor. Keep guidance educational and contextual.",
       "If the user's question asks for investment advice, stay cautious and avoid personalized investment recommendations.",
@@ -2139,7 +2142,7 @@ export async function POST(request: Request) {
           add(
             "follow-up-upcoming-bills",
             "recurring",
-            "Will I have enough for upcoming bills?",
+            `${recurringDueSoon.length + financialCommitments.length} upcoming payment${recurringDueSoon.length + financialCommitments.length === 1 ? "" : "s"}: will I have enough?`,
             "Will I have enough for my upcoming bills and commitments, and which payment should I prepare for first?"
           );
         }
@@ -2157,14 +2160,14 @@ export async function POST(request: Request) {
         add(
           "follow-up-spending-change",
           "behavior",
-          "What changed in my spending?",
+          `What changed in my spending (${currentWindowLabel})?`,
           `What changed in my spending across the ${currentWindowLabel}, and what is the clearest explanation?`
         );
         if (topCategoryName) {
           add(
             "follow-up-top-category",
             "transactions",
-            `Why is ${topCategoryName} so important?`,
+            `${topCategoryName} is my biggest driver. Why?`,
             `Why is ${topCategoryName} such a large part of my spending, and which transactions should I review first?`
           );
         }
@@ -2180,7 +2183,7 @@ export async function POST(request: Request) {
         add(
           "follow-up-goal-progress",
           "goals",
-          goalValue ? "What would help me reach this goal faster?" : "How should I set a savings goal?",
+          goalValue ? `${goalProgressLabel}: what would help me improve?` : "How should I set a savings goal?",
           goalValue
             ? "What realistic change would help me reach my current goal faster?"
             : "How should I set a savings goal using my actual income, spending, and available cash?"
@@ -2203,7 +2206,7 @@ export async function POST(request: Request) {
         add(
           "follow-up-investment-readiness",
           "investments",
-          latestInvestmentSnapshot ? "What should I review in my investments?" : "Am I ready to start investing?",
+          latestInvestmentSnapshot ? "Investment snapshot: what should I review?" : "Am I ready to start investing?",
           latestInvestmentSnapshot
             ? "What should I review in my latest investment snapshot before making any decision?"
             : "Am I ready to start investing, and what information should I decide first?"
@@ -2232,12 +2235,22 @@ export async function POST(request: Request) {
     })();
 
     const env = getEnv();
+    const groundingConfidenceScore = Math.round(
+      average([
+        accountCoverageScore,
+        currentTransactionConfidence,
+        dataFreshnessLabel.toLowerCase().includes("stale") ? 45 : 85,
+      ])
+    );
     const grounding = {
       accountCount: workspace.accounts.length,
       transactionCount: allTransactions.length,
       historyThrough: analysisAnchorDate.toISOString(),
       freshness: dataFreshnessLabel,
       historyDays: historySpanDays,
+      confidenceScore: groundingConfidenceScore,
+      confidenceLabel: groundingConfidenceScore >= 75 ? "high" : groundingConfidenceScore >= 55 ? "medium" : "limited",
+      mode: groundingMode,
       recurringCount: recurringPatterns.length,
       budgetCount: budgets.length,
       investmentSnapshotAvailable: Boolean(latestInvestmentSnapshot),

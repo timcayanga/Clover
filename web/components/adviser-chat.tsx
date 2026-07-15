@@ -30,6 +30,9 @@ type AdviserGrounding = {
   historyThrough: string;
   freshness?: string;
   historyDays?: number;
+  confidenceScore?: number;
+  confidenceLabel?: string;
+  mode?: string;
   recurringCount: number;
   budgetCount: number;
   investmentSnapshotAvailable: boolean;
@@ -383,6 +386,7 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
       {grounding ? (
         <p className="adviser-chat__status">
           Using {grounding.transactionCount.toLocaleString()} transaction{grounding.transactionCount === 1 ? "" : "s"} across {grounding.accountCount} account{grounding.accountCount === 1 ? "" : "s"}; {grounding.freshness ?? `history through ${new Date(grounding.historyThrough).toLocaleDateString()}`}.
+          {grounding.confidenceLabel ? ` Confidence: ${grounding.confidenceLabel}.` : ""}
         </p>
       ) : null}
 
