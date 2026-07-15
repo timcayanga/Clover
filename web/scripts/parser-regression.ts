@@ -3316,6 +3316,18 @@ const main = async () => {
     throw new Error("expected mixed currency warning to persist in split-bill raw payload");
   }
 
+  const currencySymbolDateArtifactPreview = parseReceiptText([
+    "CAFE LUNA",
+    "Coffee £ 30.88",
+    "¥ 30/202",
+    "TOTAL £ 30.88",
+  ].join("\n"));
+  if (currencySymbolDateArtifactPreview.currencyMentions.length !== 1 || currencySymbolDateArtifactPreview.currencyWarning) {
+    throw new Error(
+      `expected a currency symbol inside an OCR date artifact to be ignored, got mentions=${currencySymbolDateArtifactPreview.currencyMentions.join(", ") || "none"} warning=${currencySymbolDateArtifactPreview.currencyWarning ?? "null"}`
+    );
+  }
+
   const noisyMerchantDraft = splitBillDraftFromReceiptPreview({
     ...mixedCurrencyPreview,
     merchantName: "PRE RE Se",

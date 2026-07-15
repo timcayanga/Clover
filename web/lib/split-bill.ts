@@ -325,20 +325,26 @@ export const normalizeCurrencyCode = (value?: string | null) => {
   return CURRENCY_ALIAS[token] ?? (token.replace(/\s+/g, "").slice(0, 3) || "PHP");
 };
 
+const hasCurrencySymbolAmount = (text: string, symbol: string) => {
+  const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const amount = "(?:\\d{3,}|\\d{1,3}(?:,\\d{3})+|\\d+\\.\\d{2})";
+  return new RegExp(`(?:${escapedSymbol}[ \\t]*${amount}|${amount}[ \\t]*${escapedSymbol})(?![\\d/]\\d)`, "i").test(text);
+};
+
 const detectCurrencyFromText = (text: string) => {
-  if (/[₱]/.test(text) || /\bPHP\b/i.test(text) || looksLikePhilippineReceiptContext(text)) {
+  if (hasCurrencySymbolAmount(text, "₱") || /\bPHP\b/i.test(text) || looksLikePhilippineReceiptContext(text)) {
     return "PHP";
   }
 
-  if (/\$/.test(text) || /\bUSD\b/i.test(text)) {
+  if (hasCurrencySymbolAmount(text, "$") || /\bUSD\b/i.test(text)) {
     return "USD";
   }
 
-  if (/€/.test(text) || /\bEUR\b/i.test(text)) {
+  if (hasCurrencySymbolAmount(text, "€") || /\bEUR\b/i.test(text)) {
     return "EUR";
   }
 
-  if (/£/.test(text) || /\bGBP\b/i.test(text)) {
+  if (hasCurrencySymbolAmount(text, "£") || /\bGBP\b/i.test(text)) {
     if (looksLikePhilippineReceiptContext(text)) {
       return "PHP";
     }
@@ -346,7 +352,7 @@ const detectCurrencyFromText = (text: string) => {
     return "GBP";
   }
 
-  if (/¥/.test(text) || /\bJPY\b/i.test(text)) {
+  if (hasCurrencySymbolAmount(text, "¥") || /\bJPY\b/i.test(text)) {
     return "JPY";
   }
 
@@ -361,19 +367,19 @@ const detectCurrencyMentionsFromText = (text: string) => {
     }
   };
 
-  if (/[₱]/.test(text) || /\bPHP\b/i.test(text)) {
+  if (hasCurrencySymbolAmount(text, "₱") || /\bPHP\b/i.test(text)) {
     pushMention("PHP");
   }
-  if (/\$/.test(text) || /\bUSD\b/i.test(text)) {
+  if (hasCurrencySymbolAmount(text, "$") || /\bUSD\b/i.test(text)) {
     pushMention("USD");
   }
-  if (/€/.test(text) || /\bEUR\b/i.test(text)) {
+  if (hasCurrencySymbolAmount(text, "€") || /\bEUR\b/i.test(text)) {
     pushMention("EUR");
   }
-  if (/£/.test(text) || /\bGBP\b/i.test(text)) {
+  if (hasCurrencySymbolAmount(text, "£") || /\bGBP\b/i.test(text)) {
     pushMention("GBP");
   }
-  if (/¥/.test(text) || /\bJPY\b/i.test(text)) {
+  if (hasCurrencySymbolAmount(text, "¥") || /\bJPY\b/i.test(text)) {
     pushMention("JPY");
   }
   if (/\bSGD\b/i.test(text)) {
