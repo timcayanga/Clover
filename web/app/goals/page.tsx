@@ -11,6 +11,7 @@ import { RouteSplash } from "@/components/route-splash";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { GoalsEditor } from "@/components/goals-editor-modal";
+import { GoalInlineSetup } from "@/components/goal-inline-setup";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import {
   GOAL_OPTIONS,
@@ -729,6 +730,13 @@ async function GoalsPageStream() {
     invest_better: "📈",
   };
   const goalEmoji = selectedGoalKey ? goalEmojis[selectedGoalKey] ?? "🎯" : "🎯";
+  const supportDestination = selectedGoalKey === "invest_better"
+    ? { href: "/investments", label: "Open Investments" }
+    : selectedGoalKey === "pay_down_debt"
+      ? { href: "/accounts", label: "Open Accounts" }
+      : selectedGoalKey === "save_more" || selectedGoalKey === "build_emergency_fund"
+        ? { href: "/budgeting", label: "Open Budgeting" }
+        : { href: "/reports", label: "Open Reports" };
   const roadmapMilestones = playbook.milestones.map((milestone) => ({
     ...milestone,
     reached: hasGoalTarget && goalProgress.progressPercent !== null && goalProgress.progressPercent >= milestone.threshold,
@@ -745,21 +753,7 @@ async function GoalsPageStream() {
               <p className="eyebrow">Your primary goal</p>
               <h3>What do you want your money to help you do?</h3>
               <p>Choose a direction or tell Clover in your own words. We will turn it into a clear target and roadmap for you to confirm.</p>
-              <GoalsEditor
-                goals={GOAL_OPTIONS.filter((goal) => goal.value !== "track_spending")}
-                currentGoal={selectedGoalKey}
-                currentTargetAmount={null}
-                currentGoalPlan={null}
-                monthlyIncome={monthlyIncome}
-                suggestedTargetAmount={suggestedGoalTarget}
-                investmentHoldingsCount={investmentHoldingsCount}
-                investmentHoldingsValue={investmentHoldingsValue}
-                paydayHint={paydayHint}
-                currency={goalCurrency}
-                compact
-                triggerLabel="Set primary goal"
-                triggerClassName="button button-primary button-pill"
-              />
+              <GoalInlineSetup goals={GOAL_OPTIONS} suggestedTargetAmount={suggestedGoalTarget} monthlyIncome={monthlyIncome} currency={goalCurrency} />
             </section>
           ) : (
             <section className="goals-section goals-section--summary">
@@ -852,7 +846,7 @@ async function GoalsPageStream() {
               <p>{hasGoalTarget ? goalProgress.coachCopy : "Set a primary goal and Clover will explain what is helping, what is getting in the way, and what to do next."}</p>
               <strong className="goals-coach-panel__action">{goalNextAction}</strong>
               <div className="goals-coach-panel__links">
-                <Link className="button button-secondary button-small" href={selectedGoalKey === "invest_better" ? "/investments" : selectedGoalKey === "track_spending" ? "/budgeting" : "/reports"}>Open supporting page</Link>
+                <Link className="button button-secondary button-small" href={supportDestination.href}>{supportDestination.label}</Link>
                 <Link className="pill-link pill-link--inline" href="/adviser">Ask Adviser</Link>
               </div>
             </article>
