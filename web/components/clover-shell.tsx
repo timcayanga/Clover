@@ -262,13 +262,32 @@ const getSidebarSearchBlob = (account: SidebarSearchAccount) =>
 
 const formatSidebarMoney = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "MIXED");
 
-const navItems = [
-  { href: "/home", label: "Home", key: "dashboard" as const },
-  { href: "/accounts", label: "Accounts", key: "accounts" as const },
-  { href: "/transactions", label: "Transactions", key: "transactions" as const },
-  { href: "/recurring", label: "Recurring", key: "recurring" as const },
-  { href: "/adviser", label: "Adviser", key: "adviser" as const },
-  { href: "/more", label: "More", key: "more" as const },
+const desktopNavSections = [
+  {
+    label: "Overview",
+    items: [
+      { href: "/home", label: "Home", key: "dashboard" as const },
+      { href: "/adviser", label: "Adviser", key: "adviser" as const },
+    ],
+  },
+  {
+    label: "Manage",
+    items: [
+      { href: "/accounts", label: "Accounts", key: "accounts" as const },
+      { href: "/transactions", label: "Transactions", key: "transactions" as const },
+      { href: "/recurring", label: "Recurring", key: "recurring" as const },
+      { href: "/split-bill", label: "Split Bills", key: "split-bill" as const },
+    ],
+  },
+  {
+    label: "Plan",
+    items: [
+      { href: "/budgeting", label: "Budget", key: "budgeting" as const },
+      { href: "/goals", label: "Goals", key: "goals" as const },
+      { href: "/investments", label: "Investments", key: "investments" as const },
+      { href: "/reports", label: "Reports", key: "reports" as const },
+    ],
+  },
 ];
 
 const shouldPrefetchNavHref = (href: string) => href !== "/split-bill";
@@ -1437,124 +1456,35 @@ export function CloverShell({
         </div>
 
         <nav className="sidebar-nav" aria-label="Primary" id="primary-navigation">
-          {navItems.map((item) => {
-            if (item.key === "investments") {
-              return null;
-            }
-
-            if (item.key === "more") {
-              return (
-                <div key={item.key} className="sidebar-nav__more">
-                  <button
-                    className={`nav-link ${isMoreActive || isMoreMenuOpen ? "is-active" : ""}`}
-                    type="button"
-                    aria-current={pathname?.startsWith("/more") ? "page" : undefined}
-                    aria-haspopup="menu"
-                    aria-expanded={isMoreMenuOpen}
-                    onClick={() =>
-                      setOpenMenu((current) => {
-                        if (current === "more") {
-                          return null;
-                        }
-
-                        return "more";
-                      })
+          {desktopNavSections.map((section) => (
+            <div key={section.label} className="sidebar-nav__section">
+              <p className="sidebar-nav__section-label">{section.label}</p>
+              {section.items.map((item) => (
+                <button
+                  key={item.key}
+                  className={`nav-link ${active === item.key ? "is-active" : ""}`}
+                  aria-current={active === item.key ? "page" : undefined}
+                  type="button"
+                  onMouseDown={(event) => {
+                    if (event.button !== 0) {
+                      return;
                     }
-                  >
-                    <span className="nav-link__icon" aria-hidden="true">
-                      <MenuIcon name={item.key} />
-                    </span>
-                    {item.label}
-                  </button>
 
-                  {isMoreMenuOpen ? (
-                    <div className="sidebar-nav__submenu" role="menu" aria-label="More products">
-                      <button
-                        className={`sidebar-nav__submenu-link${active === "investments" || pathname?.startsWith("/investments") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/investments")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="investments" />
-                        </span>
-                        Investments
-                      </button>
-                      <button
-                        className={`sidebar-nav__submenu-link${active === "split-bill" || pathname?.startsWith("/split-bill") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/split-bill")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="split-bill" />
-                        </span>
-                        Split Bills
-                      </button>
-                      <button
-                        className={`sidebar-nav__submenu-link${active === "goals" || pathname?.startsWith("/goals") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/goals")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="goals" />
-                        </span>
-                        Goals
-                      </button>
-                      <button
-                        className={`sidebar-nav__submenu-link${active === "budgeting" || pathname?.startsWith("/budgeting") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/budgeting")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="budgeting" />
-                        </span>
-                        Budgeting
-                      </button>
-                      <button
-                        className={`sidebar-nav__submenu-link${active === "reports" || pathname?.startsWith("/reports") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/reports")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="reports" />
-                        </span>
-                        Reports
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            }
-
-            return (
-              <button
-                key={item.key}
-                className={`nav-link ${active === item.key ? "is-active" : ""}`}
-                aria-current={active === item.key ? "page" : undefined}
-                type="button"
-                onMouseDown={(event) => {
-                  if (event.button !== 0) {
-                    return;
-                  }
-
-                  event.preventDefault();
-                  navigateTo(item.href);
-                }}
-                onClick={() => navigateTo(item.href)}
-                onMouseEnter={() => prefetchNavTarget(item.href)}
-                onTouchStart={() => prefetchNavTarget(item.href)}
-              >
-                <span className="nav-link__icon" aria-hidden="true">
-                  <MenuIcon name={item.key} />
-                </span>
-                {item.label}
-              </button>
-            );
-          })}
+                    event.preventDefault();
+                    navigateTo(item.href);
+                  }}
+                  onClick={() => navigateTo(item.href)}
+                  onMouseEnter={() => prefetchNavTarget(item.href)}
+                  onTouchStart={() => prefetchNavTarget(item.href)}
+                >
+                  <span className="nav-link__icon" aria-hidden="true">
+                    <MenuIcon name={item.key} />
+                  </span>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ))}
         </nav>
 
         <div className="sidebar-footer">

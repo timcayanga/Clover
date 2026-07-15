@@ -857,6 +857,26 @@ body.dashboard-modal-open .app-shell {
   grid-auto-rows: max-content;
 }
 
+.sidebar-nav__section {
+  display: grid;
+  gap: 1px;
+}
+
+.sidebar-nav__section + .sidebar-nav__section {
+  margin-top: 6px;
+}
+
+.sidebar-nav__section-label {
+  margin: 0;
+  padding: 2px 12px 1px;
+  color: var(--muted-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
 .sidebar-nav__more {
   position: relative;
   display: grid;
