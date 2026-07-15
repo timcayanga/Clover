@@ -4056,6 +4056,16 @@ const main = async () => {
     throw new Error(`expected noisy OCR confidence to reflect unresolved receipt noise, got ${noisyReceiptPreview.confidence}`);
   }
 
+  const invalidDateReceiptPreview = parseReceiptText([
+    "Cafe Luna",
+    "31/13/2024 12:35",
+    "Coffee 80.00",
+    "TOTAL 80.00",
+  ].join("\n"));
+  if (invalidDateReceiptPreview.billDate !== null) {
+    throw new Error(`expected impossible OCR date to remain unresolved, got ${invalidDateReceiptPreview.billDate}`);
+  }
+
   const merchantHeaderPreview = parseReceiptText([
     "TABLE NO: 12",
     "REF: 300421",

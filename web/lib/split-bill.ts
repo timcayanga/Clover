@@ -421,6 +421,24 @@ const normalizeReceiptYear = (year: number) => {
   return year;
 };
 
+const buildReceiptDate = (year: number | null, month: number, day: number) => {
+  if (year === null || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed.toISOString();
+};
+
 const parseBillDateFromText = (text: string) => {
   const datePatterns = [
     /\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/,
@@ -437,29 +455,30 @@ const parseBillDateFromText = (text: string) => {
 
     if (match[1].length === 4) {
       const year = normalizeReceiptYear(Number(match[1]));
-      const month = Number(match[2]) - 1;
+      const month = Number(match[2]);
       const day = Number(match[3]);
-      const parsed = year === null ? null : new Date(Date.UTC(year, month, day));
-      if (parsed && !Number.isNaN(parsed.getTime())) {
-        return parsed.toISOString();
+      const parsed = buildReceiptDate(year, month, day);
+      if (parsed) {
+        return parsed;
       }
     } else if (/^[A-Za-z]/.test(match[1]) || /^[A-Za-z]/.test(match[2])) {
       const monthToken = /^[A-Za-z]/.test(match[1]) ? match[1] : match[2];
       const dayToken = /^[A-Za-z]/.test(match[1]) ? match[2] : match[1];
       const monthIndex = monthIndexByAbbr[monthToken.slice(0, 3).toUpperCase()];
       const year = normalizeReceiptYear(Number(match[3]));
-      const parsed = monthIndex === undefined || year === null ? null : new Date(Date.UTC(year, monthIndex, Number(dayToken)));
-      if (parsed && !Number.isNaN(parsed.getTime())) {
-        return parsed.toISOString();
+      const parsed = buildReceiptDate(year, monthIndex === undefined ? 0 : monthIndex + 1, Number(dayToken));
+      if (parsed) {
+        return parsed;
       }
     } else {
       const first = Number(match[1]);
       const second = Number(match[2]);
       const year = normalizeReceiptYear(Number(match[3]));
-      const parsed =
-        year === null ? null : new Date(Date.UTC(year, first > 12 ? second - 1 : first - 1, first > 12 ? first : second));
-      if (parsed && !Number.isNaN(parsed.getTime())) {
-        return parsed.toISOString();
+      const month = first > 12 ? second : first;
+      const day = first > 12 ? first : second;
+      const parsed = buildReceiptDate(year, month, day);
+      if (parsed) {
+        return parsed;
       }
     }
   }
