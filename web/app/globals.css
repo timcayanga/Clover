@@ -35761,6 +35761,327 @@ html[data-theme="dark"] body {
   color: var(--text);
 }
 
+/* Keep the app shell deterministic when the viewport crosses desktop and mobile sizes. */
+@media (min-width: 1101px) {
+  .app-shell {
+    grid-template-columns: 236px minmax(0, 1fr) !important;
+  }
+
+  .sidebar {
+    position: relative !important;
+    inset: auto !important;
+    width: auto !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    border: 0 !important;
+    border-right: 1px solid var(--stroke) !important;
+    border-radius: 0 !important;
+    transform: none !important;
+    visibility: visible !important;
+    box-shadow: none !important;
+  }
+
+  .sidebar-backdrop,
+  .shell-menu-button,
+  .shell-compact-bar,
+  .shell-bottom-nav {
+    display: none !important;
+  }
+
+  .content {
+    width: 100%;
+    min-width: 0;
+    padding: 18px 20px 20px !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .app-shell,
+  body[data-clover-page-modal] .app-shell,
+  body.dashboard-modal-open .app-shell {
+    grid-template-columns: minmax(0, 1fr) !important;
+    min-height: 100dvh;
+    height: auto;
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+
+  .sidebar {
+    position: fixed !important;
+    inset: 12px auto 12px 12px !important;
+    width: min(330px, calc(100vw - 24px)) !important;
+    height: auto !important;
+    max-height: calc(100dvh - 24px) !important;
+    min-height: 0 !important;
+    border: 1px solid var(--stroke) !important;
+    border-radius: 28px !important;
+    box-shadow: var(--shadow) !important;
+    transform: translateX(calc(-100% - 20px)) !important;
+    transition: transform 180ms ease, visibility 180ms ease;
+    z-index: 2147483400 !important;
+    visibility: hidden !important;
+  }
+
+  .app-shell.is-sidebar-open .sidebar {
+    transform: translateX(0) !important;
+    visibility: visible !important;
+  }
+
+  .sidebar-backdrop {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 2147483300 !important;
+    background: rgba(15, 23, 42, 0.22);
+  }
+
+  .app-shell:not(.is-sidebar-open) .sidebar-backdrop {
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  .content {
+    width: 100%;
+    min-width: 0;
+    padding: 14px 16px 22px !important;
+  }
+
+  .topbar,
+  .shell-compact-bar {
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .topbar .shell-menu-button,
+  .shell-compact-bar .shell-menu-button {
+    display: inline-flex !important;
+  }
+
+  .shell-bottom-nav {
+    display: none !important;
+  }
+
+  .topbar__title-wrap,
+  .shell-compact-bar__copy {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .dashboard-home__hero--balance {
+    min-height: 152px;
+    max-height: 196px;
+  }
+
+  .accounts-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .accounts-card-grid.accounts-card-grid--desktop {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 272px)) !important;
+    justify-content: start;
+  }
+
+  .accounts-card-grid.accounts-card-grid--desktop .financial-account-card {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .modal-backdrop--transactions-content {
+    left: 0 !important;
+    width: 100% !important;
+  }
+
+  .modal-backdrop {
+    padding: 12px !important;
+  }
+
+  .modal-card,
+  .account-actions-modal__card,
+  .budget-editor,
+  .accounts-import-modal {
+    width: min(100%, calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    overflow: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .shell-bottom-nav {
+    display: grid !important;
+  }
+
+  .topbar,
+  .shell-compact-bar {
+    position: relative;
+  }
+
+  .topbar__title-wrap,
+  .shell-compact-bar__copy {
+    position: absolute;
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    transform: translateY(-50%);
+    z-index: 0;
+  }
+
+  .topbar-actions,
+  .shell-compact-bar__actions,
+  .topbar .shell-menu-button,
+  .shell-compact-bar .shell-menu-button,
+  .topbar .shell-back-button,
+  .shell-compact-bar .shell-back-button {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+@media (max-width: 760px) {
+  .content {
+    padding: 12px 10px calc(106px + env(safe-area-inset-bottom)) !important;
+    scroll-padding-bottom: calc(106px + env(safe-area-inset-bottom));
+  }
+
+  .topbar,
+  .shell-compact-bar {
+    grid-template-columns: 44px minmax(0, 1fr) auto !important;
+    gap: 8px;
+  }
+
+  .topbar__title-wrap,
+  .shell-compact-bar__copy {
+    grid-column: 1 / -1 !important;
+    grid-row: 1;
+    position: absolute;
+    inset: auto 0 auto 0 !important;
+    top: 50%;
+    width: 100% !important;
+    max-width: 100% !important;
+    transform: translateY(-50%);
+    justify-self: stretch !important;
+    justify-items: center !important;
+    text-align: center !important;
+  }
+
+  .topbar__title-row {
+    justify-content: center !important;
+    max-width: 100%;
+  }
+
+  .topbar-actions,
+  .shell-compact-bar__actions {
+    grid-column: 3 !important;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .dashboard-home__hero--balance {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    max-height: none;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .dashboard-home__hero-main {
+    min-height: 0;
+  }
+
+  .dashboard-home__hero-aside {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-self: stretch;
+  }
+
+  .dashboard-home__hero-mini-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: 0.07em;
+  }
+
+  .accounts-overview-grid {
+    gap: 8px;
+  }
+
+  .accounts-overview-card {
+    min-width: 0;
+    min-height: 84px;
+    padding-inline: 8px;
+  }
+
+  .accounts-overview-card .eyebrow {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: 0.1em;
+  }
+
+  .accounts-card-grid.accounts-card-grid--desktop {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .accounts-card-grid.accounts-card-grid--desktop .financial-account-card {
+    max-width: 360px;
+  }
+
+  .shell-bottom-nav {
+    left: 8px !important;
+    right: 8px !important;
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 920px) {
+  .topbar,
+  .shell-compact-bar {
+    position: relative;
+  }
+
+  .topbar__title-wrap,
+  .shell-compact-bar__copy {
+    position: absolute;
+    inset: auto 0 auto 0 !important;
+    top: 50%;
+    width: 100% !important;
+    max-width: 100% !important;
+    transform: translateY(-50%);
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    z-index: 0;
+    justify-items: center !important;
+    text-align: center !important;
+  }
+
+  .topbar-actions,
+  .shell-compact-bar__actions,
+  .topbar .shell-menu-button,
+  .shell-compact-bar .shell-menu-button,
+  .topbar .shell-back-button,
+  .shell-compact-bar .shell-back-button {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+@media (max-width: 360px) {
+  .dashboard-home__hero-aside,
+  .accounts-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .accounts-overview-card {
+    min-height: 72px;
+  }
+
+  .shell-bottom-nav__label {
+    font-size: 10px;
+  }
+}
+
 html[data-theme="dark"] .content {
   background:
     radial-gradient(circle at top right, rgba(71, 215, 232, 0.08), transparent 22%),
