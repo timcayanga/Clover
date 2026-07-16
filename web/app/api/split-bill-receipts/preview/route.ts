@@ -94,6 +94,7 @@ const mergeReceiptBackup = (
   const backupType = asText(backup.receipt_type)?.toLowerCase();
   const receiptType = backupType === "restaurant_receipt" || backupType === "official_receipt" || backupType === "tax_invoice" ||
     backupType === "travel_ticket" || backupType === "wallet_transfer" ? backupType : localPreview.receiptType;
+  const backupCurrency = asText(backup.currency) ? normalizeCurrencyCode(asText(backup.currency)) : null;
 
   return {
     ...localPreview,
@@ -105,7 +106,12 @@ const mergeReceiptBackup = (
     documentNumber: localPreview.documentNumber ?? asText(backup.document_number),
     invoiceNumber: localPreview.invoiceNumber ?? asText(backup.invoice_number),
     bookingReference: localPreview.bookingReference ?? asText(backup.booking_reference),
-    currency: asText(backup.currency) ? normalizeCurrencyCode(asText(backup.currency)) : localPreview.currency,
+    currency: backupCurrency ?? localPreview.currency,
+    currencyMentions: localPreview.currencyMentions.length > 0
+      ? localPreview.currencyMentions
+      : backupCurrency
+        ? [backupCurrency]
+        : localPreview.currencyMentions,
     paymentMethod: localPreview.paymentMethod ?? asText(backup.payment_method),
     receiptPayerName: localPreview.receiptPayerName ?? asText(backup.buyer_name),
     receiptAccountMatch: localPreview.receiptAccountMatch ?? normalizedAccountMatch,
