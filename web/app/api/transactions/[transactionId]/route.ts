@@ -154,6 +154,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         currency: payload.currency ? payload.currency.toUpperCase() : undefined,
         rawPayload: payload.rawPayload === undefined ? undefined : (payload.rawPayload as Prisma.InputJsonValue),
         reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : undefined),
+        reviewPriority: editedFields && payload.reviewStatus !== "pending_review" ? "none" : undefined,
+        reviewReasons: editedFields && payload.reviewStatus !== "pending_review" ? Prisma.DbNull : undefined,
         parserConfidence: transaction.parserConfidence,
         categoryConfidence: payload.categoryId ? 100 : transaction.categoryConfidence,
         accountMatchConfidence: payload.accountId ? 100 : transaction.accountMatchConfidence,

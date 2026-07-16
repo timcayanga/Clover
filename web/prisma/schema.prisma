@@ -562,6 +562,8 @@ model Transaction {
   importFileId           String?
   categoryId             String?
   reviewStatus           ReviewStatus          @default(suggested)
+  reviewPriority         String                @default("none")
+  reviewReasons          Json?
   parserConfidence       Int                   @default(0)
   categoryConfidence     Int                   @default(0)
   accountMatchConfidence Int                   @default(0)
@@ -599,6 +601,7 @@ model Transaction {
   @@index([importFileId])
   @@index([categoryId])
   @@index([reviewStatus])
+  @@index([workspaceId, reviewPriority, reviewStatus])
   @@index([deletedAt])
   @@index([date])
   @@index([workspaceId, date])

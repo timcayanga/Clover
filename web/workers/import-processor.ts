@@ -1,4 +1,5 @@
-import type { AccountType, Prisma, ReviewStatus, TransactionType } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type { AccountType, ReviewStatus, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { capturePostHogServerEvent } from "@/lib/analytics";
@@ -5339,6 +5340,8 @@ const buildTransactionInsertRecord = (params: {
   categoryId?: string | null;
   categoryName?: string | null;
   reviewStatus?: string;
+  reviewPriority?: string;
+  reviewReasons?: Prisma.InputJsonValue | null;
   parserConfidence?: number;
   categoryConfidence?: number;
   accountMatchConfidence?: number;
@@ -5369,6 +5372,8 @@ const buildTransactionInsertRecord = (params: {
     accountId: params.accountId,
     categoryId: params.categoryId ?? null,
     reviewStatus: params.reviewStatus ?? "suggested",
+    reviewPriority: params.reviewPriority ?? "none",
+    reviewReasons: params.reviewReasons ?? null,
     parserConfidence: params.parserConfidence ?? 0,
     categoryConfidence: params.categoryConfidence ?? 0,
     accountMatchConfidence: params.accountMatchConfidence ?? 0,
@@ -11157,6 +11162,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       categoryId,
       categoryName,
       reviewStatus,
+      reviewPriority: reviewOnlyRow ? "none" : getImportReviewPriority(reviewReasons),
+      reviewReasons: reviewReasons as Prisma.InputJsonValue,
       parserConfidence: rowParserConfidence,
       categoryConfidence: rowCategoryConfidence,
       accountMatchConfidence: rowAccountMatchConfidence,
@@ -11257,6 +11264,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
                 categoryConfidence: rowCategoryConfidence,
                 parserConfidence: rowParserConfidence,
                 reviewStatus: insertRow.reviewStatus as Prisma.EnumReviewStatusFieldUpdateOperationsInput | ReviewStatus,
+                reviewPriority: typeof insertRow.reviewPriority === "string" ? insertRow.reviewPriority : "none",
+                reviewReasons: insertRow.reviewReasons ? (insertRow.reviewReasons as Prisma.InputJsonValue) : Prisma.DbNull,
                 isTransfer: canonicalType === "transfer",
                 normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
                 learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,

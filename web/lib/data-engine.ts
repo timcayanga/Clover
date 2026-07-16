@@ -490,6 +490,8 @@ const TRANSACTION_COLUMNS = [
   "importFileId",
   "categoryId",
   "reviewStatus",
+  "reviewPriority",
+  "reviewReasons",
   "parserConfidence",
   "categoryConfidence",
   "accountMatchConfidence",
@@ -3154,6 +3156,8 @@ type TransactionInsertParams = {
   categoryId?: string | null;
   categoryName?: string | null;
   reviewStatus?: string;
+  reviewPriority?: string;
+  reviewReasons?: Prisma.InputJsonValue | null;
   parserConfidence?: number;
   categoryConfidence?: number;
   accountMatchConfidence?: number;
@@ -3190,6 +3194,8 @@ const buildTransactionInsertRecord = async (params: TransactionInsertParams, col
   if (columnSet.has("categoryId")) record.categoryId = params.categoryId ?? null;
   if (columnSet.has("categoryName")) record.categoryName = params.categoryName ?? null;
   if (columnSet.has("reviewStatus")) record.reviewStatus = params.reviewStatus ?? "suggested";
+  if (columnSet.has("reviewPriority")) record.reviewPriority = params.reviewPriority ?? "none";
+  if (columnSet.has("reviewReasons")) record.reviewReasons = params.reviewReasons ?? null;
   if (columnSet.has("parserConfidence")) record.parserConfidence = params.parserConfidence ?? 0;
   if (columnSet.has("categoryConfidence")) record.categoryConfidence = params.categoryConfidence ?? 0;
   if (columnSet.has("accountMatchConfidence")) record.accountMatchConfidence = params.accountMatchConfidence ?? 0;
