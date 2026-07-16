@@ -2093,7 +2093,14 @@ const looksLikeSplitAllocationWorksheet = (text: string) => {
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
   const rowsWithManyAmounts = lines.filter((line) => (line.match(/\b\d+(?:\.\d{2})?\b/g) ?? []).length >= 5).length;
-  return rowsWithManyAmounts >= 2;
+  if (rowsWithManyAmounts >= 2) {
+    return true;
+  }
+
+  const rowsWithSeveralAmounts = lines.filter((line) => (line.match(/-?\d+(?:\.\d{2})?\b/g) ?? []).length >= 3).length;
+  return rowsWithSeveralAmounts >= 2 &&
+    /\btotal\s+order\b/i.test(text) &&
+    /\b(?:df|disc|discount)\b/i.test(text);
 };
 
 const extractDeclaredReceiptItemCount = (text: string) => {

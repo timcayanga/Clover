@@ -3485,6 +3485,17 @@ const main = async () => {
     throw new Error("expected OCR column-only split worksheet to stay off the fast receipt path");
   }
 
+  const compactSplitSummaryPreview = parseReceiptText([
+    "Lance Grace Iris",
+    "Total Order 344.00 247.00 264.00",
+    "DF 19.67 19.67 19.67",
+    "Disc -57.00 -57.00 -57.00",
+    "306.67 209.67 226.67",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(compactSplitSummaryPreview).reliableForFastPath) {
+    throw new Error("expected compact total-order split summary to stay off the fast receipt path");
+  }
+
   const nonQuantityTableRowPreview = parseReceiptText([
     "Qty Description Amount",
     "2.00 YAKIJAKE BENTO 1100.00",
