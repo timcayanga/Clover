@@ -1106,18 +1106,24 @@ body.transactions-manual-open .shell-quick-add-button {
   display: grid;
   gap: 6px;
   min-width: 232px;
-  padding: 10px;
-  border-radius: 18px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .shell-quick-add-popover__item {
-  display: grid;
-  gap: 3px;
-  padding: 12px 14px;
-  border: 0;
-  border-radius: 14px;
-  background: transparent;
-  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid rgba(3, 168, 192, 0.24);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--accent);
   text-align: left;
   cursor: pointer;
   transition: background 160ms ease, color 160ms ease, transform 160ms ease;
@@ -1125,7 +1131,7 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .shell-quick-add-popover__item:hover,
 .shell-quick-add-popover__item:focus-visible {
-  background: rgba(3, 168, 192, 0.08);
+  background: #f4fcfd;
   outline: none;
   transform: translateY(-1px);
 }
@@ -1142,17 +1148,24 @@ body.transactions-manual-open .shell-quick-add-button {
   color: #fff;
 }
 
-.shell-quick-add-popover__item--mobile-only {
-  display: none;
+.shell-quick-add-popover__item--manual {
+  border-color: rgba(148, 163, 184, 0.46);
+  color: var(--accent);
 }
 
-.shell-quick-add-popover__label-mobile {
+.shell-quick-add-popover__item--mobile-only {
   display: none;
 }
 
 .shell-quick-add-popover__item strong {
   font-size: 14px;
   letter-spacing: -0.02em;
+}
+
+.shell-quick-add-popover__item svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
 }
 
 .shell-quick-add-popover__item span {
@@ -3604,20 +3617,6 @@ body.transactions-manual-open .shell-quick-add-button {
 
   .shell-quick-add-popover__item--mobile-only {
     display: grid;
-  }
-
-  .shell-quick-add-popover__item--primary {
-    background: transparent;
-    color: var(--text);
-    box-shadow: none;
-  }
-
-  .shell-quick-add-popover__label-desktop {
-    display: none;
-  }
-
-  .shell-quick-add-popover__label-mobile {
-    display: inline;
   }
 
   .more-page__sections {

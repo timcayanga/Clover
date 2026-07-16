@@ -300,6 +300,7 @@ type IconName =
   | "search"
   | "more"
   | "plus"
+  | "upload"
   | "notifications"
   | "profile"
   | "settings"
@@ -406,6 +407,14 @@ function MenuIcon({ name }: { name: IconName }) {
         <svg {...common}>
           <path d="M12 5v14" />
           <path d="M5 12h14" />
+        </svg>
+      );
+    case "upload":
+      return (
+        <svg {...common}>
+          <path d="M12 16V4" />
+          <path d="m7 9 5-5 5 5" />
+          <path d="M5 20h14" />
         </svg>
       );
     case "more":
@@ -1681,7 +1690,7 @@ export function CloverShell({
         tabIndex={-1}
       />
       {isQuickAddOpen ? (
-        <div className="shell-quick-add-popover glass" ref={quickAddPopoverRef} role="menu" aria-label="Quick add">
+        <div className="shell-quick-add-popover" ref={quickAddPopoverRef} role="menu" aria-label="Quick add">
           <button
             className="shell-quick-add-popover__item shell-quick-add-popover__item--mobile-only"
             type="button"
@@ -1713,13 +1722,11 @@ export function CloverShell({
               openQuickAddFilePicker();
             }}
           >
-            <strong>
-              <span className="shell-quick-add-popover__label-desktop">📁 Upload</span>
-              <span className="shell-quick-add-popover__label-mobile">📁 Files</span>
-            </strong>
+            <MenuIcon name="upload" />
+            <strong>Upload Files</strong>
           </button>
           <button
-            className="shell-quick-add-popover__item"
+            className="shell-quick-add-popover__item shell-quick-add-popover__item--manual"
             type="button"
             role="menuitem"
             onClick={() => {
@@ -1727,7 +1734,8 @@ export function CloverShell({
               setQuickAddModal("transaction");
             }}
           >
-            <strong>✍️ Add Manually</strong>
+            <MenuIcon name="plus" />
+            <strong>Add Manually</strong>
           </button>
         </div>
       ) : null}
