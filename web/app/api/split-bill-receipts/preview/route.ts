@@ -103,20 +103,25 @@ const tryReceiptBackup = async (params: { file: File; receiptText: string; previ
     return params.preview;
   }
 
-  const bytes = new Uint8Array(await params.file.arrayBuffer());
-  const normalized = await normalizeReceiptImageForVision({ bytes, fileType: params.file.type, fileName: params.file.name });
-  const result = await parseImportTextWithOpenAIFallback({
-    text: params.receiptText,
-    fileName: params.file.name,
-    fileType: normalized.mimeType,
-    detectedMetadata: null,
-    parsedRows: [],
-    pageImages: [{ page: 1, dataUrl: normalized.dataUrl }],
-    importMode: "receipt",
-    pageImageLimit: 1,
-    timeoutMs: 25_000,
-  });
-  return result?.receiptDetails ? mergeReceiptBackup(params.preview, result.receiptDetails as unknown as Record<string, unknown>) : params.preview;
+  try {
+    const bytes = new Uint8Array(await params.file.arrayBuffer());
+    const normalized = await normalizeReceiptImageForVision({ bytes, fileType: params.file.type, fileName: params.file.name });
+    const result = await parseImportTextWithOpenAIFallback({
+      text: params.receiptText,
+      fileName: params.file.name,
+      fileType: normalized.mimeType,
+      detectedMetadata: null,
+      parsedRows: [],
+      pageImages: [{ page: 1, dataUrl: normalized.dataUrl }],
+      importMode: "receipt",
+      pageImageLimit: 1,
+      timeoutMs: 25_000,
+    });
+    return result?.receiptDetails ? mergeReceiptBackup(params.preview, result.receiptDetails as unknown as Record<string, unknown>) : params.preview;
+  } catch (error) {
+    console.warn("Receipt backup parser failed; keeping local preview", error);
+    return params.preview;
+  }
 };
 
 export async function POST(request: Request) {
