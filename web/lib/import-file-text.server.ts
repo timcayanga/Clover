@@ -630,7 +630,7 @@ const pickBestReceiptTextCandidate = (
   return scoredCandidates[0]?.text ?? "";
 };
 
-const shouldRetryImageOcrBestEffort = (params: {
+export const shouldRetryImageOcrBestEffort = (params: {
   firstPassText: string;
   fileType?: string | null;
   fileName?: string | null;
@@ -662,7 +662,9 @@ const shouldRetryImageOcrBestEffort = (params: {
     const firstPassPreview = parseReceiptText(firstPassText);
     const firstPassQuality = assessReceiptPreviewQuality(firstPassPreview);
     const needsReceiptRecovery = firstPassQuality.issues.some((issue) =>
-      /merchant looks noisy|total missing|suspicious line items/i.test(issue)
+      /merchant looks noisy|total missing|total inferred from line items|suspicious line items|summary does not reconcile|total is smaller than subtotal|line item exceeds total/i.test(
+        issue
+      )
     );
 
     if (needsReceiptRecovery) {

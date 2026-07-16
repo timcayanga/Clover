@@ -890,6 +890,12 @@ const main = async () => {
     issues: string[];
     reliableForFastPath: boolean;
   };
+  const shouldRetryImageOcrBestEffort = importFileTextModule.shouldRetryImageOcrBestEffort as (params: {
+    firstPassText: string;
+    fileType?: string | null;
+    fileName?: string | null;
+    importMode?: string | null;
+  }) => boolean;
   const resolveReceiptAccountHintToAccount = receiptAccountResolutionModule.resolveReceiptAccountHintToAccount as (
     hint: {
       accountName: string | null;
@@ -3532,6 +3538,43 @@ const main = async () => {
   ].join("\n"));
   if (!assessReceiptPreviewQuality(explicitSummaryReceiptPreview).reliableForFastPath) {
     throw new Error("expected receipt with an explicit total to remain eligible for the fast path");
+  }
+
+  if (
+    !shouldRetryImageOcrBestEffort({
+      firstPassText: [
+        "CAFE LUNA",
+        "Coffee 80.00",
+        "Cake 50.00",
+        "Subtotal 130.00",
+        "Total 10.00",
+      ].join("\n"),
+      fileType: "image/jpeg",
+      fileName: "receipt.jpg",
+      importMode: "receipt",
+    })
+  ) {
+    throw new Error("expected unreconciled receipt totals to trigger targeted OCR recovery");
+  }
+
+  if (
+    shouldRetryImageOcrBestEffort({
+      firstPassText: [
+        "THE FAMILY TABLE",
+        "Date: 2024-02-20",
+        "Coffee 80.00",
+        "Cake 50.00",
+        "Water 20.00",
+        "Subtotal 150.00",
+        "Total 150.00",
+        "Paid with Visa",
+      ].join("\n"),
+      fileType: "image/jpeg",
+      fileName: "receipt.jpg",
+      importMode: "receipt",
+    })
+  ) {
+    throw new Error("expected a reconciled receipt to avoid targeted OCR recovery");
   }
 
   const cardFooterPreview = parseReceiptText([
