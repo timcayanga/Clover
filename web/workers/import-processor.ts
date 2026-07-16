@@ -85,6 +85,7 @@ import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
+import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
 import {
   isGenericMobileScreenshotFileName,
   resolveStatementIdentityFromMetadata,
@@ -5298,6 +5299,7 @@ const buildTransactionInsertRecord = (params: {
   rawPayload?: Prisma.InputJsonValue | null;
   normalizedPayload?: Prisma.InputJsonValue | null;
   learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
+  sourceRowKey?: string | null;
   date: Date;
   amount: string | number;
   currency: string;
@@ -5327,6 +5329,7 @@ const buildTransactionInsertRecord = (params: {
     rawPayload: params.rawPayload ?? null,
     normalizedPayload: params.normalizedPayload ?? null,
     learnedRuleIdsApplied: params.learnedRuleIdsApplied ?? null,
+    sourceRowKey: params.sourceRowKey ?? null,
     date: params.date,
     amount,
     currency: params.currency,
@@ -5829,7 +5832,7 @@ const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
 
   const groups = new Map<string, typeof transactions>();
   for (const transaction of transactions) {
-    if (transaction.reviewStatus === "edited" || transaction.reviewStatus === "rejected") {
+    if (isProtectedTransactionReviewStatus(transaction.reviewStatus)) {
       continue;
     }
 
@@ -6069,6 +6072,7 @@ export const processImportEnrichmentJobs = async (options: {
       break;
     }
 
+    const leaseToken = job.leaseToken;
     try {
       const attempt = Math.max(1, Number(job.attempts ?? 1));
       const deadlineAt = Date.now() + 60_000;
@@ -6076,6 +6080,8 @@ export const processImportEnrichmentJobs = async (options: {
       if (!importFile) {
         await failImportEnrichmentJob({
           id: job.id,
+          workerId,
+          leaseToken,
           errorCode: "I-404",
           errorMessage: "Import file was not found for enrichment.",
           retryable: false,
@@ -6093,7 +6099,7 @@ export const processImportEnrichmentJobs = async (options: {
       const parsedRows = await fetchParsedTransactionRows(job.importFileId);
       const totalRows = parsedRows.length;
       if (totalRows === 0) {
-        await completeImportEnrichmentJob({ id: job.id, totalRows: 0 });
+        await completeImportEnrichmentJob({ id: job.id, totalRows: 0, workerId, leaseToken });
         results.push({ importFileId: job.importFileId, status: "done", processedRows: 0, totalRows: 0 });
         continue;
       }
@@ -6279,6 +6285,7 @@ export const processImportEnrichmentJobs = async (options: {
         processedRows = Math.min(totalRows, startIndex + batchRows.length);
         await updateRunningImportEnrichmentJobProgress({
           id: job.id,
+          leaseToken,
           phase: "enriching",
           lastRowIndex: processedRows,
           processedRows,
@@ -6307,6 +6314,7 @@ export const processImportEnrichmentJobs = async (options: {
         if (remainingCleanupCount > 0 && attempt < MAX_IMPORT_ENRICHMENT_ATTEMPTS) {
           await updateImportEnrichmentJobProgress({
             id: job.id,
+            leaseToken,
             phase: "retrying",
             lastRowIndex: 0,
             processedRows: 0,
@@ -6325,6 +6333,8 @@ export const processImportEnrichmentJobs = async (options: {
           await markRemainingImportCleanupRowsForReview(job.importFileId).catch(() => null);
           await failImportEnrichmentJob({
             id: job.id,
+            workerId,
+            leaseToken,
             errorCode: "I-206",
             errorMessage: "Some transaction details may need review.",
             retryable: false,
@@ -6335,7 +6345,7 @@ export const processImportEnrichmentJobs = async (options: {
           });
           results.push({ importFileId: job.importFileId, status: "failed", processedRows, totalRows });
         } else {
-          await completeImportEnrichmentJob({ id: job.id, totalRows });
+          await completeImportEnrichmentJob({ id: job.id, totalRows, workerId, leaseToken });
           await updateImportFileCompat(job.importFileId, {
             processingPhase: "complete",
             processingMessage: "Transaction details finalized.",
@@ -6346,6 +6356,8 @@ export const processImportEnrichmentJobs = async (options: {
         const retryable = attempt < MAX_IMPORT_ENRICHMENT_ATTEMPTS;
         await failImportEnrichmentJob({
           id: job.id,
+          workerId,
+          leaseToken,
           errorCode: "I-504",
           errorMessage: "Enrichment timed out before all rows were checked.",
           retryable,
@@ -6360,6 +6372,8 @@ export const processImportEnrichmentJobs = async (options: {
       const retryable = job.attempts < MAX_IMPORT_ENRICHMENT_ATTEMPTS;
       await failImportEnrichmentJob({
         id: job.id,
+        workerId,
+        leaseToken,
         errorCode: "I-503",
         errorMessage: message,
         retryable,
@@ -8538,6 +8552,9 @@ export const processImportFileText = async (
 
   const extractedTextFileFingerprint = textCacheInfo?.cacheRecord?.fileFingerprint ?? null;
   if (extractedTextFileFingerprint) {
+    await updateImportFileCompat(importFileId, {
+      sourceFingerprint: extractedTextFileFingerprint,
+    }).catch(() => null);
     void storeImportedFileTextCacheRecord({
       workspaceId: String(importFile.workspaceId),
       fileFingerprint: extractedTextFileFingerprint,
@@ -10527,7 +10544,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           where: {
             deletedAt: null,
             workspaceId: String(importFile.workspaceId),
-            reviewStatus: { notIn: ["rejected", "duplicate_skipped"] },
+            reviewStatus: { notIn: ["confirmed", "edited", "rejected", "duplicate_skipped"] },
             OR: mobileScreenshotOverlapPayloadMatchers.map((matcher) => ({
               rawPayload: {
                 path: [matcher.path],
@@ -11062,6 +11079,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       } as Prisma.InputJsonValue,
       normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
+      sourceRowKey:
+        typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
+          ? `${row.statementFingerprint.trim()}:${index + 1}`
+          : checkpointStatementFingerprint
+            ? `${checkpointStatementFingerprint}:${index + 1}`
+            : `${importFileId}:${index + 1}`,
       date:
         parsedTransactionDate ?? new Date(),
       amount: parseAmountValue(coerceAmountToString(row.amount)) ?? 0,
@@ -11105,8 +11128,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       retainedExistingImportTransactionIds.add(existingImportTransaction.id);
       retainedExistingImportTransactionsCount += 1;
       const canPatchImportedClassification =
-        existingImportTransaction.reviewStatus !== "edited" &&
-        existingImportTransaction.reviewStatus !== "rejected";
+        !isProtectedTransactionReviewStatus(existingImportTransaction.reviewStatus);
       await tx.transaction.update({
         where: { id: existingImportTransaction.id },
         data: {
@@ -11121,6 +11143,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               ? insertRow.description
               : null,
           rawPayload: mergeImportJsonPayload(insertRow.rawPayload, existingImportTransaction.rawPayload) as Prisma.InputJsonValue,
+          sourceRowKey: typeof insertRow.sourceRowKey === "string" ? insertRow.sourceRowKey : undefined,
           isExcluded: Boolean(insertRow.isExcluded),
           ...(canPatchImportedClassification
             ? {
@@ -11525,7 +11548,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         workspaceId: String(importFile.workspaceId),
         deletedAt: null,
         accountId: { notIn: resolvedAccountIdsForCleanup },
-        reviewStatus: { notIn: ["edited", "rejected"] },
+        reviewStatus: { notIn: ["confirmed", "edited", "rejected", "duplicate_skipped"] },
         OR: [
           {
             rawPayload: {
@@ -11557,7 +11580,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             workspaceId: String(importFile.workspaceId),
             deletedAt: null,
             accountId: { notIn: resolvedAccountIdsForCleanup },
-            reviewStatus: { notIn: ["edited", "rejected"] },
+            reviewStatus: { notIn: ["confirmed", "edited", "rejected", "duplicate_skipped"] },
             account: {
               source: "upload",
               institution: { in: resolvedInstitutionsForCleanup },
@@ -11591,7 +11614,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           await prisma.transaction.deleteMany({
             where: {
               id: { in: staleDuplicateIds },
-              reviewStatus: { notIn: ["edited", "rejected"] },
+              reviewStatus: { notIn: ["confirmed", "edited", "rejected", "duplicate_skipped"] },
             },
           }).catch((error) => {
             console.warn("[import-account-match] unable to delete stale duplicate multi-account rows by content", {

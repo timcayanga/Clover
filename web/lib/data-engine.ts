@@ -153,6 +153,7 @@ export type EnrichedParsedImportRow = ParsedImportRow & {
   rawPayload?: Prisma.InputJsonValue | null;
   normalizedPayload?: Prisma.InputJsonValue | null;
   learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
+  sourceRowKey?: string | null;
 };
 
 const COMMON_STOP_WORDS = new Set([
@@ -435,6 +436,9 @@ const IMPORT_FILE_COLUMNS = [
   "parsedRowsCount",
   "confirmedTransactionsCount",
   "confirmedAt",
+  "sourceFingerprint",
+  "sourceTimezone",
+  "sourceLocale",
   "uploadedAt",
   "deletedAt",
   "createdAt",
@@ -473,6 +477,7 @@ const TRANSACTION_COLUMNS = [
   "rawPayload",
   "normalizedPayload",
   "learnedRuleIdsApplied",
+  "sourceRowKey",
   "date",
   "amount",
   "currency",
@@ -3131,6 +3136,7 @@ type TransactionInsertParams = {
   rawPayload?: Prisma.InputJsonValue | null;
   normalizedPayload?: Prisma.InputJsonValue | null;
   learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
+  sourceRowKey?: string | null;
   date: Date;
   amount: string | number;
   currency: string;
@@ -3166,6 +3172,7 @@ const buildTransactionInsertRecord = async (params: TransactionInsertParams, col
   if (columnSet.has("rawPayload")) record.rawPayload = params.rawPayload ?? null;
   if (columnSet.has("normalizedPayload")) record.normalizedPayload = params.normalizedPayload ?? null;
   if (columnSet.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = params.learnedRuleIdsApplied ?? null;
+  if (columnSet.has("sourceRowKey")) record.sourceRowKey = params.sourceRowKey ?? null;
   if (columnSet.has("date")) record.date = params.date;
   if (columnSet.has("amount")) record.amount = amount;
   if (columnSet.has("currency")) record.currency = params.currency;

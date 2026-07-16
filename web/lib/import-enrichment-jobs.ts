@@ -19,6 +19,8 @@ export type ImportEnrichmentJobRow = {
   errorMessage: string | null;
   lockedAt: Date | null;
   lockedBy: string | null;
+  leaseToken: string | null;
+  leaseVersion: number;
   startedAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
@@ -64,6 +66,9 @@ export const ensureImportEnrichmentJobTable = async () => {
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ImportEnrichmentJob_status_idx" ON "ImportEnrichmentJob"("status")`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ImportEnrichmentJob_lockedAt_idx" ON "ImportEnrichmentJob"("lockedAt")`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ImportEnrichmentJob_updatedAt_idx" ON "ImportEnrichmentJob"("updatedAt")`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "ImportEnrichmentJob" ADD COLUMN IF NOT EXISTS "leaseToken" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "ImportEnrichmentJob" ADD COLUMN IF NOT EXISTS "leaseVersion" INTEGER NOT NULL DEFAULT 0`);
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ImportEnrichmentJob_leaseToken_idx" ON "ImportEnrichmentJob"("leaseToken")`);
     })();
   }
 
@@ -76,6 +81,7 @@ const normalizeJob = (row: ImportEnrichmentJobRow): ImportEnrichmentJobRow => ({
   totalRows: Number(row.totalRows ?? 0),
   processedRows: Number(row.processedRows ?? 0),
   attempts: Number(row.attempts ?? 0),
+  leaseVersion: Number(row.leaseVersion ?? 0),
 });
 
 export const upsertImportEnrichmentJob = async (params: {
@@ -92,10 +98,10 @@ export const upsertImportEnrichmentJob = async (params: {
       INSERT INTO "ImportEnrichmentJob" (
         "id", "workspaceId", "importFileId", "status", "phase",
         "lastRowIndex", "totalRows", "processedRows", "attempts",
-        "errorCode", "errorMessage", "lockedAt", "lockedBy", "startedAt", "completedAt",
+        "errorCode", "errorMessage", "lockedAt", "lockedBy", "leaseToken", "leaseVersion", "startedAt", "completedAt",
         "createdAt", "updatedAt"
       )
-      VALUES ($1, $2, $3, 'queued', $4, 0, $5, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NOW(), NOW())
+      VALUES ($1, $2, $3, 'queued', $4, 0, $5, 0, 0, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NOW(), NOW())
       ON CONFLICT ("importFileId") DO UPDATE SET
         "workspaceId" = EXCLUDED."workspaceId",
         "status" = CASE
@@ -118,6 +124,8 @@ export const upsertImportEnrichmentJob = async (params: {
         "errorMessage" = NULL,
         "lockedAt" = NULL,
         "lockedBy" = NULL,
+        "leaseToken" = NULL,
+        "leaseVersion" = CASE WHEN $6::boolean THEN "ImportEnrichmentJob"."leaseVersion" + 1 ELSE "ImportEnrichmentJob"."leaseVersion" END,
         "startedAt" = CASE WHEN $6::boolean THEN NULL ELSE "ImportEnrichmentJob"."startedAt" END,
         "completedAt" = CASE WHEN $6::boolean THEN NULL ELSE "ImportEnrichmentJob"."completedAt" END,
         "updatedAt" = NOW()
@@ -197,6 +205,8 @@ export const claimNextImportEnrichmentJob = async (params: {
         "attempts" = job."attempts" + 1,
         "lockedAt" = NOW(),
         "lockedBy" = $1,
+        "leaseToken" = md5(random()::text || clock_timestamp()::text || job."id"),
+        "leaseVersion" = job."leaseVersion" + 1,
         "startedAt" = COALESCE(job."startedAt", NOW()),
         "updatedAt" = NOW()
       FROM candidate
@@ -217,6 +227,7 @@ export const updateImportEnrichmentJobProgress = async (params: {
   processedRows: number;
   totalRows: number;
   workerId: string;
+  leaseToken?: string | null;
 }) => {
   await ensureImportEnrichmentJobTable();
   const rows = await prisma.$queryRawUnsafe<ImportEnrichmentJobRow[]>(
@@ -230,15 +241,18 @@ export const updateImportEnrichmentJobProgress = async (params: {
         "totalRows" = $5,
         "lockedAt" = NULL,
         "lockedBy" = NULL,
+        "leaseToken" = NULL,
         "updatedAt" = NOW()
-      WHERE "id" = $1
+      WHERE "id" = $1 AND "lockedBy" = $6 AND ($7::text IS NULL OR "leaseToken" = $7)
       RETURNING *
     `,
     params.id,
     params.phase,
     Math.max(0, params.lastRowIndex),
     Math.max(0, params.processedRows),
-    Math.max(0, params.totalRows)
+    Math.max(0, params.totalRows),
+    params.workerId,
+    params.leaseToken ?? null
   );
   return rows[0] ? normalizeJob(rows[0]) : null;
 };
@@ -250,6 +264,7 @@ export const updateRunningImportEnrichmentJobProgress = async (params: {
   processedRows: number;
   totalRows: number;
   workerId: string;
+  leaseToken?: string | null;
 }) => {
   await ensureImportEnrichmentJobTable();
   const rows = await prisma.$queryRawUnsafe<ImportEnrichmentJobRow[]>(
@@ -264,7 +279,7 @@ export const updateRunningImportEnrichmentJobProgress = async (params: {
         "lockedAt" = NOW(),
         "lockedBy" = $6,
         "updatedAt" = NOW()
-      WHERE "id" = $1
+      WHERE "id" = $1 AND "lockedBy" = $6 AND ($7::text IS NULL OR "leaseToken" = $7)
       RETURNING *
     `,
     params.id,
@@ -272,12 +287,13 @@ export const updateRunningImportEnrichmentJobProgress = async (params: {
     Math.max(0, params.lastRowIndex),
     Math.max(0, params.processedRows),
     Math.max(0, params.totalRows),
-    params.workerId
+    params.workerId,
+    params.leaseToken ?? null
   );
   return rows[0] ? normalizeJob(rows[0]) : null;
 };
 
-export const completeImportEnrichmentJob = async (params: { id: string; totalRows: number }) => {
+export const completeImportEnrichmentJob = async (params: { id: string; totalRows: number; workerId?: string; leaseToken?: string | null }) => {
   await ensureImportEnrichmentJobTable();
   const rows = await prisma.$queryRawUnsafe<ImportEnrichmentJobRow[]>(
     `
@@ -290,13 +306,16 @@ export const completeImportEnrichmentJob = async (params: { id: string; totalRow
         "totalRows" = $2,
         "lockedAt" = NULL,
         "lockedBy" = NULL,
+        "leaseToken" = NULL,
         "completedAt" = NOW(),
         "updatedAt" = NOW()
-      WHERE "id" = $1
+      WHERE "id" = $1 AND ($3::text IS NULL OR "lockedBy" = $3) AND ($4::text IS NULL OR "leaseToken" = $4)
       RETURNING *
     `,
     params.id,
-    Math.max(0, params.totalRows)
+    Math.max(0, params.totalRows),
+    params.workerId ?? null,
+    params.leaseToken ?? null
   );
   return rows[0] ? normalizeJob(rows[0]) : null;
 };
@@ -306,6 +325,8 @@ export const failImportEnrichmentJob = async (params: {
   errorCode?: string | null;
   errorMessage?: string | null;
   retryable?: boolean;
+  workerId?: string;
+  leaseToken?: string | null;
 }) => {
   await ensureImportEnrichmentJobTable();
   const rows = await prisma.$queryRawUnsafe<ImportEnrichmentJobRow[]>(
@@ -318,14 +339,17 @@ export const failImportEnrichmentJob = async (params: {
         "errorMessage" = $4,
         "lockedAt" = NULL,
         "lockedBy" = NULL,
+        "leaseToken" = NULL,
         "updatedAt" = NOW()
-      WHERE "id" = $1
+      WHERE "id" = $1 AND ($5::text IS NULL OR "lockedBy" = $5) AND ($6::text IS NULL OR "leaseToken" = $6)
       RETURNING *
     `,
     params.id,
     params.retryable ? "retrying" : "failed",
     params.errorCode ?? null,
-    params.errorMessage ?? null
+    params.errorMessage ?? null,
+    params.workerId ?? null,
+    params.leaseToken ?? null
   );
   return rows[0] ? normalizeJob(rows[0]) : null;
 };

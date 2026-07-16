@@ -563,6 +563,7 @@ model Transaction {
   rawPayload             Json?
   normalizedPayload      Json?
   learnedRuleIdsApplied  Json?
+  sourceRowKey           String?
   date                   DateTime
   amount                 Decimal               @db.Decimal(18, 2)
   currency               String                @default("PHP")
@@ -594,6 +595,7 @@ model Transaction {
   @@index([deletedAt])
   @@index([date])
   @@index([workspaceId, date])
+  @@index([importFileId, sourceRowKey])
 }
 
 model TransactionTag {
@@ -627,6 +629,9 @@ model ImportFile {
   uploadedAt                 DateTime                    @default(now())
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
+  sourceFingerprint          String?
+  sourceTimezone             String?
+  sourceLocale               String?
   workspace                  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   account                    Account?                    @relation(fields: [accountId], references: [id], onDelete: SetNull)
   documentImport             DocumentImport?
@@ -684,6 +689,8 @@ model ImportEnrichmentJob {
   errorMessage   String?
   lockedAt       DateTime?
   lockedBy       String?
+  leaseToken     String?
+  leaseVersion   Int                       @default(0)
   startedAt      DateTime?
   completedAt    DateTime?
   createdAt      DateTime                  @default(now())
