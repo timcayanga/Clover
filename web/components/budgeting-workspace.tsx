@@ -102,6 +102,15 @@ type BudgetSuggestion = {
   tone: "positive" | "warning" | "neutral";
 };
 
+type BudgetExample = {
+  id: string;
+  label: string;
+  emoji: string;
+  amount: number;
+  kind: BudgetKind;
+  categoryId: string;
+};
+
 type BudgetCategoryOption = {
   id: string;
   name: string;
@@ -272,6 +281,28 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   const suggestions = data.suggestions.slice(0, 2);
   const budgetCurrencies = [...new Set(visibleBudgets.map((budget) => budget.currency.toUpperCase()))];
   const selectedHistoryBudget = historyBudgetId ? data.budgets.find((budget) => budget.id === historyBudgetId) ?? null : null;
+  const budgetExamples = useMemo<BudgetExample[]>(() => {
+    const categoryFor = (terms: string[]) =>
+      data.categories.find((category) => terms.some((term) => category.name.toLowerCase().includes(term))) ?? null;
+    const categoryExamples = [
+      { id: "groceries", label: "Groceries", emoji: "🛒", terms: ["grocery", "groceries", "food"], amount: 10000 },
+      { id: "shopping", label: "Shopping", emoji: "🛍️", terms: ["shopping", "clothing", "retail"], amount: 5000 },
+      { id: "dining", label: "Eating out", emoji: "🍽️", terms: ["dining", "restaurant", "food"], amount: 5000 },
+    ]
+      .map((example) => {
+        const category = categoryFor(example.terms);
+        return category
+          ? { id: example.id, label: category.name, emoji: example.emoji, amount: example.amount, kind: "spend_limit" as const, categoryId: category.id }
+          : null;
+      })
+      .filter((example): example is BudgetExample => example !== null);
+
+    return [
+      ...categoryExamples.filter((example, index, examples) => examples.findIndex((candidate) => candidate.categoryId === example.categoryId) === index),
+      { id: "all-spending", label: "All spending", emoji: "🧾", amount: 30000, kind: "spend_limit", categoryId: "__all__" },
+      { id: "save-monthly", label: "Save monthly", emoji: "🌱", amount: 10000, kind: "savings_target", categoryId: "__all__" },
+    ].slice(0, 4);
+  }, [data.categories]);
 
   const budgetGroups = useMemo(() => {
     const grouped = new Map<string, BudgetItem[]>();
@@ -304,6 +335,21 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
     setEditingBudgetId(null);
     setEditorPreset(null);
     setError(null);
+    setIsEditorOpen(true);
+  };
+
+  const openBudgetExample = (example: BudgetExample) => {
+    setEditingBudgetId(null);
+    setError(null);
+    setEditorPreset({
+      kind: example.kind,
+      name: "",
+      categoryId: example.categoryId,
+      accountId: "__none__",
+      cadence: "monthly",
+      targetAmount: String(example.amount),
+      currency: data.budgets[0]?.currency ?? data.accounts[0]?.currency ?? "PHP",
+    });
     setIsEditorOpen(true);
   };
 
@@ -659,8 +705,22 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
           </div>
         ) : (
           <article className="budget-empty">
-            <button className="button button-primary button-pill" type="button" onClick={openCreateEditor}>
-              Create budget
+            <div className="budget-empty__head">
+              <p className="eyebrow">Start with an example</p>
+              <h4>Choose a budget to get started</h4>
+              <p>Pick a simple starting point. You can adjust the amount and cadence before saving.</p>
+            </div>
+            <div className="budget-empty__chips" aria-label="Budget examples">
+              {budgetExamples.map((example) => (
+                <button key={example.id} className="budget-empty__chip" type="button" onClick={() => openBudgetExample(example)}>
+                  <span aria-hidden="true">{example.emoji}</span>
+                  <strong>{example.label}</strong>
+                  <small>{formatCurrency(example.amount, data.budgets[0]?.currency ?? data.accounts[0]?.currency ?? "PHP")} monthly</small>
+                </button>
+              ))}
+            </div>
+            <button className="button button-secondary button-pill" type="button" onClick={openCreateEditor}>
+              Create custom budget
             </button>
           </article>
         )}
