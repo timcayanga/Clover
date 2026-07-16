@@ -32,6 +32,7 @@ const asReceiptDate = (value: unknown) => {
 };
 
 const mergeReceiptBackup = (localPreview: ReceiptPreviewResult, backup: Record<string, unknown>): ReceiptPreviewResult => {
+  const localMerchantLooksWeak = assessReceiptPreviewQuality(localPreview).issues.includes("merchant looks noisy");
   const backupItems = Array.isArray(backup.line_items)
     ? backup.line_items.flatMap((item) => {
         if (!item || typeof item !== "object") {
@@ -74,7 +75,7 @@ const mergeReceiptBackup = (localPreview: ReceiptPreviewResult, backup: Record<s
   return {
     ...localPreview,
     receiptType,
-    merchantName: localPreview.merchantName && !/looks noisy|^this document\b|[~_=|]{2,}/i.test(localPreview.merchantName)
+    merchantName: localPreview.merchantName && !localMerchantLooksWeak && !/^this document\b|[~_=|]{2,}/i.test(localPreview.merchantName)
       ? localPreview.merchantName
       : asText(backup.merchant_clean) ?? asText(backup.merchant_raw) ?? localPreview.merchantName,
     billDate: localPreview.billDate ?? asReceiptDate(backup.transaction_date),
