@@ -21943,8 +21943,10 @@ const looksLikeWiseMobileScreenshotText = (text: string) => {
       .filter((currency): currency is string => Boolean(currency))
   );
   const hasWiseActivityLanguage = lines.some((line) => wiseMobileStatusPattern.test(line)) || /\bTo\s+PHP\b/i.test(text);
+  const hasSearchLanguage = lines.some((line) => /\bSearch\b/i.test(line));
   const hasVisibleDate = lines.some((line) => wiseMobileDatePattern.test(line));
-  return amountCurrencies.size >= 1 && (uiScore >= 2 || (hasWiseActivityLanguage && hasVisibleDate) || (uiScore >= 1 && hasVisibleDate));
+  return amountCurrencies.size >= 1 &&
+    (uiScore >= 2 || (hasWiseActivityLanguage && hasVisibleDate) || (uiScore >= 1 && hasVisibleDate) || (hasSearchLanguage && hasVisibleDate));
 };
 
 const parseWiseMobileScreenshotMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
