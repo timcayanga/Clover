@@ -3456,6 +3456,20 @@ const main = async () => {
     );
   }
 
+  const columnOnlyWorksheetPreview = parseReceiptText([
+    "Annab MJ Iris Grace Jannie Tim",
+    "375",
+    "567 567 567 567 567",
+    "187 187 187 187 187",
+    "82 82 82 82 82 82",
+    "56 56 56 56 56 56",
+    "59 59 59 59 59 59",
+    "951 513 951 951 951 951",
+  ].join("\n"));
+  if (assessReceiptPreviewQuality(columnOnlyWorksheetPreview).reliableForFastPath) {
+    throw new Error("expected OCR column-only split worksheet to stay off the fast receipt path");
+  }
+
   const cardFooterPreview = parseReceiptText([
     "AC BAR & LOUNGE",
     "Sales Invoice #: 000000808",

@@ -2070,7 +2070,11 @@ const looksLikeSplitAllocationWorksheet = (text: string) => {
     return true;
   }
 
-  const lines = normalized.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n+/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
   const rowsWithManyAmounts = lines.filter((line) => (line.match(/\b\d+(?:\.\d{2})?\b/g) ?? []).length >= 5).length;
   return rowsWithManyAmounts >= 2;
 };
