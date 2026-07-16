@@ -19324,8 +19324,8 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   justify-content: center;
   min-height: 44px;
   padding-inline: 18px;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .investments-page__add-button .button-icon {

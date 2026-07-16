@@ -1627,7 +1627,7 @@ export default function InvestmentsPage() {
             label: tab.label,
             icon: tab.icon,
             disabled: false,
-            badge: null,
+            badge: tab.proOnly && tab.key === "analysis" ? "PRO" : null,
             ariaLabel: tab.label,
           }))}
         />
@@ -1684,7 +1684,7 @@ export default function InvestmentsPage() {
               label: tab.label,
               icon: tab.icon,
               disabled: false,
-              badge: null,
+              badge: tab.proOnly && tab.key === "analysis" ? "PRO" : null,
               ariaLabel: tab.label,
             }))}
           />
