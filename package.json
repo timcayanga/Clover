@@ -13,7 +13,8 @@
     "dev": "electron .",
     "prestart": "npm run sync:assets",
     "check": "node scripts/check.mjs",
-    "qa:renderer": "node scripts/renderer-check.mjs"
+    "qa:renderer": "node scripts/renderer-check.mjs",
+    "qa:hsbc-screenshots": "cd web && npx tsx scripts/hsbc-screenshot-regression.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",

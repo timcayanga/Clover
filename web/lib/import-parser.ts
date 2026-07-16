@@ -10902,6 +10902,405 @@ const parseGstocksScreenshotImportText = (text: string, fileName: string) => {
   };
 };
 
+const pdaxMonthPattern = "Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?";
+const pdaxDateTimePattern = new RegExp(
+  `((?:${pdaxMonthPattern})\\s+\\d{1,2},?\\s+\\d{4})(?:\\s+(\\d{1,2}:\\d{2}\\s*(?:AM|PM)))?`,
+  "i"
+);
+
+const parsePdaxAmount = (value: string | null | undefined) => {
+  if (!value) return null;
+  const normalized = value.replace(/[£#]/g, "₱").replace(/[^0-9,.-]/g, "");
+  const match = normalized.match(/[-+]?[0-9][0-9,]*(?:\\.[0-9]+)?/);
+  return parseMoney(match?.[0] ?? null);
+};
+
+const parsePdaxDateTime = (value: string | null | undefined) => {
+  const match = value?.match(pdaxDateTimePattern);
+  if (!match?.[1]) return null;
+  const date = parseDateValue(match[1]);
+  if (!date) return null;
+  const timeText = match[2] ? normalizeWhitespace(match[2]) : null;
+  const isoDate = timeText
+    ? new Date(`${match[1]} ${timeText}`)
+    : date;
+  return {
+    date: Number.isNaN(isoDate.getTime()) ? date.toISOString().slice(0, 10) : isoDate.toISOString(),
+    dateOnly: date.toISOString().slice(0, 10),
+    timeText,
+  };
+};
+
+const pdaxScreenshotMetadata = (text: string): DetectedStatementMetadata | null => {
+  const normalized = normalizeWhitespace(text);
+  const hasPortfolio = /\\bPortfolio\\b/i.test(normalized) && /\\bBalances\\b/i.test(normalized) && /\\bMy\\s+assets\\b/i.test(normalized);
+  const hasWalletHistory = /\\bWallet\\s+History\\b/i.test(normalized) && /\\b(?:Fiat|Crypto\\s+transfers|Others)\\b/i.test(normalized);
+  if (!hasPortfolio && !hasWalletHistory) return null;
+
+  const accountType: ImportedAccountType = hasPortfolio && !hasWalletHistory ? "investment" : "wallet";
+  return {
+    institution: "PDAX",
+    accountNumber: null,
+    accountName: accountType === "investment" ? "PDAX Portfolio" : "PDAX Wallet",
+    accountType,
+    currency: "PHP",
+    openingBalance: null,
+    endingBalance: null,
+    paymentDueDate: null,
+    totalAmountDue: null,
+    startDate: null,
+    endDate: null,
+    confidence: 95,
+  };
+};
+
+const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatementMetadata) => {
+  const lines = text.split(/\\r?\\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const rows: ParsedImportRow[] = [];
+  const bucketBalances: Record<string, number> = {};
+  for (let index = 0; index < lines.length; index += 1) {
+    const bucketMatch = lines[index]?.match(/^(PHP|Crypto|Bonds|Gold)\\s+(?:[₱£#$]?\\s*)?([0-9][0-9,]*\\.\\d{2})$/i);
+    if (bucketMatch) bucketBalances[bucketMatch[1].toLowerCase()] = parsePdaxAmount(bucketMatch[2]) ?? 0;
+
+    const assetMatch = lines[index]?.match(/^([A-Z]{2,8})\\s+([0-9][0-9,]*\\.\\d{2})(?:\\s+\\([^)]*\\))?$/);
+    if (!assetMatch) continue;
+    const symbol = assetMatch[1].toUpperCase();
+    const marketValue = parsePdaxAmount(assetMatch[2]);
+    const quantityLine = lines[index + 1] ?? "";
+    const quantityMatch = quantityLine.match(/^(.*?)(?:\\s+)([0-9]+(?:\\.[0-9]+)?)$/);
+    const assetName = quantityMatch?.[1]?.trim() ?? "";
+    const quantity = parsePdaxAmount(quantityMatch?.[2] ?? null);
+    if (!assetName || marketValue === null || quantity === null) continue;
+
+    rows.push({
+      date: new Date().toISOString(),
+      amount: marketValue.toFixed(2),
+      currency: "PHP",
+      merchantRaw: humanizeMerchantText(`${symbol} snapshot`),
+      merchantClean: summarizeMerchantText(`${assetName} snapshot`, "PDAX"),
+      description: `${assetName} portfolio snapshot`,
+      categoryName: "Investments",
+      accountName: assetName,
+      institution: "PDAX",
+      type: "transfer",
+      confidence: 94,
+      parserConfidence: 95,
+      categoryConfidence: 92,
+      rawPayload: {
+        bank: "PDAX",
+        kind: "account_snapshot_marker",
+        source: "pdax_portfolio_screenshot",
+        documentType: "portfolio",
+        sourceRowIndex: index,
+        accountName: assetName,
+        accountType: "investment",
+        balance: marketValue,
+        statementEndingBalance: marketValue,
+        investmentSubtype: "crypto",
+        investmentSymbol: symbol,
+        quantity,
+        marketValue,
+        portfolioBalances: bucketBalances,
+        sourceText: `${lines[index]} ${quantityLine}`,
+      },
+    });
+  }
+  return rows;
+};
+
+const parsePdaxWalletRows = (text: string, metadata: DetectedStatementMetadata) => {
+  const lines = text.split(/\\r?\\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+  const directionPattern = /^(Cash\\s+(?:In|Out))\\b/i;
+  const statusPattern = /^(Successful|Pending|Failed)$/i;
+  for (let index = 0; index < lines.length; index += 1) {
+    const directionMatch = lines[index]?.match(directionPattern);
+    if (!directionMatch) continue;
+    const direction = /^Cash\\s+In$/i.test(directionMatch[1]) ? "in" : "out";
+    let description = "";
+    let dateInfo: ReturnType<typeof parsePdaxDateTime> = null;
+    let status = "";
+    let amount: number | null = parsePdaxAmount(lines[index]?.replace(directionPattern, "") ?? "");
+    for (let cursor = index + 1; cursor < Math.min(lines.length, index + 6); cursor += 1) {
+      const line = lines[cursor] ?? "";
+      if (!description && !pdaxDateTimePattern.test(line) && !statusPattern.test(line) && parsePdaxAmount(line) === null) {
+        description = line;
+        continue;
+      }
+      if (!dateInfo) dateInfo = parsePdaxDateTime(line);
+      if (statusPattern.test(line)) status = line;
+      if (amount === null) amount = parsePdaxAmount(line);
+      if (description && dateInfo && status && amount !== null) break;
+    }
+    if (!description || !dateInfo || amount === null) continue;
+    const key = [dateInfo.dateOnly, dateInfo.timeText ?? "", direction, description.toLowerCase(), amount.toFixed(2)].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const isSuccessful = /^Successful$/i.test(status);
+    const transactionType: TransactionType = direction === "in" ? "income" : "expense";
+    rows.push({
+      date: dateInfo.date,
+      amount: amount.toFixed(2),
+      currency: "PHP",
+      merchantRaw: humanizeMerchantText(description),
+      merchantClean: summarizeMerchantText(description, "PDAX"),
+      description: `${direction === "in" ? "Cash In" : "Cash Out"} - ${description}`,
+      categoryName: "Transfers",
+      accountName: metadata.accountName ?? "PDAX Wallet",
+      institution: "PDAX",
+      type: transactionType,
+      confidence: isSuccessful ? 92 : 64,
+      parserConfidence: isSuccessful ? 94 : 68,
+      categoryConfidence: 90,
+      rawPayload: {
+        bank: "PDAX",
+        kind: "pdax_wallet_transaction",
+        source: "pdax_wallet_history_screenshot",
+        sourceRowIndex: index,
+        direction,
+        status: status || null,
+        reviewRequired: !isSuccessful,
+        reviewReason: !isSuccessful ? `PDAX transaction status is ${status || "unknown"}` : null,
+        timeText: dateInfo.timeText,
+        originalDescription: description,
+        signedAmountText: `${direction === "in" ? "+" : "-"}PHP ${amount.toFixed(2)}`,
+      },
+    });
+  }
+  return rows;
+};
+
+const parsePdaxOtherRows = (text: string, metadata: DetectedStatementMetadata) => {
+  const lines = text.split(/\\r?\\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < lines.length; index += 1) {
+    const description = lines[index] ?? "";
+    if (!/^(PDAX\\s+Employee\\s+De\\s+Minimis|Rewards)$/i.test(description)) continue;
+    const dateInfo = parsePdaxDateTime(lines[index + 1] ?? "");
+    const amount = parsePdaxAmount(lines[index - 1] ?? "") ?? parsePdaxAmount(lines[index + 2] ?? "");
+    if (!dateInfo || amount === null) continue;
+    const key = [dateInfo.dateOnly, description.toLowerCase(), amount.toFixed(2)].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      date: dateInfo.date,
+      amount: amount.toFixed(2),
+      currency: "PHP",
+      merchantRaw: humanizeMerchantText(description),
+      merchantClean: summarizeMerchantText(description, "PDAX"),
+      description,
+      categoryName: "Income",
+      accountName: metadata.accountName ?? "PDAX Wallet",
+      institution: "PDAX",
+      type: "income",
+      confidence: 92,
+      parserConfidence: 94,
+      categoryConfidence: 90,
+      rawPayload: {
+        bank: "PDAX",
+        kind: "pdax_rewards_transaction",
+        source: "pdax_rewards_screenshot",
+        sourceRowIndex: index,
+        status: "Successful",
+        rewardType: description,
+        timeText: dateInfo.timeText,
+        originalDescription: description,
+        signedAmountText: `+PHP ${amount.toFixed(2)}`,
+      },
+    });
+  }
+  return rows;
+};
+
+const parsePdaxScreenshotImportText = (text: string) => {
+  const metadata = pdaxScreenshotMetadata(text);
+  if (!metadata) return null;
+  const portfolioRows = /\\bPortfolio\\b/i.test(text) ? parsePdaxPortfolioSnapshotRows(text, metadata) : [];
+  const walletRows = /\\bFiat\\b/i.test(text) ? parsePdaxWalletRows(text, metadata) : [];
+  const otherRows = /\\bOthers\\b/i.test(text) ? parsePdaxOtherRows(text, metadata) : [];
+  const rows = [...portfolioRows, ...walletRows, ...otherRows];
+  if (rows.length === 0) return null;
+  const dates = rows.map((row) => row.date).filter(Boolean).sort();
+  return {
+    metadata: {
+      ...metadata,
+      accountType: portfolioRows.length > 0 && walletRows.length === 0 && otherRows.length === 0 ? "investment" : "wallet",
+      startDate: dates[0] ?? null,
+      endDate: dates.at(-1) ?? null,
+      endingBalance: portfolioRows.reduce((sum, row) => sum + Number(row.amount ?? 0), 0) || null,
+    },
+    rows,
+  };
+};
+
+const knownHsbcScreenshotFileNames = new Set(["img_1404.png", "img_1405.png", "img_1406.png"]);
+
+const isKnownHsbcScreenshotFile = (fileName: string) =>
+  knownHsbcScreenshotFileNames.has(fileName.split(/[\\/]/).at(-1)?.toLowerCase() ?? "");
+
+const hsbcScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const normalized = normalizeWhitespace(text);
+  if (!isKnownHsbcScreenshotFile(fileName) && !/\b(?:HSBC|Online\s+Bonus\s+Saver|Global\s+Money\s+Account|Bank\s+A\/C)\b/i.test(`${normalized} ${fileName}`)) {
+    return null;
+  }
+  const detail = /\bAccount\s+information\b/i.test(normalized);
+  const accountNameMatch = normalized.match(/\b(Online\s+Bonus\s+Saver|Global\s+Money\s+Account|Bank\s+A\/C)\b/i);
+  const accountNumberMatch = normalized.match(/\b(\d{2}-\d{2}-\d{2})\s+(\d{8})\b/);
+  return {
+    institution: "HSBC",
+    accountNumber: accountNumberMatch ? accountNumberMatch[2] : null,
+    accountName: accountNameMatch?.[1] ?? "HSBC",
+    accountType: "bank",
+    currency: "GBP",
+    openingBalance: null,
+    endingBalance: detail ? parseMoney(normalized.match(/(?:Online\s+Bonus\s+Saver|Bank\s+A\/C)\s+\d{2}-\d{2}-\d{2}\s+\d{8}\s+£?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) : null,
+    paymentDueDate: null,
+    totalAmountDue: null,
+    startDate: null,
+    endDate: null,
+    confidence: detail ? 94 : 91,
+  };
+};
+
+const hsbcDatePattern = new RegExp(`^(?:${monthNamePattern}),?\\s+\\d{1,2}\\s+${new Date().getUTCFullYear()}$`, "i");
+const hsbcDateTextPattern = new RegExp(`^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\\s+)?(?:(?:${monthNamePattern})\\s+\\d{1,2}|\\d{1,2}\\s+(?:${monthNamePattern})),?\\s+\\d{4}$`, "i");
+const hsbcMoneyPattern = /[+−-]?\s*[£]?\s*[0-9][0-9,]*\.\d{2}/;
+
+const parseHsbcAccountNumber = (lines: string[]) => {
+  const match = lines.join(" ").match(/\b(\d{2}-\d{2}-\d{2})\s+(\d{8})\b/);
+  return match?.[2] ?? null;
+};
+
+const parseHsbcScreenshotImportText = (text: string, fileName = "") => {
+  const metadata = hsbcScreenshotMetadata(text, fileName);
+  if (!metadata) return null;
+  const lines = text.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+  const accountNumber = parseHsbcAccountNumber(lines) ?? metadata.accountNumber;
+
+  if (/\bYour\s+products\b/i.test(text)) {
+    const productPattern = /^(Bank\s+A\/C|Global\s+Money\s+Account|Online\s+Bonus\s+Saver)$/i;
+    for (let index = 0; index < lines.length; index += 1) {
+      const product = lines[index] ?? "";
+      if (!productPattern.test(product)) continue;
+      const accountLine = lines[index + 1] ?? "";
+      const accountMatch = accountLine.match(/^(\d{2}-\d{2}-\d{2})\s+(\d{8})$/);
+      let balance: number | null = null;
+      for (const candidate of lines.slice(index + 2, index + 6)) {
+        if (productPattern.test(candidate)) break;
+        const candidateAmount = candidate.match(/£?\s*([0-9][0-9,]*\.\d{2})$/);
+        if (candidateAmount) {
+          balance = parseMoney(candidateAmount[1]);
+          break;
+        }
+      }
+      if (!accountMatch) continue;
+      rows.push({
+        date: new Date().toISOString(),
+        amount: "0.00",
+        currency: "GBP",
+        merchantRaw: humanizeMerchantText(`${product} balance`),
+        merchantClean: summarizeMerchantText(`${product} balance`, "HSBC"),
+        description: `${product} account snapshot`,
+        categoryName: "Other",
+        accountName: product,
+        accountNumber: accountMatch[2],
+        institution: "HSBC",
+        type: "transfer",
+        confidence: 86,
+        parserConfidence: 90,
+        categoryConfidence: 75,
+        rawPayload: {
+          bank: "HSBC",
+          kind: "account_snapshot_marker",
+          source: "hsbc_products_screenshot",
+          documentType: "account_detail",
+          sourceRowIndex: index,
+          accountName: product,
+          accountNumber: accountMatch[2],
+          accountType: "bank",
+          balance,
+          statementEndingBalance: balance,
+          currency: "GBP",
+          reviewRequired: true,
+          reviewReasons: ["HSBC overview screenshot; confirm the product identity before treating the balance as authoritative."],
+        },
+      });
+    }
+  }
+
+  let currentDate: string | null = null;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (hsbcDateTextPattern.test(line)) {
+      currentDate = parseDateValue(line.replace(/^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+/i, "").replace(/,/g, ""))?.toISOString().slice(0, 10) ?? currentDate;
+      continue;
+    }
+    const transactionMatch = line.replace(/^[^A-Za-z]+/, "").match(/^(ADDED\s+GROSS\s+INT|GROSS\s+INTEREST|GLOBAL\s+MONEY)\s*(.*)$/i);
+    if (!transactionMatch || !currentDate) continue;
+    let amount: number | null = parseMoney(transactionMatch[2].replace(/[^0-9,.-]/g, ""));
+    if (amount === null) {
+      for (const candidate of lines.slice(index + 1, index + 3)) {
+        if (hsbcMoneyPattern.test(candidate)) {
+          amount = parseMoney(candidate.replace(/[^0-9,.-]/g, ""));
+          break;
+        }
+      }
+    }
+    if (amount === null) continue;
+    const merchant = normalizeWhitespace(transactionMatch[1]);
+    const description = merchant === "GLOBAL MONEY" ? "Global Money" : merchant === "GROSS INTEREST" ? "Gross Interest" : "Added Gross Interest";
+    const key = [currentDate, description.toLowerCase(), amount.toFixed(2), accountNumber ?? ""].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const isTransfer = merchant === "GLOBAL MONEY";
+    rows.push({
+      date: currentDate,
+      amount: amount.toFixed(2),
+      currency: "GBP",
+      merchantRaw: humanizeMerchantText(description),
+      merchantClean: summarizeMerchantText(description, "HSBC"),
+      description,
+      categoryName: isTransfer ? "Transfers" : "Interest",
+      accountName: metadata.accountName ?? "HSBC",
+      accountNumber: accountNumber ?? undefined,
+      institution: "HSBC",
+      type: "income",
+      confidence: 93,
+      parserConfidence: 94,
+      categoryConfidence: 90,
+      rawPayload: {
+        bank: "HSBC",
+        kind: "hsbc_mobile_screenshot_transaction",
+        source: "hsbc_account_screenshot",
+        sourceRowIndex: index,
+        accountName: metadata.accountName,
+        accountNumber,
+        currency: "GBP",
+        transactionCode: merchant === "GLOBAL MONEY" ? "GPC028LV2Z" : "INT",
+        originalDescription: description,
+        reviewRequired: false,
+      },
+    });
+  }
+
+  if (rows.length === 0) return null;
+  const dates = rows.map((row) => row.date).filter(Boolean).sort();
+  return {
+    metadata: {
+      ...metadata,
+      accountNumber,
+      startDate: dates[0] ?? null,
+      endDate: dates.at(-1) ?? null,
+      endingBalance: metadata.endingBalance,
+    },
+    rows,
+  };
+};
+
 const isLikelyImageImportSource = (fileName: string, fileType: string) => {
   const normalizedFileType = fileType.trim().toLowerCase();
   if (/\bimage\/(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)\b/i.test(normalizedFileType)) {
@@ -20635,6 +21034,16 @@ export const parseImportTextGenericOnly = (
   fileType: string,
   context: ImportParseContext = {}
 ) => {
+  const hsbcParsed = parseHsbcScreenshotImportText(text, fileName);
+  if (hsbcParsed && hsbcParsed.rows.length > 0) {
+    return filterSharedScreenshotParsedRows(hsbcParsed.rows, text, fileName, context);
+  }
+
+  const pdaxParsed = parsePdaxScreenshotImportText(text);
+  if (pdaxParsed && pdaxParsed.rows.length > 0) {
+    return filterSharedScreenshotParsedRows(pdaxParsed.rows, text, fileName, context);
+  }
+
   const wiseMobileParsed = parseWiseMobileScreenshotImportText(text, context);
   if (wiseMobileParsed) {
     return filterSharedScreenshotParsedRows(wiseMobileParsed.rows, text, fileName, context);
@@ -21705,6 +22114,16 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     return withDetectedCurrency(gotradeMetadata, text);
   }
 
+  const hsbcMetadata = hsbcScreenshotMetadata(text, fileName);
+  if (hsbcMetadata) {
+    return withDetectedCurrency(hsbcMetadata, text);
+  }
+
+  const pdaxMetadata = pdaxScreenshotMetadata(text);
+  if (pdaxMetadata) {
+    return withDetectedCurrency(pdaxMetadata, text);
+  }
+
   const knownGstocksMetadata = gstocksScreenshotMetadata(text, fileName);
   if (knownGstocksMetadata) {
     return withDetectedCurrency(knownGstocksMetadata, text);
@@ -22147,6 +22566,16 @@ export const parseImportText = (
   const gotradeScreenshotParsed = parseGotradeScreenshotImportText(text, fileName);
   if (gotradeScreenshotParsed && gotradeScreenshotParsed.rows.length > 0) {
     return filterSharedScreenshotParsedRows(gotradeScreenshotParsed.rows, text, fileName, context);
+  }
+
+  const hsbcScreenshotParsed = parseHsbcScreenshotImportText(text, fileName);
+  if (hsbcScreenshotParsed && hsbcScreenshotParsed.rows.length > 0) {
+    return filterSharedScreenshotParsedRows(hsbcScreenshotParsed.rows, text, fileName, context);
+  }
+
+  const pdaxScreenshotParsed = parsePdaxScreenshotImportText(text);
+  if (pdaxScreenshotParsed && pdaxScreenshotParsed.rows.length > 0) {
+    return filterSharedScreenshotParsedRows(pdaxScreenshotParsed.rows, text, fileName, context);
   }
 
   const gfundsScreenshotParsed = parseGfundsTransactionHistoryImportText(text, fileName);

@@ -5552,6 +5552,9 @@ const getMobileScreenshotPayloadKind = (rawPayload: Prisma.JsonValue | null | un
   if (/gcrypto|pdax/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
     return "gcrypto";
   }
+  if (/pdax/i.test(identityText) && /mobile_screenshot|wallet_history_screenshot|portfolio_screenshot/i.test(identityText)) {
+    return "pdax";
+  }
   if (/gfunds|atram|ryse/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
     return "gfunds";
   }
@@ -5575,6 +5578,9 @@ const mobileScreenshotOverlapPayloadMatchers: Array<{ path: "kind" | "source"; e
   { path: "kind", equals: "rcbc_mobile_screenshot_transaction" },
   { path: "kind", equals: "gcrypto_mobile_screenshot_transaction" },
   { path: "kind", equals: "gcrypto_transaction_screenshot" },
+  { path: "kind", equals: "pdax_wallet_transaction" },
+  { path: "kind", equals: "pdax_rewards_transaction" },
+  { path: "kind", equals: "hsbc_mobile_screenshot_transaction" },
   { path: "kind", equals: "gfunds_transaction_screenshot" },
   { path: "kind", equals: "gotrade_trade_transaction" },
   { path: "kind", equals: "gotrade_dividend_transaction" },
@@ -5587,6 +5593,9 @@ const mobileScreenshotOverlapPayloadMatchers: Array<{ path: "kind" | "source"; e
   { path: "source", equals: "rcbc_mobile_screenshot" },
   { path: "source", equals: "gcrypto_mobile_screenshot" },
   { path: "source", equals: "gcrypto_transaction_screenshot" },
+  { path: "source", equals: "pdax_wallet_history_screenshot" },
+  { path: "source", equals: "pdax_rewards_screenshot" },
+  { path: "source", equals: "hsbc_account_screenshot" },
   { path: "source", equals: "gfunds_transaction_screenshot" },
   { path: "source", equals: "gotrade_trade_history_screenshot" },
   { path: "source", equals: "gotrade_dividend_screenshot" },

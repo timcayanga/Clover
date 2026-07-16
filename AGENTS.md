@@ -21,9 +21,10 @@ Clover is a personal finance app focused on statement import, transaction parsin
 15. `docs/uno-parser-rules.md` when working on UNO Digital Bank imports
 16. `docs/ab-capital-securities-parser-rules.md` when working on AB Capital Securities imports
 17. `docs/gcrypto-parser-rules.md` when working on GCrypto imports
-18. `docs/maribank-parser-rules.md` when working on MariBank imports
-19. `docs/psbank-parser-rules.md` when working on PS Bank imports
-20. `docs/chinabank-parser-rules.md` when working on China Bank imports
+18. `docs/pdax-parser-rules.md` when working on PDAX imports
+19. `docs/maribank-parser-rules.md` when working on MariBank imports
+20. `docs/psbank-parser-rules.md` when working on PS Bank imports
+21. `docs/chinabank-parser-rules.md` when working on China Bank imports
 21. `docs/hsbc-parser-rules.md` when working on HSBC imports
 22. `docs/eastwest-parser-rules.md` when working on EastWest imports
 23. `docs/gotyme-parser-rules.md` when working on GoTyme imports
