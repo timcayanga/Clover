@@ -213,6 +213,8 @@ assert.equal(detailRows[0]?.rawPayload?.maturityAmount, 106000);
 assert.equal(detailRows[0]?.rawPayload?.maturityInterest, 6000);
 assert.equal(detailRows[0]?.rawPayload?.maturityDate, "2026-10-07");
 assert.equal(detailRows[0]?.rawPayload?.payoutAccountNumber, "30008998394132");
+assert.equal(detailRows[0]?.rawPayload?.quantity, undefined, "Time deposits must not be represented as units or shares.");
+assert.equal(detailRows[0]?.rawPayload?.units, undefined, "Time deposits must not expose a units field.");
 assert.match(String(detailRows[0]?.rawPayload?.note ?? ""), /Interest rate 6\.00% per annum/i);
 
 const detailNoisyMetadata = detectStatementMetadata(detailNoisyOcrScreenshotText, "IMG_1409.PNG");
@@ -245,5 +247,7 @@ assert.equal(detail2023Rows[0]?.accountNumber, "40007384712023");
 assert.equal(detail2023Rows[0]?.rawPayload?.depositAmount, 100000);
 assert.equal(detail2023Rows[0]?.rawPayload?.maturityAmount, 105750);
 assert.equal(detail2023Rows[0]?.rawPayload?.maturityInterest, 5750);
+assert.equal(detail2023Rows[0]?.rawPayload?.quantity, undefined, "Time deposits must not be represented as units or shares.");
+assert.equal(detail2023Rows[0]?.rawPayload?.units, undefined, "Time deposits must not expose a units field.");
 
 console.log("[PASS] GSave / UNO screenshots resolve to savings and time-deposit account snapshots.");

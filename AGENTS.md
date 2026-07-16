@@ -39,6 +39,7 @@ Clover is a personal finance app focused on statement import, transaction parsin
 32. `web/lib/import-parser.ts`
 33. `web/lib/data-engine.ts`
 34. `web/workers/import-processor.ts`
+35. `docs/generic-screenshot-parser-rules.md` when working on unfamiliar screenshot imports or generic parser fallbacks
 
 If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
 
