@@ -7681,7 +7681,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   color: var(--muted-2);
   font-family: var(--font-body);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.14em;
   line-height: 1.25;
   text-transform: uppercase;
