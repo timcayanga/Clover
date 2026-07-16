@@ -7650,6 +7650,42 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   transform: translateY(0);
 }
 
+.reports-subtab-card {
+  position: relative;
+}
+
+.reports-subtab-card > .report-card__head {
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-height: 24px;
+  padding-right: 32px;
+}
+
+.reports-subtab-card > .report-card__head .report-card__head-title,
+.reports-subtab-card > .report-card__head > div:first-child {
+  align-items: flex-start;
+}
+
+.reports-subtab-card .report-card__head-title h4,
+.reports-subtab-card .report-card__head > div:first-child h4,
+.reports-subtab-card > h4 {
+  font-family: var(--font-heading);
+  font-size: 1.06rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.reports-subtab-card > .report-card__stat {
+  display: none;
+}
+
+.reports-subtab-card > .reports-container-info {
+  left: auto;
+  right: 18px;
+  top: 18px;
+}
+
 .report-card__head-title,
 .metric__label {
   padding-right: 24px;

@@ -1708,7 +1708,7 @@ export async function ReportsStream({
           <ReportsSectionPanel section="advanced">
             <>
             <section className="reports-brief-grid reports-brief-grid--more">
-              <article className="report-ai-card report-ai-card--featured report-sankey-card glass">
+              <article className="report-ai-card reports-subtab-card report-ai-card--featured report-sankey-card glass">
                 <ReportInfoTip className="reports-container-info" label="A Sankey view of how income flows into accounts and then into spending categories." />
                 <div className="report-card__head report-card__head--compact">
                   <div>
@@ -1856,7 +1856,7 @@ export async function ReportsStream({
               </article>
 
               <div className="reports-brief-grid__split">
-                <article className="report-ai-card report-ai-card--compact glass">
+                <article className="report-ai-card reports-subtab-card report-ai-card--compact glass">
                   <ReportInfoTip className="reports-container-info" label="The biggest reasons behind the shift." />
                   <div className="report-card__head report-card__head--compact">
                     <div>
@@ -1874,7 +1874,7 @@ export async function ReportsStream({
                   </div>
                 </article>
 
-                <article className="report-ai-card report-ai-card--compact glass">
+                <article className="report-ai-card reports-subtab-card report-ai-card--compact glass">
                   <ReportInfoTip className="reports-container-info" label="One easy action to take right now." />
                   <div className="report-card__head report-card__head--compact">
                     <div>
@@ -1898,7 +1898,7 @@ export async function ReportsStream({
               </div>
             </section>
 
-            <article className="reports-next glass">
+            <article className="reports-next reports-subtab-card glass">
               <p className="eyebrow">🎯 Goal check</p>
               <h4>{goalNextStep.title}</h4>
               <p>{goalSummary}</p>
@@ -1922,7 +1922,7 @@ export async function ReportsStream({
 
         <ReportsSectionPanel section="spending">
         <section className="reports-grid reports-grid--primary">
-          <article className="report-card glass report-card--wide">
+          <article className="report-card reports-subtab-card glass report-card--wide">
             <ReportInfoTip className="reports-container-info" label="A simple view of where income flowed." />
             <div className="report-card__head">
               <div className="report-card__head-title">
@@ -1984,7 +1984,7 @@ export async function ReportsStream({
             </div>
           </article>
 
-          <article className="report-card glass">
+          <article className="report-card reports-subtab-card glass">
             <ReportInfoTip className="reports-container-info" label="The biggest spending groups in this period." />
             <div className="report-card__head">
               <div className="report-card__head-title">
@@ -2079,7 +2079,7 @@ export async function ReportsStream({
 
         <ReportsSectionPanel section="trends">
         <section className="reports-grid reports-grid--trends">
-          <article className="report-card glass">
+          <article className="report-card reports-subtab-card glass">
             <ReportInfoTip className="reports-container-info" label="A quick look at this month versus the last one." />
             <div className="report-card__head">
               <div className="report-card__head-title">
@@ -2116,7 +2116,7 @@ export async function ReportsStream({
             </div>
           </article>
 
-          <article className="report-card glass">
+          <article className="report-card reports-subtab-card glass">
             <ReportInfoTip className="reports-container-info" label="Bills and merchants that tend to show up again." />
             <div className="report-card__head">
               <div className="report-card__head-title">
@@ -2170,7 +2170,7 @@ export async function ReportsStream({
             </div>
           </article>
 
-          <article className="report-card glass">
+          <article className="report-card reports-subtab-card glass">
             <ReportInfoTip className="reports-container-info" label="The merchants taking the biggest share of spend." />
             <div className="report-card__head">
               <div className="report-card__head-title">
