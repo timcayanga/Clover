@@ -34,7 +34,11 @@ const asReceiptDate = (value: unknown) => {
     : null;
 };
 
-const mergeReceiptBackup = (localPreview: ReceiptPreviewResult, backup: Record<string, unknown>): ReceiptPreviewResult => {
+const mergeReceiptBackup = (
+  localPreview: ReceiptPreviewResult,
+  backup: Record<string, unknown>,
+  backupAccountMatch: unknown
+): ReceiptPreviewResult => {
   const localMerchantLooksWeak = assessReceiptPreviewQuality(localPreview).issues.includes("merchant looks noisy");
   const backupItems = Array.isArray(backup.line_items)
     ? backup.line_items.flatMap((item) => {
@@ -71,6 +75,19 @@ const mergeReceiptBackup = (localPreview: ReceiptPreviewResult, backup: Record<s
   const backupConfidence = typeof backup.confidence_score === "number" && Number.isFinite(backup.confidence_score)
     ? Math.round(backup.confidence_score)
     : 0;
+  const accountMatch = backupAccountMatch && typeof backupAccountMatch === "object"
+    ? backupAccountMatch as Record<string, unknown>
+    : null;
+  const normalizedAccountMatch = accountMatch && (asText(accountMatch.account_name) || asText(accountMatch.account_last4))
+    ? {
+        accountName: asText(accountMatch.account_name),
+        accountLast4: asText(accountMatch.account_last4),
+        confidence: typeof accountMatch.confidence === "number" && Number.isFinite(accountMatch.confidence)
+          ? Math.max(0, Math.min(100, Math.round(accountMatch.confidence)))
+          : 0,
+        reason: asText(accountMatch.reason),
+      }
+    : null;
   const backupType = asText(backup.receipt_type)?.toLowerCase();
   const receiptType = backupType === "restaurant_receipt" || backupType === "official_receipt" || backupType === "tax_invoice" ||
     backupType === "travel_ticket" || backupType === "wallet_transfer" ? backupType : localPreview.receiptType;
@@ -88,6 +105,7 @@ const mergeReceiptBackup = (localPreview: ReceiptPreviewResult, backup: Record<s
     currency: asText(backup.currency)?.toUpperCase() ?? localPreview.currency,
     paymentMethod: localPreview.paymentMethod ?? asText(backup.payment_method),
     receiptPayerName: localPreview.receiptPayerName ?? asText(backup.buyer_name),
+    receiptAccountMatch: localPreview.receiptAccountMatch ?? normalizedAccountMatch,
     subtotal: localPreview.subtotal ?? asAmount(backup.subtotal),
     serviceCharge: localPreview.serviceCharge ?? asAmount(backup.service_charge),
     tax: localPreview.tax ?? asAmount(backup.tax),
@@ -131,7 +149,9 @@ const tryReceiptBackup = async (params: { file: File; receiptText: string; previ
       pageImageLimit: Math.min(3, pageImages.length),
       timeoutMs: 25_000,
     });
-    return result?.receiptDetails ? mergeReceiptBackup(params.preview, result.receiptDetails as unknown as Record<string, unknown>) : params.preview;
+    return result?.receiptDetails
+      ? mergeReceiptBackup(params.preview, result.receiptDetails as unknown as Record<string, unknown>, result.receiptAccountMatch)
+      : params.preview;
   } catch (error) {
     console.warn("Receipt backup parser failed; keeping local preview", error);
     return params.preview;
