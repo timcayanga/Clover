@@ -494,7 +494,7 @@ const extractBackupParserLearningSignals = (rows: EnrichedParsedImportRow[]): Ba
         description: null,
         categoryName,
         type,
-      } as ParsedImportRow);
+      } as unknown as ParsedImportRow);
       if (teachability.score < 55) {
         continue;
       }
@@ -4315,7 +4315,7 @@ const collapseDuplicateUploadedAccountsForAccount = async <
   T extends {
     id: string;
     workspaceId?: string | null;
-    name: string;
+    name: string | null;
     institution: string | null;
     accountNumber: string | null;
     type: AccountType;
@@ -4396,7 +4396,7 @@ const collapseDuplicateUploadedAccountsForAccount = async <
     sortedDuplicates.find((entry) => entry.balance !== null && entry.balance !== undefined)?.balance?.toString() ?? null;
   const canonicalIdentityUpdates: Record<string, unknown> = {};
   if (account.id !== canonical.id) {
-    if (account.name.trim() && account.name !== canonical.name) {
+    if (typeof account.name === "string" && account.name.trim() && account.name !== canonical.name) {
       canonicalIdentityUpdates.name = account.name.trim();
     }
     if ((account.institution ?? null) !== (canonical.institution ?? null)) {
@@ -8090,6 +8090,7 @@ export const processImportFileText = async (
         openAiParsed = transcriptParsed ?? openAiParsed;
         if (!openAiParsed && transcriptReceiptDetails) {
           openAiParsed = {
+            documentType: "receipt",
             metadata: openAiMetadata ??
               metadataForParse ?? {
                 institution: null,
@@ -8552,7 +8553,7 @@ export const processImportFileText = async (
       : unionBankKnownSampleMetadata?.endingBalance ?? ucpbKnownSampleMetadata?.endingBalance ?? effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
   };
   let confirmedImportResult: ConfirmImportResult | null = null;
-  const materializedParsedAccounts = await ensureParsedAccountGroupsMaterialized({
+  const materializedParsedAccounts = (await ensureParsedAccountGroupsMaterialized({
     importFile,
     rows: effectiveRows as Array<Record<string, unknown>>,
     metadata: resolvedMetadata,
@@ -8562,7 +8563,15 @@ export const processImportFileText = async (
       error,
     });
     return [];
-  });
+  })) as unknown as Array<{
+    id: string;
+    name: string | null;
+    institution: string | null;
+    accountNumber: string | null;
+    type: AccountType;
+    source?: string | null;
+    currency: string | null;
+  }>;
   const materializedParsedAccount =
     materializedParsedAccounts.length === 1
       ? (materializedParsedAccounts[0] ?? null)
@@ -9257,7 +9266,7 @@ export const processImportFileText = async (
     const canFinalizeWithWarnings = hasUsableParsedRows && !hasCriticalFindings;
     const canFinalizeStableScreenshotImport =
       imageImport &&
-      importMode === "statement" &&
+      String(importMode) === "statement" &&
       hasUsableParsedRows &&
       !hasCriticalFindings &&
       qaRunResult.evaluation.score >= Math.max(80, AUTO_REPARSE_SCORE_TARGET - 8);
@@ -11608,24 +11617,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               accountName: summary.accountName,
               institution: summary.institution,
               accountNumber: summary.accountNumber,
-              accountType: summary.accountType,
+              accountType: summary.accountType as AccountType | null,
             },
           ] as const;
         })
-        .filter(
-          (
-            entry
-          ): entry is readonly [
-            string,
-            {
-              balance?: string | null;
-              accountName?: string | null;
-              institution?: string | null;
-              accountNumber?: string | null;
-              accountType?: AccountType | null;
-            },
-          ] => Boolean(entry)
-        )
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
     );
     const resolvedInstitutionsForCleanup = Array.from(
       new Set(resolvedAccounts.map((entry) => entry.institution).filter((institution): institution is string => Boolean(institution?.trim())))
