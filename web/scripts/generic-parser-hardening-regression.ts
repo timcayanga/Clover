@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { guessCategoryFallback } from "@/lib/data-engine";
-import { parseGenericBankStatementText, type ParsedImportRow } from "@/lib/import-parser";
+import { parseGenericBankStatementText, parseImportText, type ParsedImportRow } from "@/lib/import-parser";
 import { getSharedMerchantCategoryHint } from "@/lib/merchant-category-hints";
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 
@@ -240,6 +240,24 @@ Ending Balance 1,100.00
   assert.equal(findRow(parsedRepeatedDate.rows, /POS Purchase/i).type, "expense");
   assert.equal(findRow(parsedRepeatedDate.rows, /Cash Deposit/i).type, "income");
   assert.equal(parsedRepeatedDate.metadata.endingBalance, 1100);
+
+  const unfamiliarScreenshotRows = parseImportText(
+    `
+Example Bank
+Account details
+Savings Account ****1234
+Available balance PHP 12,345.67
+Home
+Accounts
+`,
+    "renamed-capture.png",
+    "image/png"
+  );
+  assert.equal(unfamiliarScreenshotRows.length, 1, "Expected an unfamiliar screenshot to remain visible as one snapshot.");
+  assert.equal(unfamiliarScreenshotRows[0]?.rawPayload?.kind, "account_snapshot_marker");
+  assert.equal(unfamiliarScreenshotRows[0]?.rawPayload?.reviewRequired, true);
+  assert.equal(unfamiliarScreenshotRows[0]?.rawPayload?.balance, 12345.67);
+  assert.ok((unfamiliarScreenshotRows[0]?.confidence ?? 100) < 70, "Expected unfamiliar screenshot snapshots to require review.");
 
   assert.equal(getSharedMerchantCategoryHint("Maria Harman"), "Transfers", "Expected person-like names to map to Transfers.");
   assert.equal(getSharedMerchantCategoryHint("Visa Provisioning Service"), "Shopping", "Expected provisioning checks to map to Shopping.");

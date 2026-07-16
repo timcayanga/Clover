@@ -95,6 +95,7 @@ export type ImportParseContext = {
 type GenericParserOptions = {
   institutionAwareNormalization?: boolean;
   splitAccountSections?: boolean;
+  fileName?: string;
 };
 
 const delimiterForFile = (fileType: string, fileName: string) => {
@@ -1177,6 +1178,7 @@ const parseGenericScreenshotStatementMetadata = (text: string, fileName = ""): D
     /\bdeposit accounts\b/i.test(normalizedText),
     /\bview other accounts\b/i.test(normalizedText),
     /\bavailable limit\b/i.test(normalizedText),
+    /\b(?:portfolio|market value|holdings?|positions?|my stocks|total value|available cash)\b/i.test(normalizedText),
   ].filter(Boolean).length;
 
   if (!imageNamedLikeScreenshot && screenshotSignalCount < 2) {
@@ -1267,6 +1269,14 @@ const parseGenericScreenshotStatementMetadata = (text: string, fileName = ""): D
         : institution
       : null);
   const accountType = inferAccountTypeFromStatement(institution, provisionalAccountName, "bank");
+  const screenshotAccountType: ImportedAccountType =
+    /\b(?:portfolio|market value|holdings?|positions?|my stocks|total value|open orders|crypto|funds?)\b/i.test(normalizedText)
+      ? "investment"
+      : /\b(?:amount due|available limit|minimum payment|credit card|mastercard|visa)\b/i.test(normalizedText)
+        ? "credit_card"
+        : /\b(?:wallet|gcash|e-wallet|cash wallet)\b/i.test(normalizedText)
+          ? "wallet"
+          : accountType;
 
   if (!institution && !provisionalAccountName && !accountNumber && endingBalance === null) {
     return null;
@@ -1283,7 +1293,7 @@ const parseGenericScreenshotStatementMetadata = (text: string, fileName = ""): D
             ? formatSimpleBankAccountName(institution, accountNumber)
             : institution
           : provisionalAccountName,
-    accountType,
+    accountType: screenshotAccountType,
     openingBalance: null,
     endingBalance,
     startDate: null,
@@ -1395,9 +1405,9 @@ const buildGenericScreenshotSnapshotRows = (
       accountNumber: metadata.accountNumber ?? undefined,
       institution,
       type: "expense",
-      confidence: Math.max(82, Math.min(96, metadata.confidence || 0)),
-      parserConfidence: Math.max(80, Math.min(94, metadata.confidence || 0)),
-      categoryConfidence: 100,
+      confidence: Math.min(68, Math.max(52, metadata.confidence || 0)),
+      parserConfidence: Math.min(68, Math.max(50, metadata.confidence || 0)),
+      categoryConfidence: 45,
       rawPayload: {
         bank: institution,
         institutionRaw: metadata.institution ?? institution,
@@ -1412,6 +1422,11 @@ const buildGenericScreenshotSnapshotRows = (
         statementEndingBalance: metadata.endingBalance,
         totalAmountDue: metadata.totalAmountDue ?? null,
         creditLimit: metadata.creditLimit ?? null,
+        reviewRequired: true,
+        reviewReasons: [
+          "Unfamiliar screenshot layout; confirm the account identity and visible balance.",
+          "Snapshot-only import; no transactions were inferred.",
+        ],
       },
     },
   ];
@@ -10812,7 +10827,9 @@ const gstocksScreenshotMetadata = (text: string, fileName = ""): DetectedStateme
     accountType: "investment",
     currency: "PHP",
     openingBalance: null,
-    endingBalance: 100350,
+    // The portfolio total is derived from visible holdings below. Never use a
+    // fixture total for a renamed or newly captured screenshot.
+    endingBalance: null,
     paymentDueDate: null,
     totalAmountDue: null,
     startDate: null,
@@ -10864,8 +10881,8 @@ const buildGstocksHoldingSnapshotRow = (
 });
 
 const parseGstocksScreenshotImportText = (text: string, fileName: string) => {
-  const metadata = gstocksScreenshotMetadata(text, fileName);
-  if (!metadata) {
+  const baseMetadata = gstocksScreenshotMetadata(text, fileName);
+  if (!baseMetadata) {
     return null;
   }
 
@@ -10873,6 +10890,11 @@ const parseGstocksScreenshotImportText = (text: string, fileName: string) => {
   if (holdings.length === 0) {
     return null;
   }
+
+  const metadata = {
+    ...baseMetadata,
+    endingBalance: holdings.reduce((total, holding) => total + holding.marketValue, 0),
+  };
 
   return {
     metadata,
@@ -19653,7 +19675,7 @@ export const parseGenericBankStatementText = (
       }
     }
   }
-  const genericScreenshotMetadata = parseGenericScreenshotStatementMetadata(genericText);
+  const genericScreenshotMetadata = parseGenericScreenshotStatementMetadata(genericText, options.fileName ?? "");
   const metadata = parseGenericStatementMetadata(genericText, context) ?? genericScreenshotMetadata;
   const repeatedStatementSummary = extractLatestRepeatedStatementSummary(text);
   if (!metadata) {
@@ -20202,9 +20224,22 @@ export const parseImportTextGenericOnly = (
     return filterSharedScreenshotParsedRows(genericInvestmentScreenshotParsed.rows, text, fileName, context);
   }
 
-  const genericParsed = parseGenericBankStatementText(text, context, { institutionAwareNormalization: false });
+  const genericParsed = parseGenericBankStatementText(text, context, {
+    institutionAwareNormalization: false,
+    fileName,
+  });
   if (genericParsed) {
     return filterSharedScreenshotParsedRows(genericParsed.rows, text, fileName, context);
+  }
+
+  // Keep unfamiliar screenshot-only pages visible in the review flow instead
+  // of dropping them when the generic statement parser has no table rows.
+  const genericScreenshotMetadata = parseGenericScreenshotStatementMetadata(text, fileName);
+  const genericScreenshotSnapshotRows = genericScreenshotMetadata
+    ? buildGenericScreenshotSnapshotRows(text, genericScreenshotMetadata)
+    : null;
+  if (genericScreenshotSnapshotRows && genericScreenshotSnapshotRows.length > 0) {
+    return filterSharedScreenshotParsedRows(genericScreenshotSnapshotRows, text, fileName, context);
   }
 
   const delimiter = delimiterForFile(fileType, fileName);
@@ -21895,7 +21930,7 @@ export const parseImportText = (
     return genericCardParsed.rows;
   }
 
-  const genericParsed = parseGenericBankStatementText(text, context);
+  const genericParsed = parseGenericBankStatementText(text, context, { fileName });
   if (genericParsed && genericParsed.rows.length > 0) {
     return genericParsed.rows;
   }
