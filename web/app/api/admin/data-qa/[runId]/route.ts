@@ -537,6 +537,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
       undefined,
       pdfJsBaseUrl
     );
+    const fileName = String(importFile.fileName ?? "imported-file");
     const detectedMetadata = detectStatementMetadataFromText(extractedText, fileName);
     const statementFingerprint = buildStatementFingerprint(
       extractedText,
@@ -710,6 +711,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
       undefined,
       pdfJsBaseUrl
     );
+    const fileName = String(importFile.fileName ?? "imported-file");
     const detectedMetadata = detectStatementMetadataFromText(extractedText, fileName);
     const statementFingerprint = buildStatementFingerprint(
       extractedText,

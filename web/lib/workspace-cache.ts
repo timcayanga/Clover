@@ -83,6 +83,11 @@ export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v10";
 export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v10";
 export const deletedAccountsWorkspaceCacheKey = "clover.accounts.deleted-account-ids.v1";
 export const deletingAccountsWorkspaceCacheKey = "clover.accounts.deleting-account-ids.v1";
+export const workspaceCacheUpdatedEventName = "clover:workspace-cache-updated";
+
+export type WorkspaceCacheUpdatedEventDetail = {
+  key: string;
+};
 
 const isCachedRecordArray = (value: unknown): value is CachedRecord[] =>
   Array.isArray(value) && value.every((entry) => entry && typeof entry === "object");
@@ -638,6 +643,14 @@ const writeJsonCache = (key: string, value: unknown) => {
   if (sessionStorageRef) {
     sessionStorageRef.setItem(key, serialized);
   }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent<WorkspaceCacheUpdatedEventDetail>(workspaceCacheUpdatedEventName, {
+        detail: { key },
+      })
+    );
+  }
 };
 
 const clearStorageKeys = (storage: Storage | null, keys: string[]) => {
@@ -647,6 +660,16 @@ const clearStorageKeys = (storage: Storage | null, keys: string[]) => {
 
   for (const key of keys) {
     storage.removeItem(key);
+  }
+
+  if (typeof window !== "undefined") {
+    for (const key of keys) {
+      window.dispatchEvent(
+        new CustomEvent<WorkspaceCacheUpdatedEventDetail>(workspaceCacheUpdatedEventName, {
+          detail: { key },
+        })
+      );
+    }
   }
 };
 
