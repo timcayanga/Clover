@@ -3514,6 +3514,26 @@ const main = async () => {
     );
   }
 
+  const inferredSummaryReceiptPreview = parseReceiptText([
+    "CAFE LUNA",
+    "Coffee 80.00",
+    "Cake 50.00",
+  ].join("\n"));
+  const inferredSummaryQuality = assessReceiptPreviewQuality(inferredSummaryReceiptPreview);
+  if (!inferredSummaryQuality.issues.includes("total inferred from line items") || inferredSummaryQuality.reliableForFastPath) {
+    throw new Error("expected item-sum-only receipt totals to stay review-required");
+  }
+
+  const explicitSummaryReceiptPreview = parseReceiptText([
+    "CAFE LUNA",
+    "Coffee 80.00",
+    "Cake 50.00",
+    "TOTAL 130.00",
+  ].join("\n"));
+  if (!assessReceiptPreviewQuality(explicitSummaryReceiptPreview).reliableForFastPath) {
+    throw new Error("expected receipt with an explicit total to remain eligible for the fast path");
+  }
+
   const cardFooterPreview = parseReceiptText([
     "AC BAR & LOUNGE",
     "Sales Invoice #: 000000808",

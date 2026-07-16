@@ -2161,11 +2161,25 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
   const maxItemAmount = itemAmounts.length > 0 ? Math.max(...itemAmounts) : null;
   const receiptText = String(preview.receiptText ?? "");
   const declaredItemCount = extractDeclaredReceiptItemCount(receiptText);
+  const hasExplicitSummaryLine = receiptText.split(/\r?\n/).some((line) =>
+    /^\s*(?:sub\s*-?\s*total|amount due|grand total|bill total|total)\b/i.test(line)
+  );
 
   if (total !== null) {
     score += 2;
   } else {
     issues.push("total missing");
+  }
+
+  if (
+    total !== null &&
+    cleanItemCount > 0 &&
+    !hasExplicitSummaryLine &&
+    Math.abs(itemTotal - total) <= Math.max(1, total * 0.01)
+  ) {
+    issues.push("total inferred from line items");
+    score -= 2;
+    severeIssue = true;
   }
 
   if (preview.items.length > 0) {
