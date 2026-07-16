@@ -16,6 +16,7 @@ import {
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
+import { applyDeterministicMerchantRescue } from "@/lib/merchant-enrichment";
 import {
   isLikelyScreenshotDateFragment,
   isLikelyScreenshotUiArtifactText,
@@ -5902,7 +5903,7 @@ export const countImportTransactionsNeedingCleanup = async (importFileId: string
   prisma.transaction.count({
     where: {
       ...(await buildImportTransactionWhere(importFileId)),
-      reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
+      reviewStatus: { in: ["suggested", "pending_review"] },
       AND: [
         {
           OR: [
@@ -5919,7 +5920,7 @@ const markRemainingImportCleanupRowsForReview = async (importFileId: string) =>
   prisma.transaction.updateMany({
     where: {
       ...(await buildImportTransactionWhere(importFileId)),
-      reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
+      reviewStatus: { in: ["suggested", "pending_review"] },
       AND: [
         {
           OR: [
@@ -6004,6 +6005,39 @@ const strengthenEnrichmentRowForAttempt = (
         : {}) as Record<string, unknown>),
       enrichmentAttempt: attempt,
       enrichmentFallback: shouldUseGuessedCategory ? "deterministic-category" : "training",
+    } as Prisma.InputJsonValue,
+  };
+};
+
+const applyMerchantRescueToEnrichedRow = (
+  row: EnrichedParsedImportRow,
+  parsedRow: EnrichedParsedImportRow | undefined
+): EnrichedParsedImportRow => {
+  const rescue = applyDeterministicMerchantRescue({
+    merchantRaw: row.merchantRaw ?? parsedRow?.merchantRaw ?? null,
+    merchantClean: row.merchantClean ?? parsedRow?.merchantClean ?? null,
+    description: row.description ?? parsedRow?.description ?? null,
+    categoryName: row.categoryName ?? parsedRow?.categoryName ?? null,
+    type: row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : parsedRow?.type,
+    institution: row.institution ?? parsedRow?.institution ?? null,
+  });
+
+  if (!rescue.applied) {
+    return row;
+  }
+
+  return {
+    ...row,
+    merchantClean: rescue.merchantClean ?? row.merchantClean,
+    categoryName: rescue.categoryName ?? row.categoryName,
+    type: rescue.type,
+    confidence: Math.max(normalizeImportConfidenceScore(row.confidence), 86),
+    categoryConfidence: Math.max(normalizeImportConfidenceScore(row.categoryConfidence), 86),
+    normalizedPayload: {
+      ...((row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
+        ? row.normalizedPayload
+        : {}) as Record<string, unknown>),
+      deterministicMerchantRescue: rescue.reason,
     } as Prisma.InputJsonValue,
   };
 };
@@ -6140,9 +6174,11 @@ export const processImportEnrichmentJobs = async (options: {
           workspaceId: String(importFile.workspaceId),
           rows: coerceParsedTransactionRowsForEnrichment(batchRows),
           statementConfidence: attempt >= 2 ? Math.max(statementConfidence, 90) : statementConfidence,
-        })).map((row, index) =>
-          strengthenEnrichmentRowForAttempt(row, batchRows[index] as EnrichedParsedImportRow | undefined, attempt)
-        );
+        })).map((row, index) => {
+          const parsedRow = batchRows[index] as EnrichedParsedImportRow | undefined;
+          const strengthened = strengthenEnrichmentRowForAttempt(row, parsedRow, attempt);
+          return applyMerchantRescueToEnrichedRow(strengthened, parsedRow);
+        });
 
         for (const [index, row] of enrichedRows.entries()) {
           const sourceRowIndex = startIndex + index + 1;
@@ -6164,7 +6200,8 @@ export const processImportEnrichmentJobs = async (options: {
           if (
             !transaction ||
             transaction.reviewStatus === "edited" ||
-            transaction.reviewStatus === "rejected"
+            transaction.reviewStatus === "rejected" ||
+            transaction.reviewStatus === "confirmed"
           ) {
             skippedRows += 1;
             continue;
