@@ -18,7 +18,7 @@ import { RouteSplash } from "@/components/route-splash";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { recordAppError } from "@/lib/error-logs";
-import { InfoTip as ReportInfoTip } from "@/components/info-tip";
+import { InfoTooltip as ReportInfoTip } from "@/components/info-tooltip";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { getCategoryIconTone } from "@/lib/category-icons";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
