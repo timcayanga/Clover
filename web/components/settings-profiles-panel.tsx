@@ -94,21 +94,20 @@ export function SettingsProfilesPanel({
                   )}
                 </span>
                 <div className="settings-profile-summary__copy">
-                  <strong>{profile.name}</strong>
-                  <p>{profile.type === "shared" ? "Shared profile" : "Personal profile"}</p>
+                  <input
+                    className="settings-profile-name-input"
+                    aria-label={`Profile name for ${profile.name}`}
+                    value={renameDraft}
+                    disabled={isPending}
+                    onChange={(event) => onRenameDraftChange(profile.id, event.target.value)}
+                  />
                 </div>
               </div>
               <div className="settings-profile-card__actions">
-                <label className="settings-inline-field">
-                  <span>Rename</span>
-                  <input value={renameDraft} disabled={isDefault} onChange={(event) => onRenameDraftChange(profile.id, event.target.value)} />
-                </label>
                 <div className="settings-profile-card__buttons">
-                  {!isDefault ? (
-                    <button type="button" className="button button-secondary button-small" disabled={isPending} onClick={() => onRenameProfile(profile.id)}>
-                      Save name
-                    </button>
-                  ) : null}
+                  <button type="button" className="button button-secondary button-small" disabled={isPending} onClick={() => onRenameProfile(profile.id)}>
+                    Save name
+                  </button>
                   {!isActive ? (
                     <button type="button" className="button button-secondary button-small" disabled={isPending} onClick={() => onSwitchProfile(profile.id)}>
                       Switch

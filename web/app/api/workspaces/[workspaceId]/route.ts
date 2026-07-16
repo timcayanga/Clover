@@ -48,10 +48,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ wo
 
     const accessibleWorkspace = await assertWorkspaceAccess(userId, workspaceId);
 
-    if (await isDefaultPersonalWorkspace(accessibleWorkspace)) {
-      return NextResponse.json({ error: "The Personal profile is required and cannot be renamed." }, { status: 400 });
-    }
-
     const workspace = await prisma.workspace.update({
       where: { id: workspaceId },
       data: {

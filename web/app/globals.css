@@ -33989,6 +33989,27 @@ body:has(.pricing-page) {
   min-width: 0;
 }
 
+.settings-profile-name-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 0 5px;
+  border: 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  outline: none;
+}
+
+.settings-profile-name-input:focus {
+  border-bottom-color: rgba(3, 168, 192, 0.8);
+  box-shadow: 0 1px 0 rgba(3, 168, 192, 0.8);
+}
+
 .settings-profile-summary__label {
   color: var(--muted-2);
   font-size: 12px;
