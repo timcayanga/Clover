@@ -4068,6 +4068,17 @@ const main = async () => {
     throw new Error(`expected noisy OCR confidence to reflect unresolved receipt noise, got ${noisyReceiptPreview.confidence}`);
   }
 
+  const backupReceiptPreview = {
+    ...noisyReceiptPreview,
+    merchantName: "Cafe Luna",
+    total: "80.00",
+    billDate: "2026-01-15T00:00:00.000Z",
+    requiresReview: true,
+  };
+  if (assessReceiptPreviewQuality(backupReceiptPreview).reliableForFastPath) {
+    throw new Error("expected backup-enriched receipt drafts to remain review-gated");
+  }
+
   const invalidDateReceiptPreview = parseReceiptText([
     "Cafe Luna",
     "31/13/2024 12:35",

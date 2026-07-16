@@ -1916,6 +1916,12 @@ const normalizeImportedImageBytes = async (
   }
 };
 
+export const normalizeReceiptImageForVision = async (params: {
+  bytes: Uint8Array;
+  fileType?: string | null;
+  fileName?: string | null;
+}) => normalizeImportedImageBytes(params.bytes, params.fileType, params.fileName, "receipt");
+
 type ImportFileLike = {
   name?: string;
   type?: string;

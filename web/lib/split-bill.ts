@@ -120,6 +120,7 @@ export type ReceiptPreviewResult = {
   splitAllocations: ReceiptPreviewSplitAllocation[];
   receiptAccountMatch: ReceiptPreviewAccountMatch | null;
   confidence: number;
+  requiresReview?: boolean;
 };
 
 export type ReceiptPreviewQualityAssessment = {
@@ -2072,6 +2073,11 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
   const issues: string[] = [];
   let score = 0;
   let severeIssue = false;
+  if (preview.requiresReview) {
+    issues.push("backup parser result requires review");
+    score -= 2;
+    severeIssue = true;
+  }
   const merchantLooksReliable = Boolean(preview.merchantName) && !isSuspiciousReceiptMerchantName(preview.merchantName);
   const hasIdentityBackstop = merchantLooksReliable || Boolean(preview.receiptAccountMatch || preview.paymentMethod);
 
