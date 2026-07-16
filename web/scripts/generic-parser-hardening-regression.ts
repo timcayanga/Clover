@@ -354,6 +354,25 @@ Refund
     "Expected ISO and slash-formatted dates in unfamiliar mobile activity screens."
   );
 
+  const internationalCurrencyRows = parseImportText(
+    `Unknown Wallet
+Activity
+2026-05-06
+Coffee House
+-€12.50
+2026-05-07
+Salary
++₹1,000.00`,
+    "IMG_9997.PNG",
+    "image/png",
+    { institution: "Unknown Wallet", accountName: "Wallet" }
+  );
+  assert.equal(internationalCurrencyRows.length, 2, "Expected generic activity screenshots to support common currency symbols.");
+  assert.deepEqual(
+    internationalCurrencyRows.map((row) => row.amount),
+    ["12.50", "1000.00"]
+  );
+
   assert.equal(getSharedMerchantCategoryHint("Maria Harman"), "Transfers", "Expected person-like names to map to Transfers.");
   assert.equal(getSharedMerchantCategoryHint("Visa Provisioning Service"), "Shopping", "Expected provisioning checks to map to Shopping.");
   assert.equal(getSharedMerchantCategoryHint("Great Ocean Road Choc"), "Travel & Lifestyle");

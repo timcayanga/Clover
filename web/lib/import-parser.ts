@@ -1445,7 +1445,7 @@ const buildGenericScreenshotAccountRows = (
 
   const lines = splitStatementLines(text).map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean);
   const accountIdentityPattern = /^(?:\d{2}[- ]\d{2}[- ]\d{2}\s+)?(?:[*xX•]+\s*)?\d{4,18}$/;
-  const moneyPattern = /(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|₱|£|\$)?\s*[+-]?\s*[0-9][0-9,]*\.\d{2}/i;
+  const moneyPattern = /(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|INR|KRW|BRL|MXN|ZAR|RUB|TRY|PLN|SEK|NOK|DKK|ILS|VND|IDR|MYR|TWD|BDT|SAR|QAR|₱|£|€|¥|₹|฿|₩|\$)?\s*[+-]?\s*[0-9][0-9,]*\.\d{2}/i;
   const rows: ParsedImportRow[] = [];
   const seen = new Set<string>();
   const institution = metadata.institution ?? sanitizeBankNameLabel(detectInstitutionFromText(normalizedText)) ?? "Unknown";
@@ -1522,7 +1522,7 @@ const buildGenericScreenshotHoldingRows = (
 
   const lines = splitStatementLines(text).map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean);
   const quantityPattern = /([0-9][0-9,]*(?:\.\d+)?)\s+(shares?|units?|quantity)\b/i;
-  const moneyPattern = /(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|₱|£|\$)?\s*[+-]?\s*([0-9][0-9,]*\.\d{2})/i;
+  const moneyPattern = /(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|INR|KRW|BRL|MXN|ZAR|RUB|TRY|PLN|SEK|NOK|DKK|ILS|VND|IDR|MYR|TWD|BDT|SAR|QAR|₱|£|€|¥|₹|฿|₩|\$)?\s*[+-]?\s*([0-9][0-9,]*\.\d{2})/i;
   const rows: ParsedImportRow[] = [];
   const seen = new Set<string>();
   const institution = metadata.institution ?? sanitizeBankNameLabel(detectInstitutionFromText(normalizedText)) ?? "Unknown";
@@ -1600,7 +1600,7 @@ const parseGenericMobileScreenshotTransactionRows = (
   const normalizedText = normalizeWhitespace(text).replace(/\u00a0/g, " ");
   const looksLikeTransactionScreen =
     /\b(?:transaction(?:s|\s+history)?|activity|payments?|transfers?|cash\s+(?:in|out)|history)\b/i.test(normalizedText) &&
-    /[+-]?\s*(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|₱|£|\$)?\s*[0-9][0-9,]*\.\d{2}/i.test(normalizedText);
+    /[+-]?\s*(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|INR|KRW|BRL|MXN|ZAR|RUB|TRY|PLN|SEK|NOK|DKK|ILS|VND|IDR|MYR|TWD|BDT|SAR|QAR|₱|£|€|¥|₹|฿|₩|\$)?\s*[0-9][0-9,]*\.\d{2}/i.test(normalizedText);
   if (!looksLikeTransactionScreen) return [];
 
   const lines = splitStatementLines(text).map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean);
@@ -1608,7 +1608,7 @@ const parseGenericMobileScreenshotTransactionRows = (
     `^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\\s+)?(?:(?:(?:${monthNamePattern})\\s+\\d{1,2}|\\d{1,2}\\s+(?:${monthNamePattern})),?\\s+\\d{4}|\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4})$`,
     "i"
   );
-  const amountPattern = /([+-])?\s*(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|₱|£|\$)?\s*([0-9][0-9,]*\.\d{2})/i;
+  const amountPattern = /([+-])?\s*(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|INR|KRW|BRL|MXN|ZAR|RUB|TRY|PLN|SEK|NOK|DKK|ILS|VND|IDR|MYR|TWD|BDT|SAR|QAR|₱|£|€|¥|₹|฿|₩|\$)?\s*([0-9][0-9,]*\.\d{2})/i;
   const statusPattern = /^(?:successful|completed|pending|failed|posted|reverted)$/i;
   const dateOnly = (line: string) => line.replace(/^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+/i, "").replace(/,/g, "");
   const rows: ParsedImportRow[] = [];
