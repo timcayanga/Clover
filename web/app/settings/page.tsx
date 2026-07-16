@@ -11,7 +11,10 @@ export const metadata = {
   title: "Settings",
 };
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = (await searchParams) ?? {};
+  const initialSection = params.upgrade === "pro" ? "plan" : "account";
+  const preferredBillingInterval = params.interval === "monthly" || params.interval === "annual" ? params.interval : undefined;
   const session = await getSessionContext();
   let workspaceId = "";
   let workspaceName = "Settings";
@@ -115,7 +118,8 @@ export default async function SettingsPage() {
     <CloverShell active="settings" title="Settings">
       <SettingsHub
         mode="full"
-        initialSection="account"
+        initialSection={initialSection}
+        preferredBillingInterval={preferredBillingInterval}
         workspaceId={workspaceId}
         workspaceName={workspaceName}
         selectedProfileId={workspaceId}

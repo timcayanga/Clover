@@ -8,6 +8,7 @@ import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { getFinancialExperienceDefinition, getFinancialExperienceProfile, type FinancialExperienceLevel } from "@/lib/goals";
+import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -21,7 +22,7 @@ type ExperienceOption = {
   icon: string;
 };
 
-type OnboardingStep = "experience" | "upload";
+type OnboardingStep = "upgrade" | "experience" | "upload";
 
 const EXPERIENCE_OPTIONS: ExperienceOption[] = [
   {
@@ -53,6 +54,12 @@ type OnboardingFormProps = {
     type: string;
   }>;
   currentExperience?: string | null;
+  upgradeForPro?: boolean;
+  upgradeInterval?: "monthly" | "annual";
+  paypalClientId?: string | null;
+  paypalMonthlyPlanId?: string | null;
+  paypalAnnualPlanId?: string | null;
+  paypalBuyerCountry?: string | null;
 };
 
 const acceptedImportFiles = ".csv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif";
@@ -63,6 +70,12 @@ export function OnboardingForm({
   workspaceId,
   workspaceAccounts,
   currentExperience = null,
+  upgradeForPro = false,
+  upgradeInterval = "annual",
+  paypalClientId = null,
+  paypalMonthlyPlanId = null,
+  paypalAnnualPlanId = null,
+  paypalBuyerCountry = null,
 }: OnboardingFormProps) {
   const router = useRouter();
   const photoInputRef = useRef<HTMLInputElement | null>(null);
@@ -70,14 +83,19 @@ export function OnboardingForm({
   const [experience, setExperience] = useState<FinancialExperienceLevel | null>(
     (currentExperience as FinancialExperienceLevel | null) ?? null,
   );
-  const [step, setStep] = useState<OnboardingStep>("experience");
-  const [message, setMessage] = useState("How comfortable are you with financial management?");
+  const [step, setStep] = useState<OnboardingStep>(upgradeForPro ? "upgrade" : "experience");
+  const [message, setMessage] = useState(
+    upgradeForPro ? "Choose Pro now or continue with Clover Free. You can upgrade later." : "How comfortable are you with financial management?",
+  );
   const [isPending, startTransition] = useTransition();
   const [importOpen, setImportOpen] = useState(false);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
+  const [selectedUpgradeInterval, setSelectedUpgradeInterval] = useState<"monthly" | "annual">(upgradeInterval);
 
   const selectedExperienceProfile = getFinancialExperienceProfile(experience);
   const selectedExperienceDefinition = getFinancialExperienceDefinition(experience);
+
+  const upgradePlanId = selectedUpgradeInterval === "annual" ? paypalAnnualPlanId : paypalMonthlyPlanId;
 
   const persistOnboarding = (startAction: "import" | "skip") => {
     const payload = JSON.stringify({
@@ -264,6 +282,52 @@ export function OnboardingForm({
     </>
   );
 
+  const upgradeStep = (
+    <>
+      <p className="eyebrow">Clover Pro</p>
+      <h3>Get more room when you need it.</h3>
+      <p className="onboarding-card__copy">
+        Choose monthly or annual billing now, or continue with Free and upgrade later. Your choice will not stop you from finishing setup.
+      </p>
+
+      <div className="onboarding-upgrade__interval" role="group" aria-label="Pro billing frequency">
+        {(["monthly", "annual"] as const).map((option) => (
+          <button
+            key={option}
+            className={selectedUpgradeInterval === option ? "is-selected" : ""}
+            type="button"
+            aria-pressed={selectedUpgradeInterval === option}
+            onClick={() => setSelectedUpgradeInterval(option)}
+          >
+            {option === "monthly" ? "Monthly · PHP 99" : "Annually · PHP 999"}
+          </button>
+        ))}
+      </div>
+
+      <div className="onboarding-upgrade__actions">
+        {paypalClientId && upgradePlanId ? (
+          <PayPalSubscribeButton
+            clientId={paypalClientId}
+            planId={upgradePlanId}
+            customId={workspaceId}
+            buyerCountry={paypalBuyerCountry}
+            fundingSource="card"
+            className="onboarding-upgrade__paypal"
+            onApproved={() => {
+              setMessage("Pro is being confirmed. Continue setting up Clover while we finish that step.");
+              setStep("experience");
+            }}
+          />
+        ) : (
+          <p className="onboarding-card__copy onboarding-card__copy--subtle">Payment setup is not available in this environment yet.</p>
+        )}
+        <button className="button button-secondary" type="button" onClick={() => setStep("experience")}>
+          Upgrade later
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <>
       <PostHogEvent
@@ -278,7 +342,7 @@ export function OnboardingForm({
           <img className="onboarding-card__mark" src="/clover-mark.svg" alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
         </div>
 
-        {step === "experience" ? experienceStep : uploadStep}
+        {step === "upgrade" ? upgradeStep : step === "experience" ? experienceStep : uploadStep}
         {message ? <p className="onboarding-card__message">{message}</p> : null}
       </section>
 

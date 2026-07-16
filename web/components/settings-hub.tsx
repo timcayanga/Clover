@@ -131,6 +131,7 @@ type DataDeleteModalState = {
 type SettingsHubProps = {
   mode?: "menu" | "panel" | "full";
   initialSection?: SettingsSectionKey;
+  preferredBillingInterval?: BillingInterval;
   workspaceId: string;
   workspaceName: string;
   selectedProfileId: string;
@@ -417,6 +418,7 @@ function downloadBlob(blob: Blob, fileName: string) {
 export function SettingsHub({
   mode = "full",
   initialSection = "account",
+  preferredBillingInterval,
   workspaceId: initialWorkspaceId,
   workspaceName: initialWorkspaceName,
   selectedProfileId: initialSelectedProfileId,
@@ -2230,6 +2232,7 @@ export function SettingsHub({
           <SettingsPlanPanel
             workspaceId={workspaceId}
             planTier={planTier}
+            preferredBillingInterval={preferredBillingInterval}
             paypalClientId={paypalClientId}
             paypalMonthlyPlanId={paypalMonthlyPlanId}
             paypalAnnualPlanId={paypalAnnualPlanId}

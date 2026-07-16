@@ -7,15 +7,23 @@ type BillingInterval = "monthly" | "annual";
 
 type PricingProSelectorProps = {
   signedIn: boolean;
+  planTier: "free" | "pro" | null;
 };
 
-export function PricingProSelector({ signedIn }: PricingProSelectorProps) {
+export function PricingProSelector({ signedIn, planTier }: PricingProSelectorProps) {
   const [interval, setInterval] = useState<BillingInterval>("annual");
   const isAnnual = interval === "annual";
+  const isPro = planTier === "pro";
+  const proHref = signedIn ? "/settings?upgrade=pro&interval=" + interval + "#billing" : "/sign-up?intent=pro&interval=" + interval;
+
+  if (isPro) {
+    return <div className="pricing-pro-selector pricing-pro-selector--active"><p>Pro is active on your account.</p></div>;
+  }
 
   return (
     <div className="pricing-pro-selector">
-      <div className="pricing-pro-selector__billing" role="group" aria-label="Billing frequency">
+      <div className={`pricing-pro-selector__billing ${isAnnual ? "is-annual" : "is-monthly"}`} role="group" aria-label="Billing frequency">
+        <span className="pricing-pro-selector__billing-thumb" aria-hidden="true" />
         <button
           className={!isAnnual ? "is-selected" : ""}
           type="button"
@@ -47,8 +55,8 @@ export function PricingProSelector({ signedIn }: PricingProSelectorProps) {
         <p className="pricing-pro-selector__saving">Switch to annually to save PHP 189 each year.</p>
       )}
 
-      <Link className="button button-primary button-pill pricing-pro-selector__signup" href={signedIn ? "/home" : "/sign-up"} prefetch={false}>
-        {signedIn ? "Go to Clover" : "Sign Up"}
+      <Link className="button button-primary button-pill pricing-pro-selector__signup" href={proHref} prefetch={false}>
+        {signedIn ? "Upgrade to Pro" : "Organize my finances with Pro"}
       </Link>
     </div>
   );

@@ -8,11 +8,16 @@ export const metadata = {
   title: "Sign Up",
 };
 
-export default async function SignUpPage() {
+export default async function SignUpPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = (await searchParams) ?? {};
+  const intent = params.intent === "pro" ? "pro" : "free";
+  const interval = params.interval === "monthly" ? "monthly" : "annual";
+  const completeRedirectUrl = intent === "pro" ? `/onboarding?upgrade=pro&interval=${interval}` : "/onboarding";
+
   return (
     <main className="auth-page auth-page--signup">
       <PostHogEvent event="signup_started" onceKey={analyticsOnceKey("signup_started", "session")} />
-      <ClerkAuthScreen enabled={Boolean(publishableKey)} mode="sign-up" />
+      <ClerkAuthScreen enabled={Boolean(publishableKey)} mode="sign-up" completeRedirectUrl={completeRedirectUrl} />
     </main>
   );
 }

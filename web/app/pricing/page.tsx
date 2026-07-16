@@ -49,6 +49,7 @@ export default async function PricingPage() {
     session = null;
   }
   const user = session?.userId ? await getOrCreateCurrentUser(session.userId) : null;
+  const planTier = user?.planTier ?? null;
   const accountState: PublicAccountState = user
     ? {
         signedIn: true,
@@ -102,9 +103,11 @@ export default async function PricingPage() {
               <PlanFeatureItem label="Basic reports and Adviser guidance" />
               <PlanFeatureItem label="Basic goal tracking" />
             </ul>
-            <Link className="button button-secondary button-pill pricing-card__cta" href={accountState.signedIn ? "/home" : "/sign-up"} prefetch={false}>
-              {accountState.signedIn ? "Go to Clover" : "Sign Up"}
-            </Link>
+            {!accountState.signedIn ? (
+              <Link className="button button-secondary button-pill pricing-card__cta" href="/sign-up?intent=free" prefetch={false}>
+                Organize my finances for free
+              </Link>
+            ) : null}
           </article>
 
         <article className="pricing-card pricing-card--featured">
@@ -130,6 +133,7 @@ export default async function PricingPage() {
             </ul>
             <PricingProSelector
               signedIn={accountState.signedIn}
+              planTier={planTier}
             />
           </article>
       </section>

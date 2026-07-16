@@ -14,6 +14,7 @@ import {
 type ClerkAuthScreenProps = {
   enabled: boolean;
   mode: "sign-in" | "sign-up";
+  completeRedirectUrl?: string;
 };
 
 type SocialStrategy = "oauth_google" | "oauth_facebook";
@@ -150,7 +151,7 @@ function SocialIcon({ provider }: { provider: "google" | "facebook" }) {
   return provider === "google" ? <GoogleIcon /> : <FacebookIcon />;
 }
 
-export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
+export function ClerkAuthScreen({ enabled, mode, completeRedirectUrl = "/home" }: ClerkAuthScreenProps) {
   if (!enabled) {
     return (
       <section className="glass" style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
@@ -164,10 +165,10 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
     );
   }
 
-  return <ClerkAuthScreenInner mode={mode} />;
+  return <ClerkAuthScreenInner mode={mode} completeRedirectUrl={completeRedirectUrl} />;
 }
 
-function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
+function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" | "sign-up"; completeRedirectUrl: string }) {
   const router = useRouter();
   const auth = useAuth();
   const signInState = useSignIn();

@@ -21,6 +21,7 @@ type BillingSubscriptionSummary = {
 type SettingsPlanPanelProps = {
   workspaceId: string;
   planTier: "free" | "pro";
+  preferredBillingInterval?: BillingInterval;
   paypalClientId?: string | null;
   paypalMonthlyPlanId?: string | null;
   paypalAnnualPlanId?: string | null;
@@ -171,6 +172,7 @@ const planCards: PlanCard[] = [
 export function SettingsPlanPanel({
   workspaceId,
   planTier,
+  preferredBillingInterval,
   paypalClientId,
   paypalMonthlyPlanId,
   paypalAnnualPlanId,
@@ -272,7 +274,7 @@ export function SettingsPlanPanel({
           const isCurrent = currentPlanValue === option.value;
 
           return (
-            <article key={option.value} className={`settings-plan-card settings-plan-card--${option.value}${isCurrent ? " is-current" : ""}`}>
+            <article key={option.value} className={`settings-plan-card settings-plan-card--${option.value}${isCurrent ? " is-current" : ""}${preferredBillingInterval === option.value ? " is-preferred" : ""}`}>
               <div className="settings-plan-card__band">
                 <div className="settings-plan-card__band-copy">
                   <div className="settings-plan-card__icon">

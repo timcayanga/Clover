@@ -33,6 +33,36 @@
   --page-shell: rgba(255, 255, 255, 0.84);
 }
 
+/* Compact pricing cards and a responsive iOS-style billing toggle. */
+.pricing-page__comparison { align-items: start; }
+.pricing-page .pricing-card { grid-template-rows: auto auto auto auto; align-content: start; }
+.pricing-page .pricing-card__top { min-height: 52px; }
+.pricing-page .pricing-card__icon,
+.pricing-page .pricing-card__icon--featured { width: 52px; height: 52px; flex: 0 0 52px; }
+.pricing-page .pricing-card--featured .pricing-card__icon--featured { background: #fff; border-color: #fff; color: #008ea5; }
+.pricing-page .pricing-card__summary { min-height: 38px; margin: 4px 0 8px; }
+.pricing-page .pricing-card__list { margin: 0; }
+.pricing-page .pricing-pro-selector__billing { position: relative; isolation: isolate; width: fit-content; padding: 3px; gap: 0; overflow: hidden; }
+.pricing-page .pricing-pro-selector__billing-thumb { position: absolute; z-index: -1; inset: 3px auto 3px 3px; width: 76px; border-radius: 999px; background: #fff; box-shadow: 0 2px 8px rgb(0 55 71 / 16%); transition: transform 180ms ease; }
+.pricing-page .pricing-pro-selector__billing.is-annual .pricing-pro-selector__billing-thumb { transform: translateX(76px); }
+.pricing-page .pricing-card--featured .pricing-pro-selector__billing { background: rgb(255 255 255 / 30%); border-color: rgb(255 255 255 / 46%); }
+.pricing-page .pricing-pro-selector__billing button { position: relative; z-index: 1; min-width: 76px; transition: color 180ms ease; }
+.pricing-page .pricing-pro-selector__billing button.is-selected,
+.pricing-page .pricing-card--featured .pricing-pro-selector__billing button.is-selected { color: #073844; background: transparent; }
+.pricing-page .pricing-card--featured .pricing-pro-selector__billing button { color: #fff; }
+.pricing-page .pricing-card--featured .pricing-pro-selector__price span,
+.pricing-page .pricing-card--featured .pricing-pro-selector__saving,
+.pricing-page .pricing-card--featured .pricing-pro-selector__saving s { color: rgb(255 255 255 / 88%); }
+.pricing-page .pricing-card--featured .pricing-pro-selector__signup { color: #fff; }
+.pricing-page .pricing-pro-selector--active { min-height: 36px; color: #fff; font-size: .82rem; }
+.pricing-page .pricing-pro-selector--active p { margin: 0; }
+.onboarding-upgrade__interval { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 18px 0; }
+.onboarding-upgrade__interval button { min-height: 44px; border: 1px solid rgb(0 157 178 / 24%); border-radius: 999px; background: #fff; color: var(--text); cursor: pointer; font: inherit; }
+.onboarding-upgrade__interval button.is-selected { border-color: var(--accent); background: var(--accent); color: #fff; }
+.onboarding-upgrade__actions { display: grid; gap: 12px; }
+.onboarding-upgrade__paypal { min-height: 42px; }
+.settings-plan-card.is-preferred { outline: 2px solid var(--accent); outline-offset: 3px; }
+
 * {
   box-sizing: border-box;
 }

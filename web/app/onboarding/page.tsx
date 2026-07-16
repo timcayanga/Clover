@@ -4,13 +4,14 @@ import { getSessionContext } from "@/lib/auth";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { prisma } from "@/lib/prisma";
+import { getEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Onboarding",
 };
 
-export default async function OnboardingPage() {
+export default async function OnboardingPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   let session;
 
   try {
@@ -39,6 +40,10 @@ export default async function OnboardingPage() {
       },
     },
   });
+  const params = (await searchParams) ?? {};
+  const upgradeForPro = params.upgrade === "pro";
+  const upgradeInterval = params.interval === "monthly" ? "monthly" : "annual";
+  const env = getEnv();
 
   return (
     <main className="onboarding-page">
@@ -47,6 +52,12 @@ export default async function OnboardingPage() {
           workspaceId={onboardingWorkspace?.id ?? starterWorkspace.id}
           workspaceAccounts={onboardingWorkspace?.accounts ?? []}
           currentExperience={user.financialExperience}
+          upgradeForPro={upgradeForPro}
+          upgradeInterval={upgradeInterval}
+          paypalClientId={env.PAYPAL_CLIENT_ID ?? null}
+          paypalMonthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
+          paypalAnnualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? null}
+          paypalBuyerCountry={env.PAYPAL_BUYER_COUNTRY ?? null}
         />
       </section>
     </main>
