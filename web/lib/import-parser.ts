@@ -1605,7 +1605,7 @@ const parseGenericMobileScreenshotTransactionRows = (
 
   const lines = splitStatementLines(text).map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean);
   const datePattern = new RegExp(
-    `^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\\s+)?(?:(?:${monthNamePattern})\\s+\\d{1,2}|\\d{1,2}\\s+(?:${monthNamePattern})),?\\s+\\d{4}$`,
+    `^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\\s+)?(?:(?:(?:${monthNamePattern})\\s+\\d{1,2}|\\d{1,2}\\s+(?:${monthNamePattern})),?\\s+\\d{4}|\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4})$`,
     "i"
   );
   const amountPattern = /([+-])?\s*(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|₱|£|\$)?\s*([0-9][0-9,]*\.\d{2})/i;

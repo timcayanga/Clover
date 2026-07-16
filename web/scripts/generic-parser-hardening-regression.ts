@@ -335,6 +335,25 @@ Salary payment
     "Expected unfamiliar mobile transactions to remain review-only."
   );
 
+  const numericDateTransactionRows = parseImportText(
+    `Unknown Wallet
+Activity
+2026-05-03
+Grocery Market
+-PHP 85.40
+04/05/2026
+Refund
++PHP 12.00`,
+    "IMG_9998.PNG",
+    "image/png",
+    { institution: "Unknown Wallet", accountName: "Wallet" }
+  );
+  assert.deepEqual(
+    numericDateTransactionRows.map((row) => row.date),
+    ["2026-04-05", "2026-05-03"],
+    "Expected ISO and slash-formatted dates in unfamiliar mobile activity screens."
+  );
+
   assert.equal(getSharedMerchantCategoryHint("Maria Harman"), "Transfers", "Expected person-like names to map to Transfers.");
   assert.equal(getSharedMerchantCategoryHint("Visa Provisioning Service"), "Shopping", "Expected provisioning checks to map to Shopping.");
   assert.equal(getSharedMerchantCategoryHint("Great Ocean Road Choc"), "Travel & Lifestyle");
