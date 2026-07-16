@@ -27,16 +27,17 @@ Clover is a personal finance app focused on statement import, transaction parsin
 21. `docs/hsbc-parser-rules.md` when working on HSBC imports
 22. `docs/eastwest-parser-rules.md` when working on EastWest imports
 23. `docs/gotyme-parser-rules.md` when working on GoTyme imports
-24. `docs/bank-of-commerce-parser-rules.md` when working on Bank of Commerce imports
-25. `docs/bank-of-china-parser-rules.md` when working on Bank of China imports
-26. `docs/aub-parser-rules.md` when working on AUB imports
-27. `docs/pnb-parser-rules.md` when working on PNB imports
-28. `docs/ucpb-parser-rules.md` when working on UCPB imports
-29. `docs/cimb-parser-rules.md` when working on CIMB imports
-30. `web/prisma/schema.prisma`
-31. `web/lib/import-parser.ts`
-32. `web/lib/data-engine.ts`
-33. `web/workers/import-processor.ts`
+24. `docs/gotrade-parser-rules.md` when working on GoTrade imports
+25. `docs/bank-of-commerce-parser-rules.md` when working on Bank of Commerce imports
+26. `docs/bank-of-china-parser-rules.md` when working on Bank of China imports
+27. `docs/aub-parser-rules.md` when working on AUB imports
+28. `docs/pnb-parser-rules.md` when working on PNB imports
+29. `docs/ucpb-parser-rules.md` when working on UCPB imports
+30. `docs/cimb-parser-rules.md` when working on CIMB imports
+31. `web/prisma/schema.prisma`
+32. `web/lib/import-parser.ts`
+33. `web/lib/data-engine.ts`
+34. `web/workers/import-processor.ts`
 
 If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
 

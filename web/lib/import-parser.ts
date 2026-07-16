@@ -11312,6 +11312,437 @@ const parseGcryptoTransactionHistoryImportText = (text: string, fileName: string
   };
 };
 
+const gotradeSecurityCatalog = [
+  { symbol: "AMZN", name: "Amazon" },
+  { symbol: "GOOGL", name: "Alphabet Inc Class A - Google" },
+  { symbol: "O", name: "Realty Income" },
+  { symbol: "PG", name: "Procter & Gamble" },
+  { symbol: "SCHD", name: "Schwab US Dividend Equity ETF" },
+  { symbol: "VOO", name: "Vanguard S&P 500 ETF" },
+  { symbol: "VZ", name: "Verizon" },
+  { symbol: "XOM", name: "Exxon Mobil" },
+] as const;
+
+const looksLikeGotradeScreenshotText = (text: string) =>
+  /\b(?:my positions|recent trades|trade history|dividends|cash earnings|buy\s*-\s*market by dollars|withholding tax\s+25%\s*\(phl\)|per\s+shares?)\b/i.test(
+    normalizeWhitespace(text)
+  );
+
+const gotradeSecurityName = (symbolOrName: string) => {
+  const normalized = normalizeWhitespace(symbolOrName).toLowerCase();
+  if (normalized.includes("alphabet") && normalized.includes("google")) {
+    return "Alphabet Inc Class A - Google";
+  }
+  if (normalized.includes("schwab us dividend")) {
+    return "Schwab US Dividend Equity ETF";
+  }
+  const catalogMatch = gotradeSecurityCatalog.find(
+    (security) =>
+      security.symbol.toLowerCase() === normalized ||
+      security.name.toLowerCase() === normalized ||
+      normalized.includes(security.name.toLowerCase())
+  );
+  return catalogMatch?.name ?? normalizeWhitespace(symbolOrName);
+};
+
+const gotradeSecuritySymbol = (symbolOrName: string) => {
+  const normalized = normalizeWhitespace(symbolOrName).toLowerCase();
+  if (normalized.includes("alphabet") && normalized.includes("google")) {
+    return "GOOGL";
+  }
+  if (normalized.includes("schwab us dividend")) {
+    return "SCHD";
+  }
+  const catalogMatch = gotradeSecurityCatalog.find(
+    (security) =>
+      security.symbol.toLowerCase() === normalized ||
+      security.name.toLowerCase() === normalized ||
+      normalized.includes(security.name.toLowerCase())
+  );
+  return catalogMatch?.symbol ?? null;
+};
+
+const gotradeScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  if (!looksLikeGotradeScreenshotText(text)) {
+    return null;
+  }
+
+  return {
+    institution: "GoTrade",
+    accountNumber: null,
+    accountName: "GoTrade",
+    accountType: "investment",
+    currency: "USD",
+    openingBalance: null,
+    endingBalance: null,
+    paymentDueDate: null,
+    totalAmountDue: null,
+    startDate: null,
+    endDate: null,
+    confidence: fileName ? 92 : 88,
+  };
+};
+
+const gotradeMoneyPattern = /(?:^|\s)([-+]?\$\s*[0-9][0-9,]*(?:\.\d{1,2})?)(?=\s|$)/;
+const gotradeDatePattern = new RegExp(
+  `^(?:(?:${monthNamePattern}\\s+\\d{1,2},?\\s+\\d{4})|(?:\\d{1,2}\\s+${monthNamePattern}\\s+\\d{4}))(?:\\s*[·.-]\\s*Filled)?$`,
+  "i"
+);
+
+const parseGotradeAmount = (line: string) => {
+  const match = line.match(gotradeMoneyPattern);
+  return parseMoney(match?.[1]?.replace(/\$/g, "") ?? null);
+};
+
+const parseGotradePositionRows = (lines: string[], metadata: DetectedStatementMetadata): ParsedImportRow[] => {
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+  const positionStart = lines.findIndex((line) => /\bmy positions\b/i.test(line));
+  const positionEndCandidates = [
+    lines.findIndex((line, index) => index > Math.max(positionStart, -1) && /\b(?:recent trades|trade history|dividends)\b/i.test(line)),
+    lines.findIndex((line, index) => index > Math.max(positionStart, -1) && gotradeDatePattern.test(line)),
+  ].filter((index) => index >= 0);
+  const positionEnd = positionEndCandidates[0] ?? lines.length;
+  const positionLines = lines.slice(positionStart >= 0 ? positionStart : 0, positionEnd);
+
+  for (let index = 0; index < positionLines.length; index += 1) {
+    const sharesMatch = normalizeWhitespace(positionLines[index] ?? "").match(
+      /\b([0-9]+(?:\.[0-9]+)?)\s+shares?\b/i
+    );
+    if (!sharesMatch || /per\s+shares?/i.test(positionLines[index] ?? "")) {
+      continue;
+    }
+
+    const quantity = Number(sharesMatch[1]);
+    const nameParts: string[] = [];
+    for (let offset = 1; offset <= 3; offset += 1) {
+      const rawCandidate = normalizeWhitespace(positionLines[index - offset] ?? "");
+      const candidate = rawCandidate.replace(gotradeMoneyPattern, "").replace(/\s+\d+(?:\.\d+)?%.*$/i, "").trim();
+      if (
+        !candidate ||
+        /\d/.test(candidate) ||
+        isGenericScreenshotNoiseLine(candidate) ||
+        /(?:my positions|cash earnings|cash unlocked|recent trades|trade history|dividends|export to csv|market by dollars)/i.test(candidate)
+      ) {
+        continue;
+      }
+      if (!/\$|%|shares?|^\d/.test(candidate)) {
+        nameParts.unshift(candidate);
+        if (gotradeSecuritySymbol(candidate)) {
+          break;
+        }
+      }
+    }
+    const immediateName = normalizeWhitespace(positionLines[index - 1] ?? "")
+      .replace(gotradeMoneyPattern, "")
+      .replace(/\s+\d+(?:\.\d+)?%.*$/i, "")
+      .trim();
+    const name = gotradeSecuritySymbol(immediateName) ? immediateName : nameParts.join(" ");
+
+    if (!name) {
+      continue;
+    }
+
+    let marketValue: number | null = null;
+    for (const offset of [-1, -2, 1, 2, 3, -3]) {
+      const candidate = normalizeWhitespace(positionLines[index + offset] ?? "");
+      const amount = parseGotradeAmount(candidate);
+      if (amount !== null) {
+        marketValue = amount;
+        break;
+      }
+    }
+    if (marketValue === null) {
+      continue;
+    }
+
+    const canonicalName = gotradeSecurityName(name);
+    const symbol = gotradeSecuritySymbol(name);
+    if (!symbol && canonicalName.length < 4) {
+      continue;
+    }
+    const dedupeKey = [canonicalName.toLowerCase(), quantity, marketValue.toFixed(2)].join("|");
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+
+    rows.push({
+      date: "2000-01-01",
+      amount: "0.00",
+      currency: "USD",
+      merchantRaw: `${canonicalName} snapshot`,
+      merchantClean: canonicalName,
+      description: `${canonicalName} position snapshot`,
+      categoryName: "Other",
+      accountName: canonicalName,
+      institution: metadata.institution ?? "GoTrade",
+      type: "expense",
+      confidence: 92,
+      parserConfidence: 90,
+      categoryConfidence: 100,
+      rawPayload: {
+        bank: "GoTrade",
+        providerInstitution: "GoTrade",
+        providerProduct: "GoTrade Investments",
+        kind: "account_snapshot_marker",
+        source: "gotrade_positions_screenshot",
+        sourceRowIndex: rows.length + 1,
+        documentType: "account_detail",
+        accountName: canonicalName,
+        accountType: "investment",
+        investmentSubtype: "stock",
+        investmentSymbol: symbol,
+        quantity,
+        marketValue,
+        balance: marketValue,
+        statementEndingBalance: marketValue,
+        currency: "USD",
+        gotradeDedupeKey: dedupeKey,
+      },
+    });
+  }
+
+  return rows;
+};
+
+const parseGotradeTradeRows = (lines: string[], metadata: DetectedStatementMetadata): ParsedImportRow[] => {
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+  let activeDate: string | null = null;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = normalizeWhitespace(lines[index] ?? "");
+    if (gotradeDatePattern.test(line)) {
+      activeDate = parseDateValue(line.replace(/\s*[·.-]\s*Filled$/i, ""))?.toISOString().slice(0, 10) ?? activeDate;
+      continue;
+    }
+
+    const actionMatch = line.match(/\b(Buy|Sell)\s*[-~]\s*Market\s+by\s+Dollars\b/i);
+    if (!activeDate || !actionMatch) {
+      continue;
+    }
+
+    const detailLine = normalizeWhitespace(lines[index + 1] ?? "");
+    const detailMatch = detailLine.match(/(?:^|[+\-])\s*([A-Z]{1,6})\s*-\s*([0-9]+(?:\.[0-9]+)?)\s+shares?\s+@\s*\$?\s*([0-9][0-9,]*(?:\.\d+)?)/i);
+    const amount = parseGotradeAmount(line);
+    if (!detailMatch || amount === null) {
+      continue;
+    }
+
+    const action = actionMatch[1].toLowerCase() === "sell" ? "Sell" : "Buy";
+    const symbol = detailMatch[1].toUpperCase();
+    const quantity = Number(detailMatch[2]);
+    const executionPrice = Number(detailMatch[3].replace(/,/g, ""));
+    const canonicalName = gotradeSecurityName(symbol);
+    const dedupeKey = [activeDate, action.toLowerCase(), symbol, quantity, amount.toFixed(2), executionPrice].join("|");
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+
+    rows.push({
+      date: activeDate,
+      amount: Math.abs(amount).toFixed(2),
+      currency: "USD",
+      merchantRaw: `${action} ${canonicalName}`,
+      merchantClean: `${action} ${canonicalName}`,
+      description: `${action} - ${canonicalName} (${quantity} shares @ $${executionPrice.toFixed(2)})`,
+      categoryName: "Investments",
+      accountName: canonicalName,
+      institution: metadata.institution ?? "GoTrade",
+      type: action === "Buy" ? "expense" : "income",
+      confidence: 94,
+      parserConfidence: 92,
+      categoryConfidence: 94,
+      rawPayload: {
+        bank: "GoTrade",
+        providerInstitution: "GoTrade",
+        kind: "gotrade_trade_transaction",
+        source: "gotrade_trade_history_screenshot",
+        action,
+        assetName: canonicalName,
+        investmentSymbol: symbol,
+        quantity,
+        executionPrice,
+        amount: Math.abs(amount),
+        currency: "USD",
+        gotradeDedupeKey: dedupeKey,
+        line: `${activeDate} ${action} ${symbol} ${quantity} shares @ ${executionPrice} ${amount}`,
+      },
+    });
+  }
+
+  return rows;
+};
+
+const parseGotradeDividendRows = (lines: string[], metadata: DetectedStatementMetadata): ParsedImportRow[] => {
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+  let activeDate: string | null = null;
+  const findNameBefore = (index: number) => {
+    for (let offset = 1; offset <= 4; offset += 1) {
+      const candidate = normalizeWhitespace(lines[index - offset] ?? "");
+      if (
+        candidate &&
+        !gotradeDatePattern.test(candidate) &&
+        parseGotradeAmount(candidate) === null &&
+        !/per\s+shares?|withholding\s+tax|^(?:dividends|all time|all stocks)$/i.test(candidate) &&
+        !/^\d{1,2}\s+[A-Za-z]+\s+\d{4}$/.test(candidate)
+      ) {
+        return candidate;
+      }
+    }
+    return "";
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = normalizeWhitespace(lines[index] ?? "");
+    if (gotradeDatePattern.test(line)) {
+      activeDate = parseDateValue(line.replace(/\s*[·.-]\s*Filled$/i, ""))?.toISOString().slice(0, 10) ?? activeDate;
+      continue;
+    }
+    if (!activeDate || /^(?:dividends|track your dividend payouts|all time|all stocks|show more)$/i.test(line)) {
+      continue;
+    }
+
+    const nameCandidate = line.replace(gotradeMoneyPattern, "").trim();
+    const nextLine = normalizeWhitespace(lines[index + 1] ?? "");
+    const withholdingOffset = [1, 2].find((offset) => /withh?old(?:ing|in)|withholding|25%|\bphl\b/i.test(lines[index + offset] ?? ""));
+    const isWithholding = /withholding\s+tax\s+25%\s*\(phl\)/i.test(line) || withholdingOffset !== undefined;
+    if ((!nameCandidate && !isWithholding) || /per\s+shares?/i.test(nameCandidate)) {
+      continue;
+    }
+
+    if (isWithholding) {
+      const name = /withholding\s+tax/i.test(line) ? findNameBefore(index) : nameCandidate;
+      const amount =
+        parseGotradeAmount(line) ??
+        (withholdingOffset ? parseGotradeAmount(lines[index + withholdingOffset - 1] ?? "") : null) ??
+        parseGotradeAmount(lines[index - 1] ?? "");
+      if (!name || amount === null) {
+        continue;
+      }
+      const canonicalName = gotradeSecurityName(name);
+      const symbol = gotradeSecuritySymbol(name);
+      const dedupeKey = [activeDate, "withholding", symbol ?? canonicalName, amount.toFixed(2)].join("|");
+      if (seen.has(dedupeKey)) {
+        continue;
+      }
+      seen.add(dedupeKey);
+      rows.push({
+        date: activeDate,
+        amount: Math.abs(amount).toFixed(2),
+        currency: "USD",
+        merchantRaw: `${canonicalName} withholding tax`,
+        merchantClean: "Dividend Withholding Tax",
+        description: `${canonicalName} - Withholding tax 25% (PHL)`,
+        categoryName: "Financial",
+        accountName: canonicalName,
+        institution: metadata.institution ?? "GoTrade",
+        type: "expense",
+        confidence: 93,
+        parserConfidence: 91,
+        categoryConfidence: 92,
+        rawPayload: {
+          bank: "GoTrade",
+          providerInstitution: "GoTrade",
+          kind: "gotrade_dividend_transaction",
+          source: "gotrade_dividend_screenshot",
+          dividendType: "withholding_tax",
+          assetName: canonicalName,
+          investmentSymbol: symbol,
+          taxRate: 25,
+          amount: Math.abs(amount),
+          currency: "USD",
+          gotradeDedupeKey: dedupeKey,
+        },
+      });
+      continue;
+    }
+
+    const detailIndex = [1, 2, 3].find((offset) => /per\s+shares?/i.test(lines[index + offset] ?? ""));
+    const detailLine = detailIndex ? normalizeWhitespace(lines[index + detailIndex] ?? "") : "";
+    const detailMatch = detailLine.match(/(?:\$|£|₱)\s*([0-9][0-9,.]*)\s+per\s+shares?\s+([0-9]+(?:\.[0-9]+)?)\s+shares?/i);
+    if (!detailMatch) {
+      continue;
+    }
+    const amount =
+      parseGotradeAmount(line) ??
+      (detailIndex ? parseGotradeAmount(lines[index + detailIndex - 1] ?? "") : null) ??
+      (detailIndex ? parseGotradeAmount(lines[index + detailIndex + 1] ?? "") : null);
+    if (amount === null) {
+      continue;
+    }
+    const canonicalName = gotradeSecurityName(nameCandidate);
+    const symbol = gotradeSecuritySymbol(nameCandidate);
+    const perShare = Number(detailMatch[1].replace(/,/g, ""));
+    const quantity = Number(detailMatch[2]);
+    const dedupeKey = [activeDate, "dividend", symbol ?? canonicalName, amount.toFixed(2), quantity].join("|");
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+    rows.push({
+      date: activeDate,
+      amount: Math.abs(amount).toFixed(2),
+      currency: "USD",
+      merchantRaw: `${canonicalName} dividend`,
+      merchantClean: `${canonicalName} Dividend`,
+      description: `${canonicalName} dividend ($${perShare.toFixed(2)} per share)`,
+      categoryName: "Income",
+      accountName: canonicalName,
+      institution: metadata.institution ?? "GoTrade",
+      type: "income",
+      confidence: 93,
+      parserConfidence: 91,
+      categoryConfidence: 92,
+      rawPayload: {
+        bank: "GoTrade",
+        providerInstitution: "GoTrade",
+        kind: "gotrade_dividend_transaction",
+        source: "gotrade_dividend_screenshot",
+        dividendType: "cash_dividend",
+        assetName: canonicalName,
+        investmentSymbol: symbol,
+        perShare,
+        quantity,
+        amount: Math.abs(amount),
+        currency: "USD",
+        gotradeDedupeKey: dedupeKey,
+      },
+    });
+  }
+
+  return rows;
+};
+
+const parseGotradeScreenshotImportText = (text: string, fileName = "") => {
+  const metadata = gotradeScreenshotMetadata(text, fileName);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = splitStatementLines(text).map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean);
+  const rows = [
+    ...parseGotradePositionRows(lines, metadata),
+    ...parseGotradeTradeRows(lines, metadata),
+    ...parseGotradeDividendRows(lines, metadata),
+  ];
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return {
+    metadata: {
+      ...metadata,
+      startDate: rows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort()[0] ?? null,
+      endDate: rows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
+    },
+    rows,
+  };
+};
+
 const parseGenericInvestmentActionScreenshotImportText = (
   text: string,
   fileName: string,
@@ -20209,6 +20640,11 @@ export const parseImportTextGenericOnly = (
     return filterSharedScreenshotParsedRows(wiseMobileParsed.rows, text, fileName, context);
   }
 
+  const gotradeScreenshotParsed = parseGotradeScreenshotImportText(text, fileName);
+  if (gotradeScreenshotParsed && gotradeScreenshotParsed.rows.length > 0) {
+    return filterSharedScreenshotParsedRows(gotradeScreenshotParsed.rows, text, fileName, context);
+  }
+
   const chinaBankParsed = parseChinaBankImportText(text, context);
   if (chinaBankParsed) {
     return chinaBankParsed.rows;
@@ -21264,6 +21700,11 @@ const filterSharedScreenshotParsedRows = (
 };
 
 export const detectStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const gotradeMetadata = gotradeScreenshotMetadata(text, fileName);
+  if (gotradeMetadata) {
+    return withDetectedCurrency(gotradeMetadata, text);
+  }
+
   const knownGstocksMetadata = gstocksScreenshotMetadata(text, fileName);
   if (knownGstocksMetadata) {
     return withDetectedCurrency(knownGstocksMetadata, text);
@@ -21701,6 +22142,11 @@ export const parseImportText = (
     if (forcedWiseParsed && forcedWiseParsed.rows.length > 0) {
       return filterSharedScreenshotParsedRows(forcedWiseParsed.rows, text, fileName, context);
     }
+  }
+
+  const gotradeScreenshotParsed = parseGotradeScreenshotImportText(text, fileName);
+  if (gotradeScreenshotParsed && gotradeScreenshotParsed.rows.length > 0) {
+    return filterSharedScreenshotParsedRows(gotradeScreenshotParsed.rows, text, fileName, context);
   }
 
   const gfundsScreenshotParsed = parseGfundsTransactionHistoryImportText(text, fileName);

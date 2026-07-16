@@ -5555,6 +5555,9 @@ const getMobileScreenshotPayloadKind = (rawPayload: Prisma.JsonValue | null | un
   if (/gfunds|atram|ryse/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
     return "gfunds";
   }
+  if (/gotrade/i.test(identityText) && /mobile_screenshot|transaction_screenshot|gotrade_/i.test(identityText)) {
+    return "gotrade";
+  }
   if (/generic_investment_action_screenshot/i.test(identityText)) {
     return "generic-investment";
   }
@@ -5573,6 +5576,8 @@ const mobileScreenshotOverlapPayloadMatchers: Array<{ path: "kind" | "source"; e
   { path: "kind", equals: "gcrypto_mobile_screenshot_transaction" },
   { path: "kind", equals: "gcrypto_transaction_screenshot" },
   { path: "kind", equals: "gfunds_transaction_screenshot" },
+  { path: "kind", equals: "gotrade_trade_transaction" },
+  { path: "kind", equals: "gotrade_dividend_transaction" },
   { path: "kind", equals: "generic_investment_action_screenshot_transaction" },
   { path: "source", equals: "gcash_mobile_screenshot" },
   { path: "source", equals: "maya_mobile_screenshot" },
@@ -5583,6 +5588,8 @@ const mobileScreenshotOverlapPayloadMatchers: Array<{ path: "kind" | "source"; e
   { path: "source", equals: "gcrypto_mobile_screenshot" },
   { path: "source", equals: "gcrypto_transaction_screenshot" },
   { path: "source", equals: "gfunds_transaction_screenshot" },
+  { path: "source", equals: "gotrade_trade_history_screenshot" },
+  { path: "source", equals: "gotrade_dividend_screenshot" },
   { path: "source", equals: "generic_investment_action_screenshot" },
 ];
 
@@ -5640,9 +5647,11 @@ const buildMobileScreenshotContentKey = (transaction: {
   }
 
   const date =
-    transaction.date instanceof Date && !Number.isNaN(transaction.date.getTime())
-      ? transaction.date.toISOString().slice(0, 10)
-      : normalizeTransactionDedupeText(transaction.date).slice(0, 10);
+    screenshotKind === "gotrade"
+      ? ""
+      : transaction.date instanceof Date && !Number.isNaN(transaction.date.getTime())
+        ? transaction.date.toISOString().slice(0, 10)
+        : normalizeTransactionDedupeText(transaction.date).slice(0, 10);
   const amount = parseAmountValue(
     typeof transaction.amount === "number" || typeof transaction.amount === "string"
       ? String(transaction.amount)
