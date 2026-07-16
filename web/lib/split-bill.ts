@@ -121,6 +121,12 @@ export type ReceiptPreviewResult = {
   receiptAccountMatch: ReceiptPreviewAccountMatch | null;
   confidence: number;
   requiresReview?: boolean;
+  backupParser?: {
+    model: string | null;
+    promptVersion: string | null;
+    confidence: number | null;
+    schemaValidated: boolean | null;
+  };
 };
 
 export type ReceiptPreviewQualityAssessment = {
@@ -2973,6 +2979,7 @@ export const splitBillDraftFromReceiptPreview = (preview: ReceiptPreviewResult):
     rawPayload: mergeSplitBillReceiptSummary(
       {
         receiptAccountMatch: shouldPreserveAccountHints ? preview.receiptAccountMatch : null,
+        receiptBackupParser: preview.backupParser ?? null,
         paymentMethod: shouldPreserveAccountHints ? preview.paymentMethod : null,
         receiptPayerName: preview.receiptPayerName,
         receiptCurrencyMentions: preview.currencyMentions,

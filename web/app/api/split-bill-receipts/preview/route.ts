@@ -40,7 +40,8 @@ const isVisualReceiptFile = (file: File) =>
 const mergeReceiptBackup = (
   localPreview: ReceiptPreviewResult,
   backup: Record<string, unknown>,
-  backupAccountMatch: unknown
+  backupAccountMatch: unknown,
+  backupAudit: { model?: string | null; promptVersion?: string | null; confidence?: number | null; schemaValidated?: boolean | null }
 ): ReceiptPreviewResult => {
   const localMerchantLooksWeak = assessReceiptPreviewQuality(localPreview).issues.includes("merchant looks noisy");
   const backupItems = Array.isArray(backup.line_items)
@@ -126,6 +127,14 @@ const mergeReceiptBackup = (
     splitAllocations: localPreview.splitAllocations.length > 0 ? localPreview.splitAllocations : backupAllocations,
     confidence: Math.min(89, Math.max(localPreview.confidence, backupConfidence)),
     requiresReview: true,
+    backupParser: {
+      model: asText(backupAudit.model),
+      promptVersion: asText(backupAudit.promptVersion),
+      confidence: typeof backupAudit.confidence === "number" && Number.isFinite(backupAudit.confidence)
+        ? Math.max(0, Math.min(100, Math.round(backupAudit.confidence)))
+        : backupConfidence || null,
+      schemaValidated: typeof backupAudit.schemaValidated === "boolean" ? backupAudit.schemaValidated : null,
+    },
   };
 };
 
@@ -159,7 +168,12 @@ const tryReceiptBackup = async (params: { file: File; receiptText: string; previ
       timeoutMs: 25_000,
     });
     return result?.receiptDetails
-      ? mergeReceiptBackup(params.preview, result.receiptDetails as unknown as Record<string, unknown>, result.receiptAccountMatch)
+      ? mergeReceiptBackup(
+          params.preview,
+          result.receiptDetails as unknown as Record<string, unknown>,
+          result.receiptAccountMatch,
+          result.audit
+        )
       : params.preview;
   } catch (error) {
     console.warn("Receipt backup parser failed; keeping local preview", error);
