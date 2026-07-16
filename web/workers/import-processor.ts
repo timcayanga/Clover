@@ -87,6 +87,7 @@ import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
 import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
+import { assessStatementExtractionQuality, compareStatementExtractionCandidates } from "@/lib/import-quality";
 import {
   isGenericMobileScreenshotFileName,
   resolveStatementIdentityFromMetadata,
@@ -8282,14 +8283,37 @@ export const processImportFileText = async (
     hasKnownInstitution &&
     (Boolean(metadataForParse.accountNumber) || parsedRowsHaveMultipleAccountNumbers) &&
     (metadataForParse.confidence ?? 0) >= 80;
+  const localStatementQuality =
+    importMode === "statement"
+      ? assessStatementExtractionQuality({
+          rows: parsedRows,
+          pageCount: pageImages?.length ?? null,
+        })
+      : null;
+  const openAiStatementQuality =
+    importMode === "statement" && openAiParsed
+      ? assessStatementExtractionQuality({
+          rows: openAiParsed.rows,
+          pageCount: pageImages?.length ?? null,
+        })
+      : null;
+  const openAiQualityAdvantage =
+    localStatementQuality && openAiStatementQuality
+      ? openAiStatementQuality.score - localStatementQuality.score
+      : 0;
+  const statementCandidateComparison = localStatementQuality
+    ? compareStatementExtractionCandidates({ local: localStatementQuality, backup: openAiStatementQuality })
+    : null;
   const openAiStatementRowsAreCompetitive =
     importMode !== "statement" ||
     parsedRows.length === 0 ||
-    (openAiParsed?.rows.length ?? 0) >= Math.max(1, Math.floor(parsedRows.length * 0.9));
+    (openAiParsed?.rows.length ?? 0) >= Math.max(1, Math.floor(parsedRows.length * 0.9)) ||
+    openAiQualityAdvantage >= 8 || statementCandidateComparison?.winner === "backup";
   const openAiStatementQualityIsAcceptable =
     importMode !== "statement" ||
     !openAiParsed?.audit.quality ||
-    (!openAiParsed.audit.quality.critical && openAiParsed.audit.quality.score >= 55);
+    (!openAiParsed.audit.quality.critical && openAiParsed.audit.quality.score >= 55 &&
+      (!openAiStatementQuality || !openAiStatementQuality.critical));
   const parsedRowsAreSnapshotOnlyStatement =
     importMode === "statement" &&
     parsedRows.length > 0 &&
@@ -8629,6 +8653,11 @@ export const processImportFileText = async (
     importValidationCritical: importValidation.critical,
     importValidationFindings: importValidation.findings,
     importValidationMetrics: importValidation.metrics,
+    localCandidateQuality: localStatementQuality,
+    backupCandidateQuality: openAiStatementQuality,
+    backupQualityAdvantage: openAiQualityAdvantage,
+    candidateWinner: statementCandidateComparison?.winner ?? null,
+    candidateComparisonReason: statementCandidateComparison?.reason ?? null,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const receiptDocumentCashAccountId =

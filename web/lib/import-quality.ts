@@ -20,6 +20,14 @@ export type StatementExtractionQuality = {
   reasons: string[];
 };
 
+export type StatementCandidateComparison = {
+  winner: "local" | "backup" | "tie";
+  localScore: number;
+  backupScore: number | null;
+  backupQualityAdvantage: number;
+  reason: "backup_materially_better" | "local_materially_better" | "backup_critical" | "insufficient_backup" | "close_quality";
+};
+
 const asText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
 const rowEvidence = (row: StatementQualityRow) => {
@@ -116,5 +124,57 @@ export const assessStatementExtractionQuality = (params: {
     duplicateKeyRate,
     critical,
     reasons,
+  };
+};
+
+export const compareStatementExtractionCandidates = (params: {
+  local: StatementExtractionQuality;
+  backup?: StatementExtractionQuality | null;
+}): StatementCandidateComparison => {
+  const backup = params.backup ?? null;
+  if (!backup) {
+    return {
+      winner: "local",
+      localScore: params.local.score,
+      backupScore: null,
+      backupQualityAdvantage: 0,
+      reason: "insufficient_backup",
+    };
+  }
+
+  const backupQualityAdvantage = backup.score - params.local.score;
+  if (backup.critical && !params.local.critical) {
+    return {
+      winner: "local",
+      localScore: params.local.score,
+      backupScore: backup.score,
+      backupQualityAdvantage,
+      reason: "backup_critical",
+    };
+  }
+  if (!params.local.critical && backupQualityAdvantage <= -8) {
+    return {
+      winner: "local",
+      localScore: params.local.score,
+      backupScore: backup.score,
+      backupQualityAdvantage,
+      reason: "local_materially_better",
+    };
+  }
+  if (!backup.critical && (params.local.critical || backupQualityAdvantage >= 8)) {
+    return {
+      winner: "backup",
+      localScore: params.local.score,
+      backupScore: backup.score,
+      backupQualityAdvantage,
+      reason: "backup_materially_better",
+    };
+  }
+  return {
+    winner: "tie",
+    localScore: params.local.score,
+    backupScore: backup.score,
+    backupQualityAdvantage,
+    reason: "close_quality",
   };
 };

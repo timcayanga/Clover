@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { assessStatementExtractionQuality } from "@/lib/import-quality";
+import { assessStatementExtractionQuality, compareStatementExtractionCandidates } from "@/lib/import-quality";
 
 const row = (overrides: Record<string, unknown> = {}) => ({
   date: "2026-01-01",
@@ -45,6 +45,20 @@ const main = () => {
     declaredTransactionCount: 2,
   });
   assert.ok(duplicateRows.reasons.includes("duplicate_row_keys"));
+
+  const candidateComparison = compareStatementExtractionCandidates({
+    local: incomplete,
+    backup: complete,
+  });
+  assert.equal(candidateComparison.winner, "backup");
+  assert.equal(candidateComparison.reason, "backup_materially_better");
+
+  const criticalBackupComparison = compareStatementExtractionCandidates({
+    local: complete,
+    backup: incomplete,
+  });
+  assert.equal(criticalBackupComparison.winner, "local");
+  assert.equal(criticalBackupComparison.reason, "backup_critical");
 
   console.log("Import quality regression checks passed.");
 };

@@ -3474,9 +3474,12 @@ export const upsertMerchantRule = async (params: {
     const incomingConfidence = Math.max(0, Math.min(100, Math.round(params.confidence ?? 100)));
     const existing = await prisma.merchantRule.findUnique({
       where: { workspaceId_merchantKey: { workspaceId: params.workspaceId, merchantKey } },
-      select: { id: true, status: true, source: true, confidence: true },
+      select: { id: true, status: true, source: true, confidence: true, categoryId: true, normalizedName: true },
     });
     const incomingIsManual = /manual/i.test(params.source);
+    if (existing && !incomingIsManual && (existing.status === "suspended" || existing.status === "rejected")) {
+      return existing;
+    }
     if (
       existing &&
       existing.status === "active" &&
@@ -3486,7 +3489,13 @@ export const upsertMerchantRule = async (params: {
     ) {
       return await prisma.merchantRule.update({
         where: { id: existing.id },
-        data: { applicationCount: { increment: 1 }, lastUsedAt: new Date() },
+        data: {
+          applicationCount: { increment: 1 },
+          correctionCount: {
+            increment: existing.categoryId !== params.categoryId || normalizeMerchantText(existing.normalizedName) !== normalizeMerchantText(params.normalizedName) ? 1 : 0,
+          },
+          lastUsedAt: new Date(),
+        },
       });
     }
 
@@ -3503,11 +3512,18 @@ export const upsertMerchantRule = async (params: {
         categoryId: params.categoryId,
         categoryName: params.categoryName ?? null,
         source: params.source,
-        status: "active",
+        status: incomingIsManual ? "active" : existing?.status === "candidate" ? "candidate" : "active",
         version: { increment: 1 },
         confidence: incomingConfidence,
         timesConfirmed: { increment: 1 },
         applicationCount: { increment: 1 },
+        correctionCount: {
+          increment:
+            incomingIsManual && existing &&
+            (existing.categoryId !== params.categoryId || normalizeMerchantText(existing.normalizedName) !== normalizeMerchantText(params.normalizedName))
+              ? 1
+              : 0,
+        },
         provenance: { source: params.source, updatedAt: new Date().toISOString() },
         lastUsedAt: new Date(),
       },
