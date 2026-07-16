@@ -349,6 +349,16 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
         category_confidence: current?.categoryConfidence ?? null,
         account_match_confidence: current?.accountMatchConfidence ?? null,
       });
+      if (reviewStatusValue === "confirmed" || reviewStatusValue === "edited") {
+        capturePostHogClientEvent(
+          reviewStatusValue === "confirmed" ? "transaction_confirmed_without_edit" : "transaction_edited_before_confirmation",
+          {
+            workspace_id: workspaceId,
+            review_status: reviewStatusValue,
+            has_learning_change: body.reviewStatus === "edited",
+          }
+        );
+      }
       setStatus(message);
     } catch (error) {
       setItems(previousItems);

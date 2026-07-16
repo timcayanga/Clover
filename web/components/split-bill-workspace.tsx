@@ -17,6 +17,7 @@ import {
 } from "@/lib/split-bill";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 import { getSplitBillBillsForGroup, getSplitBillBillsForPerson } from "@/lib/split-bill-view-models";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 type SplitBillWorkspaceProps = {
   bills: SplitBillSerializedBill[];
@@ -373,10 +374,22 @@ export function SplitBillWorkspace({
   };
 
   const handleBillSaved = (bill: SplitBillSerializedBill) => {
+    const isNewBill = !bills.some((entry) => entry.id === bill.id);
     setBills((current) => {
       const next = current.filter((entry) => entry.id !== bill.id);
       return [bill, ...next];
     });
+    if (isNewBill) {
+      capturePostHogClientEvent("split_bill_created", {
+        participant_count: bill.participants.length,
+        item_count: bill.items.length,
+        has_receipt: Boolean(bill.receiptFileName),
+      });
+      capturePostHogClientEvent("split_bill_completed", {
+        participant_count: bill.participants.length,
+        item_count: bill.items.length,
+      });
+    }
     setSelected({ kind: "bill", id: bill.id });
   };
 
@@ -546,6 +559,10 @@ export function SplitBillWorkspace({
     }
 
     setBills((current) => current.map((entry) => (entry.id === bill.id ? payload.bill! : entry)));
+    capturePostHogClientEvent("split_bill_settled", {
+      settlement_mode: "transfer",
+      amount_bucket: amount < 1000 ? "small" : amount < 10000 ? "medium" : "large",
+    });
     return payload.bill;
   };
 

@@ -11419,7 +11419,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   const analyticsDistinctId = String(importFile.workspaceId ?? "import-worker");
   for (const entry of preparedTransactions) {
     const insertRow = entry.insertRow as {
-      amount?: unknown;
       currency?: unknown;
       reviewStatus?: unknown;
       isTransfer?: unknown;
@@ -11428,18 +11427,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       categoryConfidence?: unknown;
       accountMatchConfidence?: unknown;
       parserConfidence?: unknown;
-      merchantClean?: unknown;
-      merchantRaw?: unknown;
       type?: unknown;
     };
-    const amount = Math.abs(Number(insertRow.amount ?? 0));
 
     void capturePostHogServerEvent("transaction_imported", analyticsDistinctId, {
       workspace_id: String(importFile.workspaceId ?? null),
       import_file_id: importFileId,
       transaction_id: entry.transactionId,
-      amount,
-      amount_signed: Number(insertRow.amount ?? 0),
       currency: String(insertRow.currency ?? "PHP"),
       transaction_type: String(entry.insightRow.type ?? "expense"),
       review_status: typeof insertRow.reviewStatus === "string" ? insertRow.reviewStatus : null,
@@ -11449,12 +11443,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       category_confidence: typeof insertRow.categoryConfidence === "number" ? insertRow.categoryConfidence : null,
       account_match_confidence: typeof insertRow.accountMatchConfidence === "number" ? insertRow.accountMatchConfidence : null,
       parser_confidence: typeof insertRow.parserConfidence === "number" ? insertRow.parserConfidence : null,
-      merchant_name:
-        typeof insertRow.merchantClean === "string"
-          ? insertRow.merchantClean
-          : typeof insertRow.merchantRaw === "string"
-            ? insertRow.merchantRaw
-            : null,
     });
   }
 

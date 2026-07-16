@@ -15,6 +15,7 @@ import type { RecurringPatternSummary } from "@/lib/recurring-page";
 import type { PlannedPaymentSuggestion } from "@/lib/planned-payment-suggestions";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatAccountTypeLabel, getRecurringKindSuggestionForAccountType, isLiabilityAccountType } from "@/lib/account-types";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 type CommitmentAccountOption = {
   id: string;
@@ -690,6 +691,13 @@ export function CommitmentsPanel({
           setVisibleCommitments((current) => [payload.commitment as FinancialCommitmentSummary, ...current.filter((item) => item.id !== payload.commitment?.id)]);
         }
 
+        capturePostHogClientEvent("recurring_item_confirmed", {
+          workspace_id: workspaceId,
+          source_kind: reviewingSuggestion.sourceKind,
+          recurrence: patternDraft.recurrence,
+          has_amount: Boolean(patternDraft.amount.trim()),
+        });
+
         setReviewingSuggestion(null);
         router.refresh();
       })
@@ -712,6 +720,11 @@ export function CommitmentsPanel({
           const payload = (await response.json().catch(() => null)) as { error?: string } | null;
           throw new Error(payload?.error ?? "Unable to hide recurring suggestion");
         }
+
+        capturePostHogClientEvent("recurring_item_reviewed", {
+          workspace_id: workspaceId,
+          action: "dismissed",
+        });
 
         router.refresh();
       })

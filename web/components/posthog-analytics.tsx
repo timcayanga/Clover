@@ -87,6 +87,30 @@ const runWhenPostHogReady = (callback: () => void) => {
   window.__posthogQueue.push(callback);
 };
 
+const safeCapture = (event: string, properties: Record<string, unknown> = {}) => {
+  try {
+    window.posthog?.capture(event, properties);
+  } catch {
+    // Analytics must never interrupt Clover rendering or navigation.
+  }
+};
+
+const safeIdentify = (distinctId: string, properties: Record<string, unknown> = {}) => {
+  try {
+    window.posthog?.identify(distinctId, properties);
+  } catch {
+    // Analytics must never interrupt Clover rendering or navigation.
+  }
+};
+
+const safeReset = () => {
+  try {
+    window.posthog?.reset();
+  } catch {
+    // Analytics must never interrupt Clover rendering or navigation.
+  }
+};
+
 const getClientAnalyticsEnvironment = () => {
   if (typeof document === "undefined") {
     return "production";
@@ -130,7 +154,7 @@ function PostHogPageViews() {
 
   useEffect(() => {
     runWhenPostHogReady(() => {
-      window.posthog?.capture("$pageview", {
+      safeCapture("$pageview", {
         $current_url: window.location.href,
         $pathname: pathname,
         $search: search,
@@ -158,7 +182,7 @@ function PostHogSessionSignals() {
         }
 
         const returning = window.localStorage.getItem(sessionReturnedKey) === "1";
-        window.posthog?.capture(returning ? "session_returned" : "session_started", {
+        safeCapture(returning ? "session_returned" : "session_started", {
           $current_url: window.location.href,
           $pathname: window.location.pathname,
           $search: window.location.search,
@@ -175,6 +199,50 @@ function PostHogSessionSignals() {
   return null;
 }
 
+function PostHogRoutePerformance() {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (!shouldTrackAnalytics()) {
+      return;
+    }
+
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    let cancelled = false;
+    const finish = () => {
+      if (cancelled) {
+        return;
+      }
+
+      const finishedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const durationMs = Math.max(0, Math.round(finishedAt - startedAt));
+      const properties = {
+        route: pathname,
+        duration_ms: durationMs,
+        viewport_class: window.innerWidth < 768 ? "mobile" : window.innerWidth < 1200 ? "tablet" : "desktop",
+      } satisfies AnalyticsProperties;
+
+      runWhenPostHogReady(() => {
+        safeCapture("page_load_completed", properties);
+        if (durationMs >= 2000) {
+          safeCapture("page_load_slow", properties);
+        }
+      });
+    };
+
+    const frame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(finish);
+    });
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [pathname]);
+
+  return null;
+}
+
 function PostHogIdentity() {
   const { isLoaded, user } = useUser();
 
@@ -185,14 +253,14 @@ function PostHogIdentity() {
 
     runWhenPostHogReady(() => {
       if (user) {
-        window.posthog?.identify(
+        safeIdentify(
           scopeAnalyticsDistinctId(user.id, getClientAnalyticsEnvironment()),
           getPostHogPersonProperties(user)
         );
         return;
       }
 
-      window.posthog?.reset();
+        safeReset();
     });
   }, [isLoaded, user]);
 
@@ -212,6 +280,7 @@ export function PostHogAnalytics() {
       <PostHogBootstrap token={token} host={host} />
       <PostHogPageViews />
       <PostHogSessionSignals />
+      <PostHogRoutePerformance />
     </>
   );
 }
@@ -233,7 +302,7 @@ export function PostHogPersonProperties({ distinctId, properties }: PostHogPerso
     }
 
     runWhenPostHogReady(() => {
-      window.posthog?.identify(scopeAnalyticsDistinctId(distinctId, getClientAnalyticsEnvironment()), properties);
+      safeIdentify(scopeAnalyticsDistinctId(distinctId, getClientAnalyticsEnvironment()), properties);
     });
   }, [distinctId, properties]);
 
@@ -264,7 +333,7 @@ export function PostHogEvent({ event, properties = {}, onceKey }: PostHogEventPr
     }
 
     runWhenPostHogReady(() => {
-      window.posthog?.capture(event, properties);
+      safeCapture(event, properties);
     });
   }, [event, onceKey, properties]);
 
@@ -282,7 +351,7 @@ export function PostHogPageEvent({ event, properties }: Omit<PostHogEventProps, 
     }
 
     runWhenPostHogReady(() => {
-      window.posthog?.capture(event, {
+      safeCapture(event, {
         ...properties,
         $current_url: window.location.href,
         $pathname: pathname,
@@ -300,7 +369,7 @@ export const capturePostHogClientEvent = (event: AnalyticsEventName, properties:
   }
 
   runWhenPostHogReady(() => {
-    window.posthog?.capture(event, properties);
+    safeCapture(event, properties);
   });
 };
 
@@ -323,7 +392,7 @@ export const capturePostHogClientEventOnce = (
   }
 
   runWhenPostHogReady(() => {
-    window.posthog?.capture(event, properties);
+    safeCapture(event, properties);
   });
 };
 

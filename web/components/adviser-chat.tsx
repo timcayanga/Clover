@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { trackAdviserInteraction } from "@/lib/adviser-interactions";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 type AdviserPrompt = {
   id: string;
@@ -159,6 +160,10 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
 
     setError(null);
     setIsSending(true);
+    capturePostHogClientEvent("adviser_question_asked", {
+      prompt_source: prompts.some((prompt) => prompt.prompt === trimmed) ? "suggested_prompt" : "custom",
+      message_length_bucket: trimmed.length < 40 ? "short" : trimmed.length < 160 ? "medium" : "long",
+    });
     const nextMessages: ChatMessage[] = [...messages, { role: "user", content: trimmed }];
     setMessages(nextMessages);
     setInput("");
@@ -294,6 +299,9 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
 
       setActions((current) => current.filter((item) => item.id !== action.id));
       setMessages((current) => [...current, { role: "assistant", content: `${action.label} completed. You can ask me to check the updated picture.` }]);
+      capturePostHogClientEvent("adviser_action_completed", {
+        action_type: action.type,
+      });
     } catch (error) {
       setError(error instanceof Error ? error.message : "Clover could not complete that action.");
     } finally {

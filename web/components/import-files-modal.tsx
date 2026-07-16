@@ -1823,6 +1823,12 @@ export function ImportFilesModal({
           amount_total: summary ? summary.incomeTotal + summary.expenseTotal : null,
           currency: "PHP",
         });
+        capturePostHogClientEvent("transaction_confirmation_completed", {
+          workspace_id: workspaceId || null,
+          transaction_count: importedRows,
+          institution: summaryContext.institution ?? null,
+          source_surface: importActivitySurfaceRef.current,
+        });
         return { status: "done", importedRows, summary };
       }
 
