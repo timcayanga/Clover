@@ -438,7 +438,7 @@ const detectCurrencyFromText = (text: string) => {
     { code: "TWD", match: /\bTWD\b/ },
     { code: "MYR", match: /\bMYR\b/ },
     { code: "IDR", match: /\bIDR\b/ },
-    { code: "INR", match: /\bINR\b/ },
+    { code: "INR", match: /\bINR\b|₹/i },
     { code: "BTC", match: /\bBTC\b|₿/i },
     { code: "ETH", match: /\bETH\b/ },
     { code: "USDT", match: /\bUSDT\b/ },
@@ -19462,6 +19462,7 @@ const parseGenericStatementTransactionBlock = (
   return {
     date: anchoredDate.toISOString().slice(0, 10),
     amount: amount.toFixed(2),
+    currency: normalizeInstitutionCurrency(state.institution, detectCurrencyFromText(rowText), state.accountName),
     merchantRaw: humanizeMerchantText(description),
     merchantClean: summarizeMerchantText(description, options.institutionAwareNormalization === false ? null : state.institution),
     description,
@@ -19485,6 +19486,7 @@ const parseGenericStatementTransactionBlock = (
             ? moneyMatches[0]?.[0] ?? null
             : null,
       amountDirectionMarker: explicitAmountDirectionMarker,
+      currency: detectCurrencyFromText(rowText),
       balanceText:
         balance !== null
           ? balanceMatchIndex !== null
@@ -22773,12 +22775,13 @@ const parseHeuristicLines = (text: string, institution?: string | null, fileName
         line.match(/\b\d{1,2}[/-][A-Za-z]{3}[/-]\d{2,4}\b/) ||
         line.match(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/) ||
         line.match(/\b\d{1,2}[A-Za-z]{3}\d{4}\b/);
-      const amountMatch = line.match(/[-+]?(?:PHP|USD|EUR|GBP|₱|\$)?\s?\d[\d,]*(?:\.\d{2})?/g);
+      const amountMatch = line.match(/[-+]?(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|INR|KRW|BRL|MXN|ZAR|RUB|TRY|PLN|SEK|NOK|DKK|ILS|VND|IDR|MYR|TWD|BDT|SAR|QAR|₱|£|€|¥|₹|฿|₩|\$)?\s?\d[\d,]*(?:\.\d{2})?/g);
       const amount = amountMatch?.at(-1) ?? "";
       const merchant = line
         .replace(dateMatch?.[0] ?? "", "")
         .replace(amount, "")
-        .replace(/\b(PHP|USD|EUR|GBP|₱|\$)\b/g, "")
+        .replace(/\b(PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|INR|KRW|BRL|MXN|ZAR|RUB|TRY|PLN|SEK|NOK|DKK|ILS|VND|IDR|MYR|TWD|BDT|SAR|QAR)\b/gi, "")
+        .replace(/[₱£€¥₹฿₩$]/g, "")
         .replace(/\s{2,}/g, " ")
         .trim();
 
@@ -22808,6 +22811,7 @@ const parseHeuristicLines = (text: string, institution?: string | null, fileName
       return {
         date: dateMatch?.[0],
         amount: normalizedAmount,
+        currency: normalizeInstitutionCurrency(institution, detectCurrencyFromText(line)),
         merchantRaw: humanizeMerchantText(merchant || line),
         merchantClean: summarizeMerchantText(merchant || line, institution),
         description: line,

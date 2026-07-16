@@ -34,8 +34,12 @@
 }
 
 /* Compact pricing cards and a responsive iOS-style billing toggle. */
-.pricing-page__comparison { align-items: start; }
-.pricing-page .pricing-card { grid-template-rows: auto auto auto auto; align-content: start; }
+.pricing-page__comparison { align-items: stretch; }
+.pricing-page .pricing-card {
+  height: 100%;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  align-content: stretch;
+}
 .pricing-page .pricing-card__top { min-height: 52px; }
 .pricing-page .pricing-card__icon,
 .pricing-page .pricing-card__icon--featured { width: 52px; height: 52px; flex: 0 0 52px; }
@@ -62,6 +66,10 @@
 .onboarding-upgrade__actions { display: grid; gap: 12px; }
 .onboarding-upgrade__paypal { min-height: 42px; }
 .settings-plan-card.is-preferred { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+@media (max-width: 720px) {
+  .pricing-page__comparison { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+}
 
 * {
   box-sizing: border-box;

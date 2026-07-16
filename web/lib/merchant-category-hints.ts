@@ -69,9 +69,13 @@ const matchesCategoryHint = (value: string, patterns: { lower?: RegExp; compact?
   const lower = normalized.toLowerCase();
   const compact = compactWhitespace(normalized).toLowerCase();
   const ocrCompact = normalizeOcrCompactHint(normalized);
+  const matches = (pattern: unknown, candidate: string) =>
+    pattern instanceof RegExp && pattern.test(candidate);
+
   return Boolean(
-    (patterns.lower && patterns.lower.test(lower)) ||
-      (patterns.compact && (patterns.compact.test(compact) || patterns.compact.test(ocrCompact)))
+    matches(patterns.lower, lower) ||
+      matches(patterns.compact, compact) ||
+      matches(patterns.compact, ocrCompact)
   );
 };
 

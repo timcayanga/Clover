@@ -372,6 +372,11 @@ Salary
     internationalCurrencyRows.map((row) => row.amount),
     ["12.50", "1000.00"]
   );
+  assert.deepEqual(
+    internationalCurrencyRows.map((row) => row.currency),
+    ["EUR", "INR"],
+    "Expected unfamiliar screenshot rows to retain their detected currency."
+  );
 
   assert.equal(getSharedMerchantCategoryHint("Maria Harman"), "Transfers", "Expected person-like names to map to Transfers.");
   assert.equal(getSharedMerchantCategoryHint("Visa Provisioning Service"), "Shopping", "Expected provisioning checks to map to Shopping.");
