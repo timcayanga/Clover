@@ -11,6 +11,20 @@ type AdviserPrompt = {
   prompt: string;
 };
 
+const getPromptEmoji = (group: string) => {
+  const normalizedGroup = group.toLowerCase();
+  if (normalizedGroup.includes("account")) return "🏦";
+  if (normalizedGroup.includes("cash") || normalizedGroup.includes("budget")) return "💰";
+  if (normalizedGroup.includes("recurr") || normalizedGroup.includes("bill")) return "🔁";
+  if (normalizedGroup.includes("split") || normalizedGroup.includes("shared")) return "🤝";
+  if (normalizedGroup.includes("goal")) return "🎯";
+  if (normalizedGroup.includes("invest")) return "📈";
+  if (normalizedGroup.includes("cleanup") || normalizedGroup.includes("quality")) return "🧹";
+  if (normalizedGroup.includes("report") || normalizedGroup.includes("trend")) return "📊";
+  if (normalizedGroup.includes("transaction") || normalizedGroup.includes("pattern") || normalizedGroup.includes("behavior")) return "🧾";
+  return "💡";
+};
+
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -352,7 +366,8 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
               void sendMessage(prompt.prompt);
             }}
           >
-            {prompt.label}
+            <span className="adviser-chat__prompt-emoji" aria-hidden="true">{getPromptEmoji(prompt.group)}</span>
+            <span>{prompt.label}</span>
           </button>
         ))}
       </div>

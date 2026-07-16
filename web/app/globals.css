@@ -9655,6 +9655,9 @@ html[data-theme="dark"] .adviser-section {
 }
 
 .adviser-chat__prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   border: 1px solid rgba(11, 27, 43, 0.08);
   background: rgba(255, 255, 255, 0.72);
   color: inherit;
@@ -9663,6 +9666,11 @@ html[data-theme="dark"] .adviser-section {
   font-weight: 400;
   letter-spacing: 0;
   cursor: pointer;
+}
+
+.adviser-chat__prompt-emoji {
+  font-size: 1rem;
+  line-height: 1;
 }
 
 html[data-theme="dark"] .adviser-chat__prompt {
