@@ -67,7 +67,7 @@ export function InfoTooltip({ label, title, align = "right", className }: InfoTo
         aria-expanded={isOpen}
         onFocus={() => setIsOpen(true)}
         onBlur={() => setIsOpen(false)}
-        onClick={() => setIsOpen((current) => !current)}
+        onMouseDown={(event) => event.preventDefault()}
       >
         <InfoIcon className="info-tooltip__icon" />
       </button>

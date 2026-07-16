@@ -20834,7 +20834,6 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .accounts-overview-card:has(.accounts-overview-card__info:hover),
-.accounts-overview-card:has(.accounts-overview-card__info:focus),
 .accounts-overview-card:has(.accounts-overview-card__info:focus-visible) {
   z-index: 8;
 }
@@ -20909,7 +20908,6 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .accounts-overview-card__info:hover .accounts-overview-card__info-tooltip,
-.accounts-overview-card__info:focus .accounts-overview-card__info-tooltip,
 .accounts-overview-card__info:focus-visible .accounts-overview-card__info-tooltip {
   opacity: 1;
   visibility: visible;
