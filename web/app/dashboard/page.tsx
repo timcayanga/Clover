@@ -894,7 +894,7 @@ async function DashboardStream({
         <div className="dashboard-home__snapshot-grid dashboard-home__snapshot-grid--lower">
           <div className="dashboard-home__goal-card dashboard-home__recurring-card">
             <div className="dashboard-home__goal-card-head">
-              <p className="eyebrow">Recurring watch</p>
+                <p className="eyebrow">What&apos;s coming up</p>
             </div>
             <div className="dashboard-home__goal-card-body">
               <div
@@ -942,7 +942,7 @@ async function DashboardStream({
           ) : (
             <div className="dashboard-home__goal-card dashboard-home__review-card">
               <div className="dashboard-home__goal-card-head">
-                <p className="eyebrow">Review queue</p>
+                <p className="eyebrow">Things to review</p>
               </div>
               <div className="dashboard-home__goal-card-body">
                 <div
