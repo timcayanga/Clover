@@ -19,6 +19,7 @@ type CorpusFileResult = {
   protected: boolean;
   visualRequired: boolean;
   otherSamples?: Array<{ merchantRaw: string; merchantClean: string; description: string }>;
+  duplicateSamples?: Array<{ key: string; count: number; merchants: string[]; sourceLines: string[] }>;
   error?: string;
 };
 
@@ -122,6 +123,26 @@ const summarizeFile = async (filePath: string): Promise<CorpusFileResult> => {
       merchantClean: String(row.merchantClean ?? ""),
       description: String(row.description ?? ""),
     }));
+    const duplicateGroups = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const key = qualityKey(row);
+      if (key !== "||") {
+        duplicateGroups.set(key, [...(duplicateGroups.get(key) ?? []), row]);
+      }
+    }
+    const duplicateSamples = [...duplicateGroups.entries()]
+      .filter(([, matchingRows]) => matchingRows.length > 1)
+      .slice(0, 10)
+      .map(([key, matchingRows]) => ({
+        key,
+        count: matchingRows.length,
+        merchants: [...new Set(matchingRows.map((row) => String(row.merchantRaw ?? "")).filter(Boolean))],
+        sourceLines: matchingRows
+          .map((row) => (row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+            ? String((row.rawPayload as Record<string, unknown>).line ?? (row.rawPayload as Record<string, unknown>).sourceLine ?? "")
+            : ""))
+          .filter(Boolean),
+      }));
     return {
       file: relativeFile,
       bank,
@@ -138,6 +159,7 @@ const summarizeFile = async (filePath: string): Promise<CorpusFileResult> => {
       // is image-backed; do not count it as complete parser coverage.
       visualRequired: extraction.pageCount > 1 && rows.length <= 1,
       ...(otherSamples.length > 0 ? { otherSamples } : {}),
+      ...(duplicateSamples.length > 0 ? { duplicateSamples } : {}),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -161,6 +183,18 @@ const summarizeFile = async (filePath: string): Promise<CorpusFileResult> => {
 };
 
 const rate = (count: number, total: number) => (total > 0 ? count / total : 0);
+
+const qualityKey = (row: { date?: unknown; amount?: unknown; merchantRaw?: unknown; rawPayload?: unknown }) => {
+  const payload = row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+    ? (row.rawPayload as Record<string, unknown>)
+    : null;
+  const identity = payload
+    ? payload.referenceNo ?? payload.referenceNumber ?? payload.transactionId ?? payload.transactionNumber ?? payload.timeText ?? payload.transactionTime
+    : "";
+  return [row.date, row.amount, row.merchantRaw, identity]
+    .map((value) => String(value ?? "").trim().toLowerCase().replace(/\s+/g, " "))
+    .join("|");
+};
 
 const main = async () => {
   const files = await listPdfFiles(root);

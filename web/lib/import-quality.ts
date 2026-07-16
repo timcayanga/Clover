@@ -46,6 +46,22 @@ const rowEvidence = (row: StatementQualityRow) => {
 
 const normalizeKeyPart = (value: unknown) => asText(value).toLowerCase().replace(/\s+/g, " ");
 
+const rowIdentity = (row: StatementQualityRow) => {
+  if (!row.rawPayload || typeof row.rawPayload !== "object" || Array.isArray(row.rawPayload)) {
+    return "";
+  }
+
+  const payload = row.rawPayload as Record<string, unknown>;
+  return normalizeKeyPart(
+    payload.referenceNo ??
+      payload.referenceNumber ??
+      payload.transactionId ??
+      payload.transactionNumber ??
+      payload.timeText ??
+      payload.transactionTime
+  );
+};
+
 export const assessStatementExtractionQuality = (params: {
   rows: StatementQualityRow[];
   pageCount?: number | null;
@@ -68,7 +84,7 @@ export const assessStatementExtractionQuality = (params: {
   const pages = new Set(evidence.map((entry) => entry.page).filter((page): page is number => page !== null));
   const pageCount = Math.max(0, Math.floor(Number(params.pageCount ?? 0)));
   const pageCoverage = pageCount > 0 ? Math.min(1, pages.size / pageCount) : 1;
-  const keys = rows.map((row) => [normalizeKeyPart(row.date), normalizeKeyPart(row.amount), normalizeKeyPart(row.merchantRaw)].join("|"));
+  const keys = rows.map((row) => [normalizeKeyPart(row.date), normalizeKeyPart(row.amount), normalizeKeyPart(row.merchantRaw), rowIdentity(row)].join("|"));
   const duplicateKeyRate = rowCount
     ? 1 - new Set(keys.filter((key) => key !== "||")).size / Math.max(1, keys.filter((key) => key !== "||").length)
     : 0;

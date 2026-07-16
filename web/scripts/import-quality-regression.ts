@@ -46,6 +46,26 @@ const main = () => {
   });
   assert.ok(duplicateRows.reasons.includes("duplicate_row_keys"));
 
+  const repeatedWalletPayments = assessStatementExtractionQuality({
+    rows: [
+      row({ rawPayload: { referenceNo: "000000000001", timeText: "08:52" } }),
+      row({ rawPayload: { referenceNo: "000000000002", timeText: "05:12" } }),
+    ],
+    pageCount: 1,
+    declaredTransactionCount: 2,
+  });
+  assert.equal(repeatedWalletPayments.duplicateKeyRate, 0);
+
+  const repeatedWalletRow = assessStatementExtractionQuality({
+    rows: [
+      row({ rawPayload: { referenceNo: "000000000001", timeText: "08:52" } }),
+      row({ rawPayload: { referenceNo: "000000000001", timeText: "08:52" } }),
+    ],
+    pageCount: 1,
+    declaredTransactionCount: 2,
+  });
+  assert.ok(repeatedWalletRow.reasons.includes("duplicate_row_keys"));
+
   const candidateComparison = compareStatementExtractionCandidates({
     local: incomplete,
     backup: complete,
