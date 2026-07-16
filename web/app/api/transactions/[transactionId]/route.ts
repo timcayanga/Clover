@@ -231,7 +231,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         })
       : null;
 
-    if (payload.merchantRaw || payload.merchantClean || payload.categoryId !== undefined) {
+    if (payload.merchantRaw || payload.merchantClean || payload.categoryId !== undefined || payload.type !== undefined || payload.isTransfer !== undefined) {
       const merchantText = payload.merchantClean || payload.merchantRaw || updated.merchantClean || updated.merchantRaw;
 
       if (merchantText && categoryForRule) {
@@ -256,19 +256,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
           confidence: 100,
           notes: payload.categoryId ? "Manual transaction edit from the transaction editor." : "Manual merchant label edit from the transaction editor.",
           actorUserId: userId,
-          fieldName: payload.categoryId !== undefined ? "category" : payload.merchantClean !== undefined || payload.merchantRaw !== undefined ? "merchant" : null,
+          fieldName:
+            payload.categoryId !== undefined
+              ? "category"
+              : payload.merchantClean !== undefined || payload.merchantRaw !== undefined
+                ? "merchant"
+                : payload.type !== undefined || payload.isTransfer !== undefined
+                  ? "type"
+                  : null,
           previousValue:
             payload.categoryId !== undefined
               ? transaction.categoryId
               : payload.merchantClean !== undefined || payload.merchantRaw !== undefined
                 ? transaction.merchantClean ?? transaction.merchantRaw
-                : null,
+                : transaction.type,
           correctedValue:
             payload.categoryId !== undefined
               ? updated.categoryId
               : payload.merchantClean !== undefined || payload.merchantRaw !== undefined
                 ? updated.merchantClean ?? updated.merchantRaw
-                : null,
+                : updated.type,
         }).catch(() => null);
       }
     }
