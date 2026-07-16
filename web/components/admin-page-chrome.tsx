@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 type AdminPageChromeProps = {
-  active: "home" | "users" | "inquiries" | "data-qa";
+  active: "home" | "users" | "analytics" | "logs" | "errors" | "inquiries" | "data-qa";
   title: string;
   kicker?: string;
   subtitle?: string;
@@ -13,6 +13,9 @@ type AdminPageChromeProps = {
 const adminNavItems = [
   { key: "home", href: "/admin", label: "Home" },
   { key: "users", href: "/admin/users", label: "Users" },
+  { key: "analytics", href: "/admin/analytics", label: "Analytics" },
+  { key: "logs", href: "/admin/logs", label: "Audit logs" },
+  { key: "errors", href: "/admin/errors", label: "Errors" },
   { key: "inquiries", href: "/admin/inquiries", label: "Inquiries" },
   { key: "data-qa", href: "/admin/data-qa", label: "Data QA" },
 ] as const;

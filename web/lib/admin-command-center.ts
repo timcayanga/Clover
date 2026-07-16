@@ -84,10 +84,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
         where: {
           deletedAt: null,
           isExcluded: false,
-          OR: [
-            { reviewStatus: null },
-            { reviewStatus: { notIn: ["confirmed", "rejected", "duplicate_skipped"] } },
-          ],
+          reviewStatus: { notIn: ["confirmed", "rejected", "duplicate_skipped"] },
           workspace: { user: { environment: "production" } },
         },
       }),
