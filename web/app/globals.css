@@ -9805,6 +9805,10 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 }
 
 @media (max-width: 720px) {
+  .reports-top-tabs .animated-tabs__badge {
+    display: none;
+  }
+
   .adviser-summary,
   .adviser-hero,
   .adviser-footnote {
