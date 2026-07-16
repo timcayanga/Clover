@@ -18,6 +18,7 @@ type CorpusFileResult = {
   identity: boolean;
   protected: boolean;
   visualRequired: boolean;
+  otherSamples?: Array<{ merchantRaw: string; merchantClean: string; description: string }>;
   error?: string;
 };
 
@@ -116,6 +117,11 @@ const summarizeFile = async (filePath: string): Promise<CorpusFileResult> => {
     const normalizedRows = rows.filter((row) => Boolean(row.merchantClean?.trim())).length;
     const otherRows = rows.filter((row) => row.categoryName?.toLowerCase() === "other");
     const recoverableOtherRows = otherRows.filter((row) => getStrongMerchantCategoryHint(String(row.merchantClean ?? row.merchantRaw ?? row.description ?? ""))).length;
+    const otherSamples = otherRows.slice(0, 10).map((row) => ({
+      merchantRaw: String(row.merchantRaw ?? ""),
+      merchantClean: String(row.merchantClean ?? ""),
+      description: String(row.description ?? ""),
+    }));
     return {
       file: relativeFile,
       bank,
@@ -131,6 +137,7 @@ const summarizeFile = async (filePath: string): Promise<CorpusFileResult> => {
       // A sparse text layer on a multi-page statement usually means the table
       // is image-backed; do not count it as complete parser coverage.
       visualRequired: extraction.pageCount > 1 && rows.length <= 1,
+      ...(otherSamples.length > 0 ? { otherSamples } : {}),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

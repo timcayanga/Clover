@@ -16,6 +16,21 @@ const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
 }> = [
   {
     category: "Food & Dining",
+    lower: /velveteen\s+house|kineya\s+don\s+don\s+tei|don\s+don\s+tei|soi\s+chicken|tartufo\s+ristorante|single\s+origin|kaokee|pickup\s+coffee|cha\s+tuk\s+chak|chatukchak/,
+    compact: /velveteenhouse|kineyadondondtei|dondondtei|soichicken|tartuforistorante|singleorigin|kaokee|pickupcoffee|chatukchak|chatukchak/,
+  },
+  {
+    category: "Travel & Lifestyle",
+    lower: /\bairasia\b|\bnomad\b/,
+    compact: /airasia|nomad/,
+  },
+  {
+    category: "Entertainment",
+    lower: /\bstudio\s+300\b/,
+    compact: /studio300/,
+  },
+  {
+    category: "Food & Dining",
     lower:
       /grabfood|foodpanda|ubereats?|doordash|pickaroo|dunkin(?:\s+donuts?)?|krispy\s+kreme|jollibee|chowking|mang\s+inasal|burger\s+king|mcdonald'?s|\bmc\s*d\b|starbucks|pickup\s+coffee|tim\s+hortons|shake\s+shack|subway|chili'?s|cara\s+mia|jarandjam|main\s+bar|ac\s+bar|dairy\s+queen|\bdq\b|panco\s+cafe|koi(?:\s+the)?|simply\s+gourmet|hapag|harlan\s*\+?\s*holden|matcha\s+bar|elephant\s+grounds|mo\s+cookies|nikkei|yardstick|your\s+local|brunch\s+bureau|breakfast\s+at\s+antonio'?s|royce|bok\s+korean\s+fried\s+chicken|din\s+tai\s+fung|arabica|ralph'?s\s+wines|mary\s+grace|wildflour|mendokoro|ramen\s+nagi|manam|conti'?s|coffee\s+bean|cbtl|seattle'?s\s+best|army\s+navy|mister\s+donut|kfc|popeyes|shakey'?s|yellow\s+cab|max'?s|panda\s+express|cibo|nono'?s|frankie'?s|botejyu|tuan\s+tuan|sunnies\s+cafe|bonchon|kenny\s+rogers|yoshinoya|marugame|kuya\s+j|mesa|samgyupsalamat|tim\s+ho\s+wan|gong\s+cha|chatime|koomi|macao\s+imperial|tiger\s+sugar|coco\s+fresh|bo'?s\s+coffee|coffee\s+project|toby'?s\s+estate|but\s+first,\s*coffee|happy\s+lemon|auntie\s+anne'?s|llao\s*llao|ooma|mango\s+tree|italianni'?s|tgi\s*friday'?s|the\s+fat\s+seed(?:\s+cafe)?|revolver\s+espresso|wholesome\s+table|wong\s+place|\bj\.?\s*co\b|jco|coffee\s+academics|bacolod\s+chicken\s+inasal|lay\s+lao|saan\s+songwat|pho\s+hoa|peace\s+oriental|\bonest\b/,
     compact:

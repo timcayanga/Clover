@@ -1930,12 +1930,56 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "McDonald's",
   },
   {
+    patterns: [/\bgadc\b.*(?:slp|shlemerald)/i, /\bgolden\s+arches\s+development\s+corporation\b/i],
+    replacement: "McDonald's",
+  },
+  {
     patterns: [/\bjollibee\b/i],
     replacement: "Jollibee",
   },
   {
     patterns: [/\bdunkin(?:\s+donuts?)?\b/i, /\bdunkindonuts?\b/i],
     replacement: "Dunkin",
+  },
+  {
+    patterns: [/\bvelveteen\s+house\b/i],
+    replacement: "Velveteen House",
+  },
+  {
+    patterns: [/\bkineya\s+don\s+don\s+tei\b/i, /\bdon\s+don\s+tei\b/i],
+    replacement: "Kineya Don Don Tei",
+  },
+  {
+    patterns: [/\bsoi\s+chicken\b/i],
+    replacement: "Soi Chicken",
+  },
+  {
+    patterns: [/\btartufo\s+ristorante\b/i],
+    replacement: "Tartufo Ristorante",
+  },
+  {
+    patterns: [/\bsingle\s+origin\b/i],
+    replacement: "Single Origin",
+  },
+  {
+    patterns: [/\bkaokee\b/i],
+    replacement: "Kaokee",
+  },
+  {
+    patterns: [/\bcha\s+tuk\s+chak\b/i, /\bchatukchak\b/i],
+    replacement: "Cha Tuk Chak",
+  },
+  {
+    patterns: [/\bp[u]?c\s*\d{3,}\b/i, /\bpickup\s+coffee\b/i],
+    replacement: "Pickup Coffee",
+  },
+  {
+    patterns: [/\b2c2p\b.*\bairasia\b/i, /\bairasia\b/i],
+    replacement: "AirAsia",
+  },
+  {
+    patterns: [/\bstudio\s+300\b/i],
+    replacement: "Studio 300",
   },
   {
     patterns: [/\bpanco\s+cafe\b/i, /\bpancocafe\b/i],

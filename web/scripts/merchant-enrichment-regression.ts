@@ -13,6 +13,15 @@ const main = () => {
     ["DRUG CARE BANGKOK THBAHT", "Health & Wellness", "Drug Care"],
     ["KINDLE UNLTD*LB1GY4673 US U.S. DOLLAR", "Bills & Utilities", "Kindle Unlimited"],
     ["TOPS-SILOM COMPLEX BANGKOK THBAHT", "Shopping", "Tops"],
+    ["VELVETEEN HOUSE MAKATI CITY PH", "Food & Dining", "Velveteen House"],
+    ["KINEYA DON DON TEI ROB QUEZON CITY PH", "Food & Dining", "Kineya Don Don Tei"],
+    ["SOI CHICKEN BGC TAGUIG PH", "Food & Dining", "Soi Chicken"],
+    ["2C2P_PH*PH AIRASIA TAGUIG CITY PH", "Travel & Lifestyle", "AirAsia"],
+    ["SINGLE ORIGIN GB5 MAKATI PH", "Food & Dining", "Single Origin"],
+    ["KAOKEE SAN JUAN SAN JUAN PH", "Food & Dining", "Kaokee"],
+    ["CHATUKCHAK CYBERGAMMA PASIG CITY PH", "Food & Dining", "Cha Tuk Chak"],
+    ["GADC 705 SLP SOK MAKATI CITY PH", "Food & Dining", "McDonald's"],
+    ["GADC SHLEMERALD KC1 PASIG PH", "Food & Dining", "McDonald's"],
   ] as const;
 
   for (const [merchantRaw, categoryName, expectedMerchant] of cases) {
