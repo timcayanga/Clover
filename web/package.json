@@ -32,6 +32,7 @@
     "qa:gotrade-screenshots": "tsx scripts/gotrade-screenshot-regression.ts",
     "qa:imported-accounts": "tsx scripts/imported-account-ui-regression.ts",
     "qa:parser-routing": "tsx scripts/parser-routing-regression.ts",
+    "qa:import-quality": "tsx scripts/import-quality-regression.ts",
     "qa:rcbc-screenshot-import": "tsx scripts/rcbc-screenshot-import-regression.ts",
     "qa:rcbc-screenshots": "tsx scripts/rcbc-screenshot-regression.ts",
     "qa:training-signals": "tsx scripts/training-signal-dedupe.ts",

@@ -7162,9 +7162,9 @@ export const processImportFileText = async (
             fileDataBase64: earlyPdfFileDataBase64,
             preferPrimary: openAiPrimaryMode || Boolean(earlyPageImages?.length),
             importMode,
-            pageImageLimit: imageImport && importMode === "statement" ? 1 : preliminaryWiseImageStatement ? 1 : null,
-            timeoutMs: imageImport && importMode === "statement" ? 35_000 : preliminaryWiseImageStatement ? 60_000 : null,
-            retryTimeoutMs: imageImport && importMode === "statement" ? 15_000 : preliminaryWiseImageStatement ? 20_000 : null,
+            pageImageLimit: preliminaryWiseImageStatement ? 1 : null,
+            timeoutMs: preliminaryWiseImageStatement ? 60_000 : null,
+            retryTimeoutMs: preliminaryWiseImageStatement ? 20_000 : null,
           }).catch((error) => {
             console.warn("Early backup parser kickoff failed; falling back to standard handoff path", {
               importFileId,
@@ -7769,9 +7769,9 @@ export const processImportFileText = async (
               fileDataBase64: pdfFileDataBase64,
               preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
               importMode,
-              pageImageLimit: imageImport && importMode === "statement" ? 1 : isWiseImageStatement ? 1 : null,
-              timeoutMs: imageImport && importMode === "statement" ? 35_000 : isWiseImageStatement ? 60_000 : null,
-              retryTimeoutMs: imageImport && importMode === "statement" ? 15_000 : isWiseImageStatement ? 20_000 : null,
+              pageImageLimit: isWiseImageStatement ? 1 : null,
+              timeoutMs: isWiseImageStatement ? 60_000 : null,
+              retryTimeoutMs: isWiseImageStatement ? 20_000 : null,
             });
       backupParserRaceResolved = Boolean(importMode === "statement" && earlyOpenAiFallbackPromise);
     }
@@ -8230,6 +8230,10 @@ export const processImportFileText = async (
     importMode !== "statement" ||
     parsedRows.length === 0 ||
     (openAiParsed?.rows.length ?? 0) >= Math.max(1, Math.floor(parsedRows.length * 0.9));
+  const openAiStatementQualityIsAcceptable =
+    importMode !== "statement" ||
+    !openAiParsed?.audit.quality ||
+    (!openAiParsed.audit.quality.critical && openAiParsed.audit.quality.score >= 55);
   const parsedRowsAreSnapshotOnlyStatement =
     importMode === "statement" &&
     parsedRows.length > 0 &&
@@ -8243,6 +8247,7 @@ export const processImportFileText = async (
       (!deterministicStatementParseLooksStrong || openAiStatementRowsAreCompetitive));
   const useOpenAiParse =
     Boolean(openAiParsed?.audit.schemaValidated) &&
+    openAiStatementQualityIsAcceptable &&
     shouldAdoptOpenAiStatementParse &&
     (!parsedRowsHaveMultipleAccountNumbers || hasMultipleParsedAccountNumbers((openAiParsed?.rows ?? []) as Array<Record<string, unknown>>)) &&
     (openAiPrimaryMode ||

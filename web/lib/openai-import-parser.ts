@@ -11,6 +11,7 @@ import {
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
+import { assessStatementExtractionQuality } from "@/lib/import-quality";
 
 const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v3";
 const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v2";
@@ -2023,6 +2024,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         schemaValidated: boolean;
         schemaValidationResult: string;
         rawResponse: string;
+        quality?: ReturnType<typeof assessStatementExtractionQuality>;
       };
     }
   | null
@@ -2232,7 +2234,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             : pdfFileDataBase64
               ? 6_000
               : isImageStatementMode
-                ? 3_500
+                ? 8_000
               : pageImages.length > 0
                 ? params.text.trim().length === 0
                   ? 6_000
@@ -2648,6 +2650,12 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     });
 
     const rows = mappedRows.filter((row): row is ParsedImportRow => row !== null);
+    const quality = assessStatementExtractionQuality({
+      rows,
+      pageCount: pageImagesToSend.length,
+      declaredTransactionCount: value.quality_checks.transaction_count,
+      balanceReconciled,
+    });
 
     const allowsEmptyRows = documentType !== "statement";
 
@@ -2668,7 +2676,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         sourceFilename: params.fileName ?? null,
         confidence: metadata.confidence,
         schemaValidated,
-        schemaValidationResult: `${validationSummary}; family=${inferredDocumentFamily}; difficulty=${inferredDifficulty}; model=${selectedModel}`,
+        schemaValidationResult: `${validationSummary}; quality=${quality.score}; qualityReasons=${quality.reasons.join(",") || "none"}; family=${inferredDocumentFamily}; difficulty=${inferredDifficulty}; model=${selectedModel}`,
+        quality,
         rawResponse: outputText,
       },
     };
