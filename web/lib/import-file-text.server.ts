@@ -2309,6 +2309,9 @@ const renderPdfPageImagesFromBytes = async (
   }
 };
 
+export const renderReceiptPdfPagesForVision = async (bytes: Uint8Array) =>
+  renderPdfPageImagesFromBytes(bytes, undefined, 3, 1.5, true);
+
 export const readUploadedFileText = async (
   file: File | ImportFileLike,
   password?: string,

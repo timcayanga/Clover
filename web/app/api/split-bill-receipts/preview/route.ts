@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { normalizeReceiptImageForVision, readUploadedFileText } from "@/lib/import-file-text.server";
+import { normalizeReceiptImageForVision, readUploadedFileText, renderReceiptPdfPagesForVision } from "@/lib/import-file-text.server";
 import { parseImportTextWithOpenAIFallback } from "@/lib/openai-import-parser";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import { assessReceiptPreviewQuality, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
@@ -103,22 +103,32 @@ const mergeReceiptBackup = (localPreview: ReceiptPreviewResult, backup: Record<s
 };
 
 const tryReceiptBackup = async (params: { file: File; receiptText: string; preview: ReceiptPreviewResult }) => {
-  if (!process.env.OPENAI_API_KEY?.trim() || !assessReceiptPreviewQuality(params.preview).issues.length || !params.file.type.startsWith("image/")) {
+  const isImage = params.file.type.startsWith("image/");
+  const isPdf = params.file.type === "application/pdf" || /\.pdf$/i.test(params.file.name);
+  if (!process.env.OPENAI_API_KEY?.trim() || !assessReceiptPreviewQuality(params.preview).issues.length || (!isImage && !isPdf)) {
     return params.preview;
   }
 
   try {
     const bytes = new Uint8Array(await params.file.arrayBuffer());
-    const normalized = await normalizeReceiptImageForVision({ bytes, fileType: params.file.type, fileName: params.file.name });
+    const pageImages = isImage
+      ? [{
+          page: 1,
+          dataUrl: (await normalizeReceiptImageForVision({ bytes, fileType: params.file.type, fileName: params.file.name })).dataUrl,
+        }]
+      : await renderReceiptPdfPagesForVision(bytes);
+    if (pageImages.length === 0) {
+      return params.preview;
+    }
     const result = await parseImportTextWithOpenAIFallback({
       text: params.receiptText,
       fileName: params.file.name,
-      fileType: normalized.mimeType,
+      fileType: isPdf ? "application/pdf" : params.file.type,
       detectedMetadata: null,
       parsedRows: [],
-      pageImages: [{ page: 1, dataUrl: normalized.dataUrl }],
+      pageImages,
       importMode: "receipt",
-      pageImageLimit: 1,
+      pageImageLimit: Math.min(3, pageImages.length),
       timeoutMs: 25_000,
     });
     return result?.receiptDetails ? mergeReceiptBackup(params.preview, result.receiptDetails as unknown as Record<string, unknown>) : params.preview;
