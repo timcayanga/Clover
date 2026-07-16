@@ -3316,6 +3316,21 @@ const main = async () => {
     throw new Error("expected mixed currency warning to persist in split-bill raw payload");
   }
 
+  const gcashMonthNamePreview = parseReceiptText([
+    "Sent via GCash",
+    "Total Amount Sent £348.00",
+    "Sept 08, 2023 1:23 pm",
+  ].join("\n"));
+  if (
+    gcashMonthNamePreview.billDate !== "2023-09-08T00:00:00.000Z" ||
+    gcashMonthNamePreview.currency !== "PHP" ||
+    gcashMonthNamePreview.currencyMentions.includes("GBP")
+  ) {
+    throw new Error(
+      `expected GCash OCR to recover PHP and Sept date, got date=${gcashMonthNamePreview.billDate ?? "null"} currency=${gcashMonthNamePreview.currency} mentions=${gcashMonthNamePreview.currencyMentions.join(", ")}`
+    );
+  }
+
   const currencySymbolDateArtifactPreview = parseReceiptText([
     "CAFE LUNA",
     "Coffee £ 30.88",

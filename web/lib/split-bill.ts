@@ -356,6 +356,10 @@ const hasCurrencySymbolAmount = (text: string, symbol: string) => {
 };
 
 const detectCurrencyFromText = (text: string) => {
+  if (/\b(?:gcash|maya)\b/i.test(text)) {
+    return "PHP";
+  }
+
   if (hasCurrencySymbolAmount(text, "₱") || /\bPHP\b/i.test(text) || looksLikePhilippineReceiptContext(text)) {
     return "PHP";
   }
@@ -390,6 +394,17 @@ const detectCurrencyMentionsFromText = (text: string) => {
       mentions.push(value);
     }
   };
+
+  if (/\b(?:gcash|maya)\b/i.test(text)) {
+    pushMention("PHP");
+    if (/\bUSD\b/i.test(text)) {
+      pushMention("USD");
+    }
+    if (/\bEUR\b/i.test(text)) {
+      pushMention("EUR");
+    }
+    return mentions;
+  }
 
   if (hasCurrencySymbolAmount(text, "₱") || /\bPHP\b/i.test(text)) {
     pushMention("PHP");
@@ -483,7 +498,7 @@ const parseBillDateFromText = (text: string) => {
       continue;
     }
 
-    if (match[1].length === 4) {
+    if (/^\d{4}$/.test(match[1])) {
       const year = normalizeReceiptYear(Number(match[1]));
       const month = Number(match[2]);
       const day = Number(match[3]);
