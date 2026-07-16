@@ -1928,9 +1928,6 @@ export async function ReportsStream({
               <div className="report-card__head-title">
                 <h4>Where it went</h4>
               </div>
-              <div className="report-card__stat">
-                <strong>{formatCurrency(currentSummary.income)}</strong>
-              </div>
             </div>
 
             <div className="report-flow-map">
@@ -1992,9 +1989,6 @@ export async function ReportsStream({
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>Spending mix</h4>
-              </div>
-              <div className="report-card__stat">
-                <strong>{formatCurrency(reportSpentTotal)}</strong>
               </div>
             </div>
 
@@ -2091,9 +2085,6 @@ export async function ReportsStream({
               <div className="report-card__head-title">
                 <h4>Month summary</h4>
               </div>
-              <div className="report-card__stat">
-                <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
-              </div>
             </div>
 
             <div className="report-insight-grid">
@@ -2130,9 +2121,6 @@ export async function ReportsStream({
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>Repeat bills</h4>
-              </div>
-              <div className="report-card__stat">
-                <strong>{recurringMerchants.length}</strong>
               </div>
             </div>
 
@@ -2187,9 +2175,6 @@ export async function ReportsStream({
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>Biggest merchants</h4>
-              </div>
-              <div className="report-card__stat">
-                <strong>{topMerchants.length}</strong>
               </div>
             </div>
 

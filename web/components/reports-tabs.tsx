@@ -15,7 +15,7 @@ const reportsSectionLabels: Record<ReportsSection, string> = {
   overview: "Overview",
   spending: "Spending",
   trends: "Trends",
-  advanced: "Recommendations",
+  advanced: "Insights",
 };
 
 const ReportsTabsContext = createContext<ReportsTabsContextValue | null>(null);

@@ -7607,6 +7607,9 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 }
 
 .report-card__head-title h4 {
+  font-size: 1.06rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
@@ -7618,6 +7621,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 }
 
 .reports-container-info {
+  left: auto;
   position: absolute;
   top: 12px;
   right: 12px;
