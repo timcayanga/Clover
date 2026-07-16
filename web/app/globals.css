@@ -31357,11 +31357,11 @@ body:has(.pricing-page) {
 .pricing-page__header {
   display: grid;
   gap: 12px;
-  padding: clamp(40px, 7vw, 84px) 0 20px;
+  padding: clamp(18px, 2.5vw, 32px) 0 12px;
 }
 
 .pricing-page__header h1 {
-  font-size: clamp(2rem, 3.6vw, 3rem);
+  font-size: clamp(1.65rem, 2.8vw, 2.25rem);
   line-height: 1;
   max-width: none;
 }
