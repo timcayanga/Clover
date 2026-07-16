@@ -2078,6 +2078,10 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "PayPal",
   },
   {
+    patterns: [/\bdhl[-\s]+duty\s+collection\b/i, /\bdhldutycollection\b/i],
+    replacement: "DHL Duty Collection",
+  },
+  {
     patterns: [/\bwatsons?\b/i],
     replacement: "Watsons",
   },

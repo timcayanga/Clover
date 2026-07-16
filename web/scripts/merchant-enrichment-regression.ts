@@ -22,6 +22,7 @@ const main = () => {
     ["CHATUKCHAK CYBERGAMMA PASIG CITY PH", "Food & Dining", "Cha Tuk Chak"],
     ["GADC 705 SLP SOK MAKATI CITY PH", "Food & Dining", "McDonald's"],
     ["GADC SHLEMERALD KC1 PASIG PH", "Food & Dining", "McDonald's"],
+    ["DHL-DUTY COLLECTION MAKATI CITY", "Shopping", "DHL Duty Collection"],
   ] as const;
 
   for (const [merchantRaw, categoryName, expectedMerchant] of cases) {

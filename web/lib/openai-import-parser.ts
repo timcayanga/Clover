@@ -1534,7 +1534,7 @@ const responseLooksUseful = (metadata: DetectedStatementMetadata | null, rows: P
   return confidence < 75 && (!hasStrongIdentity || fileNameLike);
 };
 
-const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | undefined, hasPageImages: boolean, hasPdfInput: boolean) => {
+export const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | undefined, hasPageImages: boolean, hasPdfInput: boolean) => {
   const baseGuidance = [
     "You are Clover’s financial document extraction engine.",
     "You are acting as Clover’s backup parser because the deterministic parser was unsupported, weak, or incomplete.",

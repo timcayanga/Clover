@@ -43,7 +43,11 @@ const listPdfFiles = async (directory: string): Promise<string[]> => {
 const readPdfText = async (filePath: string) => {
   const bytes = await readFile(filePath);
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const document = await pdfjs.getDocument({ data: new Uint8Array(bytes), useSystemFonts: false }).promise;
+  const document = await pdfjs.getDocument({
+    data: new Uint8Array(bytes),
+    standardFontDataUrl: join(process.cwd(), "node_modules/pdfjs-dist/standard_fonts/"),
+    useSystemFonts: false,
+  }).promise;
   const pageTexts: string[] = [];
   for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
     const page = await document.getPage(pageNumber);
