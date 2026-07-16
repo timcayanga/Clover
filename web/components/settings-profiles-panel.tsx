@@ -95,7 +95,7 @@ export function SettingsProfilesPanel({
                 </span>
                 <div className="settings-profile-summary__copy">
                   <strong>{profile.name}</strong>
-                  <p>{isDefault ? "Personal · Default profile" : profile.type === "shared" ? "Shared" : "Personal"}</p>
+                  <p>{profile.type === "shared" ? "Shared profile" : "Personal profile"}</p>
                 </div>
               </div>
               <div className="settings-profile-card__actions">
@@ -104,15 +104,21 @@ export function SettingsProfilesPanel({
                   <input value={renameDraft} disabled={isDefault} onChange={(event) => onRenameDraftChange(profile.id, event.target.value)} />
                 </label>
                 <div className="settings-profile-card__buttons">
-                  <button type="button" className="button button-secondary button-small" disabled={isPending || isDefault} onClick={() => onRenameProfile(profile.id)}>
-                    {isDefault ? "Default" : "Save name"}
-                  </button>
-                  <button type="button" className="button button-secondary button-small" disabled={isPending || isActive} onClick={() => onSwitchProfile(profile.id)}>
-                    {isActive ? "Active" : "Switch"}
-                  </button>
-                  <button type="button" className="button button-danger button-small" disabled={isPending || isDefault} onClick={() => onRemoveProfile(profile.id, profile.name)}>
-                    {isDefault ? "Required" : "Remove"}
-                  </button>
+                  {!isDefault ? (
+                    <button type="button" className="button button-secondary button-small" disabled={isPending} onClick={() => onRenameProfile(profile.id)}>
+                      Save name
+                    </button>
+                  ) : null}
+                  {!isActive ? (
+                    <button type="button" className="button button-secondary button-small" disabled={isPending} onClick={() => onSwitchProfile(profile.id)}>
+                      Switch
+                    </button>
+                  ) : null}
+                  {!isDefault ? (
+                    <button type="button" className="button button-danger button-small" disabled={isPending} onClick={() => onRemoveProfile(profile.id, profile.name)}>
+                      Remove
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </article>
