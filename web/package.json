@@ -34,6 +34,7 @@
     "qa:parser-routing": "tsx scripts/parser-routing-regression.ts",
     "qa:import-quality": "tsx scripts/import-quality-regression.ts",
     "qa:merchant-enrichment": "tsx scripts/merchant-enrichment-regression.ts",
+    "qa:soa-corpus": "tsx scripts/soa-corpus-quality.ts",
     "qa:rcbc-screenshot-import": "tsx scripts/rcbc-screenshot-import-regression.ts",
     "qa:rcbc-screenshots": "tsx scripts/rcbc-screenshot-regression.ts",
     "qa:training-signals": "tsx scripts/training-signal-dedupe.ts",
