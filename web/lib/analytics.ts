@@ -124,6 +124,7 @@ export type AnalyticsEventName =
   | "trial_to_paid_conversion"
   | "upgrade_prompt_viewed"
   | "support_contacted"
+  | "admin_support_action"
   | "error_shown";
 
 const normalizeHost = (host: string) => host.replace(/\/$/, "");
