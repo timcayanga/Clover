@@ -29,6 +29,8 @@ const envSchema = z.object({
   PAYPAL_PRO_PLAN_ID: z.string().min(1).optional(),
   PAYPAL_BUYER_COUNTRY: z.string().length(2).optional(),
   ADMIN_USER_IDS: z.string().min(1).optional(),
+  ADMIN_EMAILS: z.string().min(1).optional(),
+  ADMIN_ONLY_USER_IDS: z.string().min(1).optional(),
   STAGING_BASIC_AUTH_USERNAME: z.string().min(1).optional(),
   STAGING_BASIC_AUTH_PASSWORD: z.string().min(1).optional(),
   CLOVER_IMPORT_STORAGE_DIR: z.string().min(1).optional(),

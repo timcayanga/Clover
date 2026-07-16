@@ -3,6 +3,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
 import { cookies } from "next/headers";
 import { rememberedSessionIdKey } from "@/lib/clerk-session-persistence";
+import { isAdminOnlyUserId, isConfiguredAdminEmail } from "@/lib/admin-access";
 
 const stagingHosts = new Set(["staging.clover.ph", "clover-stage.vercel.app"]);
 const localDevHosts = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -84,6 +85,10 @@ export const getSessionContext = async () => {
       return { userId: stagingGuestUserId, isGuest: true };
     }
     throw new Error("UNAUTHORIZED");
+  }
+
+  if (isAdminOnlyUserId(session.userId) || (await isConfiguredAdminEmail(session.userId))) {
+    throw new Error("ADMIN_ONLY");
   }
 
   return { userId: session.userId, isGuest: false };

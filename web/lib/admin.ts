@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 import { isLocalDevHost, isStagingHost } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
+import { isConfiguredAdminEmail } from "@/lib/admin-access";
 
 const normalizeList = (value: string | undefined) =>
   (value ?? "")
@@ -39,7 +40,7 @@ export const requireAdminAuth = async () => {
     throw new Error("UNAUTHORIZED");
   }
 
-  if (!isAdminUserId(session.userId) && !(await hasStagingAccess())) {
+  if (!isAdminUserId(session.userId) && !(await isConfiguredAdminEmail(session.userId)) && !(await hasStagingAccess())) {
     throw new Error("FORBIDDEN");
   }
 
