@@ -46,11 +46,38 @@ const readPdfText = async (filePath: string) => {
   for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
     const page = await document.getPage(pageNumber);
     const content = await page.getTextContent();
+    const positionedItems = content.items
+      .map((item) => {
+        if (!("str" in item) || typeof item.str !== "string" || !item.str.trim()) {
+          return null;
+        }
+
+        const transform = "transform" in item && Array.isArray(item.transform) ? item.transform : [];
+        return {
+          text: item.str.trim(),
+          x: typeof transform[4] === "number" ? transform[4] : 0,
+          y: typeof transform[5] === "number" ? transform[5] : 0,
+        };
+      })
+      .filter((item): item is { text: string; x: number; y: number } => Boolean(item));
+
+    // PDF text items are often emitted as individual characters. Rebuild
+    // visual lines before handing the text to the deterministic parser.
+    const lines: Array<{ y: number; items: Array<{ text: string; x: number }> }> = [];
+    for (const item of positionedItems.sort((left, right) => right.y - left.y || left.x - right.x)) {
+      const currentLine = lines.at(-1);
+      if (currentLine && Math.abs(currentLine.y - item.y) <= 2) {
+        currentLine.items.push(item);
+      } else {
+        lines.push({ y: item.y, items: [item] });
+      }
+    }
+
     pageTexts.push(
-      content.items
-        .map((item) => ("str" in item && typeof item.str === "string" ? item.str : ""))
-        .filter(Boolean)
-        .join(" ")
+      lines
+        .sort((left, right) => right.y - left.y)
+        .map((line) => line.items.sort((left, right) => left.x - right.x).map((item) => item.text).join(" "))
+        .join("\n")
     );
   }
   return { text: pageTexts.join("\n"), pageCount: document.numPages };

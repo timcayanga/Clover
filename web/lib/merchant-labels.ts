@@ -286,6 +286,42 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
   ],
   BPI: [
     {
+      patterns: [/\bmc\s*d(?:onald'?s)?\b/i, /\bmcd\b/i],
+      replacement: "McDonald's",
+    },
+    {
+      patterns: [/\b7\s*-?\s*11\b/i, /\b711\b/i],
+      replacement: "7-Eleven",
+    },
+    {
+      patterns: [/\bdrug\s*care\b/i],
+      replacement: "Drug Care",
+    },
+    {
+      patterns: [/\bkindle\s+(?:unltd|unlimited)\b/i],
+      replacement: "Kindle Unlimited",
+    },
+    {
+      patterns: [/\bcentral\s+embassy\b/i],
+      replacement: "Central Embassy",
+    },
+    {
+      patterns: [/\bsiam\s+paragon\b/i],
+      replacement: "Siam Paragon",
+    },
+    {
+      patterns: [/\btops(?:\s+[-/]\s*[^ ]+)?\b/i],
+      replacement: "Tops",
+    },
+    {
+      patterns: [/\bpeace\s+oriental\b/i],
+      replacement: "Peace Oriental",
+    },
+    {
+      patterns: [/\bpho\s+hoa\b/i],
+      replacement: "Pho Hoa",
+    },
+    {
       patterns: [/\beps\s*at\s*en\b.*from:\s*non-bpi\s*terminal\b/i, /\bepsaten\s*0+\s*from:\s*non-bpi\s*terminal\b/i],
       replacement: "ATM Withdrawal",
     },
