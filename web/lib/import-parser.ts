@@ -11057,6 +11057,13 @@ const buildKnownGstocksScreenshotHoldings = (fileName: string): GstocksHoldingSn
 const gstocksScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
   const normalized = normalizeWhitespace(text);
   const compact = normalized.replace(/\s+/g, " ");
+  const hasExplicitGfundsSignals =
+    /\b(?:GFunds|ATRAM|Invest\s+through\s+Ryse)\b/i.test(compact) &&
+    /\b(?:Portfolio\s+Value|Current\s+Value|Market\s+Value|Subscribed\s+Amount|Invested\s+Amount|NAVPU|Units)\b/i.test(compact);
+  if (hasExplicitGfundsSignals) {
+    return null;
+  }
+
   const hasExplicitGstocksSignals =
     (/\bAB\s+Capital\b/i.test(compact) || /\binvestatrade\b/i.test(compact) || /\bGStocks\b/i.test(compact)) &&
     /\b(?:My\s+Stocks|Shares|Avg\s+Price|Market\s+Value|Total\s+Cost)\b/i.test(compact);
