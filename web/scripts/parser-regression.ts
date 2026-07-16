@@ -655,6 +655,11 @@ const main = async () => {
   const parser = await import("../lib/import-parser");
   const receiptAccountResolutionModule = await import("../lib/receipt-account-resolution");
   const splitBillModule = await import("../lib/split-bill");
+  if (dataEngine.IMPORT_FILE_EXTRACTION_CACHE_VERSION !== "v8") {
+    throw new Error(
+      `expected receipt OCR cache version v8 after extraction recovery changes, got ${dataEngine.IMPORT_FILE_EXTRACTION_CACHE_VERSION}`
+    );
+  }
 
   const readUploadedFileText = importFileTextModule.readUploadedFileText as (
     file: { name?: string; type?: string; arrayBuffer: () => Promise<ArrayBuffer | SharedArrayBuffer> },
