@@ -1150,7 +1150,9 @@ const extractReceiptTableItems = (lines: string[], merchantName?: string | null)
       continue;
     }
 
-    const item = parseReceiptTableItemLine(normalized);
+    const item =
+      parseReceiptTableItemLine(normalized) ??
+      (/^\d+(?:\.\d+)?\s+/.test(normalized) ? null : extractReceiptItemFromLine(normalized));
     if (item) {
       candidates.push(item);
       continue;

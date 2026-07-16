@@ -3485,6 +3485,21 @@ const main = async () => {
     throw new Error("expected OCR column-only split worksheet to stay off the fast receipt path");
   }
 
+  const nonQuantityTableRowPreview = parseReceiptText([
+    "Qty Description Amount",
+    "2.00 YAKIJAKE BENTO 1100.00",
+    "2.00 SALMON POKE 1240.00",
+    "2.00 CHOCO PLATE 180.00",
+    "E on RIE PILATE 750.00",
+    "SUB-TOTAL 3270.00",
+    "AMOUNT DUE 3270.00",
+  ].join("\n"));
+  if (nonQuantityTableRowPreview.items.length !== 4 || nonQuantityTableRowPreview.total !== "3270.00") {
+    throw new Error(
+      `expected OCR table fallback to keep non-quantity item row, got items=${nonQuantityTableRowPreview.items.length} total=${nonQuantityTableRowPreview.total ?? "null"}`
+    );
+  }
+
   const cardFooterPreview = parseReceiptText([
     "AC BAR & LOUNGE",
     "Sales Invoice #: 000000808",
