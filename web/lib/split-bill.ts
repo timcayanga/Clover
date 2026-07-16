@@ -547,13 +547,13 @@ const isReceiptDateLine = (line: string) =>
   /\b\d{2,4}\b/.test(line);
 
 const isReceiptAdministrativeLine = (line: string) =>
-  /\b(?:trans(?:action)?\s*no|trans\s*no|permit\s*no|serial\s*n[bo0]|or\s*no|invoice\s*no|guest\s*count|cust(?:omer)?\s*count|cashier|server|tin\b|bir\b|accre\.?\s*no|table\s*no|print\s*cnt|terminal|branch|poblacion|makati city|quezon city|this serves as an official receipt)\b/i.test(
+  /\b(?:trans(?:action)?\s*no|trans\s*no|ref(?:erence)?\s*no|permit\s*no|serial\s*n[bo0]|or\s*no|invoice\s*no|guest\s*count|cust(?:omer)?\s*count|cashier|server|tin\b|bir\b|accre\.?\s*no|table\s*no|print\s*cnt|terminal|branch|poblacion|makati city|quezon city|this serves as an official receipt)\b/i.test(
     line
   );
 
 const isReceiptFooterValueLine = (line: string) =>
   /^\s*amount\b/i.test(line) ||
-  /\b(?:gross amount|ross amount|bill amount|amount due|grand total|bill total|vatable amount|ustable amount|vatable|vat exempt|vat zero|vat sales|uat sales|cash\b|chan[zg]e\b|thank you|official receipt|trans(?:action)?\s*no|serial\s*n[bo0]|permit\s*no|\d{2,3}\s+va[tr]\b|for comments|pls contact|please contact)\b/i.test(
+  /\b(?:gross amount|ross amount|bill amount|amount due|grand total|bill total|vatable amount|ustable amount|vatable|vat exempt|vat zero|vat sales|uat sales|cash\b|chan[zg]e\b|thank you|official receipt|trans(?:action)?\s*no|ref(?:erence)?\s*no|serial\s*n[bo0]|permit\s*no|\d{2,3}\s+va[tr]\b|for comments|pls contact|please contact)\b/i.test(
     line
   );
 
@@ -2404,6 +2404,8 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   ]);
   const documentNumber = extractReceiptField(normalized, [
     /\b(?:official receipt|receipt|or no\.?|cash slip)\s*(?:no\.?|#)?\s*[:#-]?\s*([A-Z0-9-]{3,})/i,
+    /\b(?:ref(?:erence)?\s*no\.?)\s*[:#-]?\s*(\d{3,}(?:\s+\d{2,}){1,3})\b/i,
+    /\b(?:ref(?:erence)?\s*no\.?)\s*[:#-]?\s*([A-Z0-9]+(?:[\s-]+[A-Z0-9]+){1,})/i,
     /\b(?:ref\.?\s*no\.?|reference)\s*[:#-]?\s*([A-Z0-9-]{6,})/i,
     /\b(?:ticket number)\s*[:#-]?\s*([A-Z0-9-]{6,})/i,
   ]);

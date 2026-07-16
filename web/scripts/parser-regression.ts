@@ -3319,12 +3319,15 @@ const main = async () => {
   const gcashMonthNamePreview = parseReceiptText([
     "Sent via GCash",
     "Total Amount Sent £348.00",
+    "Ref No. 1011 938 000046",
     "Sept 08, 2023 1:23 pm",
   ].join("\n"));
   if (
     gcashMonthNamePreview.billDate !== "2023-09-08T00:00:00.000Z" ||
     gcashMonthNamePreview.currency !== "PHP" ||
-    gcashMonthNamePreview.currencyMentions.includes("GBP")
+    gcashMonthNamePreview.currencyMentions.includes("GBP") ||
+    gcashMonthNamePreview.documentNumber !== "1011 938 000046" ||
+    gcashMonthNamePreview.items.length !== 0
   ) {
     throw new Error(
       `expected GCash OCR to recover PHP and Sept date, got date=${gcashMonthNamePreview.billDate ?? "null"} currency=${gcashMonthNamePreview.currency} mentions=${gcashMonthNamePreview.currencyMentions.join(", ")}`
