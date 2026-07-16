@@ -21310,6 +21310,13 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .accounts-sections {
   display: grid;
   gap: 8px;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .accounts-group {
@@ -21322,6 +21329,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  filter: none !important;
 }
 
 .accounts-group::before,
@@ -21330,9 +21338,14 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 @media (min-width: 981px) {
+  .accounts-group + .accounts-group {
+    padding-top: 12px;
+    border-top: 1px solid var(--stroke) !important;
+  }
+
   .accounts-group:not(:last-child) {
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--stroke) !important;
+    padding-bottom: 0;
+    border-bottom: 0 !important;
   }
 }
 
