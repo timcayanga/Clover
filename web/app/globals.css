@@ -21273,11 +21273,10 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .accounts-group {
   display: grid;
   gap: 8px;
-  padding: 10px;
-  border-radius: 16px;
-  border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: var(--shadow-soft);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .accounts-group__head {

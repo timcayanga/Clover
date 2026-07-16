@@ -3622,7 +3622,7 @@ function AccountsPageContent() {
                 </div>
               ) : accountGroups.length > 0 ? (
                 accountGroups.map((group) => (
-                  <article key={group.title} className="accounts-group glass">
+                  <article key={group.title} className="accounts-group">
                     <div className="accounts-group__head">
                       <div className="accounts-group__title-row">
                         <h5>{group.title}</h5>
