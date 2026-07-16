@@ -7656,9 +7656,9 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 
 .reports-subtab-card > .report-card__head {
   align-items: flex-start;
-  justify-content: flex-start;
+  justify-content: space-between;
   min-height: 24px;
-  padding-right: 32px;
+  padding-right: 0;
 }
 
 .reports-subtab-card > .report-card__head .report-card__head-title,
@@ -7678,6 +7678,11 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 
 .reports-subtab-card > .report-card__stat {
   display: none;
+}
+
+.reports-subtab-card > .report-card__head > .reports-container-info {
+  position: static;
+  margin-left: auto;
 }
 
 .reports-subtab-card > .reports-container-info {
