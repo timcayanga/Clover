@@ -1558,7 +1558,6 @@ export function SettingsHub({
               <article className="settings-action-card settings-account-card settings-account-card--photo">
                 <div className="settings-account-card__head">
                   <h5>Photo</h5>
-                  <span className="settings-pill">Account</span>
                 </div>
                 <UserAvatarEditor displayName={`${firstNameDraft} ${lastNameDraft}`.trim() || workspaceName} avatarUrl={avatarUrl ?? user?.imageUrl ?? null} />
               </article>

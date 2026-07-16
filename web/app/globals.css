@@ -34140,7 +34140,7 @@ body:has(.pricing-page) {
   display: grid;
   grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .settings-account-card {
@@ -34150,6 +34150,15 @@ body:has(.pricing-page) {
 .settings-account-card--photo,
 .settings-account-card--details {
   min-width: 0;
+}
+
+.settings-account-card--photo {
+  align-content: start;
+  justify-items: center;
+}
+
+.settings-account-card--photo .settings-account-card__head {
+  width: 100%;
 }
 
 .settings-account-card__head {
@@ -34243,12 +34252,12 @@ body:has(.pricing-page) {
 .user-avatar-editor {
   display: grid;
   gap: 12px;
-  justify-items: start;
+  justify-items: center;
 }
 
 .user-avatar-editor__preview {
-  width: 88px;
-  height: 88px;
+  width: 132px;
+  height: 132px;
   border-radius: 22px;
   overflow: hidden;
   display: inline-flex;
@@ -34272,6 +34281,14 @@ body:has(.pricing-page) {
 .user-avatar-editor__image--fallback {
   object-fit: contain;
   padding: 14px;
+}
+
+.settings-account-card--photo .user-avatar-editor__toggle {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .user-avatar-editor__menu {
