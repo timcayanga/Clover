@@ -126,6 +126,7 @@ export type ReceiptPreviewResult = {
     promptVersion: string | null;
     confidence: number | null;
     schemaValidated: boolean | null;
+    reason: string | null;
   };
 };
 
