@@ -10645,7 +10645,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           where: {
             deletedAt: null,
             workspaceId: String(importFile.workspaceId),
-            reviewStatus: { notIn: ["confirmed", "edited", "rejected", "duplicate_skipped"] },
             OR: mobileScreenshotOverlapPayloadMatchers.map((matcher) => ({
               rawPayload: {
                 path: [matcher.path],
