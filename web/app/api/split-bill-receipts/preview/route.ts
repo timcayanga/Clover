@@ -9,7 +9,10 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const asText = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
-const asAmount = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value.toFixed(2) : null);
+const asAmount = (value: unknown) => {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value.replace(/,/g, "").trim()) : NaN;
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : null;
+};
 
 const asReceiptDate = (value: unknown) => {
   const raw = asText(value);
