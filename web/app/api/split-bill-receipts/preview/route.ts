@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { normalizeReceiptImageForVision, readUploadedFileText, renderReceiptPdfPagesForVision } from "@/lib/import-file-text.server";
 import { parseImportTextWithOpenAIFallback } from "@/lib/openai-import-parser";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
-import { assessReceiptPreviewQuality, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
+import { assessReceiptPreviewQuality, normalizeCurrencyCode, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -102,7 +102,7 @@ const mergeReceiptBackup = (
     documentNumber: localPreview.documentNumber ?? asText(backup.document_number),
     invoiceNumber: localPreview.invoiceNumber ?? asText(backup.invoice_number),
     bookingReference: localPreview.bookingReference ?? asText(backup.booking_reference),
-    currency: asText(backup.currency)?.toUpperCase() ?? localPreview.currency,
+    currency: asText(backup.currency) ? normalizeCurrencyCode(asText(backup.currency)) : localPreview.currency,
     paymentMethod: localPreview.paymentMethod ?? asText(backup.payment_method),
     receiptPayerName: localPreview.receiptPayerName ?? asText(backup.buyer_name),
     receiptAccountMatch: localPreview.receiptAccountMatch ?? normalizedAccountMatch,

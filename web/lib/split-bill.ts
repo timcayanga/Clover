@@ -320,6 +320,22 @@ export const normalizeCurrencyCode = (value?: string | null) => {
     return "PHP";
   }
 
+  if (value.includes("₱")) {
+    return "PHP";
+  }
+  if (value.includes("$")) {
+    return "USD";
+  }
+  if (value.includes("€")) {
+    return "EUR";
+  }
+  if (value.includes("£")) {
+    return "GBP";
+  }
+  if (value.includes("¥")) {
+    return "JPY";
+  }
+
   const compact = normalizeWhitespace(value).toUpperCase().replace(/[^A-Z]/g, " ");
   const token = compact.replace(/\s+/g, " ").trim();
 
