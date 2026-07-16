@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {
   buildParserRoutingDecision,
   buildParserRoutingHistoryHint,
+  buildImportReviewReasons,
+  getImportReviewPriority,
   mergeParserRoutingHistoryHints,
 } from "@/workers/import-processor";
 
@@ -204,5 +206,25 @@ assert.ok(
   seededBackupHistoryHint.reasons.some((reason) => reason.code === "historical_untrained_layout_family"),
   "Expected backup-seeded template history to preserve untrained layout routing evidence."
 );
+
+const reviewReasons = buildImportReviewReasons({
+  confidence: 52,
+  categoryName: "Other",
+  type: "expense",
+  rawPayload: {
+    validation: {
+      critical: true,
+      findings: [{ code: "amount.coverage_low" }],
+    },
+    classification: {
+      rowAnomalies: { issues: ["amount_text_mismatch"] },
+    },
+  },
+});
+assert.ok(reviewReasons.includes("low_confidence"));
+assert.ok(reviewReasons.includes("ambiguous_category"));
+assert.ok(reviewReasons.includes("validation:amount.coverage_low"));
+assert.ok(reviewReasons.includes("anomaly:amount_text_mismatch"));
+assert.equal(getImportReviewPriority(reviewReasons), "critical");
 
 console.log("parser routing regression passed");

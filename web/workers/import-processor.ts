@@ -1367,6 +1367,52 @@ const shouldRouteToReview = (params: { confidence: number; categoryName?: string
   return params.confidence < 70;
 };
 
+export const buildImportReviewReasons = (params: {
+  confidence: number;
+  categoryName?: string | null;
+  type?: string | null;
+  rawPayload?: unknown;
+}) => {
+  const reasons: string[] = [];
+  if (!params.type) reasons.push("missing_transaction_type");
+  if (!params.categoryName || params.categoryName.trim().toLowerCase() === "other") reasons.push("ambiguous_category");
+  if (params.confidence < 70) reasons.push("low_confidence");
+  const payload = params.rawPayload && typeof params.rawPayload === "object" && !Array.isArray(params.rawPayload)
+    ? (params.rawPayload as Record<string, unknown>)
+    : null;
+  const validation = payload?.validation;
+  if (validation && typeof validation === "object" && !Array.isArray(validation)) {
+    const validationRecord = validation as Record<string, unknown>;
+    if (validationRecord.critical === true) reasons.push("import_validation_critical");
+    const findings = Array.isArray(validationRecord.findings) ? validationRecord.findings : [];
+    for (const finding of findings.slice(0, 4)) {
+      if (finding && typeof finding === "object" && !Array.isArray(finding) && typeof (finding as Record<string, unknown>).code === "string") {
+        reasons.push(`validation:${String((finding as Record<string, unknown>).code)}`);
+      }
+    }
+  }
+  const classification = payload?.classification;
+  if (classification && typeof classification === "object" && !Array.isArray(classification)) {
+    const rowAnomalies = (classification as Record<string, unknown>).rowAnomalies;
+    if (rowAnomalies && typeof rowAnomalies === "object" && !Array.isArray(rowAnomalies)) {
+      const issues = (rowAnomalies as Record<string, unknown>).issues;
+      if (Array.isArray(issues)) {
+        for (const issue of issues.slice(0, 4)) {
+          if (typeof issue === "string" && issue.trim()) reasons.push(`anomaly:${issue.trim()}`);
+        }
+      }
+    }
+  }
+  return [...new Set(reasons)];
+};
+
+export const getImportReviewPriority = (reasons: string[]) => {
+  if (reasons.some((reason) => reason === "missing_transaction_type" || reason === "import_validation_critical")) return "critical";
+  if (reasons.some((reason) => reason === "ambiguous_category" || reason.startsWith("validation:"))) return "high";
+  if (reasons.length > 0) return "normal";
+  return "none";
+};
+
 const assessReceiptExtractionQuality = (params: {
   receiptDetails: {
     merchant_raw: string | null;
@@ -11093,17 +11139,24 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         rawPayload: row.rawPayload ?? null,
       },
     });
+    const reviewReasons = buildImportReviewReasons({
+      confidence: rowConfidence,
+      categoryName,
+      type: canonicalType,
+      rawPayload: row.rawPayload,
+    });
+    const reviewStatus = reviewOnlyRow
+      ? "rejected"
+      : shouldRouteToReview({ confidence: rowConfidence, categoryName, type: canonicalType })
+        ? "pending_review"
+        : "confirmed";
     const insertRow = buildTransactionInsertRecord({
       workspaceId: String(importFile.workspaceId),
       accountId: rowResolvedAccountId,
       importFileId,
       categoryId,
       categoryName,
-      reviewStatus: reviewOnlyRow
-        ? "rejected"
-        : shouldRouteToReview({ confidence: rowConfidence, categoryName, type: canonicalType })
-          ? "pending_review"
-          : "confirmed",
+      reviewStatus,
       parserConfidence: rowParserConfidence,
       categoryConfidence: rowCategoryConfidence,
       accountMatchConfidence: rowAccountMatchConfidence,
@@ -11117,6 +11170,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
             ? row.statementFingerprint.trim()
             : checkpointStatementFingerprint,
+        review: {
+          status: reviewStatus,
+          priority: reviewOnlyRow ? "none" : getImportReviewPriority(reviewReasons),
+          reasons: reviewReasons,
+        },
       } as Prisma.InputJsonValue,
       normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
