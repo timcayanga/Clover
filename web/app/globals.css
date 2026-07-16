@@ -7793,6 +7793,16 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   text-transform: uppercase;
 }
 
+.reports-subtab-card .reports-subtab-title {
+  color: var(--muted-2);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
 .reports-subtab-card > .report-card__stat {
   display: none;
 }
