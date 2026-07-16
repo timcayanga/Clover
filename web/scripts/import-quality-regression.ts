@@ -39,6 +39,13 @@ const main = () => {
   assert.ok(weakEnrichment.reasons.includes("low_normalized_name_coverage"));
   assert.ok(weakEnrichment.reasons.includes("high_other_rate"));
 
+  const duplicateRows = assessStatementExtractionQuality({
+    rows: [row(), row()],
+    pageCount: 1,
+    declaredTransactionCount: 2,
+  });
+  assert.ok(duplicateRows.reasons.includes("duplicate_row_keys"));
+
   console.log("Import quality regression checks passed.");
 };
 

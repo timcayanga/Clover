@@ -8878,6 +8878,17 @@ export const processImportFileText = async (
         usedHybridRaceMode: parserRoutingMetadata.usedHybridRaceMode,
         backupParserRaceResolved: parserRoutingMetadata.backupParserRaceResolved,
         backupParserRaceTimedOut: parserRoutingMetadata.backupParserRaceTimedOut,
+        balanceReconciled: rows.some((row) => {
+          const rawPayload = row.rawPayload;
+          if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+            return false;
+          }
+          const payload = rawPayload as Record<string, unknown>;
+          const qualityChecks = payload.qualityChecks;
+          return payload.balanceReconciled === true ||
+            (qualityChecks && typeof qualityChecks === "object" && !Array.isArray(qualityChecks) &&
+              (qualityChecks as Record<string, unknown>).balance_reconciled === true);
+        }),
       } as Prisma.InputJsonValue;
       await prisma.accountStatementCheckpoint.upsert({
         where: { importFileId },
@@ -10585,8 +10596,14 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     let checkpointStatus: "pending" | "reconciled" | "mismatch" = "pending";
     let mismatchReason: string | null = null;
 
-    if (statementCheckpoint.endingBalance !== null) {
+    const checkpointSourceMetadata =
+      statementCheckpoint.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object" && !Array.isArray(statementCheckpoint.sourceMetadata)
+        ? (statementCheckpoint.sourceMetadata as Record<string, unknown>)
+        : null;
+    if (statementCheckpoint.endingBalance !== null && checkpointSourceMetadata?.balanceReconciled === true) {
       checkpointStatus = "reconciled";
+    } else if (statementCheckpoint.endingBalance !== null) {
+      mismatchReason = "Ending balance was captured, but the transaction rows were not proven to reconcile.";
     }
 
     if (

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { DATA_ENGINE_VERSION } from "@/lib/data-engine";
 import { parseDateValue } from "@/lib/import-parser";
 import { getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
+import { assessStatementExtractionQuality } from "@/lib/import-quality";
 
 export type DataQaSource = "import_processing" | "import_confirmation" | "local_training" | "replay" | "manual";
 
@@ -137,6 +138,10 @@ export type DataQaEvaluation = {
     uiAccountsReady: boolean;
     uiDrawerReady: boolean;
     uiTransactionsReady: boolean;
+    evidenceCoverage: number;
+    pageCoverage: number;
+    duplicateKeyRate: number;
+    checkpointReconciled: boolean;
     msPerRow: number | null;
   };
   feedbackPayload: Prisma.JsonObject;
@@ -357,6 +362,12 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
     fileType: input.fileType,
   });
   const repairCandidates = buildRepairCandidates(rows);
+  const statementQuality = assessStatementExtractionQuality({
+    rows,
+    pageCount: input.timings?.pageCount ?? null,
+    balanceReconciled: input.checkpoint?.status === "reconciled" ? true : input.checkpoint?.status === "mismatch" ? false : null,
+  });
+  const checkpointReconciled = input.checkpoint?.status === "reconciled";
 
   const findings: DataQaFindingInput[] = [];
 
@@ -524,6 +535,62 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       metadata: {
         source: input.source,
       },
+    });
+  }
+
+  if (rowCount > 0 && statementQuality.evidenceCoverage < 0.8) {
+    findings.push({
+      code: "transactions.source_evidence_coverage_low",
+      severity: rowCount >= 5 ? "warning" : "info",
+      field: "rawPayload.parserEvidence",
+      message: "Too many transaction rows lack page or source-text evidence tying them back to the statement.",
+      observedValue: { evidenceCoverage: statementQuality.evidenceCoverage, rowCount },
+      expectedValue: { minEvidenceCoverage: 0.8 },
+      suggestion: "Preserve page-level OCR/source text for every row and route unsupported rows to review instead of publishing them as fully trusted.",
+      confidence: 90,
+      metadata: { source: input.source, fileName: input.fileName },
+    });
+  }
+
+  if (rowCount > 0 && (input.timings?.pageCount ?? 0) > 1 && statementQuality.pageCoverage < 0.75) {
+    findings.push({
+      code: "transactions.page_coverage_incomplete",
+      severity: "critical",
+      field: "rawPayload.parserEvidence.page",
+      message: "A multi-page statement has transaction evidence from too few pages to trust the import as complete.",
+      observedValue: { pageCoverage: statementQuality.pageCoverage, pageCount: input.timings?.pageCount ?? 0 },
+      expectedValue: { minPageCoverage: 0.75 },
+      suggestion: "Re-run extraction across all statement pages before finalizing the import.",
+      confidence: 94,
+      metadata: { source: input.source, fileName: input.fileName },
+    });
+  }
+
+  if (rowCount > 0 && statementQuality.duplicateKeyRate > 0.05) {
+    findings.push({
+      code: "transactions.duplicate_key_rate_high",
+      severity: "warning",
+      field: "rawPayload",
+      message: "Repeated date, amount, and merchant keys suggest duplicated statement rows or overlapping pages.",
+      observedValue: { duplicateKeyRate: statementQuality.duplicateKeyRate },
+      expectedValue: { maxDuplicateKeyRate: 0.05 },
+      suggestion: "Compare page evidence and statement fingerprints before saving overlapping rows.",
+      confidence: 88,
+      metadata: { source: input.source, fileName: input.fileName },
+    });
+  }
+
+  if (input.checkpoint?.status === "mismatch") {
+    findings.push({
+      code: "statement.checkpoint_reconciliation_mismatch",
+      severity: "critical",
+      field: "checkpoint.status",
+      message: "The statement checkpoint does not reconcile with its account balance history.",
+      observedValue: { status: input.checkpoint.status },
+      expectedValue: { status: "reconciled" },
+      suggestion: "Keep the import in repair/review state until the balance mismatch is explained or corrected.",
+      confidence: 96,
+      metadata: { source: input.source, fileName: input.fileName },
     });
   }
 
@@ -729,6 +796,10 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       uiAccountsReady,
       uiDrawerReady,
       uiTransactionsReady,
+      evidenceCoverage: statementQuality.evidenceCoverage,
+      pageCoverage: statementQuality.pageCoverage,
+      duplicateKeyRate: statementQuality.duplicateKeyRate,
+      checkpointReconciled,
       totalMs: speed.totalMs,
       msPerRow: speed.msPerRow,
     },
@@ -762,6 +833,10 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       uiAccountsReady,
       uiDrawerReady,
       uiTransactionsReady,
+      evidenceCoverage: statementQuality.evidenceCoverage,
+      pageCoverage: statementQuality.pageCoverage,
+      duplicateKeyRate: statementQuality.duplicateKeyRate,
+      checkpointReconciled,
       msPerRow: speed.msPerRow,
     },
     feedbackPayload,
