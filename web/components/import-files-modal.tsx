@@ -869,12 +869,13 @@ export function ImportFilesModal({
         window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
       }
       primaryVisibilityCompletedRef.current = true;
+      // The import activity dock can continue showing progress after the full modal closes.
       autoCloseCompletedBatchTimerRef.current = window.setTimeout(() => {
         autoCloseCompletedBatchTimerRef.current = null;
         clearImportActivity();
         lastImportActivityRef.current = null;
         onClose();
-      }, 10_000);
+      }, 0);
     }
   };
 
@@ -6647,13 +6648,14 @@ export function ImportFilesModal({
       return;
     }
 
+    // Do not hold the completed-upload summary open in the full import window.
     autoCloseCompletedBatchTimerRef.current = window.setTimeout(() => {
       autoCloseCompletedBatchTimerRef.current = null;
       clearImportActivity();
       lastImportActivityRef.current = null;
       setBusy(false);
       onClose();
-    }, 10_000);
+    }, 0);
 
     return () => {
       if (autoCloseCompletedBatchTimerRef.current) {
