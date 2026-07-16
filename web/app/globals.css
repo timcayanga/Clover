@@ -21282,9 +21282,17 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   display: grid;
   gap: 8px;
   padding: 0;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.accounts-group::before,
+.accounts-group::after {
+  display: none !important;
 }
 
 .accounts-group__head {
