@@ -274,7 +274,7 @@ const desktopNavSections = [
   {
     label: "Plan",
     items: [
-      { href: "/budgeting", label: "Budget", key: "budgeting" as const },
+      { href: "/budgeting", label: "Budgeting", key: "budgeting" as const },
       { href: "/goals", label: "Goals", key: "goals" as const },
       { href: "/investments", label: "Investments", key: "investments" as const },
     ],

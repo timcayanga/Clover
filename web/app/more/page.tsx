@@ -83,7 +83,7 @@ const moreSections: MoreSection[] = [
     items: [
       {
         href: "/budgeting",
-        title: "Budget",
+        title: "Budgeting",
         icon: "budgeting",
       },
       {
