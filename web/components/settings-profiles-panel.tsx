@@ -16,6 +16,7 @@ type SettingsProfilesPanelProps = {
   activeProfileId: string;
   profileList: ProfileSummary[];
   profilesLoading: boolean;
+  profileLimit: number | null;
   newProfileName: string;
   profileRenameDrafts: Record<string, string>;
   defaultProfileId: string;
@@ -46,6 +47,7 @@ export function SettingsProfilesPanel({
   activeProfileId,
   profileList,
   profilesLoading: _profilesLoading,
+  profileLimit,
   newProfileName,
   profileRenameDrafts,
   defaultProfileId,
@@ -68,6 +70,9 @@ export function SettingsProfilesPanel({
       <div className="settings-section__intro settings-section__intro--single">
         <div>
           <h4>Profiles</h4>
+          <p className="settings-helper">
+            {profileLimit === null ? `${profileList.length} Profiles` : `${profileList.length} of ${profileLimit} Profiles used`}
+          </p>
         </div>
       </div>
 
@@ -116,6 +121,9 @@ export function SettingsProfilesPanel({
       </div>
 
       <div className="settings-profile-create">
+        {profileLimit !== null && profileList.length >= profileLimit ? (
+          <p className="settings-helper">You&apos;ve reached your {profileLimit}-Profile limit. Upgrade to Pro for more Profiles.</p>
+        ) : null}
         {isCreateOpen ? (
           <div className="settings-profile-create__form">
             <label className="settings-inline-field">
@@ -134,9 +142,10 @@ export function SettingsProfilesPanel({
         <button
           type="button"
           className="button button-secondary button-small settings-profile-create__toggle"
+          disabled={profileLimit !== null && profileList.length >= profileLimit}
           onClick={() => setIsCreateOpen((current) => !current)}
         >
-          Create Profile
+          {profileLimit !== null && profileList.length >= profileLimit ? "Profile limit reached" : "Create Profile"}
         </button>
       </div>
 

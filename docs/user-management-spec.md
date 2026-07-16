@@ -184,6 +184,14 @@ In the product UI, Clover should present each user-scoped container as a `Profil
 - Keep goal data separate from plan data so each can evolve independently.
 - Keep the user-facing Profile model separate from the underlying workspace storage model until the database is migrated.
 
+### Profile Limits And Sharing Boundary
+
+- Free includes up to 3 Profiles total, including the required Personal Profile.
+- Pro includes up to 10 Profiles total, including the required Personal Profile.
+- Profile limits are enforced at the account level and count all Profiles owned by the account.
+- A Profile is currently a regular, single-account container. Group Profiles, invitations, and cross-account access are not part of the current model.
+- A future Circle model may add explicit membership, invitations, and roles without changing the isolation boundary between Profiles.
+
 ### Suggested Additions for Later
 
 - `planType` or subscription entitlement fields

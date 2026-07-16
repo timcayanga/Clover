@@ -4,6 +4,7 @@ import { syncClerkUser } from "@/lib/clerk";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
+import { getEffectiveProfileLimit } from "@/lib/user-limits";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { createTransientDataUnavailableResponse, isTransientDataError, isUnauthorizedDataError } from "@/lib/transient-data";
@@ -110,7 +111,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Workspace name is required" }, { status: 400 });
     }
 
+    if (type !== "personal") {
+      return NextResponse.json({ error: "Only regular Profiles are available right now." }, { status: 400 });
+    }
+
     const user = await getOrCreateCurrentUser(userId);
+    const profileLimit = getEffectiveProfileLimit(user);
+    if (profileLimit !== null) {
+      const profileCount = await prisma.workspace.count({ where: { userId: user.id } });
+      if (profileCount >= profileLimit) {
+        return NextResponse.json(
+          { error: `${user.planTier === "free" ? "Free" : "Pro"} includes up to ${profileLimit} Profiles, including Personal.` },
+          { status: 400 }
+        );
+      }
+    }
     if (existingUser?.environment) {
       await prisma.user.update({
         where: { id: user.id },
@@ -124,7 +139,7 @@ export async function POST(request: Request) {
       data: {
         userId: user.id,
         name,
-        type: type === "shared" || type === "business" ? type : "personal",
+        type: "personal",
       },
     });
 

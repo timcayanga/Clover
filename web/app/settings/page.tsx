@@ -6,6 +6,7 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { getEffectiveProfileLimit } from "@/lib/user-limits";
 
 export const metadata = {
   title: "Settings",
@@ -129,6 +130,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
         email={user?.email ?? ""}
         avatarUrl={user?.imageUrl ?? null}
         planTier={user?.planTier ?? "free"}
+        profileLimit={user ? getEffectiveProfileLimit(user) : null}
         paypalClientId={null}
         paypalMonthlyPlanId={null}
         paypalAnnualPlanId={null}

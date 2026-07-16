@@ -141,6 +141,7 @@ type SettingsHubProps = {
   email: string;
   avatarUrl?: string | null;
   planTier: "free" | "pro";
+  profileLimit: number | null;
   paypalClientId?: string | null;
   paypalMonthlyPlanId?: string | null;
   paypalAnnualPlanId?: string | null;
@@ -428,6 +429,7 @@ export function SettingsHub({
   email: initialEmail,
   avatarUrl: initialAvatarUrl,
   planTier: initialPlanTier,
+  profileLimit,
   paypalClientId: initialPaypalClientId,
   paypalMonthlyPlanId: initialPaypalMonthlyPlanId,
   paypalAnnualPlanId: initialPaypalAnnualPlanId,
@@ -1708,6 +1710,7 @@ export function SettingsHub({
             activeProfileId={activeProfileId}
             profileList={profileList}
             profilesLoading={profilesLoading}
+            profileLimit={profileLimit}
             newProfileName={newProfileName}
             profileRenameDrafts={profileRenameDrafts}
             isPending={isPending}

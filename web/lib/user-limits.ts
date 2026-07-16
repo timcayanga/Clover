@@ -6,6 +6,16 @@ export type UserLimits = {
   transactionLimit: number | null;
 };
 
+export type ProfileLimitSource = {
+  clerkUserId?: string | null;
+  planTier: PlanTier;
+};
+
+const PLAN_PROFILE_LIMITS: Record<PlanTier, number> = {
+  free: 3,
+  pro: 10,
+};
+
 const PLAN_DEFAULT_LIMITS: Record<PlanTier, UserLimits> = {
   free: {
     accountLimit: 5,
@@ -34,6 +44,20 @@ type EffectiveUserLimitsOptions = {
 const UNLIMITED_SYNTHETIC_USER_IDS = new Set(["staging-guest", "local-admin"]);
 
 export const getPlanDefaultLimits = (planTier: PlanTier): UserLimits => PLAN_DEFAULT_LIMITS[planTier];
+
+export const getPlanProfileLimit = (planTier: PlanTier): number => PLAN_PROFILE_LIMITS[planTier];
+
+export const getEffectiveProfileLimit = (user: ProfileLimitSource): number | null => {
+  if (user.clerkUserId && UNLIMITED_SYNTHETIC_USER_IDS.has(user.clerkUserId)) {
+    return null;
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    return null;
+  }
+
+  return getPlanProfileLimit(user.planTier);
+};
 
 export const getEffectiveUserLimits = (user: UserLimitsLike, options: EffectiveUserLimitsOptions = {}): UserLimits => {
   if (user.clerkUserId && UNLIMITED_SYNTHETIC_USER_IDS.has(user.clerkUserId)) {
