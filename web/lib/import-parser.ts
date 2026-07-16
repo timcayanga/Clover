@@ -1509,6 +1509,89 @@ const buildGenericScreenshotAccountRows = (
   return rows;
 };
 
+const buildGenericScreenshotHoldingRows = (
+  text: string,
+  metadata: DetectedStatementMetadata,
+  fileName = ""
+): ParsedImportRow[] => {
+  const normalizedText = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const looksLikePortfolio =
+    /\b(?:portfolio|holdings?|positions?|my\s+(?:assets|investments|stocks)|investment\s+account)\b/i.test(normalizedText) &&
+    /\b(?:shares?|units?|quantity)\b/i.test(normalizedText);
+  if (!looksLikePortfolio) return [];
+
+  const lines = splitStatementLines(text).map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean);
+  const quantityPattern = /([0-9][0-9,]*(?:\.\d+)?)\s+(shares?|units?|quantity)\b/i;
+  const moneyPattern = /(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|₱|£|\$)?\s*[+-]?\s*([0-9][0-9,]*\.\d{2})/i;
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+  const institution = metadata.institution ?? sanitizeBankNameLabel(detectInstitutionFromText(normalizedText)) ?? "Unknown";
+  const accountName = metadata.accountName ?? `${institution} portfolio`;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const quantityLine = lines[index] ?? "";
+    const quantityMatch = quantityLine.match(quantityPattern);
+    if (!quantityMatch) continue;
+    const quantity = Number((quantityMatch[1] ?? "").replace(/,/g, ""));
+    if (!Number.isFinite(quantity)) continue;
+
+    const assetName = lines
+      .slice(Math.max(0, index - 2), index)
+      .reverse()
+      .find((line) =>
+        /[A-Za-z]/.test(line) &&
+        !isGenericScreenshotNoiseLine(line) &&
+        !/^(?:portfolio|holdings?|positions?|my\s+(?:assets|investments|stocks)|market|total|cash|available)$/i.test(line)
+      );
+    if (!assetName) continue;
+
+    const valueLine = lines.slice(index, index + 4).find((line) => moneyPattern.test(line) && !quantityPattern.test(line));
+    const marketValue = parseMoney(valueLine?.match(moneyPattern)?.[1] ?? null);
+    if (marketValue === null) continue;
+
+    const key = [assetName.toLowerCase(), quantity, marketValue.toFixed(2)].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      date: metadata.endDate ?? metadata.startDate ?? new Date().toISOString(),
+      amount: "0.00",
+      currency: metadata.currency ?? detectCurrencyFromText(normalizedText) ?? null,
+      merchantRaw: humanizeMerchantText(`${assetName} snapshot`),
+      merchantClean: summarizeMerchantText(`${assetName} snapshot`, institution),
+      description: `${assetName} holding snapshot`,
+      categoryName: "Other",
+      accountName,
+      institution,
+      type: "transfer",
+      confidence: 58,
+      parserConfidence: 60,
+      categoryConfidence: 45,
+      rawPayload: {
+        bank: institution,
+        institutionRaw: metadata.institution ?? institution,
+        kind: "account_snapshot_marker",
+        source: "generic_portfolio_screenshot",
+        sourceFileName: fileName,
+        sourceRowIndex: index,
+        documentType: "portfolio",
+        accountName,
+        accountType: "investment",
+        balance: marketValue,
+        statementEndingBalance: metadata.endingBalance,
+        investmentName: assetName,
+        quantity,
+        marketValue,
+        reviewRequired: true,
+        reviewReasons: [
+          "Untrained portfolio screenshot; confirm the holding name, quantity, and market value before relying on it.",
+        ],
+      },
+    });
+  }
+
+  return rows;
+};
+
 const parseGenericMobileScreenshotTransactionRows = (
   text: string,
   fileName: string,
@@ -21251,6 +21334,12 @@ export const parseImportTextGenericOnly = (
   if (genericAccountRows.length > 0) {
     return filterSharedScreenshotParsedRows(genericAccountRows, text, fileName, context);
   }
+  const genericHoldingRows = genericScreenshotMetadata
+    ? buildGenericScreenshotHoldingRows(text, genericScreenshotMetadata, fileName)
+    : [];
+  if (genericHoldingRows.length > 0) {
+    return filterSharedScreenshotParsedRows(genericHoldingRows, text, fileName, context);
+  }
   const genericScreenshotSnapshotRows = genericScreenshotMetadata
     ? buildGenericScreenshotSnapshotRows(text, genericScreenshotMetadata)
     : null;
@@ -22987,6 +23076,13 @@ export const parseImportText = (
     : [];
   if (genericAccountRows.length > 0) {
     return filterSharedScreenshotParsedRows(genericAccountRows, text, fileName, context);
+  }
+
+  const genericHoldingRows = genericScreenshotMetadata
+    ? buildGenericScreenshotHoldingRows(text, genericScreenshotMetadata, fileName)
+    : [];
+  if (genericHoldingRows.length > 0) {
+    return filterSharedScreenshotParsedRows(genericHoldingRows, text, fileName, context);
   }
 
   const genericParsed = parseGenericBankStatementText(text, context, { fileName });

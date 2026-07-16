@@ -241,7 +241,7 @@ Ending Balance 1,100.00
   assert.equal(findRow(parsedRepeatedDate.rows, /Cash Deposit/i).type, "income");
   assert.equal(parsedRepeatedDate.metadata.endingBalance, 1100);
 
-  const unfamiliarScreenshotRows = parseImportText(
+const unfamiliarScreenshotRows = parseImportText(
     `
 Example Bank
 Account details
@@ -254,7 +254,31 @@ Accounts
     "image/png"
   );
   assert.equal(unfamiliarScreenshotRows.length, 1, "Expected an unfamiliar screenshot to remain visible as one snapshot.");
-  assert.equal(unfamiliarScreenshotRows[0]?.rawPayload?.kind, "account_snapshot_marker");
+assert.equal(unfamiliarScreenshotRows[0]?.rawPayload?.kind, "account_snapshot_marker");
+
+const unfamiliarPortfolioRows = parseImportText(
+  `My portfolio
+Holdings
+Acme Global Equity Fund
+12.5 units
+$1,250.00
+Northstar Stock
+3 shares
+$450.00`,
+  "IMG_9999.PNG",
+  "image/png",
+  { institution: "Unknown Broker" }
+);
+assert.equal(unfamiliarPortfolioRows.length, 2, "Unfamiliar portfolios should preserve visible holdings for review.");
+assert.deepEqual(
+  unfamiliarPortfolioRows.map((row) => row.rawPayload?.investmentName),
+  ["Acme Global Equity Fund", "Northstar Stock"]
+);
+assert.deepEqual(
+  unfamiliarPortfolioRows.map((row) => row.rawPayload?.marketValue),
+  [1250, 450]
+);
+assert.ok(unfamiliarPortfolioRows.every((row) => row.rawPayload?.reviewRequired === true));
   assert.equal(unfamiliarScreenshotRows[0]?.rawPayload?.reviewRequired, true);
   assert.equal(unfamiliarScreenshotRows[0]?.rawPayload?.balance, 12345.67);
   assert.ok((unfamiliarScreenshotRows[0]?.confidence ?? 100) < 70, "Expected unfamiliar screenshot snapshots to require review.");
