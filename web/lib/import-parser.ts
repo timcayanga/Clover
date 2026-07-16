@@ -1509,6 +1509,94 @@ const buildGenericScreenshotAccountRows = (
   return rows;
 };
 
+const parseGenericMobileScreenshotTransactionRows = (
+  text: string,
+  fileName: string,
+  context: ImportParseContext = {}
+): ParsedImportRow[] => {
+  const normalizedText = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const looksLikeTransactionScreen =
+    /\b(?:transaction(?:s|\s+history)?|activity|payments?|transfers?|cash\s+(?:in|out)|history)\b/i.test(normalizedText) &&
+    /[+-]?\s*(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|₱|£|\$)?\s*[0-9][0-9,]*\.\d{2}/i.test(normalizedText);
+  if (!looksLikeTransactionScreen) return [];
+
+  const lines = splitStatementLines(text).map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean);
+  const datePattern = new RegExp(
+    `^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\\s+)?(?:(?:${monthNamePattern})\\s+\\d{1,2}|\\d{1,2}\\s+(?:${monthNamePattern})),?\\s+\\d{4}$`,
+    "i"
+  );
+  const amountPattern = /([+-])?\s*(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|₱|£|\$)?\s*([0-9][0-9,]*\.\d{2})/i;
+  const statusPattern = /^(?:successful|completed|pending|failed|posted|reverted)$/i;
+  const dateOnly = (line: string) => line.replace(/^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+/i, "").replace(/,/g, "");
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+  let currentDate: string | null = null;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (datePattern.test(line)) {
+      currentDate = parseDateValue(dateOnly(line))?.toISOString().slice(0, 10) ?? currentDate;
+      continue;
+    }
+    if (!currentDate || isGenericScreenshotNoiseLine(line) || statusPattern.test(line)) continue;
+
+    const amountMatch = line.match(amountPattern);
+    if (!amountMatch) continue;
+    const amount = parseMoney(amountMatch[2] ?? null);
+    if (amount === null) continue;
+    const signedAmount = amountMatch[1] === "-" ? -amount : amountMatch[1] === "+" ? amount : null;
+    const blockStart = Math.max(0, index - 3);
+    const description = lines
+      .slice(blockStart, index)
+      .filter((candidate) => !datePattern.test(candidate) && !statusPattern.test(candidate) && !amountPattern.test(candidate))
+      .filter((candidate) => !/^\d{1,2}:\d{2}\s*(?:AM|PM)$/i.test(candidate))
+      .filter((candidate) => !/^(?:transactions?|activity|history|payments?|transfers?|cash\s+(?:in|out))$/i.test(candidate))
+      .join(" ")
+      .trim();
+    if (!description || description.length < 2) continue;
+    if (/^(?:transactions?|activity|history|payments?|transfers?|cash\s+(?:in|out))$/i.test(description)) continue;
+    if (signedAmount === null && !/\b(?:payment|purchase|deposit|withdraw|transfer|received|sent|interest|fee|refund|cash)\b/i.test(description)) continue;
+
+    const type: TransactionType = signedAmount !== null ? signedAmount >= 0 ? "income" : "expense" :
+      /\b(?:received|deposit|refund|interest|cash\s+in)\b/i.test(description) ? "income" :
+        /\b(?:transfer|sent)\b/i.test(description) ? "transfer" : "expense";
+    const absoluteAmount = Math.abs(signedAmount ?? amount);
+    const key = [currentDate, description.toLowerCase(), absoluteAmount.toFixed(2), amountMatch[1] ?? ""].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const institution = context.institution ?? null;
+    rows.push({
+      date: currentDate,
+      amount: absoluteAmount.toFixed(2),
+      currency: detectCurrencyFromText(line) ?? (context.institution === "HSBC" ? "GBP" : null),
+      merchantRaw: humanizeMerchantText(description),
+      merchantClean: summarizeMerchantText(description, institution),
+      description,
+      categoryName: guessCategoryName(description, type),
+      accountName: context.accountName ?? institution ?? undefined,
+      accountNumber: context.accountNumber ?? undefined,
+      institution: institution ?? undefined,
+      type,
+      confidence: 56,
+      parserConfidence: 58,
+      categoryConfidence: 48,
+      rawPayload: {
+        bank: institution ?? "Unknown",
+        kind: "generic_mobile_screenshot_transaction",
+        source: "generic_mobile_screenshot",
+        sourceFileName: fileName,
+        sourceRowIndex: index,
+        originalDescription: description,
+        signedAmountText: signedAmount === null ? null : `${signedAmount >= 0 ? "+" : "-"}${absoluteAmount.toFixed(2)}`,
+        reviewRequired: true,
+        reviewReasons: ["Untrained mobile screenshot layout; confirm the date, description, amount, and direction."],
+      },
+    });
+  }
+
+  return rows;
+};
+
 export const getTrailingBalanceFromParsedRows = (rows: ParsedImportRow[]) => {
   const statementEndingBalancePayload = [...rows]
     .reverse()
@@ -21170,6 +21258,11 @@ export const parseImportTextGenericOnly = (
     return filterSharedScreenshotParsedRows(genericScreenshotSnapshotRows, text, fileName, context);
   }
 
+  const genericMobileRows = parseGenericMobileScreenshotTransactionRows(text, fileName, context);
+  if (genericMobileRows.length > 0) {
+    return filterSharedScreenshotParsedRows(genericMobileRows, text, fileName, context);
+  }
+
   const delimiter = delimiterForFile(fileType, fileName);
   const firstLine = text.split(/\r?\n/)[0] ?? "";
   const looksDelimited = /,|\t|;/.test(firstLine);
@@ -22899,6 +22992,11 @@ export const parseImportText = (
   const genericParsed = parseGenericBankStatementText(text, context, { fileName });
   if (genericParsed && genericParsed.rows.length > 0) {
     return genericParsed.rows;
+  }
+
+  const genericMobileRows = parseGenericMobileScreenshotTransactionRows(text, fileName, context);
+  if (genericMobileRows.length > 0) {
+    return filterSharedScreenshotParsedRows(genericMobileRows, text, fileName, context);
   }
 
   const delimiter = delimiterForFile(fileType, fileName);

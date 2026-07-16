@@ -286,6 +286,31 @@ GBP 250.00
     "Expected account-list snapshots to require confirmation."
   );
 
+  const unfamiliarMobileTransactionRows = parseImportText(
+    `
+Unknown Wallet
+Transactions
+Friday, 01 May 2026
+Coffee Shop
+-£4.50
+Saturday, 02 May 2026
+Salary payment
++£100.00
+`,
+    "Screenshot_123.png",
+    "image/png",
+    { institution: "Unknown Wallet", accountName: "Wallet" }
+  );
+  assert.equal(unfamiliarMobileTransactionRows.length, 2, "Expected unfamiliar mobile transaction blocks to remain visible.");
+  assert.deepEqual(
+    unfamiliarMobileTransactionRows.map((row) => row.description),
+    ["Coffee Shop", "Salary payment"]
+  );
+  assert.ok(
+    unfamiliarMobileTransactionRows.every((row) => row.rawPayload?.reviewRequired === true && (row.confidence ?? 100) < 70),
+    "Expected unfamiliar mobile transactions to remain review-only."
+  );
+
   assert.equal(getSharedMerchantCategoryHint("Maria Harman"), "Transfers", "Expected person-like names to map to Transfers.");
   assert.equal(getSharedMerchantCategoryHint("Visa Provisioning Service"), "Shopping", "Expected provisioning checks to map to Shopping.");
   assert.equal(getSharedMerchantCategoryHint("Great Ocean Road Choc"), "Travel & Lifestyle");
